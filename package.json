@@ -16,7 +16,7 @@
     "body-parser": "^1.20.1",
     "dotenv": "^16.0.3",
     "mongoose": "^7.2.2",
-    "@shopify/shopify-api": "^2.16.0"
+    "@shopify/shopify-api": "^11.14.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"
