@@ -3,16 +3,19 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-
 import billing from './billing.js';
 import scheduler from './scheduler.js';
 import tokenExchange from './token-exchange.js'; // ✅ новото
-
 import shopifyApi from './utils/shopifyApi.js';
 import { validateShopifyWebhook } from './utils/webhookValidator.js';
-
 import productsWebhook from './shopify/webhooks/products-update.js';
 import uninstallWebhook from './shopify/webhooks/uninstall.js';
+import { syncProductsForShop } from './controllers/productSync.js';
+import tokenExchange from './token-exchange.js';
+
+
+
+
 
 dotenv.config();
 
@@ -34,11 +37,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 app.use('/token-exchange', tokenExchange);
 
 // Billing middleware
-app.use('/billing', billing);
-
 // Webhook endpoints
-app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
-app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -53,6 +52,25 @@ app.get('/', (req, res) => {
 // Start scheduler (cron jobs for sync)
 scheduler.start();
 
+// Token exchange route (Shopify Managed Installation)
+app.use('/token-exchange', tokenExchange);
+
+// Billing middleware
+app.use('/billing', billing);
+
+// Webhook endpoints
+app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
+app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
+
+// Test sync endpoint (for development only)
+app.get('/test-sync', async (req, res) => {
+  try {
+    const count = await syncProductsForShop(req.query.shop);
+    res.send(`✅ Synced ${count} products`);
+  } catch (e) {
+    res.status(500).send(`❌ Sync error: ${e.message}`);
+  }
+});
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
