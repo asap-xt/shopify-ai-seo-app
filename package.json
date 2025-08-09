@@ -2,6 +2,7 @@
   "name": "shopify-ai-seo-2.0",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
