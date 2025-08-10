@@ -1,6 +1,6 @@
 name = "AI SEO 2.0"
-client_id = "2bc2b96aa1515eeda30ed377c41375d8"
-application_url = "https://shopify-ai-seo-20-production.up.railway.app/"
+client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
+application_url = "https://new-ai-seo-app-production.up.railway.app/"
 embedded = true
 
 [access_scopes]
