@@ -1,4 +1,8 @@
 // backend/ai/deepseek.js
+// Supports two modes:
+// 1) Direct DeepSeek API   -> set DEEPSEEK_API_KEY (+ optional DEEPSEEK_API_URL, default used below)
+// 2) OpenRouter as a hub   -> set DEEPSEEK_PROVIDER=openrouter and OPENROUTER_API_KEY (+ optional DEEPSEEK_MODEL)
+
 import fetch from 'node-fetch';
 
 function clamp(str = '', max = 60) {
@@ -8,19 +12,26 @@ function clamp(str = '', max = 60) {
 
 export async function generateWithDeepSeek(product = {}) {
   const provider = (process.env.DEEPSEEK_PROVIDER || '').toLowerCase(); // 'openrouter' | ''
-  let baseUrl = process.env.DEEPSEEK_API_URL || '';
-  let apiKey = process.env.DEEPSEEK_API_KEY || '';
-  let model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  let baseUrl;
+  let apiKey;
+  let model;
 
-  // Optional: route чрез OpenRouter (ако ползваш OPENROUTER_API_KEY)
   if (provider === 'openrouter') {
+    // OpenRouter mode
     baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    apiKey = process.env.OPENROUTER_API_KEY || apiKey;
+    apiKey = process.env.OPENROUTER_API_KEY || '';
     model = process.env.DEEPSEEK_MODEL || 'deepseek/deepseek-chat';
-  }
-
-  if (!baseUrl) {
-    throw new Error('DEEPSEEK_API_URL is not set.');
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY is missing (needed for DEEPSEEK via OpenRouter).');
+    }
+  } else {
+    // Direct DeepSeek mode (official API)
+    baseUrl = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/v1/chat/completions';
+    apiKey = process.env.DEEPSEEK_API_KEY || '';
+    model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    if (!apiKey) {
+      throw new Error('DEEPSEEK_API_KEY is missing.');
+    }
   }
 
   const title = product.title || 'Product';
@@ -46,11 +57,21 @@ Output MUST be JSON:
 Only return JSON.
   `.trim();
 
+  // Some OpenRouter setups like having a referer/title; not required, but harmless if present
+  const extraHeaders =
+    provider === 'openrouter'
+      ? {
+          // 'HTTP-Referer': process.env.BASE_URL || '',
+          // 'X-Title': 'AI SEO 2.0',
+        }
+      : {};
+
   const res = await fetch(baseUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      ...extraHeaders,
     },
     body: JSON.stringify({
       model,
@@ -58,7 +79,7 @@ Only return JSON.
         { role: 'system', content: 'You write concise, high-quality SEO metadata for ecommerce.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.4
+      temperature: 0.4,
     }),
     timeout: 30_000,
   });
@@ -80,6 +101,7 @@ Only return JSON.
       keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
     };
   } catch {
+    // If model returned non-JSON, return a minimal safe fallback (controller will still count usage)
     return {
       seoTitle: clamp(`${title} | Best Price`, 60),
       seoDescription: clamp(description || `${title} – buy now.`, 155),

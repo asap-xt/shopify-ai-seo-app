@@ -1,7 +1,19 @@
-name = "AI SEO 2.0"
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
-application_url = "https://new-ai-seo-app-production.up.railway.app"
+name = "NEW AI SEO"
+handle = "new-ai-seo"
+application_url = "https://new-ai-seo-app-production.up.railway.app/"
 embedded = true
 
-[access_scopes]
-scopes = "read_products,write_products"
+[webhooks]
+api_version = "2025-07"
+
+[auth]
+redirect_urls = [ "https://new-ai-seo-app-production.up.railway.app/api/auth" ]
+
+[pos]
+embedded = false
+
+[build]
+include_config_on_deploy = true

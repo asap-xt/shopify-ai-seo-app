@@ -34,7 +34,10 @@ function buildCandidates(provider, envModel) {
 export async function generateWithLlama(product = {}) {
   const provider = (process.env.LLAMA_PROVIDER || '').toLowerCase();
   const baseUrl  = inferBaseUrl(provider);
-  const apiKey   = process.env.LLAMA_API_KEY || '';
+  const apiKey =
+  (process.env.LLAMA_PROVIDER || '').toLowerCase() === 'openrouter'
+    ? (process.env.OPENROUTER_API_KEY || process.env.LLAMA_API_KEY || '')
+    : (process.env.LLAMA_API_KEY || '');
 
   if (!baseUrl) throw new Error('LLAMA_API_URL is not set and no known provider selected.');
   if (!apiKey)  throw new Error('LLAMA_API_KEY is missing.');
