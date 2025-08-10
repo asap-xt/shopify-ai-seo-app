@@ -1,45 +1,62 @@
-import { Anthropic, HUMAN_PROMPT } from '@anthropic-ai/sdk';
-import dotenv from 'dotenv';
- dotenv.config();
+// backend/ai/claude.js
+import Anthropic from '@anthropic-ai/sdk';
 
-// Initialize Anthropic Claude client with API key from .env
-const claude = new Anthropic({
+const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
 /**
- * Generate SEO metadata for a product using Anthropic Claude
- * @param {{ title: string, description: string, tags: string[] }} product
- * @returns {Promise<{ seoTitle: string, seoDescription: string, altText: string, keywords: string[] }>}
+ * Generate SEO metadata with Claude
+ * Falls back to 'claude-3-5-sonnet-20240620' if CLAUDE_MODEL not set
  */
 export async function generateWithClaude(product) {
-  const { title, description, tags } = product;
-  const prompt = `${HUMAN_PROMPT}Generate SEO metadata for the following product:
-Title: ${title}
-Description: ${description}
-Tags: ${tags.join(", ")}
+  const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20240620';
 
-Respond with valid JSON following this structure:
+  const prompt = `
+You are an ecommerce SEO assistant.
+Return concise, high-converting SEO metadata for a Shopify product.
+Product:
+- Title: ${product.title || ''}
+- Description: ${product.description || ''}
+- Tags: ${(product.tags || []).join(', ')}
+
+Output MUST be valid JSON with keys:
 {
-  "seoTitle": "...",
-  "seoDescription": "...",
-  "altText": "...",
-  "keywords": ["...", "..."]
+  "seoTitle": "... (max 60 chars)",
+  "seoDescription": "... (max 155 chars)",
+  "altText": "... (for main product image)",
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"]
 }
-Only return the JSON.${AI_PROMPT}`;
+Only return JSON.
+  `.trim();
 
-  const response = await claude.complete({
-    model: 'claude-v1',
-    prompt,
-    max_tokens_to_sample: 500,
-    temperature: 0.7,
+  const msg = await anthropic.messages.create({
+    model,
+    max_tokens: 600,
+    temperature: 0.4,
+    messages: [
+      { role: 'user', content: prompt }
+    ],
   });
 
-  const content = response.completion;
+  // Claude messages API returns an array of content blocks
+  const text = msg?.content?.[0]?.text || '{}';
 
   try {
-    return JSON.parse(content);
-  } catch (error) {
-    throw new Error(`Invalid JSON response from Claude: ${content}`);
+    const parsed = JSON.parse(text);
+    return {
+      seoTitle: parsed.seoTitle || '',
+      seoDescription: parsed.seoDescription || '',
+      altText: parsed.altText || '',
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+    };
+  } catch {
+    // Fallback if model returned non-JSON
+    return {
+      seoTitle: '',
+      seoDescription: '',
+      altText: '',
+      keywords: [],
+    };
   }
 }
