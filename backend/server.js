@@ -32,7 +32,7 @@ import uninstallWebhook from './webhooks/uninstall.js';
 import { syncProductsForShop } from './controllers/productSync.js';
 
 // Scheduler (auto sync per plan)
-import startScheduler from './scheduler.js';
+import { startScheduler } from './scheduler.js';
 
 // --- App init
 const app = express();
