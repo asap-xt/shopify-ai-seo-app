@@ -1,0 +1,14 @@
+{
+  "nav": { "dashboard": "Dashboard", "seo": "AI SEO", "billing": "Billing", "settings": "Settings" },
+  "dashboard": {
+    "plan": "Current plan",
+    "shop": "Shop",
+    "queries": "AI queries",
+    "products": "Product limit",
+    "providers": "Allowed AI providers",
+    "trial": "Trial ends at"
+  },
+  "seo": { "title": "Generate SEO", "productId": "Product ID", "provider": "AI Provider", "generate": "Generate", "result": "Result" },
+  "billing": { "title": "Plans & Billing", "choose": "Choose your plan:", "activate": "Activate" },
+  "settings": { "title": "Settings", "languageInfo": "Use the top-right menu to switch UI language.", "notes": "More settings will appear here later." }
+}

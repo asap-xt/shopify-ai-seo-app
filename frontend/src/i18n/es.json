@@ -1,0 +1,14 @@
+{
+  "nav": { "dashboard": "Panel", "seo": "SEO IA", "billing": "Facturación", "settings": "Ajustes" },
+  "dashboard": {
+    "plan": "Plan actual",
+    "shop": "Tienda",
+    "queries": "Consultas IA",
+    "products": "Límite de productos",
+    "providers": "Proveedores IA permitidos",
+    "trial": "La prueba termina el"
+  },
+  "seo": { "title": "Generar SEO", "productId": "ID de producto", "provider": "Proveedor IA", "generate": "Generar", "result": "Resultado" },
+  "billing": { "title": "Planes y facturación", "choose": "Elige tu plan:", "activate": "Activar" },
+  "settings": { "title": "Ajustes", "languageInfo": "Usa el menú superior derecho para cambiar el idioma.", "notes": "Pronto añadiremos más opciones." }
+}

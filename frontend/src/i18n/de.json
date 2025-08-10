@@ -1,0 +1,14 @@
+{
+  "nav": { "dashboard": "Übersicht", "seo": "KI-SEO", "billing": "Abrechnung", "settings": "Einstellungen" },
+  "dashboard": {
+    "plan": "Aktueller Plan",
+    "shop": "Shop",
+    "queries": "KI-Abfragen",
+    "products": "Produktlimit",
+    "providers": "Erlaubte KI-Anbieter",
+    "trial": "Test endet am"
+  },
+  "seo": { "title": "SEO generieren", "productId": "Produkt-ID", "provider": "KI-Anbieter", "generate": "Generieren", "result": "Ergebnis" },
+  "billing": { "title": "Pläne & Abrechnung", "choose": "Wähle deinen Plan:", "activate": "Aktivieren" },
+  "settings": { "title": "Einstellungen", "languageInfo": "Über das Menü oben rechts kannst du die Sprache wechseln.", "notes": "Weitere Optionen folgen." }
+}
