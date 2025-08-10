@@ -10,35 +10,35 @@ const PLANS = {
     price: 10,
     queryLimit: 50,
     productLimit: 150,
-    aiProviders: ['deepseek', 'llama'],
+    aiProviders: ['mock', 'deepseek', 'llama'],
     label: 'Starter',
   },
   professional: {
     price: 39,
     queryLimit: 600,
     productLimit: 300,
-    aiProviders: ['openai', 'llama', 'deepseek'], // choose any 2 in UI; we allow all 3 here, UI can restrict
+    aiProviders: ['mock', 'openai', 'llama', 'deepseek'], // choose any 2 in UI; we allow all 3 here, UI can restrict
     label: 'Professional',
   },
   growth: {
     price: 59,
     queryLimit: 1500,
     productLimit: 1000,
-    aiProviders: ['claude', 'openai', 'gemini', 'llama', 'deepseek'], // choose any 3 in UI
+    aiProviders: ['mock', 'claude', 'openai', 'gemini', 'llama', 'deepseek'], // choose any 3 in UI
     label: 'Growth',
   },
   'growth-extra': {
     price: 119,
     queryLimit: 4000,
     productLimit: 2000,
-    aiProviders: ['claude', 'openai', 'gemini', 'llama', 'deepseek'], // choose any 4 in UI
+    aiProviders: ['mock', 'claude', 'openai', 'gemini', 'llama', 'deepseek'], // choose any 4 in UI
     label: 'Growth Extra',
   },
   enterprise: {
     price: 299,
     queryLimit: 10000,
     productLimit: 10000,
-    aiProviders: ['claude', 'openai', 'gemini', 'deepseek', 'llama'],
+    aiProviders: ['mock', 'claude', 'openai', 'gemini', 'deepseek', 'llama'],
     label: 'Enterprise',
   },
 };
