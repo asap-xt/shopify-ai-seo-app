@@ -1,43 +1,90 @@
-import dotenv from 'dotenv';
+// backend/ai/deepseek.js
 import fetch from 'node-fetch';
 
-dotenv.config();
+function clamp(str = '', max = 60) {
+  const s = (str || '').trim().replace(/\s+/g, ' ');
+  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…';
+}
 
-// DeepSeek SEO generation endpoint
-const DEEPSEEK_ENDPOINT = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.ai/v1/seo';
+export async function generateWithDeepSeek(product = {}) {
+  const provider = (process.env.DEEPSEEK_PROVIDER || '').toLowerCase(); // 'openrouter' | ''
+  let baseUrl = process.env.DEEPSEEK_API_URL || '';
+  let apiKey = process.env.DEEPSEEK_API_KEY || '';
+  let model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
-/**
- * Generate SEO metadata for a product using DeepSeek
- * @param {{ title: string, description: string, tags: string[] }} product
- * @returns {Promise<{ seoTitle: string, seoDescription: string, altText: string, keywords: string[] }>}
- */
-export async function generateWithDeepSeek(product) {
-  const { title, description, tags } = product;
+  // Optional: route чрез OpenRouter (ако ползваш OPENROUTER_API_KEY)
+  if (provider === 'openrouter') {
+    baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    apiKey = process.env.OPENROUTER_API_KEY || apiKey;
+    model = process.env.DEEPSEEK_MODEL || 'deepseek/deepseek-chat';
+  }
 
-  const response = await fetch(DEEPSEEK_ENDPOINT, {
+  if (!baseUrl) {
+    throw new Error('DEEPSEEK_API_URL is not set.');
+  }
+
+  const title = product.title || 'Product';
+  const description = product.description || '';
+  const tags = Array.isArray(product.tags) ? product.tags.join(', ') : '';
+
+  const prompt = `
+You are an ecommerce SEO assistant.
+Return concise, high-converting SEO metadata for a Shopify product.
+
+Product:
+- Title: ${title}
+- Description: ${description}
+- Tags: ${tags}
+
+Output MUST be JSON:
+{
+  "seoTitle": "... (max 60 chars)",
+  "seoDescription": "... (max 155 chars)",
+  "altText": "...",
+  "keywords": ["kw1","kw2","kw3","kw4","kw5"]
+}
+Only return JSON.
+  `.trim();
+
+  const res = await fetch(baseUrl, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
     },
-    body: JSON.stringify({ title, description, tags })
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You write concise, high-quality SEO metadata for ecommerce.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.4
+    }),
+    timeout: 30_000,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DeepSeek API error: ${errorText}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`DeepSeek HTTP ${res.status}: ${text || res.statusText}`);
   }
 
-  const data = await response.json();
-  // Expecting { seoTitle, seoDescription, altText, keywords }
-  if (!data.seoTitle || !data.seoDescription) {
-    throw new Error(`Invalid response from DeepSeek: ${JSON.stringify(data)}`);
-  }
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content || '{}';
 
-  return {
-    seoTitle: data.seoTitle,
-    seoDescription: data.seoDescription,
-    altText: data.altText,
-    keywords: data.keywords || []
-  };
+  try {
+    const parsed = JSON.parse(content);
+    return {
+      seoTitle: clamp(parsed.seoTitle, 60),
+      seoDescription: clamp(parsed.seoDescription, 155),
+      altText: parsed.altText || `Photo of ${title}`,
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+    };
+  } catch {
+    return {
+      seoTitle: clamp(`${title} | Best Price`, 60),
+      seoDescription: clamp(description || `${title} – buy now.`, 155),
+      altText: `Photo of ${title}`,
+      keywords: [],
+    };
+  }
 }
