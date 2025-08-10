@@ -73,6 +73,7 @@ router.post('/product/:productId', async (req, res) => {
       ...seoData,
       updatedAt: new Date()
     };
+    product.markModified('aiOptimized');
     product.syncedAt = new Date();
     await product.save();
 
