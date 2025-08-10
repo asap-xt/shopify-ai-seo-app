@@ -4,7 +4,7 @@ import '@shopify/shopify-api/adapters/node'; // <-- важно: адаптеръ
 import express from 'express';
 import dotenv from 'dotenv';
 import { shopifyApi, LATEST_API_VERSION, RequestedTokenType } from '@shopify/shopify-api';
-import Shop from './db/models/Shop.js';
+import Shop from './db/Shop.js';
 
 dotenv.config();
 

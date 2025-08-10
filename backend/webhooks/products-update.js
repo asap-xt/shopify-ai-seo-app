@@ -1,5 +1,5 @@
 // backend/webhooks/products-update.js
-import Product from '../../db/models/Product.js';
+import Product from '../db/Product.js';
 import { formatProductForAI } from '../../utils/aiFormatter.js';
 
 export default async function productsUpdateWebhook(req, res) {

@@ -1,7 +1,7 @@
 // backend/billing.js
 import express from 'express';
-import Subscription from './db/models/Subscription.js';
-import Shop from './db/models/Shop.js';
+import Subscription from './db/Subscription.js';
+import Shop from './db/Shop.js';
 
 // ---- Plan Config (free trial: 5 days) ----
 const TRIAL_DAYS = 5;

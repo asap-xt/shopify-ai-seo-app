@@ -1,7 +1,7 @@
 // backend/controllers/seoController.js
 import express from 'express';
-import Product from '../db/models/Product.js';
-import Subscription from '../db/models/Subscription.js';
+import Product from '../db/Product.js';
+import Subscription from '../db/Subscription.js';
 import { generateSEO } from '../utils/seoGenerator.js';
 
 const router = express.Router();

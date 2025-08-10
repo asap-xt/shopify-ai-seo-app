@@ -1,5 +1,5 @@
-import Shop from '../db/models/Shop.js';
-import Product from '../db/models/Product.js';
+import Shop from '../db/Shop.js';
+import Product from '../db/Product.js';
 import { fetchProducts } from '../utils/shopifyApi.js';
 import { formatProductForAI } from '../utils/aiFormatter.js';
 
