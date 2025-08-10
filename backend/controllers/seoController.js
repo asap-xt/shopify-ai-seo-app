@@ -69,7 +69,11 @@ router.post('/product/:productId', async (req, res) => {
     );
 
     // Save to product.aiOptimized
-    product.aiOptimized = seoData;
+    product.aiOptimized = {
+      ...seoData,
+      updatedAt: new Date()
+    };
+    product.syncedAt = new Date();
     await product.save();
 
     // Increment usage counter if not trial (or count both—твоя политика)
