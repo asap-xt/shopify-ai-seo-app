@@ -1,4 +1,4 @@
-// backend/shopify/webhooks/products-update.js
+// backend/webhooks/products-update.js
 import Product from '../../db/models/Product.js';
 import { formatProductForAI } from '../../utils/aiFormatter.js';
 

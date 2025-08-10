@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useApi } from '../hooks/useApi.js';
 import { Card, Page, Text, InlineStack, BlockStack, Badge } from '@shopify/polaris';
 import { useApi } from '../hooks/useApi.js';
 
