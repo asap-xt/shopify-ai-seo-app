@@ -8,13 +8,32 @@
     />
     <title>AI SEO 2.0</title>
 
-    <!-- App Bridge v4: без Provider; подаваме API key тук -->
+    <!-- App Bridge v4: подаваме API key чрез meta, Vite го заменя -->
     <meta name="shopify-api-key" content="%VITE_SHOPIFY_API_KEY%" />
     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+
+    <!-- Top-level redirect guard: ако не е в iframe, връщаме към Admin -->
+    <script>
+      (function () {
+        try {
+          const isTop = window.top === window.self;
+          const params = new URLSearchParams(window.location.search);
+          const host = params.get('host');
+
+          // ако сме извън iframe и имаме host, редирект към Admin, пазим query-то
+          if (isTop && host) {
+            const pathAndQuery = window.location.pathname + window.location.search + window.location.hash;
+            // Админът ще интерпретира host и ще вгради приложението
+            window.location.href = "https://admin.shopify.com" + pathAndQuery;
+          }
+        } catch (e) {
+          // мълчалив fallback
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-

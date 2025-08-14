@@ -36,6 +36,18 @@ import { startScheduler } from './scheduler.js';
 
 // --- App init
 const app = express();
+
+// --- BEGIN: Embed security headers (allow Shopify Admin to embed the app) ---
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
+  );
+  res.removeHeader('X-Frame-Options');
+  next();
+});
+// --- END: Embed security headers ---
+
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
