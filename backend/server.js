@@ -7,6 +7,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,8 +15,8 @@ import { fileURLToPath } from 'url';
 dotenv.config();
 
 // --- Import routers/controllers
-// Shopify Managed Installation (token exchange)
-import tokenExchange from './token-exchange.js';
+// OAuth (Public distribution)
+import authRouter from './auth.js';
 
 // Billing API (plans, subscribe, plan info, reset)
 import billing from './billing.js';
@@ -50,7 +51,8 @@ app.use((req, res, next) => {
 
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser());
 app.use(morgan('tiny'));
 
 // --- Health
@@ -58,8 +60,8 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
 });
 
-// --- Token exchange (Shopify-managed installation)
-app.use('/token-exchange', tokenExchange);
+// --- OAuth (Public distribution)
+app.use(authRouter);
 
 // --- Billing API
 app.use('/billing', billing);
@@ -71,74 +73,30 @@ app.use('/seo', seoRouter);
 app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
 app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
 
-// --- Test sync endpoint (manual trigger): /test-sync?shop=your-shop.myshopify.com
-app.get('/test-sync', async (req, res) => {
-  try {
-    const shop = (req.query.shop || '').replace(/^https?:\/\//, '');
-    if (!shop) return res.status(400).send('Missing ?shop= param');
-    const count = await syncProductsForShop(shop);
-    res.send(`✅ Synced ${count} products for ${shop}`);
-  } catch (e) {
-    console.error('Sync error:', e);
-    res.status(500).send(`❌ Sync error: ${e.message}`);
-  }
+// --- Optional: test product sync manually
+app.get('/sync-products/:shop', async (req, res) => {
+  const { shop } = req.params;
+  await syncProductsForShop(shop);
+  res.status(200).json({ message: `Products synced for shop ${shop}` });
 });
 
-// --- MongoDB connect + start scheduler only once DB is up
-const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
-const DB_NAME = process.env.MONGO_DB_NAME || 'seo-app';
-
-async function connectMongo() {
-  if (!MONGODB_URI) {
-    console.warn('⚠️  MONGODB_URI is not set. The app will run but DB operations will fail.');
-    return;
-  }
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      dbName: DB_NAME,
-      serverSelectionTimeoutMS: 10000,
-    });
-    console.log('✅ Connected to MongoDB');
-
-    // start scheduled jobs after DB is ready
-    try {
-      await startScheduler();
-    } catch (err) {
-      console.error('❌ Scheduler start error:', err);
-    }
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
-    // Do not exit in Railway; let the platform restart if needed
-  }
-}
-connectMongo();
-
-// --- Static frontend (Polaris app) from /frontend/dist
-// IMPORTANT: place AFTER API routes and BEFORE the catch-all.
+// --- Serve frontend build
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const frontendDir = path.resolve(__dirname, '../frontend/dist');
-app.use(express.static(frontendDir));
-
-// Catch-all for client-side routing, but DO NOT intercept API/webhooks
-app.get('*', (req, res, next) => {
-  const p = req.path || '';
-  if (
-    p.startsWith('/webhooks') ||
-    p.startsWith('/billing') ||
-    p.startsWith('/seo') ||
-    p.startsWith('/token-exchange') ||
-    p.startsWith('/health') ||
-    p.startsWith('/test-sync')
-  ) {
-    return next();
-  }
-  return res.sendFile(path.join(frontendDir, 'index.html'));
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
 });
 
-// --- Start server
-const PORT = Number(process.env.PORT || 3000);
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+// --- Start server & scheduler
+const PORT = process.env.PORT || 8080;
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('MongoDB connected');
+    app.listen(PORT, () => {
+      console.log(`✓ Server listening on port ${PORT}`);
+      startScheduler();
+    });
+  })
+  .catch((err) => console.error(err));
