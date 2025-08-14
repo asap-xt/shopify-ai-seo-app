@@ -1,3 +1,4 @@
+// frontend/src/main.jsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -9,28 +10,21 @@ import { getSessionToken } from '@shopify/app-bridge/utilities';
 
 import App from './App.jsx';
 
-// Helpers
 function getQueryParam(name) {
   const url = new URL(window.location.href);
   return url.searchParams.get(name) || '';
 }
 
-const host = getQueryParam('host');
+const host = getQueryParam('host');              // задължителен за embed
 const shop = getQueryParam('shop')?.replace(/^https?:\/\//, '');
 
-// === App Bridge v4 init ===
 export const appBridge = createApp({
   apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
   host,
 });
 
-// Helper за backend auth при нужда
 export async function getIdToken() {
-  try {
-    return await getSessionToken(appBridge);
-  } catch {
-    return '';
-  }
+  try { return await getSessionToken(appBridge); } catch { return ''; }
 }
 
 const Root = () => (
