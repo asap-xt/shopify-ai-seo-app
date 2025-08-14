@@ -1,138 +1,99 @@
-// backend/auth.js
-// Shopify OAuth (Public distribution) — ESM
+// backend/server.js
+// Entry for the app server (ESM). Serves API + webhooks + static frontend build.
 
-import crypto from 'crypto';
-import fetch from 'node-fetch'; // Node 18 има глобален fetch, но този import е safe
 import express from 'express';
-import Shop from './db/Shop.js';
+import helmet from 'helmet';
+import cors from 'cors';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const router = express.Router();
+// --- Load env
+dotenv.config();
 
-const {
-  SHOPIFY_API_KEY,             // client_id
-  SHOPIFY_API_SECRET,          // client_secret
-  SHOPIFY_API_SCOPES,          // "write_products,read_products" и т.н.
-  APP_URL,                     // "https://new-ai-seo-app-production.up.railway.app"
-  SHOPIFY_API_VERSION = '2024-07',
-} = process.env;
+// --- Import routers/controllers
+import authRouter from './auth.js';                      // OAuth (Public)
+import billing from './billing.js';                      // Billing API
+import seoRouter from './controllers/seoController.js';  // SEO routes
+import validateShopifyWebhook from './middleware/webhookValidator.js';
+import productsWebhook from './webhooks/products.js';
+import uninstallWebhook from './webhooks/uninstall.js';
+import { syncProductsForShop } from './controllers/productSync.js';
+import { startScheduler } from './scheduler.js';
 
-const CALLBACK_PATH = '/auth/callback';
-const REDIRECT_URI = `${APP_URL}${CALLBACK_PATH}`;
+// --- App init
+const app = express();
 
-// Helpers
-function base64UrlEncode(str) {
-  return Buffer.from(str, 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
+// --- BEGIN: Embed security headers (allow Shopify Admin to embed the app) ---
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
+  );
+  res.removeHeader('X-Frame-Options');
+  next();
+});
+// --- END: Embed security headers ---
 
-function base64UrlDecode(str) {
-  return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-}
+// Важно: изключваме helmet.contentSecurityPolicy, за да не override-не горния хедър
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser());
+app.use(morgan('tiny'));
 
-function buildAuthUrl(shop, state) {
-  const params = new URLSearchParams({
-    client_id: SHOPIFY_API_KEY,
-    scope: (SHOPIFY_API_SCOPES || '').replace(/\s/g, ''),
-    redirect_uri: REDIRECT_URI,
-    state,
-  });
-  return `https://${shop}/admin/oauth/authorize?${params.toString()}`;
-}
+// --- Health
+app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
 
-function verifyHmac(query, secret) {
-  const { hmac, ...map } = query;
-  const message = Object.keys(map)
-    .sort()
-    .map((k) => `${k}=${Array.isArray(map[k]) ? map[k].join(',') : map[k]}`)
-    .join('&');
+// --- OAuth (Public distribution)
+app.use(authRouter);
 
-  const digest = crypto.createHmac('sha256', secret).update(message).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(digest, 'utf8'), Buffer.from(hmac, 'utf8'));
-}
+// --- Billing API
+app.use('/billing', billing);
 
-async function exchangeToken(shop, code) {
-  const resp = await fetch(`https://${shop}/admin/oauth/access_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: SHOPIFY_API_KEY, client_secret: SHOPIFY_API_SECRET, code }),
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error(`Token exchange failed: ${resp.status} ${t}`);
-  }
-  return resp.json(); // { access_token, scope, ... }
-}
+// --- SEO API
+app.use('/seo', seoRouter);
 
-async function registerWebhooks(shop, accessToken) {
-  const topics = [
-    { topic: 'products/update',  address: `${APP_URL}/webhooks/products/update`,  format: 'json' },
-    { topic: 'app/uninstalled',  address: `${APP_URL}/webhooks/app/uninstalled`, format: 'json' },
-  ];
+// --- Webhooks
+app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
+app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
 
-  for (const w of topics) {
-    try {
-      await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`, {
-        method: 'POST',
-        headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhook: w }),
-      });
-    } catch (_) { /* noop */ }
-  }
-}
-
-// GET /auth?shop=asapxt-teststore.myshopify.com
-router.get('/auth', async (req, res) => {
-  const shop = (req.query.shop || '').toString();
-  if (!shop.endsWith('.myshopify.com')) {
-    return res.status(400).send('Invalid shop');
-  }
-  const state = crypto.randomBytes(16).toString('hex');
-  res.cookie('shopify_oauth_state', state, {
-    httpOnly: true, secure: true, sameSite: 'none', maxAge: 10 * 60 * 1000, path: '/',
-  });
-
-  return res.redirect(302, buildAuthUrl(shop, state));
+// --- Optional: test product sync manually
+app.get('/sync-products/:shop', async (req, res) => {
+  const { shop } = req.params;
+  await syncProductsForShop(shop);
+  res.status(200).json({ message: `Products synced for shop ${shop}` });
 });
 
-// GET /auth/callback?code=...&hmac=...&shop=...&state=...&host=...
-router.get(CALLBACK_PATH, async (req, res) => {
-  try {
-    const { code, hmac, shop, state, host } = req.query;
-
-    // 1) Validate
-    const stateCookie = req.cookies?.shopify_oauth_state;
-    if (!state || !stateCookie || state !== stateCookie) return res.status(400).send('Invalid state');
-    if (!verifyHmac(req.query, SHOPIFY_API_SECRET))      return res.status(400).send('Invalid HMAC');
-    if (!shop || !shop.endsWith('.myshopify.com') || !code) return res.status(400).send('Missing params');
-
-    // 2) Exchange code for token
-    const tokenResp = await exchangeToken(shop, code);
-    const accessToken = tokenResp.access_token;
-    const scopes = tokenResp.scope || '';
-
-    // 3) Upsert shop record
-    await Shop.findOneAndUpdate(
-      { shop }, { shop, accessToken, scopes, installedAt: new Date() }, { upsert: true, new: true }
-    );
-
-    // 4) Register webhooks
-    await registerWebhooks(shop, accessToken);
-
-    // 5) Redirect to EMBEDDED app URL per Shopify docs:
-    // https://{base64_decode(host)}/apps/{api_key}/
-    // Ако липсва host (рядко), изграждаме го от shop.
-    const finalHost = host
-      ? host.toString()
-      : base64UrlEncode(`${shop}/admin`);
-    const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, ''); // ".../admin"
-    const embeddedUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/`;
-
-    return res.redirect(302, embeddedUrl);
-  } catch (e) {
-    console.error('OAuth callback error:', e);
-    return res.status(500).send('OAuth failed');
-  }
+// --- Serve frontend build
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
 });
 
-export default router;
+// --- Start server FIRST, then connect Mongo (to avoid Railway 502 if DB is slow)
+const PORT = process.env.PORT || 8080;
+const server = app.listen(PORT, () => {
+  console.log(`✓ Server listening on port ${PORT}`);
+  // стартирaме scheduler след старта, за да не блокираме boot-а
+  try { startScheduler(); } catch (e) { console.error('Scheduler start error:', e); }
+});
+
+// --- Connect Mongo (async, non-blocking)
+mongoose
+  .connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error('MongoDB connection error:', err));
+
+// --- Safety: log unhandled promise rejections / exceptions
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
