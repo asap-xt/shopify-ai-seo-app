@@ -18,13 +18,13 @@ function getQueryParam(name) {
 const host = getQueryParam('host');
 const shop = getQueryParam('shop')?.replace(/^https?:\/\//, '');
 
-// Инициализация на App Bridge v4 (ще ни трябва за idToken, redirect-и, и т.н.)
+// === App Bridge v4 init ===
 export const appBridge = createApp({
   apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
   host,
 });
 
-// Опционално: helper за взимане на idToken за бекенда (ползвай го в API клиент)
+// Helper за backend auth при нужда
 export async function getIdToken() {
   try {
     return await getSessionToken(appBridge);
