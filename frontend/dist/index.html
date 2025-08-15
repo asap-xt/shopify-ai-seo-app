@@ -2,42 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
-    />
+    <!-- Required by App Bridge v4: keep these at the very top -->
+    <meta name="shopify-api-key" content="2749a2f6d38ff5796ed256b5c9dc70a1" />
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+
+    <meta http-equiv="Content-Security-Policy"
+          content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shopify AI SEO 2.0</title>
+
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-      }
-      .not-embedded-hint {
-        padding: 1rem;
-        text-align: center;
-        background: #fff3cd;
-        border: 1px solid #ffeeba;
-        color: #856404;
-      }
-      .not-embedded-hint strong {
-        font-weight: bold;
-      }
+      body { margin: 0; padding: 0; }
+      .not-embedded-hint { padding: 1rem; text-align: center; background: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
+      .not-embedded-hint strong { font-weight: bold; }
     </style>
+
     <script>
-      // Примерен guard за embed
-      (function() {
-        const params = new URLSearchParams(window.location.search);
-        const host = params.get('host');
-        const shop = params.get('shop');
-        const apiKey = '2749a2f6d38ff5796ed256b5c9dc70a1';
-        if (!host && shop && apiKey) {
-          const redirect = `https://${shop}/admin/apps/${apiKey}${window.location.pathname}${window.location.search}`;
-          if (window.top === window.self) window.top.location.href = redirect;
-        }
-      })();
+      // Debug: verify App Bridge v4 is present inside the iframe
+      window.__AB_READY__ = () => {
+        try {
+          const ok = !!window.shopify;
+          console.debug('[AB] global shopify is', ok ? 'AVAILABLE' : 'MISSING', window.shopify);
+        } catch (e) { console.warn('[AB] global check error', e); }
+      };
+      document.addEventListener('DOMContentLoaded', window.__AB_READY__);
     </script>
-    <script type="module" crossorigin src="/assets/index-C-IdDxjX.js"></script>
+    <script type="module" crossorigin src="/assets/index-Cv1whbs-.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-C7YjYK5e.css">
   </head>
   <body>
