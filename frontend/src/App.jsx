@@ -168,7 +168,7 @@ export default function App() {
         <AppHeader sectionTitle={title} lang={lang} setLang={setLang} t={t} />
 
         {/* Page content (keeps the big page title too, if you like it) */}
-        <Page title={title} fullWidth>
+        <Page fullWidth>
           {key === 'dashboard' && <Dashboard t={t} />}
           {key === 'seo' && <AiSeo t={t} />}
           {key === 'billing' && <Billing t={t} />}
