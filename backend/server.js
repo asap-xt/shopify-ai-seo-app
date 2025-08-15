@@ -122,6 +122,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, '../frontend/dist');
 
+// Debug assets listing
 app.get('/debug/assets', (_req, res) => {
   try {
     const fs = require('fs');
@@ -132,6 +133,27 @@ app.get('/debug/assets', (_req, res) => {
   }
 });
 
+// ========= EMBED SPA ROUTES (for Shopify Admin left nav) =========
+
+// Serve static frontend assets
+app.use('/assets', express.static(path.join(distPath, 'assets'), {
+  immutable: true,
+  maxAge: '1y',
+}));
+
+// Direct routes for main app sections (as they appear in Shopify nav)
+app.get(['/', '/dashboard', '/ai-seo', '/billing', '/settings'], (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Catch-all for any other non-API, non-webhook route to return SPA
+app.get(/^\/(?!api\/|seo\/|billing\/|webhooks\/|assets\/|debug\/).+/, (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// ========= END EMBED SPA ROUTES =========
+
+// Fallback to SPA for any remaining requests (previous setup)
 app.use(express.static(distPath));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
