@@ -1,8 +1,8 @@
-// App.jsx — Embedded UI with Shopify Admin left nav (ui-nav-menu) + Brand header + Language button
+// App.jsx — Embedded UI with ui-nav-menu + brand header showing CURRENT SECTION + language button
 import React, { useMemo, useState } from 'react';
 import {
   Frame, Page, Layout, Card, BlockStack, Text,
-  Divider, InlineStack, Button, TextField, Select, Toast, Box,
+  Divider, InlineStack, Button, TextField, Select, Toast,
 } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
 import useI18n from './hooks/useI18n.js';
@@ -145,12 +145,12 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
-  // App display name (shows in Shopify header and our brand header)
+  // Constant app name shown in the Shopify header (not duplicated in our brand header)
   const APP_NAME = import.meta.env.VITE_APP_NAME || 'NEW AI SEO';
 
   return (
     <>
-      {/* Always show app name in Shopify Admin header */}
+      {/* App name always visible in the Shopify Admin header */}
       <TitleBar title={APP_NAME} />
 
       {/* Left navigation in Shopify Admin */}
@@ -162,12 +162,12 @@ export default function App() {
         <a href="/settings">{t('nav.settings', 'Settings')}</a>
       </ui-nav-menu>
 
-      {/* NOTE: no Polaris TopBar -> removes the black strip */}
+      {/* No Polaris TopBar -> no black strip */}
       <Frame>
-        {/* Brand header (app name left, language button right) */}
-        <AppHeader appName={APP_NAME} lang={lang} setLang={setLang} t={t} />
+        {/* Brand header: CURRENT SECTION (left) + Language button (right) */}
+        <AppHeader sectionTitle={title} lang={lang} setLang={setLang} t={t} />
 
-        {/* Page content + page title (e.g. Dashboard) */}
+        {/* Page content (keeps the big page title too, if you like it) */}
         <Page title={title} fullWidth>
           {key === 'dashboard' && <Dashboard t={t} />}
           {key === 'seo' && <AiSeo t={t} />}
