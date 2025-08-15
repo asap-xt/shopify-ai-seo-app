@@ -1,5 +1,5 @@
-// App.jsx — Embedded UI with Shopify Admin left nav (NavigationMenu actions API) + basic actions
-import React, { useMemo, useState, useEffect } from 'react';
+// App.jsx — Embedded UI with Shopify Admin left nav (App Bridge actions) + basic actions
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Frame,
   Page,
@@ -14,11 +14,10 @@ import {
   Select,
   Toast,
 } from '@shopify/polaris';
-import { TitleBar } from '@shopify/app-bridge-react';
-import { NavigationMenu } from '@shopify/app-bridge/actions';
+import { TitleBar as ABTitleBar, NavigationMenu } from '@shopify/app-bridge/actions';
 import useI18n from './hooks/useI18n.js';
 import TopNav from './components/TopNav.jsx';
-import { appBridge } from './main.jsx'; // App Bridge instance created in main.jsx
+import { appBridge } from './main.jsx';
 
 // Resolve current section from pathname (no react-router)
 function useRoute(t) {
@@ -61,7 +60,7 @@ function Dashboard({ t }) {
   );
 }
 
-// Lazy loader for getIdToken without top-level await (import main.jsx only when needed)
+// Lazy loader for getIdToken without top-level await
 let getIdToken = async () => '';
 async function ensureGetIdToken() {
   if (ensureGetIdToken._loaded) return;
@@ -87,7 +86,6 @@ function AiSeo({ t }) {
     { label: 'Claude', value: 'claude' },
   ];
 
-  // Calls backend to generate SEO for a single product
   const handleGenerate = async () => {
     setLoading(true);
     setResult('');
@@ -164,10 +162,7 @@ function AiSeo({ t }) {
 }
 
 function Billing({ t }) {
-  // Simple redirect to your billing routes; adjust to your real endpoint if needed
-  const goToBilling = () => {
-    window.location.assign('/billing');
-  };
+  const goToBilling = () => window.location.assign('/billing');
 
   return (
     <Layout>
@@ -211,7 +206,19 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
-  // Create/update Shopify Admin left nav menu via App Bridge actions API
+  // Title bar (actions API, no React provider)
+  const tbRef = useRef(null);
+  useEffect(() => {
+    if (!appBridge) return;
+    if (!tbRef.current) {
+      tbRef.current = ABTitleBar.create(appBridge, { title });
+    } else {
+      tbRef.current.set({ title });
+    }
+  }, [title]);
+
+  // Shopify Admin left nav menu (actions API)
+  const navRef = useRef(null);
   useEffect(() => {
     if (!appBridge) return;
 
@@ -222,24 +229,21 @@ export default function App() {
       { label: t('nav.settings', 'Settings'),   destination: '/settings' },
     ];
 
-    // This renders under the app name in Shopify's global left sidebar
-    NavigationMenu.create(appBridge, { items });
-    // No cleanup required; App Bridge manages a single instance per app
-  }, [t, lang]);
+    if (!navRef.current) {
+      navRef.current = NavigationMenu.create(appBridge, { items });
+    } else {
+      navRef.current.set({ items });
+    }
+  }, [t, lang]); // update labels when language changes
 
   return (
-    <>
-      {/* Title in Shopify Admin header */}
-      <TitleBar title={title} />
-
-      <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
-        <Page title={title} fullWidth>
-          {key === 'dashboard' && <Dashboard t={t} />}
-          {key === 'seo' && <AiSeo t={t} />}
-          {key === 'billing' && <Billing t={t} />}
-          {key === 'settings' && <Settings t={t} />}
-        </Page>
-      </Frame>
-    </>
+    <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
+      <Page title={title} fullWidth>
+        {key === 'dashboard' && <Dashboard t={t} />}
+        {key === 'seo' && <AiSeo t={t} />}
+        {key === 'billing' && <Billing t={t} />}
+        {key === 'settings' && <Settings t={t} />}
+      </Page>
+    </Frame>
   );
 }
