@@ -1,5 +1,5 @@
 // backend/server.js
-// Entry for the app server (ESM). Serves API + webhooks + static frontend build.
+// App server (ESM). Serves API + webhooks + static frontend build (SPA).
 
 import express from 'express';
 import helmet from 'helmet';
@@ -10,24 +10,27 @@ import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 dotenv.config();
 
-// --- Normalize APP URLs (remove trailing slash if present)
-const normalizeUrl = (url) => url?.replace(/\/+$/, '') || '';
+// --- Normalize app URLs (avoid trailing slashes that break Shopify redirects)
+const normalizeUrl = (url) => (url ? url.replace(/\/+$/, '') : '');
 process.env.APP_URL = normalizeUrl(process.env.APP_URL);
 process.env.BASE_URL = normalizeUrl(process.env.BASE_URL);
 process.env.HOST = normalizeUrl(process.env.HOST);
 process.env.SHOPIFY_APP_URL = normalizeUrl(process.env.SHOPIFY_APP_URL);
 
-// Debug log normalized URLs
-console.log('[URL CONFIG]', {
-  APP_URL: process.env.APP_URL,
-  BASE_URL: process.env.BASE_URL,
-  HOST: process.env.HOST,
-  SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL
-});
+if (process.env.NODE_ENV !== 'production') {
+  console.log('[URL CONFIG]', {
+    APP_URL: process.env.APP_URL,
+    BASE_URL: process.env.BASE_URL,
+    HOST: process.env.HOST,
+    SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL,
+  });
+}
 
+// Routers / controllers
 import authRouter from './auth.js';                      // OAuth (Public)
 import billing from './billing.js';                      // Billing API
 import seoRouter from './controllers/seoController.js';  // SEO routes
@@ -37,151 +40,159 @@ import uninstallWebhook from './webhooks/uninstall.js';
 import { syncProductsForShop } from './controllers/productSync.js';
 import { startScheduler } from './scheduler.js';
 
-const app = express();
+// Optional CSP helper (must allow embedding)
 import csp from './middleware/csp.js';
-app.use(csp);
 
-// Allow embedding in Shopify Admin (CSP frame-ancestors)
+const app = express();
+
+// ---- Security: allow embedding inside Shopify Admin (iframe)
+app.use(csp);
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com;");
-  res.removeHeader('X-Frame-Options');
+  // Keep this header explicit. Helmet CSP is disabled below to avoid overrides.
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
+  );
+  res.removeHeader('X-Frame-Options'); // obsolete with CSP, but some proxies still add it
   next();
 });
 
-// Disable helmet CSP so it doesn't override the header above
+// Base hardening
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 
-// Verbose request logger (in addition to morgan)
-app.use((req, _res, next) => {
-  console.log(`[req] ${req.method} ${req.originalUrl}`);
-  next();
-});
+// Request log
+app.use(morgan('tiny'));
+app.use(cookieParser());
 
 // RAW BODY for webhooks (must be BEFORE express.json)
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   if (!req.path.startsWith('/webhooks/')) return next();
   let data = '';
   req.setEncoding('utf8');
-  req.on('data', (chunk) => { data += chunk; });
+  req.on('data', (chunk) => (data += chunk));
   req.on('end', () => {
     req.rawBody = data;
-    try { req.body = data ? JSON.parse(data) : {}; } catch { req.body = {}; }
+    try {
+      req.body = data ? JSON.parse(data) : {};
+    } catch {
+      req.body = {};
+    }
     next();
   });
 });
 
 app.use(express.json({ limit: '2mb' }));
-app.use(cookieParser());
-app.use(morgan('tiny'));
 
-// --- Debug endpoints
-app.get('/debug/ping', (_req, res) => res.status(200).json({ ok: true }));
-app.get('/debug/routes', (_req, res) => {
-  const routes = [];
-  const stack = app._router?.stack || [];
-  for (const layer of stack) {
-    if (layer.route && layer.route.path) {
-      const methods = Object.keys(layer.route.methods).filter(Boolean);
-      routes.push({ methods, path: layer.route.path });
-    } else if (layer.name === 'router' && layer.handle?.stack) {
-      for (const r of layer.handle.stack) {
-        if (r.route?.path) {
-          const methods = Object.keys(r.route.methods).filter(Boolean);
-          routes.push({ methods, path: r.route.path });
+// ---- Health
+app.get('/health', (_req, res) => res.status(200).json({ status: 'OK' }));
+
+// ---- Debug (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/debug/ping', (_req, res) => res.status(200).json({ ok: true }));
+
+  app.get('/debug/routes', (_req, res) => {
+    const routes = [];
+    const stack = app._router?.stack || [];
+    for (const layer of stack) {
+      if (layer.route?.path) {
+        const methods = Object.keys(layer.route.methods);
+        routes.push({ methods, path: layer.route.path });
+      } else if (layer.name === 'router' && layer.handle?.stack) {
+        for (const r of layer.handle.stack) {
+          if (r.route?.path) {
+            const methods = Object.keys(r.route.methods);
+            routes.push({ methods, path: r.route.path });
+          }
         }
       }
     }
-  }
-  res.status(200).json({ routes });
-});
+    res.status(200).json({ routes });
+  });
+}
 
-// Health
-app.get('/health', (_req, res) => res.status(200).json({ status: 'OK' }));
+// ---- APIs (mount BEFORE static)
+app.use(authRouter);            // OAuth (kept at root so /auth/* works)
+app.use('/billing', billing);   // Billing actions
+app.use('/seo', seoRouter);     // SEO API
 
-// OAuth (Public distribution) – mount WITHOUT prefix so /auth works
-app.use(authRouter);
-
-// Billing & SEO APIs
-app.use('/billing', billing);
-app.use('/seo', seoRouter);
-
-// Webhooks
+// ---- Webhooks
 app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
 app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
 
-// Manual product sync (debug)
-app.get('/sync-products/:shop', async (req, res) => {
-  const { shop } = req.params;
-  await syncProductsForShop(shop);
-  res.status(200).json({ message: `Products synced for shop ${shop}` });
-});
+// Manual product sync (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/sync-products/:shop', async (req, res) => {
+    const { shop } = req.params;
+    await syncProductsForShop(shop);
+    res.status(200).json({ message: `Products synced for shop ${shop}` });
+  });
+}
 
-// Serve frontend build
+// ---- Static frontend build (SPA)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const distPath = path.join(__dirname, '../frontend/dist');
+const distPath = path.resolve(__dirname, '../frontend/dist');
 
-// Debug assets listing
-app.get('/debug/assets', (_req, res) => {
-  try {
-    const fs = require('fs');
-    const files = fs.readdirSync(distPath);
-    res.json({ distExists: true, files });
-  } catch {
-    res.json({ distExists: false, files: [] });
-  }
+// List built assets (dev aid)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/debug/assets', (_req, res) => {
+    try {
+      const files = fs.readdirSync(distPath);
+      res.json({ distExists: true, files });
+    } catch {
+      res.json({ distExists: false, files: [] });
+    }
+  });
+}
+
+// Serve static files (no index by default; SPA handled below)
+app.use(
+  express.static(distPath, {
+    index: false,
+    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-store');
+      }
+    },
+  })
+);
+
+// Explicit SPA routes that should return index.html
+const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings'];
+spaRoutes.forEach((route) => {
+  app.get(route, (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 });
 
-// ========= EMBED SPA ROUTES (for Shopify Admin left nav) =========
-
-// Serve static frontend assets
-app.use('/assets', express.static(path.join(distPath, 'assets'), {
-  immutable: true,
-  maxAge: '1y',
-}));
-
-// Direct routes for main app sections (as they appear in Shopify nav)
-app.get(['/', '/dashboard', '/ai-seo', '/billing', '/settings'], (req, res) => {
+// Generic SPA fallback: anything that is not API/webhooks/debug/assets
+app.get(/^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/).*/i, (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Catch-all for any other non-API, non-webhook route to return SPA
-app.get(/^\/(?!api\/|seo\/|billing\/|webhooks\/|assets\/|debug\/).+/, (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-// ========= END EMBED SPA ROUTES =========
-
-// Fallback to SPA for any remaining requests (previous setup)
-app.use(express.static(distPath));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-// Start server FIRST, then connect Mongo
+// ---- Start server (then async-connect to Mongo)
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`✓ Server listening on port ${PORT}`);
-  try { startScheduler(); } catch (e) { console.error('Scheduler start error:', e); }
+  try {
+    startScheduler();
+  } catch (e) {
+    console.error('Scheduler start error:', e);
+  }
 });
 
-// Connect Mongo (async, non-blocking)
+// Mongo connect (non-blocking)
 mongoose
   .connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
-// Global 404 handler
+// Last-resort 404 (should rarely trigger thanks to SPA fallback)
 app.use((req, res) => {
   console.warn(`[404] ${req.method} ${req.originalUrl}`);
   res.status(404).send('Not found by backend');
 });
 
 // Safety logs
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
+process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:', reason));
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));

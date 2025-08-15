@@ -41,15 +41,18 @@ function Dashboard({ t }) {
   );
 }
 
-// Lazy loader for getIdToken without top-level await (import only when needed)
+// Lazy loader for getIdToken without top-level await (avoid circular import with main.jsx)
 let getIdToken = async () => '';
 async function ensureGetIdToken() {
   if (ensureGetIdToken._loaded) return;
   try {
     const mod = await import('./main.jsx');
     getIdToken = typeof mod.getIdToken === 'function' ? mod.getIdToken : async () => '';
-  } catch { getIdToken = async () => ''; }
-  finally { ensureGetIdToken._loaded = true; }
+  } catch {
+    getIdToken = async () => '';
+  } finally {
+    ensureGetIdToken._loaded = true;
+  }
 }
 
 function AiSeo({ t }) {
@@ -60,24 +63,34 @@ function AiSeo({ t }) {
   const [toast, setToast] = useState({ open: false, content: '' });
   const providers = [{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }];
 
+  // POST to backend to generate SEO for a single product
   const handleGenerate = async () => {
-    setLoading(true); setResult('');
+    setLoading(true);
+    setResult('');
     try {
       await ensureGetIdToken();
       const token = await getIdToken().catch(() => '');
+
       const res = await fetch('/seo/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ productId, provider }),
       });
+
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+
       const data = await res.json();
       const out = data?.result ?? data;
       setResult(typeof out === 'string' ? out : JSON.stringify(out, null, 2));
       setToast({ open: true, content: t('seo.result', 'Result') + ' ✓' });
     } catch (e) {
       setToast({ open: true, content: `Error: ${e.message}` });
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -91,14 +104,24 @@ function AiSeo({ t }) {
               <InlineStack gap="300" align="start">
                 <TextField label={t('seo.productId', 'Product ID')} value={productId} onChange={setProductId} autoComplete="off" />
                 <Select label={t('seo.provider', 'AI Provider')} options={providers} value={provider} onChange={setProvider} />
-                <Button variant="primary" loading={loading} onClick={handleGenerate}>{t('seo.generate', 'Generate')}</Button>
+                <Button variant="primary" loading={loading} onClick={handleGenerate}>
+                  {t('seo.generate', 'Generate')}
+                </Button>
               </InlineStack>
-              {result && (<Card><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{result}</pre></Card>)}
+
+              {result && (
+                <Card>
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{result}</pre>
+                </Card>
+              )}
             </BlockStack>
           </Card>
         </Layout.Section>
       </Layout>
-      {toast.open && (<Toast content={toast.content} onDismiss={() => setToast({ open: false, content: '' })} />)}
+
+      {toast.open && (
+        <Toast content={toast.content} onDismiss={() => setToast({ open: false, content: '' })} />
+      )}
     </>
   );
 }
@@ -145,15 +168,15 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
-  // Constant app name shown in the Shopify header (not duplicated in our brand header)
+  // App name shown in the Shopify Admin header (we do NOT duplicate it in-page)
   const APP_NAME = import.meta.env.VITE_APP_NAME || 'NEW AI SEO';
 
   return (
     <>
-      {/* App name always visible in the Shopify Admin header */}
+      {/* App name always visible in Shopify Admin header */}
       <TitleBar title={APP_NAME} />
 
-      {/* Left navigation in Shopify Admin */}
+      {/* Left navigation inside Shopify Admin */}
       <ui-nav-menu>
         <a href="/" rel="home">Home</a>
         <a href="/dashboard">{t('nav.dashboard', 'Dashboard')}</a>
@@ -164,10 +187,10 @@ export default function App() {
 
       {/* No Polaris TopBar -> no black strip */}
       <Frame>
-        {/* Brand header: CURRENT SECTION (left) + Language button (right) */}
+        {/* In-page brand header: CURRENT SECTION (left) + Language button (right) */}
         <AppHeader sectionTitle={title} lang={lang} setLang={setLang} t={t} />
 
-        {/* Page content (keeps the big page title too, if you like it) */}
+        {/* Page content */}
         <Page fullWidth>
           {key === 'dashboard' && <Dashboard t={t} />}
           {key === 'seo' && <AiSeo t={t} />}

@@ -2,31 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Required by App Bridge v4: keep these at the very top -->
+    <!-- App Bridge v4 bootstrapping (must be first in <head>) -->
     <meta name="shopify-api-key" content="%VITE_SHOPIFY_API_KEY%" />
     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
 
+    <!-- The real CSP comes from server headers; keep meta for local preview parity -->
     <meta http-equiv="Content-Security-Policy"
           content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shopify AI SEO 2.0</title>
+    <title>%VITE_APP_NAME%</title>
 
     <style>
-      body { margin: 0; padding: 0; }
-      .not-embedded-hint { padding: 1rem; text-align: center; background: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
-      .not-embedded-hint strong { font-weight: bold; }
+      /* Keep styles minimal; Polaris handles the rest */
+      html, body { margin: 0; padding: 0; }
     </style>
-
-    <script>
-      // Debug: verify App Bridge v4 is present inside the iframe
-      window.__AB_READY__ = () => {
-        try {
-          const ok = !!window.shopify;
-          console.debug('[AB] global shopify is', ok ? 'AVAILABLE' : 'MISSING', window.shopify);
-        } catch (e) { console.warn('[AB] global check error', e); }
-      };
-      document.addEventListener('DOMContentLoaded', window.__AB_READY__);
-    </script>
   </head>
   <body>
     <div id="root"></div>
