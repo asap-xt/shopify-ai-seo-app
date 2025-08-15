@@ -1,95 +1,121 @@
-// frontend/src/App.jsx
-import React from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Frame, Page } from '@shopify/polaris';
-import { Provider as AppBridgeProvider, TitleBar, NavigationMenu } from '@shopify/app-bridge-react';
+import React, { useMemo } from 'react';
+import { Frame, Page, Layout, Card, BlockStack, Text, Divider } from '@shopify/polaris';
+import { TitleBar } from '@shopify/app-bridge-react';
+import SideNav from './components/SideNav.jsx';
+import TopNav from './components/TopNav.jsx';
+import useI18n from './hooks/useI18n.js';
 
-// Взимаме host/shop от props (идват от main.jsx) и пазим текущия път
-export default function App({ host, shop }) {
-  const location = useLocation();
-  const navigate = useNavigate();
+function useRoute(t) {
+  const path = (typeof window !== 'undefined' ? window.location.pathname : '/') || '/';
 
-  // Меню за вграденото приложение (ляво таб меню вътре в iframe header менюто)
-  const navItems = [
-    { label: 'Dashboard', destination: '/dashboard' },
-    { label: 'AI SEO',    destination: '/ai-seo' },
-    { label: 'Billing',   destination: '/billing' },
-    { label: 'Settings',  destination: '/settings' },
-  ];
+  return useMemo(() => {
+    if (path === '/' || path.startsWith('/dashboard')) {
+      return { key: 'dashboard', title: t('nav.dashboard', 'Dashboard') };
+    }
+    if (path.startsWith('/ai-seo')) {
+      return { key: 'seo', title: t('nav.seo', 'AI SEO') };
+    }
+    if (path.startsWith('/billing')) {
+      return { key: 'billing', title: t('nav.billing', 'Billing') };
+    }
+    if (path.startsWith('/settings')) {
+      return { key: 'settings', title: t('nav.settings', 'Settings') };
+    }
+    return { key: 'dashboard', title: t('nav.dashboard', 'Dashboard') };
+  }, [path, t]);
+}
 
-  // Заглавие отгоре (вграденият Shopify header)
-  const currentTitle = (() => {
-    if (location.pathname.startsWith('/ai-seo'))   return 'AI SEO';
-    if (location.pathname.startsWith('/billing'))  return 'Billing';
-    if (location.pathname.startsWith('/settings')) return 'Settings';
-    return 'Dashboard';
-  })();
-
-  // App Bridge Provider (очаква apiKey и host да са инжектирани от main.jsx)
-  const appBridgeConfig = {
-    apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
-    host,
-    // forcedRedirect не е нужен, защото вече сме embedded
-  };
-
-  // Малки route компоненти за примера – замени със твоите екрани
-  const Dashboard = () => (
-    <Page title="AI SEO 2.0">
-      <div className="Polaris-Box" style={{ padding: 12 }}>
-        <p>Welcome! This is your dashboard.</p>
-      </div>
-    </Page>
+function Dashboard({ t }) {
+  return (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="200">
+            <Text as="h3" variant="headingMd">{t('dashboard.plan')}</Text>
+            <Divider />
+            <Text>{t('dashboard.shop')}: My Test Shop</Text>
+            <Text>{t('dashboard.queries')}: 120</Text>
+            <Text>{t('dashboard.products')}: 50</Text>
+            <Text>{t('dashboard.providers')}: OpenAI, Claude</Text>
+            <Text>{t('dashboard.trial')}: 2025-09-01</Text>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
   );
+}
 
-  const AISeo = () => (
-    <Page title="AI SEO">
-      <div className="Polaris-Box" style={{ padding: 12 }}>
-        <p>Generate meta tags, descriptions, alt text…</p>
-      </div>
-    </Page>
+function Seo({ t }) {
+  return (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="200">
+            <Text as="h3" variant="headingMd">{t('seo.title')}</Text>
+            <Divider />
+            <Text>{t('seo.productId')}: 123456789</Text>
+            <Text>{t('seo.provider')}: OpenAI</Text>
+            <Text>{t('seo.generate')}</Text>
+            <Text>{t('seo.result')}: —</Text>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
   );
+}
 
-  const Billing = () => (
-    <Page title="Billing">
-      <div className="Polaris-Box" style={{ padding: 12 }}>
-        <p>Plan info, subscribe/upgrade.</p>
-      </div>
-    </Page>
+function Billing({ t }) {
+  return (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="200">
+            <Text as="h3" variant="headingMd">{t('billing.title')}</Text>
+            <Divider />
+            <Text>{t('billing.choose')}</Text>
+            <Text>{t('billing.activate')}</Text>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
   );
+}
 
-  const Settings = () => (
-    <Page title="Settings">
-      <div className="Polaris-Box" style={{ padding: 12 }}>
-        <p>Use the top-right menu to switch UI language.</p>
-      </div>
-    </Page>
+function Settings({ t }) {
+  return (
+    <Layout>
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="200">
+            <Text as="h3" variant="headingMd">{t('settings.title')}</Text>
+            <Divider />
+            <Text>{t('settings.languageInfo')}</Text>
+            <Text>{t('settings.notes')}</Text>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+    </Layout>
   );
+}
+
+export default function App() {
+  const { lang, setLang, t } = useI18n();
+  const { key, title } = useRoute(t);
 
   return (
-    <AppBridgeProvider config={appBridgeConfig}>
-      <Frame>
-        {/* Заглавна лента на вграденото приложение */}
-        <TitleBar title={currentTitle} />
-
-        {/* Вътрешно навигационно меню на аппа (в Shopify header-а) */}
-        <NavigationMenu
-          navigationLinks={navItems.map((n) => ({
-            label: n.label,
-            destination: n.destination,
-          }))}
-          matcher={(link) => location.pathname.startsWith(link.destination)}
-          onNavigation={(link) => navigate(link.destination)}
-        />
-
-        {/* Реалните ти екрани */}
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/ai-seo" element={<AISeo />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+    <>
+      <TitleBar title={title} />
+      <Frame
+        topBar={<TopNav lang={lang} setLang={setLang} t={t} />}
+        navigation={<SideNav t={t} />}
+      >
+        <Page title={title} fullWidth>
+          {key === 'dashboard' && <Dashboard t={t} />}
+          {key === 'seo' && <Seo t={t} />}
+          {key === 'billing' && <Billing t={t} />}
+          {key === 'settings' && <Settings t={t} />}
+        </Page>
       </Frame>
-    </AppBridgeProvider>
+    </>
   );
 }

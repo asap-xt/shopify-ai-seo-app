@@ -38,6 +38,8 @@ import { syncProductsForShop } from './controllers/productSync.js';
 import { startScheduler } from './scheduler.js';
 
 const app = express();
+import csp from './middleware/csp.js';
+app.use(csp);
 
 // Allow embedding in Shopify Admin (CSP frame-ancestors)
 app.use((req, res, next) => {

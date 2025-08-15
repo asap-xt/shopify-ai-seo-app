@@ -1,21 +1,46 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0"
+      http-equiv="Content-Security-Policy"
+      content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;"
     />
-    <title>AI SEO 2.0</title>
-
-    <!-- App Bridge v4: без Provider; подаваме API key тук -->
-    <meta name="shopify-api-key" content="2749a2f6d38ff5796ed256b5c9dc70a1" />
-    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
-    <script type="module" crossorigin src="/assets/index-CwAwSl0S.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopify AI SEO 2.0</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .not-embedded-hint {
+        padding: 1rem;
+        text-align: center;
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+      }
+      .not-embedded-hint strong {
+        font-weight: bold;
+      }
+    </style>
+    <script>
+      // Примерен guard за embed
+      (function() {
+        const params = new URLSearchParams(window.location.search);
+        const host = params.get('host');
+        const shop = params.get('shop');
+        const apiKey = '2749a2f6d38ff5796ed256b5c9dc70a1';
+        if (!host && shop && apiKey) {
+          const redirect = `https://${shop}/admin/apps/${apiKey}${window.location.pathname}${window.location.search}`;
+          if (window.top === window.self) window.top.location.href = redirect;
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CAuSNsHI.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-C7YjYK5e.css">
   </head>
   <body>
     <div id="root"></div>
   </body>
 </html>
-
