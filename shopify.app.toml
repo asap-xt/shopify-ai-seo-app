@@ -10,7 +10,7 @@ embedded = true
 api_version = "2025-07"
 
 [auth]
-redirect_urls = [ "https://new-ai-seo-app-production.up.railway.app/api/auth" ]
+redirect_urls = [ "https://new-ai-seo-app-production.up.railway.app/auth/callback" ]
 
 [pos]
 embedded = false
