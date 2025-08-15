@@ -1,3 +1,4 @@
+// main.jsx — App Bridge instance (no React Provider) + Polaris wrapper
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppProvider as PolarisAppProvider } from '@shopify/polaris';
@@ -8,22 +9,27 @@ import { getSessionToken } from '@shopify/app-bridge/utilities';
 
 import App from './App.jsx';
 
-// helper за параметри
-function getQueryParam(name) {
+// --- helpers ---
+function qp(name) {
   const url = new URL(window.location.href);
   return url.searchParams.get(name) || '';
 }
 
-// извличаме host/shop за App Bridge
-const host = getQueryParam('host');
-const shop = getQueryParam('shop')?.replace(/^https?:\/\//, '');
+const host = qp('host');
+const shop = qp('shop')?.replace(/^https?:\/\//, '');
 
-export const appBridge = createApp({
+// App Bridge config (used by NavigationMenu actions in App.jsx)
+const appBridgeConfig = {
   apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
   host,
-  forceRedirect: true, // гарантира, че ако е извън iframe, ще влезе в Admin
-});
+  // Ensures the app stays embedded inside Shopify Admin (iframe)
+  forceRedirect: true,
+};
 
+// Create a single App Bridge instance and export it for actions usage
+export const appBridge = createApp(appBridgeConfig);
+
+// Export a helper to fetch a fresh session token (used by API calls)
 export async function getIdToken() {
   try {
     return await getSessionToken(appBridge);
@@ -33,6 +39,7 @@ export async function getIdToken() {
 }
 
 const Root = () => (
+  // Polaris styling & i18n (Shopify Admin provides fonts/reset)
   <PolarisAppProvider i18n={{}}>
     <App host={host} shop={shop} />
   </PolarisAppProvider>
