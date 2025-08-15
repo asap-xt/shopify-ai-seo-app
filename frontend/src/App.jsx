@@ -1,12 +1,12 @@
-// App.jsx — Embedded UI with Shopify Admin left nav (ui-nav-menu) + basic actions + debug
+// App.jsx — Embedded UI with Shopify Admin left nav (ui-nav-menu) + Brand header + Language button
 import React, { useMemo, useState } from 'react';
 import {
   Frame, Page, Layout, Card, BlockStack, Text,
-  Divider, InlineStack, Button, TextField, Select, Toast,
+  Divider, InlineStack, Button, TextField, Select, Toast, Box,
 } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
 import useI18n from './hooks/useI18n.js';
-import TopNav from './components/TopNav.jsx';
+import AppHeader from './components/AppHeader.jsx';
 
 // Resolve current section from pathname (no react-router)
 function useRoute(t) {
@@ -20,7 +20,7 @@ function useRoute(t) {
   }, [path, t]);
 }
 
-// Sections
+// ---- Sections ----
 function Dashboard({ t }) {
   return (
     <Layout>
@@ -132,7 +132,7 @@ function Settings({ t }) {
           <BlockStack gap="200">
             <Text as="h3" variant="headingMd">{t('settings.title', 'Settings')}</Text>
             <Divider />
-            <Text>{t('settings.languageInfo', 'Use the top-right menu to switch UI language.')}</Text>
+            <Text>{t('settings.languageInfo', 'Use the language button at the top-right.')}</Text>
             <Text>{t('settings.notes', 'More settings will appear here later.')}</Text>
           </BlockStack>
         </Card>
@@ -145,24 +145,29 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
+  // App display name (shows in Shopify header and our brand header)
+  const APP_NAME = import.meta.env.VITE_APP_NAME || 'NEW AI SEO';
+
   return (
     <>
-      {/* Title in the Admin header (React wrapper around ui-title-bar) */}
-      <TitleBar title={title} />
+      {/* Always show app name in Shopify Admin header */}
+      <TitleBar title={APP_NAME} />
 
-      {/* IMPORTANT: This web component configures the left sidebar menu in Shopify Admin */}
+      {/* Left navigation in Shopify Admin */}
       <ui-nav-menu>
-        {/* First child is required, configures the home route, and is NOT rendered as a link */}
         <a href="/" rel="home">Home</a>
-
-        {/* Visible items */}
         <a href="/dashboard">{t('nav.dashboard', 'Dashboard')}</a>
         <a href="/ai-seo">{t('nav.seo', 'AI SEO')}</a>
         <a href="/billing">{t('nav.billing', 'Billing')}</a>
         <a href="/settings">{t('nav.settings', 'Settings')}</a>
       </ui-nav-menu>
 
-      <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
+      {/* NOTE: no Polaris TopBar -> removes the black strip */}
+      <Frame>
+        {/* Brand header (app name left, language button right) */}
+        <AppHeader appName={APP_NAME} lang={lang} setLang={setLang} t={t} />
+
+        {/* Page content + page title (e.g. Dashboard) */}
         <Page title={title} fullWidth>
           {key === 'dashboard' && <Dashboard t={t} />}
           {key === 'seo' && <AiSeo t={t} />}
