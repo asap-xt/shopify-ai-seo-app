@@ -1,15 +1,14 @@
-// App.jsx — Embedded UI with Shopify Admin left nav (App Bridge actions) + debug
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+// App.jsx — Embedded UI with Shopify Admin left nav (ui-nav-menu) + basic actions + debug
+import React, { useMemo, useState } from 'react';
 import {
   Frame, Page, Layout, Card, BlockStack, Text,
   Divider, InlineStack, Button, TextField, Select, Toast,
 } from '@shopify/polaris';
-import { TitleBar as ABTitleBar, NavigationMenu } from '@shopify/app-bridge/actions';
+import { TitleBar } from '@shopify/app-bridge-react';
 import useI18n from './hooks/useI18n.js';
 import TopNav from './components/TopNav.jsx';
-import { appBridge } from './main.jsx';
 
-// Route resolver (simple, no react-router)
+// Resolve current section from pathname (no react-router)
 function useRoute(t) {
   const path = (typeof window !== 'undefined' ? window.location.pathname : '/') || '/';
   return useMemo(() => {
@@ -42,7 +41,7 @@ function Dashboard({ t }) {
   );
 }
 
-// Lazy loader for getIdToken without top-level await
+// Lazy loader for getIdToken without top-level await (import only when needed)
 let getIdToken = async () => '';
 async function ensureGetIdToken() {
   if (ensureGetIdToken._loaded) return;
@@ -142,53 +141,35 @@ function Settings({ t }) {
   );
 }
 
-// ---------- App ----------
 export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
-  // TitleBar via actions API + debug
-  const tbRef = useRef(null);
-  useEffect(() => {
-    if (!appBridge) return;
-    if (!tbRef.current) {
-      tbRef.current = ABTitleBar.create(appBridge, { title });
-      console.debug('[AB] TitleBar created with title:', title);
-    } else {
-      tbRef.current.set({ title });
-      console.debug('[AB] TitleBar updated to:', title);
-    }
-  }, [title]);
-
-  // Shopify Admin left nav via actions API + debug
-  const navRef = useRef(null);
-  useEffect(() => {
-    if (!appBridge) return;
-
-    const items = [
-      { label: t('nav.dashboard', 'Dashboard'), destination: '/dashboard' },
-      { label: t('nav.seo', 'AI SEO'),         destination: '/ai-seo' },
-      { label: t('nav.billing', 'Billing'),     destination: '/billing' },
-      { label: t('nav.settings', 'Settings'),   destination: '/settings' },
-    ];
-
-    if (!navRef.current) {
-      navRef.current = NavigationMenu.create(appBridge, { items });
-      console.debug('[AB] NavigationMenu created with items:', items);
-    } else {
-      navRef.current.set({ items });
-      console.debug('[AB] NavigationMenu updated with items:', items);
-    }
-  }, [t, lang]);
-
   return (
-    <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
-      <Page title={title} fullWidth>
-        {key === 'dashboard' && <Dashboard t={t} />}
-        {key === 'seo' && <AiSeo t={t} />}
-        {key === 'billing' && <Billing t={t} />}
-        {key === 'settings' && <Settings t={t} />}
-      </Page>
-    </Frame>
+    <>
+      {/* Title in the Admin header (React wrapper around ui-title-bar) */}
+      <TitleBar title={title} />
+
+      {/* IMPORTANT: This web component configures the left sidebar menu in Shopify Admin */}
+      <ui-nav-menu>
+        {/* First child is required, configures the home route, and is NOT rendered as a link */}
+        <a href="/" rel="home">Home</a>
+
+        {/* Visible items */}
+        <a href="/dashboard">{t('nav.dashboard', 'Dashboard')}</a>
+        <a href="/ai-seo">{t('nav.seo', 'AI SEO')}</a>
+        <a href="/billing">{t('nav.billing', 'Billing')}</a>
+        <a href="/settings">{t('nav.settings', 'Settings')}</a>
+      </ui-nav-menu>
+
+      <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
+        <Page title={title} fullWidth>
+          {key === 'dashboard' && <Dashboard t={t} />}
+          {key === 'seo' && <AiSeo t={t} />}
+          {key === 'billing' && <Billing t={t} />}
+          {key === 'settings' && <Settings t={t} />}
+        </Page>
+      </Frame>
+    </>
   );
 }
