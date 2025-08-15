@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+// App.jsx — Embedded UI with Shopify NavMenu + basic actions
+import React, { useMemo, useState } from 'react';
 import {
   Frame,
   Page,
@@ -9,11 +10,15 @@ import {
   Divider,
   InlineStack,
   Button,
+  TextField,
+  Select,
+  Toast,
 } from '@shopify/polaris';
 import { TitleBar, NavMenu } from '@shopify/app-bridge-react';
 import useI18n from './hooks/useI18n.js';
+import TopNav from './components/TopNav.jsx';
 
-// Определяме коя страница е активна според пътя
+// Resolve current section from pathname (no react-router)
 function useRoute(t) {
   const path = (typeof window !== 'undefined' ? window.location.pathname : '/') || '/';
   return useMemo(() => {
@@ -33,20 +38,20 @@ function useRoute(t) {
   }, [path, t]);
 }
 
-// --- Секции (примерно съдържание) ---
+// ---------- Sections ----------
 function Dashboard({ t }) {
   return (
     <Layout>
       <Layout.Section>
         <Card>
           <BlockStack gap="200">
-            <Text as="h3" variant="headingMd">{t('dashboard.plan')}</Text>
+            <Text as="h3" variant="headingMd">{t('dashboard.plan', 'Current plan')}</Text>
             <Divider />
-            <Text>{t('dashboard.shop')}: My Test Shop</Text>
-            <Text>{t('dashboard.queries')}: 120</Text>
-            <Text>{t('dashboard.products')}: 50</Text>
-            <Text>{t('dashboard.providers')}: OpenAI, Claude</Text>
-            <Text>{t('dashboard.trial')}: 2025-09-01</Text>
+            <Text>{t('dashboard.shop', 'Shop')}: My Test Shop</Text>
+            <Text>{t('dashboard.queries', 'AI queries')}: 120</Text>
+            <Text>{t('dashboard.products', 'Product limit')}: 50</Text>
+            <Text>{t('dashboard.providers', 'Allowed AI providers')}: OpenAI, Claude</Text>
+            <Text>{t('dashboard.trial', 'Trial ends at')}: 2025-09-01</Text>
           </BlockStack>
         </Card>
       </Layout.Section>
@@ -54,37 +59,126 @@ function Dashboard({ t }) {
   );
 }
 
-function Seo({ t }) {
+// Lazy loader for getIdToken without top-level await
+let getIdToken = async () => '';
+async function ensureGetIdToken() {
+  if (getIdToken === null || getIdToken === undefined || getIdToken === (async () => '')) {
+    try {
+      const mod = await import('./main.jsx');
+      getIdToken = mod.getIdToken || (async () => '');
+    } catch {
+      getIdToken = async () => '';
+    }
+  }
+}
+
+function AiSeo({ t }) {
+  const [productId, setProductId] = useState('');
+  const [provider, setProvider] = useState('openai');
+  const [result, setResult] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState({ open: false, content: '' });
+
+  const providers = [
+    { label: 'OpenAI', value: 'openai' },
+    { label: 'Claude', value: 'claude' },
+  ];
+
+  // Calls backend to generate SEO for a single product
+  const handleGenerate = async () => {
+    setLoading(true);
+    setResult('');
+    try {
+      await ensureGetIdToken();
+      const token = await getIdToken().catch(() => '');
+
+      const res = await fetch('/seo/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ productId, provider }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const out = data?.result ?? data;
+      setResult(typeof out === 'string' ? out : JSON.stringify(out, null, 2));
+      setToast({ open: true, content: t('seo.result', 'Result') + ' ✓' });
+    } catch (e) {
+      setToast({ open: true, content: `Error: ${e.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Layout>
-      <Layout.Section>
-        <Card>
-          <BlockStack gap="200">
-            <Text as="h3" variant="headingMd">{t('seo.title')}</Text>
-            <Divider />
-            <InlineStack gap="300">
-              <Button variant="primary">{t('seo.generate')}</Button>
-            </InlineStack>
-            <Text tone="subdued">{t('seo.productId')}: 123456789 • {t('seo.provider')}: OpenAI</Text>
-            <Text>{t('seo.result')}: —</Text>
-          </BlockStack>
-        </Card>
-      </Layout.Section>
-    </Layout>
+    <>
+      <Layout>
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="300">
+              <Text as="h3" variant="headingMd">{t('seo.title', 'Generate SEO')}</Text>
+              <Divider />
+              <InlineStack gap="300" align="start">
+                <TextField
+                  label={t('seo.productId', 'Product ID')}
+                  value={productId}
+                  onChange={setProductId}
+                  autoComplete="off"
+                />
+                <Select
+                  label={t('seo.provider', 'AI Provider')}
+                  options={providers}
+                  value={provider}
+                  onChange={setProvider}
+                />
+                <Button variant="primary" loading={loading} onClick={handleGenerate}>
+                  {t('seo.generate', 'Generate')}
+                </Button>
+              </InlineStack>
+
+              {result && (
+                <Card>
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{result}</pre>
+                </Card>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      </Layout>
+
+      {toast.open && (
+        <Toast content={toast.content} onDismiss={() => setToast({ open: false, content: '' })} />
+      )}
+    </>
   );
 }
 
 function Billing({ t }) {
+  // Simple redirect to your billing routes; adjust to your real endpoint if needed
+  const goToBilling = () => {
+    // Example: open main billing page; you can add plan query (?plan=basic)
+    window.location.assign('/billing');
+  };
+
   return (
     <Layout>
       <Layout.Section>
         <Card>
           <BlockStack gap="200">
-            <Text as="h3" variant="headingMd">{t('billing.title')}</Text>
+            <Text as="h3" variant="headingMd">{t('billing.title', 'Plans & Billing')}</Text>
             <Divider />
-            <Text>{t('billing.choose')}</Text>
+            <Text>{t('billing.choose', 'Choose your plan:')}</Text>
             <InlineStack gap="300">
-              <Button variant="primary">{t('billing.activate')}</Button>
+              <Button variant="primary" onClick={goToBilling}>
+                {t('billing.activate', 'Activate')}
+              </Button>
             </InlineStack>
           </BlockStack>
         </Card>
@@ -99,10 +193,10 @@ function Settings({ t }) {
       <Layout.Section>
         <Card>
           <BlockStack gap="200">
-            <Text as="h3" variant="headingMd">{t('settings.title')}</Text>
+            <Text as="h3" variant="headingMd">{t('settings.title', 'Settings')}</Text>
             <Divider />
-            <Text>{t('settings.languageInfo')}</Text>
-            <Text>{t('settings.notes')}</Text>
+            <Text>{t('settings.languageInfo', 'Use the top-right menu to switch UI language.')}</Text>
+            <Text>{t('settings.notes', 'More settings will appear here later.')}</Text>
           </BlockStack>
         </Card>
       </Layout.Section>
@@ -110,32 +204,29 @@ function Settings({ t }) {
   );
 }
 
+// ---------- App ----------
 export default function App() {
   const { lang, setLang, t } = useI18n();
   const { key, title } = useRoute(t);
 
   return (
     <>
-      {/* 1) Това заглавие влиза в горния Admin бар */}
+      {/* Title in Shopify Admin header */}
       <TitleBar title={title} />
 
-      {/* 2) ТОВА е ключът: NavMenu -> прави „лявото меню“ под името на аппа в Shopify */}
+      {/* This renders items into Shopify's global left nav under your app name */}
       <NavMenu>
-        {/* Първият елемент е задължителен: rel="home" към root, НЕ се показва като линк */}
         <a rel="home" href="/">Home</a>
-
-        {/* Реални линкове, ПРЯКО РОДНИ НА app root (без абсолютни домейни) */}
         <a href="/dashboard">{t('nav.dashboard', 'Dashboard')}</a>
         <a href="/ai-seo">{t('nav.seo', 'AI SEO')}</a>
         <a href="/billing">{t('nav.billing', 'Billing')}</a>
         <a href="/settings">{t('nav.settings', 'Settings')}</a>
       </NavMenu>
 
-      {/* Вече НЕ подаваме Polaris navigation=<...>; Shopify показва менюто в глобалната лява навигация */}
-      <Frame>
+      <Frame topBar={<TopNav lang={lang} setLang={setLang} t={t} />}>
         <Page title={title} fullWidth>
           {key === 'dashboard' && <Dashboard t={t} />}
-          {key === 'seo' && <Seo t={t} />}
+          {key === 'seo' && <AiSeo t={t} />}
           {key === 'billing' && <Billing t={t} />}
           {key === 'settings' && <Settings t={t} />}
         </Page>
