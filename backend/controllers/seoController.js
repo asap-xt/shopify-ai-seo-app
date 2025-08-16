@@ -1,6 +1,7 @@
 // backend/controllers/seoController.js
 // Routes: GET /plans/me, POST /seo/generate, POST /seo/apply
-// - /seo/generate: If "product" is missing, auto-fetches product by productId via Admin API (offline token).
+// - /seo/generate: auto-fetches product by productId via Admin API (offline token).
+//   shop is inferred from Shopify session (embedded) and model defaults to the first allowed for the plan.
 // - Validates the LLM output with AJV against a strict schema and applies safe "fixups".
 // - /seo/apply: Updates product title/body/seo + metafields (seo_ai.bullets/faq).
 
@@ -9,6 +10,7 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { callOpenRouterJSON } from '../ai/openrouter.js';
 import { withSubscription, enforceQuota, consumeQuery, buildPlanView } from '../middleware/quota.js';
+import { allowedModelsForPlan } from '../plans.js';
 
 const router = express.Router();
 
@@ -40,11 +42,11 @@ async function adminGraphQL({ shop, accessToken, query, variables }) {
 
 /** Try to resolve an offline Admin API token for this shop. */
 async function resolveAccessToken(shop, res) {
-  // 1) If route is behind Shopify auth and session is present, use it
+  // If Shopify auth middleware populated a session, use it
   const sessToken = res?.locals?.shopify?.session?.accessToken;
   if (sessToken) return sessToken;
 
-  // 2) Try common session storages dynamically (Mongo-based)
+  // Try common session storages dynamically (Mongo-based)
   const candidates = [
     '../db/ShopifySession.js',
     '../models/ShopifySession.js',
@@ -84,7 +86,7 @@ async function resolveAccessToken(shop, res) {
     }
   }
 
-  // 3) Fallback for single-shop setups: env var
+  // Fallback for single-shop setups: env var
   if (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN) return process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
 
   const e = new Error('No Admin API token available for this shop');
@@ -126,15 +128,23 @@ function sanitizeHtmlBasic(html = '') {
   return out;
 }
 
-const kebab = (s) => String(s || '')
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-+|-+$/g, '');
+const kebab = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 const truncate = (s, n) => {
   s = String(s || '');
   if (s.length <= n) return s;
   return s.slice(0, n - 1).trimEnd() + '…';
+};
+
+const toGid = (maybeNumeric) => {
+  const s = String(maybeNumeric || '').trim();
+  if (/^gid:\/\//.test(s)) return s;
+  if (/^\d+$/.test(s)) return `gid://shopify/Product/${s}`;
+  return s;
 };
 
 // ----------------------------- AJV Schema -----------------------------
@@ -219,7 +229,6 @@ function buildSystemPrompt(lang = 'en') {
 }
 
 function buildUserPrompt(product) {
-  // Build a compact but rich context from product fields
   const priceEdge = product?.variants?.edges?.[0]?.node;
   const price = priceEdge?.price || priceEdge?.priceV2?.amount;
   const currency = priceEdge?.currencyCode || priceEdge?.priceV2?.currencyCode;
@@ -234,7 +243,7 @@ function buildUserPrompt(product) {
     price,
     currency,
     descriptionHtml: product?.descriptionHtml,
-    images: (product?.images?.edges || []).map(e => ({
+    images: (product?.images?.edges || []).map((e) => ({
       id: e?.node?.id,
       alt: e?.node?.altText || '',
     })),
@@ -261,17 +270,27 @@ router.get('/plans/me', withSubscription, (req, res) => {
 // POST /seo/generate
 router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) => {
   try {
-    const { shop, model, language = 'en', productId, product: productInput } = req.body || {};
-    if (!shop || !model || !productId) {
-      return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
+    // Accept shop from session/middleware; model may be omitted (we'll auto-pick).
+    const shop = req.shop || req.body?.shop || res?.locals?.shopify?.session?.shop || '';
+    let { model, language = 'en' } = req.body || {};
+    let productId = toGid(req.body?.productId || req.query?.productId);
+
+    if (!productId) {
+      return res.status(400).json({ error: 'Missing productId (GID or numeric ID)' });
     }
 
-    // Ensure product context: if not provided, fetch it via Admin API
-    let product = productInput;
-    if (!product) {
-      const accessToken = await resolveAccessToken(shop, res);
-      product = await fetchProductById(shop, accessToken, productId);
+    if (!model) {
+      const allowed = allowedModelsForPlan(req.subscription?.planKey || '');
+      if (allowed && allowed.length) {
+        model = allowed[0];
+      } else {
+        return res.status(400).json({ error: 'Missing model and no allowed models found for plan' });
+      }
     }
+
+    // Ensure product context: fetch via Admin API
+    const accessToken = await resolveAccessToken(shop, res);
+    const product = await fetchProductById(shop, accessToken, productId);
 
     const system = buildSystemPrompt(language);
     const user = buildUserPrompt(product);
@@ -322,9 +341,12 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
 });
 
 // POST /seo/apply
-router.post('/seo/apply', async (req, res) => {
+router.post('/seo/apply', withSubscription, async (req, res) => {
   try {
-    const { shop, productId, seo, options = {} } = req.body || {};
+    const shop = req.shop || req.body?.shop || res?.locals?.shopify?.session?.shop || '';
+    const { productId: productIdRaw, seo, options = {} } = req.body || {};
+    const productId = toGid(productIdRaw);
+
     if (!shop || !productId || !seo) return res.status(400).json({ error: 'Missing shop, productId or seo' });
 
     const {
@@ -408,8 +430,8 @@ router.post('/seo/apply', async (req, res) => {
         const errs = rsp?.data?.metafieldsSet?.userErrors || [];
         if (errs.length) errors.push({ step: 'metafieldsSet', errors: errs });
         else {
-          updated.bullets = !!metafields.find(m => m.key === 'bullets');
-          updated.faq = !!metafields.find(m => m.key === 'faq');
+          updated.bullets = !!metafields.find((m) => m.key === 'bullets');
+          updated.faq = !!metafields.find((m) => m.key === 'faq');
         }
       }
 
