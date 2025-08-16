@@ -135,7 +135,7 @@ async function shopGraphQL(shop, query, variables = {}) {
     e.status = rsp.status || 500;
     throw e;
   }
-  // Collect userErrors nested anywhere in data
+  // Collect nested userErrors
   const userErrors = [];
   (function collect(node) {
     if (!node || typeof node !== 'object') return;
@@ -264,14 +264,14 @@ const OUTPUT_SCHEMA = {
           minItems: 1,
           maxItems: 10,
           items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['q', 'a'],
-          properties: {
-            q: { type: 'string', minLength: 3, maxLength: 160 },
-            a: { type: 'string', minLength: 3, maxLength: 400 },
+            type: 'object',
+            additionalProperties: false,
+            required: ['q', 'a'],
+            properties: {
+              q: { type: 'string', minLength: 3, maxLength: 160 },
+              a: { type: 'string', minLength: 3, maxLength: 400 },
+            },
           },
-        },
         },
         imageAlt: {
           type: 'array',
@@ -465,7 +465,7 @@ router.post('/seo/apply', async (req, res) => {
             updated.body = !!input.descriptionHtml;
             updated.seo = !!input.seo;
           } catch (e) {
-            errors.push(\`productUpdate: \${e.message}\`);
+            errors.push(`productUpdate: ${e.message}`);
           }
         }
       }
@@ -504,11 +504,11 @@ router.post('/seo/apply', async (req, res) => {
           updated.bullets = metaInputs.some(m => m.key === 'bullets');
           updated.faq = metaInputs.some(m => m.key === 'faq');
         } catch (e) {
-          errors.push(\`metafieldsSet: \${e.message}\`);
+          errors.push(`metafieldsSet: ${e.message}`);
         }
       }
 
-      // 3) ensure metafield definitions exist (fix: do not request .type)
+      // 3) ensure metafield definitions exist (fixed: do not request .type)
       try {
         const defsQ = `
           query {
