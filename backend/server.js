@@ -67,24 +67,27 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'dev'));
 app.use(cookieParser());
 
-// RAW BODY for webhooks (must be BEFORE express.json)
-app.use((req, _res, next) => {
-  if (!req.path.startsWith('/webhooks/')) return next();
-  let data = '';
-  req.setEncoding('utf8');
-  req.on('data', (chunk) => (data += chunk));
-  req.on('end', () => {
-    req.rawBody = data;
-    try {
-      req.body = data ? JSON.parse(data) : {};
-    } catch {
-      req.body = {};
-    }
-    next();
-  });
+// JSON parser all but webhooks
+app.use((req, res, next) => {
+  if (req.path.startsWith('/webhooks/')) {
+    // За webhooks - запазваме raw body
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => (data += chunk));
+    req.on('end', () => {
+      req.rawBody = data;
+      try {
+        req.body = data ? JSON.parse(data) : {};
+      } catch {
+        req.body = {};
+      }
+      next();
+    });
+  } else {
+    // За всичко друго - нормален JSON parser
+    express.json({ limit: '2mb' })(req, res, next);
+  }
 });
-
-app.use(express.json({ limit: '2mb' }));
 
 // ---- Health
 app.get('/health', (_req, res) => res.status(200).json({ status: 'OK' }));
