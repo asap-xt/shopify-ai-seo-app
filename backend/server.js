@@ -197,9 +197,9 @@ spaRoutes.forEach((route) => {
   });
 });
 
-// --- Generic SPA fallback (exclude API/webhooks/etc) → fresh index.html ---
+// --- Generic SPA fallback (exclude API/webhooks/etc, incl. /auth and /token-exchange with or without trailing slash) ---
 app.get(
-  /^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/|token-exchange\/).*/i,
+  /^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth(?:\/|$)|token-exchange(?:\/|$)).*/i,
   (_req, res) => {
     res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(distPath, 'index.html'));
