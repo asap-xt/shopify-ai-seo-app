@@ -20,7 +20,7 @@ import {
   Badge,
   Link,
 } from "@shopify/polaris";
-import { getIdToken } from "./main.jsx";
+import { getIdToken } from "./session.js";
 
 const PROVIDER_LABELS = [
   { label: "OpenAI", value: "openai" },
