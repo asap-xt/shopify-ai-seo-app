@@ -98,12 +98,23 @@ async function fetchProductById(shop, accessToken, productId) {
   const q = `
     query Product($id: ID!) {
       product(id: $id) {
-        id title handle descriptionHtml vendor tags onlineStoreUrl updatedAt
-        images(first: 10) { edges { node { id altText } } }
-        variants(first: 25) { edges { node { id price currencyCode availableForSale } } }
+        id
+        title
+        handle
+        descriptionHtml
+        vendor
+        tags
+        onlineStoreUrl
+        updatedAt
+        images(first: 10) {
+          edges { node { id altText } }
+        }
+        variants(first: 25) {
+          edges { node { id price } }  # Admin API: price only (no currencyCode/availableForSale)
+        }
         seo { title description }
         metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") { value }
-        metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") { value }
+        metafield_seo_ai_faq:    metafield(namespace: "seo_ai", key: "faq")    { value }
       }
     }
   `;
