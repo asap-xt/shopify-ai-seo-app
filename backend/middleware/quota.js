@@ -1,7 +1,15 @@
 // backend/middleware/quota.js
 // Subscription loading + quota enforcement. Dynamic import of Subscription model.
+// NOW supports deriving shop from Shopify session (res.locals.shopify.session.shop)
+// so Admin-embedded requests don't need ?shop param.
 
-import { getPlanConfig, resolvePlanKey, vendorFromModel, allowedModelsForPlan, TRIAL_DAYS } from '../plans.js';
+import {
+  getPlanConfig,
+  resolvePlanKey,
+  vendorFromModel,
+  allowedModelsForPlan,
+  TRIAL_DAYS,
+} from '../plans.js';
 
 let SubscriptionModel = null;
 
@@ -27,9 +35,15 @@ async function loadSubscriptionModel() {
 
 export async function withSubscription(req, res, next) {
   try {
+    // Infer shop from multiple places; prioritize Shopify session when embedded
     const shop = String(
-      req.query.shop || req.body?.shop || req.headers['x-shopify-shop-domain'] || ''
+      req.query.shop ||
+        req.body?.shop ||
+        req.get('x-shopify-shop-domain') ||
+        res?.locals?.shopify?.session?.shop ||
+        ''
     ).trim();
+
     if (!shop) return res.status(400).json({ error: 'Missing ?shop' });
 
     const Subscription = await loadSubscriptionModel();
@@ -40,7 +54,9 @@ export async function withSubscription(req, res, next) {
     const planCfg = getPlanConfig(planKey);
 
     const now = new Date();
-    const trialEndsAt = sub.trialEndsAt ? new Date(sub.trialEndsAt) : new Date(now.getTime() + TRIAL_DAYS * 864e5);
+    const trialEndsAt = sub.trialEndsAt
+      ? new Date(sub.trialEndsAt)
+      : new Date(now.getTime() + TRIAL_DAYS * 864e5);
     const inTrial = trialEndsAt > now;
 
     req.shop = shop;
@@ -75,7 +91,9 @@ export function enforceQuota() {
     const model = req.body?.model || '';
     const vendor = vendorFromModel(model);
     if (model && vendor && !sub.planCfg.providersAllowed.includes(vendor)) {
-      return res.status(403).json({ error: `Model vendor '${vendor}' not allowed for your plan` });
+      return res
+        .status(403)
+        .json({ error: `Model vendor '${vendor}' not allowed for your plan` });
     }
 
     return next();
@@ -91,7 +109,7 @@ export async function consumeQuery(shop, inc = 1) {
   }
 }
 
-// Return data for the UI
+// Shape for /plans/me
 export function buildPlanView(sub) {
   const cfg = sub?.planCfg;
   const models = cfg ? allowedModelsForPlan(cfg.key) : [];
