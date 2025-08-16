@@ -1,24 +1,22 @@
-// Gets a Shopify session token via App Bridge (v4) for every backend call.
-// Comments in English, as requested.
-
-import createApp from "@shopify/app-bridge";
-import { getSessionToken } from "@shopify/app-bridge/utilities";
-
-function getApiKeyFromMeta() {
-  const el = document.querySelector('meta[name="shopify-api-key"]');
-  return el ? el.getAttribute("content") : "";
+// Minimal helpers. Works even when host/token are missing.
+export function getHost() {
+  const u = new URL(window.location.href);
+  return u.searchParams.get('host') || '';
 }
 
-function getHostFromSearch() {
-  const sp = new URLSearchParams(window.location.search);
-  return sp.get("host") || "";
+export function getShop() {
+  const u = new URL(window.location.href);
+  // pass-through shop if present; otherwise let user type it
+  return u.searchParams.get('shop') || '';
 }
 
-const app = createApp({
-  apiKey: getApiKeyFromMeta(),
-  host: getHostFromSearch(),
-});
-
-export async function getIdToken() {
-  return await getSessionToken(app);
+// Optional: token exchange if you decide to use it later
+export async function getSessionTokenOrNull() {
+  try {
+    // If you wire App Bridge v4, you can request a token here.
+    // For now we return null to keep UI resilient.
+    return null;
+  } catch {
+    return null;
+  }
 }

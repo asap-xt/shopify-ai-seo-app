@@ -6,13 +6,9 @@ import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 
-// Node 18+ has global fetch. If you target older Node, uncomment next line.
-// import fetch from 'node-fetch';
-
 const router = express.Router();
 
-// ---------- Helpers: plan + providers (static for phase 1–2) ----------
-
+// ---------- Plan presets ----------
 const PLAN_PRESETS = {
   starter: {
     plan: 'Starter',
@@ -87,7 +83,6 @@ const PLAN_PRESETS = {
   },
 };
 
-// In phase 1–2 we do not rely on DB; default to Growth unless APP_PLAN is set.
 function resolvePlanForShop(_shop) {
   const envKey = (process.env.APP_PLAN || '').toLowerCase();
   if (envKey && PLAN_PRESETS[envKey]) return PLAN_PRESETS[envKey];
@@ -95,7 +90,6 @@ function resolvePlanForShop(_shop) {
 }
 
 // ---------- Admin API helpers ----------
-
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
 function normalizeShop(shop) {
@@ -117,7 +111,6 @@ function requireShop(req) {
 }
 
 function resolveAdminTokenForShop(_shop) {
-  // Phase 1–2: fall back to a single env token (custom app in the dev store).
   const t = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
   if (t && t.trim()) return t.trim();
   const err = new Error('No Admin API token available for this shop');
@@ -138,43 +131,31 @@ async function shopGraphQL(shop, query, variables = {}) {
   });
   const json = await rsp.json();
   if (!rsp.ok || json.errors) {
-    const e = new Error(
-      `Admin GraphQL error: ${JSON.stringify(json.errors || json)}`
-    );
+    const e = new Error(`Admin GraphQL error: ${JSON.stringify(json.errors || json)}`);
     e.status = rsp.status || 500;
     throw e;
   }
-  // Also surface userErrors if present inside data
+  // Collect userErrors nested anywhere in data
   const userErrors = [];
-  function collectUserErrors(node) {
+  (function collect(node) {
     if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      node.forEach(collectUserErrors);
-    } else {
-      if (node.userErrors && node.userErrors.length) {
-        userErrors.push(...node.userErrors);
-      }
-      Object.values(node).forEach(collectUserErrors);
-    }
-  }
-  collectUserErrors(json.data);
+    if (Array.isArray(node)) return node.forEach(collect);
+    if (node.userErrors && node.userErrors.length) userErrors.push(...node.userErrors);
+    Object.values(node).forEach(collect);
+  })(json.data);
   if (userErrors.length) {
-    const e = new Error(
-      `Admin GraphQL userErrors: ${JSON.stringify(userErrors)}`
-    );
+    const e = new Error(`Admin GraphQL userErrors: ${JSON.stringify(userErrors)}`);
     e.status = 400;
     throw e;
   }
   return json.data;
 }
 
-// ---------- AI generation via OpenRouter ----------
-
+// ---------- OpenRouter (AI) ----------
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
 function strictPrompt(product, language) {
-  // System prompt: return ONLY JSON matching the schema.
   return [
     {
       role: 'system',
@@ -186,7 +167,7 @@ function strictPrompt(product, language) {
     {
       role: 'user',
       content:
-`Schema (TypeScript-ish):
+`Schema:
 
 {
   "productId": "gid://shopify/Product/...",
@@ -195,34 +176,27 @@ function strictPrompt(product, language) {
   "language": "en|de|es|fr|bg|...",
   "seo": {
     "title": "Max 70 chars",
-    "metaDescription": "20..200 chars, compelling",
+    "metaDescription": "20..200 chars",
     "slug": "kebab-case",
     "bodyHtml": "<p>Rich HTML...</p>",
-    "bullets": ["Point 1", "Point 2", "Point 3"],
+    "bullets": ["Point 1","Point 2","Point 3"],
     "faq": [{"q":"Question?","a":"Answer."}],
     "imageAlt": [{"imageId":"gid://shopify/ProductImage/...","alt":"Short alt"}],
-    "jsonLd": { "@context":"https://schema.org", "@type":"Product", "name":"...", "description":"...", "offers": { "@type":"Offer", "price":"...", "priceCurrency":"..." } }
+    "jsonLd": { "@context":"https://schema.org", "@type":"Product", "name":"...", "description":"...", "offers": { "@type":"Offer","price":"...","priceCurrency":"..." } }
   },
-  "quality": {
-    "warnings": ["optional warning strings"],
-    "model": "vendor/model",
-    "tokens": 0,
-    "costUsd": 0
-  }
+  "quality": { "warnings":[], "model":"vendor/model", "tokens":0, "costUsd":0 }
 }
 
-Context (product):
+Context:
 ${JSON.stringify(product, null, 2)}
 
 Rules:
-- Title: ≤ 70 chars. Meta description: 20..200 chars.
-- Slug: lowercase kebab-case (letters, digits, hyphens).
-- Body HTML: clean, semantic (<h2>,<ul>,<li>,<p>).
-- Bullets: 3–6 concise points.
-- FAQ: 1–5 Q/A pairs, helpful, no duplicates.
-- JSON-LD: minimal valid Product schema with priceCurrency if available.
-- Output ONLY the JSON.`
-    }
+- Title ≤ 70 chars; meta 20..200.
+- Slug = lowercase kebab-case.
+- Body HTML clean (<h2>,<ul>,<li>,<p>).
+- Bullets: 3–6; FAQ: 1–5.
+- Output ONLY the JSON.`,
+    },
   ];
 }
 
@@ -231,7 +205,7 @@ async function callOpenRouter(model, messages) {
   const rsp = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -257,8 +231,7 @@ async function callOpenRouter(model, messages) {
   return content;
 }
 
-// ---------- JSON Schema (AJV) ----------
-
+// ---------- JSON schema ----------
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
@@ -291,14 +264,14 @@ const OUTPUT_SCHEMA = {
           minItems: 1,
           maxItems: 10,
           items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['q', 'a'],
-            properties: {
-              q: { type: 'string', minLength: 3, maxLength: 160 },
-              a: { type: 'string', minLength: 3, maxLength: 400 },
-            },
+          type: 'object',
+          additionalProperties: false,
+          required: ['q', 'a'],
+          properties: {
+            q: { type: 'string', minLength: 3, maxLength: 160 },
+            a: { type: 'string', minLength: 3, maxLength: 400 },
           },
+        },
         },
         imageAlt: {
           type: 'array',
@@ -330,8 +303,7 @@ const OUTPUT_SCHEMA = {
 };
 const validateOutput = ajv.compile(OUTPUT_SCHEMA);
 
-// ---------- Utils ----------
-
+// ---------- Small utils ----------
 function toKebab(s) {
   return String(s || '')
     .toLowerCase()
@@ -340,19 +312,15 @@ function toKebab(s) {
     .replace(/^-+|-+$/g, '')
     .replace(/-+/g, '-');
 }
-
 function truncate(s, max) {
   const str = String(s || '').trim();
   if (str.length <= max) return str;
   return str.slice(0, max).replace(/\s+\S*$/, '').trim();
 }
-
 function sanitizeHtml(html) {
   const s = String(html || '');
-  // Very light sanitizer for phase 1–2: strip <script> tags.
   return s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
 }
-
 function fixups(out, ctx = {}) {
   const res = JSON.parse(JSON.stringify(out));
   if (ctx.productId) res.productId = ctx.productId;
@@ -377,20 +345,14 @@ function fixups(out, ctx = {}) {
 
 // ---------- Routes ----------
 
-// GET /plans/me  (simple stub based on env plan presets)
+// GET /plans/me
 router.get('/plans/me', async (req, res) => {
   try {
     const shop = normalizeShop(req.query.shop || req.headers['x-shop']) || '';
     const plan = resolvePlanForShop(shop);
     const now = new Date();
-    const trialEndsAt = new Date(now.getTime() - 24 * 3600 * 1000).toISOString(); // assume trial over; adjust as needed
-    res.json({
-      shop,
-      ...plan,
-      queryCount: 0,
-      inTrial: false,
-      trialEndsAt,
-    });
+    const trialEndsAt = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
+    res.json({ shop, ...plan, queryCount: 0, inTrial: false, trialEndsAt });
   } catch (err) {
     console.error('plans/me error:', err);
     res.status(500).json({ error: 'Plans error', message: err.message });
@@ -398,8 +360,6 @@ router.get('/plans/me', async (req, res) => {
 });
 
 // POST /seo/generate
-// Body: { shop, productId, model, language }
-// Returns: structured JSON per OUTPUT_SCHEMA
 router.post('/seo/generate', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -407,8 +367,6 @@ router.post('/seo/generate', async (req, res) => {
     if (!productId || !model) {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
-
-    // Fetch product context from Admin API
     const q = `
       query Product($id: ID!) {
         product(id: $id) {
@@ -428,7 +386,7 @@ router.post('/seo/generate', async (req, res) => {
     const p = data?.product;
     if (!p) throw new Error('Product not found');
 
-    const productCtx = {
+    const ctx = {
       id: p.id,
       title: p.title,
       descriptionHtml: p.descriptionHtml,
@@ -438,33 +396,21 @@ router.post('/seo/generate', async (req, res) => {
       handle: p.handle,
       price: p?.priceRangeV2?.minVariantPrice?.amount || null,
       currency: p?.priceRangeV2?.minVariantPrice?.currencyCode || null,
-      images: (p.images?.edges || []).map(e => ({
-        id: e.node.id,
-        altText: e.node.altText || null,
-      })),
+      images: (p.images?.edges || []).map(e => ({ id: e.node.id, altText: e.node.altText || null })),
     };
 
-    const messages = strictPrompt(productCtx, language);
+    const messages = strictPrompt(ctx, language);
     const content = await callOpenRouter(model, messages);
 
     let candidate;
-    try {
-      candidate = JSON.parse(content);
-    } catch (e) {
-      return res.status(400).json({ error: 'Model did not return valid JSON', raw: content.slice(0, 500) });
-    }
+    try { candidate = JSON.parse(content); }
+    catch { return res.status(400).json({ error: 'Model did not return valid JSON', raw: content.slice(0, 500) }); }
 
-    // Apply fixups, then validate
     const fixed = fixups(candidate, { productId, model, language });
     const ok = validateOutput(fixed);
     if (!ok) {
-      return res.status(400).json({
-        error: 'Output failed schema validation',
-        issues: validateOutput.errors,
-        sample: fixed,
-      });
+      return res.status(400).json({ error: 'Output failed schema validation', issues: validateOutput.errors, sample: fixed });
     }
-
     return res.json(fixed);
   } catch (err) {
     console.error('seo/generate error:', err);
@@ -473,7 +419,6 @@ router.post('/seo/generate', async (req, res) => {
 });
 
 // POST /seo/apply
-// Body: { shop, productId, seo, options }
 router.post('/seo/apply', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -487,14 +432,14 @@ router.post('/seo/apply', async (req, res) => {
     const updateSeo = options.updateSeo !== false;
     const updateBullets = options.updateBullets !== false;
     const updateFaq = options.updateFaq !== false;
-    const updateAlt = options.updateAlt === true; // optional future
+    const updateAlt = options.updateAlt === true;
     const dryRun = options.dryRun === true;
 
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
     if (!dryRun) {
-      // 1) productUpdate (title/descriptionHtml/seo)
+      // 1) productUpdate
       if (updateTitle || updateBody || updateSeo) {
         const input = { id: productId };
         if (updateTitle && seo.title) input.title = seo.title;
@@ -520,12 +465,12 @@ router.post('/seo/apply', async (req, res) => {
             updated.body = !!input.descriptionHtml;
             updated.seo = !!input.seo;
           } catch (e) {
-            errors.push(`productUpdate: ${e.message}`);
+            errors.push(\`productUpdate: \${e.message}\`);
           }
         }
       }
 
-      // 2) metafieldsSet (bullets, faq)
+      // 2) metafieldsSet
       const metaInputs = [];
       if (updateBullets && Array.isArray(seo.bullets)) {
         metaInputs.push({
@@ -559,16 +504,16 @@ router.post('/seo/apply', async (req, res) => {
           updated.bullets = metaInputs.some(m => m.key === 'bullets');
           updated.faq = metaInputs.some(m => m.key === 'faq');
         } catch (e) {
-          errors.push(`metafieldsSet: ${e.message}`);
+          errors.push(\`metafieldsSet: \${e.message}\`);
         }
       }
 
-      // 3) (Optional) create metafield definitions if missing (so Admin UI shows them)
+      // 3) ensure metafield definitions exist (fix: do not request .type)
       try {
         const defsQ = `
           query {
             metafieldDefinitions(ownerType: PRODUCT, first: 20, namespace: "seo_ai") {
-              edges { node { id name key namespace type } }
+              edges { node { id name key namespace } }
             }
           }
         `;

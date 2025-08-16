@@ -1,333 +1,284 @@
-// frontend/src/App.jsx
-// Embedded UI with Generate + Preview/JSON + Apply to product.
-// Comments in English.
+import React, { useEffect, useMemo, useState } from 'react';
 
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  AppProvider,
-  Page,
-  Card,
-  TextField,
-  Select,
-  Button,
-  Tabs,
-  InlineStack,
-  BlockStack,
-  Text,
-  Divider,
-  Toast,
-  Frame,
-  Badge,
-  Link,
-} from "@shopify/polaris";
-import { getIdToken } from "./session.js";
+/**
+ * Minimal, resilient UI:
+ * - Loads plan from /plans/me (suggested models)
+ * - Generate -> shows Preview/JSON
+ * - Apply -> POST /seo/apply with the JSON from generate
+ * - No App Bridge token required (works even if ?host is missing)
+ * - All errors are surfaced onscreen (no silent crashes)
+ */
 
-const PROVIDER_LABELS = [
-  { label: "OpenAI", value: "openai" },
-  { label: "Claude", value: "claude" }, // vendor 'anthropic'
-  { label: "Gemini", value: "gemini" }, // vendor 'google'
-];
+const jsonPretty = (v) => JSON.stringify(v, null, 2);
 
-function vendorFromProvider(p) {
-  if (p === "claude") return "anthropic";
-  if (p === "gemini") return "google";
-  return p;
+function getQS(name, def = '') {
+  try {
+    const u = new URL(window.location.href);
+    return u.searchParams.get(name) || def;
+  } catch {
+    return def;
+  }
 }
 
-function gidFromMaybeNumeric(s) {
-  const v = String(s || "").trim();
-  if (!v) return "";
-  if (/^gid:\/\//.test(v)) return v;
-  if (/^\d+$/.test(v)) return `gid://shopify/Product/${v}`;
-  return v;
-}
-
-function numericIdFromGid(gid) {
-  const m = String(gid || "").match(/Product\/(\d+)$/);
-  return m ? m[1] : "";
+function toGID(idOrGid) {
+  const s = String(idOrGid || '').trim();
+  if (!s) return '';
+  if (s.startsWith('gid://')) return s;
+  if (/^\d+$/.test(s)) return `gid://shopify/Product/${s}`;
+  return s;
 }
 
 export default function App() {
-  const [shop, setShop] = useState("");
-  const [plans, setPlans] = useState(null);
-  const [loadingPlans, setLoadingPlans] = useState(false);
+  // State
+  const [shop, setShop] = useState(() => getQS('shop', ''));
+  const [productId, setProductId] = useState('');
+  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
+  const [language, setLanguage] = useState('en');
 
-  const [productIdInput, setProductIdInput] = useState("");
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("");
-  const [language, setLanguage] = useState("en");
-
-  const [genLoading, setGenLoading] = useState(false);
-  const [applyLoading, setApplyLoading] = useState(false);
-
+  const [plan, setPlan] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
   const [result, setResult] = useState(null);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState('preview'); // 'preview' | 'json'
 
-  const [toast, setToast] = useState({ open: false, msg: "", link: "" });
+  const canGenerate = !!shop && !!productId;
+  const canApply = !!(result && result.productId && result.seo);
 
-  // Load plan info
+  // Load plan (modelsSuggested)
   useEffect(() => {
     (async () => {
       try {
-        setLoadingPlans(true);
-        const token = await getIdToken();
-        const rsp = await fetch("/plans/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = await rsp.json();
-        setPlans(json);
-        setShop(json?.shop || "");
-        const allowed = json?.providersAllowed || [];
-        const initialProvider = allowed.includes("openai")
-          ? "openai"
-          : allowed.includes("claude")
-          ? "claude"
-          : allowed.includes("gemini")
-          ? "gemini"
-          : "openai";
-        setProvider(initialProvider);
+        const q = shop ? `?shop=${encodeURIComponent(shop)}` : '';
+        const r = await fetch(`/plans/me${q}`);
+        const j = await r.json();
+        setPlan(j);
+        if (j?.modelsSuggested?.length) {
+          setModel(j.modelsSuggested[0]);
+        }
       } catch (e) {
-        console.error("plans/me failed", e);
-      } finally {
-        setLoadingPlans(false);
+        setMsg(`Failed to load plan: ${e.message}`);
       }
     })();
-  }, []);
-
-  // Auto-pick a model from plan suggestions
-  useEffect(() => {
-    const vendor = vendorFromProvider(provider);
-    const models = plans?.modelsSuggested || [];
-    const picked =
-      models.find((m) => m.startsWith(`${vendor}/`)) || models[0] || "";
-    setModel(picked);
-  }, [provider, plans]);
-
-  const canGenerate = useMemo(() => !!gidFromMaybeNumeric(productIdInput), [productIdInput]);
-  const canApply = useMemo(() => !!(result?.seo && result?.productId), [result]);
+  }, []); // once
 
   async function onGenerate() {
+    setBusy(true);
+    setMsg('');
+    setResult(null);
     try {
-      setGenLoading(true);
-      const token = await getIdToken();
       const body = {
-        productId: gidFromMaybeNumeric(productIdInput),
+        shop,
+        productId: toGID(productId),
+        model,
         language,
       };
-      if (model) body.model = model;
-      const rsp = await fetch("/seo/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+      const rsp = await fetch('/seo/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const json = await rsp.json();
-      if (!rsp.ok) throw new Error(json?.error || "Generate failed");
-      setResult(json);
-      setTab(0);
+      const j = await rsp.json();
+      if (!rsp.ok) {
+        const err = j?.error || 'Generate failed';
+        throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
+      }
+      setResult(j);
+      setTab('preview');
+      setMsg('Generate ✓');
     } catch (e) {
-      console.error(e);
-      setToast({ open: true, msg: `Generate error: ${e.message}`, link: "" });
+      setMsg(`Generate error: ${e.message}`);
     } finally {
-      setGenLoading(false);
+      setBusy(false);
     }
   }
 
   async function onApply() {
+    if (!canApply) return;
+    setBusy(true);
+    setMsg('');
     try {
-      setApplyLoading(true);
-      const token = await getIdToken();
-      const body = {
-        productId: result?.productId,
-        seo: result?.seo,
-        options: {
-          updateTitle: true,
-          updateBody: true,
-          updateSeo: true,
-          updateBullets: true,
-          updateFaq: true,
-          updateAlt: false,
-          dryRun: false,
-        },
-      };
-      const rsp = await fetch("/seo/apply", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
+      const rsp = await fetch('/seo/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shop,
+          productId: result.productId,
+          seo: result.seo,
+          options: {
+            updateTitle: true,
+            updateBody: true,
+            updateSeo: true,
+            updateBullets: true,
+            updateFaq: true,
+            updateAlt: false,
+            dryRun: false,
+          },
+        }),
       });
-      const json = await rsp.json();
-      if (!rsp.ok) throw new Error(json?.error || "Apply failed");
-      const numericId = numericIdFromGid(result?.productId);
-      const adminLink =
-        shop && numericId
-          ? `https://${shop}/admin/products/${numericId}`
-          : "";
-      setToast({ open: true, msg: "Applied ✓", link: adminLink });
+      const j = await rsp.json();
+      if (!rsp.ok || j?.ok === false) {
+        const err = j?.errors?.join('; ') || j?.error || 'Apply failed';
+        throw new Error(err);
+      }
+      setMsg('Applied ✓');
     } catch (e) {
-      console.error(e);
-      setToast({ open: true, msg: `Apply error: ${e.message}`, link: "" });
+      setMsg(`Apply error: ${e.message}`);
     } finally {
-      setApplyLoading(false);
+      setBusy(false);
     }
   }
 
-  const tabs = [
-    { id: "preview", content: "Preview", panelID: "preview-panel" },
-    { id: "json", content: "JSON", panelID: "json-panel" },
-  ];
-
-  function Preview() {
-    const seo = result?.seo;
-    if (!seo) return <Text as="p" tone="subdued">No result yet.</Text>;
-    return (
-      <BlockStack gap="400">
-        <div
-          style={{ padding: "8px 0" }}
-          dangerouslySetInnerHTML={{ __html: seo.bodyHtml || "" }}
-        />
-        <Divider />
-        <Text as="h3" variant="headingMd">Bullets</Text>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {(seo.bullets || []).map((b, i) => <li key={i}>{b}</li>)}
-        </ul>
-        <Divider />
-        <Text as="h3" variant="headingMd">FAQ</Text>
-        <BlockStack gap="200">
-          {(seo.faq || []).map((qa, i) => (
-            <div key={i}>
-              <Text as="p" variant="headingSm">{qa.q}</Text>
-              <Text as="p">{qa.a}</Text>
-            </div>
-          ))}
-        </BlockStack>
-      </BlockStack>
-    );
-  }
-
-  function JsonView() {
-    return (
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          background: "#f6f6f7",
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #eee",
-        }}
-      >
-        {JSON.stringify(result, null, 2)}
-      </pre>
-    );
-  }
-
+  // Simple, robust layout (no external UI libs — prevents blank screen on missing deps)
   return (
-    <AppProvider i18n={{}}>
-      <Frame>
-        <Page title="AI SEO (v2)">
-          <BlockStack gap="400">
-            <Card>
-              <BlockStack gap="300">
-                <InlineStack gap="400" align="space-between" blockAlign="center">
-                  <Text as="h2" variant="headingLg">Generate SEO</Text>
-                  {plans?.plan ? <Badge tone="success">{plans.plan}</Badge> : null}
-                </InlineStack>
+    <div style={styles.app}>
+      {/* Lightweight "nav/header" so page never looks empty */}
+      <header style={styles.header}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <h1 style={{ margin: 0 }}>AI SEO (v2)</h1>
+          <small style={{ color: '#666' }}>
+            {plan ? `${plan.plan} • ${shop || '(no shop)'}` : 'Loading plan…'}
+          </small>
+        </div>
+        <nav style={styles.nav}>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/ai-seo" aria-current="page">AI SEO</a>
+          <a href="/billing">Billing</a>
+          <a href="/settings">Settings</a>
+        </nav>
+      </header>
 
-                <InlineStack gap="400" wrap={false}>
-                  <div style={{ minWidth: 260, flex: "1 1 260px" }}>
-                    <TextField
-                      label="Product ID"
-                      value={productIdInput}
-                      onChange={setProductIdInput}
-                      placeholder="e.g. 14963354272076 or gid://shopify/Product/…"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div style={{ minWidth: 220 }}>
-                    <Select
-                      label="AI Provider"
-                      options={PROVIDER_LABELS.filter((opt) =>
-                        (plans?.providersAllowed || []).includes(opt.value)
-                      )}
-                      onChange={setProvider}
-                      value={provider}
-                    />
-                  </div>
-                  <div style={{ minWidth: 280 }}>
-                    <TextField
-                      label="Model (auto-picked)"
-                      value={model}
-                      onChange={setModel}
-                      autoComplete="off"
-                      helpText="Picked from your plan's allowed models. You can override."
-                    />
-                  </div>
-                </InlineStack>
+      {/* Controls */}
+      <section style={styles.grid}>
+        <label>Shop</label>
+        <input
+          value={shop}
+          onChange={(e) => setShop(e.target.value)}
+          placeholder="asapxt-teststore.myshopify.com"
+        />
 
-                <InlineStack gap="300">
-                  <TextField
-                    label="Language"
-                    value={language}
-                    onChange={setLanguage}
-                    autoComplete="off"
-                    helpText="en, de, es, fr…"
-                  />
-                </InlineStack>
+        <label>Product ID</label>
+        <input
+          value={productId}
+          onChange={(e) => setProductId(e.target.value)}
+          placeholder="14963354272076 or gid://shopify/Product/..."
+        />
 
-                <InlineStack gap="400">
-                  <Button
-                    variant="primary"
-                    onClick={onGenerate}
-                    loading={genLoading || loadingPlans}
-                    disabled={!canGenerate || loadingPlans}
-                  >
-                    Generate
-                  </Button>
-                  <Button onClick={onApply} loading={applyLoading} disabled={!canApply}>
-                    Apply to product
-                  </Button>
-                  {result?.productId ? (
-                    <Text as="span">
-                      Product:&nbsp;<code>{result.productId}</code>
-                    </Text>
-                  ) : null}
-                </InlineStack>
-              </BlockStack>
-            </Card>
+        <label>Model</label>
+        <select value={model} onChange={(e) => setModel(e.target.value)}>
+          {(plan?.modelsSuggested || [model]).map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
 
-            <Card>
-              <Tabs tabs={tabs} selected={tab} onSelect={setTab}>
-                <Card.Section>
-                  {tab === 0 ? <Preview /> : <JsonView />}
-                </Card.Section>
-              </Tabs>
-            </Card>
+        <label>Language</label>
+        <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+          {['en', 'de', 'es', 'fr', 'bg'].map((l) => (
+            <option key={l} value={l}>{l.toUpperCase()}</option>
+          ))}
+        </select>
+      </section>
 
-            {toast.open ? (
-              <Toast
-                content={
-                  toast.link ? (
-                    <span>
-                      {toast.msg} —{" "}
-                      <Link url={toast.link} external>
-                        View product in Admin
-                      </Link>
-                    </span>
-                  ) : (
-                    toast.msg
-                  )
-                }
-                onDismiss={() => setToast({ open: false, msg: "", link: "" })}
-              />
-            ) : null}
-          </BlockStack>
-        </Page>
-      </Frame>
-    </AppProvider>
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <button onClick={onGenerate} disabled={!canGenerate || busy}>Generate</button>
+        <button onClick={onApply} disabled={!canApply || busy}>Apply to product</button>
+        {busy && <span>Working…</span>}
+        {!!msg && (
+          <span style={{ color: msg.toLowerCase().includes('error') ? '#a40000' : '#0a7a0a' }}>
+            {msg}
+          </span>
+        )}
+      </div>
+
+      {/* Output */}
+      {result && (
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={() => setTab('preview')} disabled={tab === 'preview'}>Preview</button>
+            <button onClick={() => setTab('json')} disabled={tab === 'json'}>JSON</button>
+          </div>
+
+          {tab === 'preview' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
+              <div style={styles.card}>
+                <h2 style={{ marginTop: 0 }}>{result.seo.title}</h2>
+                <p><em>{result.seo.metaDescription}</em></p>
+                <div dangerouslySetInnerHTML={{ __html: result.seo.bodyHtml }} />
+                {!!result.seo.bullets?.length && (
+                  <>
+                    <h3>Bullets</h3>
+                    <ul>
+                      {result.seo.bullets.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                  </>
+                )}
+                {!!result.seo.faq?.length && (
+                  <>
+                    <h3>FAQ</h3>
+                    <dl>
+                      {result.seo.faq.map((f, i) => (
+                        <div key={i} style={{ marginBottom: 8 }}>
+                          <dt><strong>{f.q}</strong></dt>
+                          <dd>{f.a}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </>
+                )}
+              </div>
+
+              <pre style={styles.cardPre}>
+                {jsonPretty({
+                  productId: result.productId,
+                  slug: result.seo.slug,
+                  imageAlt: result.seo.imageAlt || [],
+                  quality: result.quality || {},
+                })}
+              </pre>
+            </div>
+          ) : (
+            <pre style={styles.cardPre}>{jsonPretty(result)}</pre>
+          )}
+        </>
+      )}
+    </div>
   );
 }
+
+const styles = {
+  app: {
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+    padding: 16,
+    color: '#111',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'end',
+    marginBottom: 12,
+  },
+  nav: {
+    display: 'flex',
+    gap: 12,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '180px 1fr',
+    gap: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  card: {
+    border: '1px solid #eee',
+    borderRadius: 8,
+    padding: 12,
+    background: '#fff',
+  },
+  cardPre: {
+    border: '1px solid #eee',
+    borderRadius: 8,
+    padding: 12,
+    background: '#fff',
+    overflow: 'auto',
+  },
+};
