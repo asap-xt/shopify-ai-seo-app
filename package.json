@@ -16,6 +16,7 @@
     "@shopify/polaris": "^13.9.5",
     "@shopify/shopify-api": "^11.14.1",
     "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "body-parser": "^1.20.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
