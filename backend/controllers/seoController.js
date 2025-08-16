@@ -436,6 +436,26 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
     parsed.language = language;
     parsed = normalizeAndFix(parsed, product);
 
+    // Ensure quality block exists (some models omit it)
+    if (!parsed.quality || typeof parsed.quality !== 'object') {
+      parsed.quality = {
+        warnings: [],
+        model: parsed.model || model,
+        tokens: llm?.tokens || 0,
+        costUsd: llm?.costUsd || 0,
+      };
+    } else {
+      // Fill missing fields defensively
+      parsed.quality.warnings = Array.isArray(parsed.quality.warnings)
+        ? parsed.quality.warnings
+        : [];
+      parsed.quality.model = parsed.quality.model || (parsed.model || model);
+      parsed.quality.tokens =
+        typeof parsed.quality.tokens === 'number' ? parsed.quality.tokens : (llm?.tokens || 0);
+      parsed.quality.costUsd =
+        typeof parsed.quality.costUsd === 'number' ? parsed.quality.costUsd : (llm?.costUsd || 0);
+    }
+
     // Validate schema
     const ok = validateOutput(parsed);
     if (!ok) {
