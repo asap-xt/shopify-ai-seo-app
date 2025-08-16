@@ -172,48 +172,39 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// Serve static files (no index by default; SPA handled below)
+// --- Static frontend (Vite build): cache assets, but force index.html to be fresh ---
 app.use(
   express.static(distPath, {
     index: false,
-    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0,
-    setHeaders: (res, filePath) => {
+    etag: false,
+    lastModified: false,
+    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0, // hashed assets can be long-cached
+    setHeaders(res, filePath) {
       if (filePath.endsWith('index.html')) {
+        // never cache the HTML shell, so the iframe always picks up the latest UI
         res.setHeader('Cache-Control', 'no-store');
       }
     },
   })
 );
 
-// Explicit SPA routes that should return index.html
+// --- Explicit SPA routes → always serve fresh index.html ---
 const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings'];
 spaRoutes.forEach((route) => {
-  app.get(route, (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
+  app.get(route, (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
 });
 
-// Generic SPA fallback: anything that is not API/webhooks/debug/assets
-app.get(/^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/|token-exchange\/).*/i, (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-// ---- Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('[ERROR]', err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
-});
-
-// ---- Start server (then async connect to Mongo)
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`✔ Server listening on port ${PORT}`);
-  console.log(`✔ Auth endpoint: ${process.env.APP_URL}/auth`);
-  console.log(`✔ Token exchange endpoint: ${process.env.APP_URL}/token-exchange`);
-  try {
-    startScheduler();
-  } catch (e) {
-    console.error('Scheduler start error:', e);
+// --- Generic SPA fallback (exclude API/webhooks/etc) → fresh index.html ---
+app.get(
+  /^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/|token-exchange\/).*/i,
+  (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(distPath, 'index.html'));
   }
-});
+);
 
 // Mongo connect (non-blocking)
 mongoose
