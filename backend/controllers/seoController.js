@@ -3,7 +3,7 @@
 // - /seo/generate: auto-fetches product by productId via Admin API (offline token).
 //   shop is inferred from session (middleware) and model defaults to the first allowed for the plan.
 // - Validates the LLM output with AJV and applies safe "fixups" to satisfy schema.
-// - /seo/apply: Updates product title/body/seo + metafields (seo_ai.bullets/faq).
+// - /seo/apply: Updates product title/descriptionHtml/seo + metafields (seo_ai.bullets/faq).
 
 import express from 'express';
 import Ajv from 'ajv';
@@ -445,7 +445,6 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
         costUsd: llm?.costUsd || 0,
       };
     } else {
-      // Fill missing fields defensively
       parsed.quality.warnings = Array.isArray(parsed.quality.warnings)
         ? parsed.quality.warnings
         : [];
@@ -513,7 +512,8 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
       if (updateTitle || updateBody || updateSeo) {
         const input = { id: productId };
         if (updateTitle && seo.title) input.title = seo.title;
-        if (updateBody && seo.bodyHtml) input.bodyHtml = seo.bodyHtml;
+        // IMPORTANT: Admin API uses descriptionHtml in ProductInput (not bodyHtml)
+        if (updateBody && seo.bodyHtml) input.descriptionHtml = seo.bodyHtml;
         if (updateSeo && (seo.title || seo.metaDescription)) {
           input.seo = {
             title: seo.title || undefined,
@@ -540,7 +540,7 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
           if (errs.length) errors.push({ step: 'productUpdate', errors: errs });
           else {
             updated.title = !!input.title;
-            updated.body = !!input.bodyHtml;
+            updated.body = !!input.descriptionHtml;
             updated.seo = !!input.seo;
           }
         }
