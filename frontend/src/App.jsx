@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
-// Minimal embedded UI for AI SEO: Product ID input, provider select, Generate, Preview/JSON tabs, and Apply to product.
-// Comments are in English.
+// Embedded UI with Generate + Preview/JSON + Apply to product.
+// Comments in English.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -24,14 +24,14 @@ import { getIdToken } from "./session.js";
 
 const PROVIDER_LABELS = [
   { label: "OpenAI", value: "openai" },
-  { label: "Claude", value: "claude" }, // vendor is 'anthropic'
-  { label: "Gemini", value: "gemini" }, // vendor is 'google'
+  { label: "Claude", value: "claude" }, // vendor 'anthropic'
+  { label: "Gemini", value: "gemini" }, // vendor 'google'
 ];
 
 function vendorFromProvider(p) {
   if (p === "claude") return "anthropic";
   if (p === "gemini") return "google";
-  return p; // "openai" stays "openai"
+  return p;
 }
 
 function gidFromMaybeNumeric(s) {
@@ -48,24 +48,24 @@ function numericIdFromGid(gid) {
 }
 
 export default function App() {
-  const [shop, setShop] = useState(""); // from /plans/me
-  const [plans, setPlans] = useState(null); // plan view
+  const [shop, setShop] = useState("");
+  const [plans, setPlans] = useState(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
 
   const [productIdInput, setProductIdInput] = useState("");
-  const [provider, setProvider] = useState("openai"); // UI selection
-  const [model, setModel] = useState(""); // picked automatically from plans/modelsSuggested
+  const [provider, setProvider] = useState("openai");
+  const [model, setModel] = useState("");
   const [language, setLanguage] = useState("en");
 
   const [genLoading, setGenLoading] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
 
-  const [result, setResult] = useState(null); // the full JSON returned by /seo/generate
-  const [tab, setTab] = useState(0); // 0=Preview, 1=JSON
+  const [result, setResult] = useState(null);
+  const [tab, setTab] = useState(0);
 
   const [toast, setToast] = useState({ open: false, msg: "", link: "" });
 
-  // Load plan info (also gives us shop + allowed models)
+  // Load plan info
   useEffect(() => {
     (async () => {
       try {
@@ -77,7 +77,6 @@ export default function App() {
         const json = await rsp.json();
         setPlans(json);
         setShop(json?.shop || "");
-        // Pick initial provider from allowed; fallback to openai
         const allowed = json?.providersAllowed || [];
         const initialProvider = allowed.includes("openai")
           ? "openai"
@@ -95,36 +94,27 @@ export default function App() {
     })();
   }, []);
 
-  // Pick model automatically when provider or plans change
+  // Auto-pick a model from plan suggestions
   useEffect(() => {
     const vendor = vendorFromProvider(provider);
     const models = plans?.modelsSuggested || [];
     const picked =
-      models.find((m) => m.startsWith(`${vendor}/`)) ||
-      models[0] ||
-      "";
+      models.find((m) => m.startsWith(`${vendor}/`)) || models[0] || "";
     setModel(picked);
   }, [provider, plans]);
 
-  const canGenerate = useMemo(() => {
-    return !!gidFromMaybeNumeric(productIdInput);
-  }, [productIdInput]);
-
-  const canApply = useMemo(() => {
-    const seo = result?.seo;
-    return !!(seo && result?.productId);
-  }, [result]);
+  const canGenerate = useMemo(() => !!gidFromMaybeNumeric(productIdInput), [productIdInput]);
+  const canApply = useMemo(() => !!(result?.seo && result?.productId), [result]);
 
   async function onGenerate() {
     try {
       setGenLoading(true);
       const token = await getIdToken();
       const body = {
-        // shop is inferred by backend from session token
         productId: gidFromMaybeNumeric(productIdInput),
         language,
       };
-      if (model) body.model = model; // let backend auto-pick if missing
+      if (model) body.model = model;
       const rsp = await fetch("/seo/generate", {
         method: "POST",
         headers: {
@@ -134,9 +124,7 @@ export default function App() {
         body: JSON.stringify(body),
       });
       const json = await rsp.json();
-      if (!rsp.ok) {
-        throw new Error(json?.error || "Generate failed");
-      }
+      if (!rsp.ok) throw new Error(json?.error || "Generate failed");
       setResult(json);
       setTab(0);
     } catch (e) {
@@ -173,19 +161,13 @@ export default function App() {
         body: JSON.stringify(body),
       });
       const json = await rsp.json();
-      if (!rsp.ok) {
-        throw new Error(json?.error || "Apply failed");
-      }
+      if (!rsp.ok) throw new Error(json?.error || "Apply failed");
       const numericId = numericIdFromGid(result?.productId);
       const adminLink =
         shop && numericId
           ? `https://${shop}/admin/products/${numericId}`
           : "";
-      setToast({
-        open: true,
-        msg: "Applied ✓",
-        link: adminLink,
-      });
+      setToast({ open: true, msg: "Applied ✓", link: adminLink });
     } catch (e) {
       console.error(e);
       setToast({ open: true, msg: `Apply error: ${e.message}`, link: "" });
@@ -195,16 +177,8 @@ export default function App() {
   }
 
   const tabs = [
-    {
-      id: "preview",
-      content: "Preview",
-      panelID: "preview-panel",
-    },
-    {
-      id: "json",
-      content: "JSON",
-      panelID: "json-panel",
-    },
+    { id: "preview", content: "Preview", panelID: "preview-panel" },
+    { id: "json", content: "JSON", panelID: "json-panel" },
   ];
 
   function Preview() {
@@ -219,9 +193,7 @@ export default function App() {
         <Divider />
         <Text as="h3" variant="headingMd">Bullets</Text>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {(seo.bullets || []).map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
+          {(seo.bullets || []).map((b, i) => <li key={i}>{b}</li>)}
         </ul>
         <Divider />
         <Text as="h3" variant="headingMd">FAQ</Text>
@@ -257,15 +229,13 @@ export default function App() {
   return (
     <AppProvider i18n={{}}>
       <Frame>
-        <Page title="AI SEO">
+        <Page title="AI SEO (v2)">
           <BlockStack gap="400">
             <Card>
               <BlockStack gap="300">
                 <InlineStack gap="400" align="space-between" blockAlign="center">
                   <Text as="h2" variant="headingLg">Generate SEO</Text>
-                  {plans?.plan ? (
-                    <Badge tone="success">{plans.plan}</Badge>
-                  ) : null}
+                  {plans?.plan ? <Badge tone="success">{plans.plan}</Badge> : null}
                 </InlineStack>
 
                 <InlineStack gap="400" wrap={false}>
@@ -278,7 +248,6 @@ export default function App() {
                       autoComplete="off"
                     />
                   </div>
-
                   <div style={{ minWidth: 220 }}>
                     <Select
                       label="AI Provider"
@@ -289,7 +258,6 @@ export default function App() {
                       value={provider}
                     />
                   </div>
-
                   <div style={{ minWidth: 280 }}>
                     <TextField
                       label="Model (auto-picked)"
@@ -320,19 +288,12 @@ export default function App() {
                   >
                     Generate
                   </Button>
-
-                  <Button
-                    onClick={onApply}
-                    loading={applyLoading}
-                    disabled={!canApply}
-                  >
+                  <Button onClick={onApply} loading={applyLoading} disabled={!canApply}>
                     Apply to product
                   </Button>
-
                   {result?.productId ? (
                     <Text as="span">
-                      Product:&nbsp;
-                      <code>{result.productId}</code>
+                      Product:&nbsp;<code>{result.productId}</code>
                     </Text>
                   ) : null}
                 </InlineStack>
