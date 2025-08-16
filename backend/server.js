@@ -33,14 +33,16 @@ console.log('[ENV CHECK] URLs:', {
 
 // Routers / controllers
 import authRouter from './auth.js';                      // OAuth (Public)
-import tokenExchangeRouter from './token-exchange.js';   // ✅ ADD TOKEN EXCHANGE
+import tokenExchangeRouter from './token-exchange.js';   // Token exchange
 import billing from './billing.js';                      // Billing API
 import seoRouter from './controllers/seoController.js';  // SEO routes
+import feedRouter from './controllers/feedController.js';// AI-ready feed routes
 import validateShopifyWebhook from './middleware/webhookValidator.js';
 import productsWebhook from './webhooks/products.js';
 import uninstallWebhook from './webhooks/uninstall.js';
 import { syncProductsForShop } from './controllers/productSync.js';
 import { startScheduler } from './scheduler.js';
+
 
 // Optional CSP helper (must allow embedding)
 import csp from './middleware/csp.js';
@@ -65,12 +67,14 @@ app.use(cors({ origin: true, credentials: true }));
 
 // Request log with more details for debugging
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'dev'));
+
+// ---- Cookie parser (before any auth that might use cookies)
 app.use(cookieParser());
 
-// JSON parser all but webhooks
+// ---- Special JSON handling: raw body for webhooks, normal JSON for all but webhooks
 app.use((req, res, next) => {
   if (req.path.startsWith('/webhooks/')) {
-    // За webhooks - запазваме raw body
+    // For webhooks we keep raw body for HMAC validation
     let data = '';
     req.setEncoding('utf8');
     req.on('data', (chunk) => (data += chunk));
@@ -84,7 +88,7 @@ app.use((req, res, next) => {
       next();
     });
   } else {
-    // За всичко друго - нормален JSON parser
+    // For everything else use standard JSON parser
     express.json({ limit: '2mb' })(req, res, next);
   }
 });
@@ -128,10 +132,11 @@ app.use((req, res, next) => {
 });
 
 // ---- APIs (mount BEFORE static)
-app.use(authRouter);                        // OAuth (kept at root so /auth/* works)
-app.use('/token-exchange', tokenExchangeRouter);  // ✅ MOUNT TOKEN EXCHANGE
-app.use('/billing', billing);               // Billing actions
-app.use('/seo', seoRouter);                 // SEO API
+app.use(authRouter);                               // OAuth (/auth/*)
+app.use('/token-exchange', tokenExchangeRouter);   // Token exchange
+app.use('/billing', billing);                      // Billing actions
+app.use(seoRouter);                                // /plans/me, /seo/generate, /seo/apply
+app.use(feedRouter);                               // /ai/feed/catalog.ndjson, /ai/feed/catalog.json
 
 // ---- Webhooks
 app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
@@ -140,9 +145,13 @@ app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
 // Manual product sync (dev only)
 if (process.env.NODE_ENV !== 'production') {
   app.get('/sync-products/:shop', async (req, res) => {
-    const { shop } = req.params;
-    await syncProductsForShop(shop);
-    res.status(200).json({ message: `Products synced for shop ${shop}` });
+    try {
+      const { shop } = req.params;
+      await syncProductsForShop(shop);
+      res.status(200).json({ message: `Products synced for shop ${shop}` });
+    } catch (e) {
+      res.status(500).json({ error: 'Sync failed', details: e.message });
+    }
   });
 }
 
@@ -151,14 +160,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../frontend/dist');
 
-// List built assets (dev aid)
+// Dev helper: list built assets
 if (process.env.NODE_ENV !== 'production') {
   app.get('/debug/assets', (_req, res) => {
     try {
-      const files = fs.readdirSync(distPath);
-      res.json({ distExists: true, files });
-    } catch {
-      res.json({ distExists: false, files: [] });
+      const files = fs.existsSync(distPath) ? fs.readdirSync(distPath) : [];
+      res.json({ distExists: fs.existsSync(distPath), files });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
   });
 }
@@ -193,7 +202,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
-// ---- Start server (then async-connect to Mongo)
+// ---- Start server (then async connect to Mongo)
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`✔ Server listening on port ${PORT}`);
