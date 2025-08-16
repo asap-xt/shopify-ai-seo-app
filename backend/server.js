@@ -21,17 +21,19 @@ process.env.BASE_URL = normalizeUrl(process.env.BASE_URL);
 process.env.HOST = normalizeUrl(process.env.HOST);
 process.env.SHOPIFY_APP_URL = normalizeUrl(process.env.SHOPIFY_APP_URL);
 
-if (process.env.NODE_ENV !== 'production') {
-  console.log('[URL CONFIG]', {
-    APP_URL: process.env.APP_URL,
-    BASE_URL: process.env.BASE_URL,
-    HOST: process.env.HOST,
-    SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL,
-  });
-}
+// DEBUG: Log all environment URLs
+console.log('[ENV CHECK] URLs:', {
+  APP_URL: process.env.APP_URL,
+  BASE_URL: process.env.BASE_URL,
+  HOST: process.env.HOST,
+  SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL,
+  SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
+  SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
+});
 
 // Routers / controllers
 import authRouter from './auth.js';                      // OAuth (Public)
+import tokenExchangeRouter from './token-exchange.js';   // ✅ ADD TOKEN EXCHANGE
 import billing from './billing.js';                      // Billing API
 import seoRouter from './controllers/seoController.js';  // SEO routes
 import validateShopifyWebhook from './middleware/webhookValidator.js';
@@ -61,8 +63,8 @@ app.use((req, res, next) => {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 
-// Request log
-app.use(morgan('tiny'));
+// Request log with more details for debugging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'dev'));
 app.use(cookieParser());
 
 // RAW BODY for webhooks (must be BEFORE express.json)
@@ -87,34 +89,46 @@ app.use(express.json({ limit: '2mb' }));
 // ---- Health
 app.get('/health', (_req, res) => res.status(200).json({ status: 'OK' }));
 
-// ---- Debug (dev only)
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/debug/ping', (_req, res) => res.status(200).json({ ok: true }));
+// ---- Debug routes (always include for troubleshooting)
+app.get('/debug/ping', (_req, res) => res.status(200).json({ ok: true }));
 
-  app.get('/debug/routes', (_req, res) => {
-    const routes = [];
-    const stack = app._router?.stack || [];
-    for (const layer of stack) {
-      if (layer.route?.path) {
-        const methods = Object.keys(layer.route.methods);
-        routes.push({ methods, path: layer.route.path });
-      } else if (layer.name === 'router' && layer.handle?.stack) {
-        for (const r of layer.handle.stack) {
-          if (r.route?.path) {
-            const methods = Object.keys(r.route.methods);
-            routes.push({ methods, path: r.route.path });
-          }
+app.get('/debug/routes', (_req, res) => {
+  const routes = [];
+  const stack = app._router?.stack || [];
+  for (const layer of stack) {
+    if (layer.route?.path) {
+      const methods = Object.keys(layer.route.methods);
+      routes.push({ methods, path: layer.route.path });
+    } else if (layer.name === 'router' && layer.handle?.stack) {
+      for (const r of layer.handle.stack) {
+        if (r.route?.path) {
+          const methods = Object.keys(r.route.methods);
+          routes.push({ methods, path: r.route.path });
         }
       }
     }
-    res.status(200).json({ routes });
+  }
+  res.status(200).json({ routes });
+});
+
+// ---- DEBUG: Log all incoming requests for troubleshooting
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`, {
+    query: req.query,
+    headers: {
+      host: req.get('host'),
+      referer: req.get('referer'),
+      'user-agent': req.get('user-agent'),
+    }
   });
-}
+  next();
+});
 
 // ---- APIs (mount BEFORE static)
-app.use(authRouter);            // OAuth (kept at root so /auth/* works)
-app.use('/billing', billing);   // Billing actions
-app.use('/seo', seoRouter);     // SEO API
+app.use(authRouter);                        // OAuth (kept at root so /auth/* works)
+app.use('/token-exchange', tokenExchangeRouter);  // ✅ MOUNT TOKEN EXCHANGE
+app.use('/billing', billing);               // Billing actions
+app.use('/seo', seoRouter);                 // SEO API
 
 // ---- Webhooks
 app.post('/webhooks/products/update', validateShopifyWebhook, productsWebhook);
@@ -166,14 +180,22 @@ spaRoutes.forEach((route) => {
 });
 
 // Generic SPA fallback: anything that is not API/webhooks/debug/assets
-app.get(/^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/).*/i, (_req, res) => {
+app.get(/^\/(?!api\/|webhooks\/|debug\/|assets\/|seo\/|billing\/|auth\/|token-exchange\/).*/i, (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// ---- Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('[ERROR]', err);
+  res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
 // ---- Start server (then async-connect to Mongo)
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`✓ Server listening on port ${PORT}`);
+  console.log(`✔ Server listening on port ${PORT}`);
+  console.log(`✔ Auth endpoint: ${process.env.APP_URL}/auth`);
+  console.log(`✔ Token exchange endpoint: ${process.env.APP_URL}/token-exchange`);
   try {
     startScheduler();
   } catch (e) {
