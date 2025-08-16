@@ -10,7 +10,7 @@ import SideNav from './components/SideNav.jsx';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
-// --- utils
+// -------- utils
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
 };
@@ -21,7 +21,7 @@ const toProductGID = (val) => {
   return s.startsWith('gid://') ? s : `gid://shopify/Product/${s}`;
 };
 
-// --- Left admin navigation (App Bridge v4): only <a> children are valid
+// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
@@ -48,7 +48,7 @@ function useRoute() {
   return { path, setPath };
 }
 
-// --- Dashboard (fetches /plans/me and renders like your screenshot)
+// -------- Dashboard (fetch /plans/me)
 function DashboardCard() {
   const [state, setState] = useState({ loading: false, err: '', data: null });
 
@@ -104,15 +104,43 @@ function DashboardCard() {
   );
 }
 
-// --- AI SEO (Generate → Apply). Backend endpoints are unchanged.
+// -------- AI SEO (Generate → Apply)
 function AiSeoPanel() {
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
+  const [model, setModel] = useState(''); // will be set from /plans/me
+  const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
   const [language, setLanguage] = useState('en');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
+
+  // Load model list dynamically from /plans/me for this shop
+  useEffect(() => {
+    const s = shop || qs('shop', '');
+    if (!s) return;
+    (async () => {
+      try {
+        const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`);
+        const j = await r.json();
+        const opts = (j.modelsSuggested || []).map(m => ({ label: m, value: m }));
+        if (opts.length) {
+          setModelOptions(opts);
+          setModel(prev => opts.find(o => o.value === prev)?.value || opts[0].value);
+        } else {
+          // Fallback to a safe small set
+          const fallback = [
+            'anthropic/claude-3.5-sonnet',
+            'openai/gpt-4o-mini',
+          ];
+          setModelOptions(fallback.map(m => ({ label: m, value: m })));
+          setModel(fallback[0]);
+        }
+      } catch {
+        // Keep whatever is there
+      }
+    })();
+  }, [shop]);
 
   async function generate() {
     setBusy(true); setResult(null);
@@ -128,6 +156,10 @@ function AiSeoPanel() {
       setResult(j);
     } catch (e) {
       setResult({ error: e.message });
+      // Highlight the common OpenRouter model ID error
+      if (String(e.message).toLowerCase().includes('not a valid model')) {
+        setToast('Selected model is not enabled/valid. Pick another model from the list.');
+      }
     } finally {
       setBusy(false);
     }
@@ -196,18 +228,14 @@ function AiSeoPanel() {
               <Layout.Section oneHalf>
                 <Select
                   label="Model"
-                  options={[
-                    { label: 'anthropic/claude-3.5-sonnet', value: 'anthropic/claude-3.5-sonnet' },
-                    { label: 'openai/gpt-4o-mini', value: 'openai/gpt-4o-mini' },
-                    { label: 'google/gemini-1.5-flash', value: 'google/gemini-1.5-flash' },
-                  ]}
+                  options={modelOptions}
                   value={model}
                   onChange={setModel}
                 />
               </Layout.Section>
               <Layout.Section oneHalf>
                 <Select
-                  label="Language"
+                  label="Language (output)"
                   options={[
                     { label: 'EN', value: 'en' },
                     { label: 'DE', value: 'de' },
@@ -220,7 +248,7 @@ function AiSeoPanel() {
               </Layout.Section>
               <Layout.Section>
                 <InlineStack gap="300">
-                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId}>
+                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId || !model}>
                     Generate
                   </Button>
                   <Button onClick={apply} disabled={!result || !result.seo || busy}>
@@ -253,7 +281,6 @@ function AiSeoPanel() {
 export default function App() {
   const { path } = useRoute();
   const [lang, setLang] = useState('en');
-
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
 
   const sectionTitle = useMemo(() => {
@@ -266,12 +293,9 @@ export default function App() {
   return (
     <AppProvider i18n={I18N}>
       {isEmbedded && <AdminNavMenu active={path} />}
-      <Frame
-        navigation={isEmbedded ? undefined : <SideNav />}
-        // No topBar here — we removed the black bar and duplicate language selector
-      >
+      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
-          {/* AppHeader contains the only language selector */}
+          {/* Only header language selector remains */}
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k, d) => d} />
           {path.startsWith('/ai-seo') ? (
             <AiSeoPanel />
