@@ -1,324 +1,323 @@
 // backend/controllers/seoController.js
-// Routes: GET /plans/me, POST /seo/generate, POST /seo/apply
-// - /seo/generate: auto-fetches product by productId via Admin API (offline token).
-//   shop is inferred from session (middleware) and model defaults to the first allowed for the plan.
-// - Validates the LLM output with AJV and applies safe "fixups" to satisfy schema.
-// - /seo/apply: Updates product title/descriptionHtml/seo + metafields (seo_ai.bullets/faq).
+// Routes: /plans/me, /seo/generate, /seo/apply
+// All comments are in English.
 
 import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { callOpenRouterJSON } from '../ai/openrouter.js';
-import {
-  withSubscription,
-  enforceQuota,
-  consumeQuery,
-  buildPlanView,
-} from '../middleware/quota.js';
-import { allowedModelsForPlan } from '../plans.js';
+
+// Node 18+ has global fetch. If you target older Node, uncomment next line.
+// import fetch from 'node-fetch';
 
 const router = express.Router();
 
-/* -------------------------------- Helpers -------------------------------- */
+// ---------- Helpers: plan + providers (static for phase 1–2) ----------
 
-function getAdminApiVersion() {
-  return process.env.SHOPIFY_API_VERSION || '2025-07';
+const PLAN_PRESETS = {
+  starter: {
+    plan: 'Starter',
+    planKey: 'starter',
+    queryLimit: 50,
+    productLimit: 150,
+    providersAllowed: ['deepseek', 'llama'],
+    modelsSuggested: [
+      'deepseek/deepseek-chat',
+      'meta-llama/llama-3.1-8b-instruct',
+    ],
+    autosync: '14d',
+  },
+  professional: {
+    plan: 'Professional',
+    planKey: 'professional',
+    queryLimit: 600,
+    productLimit: 300,
+    providersAllowed: ['openai', 'llama', 'deepseek'],
+    modelsSuggested: [
+      'openai/gpt-4o-mini',
+      'openai/o3-mini',
+      'meta-llama/llama-3.1-8b-instruct',
+      'deepseek/deepseek-chat',
+    ],
+    autosync: '48h',
+  },
+  growth: {
+    plan: 'Growth',
+    planKey: 'growth',
+    queryLimit: 1500,
+    productLimit: 1000,
+    providersAllowed: ['claude', 'openai', 'gemini'],
+    modelsSuggested: [
+      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3-haiku',
+      'openai/gpt-4o-mini',
+      'openai/o3-mini',
+      'google/gemini-1.5-flash',
+      'google/gemini-1.5-pro',
+    ],
+    autosync: '24h',
+  },
+  growth_extra: {
+    plan: 'Growth Extra',
+    planKey: 'growth_extra',
+    queryLimit: 4000,
+    productLimit: 2000,
+    providersAllowed: ['claude', 'openai', 'gemini', 'llama'],
+    modelsSuggested: [
+      'anthropic/claude-3.5-sonnet',
+      'openai/gpt-4o-mini',
+      'google/gemini-1.5-pro',
+      'meta-llama/llama-3.1-70b-instruct',
+    ],
+    autosync: '12h',
+  },
+  enterprise: {
+    plan: 'Enterprise',
+    planKey: 'enterprise',
+    queryLimit: 10000,
+    productLimit: 10000,
+    providersAllowed: ['claude', 'openai', 'gemini', 'deepseek', 'llama'],
+    modelsSuggested: [
+      'anthropic/claude-3.5-sonnet',
+      'openai/gpt-4o',
+      'google/gemini-1.5-pro',
+      'deepseek/deepseek-chat',
+      'meta-llama/llama-3.1-70b-instruct',
+    ],
+    autosync: '2h',
+  },
+};
+
+// In phase 1–2 we do not rely on DB; default to Growth unless APP_PLAN is set.
+function resolvePlanForShop(_shop) {
+  const envKey = (process.env.APP_PLAN || '').toLowerCase();
+  if (envKey && PLAN_PRESETS[envKey]) return PLAN_PRESETS[envKey];
+  return PLAN_PRESETS.growth;
 }
 
-async function adminGraphQL({ shop, accessToken, query, variables }) {
-  if (!shop || !accessToken) throw new Error('Missing shop or access token for Admin GraphQL');
-  const url = `https://${shop}/admin/api/${getAdminApiVersion()}/graphql.json`;
+// ---------- Admin API helpers ----------
+
+const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
+
+function normalizeShop(shop) {
+  if (!shop) return '';
+  const s = String(shop).trim();
+  if (!s) return '';
+  if (s.endsWith('.myshopify.com')) return s;
+  return s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+}
+
+function requireShop(req) {
+  const shop = normalizeShop(req.query.shop || req.body?.shop || req.headers['x-shop']);
+  if (!shop) {
+    const err = new Error('Missing ?shop');
+    err.status = 400;
+    throw err;
+  }
+  return shop;
+}
+
+function resolveAdminTokenForShop(_shop) {
+  // Phase 1–2: fall back to a single env token (custom app in the dev store).
+  const t = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  if (t && t.trim()) return t.trim();
+  const err = new Error('No Admin API token available for this shop');
+  err.status = 400;
+  throw err;
+}
+
+async function shopGraphQL(shop, query, variables = {}) {
+  const token = resolveAdminTokenForShop(shop);
+  const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
   const rsp = await fetch(url, {
     method: 'POST',
     headers: {
+      'X-Shopify-Access-Token': token,
       'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': accessToken,
     },
     body: JSON.stringify({ query, variables }),
   });
   const json = await rsp.json();
   if (!rsp.ok || json.errors) {
-    const msg = json.errors ? JSON.stringify(json.errors) : await rsp.text();
-    const err = new Error(`Admin GraphQL error: ${msg}`);
-    err.status = rsp.status || 500;
-    throw err;
-  }
-  return json;
-}
-
-/** Resolve an offline Admin API token for this shop. */
-async function resolveAccessToken(shop, res) {
-  // 1) If Shopify auth middleware populated a session, use it
-  const sessToken = res?.locals?.shopify?.session?.accessToken;
-  if (sessToken) return sessToken;
-
-  // 2) Try common session storages dynamically (Mongo-based setups)
-  const candidates = [
-    '../db/ShopifySession.js',
-    '../models/ShopifySession.js',
-    '../db/Session.js',
-    '../models/Session.js',
-  ];
-  for (const p of candidates) {
-    try {
-      const mod = await import(p);
-      const Model = mod.default || mod.Session || mod.ShopifySession || mod;
-      if (!Model?.findOne) continue;
-
-      // Classic offline session: id = "offline_<shop>"
-      const byId = await Model.findOne({ id: `offline_${shop}` }).lean();
-      if (byId?.session) {
-        try {
-          const s = typeof byId.session === 'string' ? JSON.parse(byId.session) : byId.session;
-          if (s?.accessToken) return s.accessToken;
-        } catch {}
-      }
-
-      // Alternative shape: { shop, isOnline:false, accessToken }
-      const doc = await Model.findOne({ shop, isOnline: false }).lean();
-      if (doc?.accessToken) return doc.accessToken;
-
-      // Some storages keep JSON under "content" or "payload"
-      const alt = await Model.findOne({ shop }).lean();
-      const content = alt?.content || alt?.payload || alt?.session;
-      if (content) {
-        try {
-          const s = typeof content === 'string' ? JSON.parse(content) : content;
-          if (s?.accessToken) return s.accessToken;
-        } catch {}
-      }
-    } catch {
-      // try next candidate path
-    }
-  }
-
-  // 3) Fallback for single-shop/dev
-  if (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN) return process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-
-  const e = new Error('No Admin API token available for this shop');
-  e.status = 503;
-  throw e;
-}
-
-async function fetchProductById(shop, accessToken, productId) {
-  const q = `
-    query Product($id: ID!) {
-      product(id: $id) {
-        id
-        title
-        handle
-        descriptionHtml
-        vendor
-        tags
-        onlineStoreUrl
-        updatedAt
-        images(first: 10) {
-          edges { node { id altText } }
-        }
-        variants(first: 25) {
-          edges { node { id price } }  # Admin API: price only
-        }
-        seo { title description }
-        metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") { value }
-        metafield_seo_ai_faq:    metafield(namespace: "seo_ai", key: "faq")    { value }
-      }
-    }
-  `;
-  const rsp = await adminGraphQL({ shop, accessToken, query: q, variables: { id: productId } });
-  const node = rsp?.data?.product;
-  if (!node) {
-    const e = new Error('Product not found');
-    e.status = 404;
+    const e = new Error(
+      `Admin GraphQL error: ${JSON.stringify(json.errors || json)}`
+    );
+    e.status = rsp.status || 500;
     throw e;
   }
-  return node;
-}
-
-async function fetchShopCurrency(shop, accessToken) {
-  const q = `query { shop { currencyCode } }`;
-  const rsp = await adminGraphQL({ shop, accessToken, query: q, variables: {} });
-  return rsp?.data?.shop?.currencyCode || null;
-}
-
-function sanitizeHtmlBasic(html = '') {
-  let out = String(html)
-    .replace(/<\s*script[\s\S]*?<\/\s*script\s*>/gi, '')
-    .replace(/<\s*style[\s\S]*?<\/\s*style\s*>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '')
-    .replace(/\son\w+=\S+/gi, '');
-  out = out.replace(/<(?!\/?(p|ul|ol|li|br|strong|em|b|i|h1|h2|h3|a|img)\b)[^>]*>/gi, '');
-  return out;
-}
-
-const kebab = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-const truncate = (s, n) => {
-  s = String(s || '');
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1).trimEnd() + '…';
-};
-
-const toGid = (maybeNumeric) => {
-  const s = String(maybeNumeric || '').trim();
-  if (/^gid:\/\//.test(s)) return s;
-  if (/^\d+$/.test(s)) return `gid://shopify/Product/${s}`;
-  return s;
-};
-
-function stripHtml(s = '') {
-  return String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-const ALLOWED_ROOT_KEYS = new Set(['productId', 'provider', 'model', 'language', 'seo', 'quality']);
-const SEO_FIELD_KEYS = ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd', 'imageAlt'];
-
-/**
- * Normalize LLM output:
- * - Move stray top-level SEO fields under seo.{...}
- * - Delete unknown root keys (schema additionalProperties: false)
- * - Fill missing/empty fields from product (fallbacks)
- * - Enforce limits (lengths, counts) and sanitize HTML
- */
-function normalizeAndFix(parsed, product) {
-  parsed.seo = parsed.seo || {};
-
-  // Move stray top-level SEO fields into seo.{...} and remove from root
-  for (const k of SEO_FIELD_KEYS) {
-    if (parsed[k] != null && parsed.seo[k] == null) {
-      parsed.seo[k] = parsed[k];
-    }
-    delete parsed[k];
-  }
-
-  // Keep only allowed root keys
-  for (const k of Object.keys(parsed)) {
-    if (!ALLOWED_ROOT_KEYS.has(k)) delete parsed[k];
-  }
-
-  // Title
-  const productTitle = String(product?.title || '');
-  parsed.seo.title = truncate(parsed.seo.title || productTitle, 70);
-
-  // Slug
-  parsed.seo.slug = kebab(parsed.seo.slug || product?.handle || parsed.seo.title || productTitle);
-
-  // Meta description (>=20 chars). Prefer model, else derive from product description.
-  let meta = String(parsed.seo.metaDescription || '').trim();
-  if (meta.length < 20) {
-    const base = stripHtml(product?.descriptionHtml || productTitle);
-    meta = base.slice(0, 180);
-    if (meta.length < 20) {
-      meta = `${productTitle} by ${product?.vendor || 'our store'}`;
+  // Also surface userErrors if present inside data
+  const userErrors = [];
+  function collectUserErrors(node) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(collectUserErrors);
+    } else {
+      if (node.userErrors && node.userErrors.length) {
+        userErrors.push(...node.userErrors);
+      }
+      Object.values(node).forEach(collectUserErrors);
     }
   }
-  parsed.seo.metaDescription = truncate(meta, 200);
-
-  // Body HTML (sanitize; if empty, build from meta)
-  let bodyHtml = String(parsed.seo.bodyHtml || '').trim();
-  bodyHtml = sanitizeHtmlBasic(bodyHtml);
-  if (!bodyHtml) {
-    bodyHtml = `<p>${parsed.seo.metaDescription}</p>`;
+  collectUserErrors(json.data);
+  if (userErrors.length) {
+    const e = new Error(
+      `Admin GraphQL userErrors: ${JSON.stringify(userErrors)}`
+    );
+    e.status = 400;
+    throw e;
   }
-  parsed.seo.bodyHtml = bodyHtml;
-
-  // Bullets: need >=2. If missing, derive from product/vendor/tags.
-  let bullets = Array.isArray(parsed.seo.bullets) ? parsed.seo.bullets.filter(Boolean) : [];
-  if (bullets.length < 2) {
-    const tags = Array.isArray(product?.tags) ? product.tags.slice(0, 3) : [];
-    const vendor = product?.vendor ? [`Made by ${product.vendor}`] : [];
-    const basics = [productTitle, ...vendor, ...tags].filter(Boolean);
-    bullets = bullets.concat(basics).slice(0, 6);
-  }
-  bullets = bullets.map((s) => truncate(stripHtml(String(s)), 120)).filter(Boolean);
-  if (bullets.length < 2) {
-    bullets = ['Key benefits and features', 'Quality materials and design'];
-  }
-  parsed.seo.bullets = bullets.slice(0, 6);
-
-  // FAQ: need >=1. If missing, create a generic one.
-  let faq = Array.isArray(parsed.seo.faq) ? parsed.seo.faq : [];
-  faq = faq
-    .map((qa) => ({
-      q: truncate(stripHtml(qa?.q || ''), 140),
-      a: truncate(stripHtml(qa?.a || ''), 400),
-    }))
-    .filter((qa) => qa.q && qa.a);
-  if (faq.length < 1) {
-    faq = [
-      {
-        q: `Who is ${productTitle} best for?`,
-        a: `Ideal for customers seeking quality and value. See details above for specs and usage recommendations.`,
-      },
-    ];
-  }
-  parsed.seo.faq = faq.slice(0, 5);
-
-  // JSON-LD: ensure minimal object exists
-  if (!parsed.seo.jsonLd || typeof parsed.seo.jsonLd !== 'object') {
-    parsed.seo.jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'Product',
-      name: parsed.seo.title,
-      description: stripHtml(product?.descriptionHtml || parsed.seo.metaDescription),
-    };
-  }
-
-  return parsed;
+  return json.data;
 }
 
-/* ------------------------------ AJV Schema ------------------------------ */
+// ---------- AI generation via OpenRouter ----------
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+
+function strictPrompt(product, language) {
+  // System prompt: return ONLY JSON matching the schema.
+  return [
+    {
+      role: 'system',
+      content:
+        `You are an SEO generator for Shopify products. Return ONLY valid JSON that matches the schema I provide. ` +
+        `Language: ${language}. Respect length limits strictly. Use concise, professional tone. ` +
+        `Never include markdown or extra text. No trailing commas.`,
+    },
+    {
+      role: 'user',
+      content:
+`Schema (TypeScript-ish):
+
+{
+  "productId": "gid://shopify/Product/...",
+  "provider": "openrouter",
+  "model": "vendor/model",
+  "language": "en|de|es|fr|bg|...",
+  "seo": {
+    "title": "Max 70 chars",
+    "metaDescription": "20..200 chars, compelling",
+    "slug": "kebab-case",
+    "bodyHtml": "<p>Rich HTML...</p>",
+    "bullets": ["Point 1", "Point 2", "Point 3"],
+    "faq": [{"q":"Question?","a":"Answer."}],
+    "imageAlt": [{"imageId":"gid://shopify/ProductImage/...","alt":"Short alt"}],
+    "jsonLd": { "@context":"https://schema.org", "@type":"Product", "name":"...", "description":"...", "offers": { "@type":"Offer", "price":"...", "priceCurrency":"..." } }
+  },
+  "quality": {
+    "warnings": ["optional warning strings"],
+    "model": "vendor/model",
+    "tokens": 0,
+    "costUsd": 0
+  }
+}
+
+Context (product):
+${JSON.stringify(product, null, 2)}
+
+Rules:
+- Title: ≤ 70 chars. Meta description: 20..200 chars.
+- Slug: lowercase kebab-case (letters, digits, hyphens).
+- Body HTML: clean, semantic (<h2>,<ul>,<li>,<p>).
+- Bullets: 3–6 concise points.
+- FAQ: 1–5 Q/A pairs, helpful, no duplicates.
+- JSON-LD: minimal valid Product schema with priceCurrency if available.
+- Output ONLY the JSON.`
+    }
+  ];
+}
+
+async function callOpenRouter(model, messages) {
+  const url = `${OPENROUTER_BASE_URL}/chat/completions`;
+  const rsp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.3,
+      max_tokens: 1200,
+      response_format: { type: 'json_object' },
+    }),
+  });
+  const json = await rsp.json();
+  if (!rsp.ok) {
+    const e = new Error(`OpenRouter error: ${JSON.stringify(json)}`);
+    e.status = rsp.status || 502;
+    throw e;
+  }
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    const e = new Error(`OpenRouter returned no content: ${JSON.stringify(json)}`);
+    e.status = 502;
+    throw e;
+  }
+  return content;
+}
+
+// ---------- JSON Schema (AJV) ----------
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
-const OutputSchema = {
+const OUTPUT_SCHEMA = {
   type: 'object',
-  required: ['productId', 'provider', 'language', 'seo', 'quality'],
+  additionalProperties: false,
+  required: ['productId', 'provider', 'model', 'language', 'seo', 'quality'],
   properties: {
-    productId: { type: 'string' },
-    provider: { type: 'string', enum: ['openrouter'] },
+    productId: { type: 'string', pattern: '^gid://shopify/Product/\\d+$' },
+    provider: { type: 'string' },
     model: { type: 'string' },
-    language: { type: 'string' },
+    language: { type: 'string', minLength: 2, maxLength: 10 },
     seo: {
       type: 'object',
+      additionalProperties: false,
       required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd'],
       properties: {
-        title: { type: 'string', minLength: 10, maxLength: 120 },
-        metaDescription: { type: 'string', minLength: 20, maxLength: 240 },
-        slug: { type: 'string' },
-        bodyHtml: { type: 'string' },
-        bullets: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 8 },
+        title: { type: 'string', minLength: 5, maxLength: 70 },
+        metaDescription: { type: 'string', minLength: 20, maxLength: 200 },
+        slug: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
+        bodyHtml: { type: 'string', minLength: 1 },
+        bullets: {
+          type: 'array',
+          minItems: 2,
+          maxItems: 10,
+          items: { type: 'string', minLength: 2, maxLength: 160 },
+        },
         faq: {
           type: 'array',
           minItems: 1,
-          maxItems: 8,
+          maxItems: 10,
           items: {
             type: 'object',
-            required: ['q', 'a'],
-            properties: { q: { type: 'string' }, a: { type: 'string' } },
             additionalProperties: false,
+            required: ['q', 'a'],
+            properties: {
+              q: { type: 'string', minLength: 3, maxLength: 160 },
+              a: { type: 'string', minLength: 3, maxLength: 400 },
+            },
           },
         },
         imageAlt: {
           type: 'array',
           items: {
             type: 'object',
-            required: ['imageId', 'alt'],
-            properties: { imageId: { type: 'string' }, alt: { type: 'string' } },
             additionalProperties: false,
+            required: ['imageId', 'alt'],
+            properties: {
+              imageId: { type: 'string', pattern: '^gid://shopify/ProductImage/\\d+$' },
+              alt: { type: 'string', minLength: 2, maxLength: 120 },
+            },
           },
         },
-        jsonLd: { type: 'object' },
+        jsonLd: { type: 'object', minProperties: 1 },
       },
-      additionalProperties: false,
     },
     quality: {
       type: 'object',
+      additionalProperties: false,
       required: ['warnings', 'model', 'tokens', 'costUsd'],
       properties: {
         warnings: { type: 'array', items: { type: 'string' } },
@@ -326,230 +325,210 @@ const OutputSchema = {
         tokens: { type: 'number' },
         costUsd: { type: 'number' },
       },
-      additionalProperties: false,
     },
   },
-  additionalProperties: false,
 };
+const validateOutput = ajv.compile(OUTPUT_SCHEMA);
 
-const validateOutput = ajv.compile(OutputSchema);
+// ---------- Utils ----------
 
-/* ------------------------------- Prompts -------------------------------- */
-
-function buildSystemPrompt(lang = 'en') {
-  return [
-    `You are an SEO generator for Shopify product pages. Return ONLY valid JSON that matches the given schema.`,
-    `Language: ${lang}. Keep tone concise, helpful, non-spammy.`,
-    `Constraints: title <= 70 chars; metaDescription ~160-180 chars; slug = kebab-case;`,
-    `bodyHtml: safe HTML (p, ul, ol, li, br, strong, em, h1-h3, a, img). No scripts, no inline events.`,
-    `bullets: 3-6 short value points. faq: 2-5 Q/A.`,
-    `jsonLd: minimal Product schema.org with offers if price available.`,
-    `Respond with nothing except the JSON.`,
-  ].join('\n');
+function toKebab(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
 }
 
-function buildUserPrompt(product, shopCurrency) {
-  const priceEdge = product?.variants?.edges?.[0]?.node;
-  const price = priceEdge?.price || null; // Admin API: price only
-  const currency = shopCurrency || null;
-
-  const ctx = {
-    id: product?.id,
-    title: product?.title,
-    handle: product?.handle,
-    vendor: product?.vendor,
-    tags: product?.tags,
-    url: product?.onlineStoreUrl,
-    price,
-    currency, // pass shop currency to help LLM build relevant JSON-LD offers
-    descriptionHtml: product?.descriptionHtml,
-    images: (product?.images?.edges || []).map((e) => ({
-      id: e?.node?.id,
-      alt: e?.node?.altText || '',
-    })),
-  };
-  return JSON.stringify({
-    schema: 'shopify.product.seo.v1',
-    instructions: 'Generate SEO JSON for this product.',
-    product: ctx,
-  });
+function truncate(s, max) {
+  const str = String(s || '').trim();
+  if (str.length <= max) return str;
+  return str.slice(0, max).replace(/\s+\S*$/, '').trim();
 }
 
-/* -------------------------------- Routes -------------------------------- */
+function sanitizeHtml(html) {
+  const s = String(html || '');
+  // Very light sanitizer for phase 1–2: strip <script> tags.
+  return s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+}
 
-// GET /plans/me
-router.get('/plans/me', withSubscription, (req, res) => {
+function fixups(out, ctx = {}) {
+  const res = JSON.parse(JSON.stringify(out));
+  if (ctx.productId) res.productId = ctx.productId;
+  if (ctx.model) res.model = ctx.model;
+  if (ctx.language) res.language = ctx.language;
+  res.provider = 'openrouter';
+  if (res.seo) {
+    res.seo.title = truncate(res.seo.title, 70);
+    if (res.seo.metaDescription) {
+      let md = res.seo.metaDescription.trim();
+      if (md.length < 20) md = (md + ' — ').repeat(10).slice(0, 60);
+      res.seo.metaDescription = truncate(md, 200);
+    }
+    res.seo.slug = toKebab(res.seo.slug || res.seo.title || '');
+    res.seo.bodyHtml = sanitizeHtml(res.seo.bodyHtml || '');
+  }
+  if (!res.quality) {
+    res.quality = { warnings: [], model: res.model || '', tokens: 0, costUsd: 0 };
+  }
+  return res;
+}
+
+// ---------- Routes ----------
+
+// GET /plans/me  (simple stub based on env plan presets)
+router.get('/plans/me', async (req, res) => {
   try {
-    const view = buildPlanView(req.subscription);
-    res.status(200).json(view);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to build plan view', details: e.message });
+    const shop = normalizeShop(req.query.shop || req.headers['x-shop']) || '';
+    const plan = resolvePlanForShop(shop);
+    const now = new Date();
+    const trialEndsAt = new Date(now.getTime() - 24 * 3600 * 1000).toISOString(); // assume trial over; adjust as needed
+    res.json({
+      shop,
+      ...plan,
+      queryCount: 0,
+      inTrial: false,
+      trialEndsAt,
+    });
+  } catch (err) {
+    console.error('plans/me error:', err);
+    res.status(500).json({ error: 'Plans error', message: err.message });
   }
 });
 
 // POST /seo/generate
-router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) => {
+// Body: { shop, productId, model, language }
+// Returns: structured JSON per OUTPUT_SCHEMA
+router.post('/seo/generate', async (req, res) => {
   try {
-    // Shop is inferred by middleware (embedded Admin), model may be omitted
-    const shop = req.shop || res?.locals?.shopify?.session?.shop || req.body?.shop || '';
-    let { model, language = 'en' } = req.body || {};
-    let productId = toGid(req.body?.productId || req.query?.productId);
-
-    if (!productId) {
-      return res.status(400).json({ error: 'Missing productId (GID or numeric ID)' });
+    const shop = requireShop(req);
+    const { productId, model, language = 'en' } = req.body || {};
+    if (!productId || !model) {
+      return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
 
-    if (!model) {
-      const allowed = allowedModelsForPlan(req.subscription?.planKey || '');
-      if (allowed && allowed.length) {
-        model = allowed[0];
-      } else {
-        return res.status(400).json({ error: 'Missing model and no allowed models found for plan' });
+    // Fetch product context from Admin API
+    const q = `
+      query Product($id: ID!) {
+        product(id: $id) {
+          id
+          title
+          descriptionHtml
+          vendor
+          productType
+          tags
+          images(first: 10) { edges { node { id altText } } }
+          priceRangeV2 { minVariantPrice { amount currencyCode } }
+          handle
+        }
       }
-    }
+    `;
+    const data = await shopGraphQL(shop, q, { id: productId });
+    const p = data?.product;
+    if (!p) throw new Error('Product not found');
 
-    // Fetch product and shop currency via Admin API
-    const accessToken = await resolveAccessToken(shop, res);
-    const [product, shopCurrency] = await Promise.all([
-      fetchProductById(shop, accessToken, productId),
-      fetchShopCurrency(shop, accessToken),
-    ]);
+    const productCtx = {
+      id: p.id,
+      title: p.title,
+      descriptionHtml: p.descriptionHtml,
+      vendor: p.vendor,
+      productType: p.productType,
+      tags: p.tags,
+      handle: p.handle,
+      price: p?.priceRangeV2?.minVariantPrice?.amount || null,
+      currency: p?.priceRangeV2?.minVariantPrice?.currencyCode || null,
+      images: (p.images?.edges || []).map(e => ({
+        id: e.node.id,
+        altText: e.node.altText || null,
+      })),
+    };
 
-    const system = buildSystemPrompt(language);
-    const user = buildUserPrompt(product, shopCurrency);
-    const llm = await callOpenRouterJSON({ model, system, user });
+    const messages = strictPrompt(productCtx, language);
+    const content = await callOpenRouter(model, messages);
 
-    // Parse LLM output
-    let parsed;
+    let candidate;
     try {
-      parsed = JSON.parse(llm.text);
-    } catch {
-      return res
-        .status(400)
-        .json({ error: 'Model did not return valid JSON', raw: llm.text?.slice(0, 800) });
+      candidate = JSON.parse(content);
+    } catch (e) {
+      return res.status(400).json({ error: 'Model did not return valid JSON', raw: content.slice(0, 500) });
     }
 
-    // Fixups & normalization BEFORE validation
-    parsed.productId = toGid(parsed.productId || productId);
-    parsed.provider = 'openrouter';
-    parsed.model = llm.model || model;
-    parsed.language = language;
-    parsed = normalizeAndFix(parsed, product);
-
-    // Ensure quality block exists (some models omit it)
-    if (!parsed.quality || typeof parsed.quality !== 'object') {
-      parsed.quality = {
-        warnings: [],
-        model: parsed.model || model,
-        tokens: llm?.tokens || 0,
-        costUsd: llm?.costUsd || 0,
-      };
-    } else {
-      parsed.quality.warnings = Array.isArray(parsed.quality.warnings)
-        ? parsed.quality.warnings
-        : [];
-      parsed.quality.model = parsed.quality.model || (parsed.model || model);
-      parsed.quality.tokens =
-        typeof parsed.quality.tokens === 'number' ? parsed.quality.tokens : (llm?.tokens || 0);
-      parsed.quality.costUsd =
-        typeof parsed.quality.costUsd === 'number' ? parsed.quality.costUsd : (llm?.costUsd || 0);
-    }
-
-    // Validate schema
-    const ok = validateOutput(parsed);
+    // Apply fixups, then validate
+    const fixed = fixups(candidate, { productId, model, language });
+    const ok = validateOutput(fixed);
     if (!ok) {
       return res.status(400).json({
         error: 'Output failed schema validation',
         issues: validateOutput.errors,
-        sample: parsed,
+        sample: fixed,
       });
     }
 
-    // Consume one AI query from plan
-    await consumeQuery(shop, 1);
-
-    return res.status(200).json(parsed);
-  } catch (e) {
-    const status = e.status || 500;
-    res.status(status).json({ error: e.message });
+    return res.json(fixed);
+  } catch (err) {
+    console.error('seo/generate error:', err);
+    res.status(err?.status || 500).json({ error: err.message || 'Generate error' });
   }
 });
 
 // POST /seo/apply
-router.post('/seo/apply', withSubscription, async (req, res) => {
+// Body: { shop, productId, seo, options }
+router.post('/seo/apply', async (req, res) => {
   try {
-    const shop = req.shop || res?.locals?.shopify?.session?.shop || req.body?.shop || '';
-    const productId = toGid(req.body?.productId);
-    const { seo, options = {} } = req.body || {};
-    if (!shop || !productId || !seo) {
-      return res.status(400).json({ error: 'Missing shop, productId or seo' });
+    const shop = requireShop(req);
+    const { productId, seo, options = {} } = req.body || {};
+    if (!productId || !seo) {
+      return res.status(400).json({ error: 'Missing productId or seo' });
     }
 
-    const {
-      updateTitle = true,
-      updateBody = true,
-      updateSeo = true,
-      updateBullets = true,
-      updateFaq = true,
-      updateAlt = false, // not implemented in this minimal version
-      dryRun = false,
-    } = options;
+    const updateTitle = options.updateTitle !== false;
+    const updateBody = options.updateBody !== false;
+    const updateSeo = options.updateSeo !== false;
+    const updateBullets = options.updateBullets !== false;
+    const updateFaq = options.updateFaq !== false;
+    const updateAlt = options.updateAlt === true; // optional future
+    const dryRun = options.dryRun === true;
 
-    const accessToken = await resolveAccessToken(shop, res);
-
-    const updated = {
-      title: false,
-      body: false,
-      seo: false,
-      bullets: false,
-      faq: false,
-      imageAlt: false,
-    };
+    const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
     if (!dryRun) {
-      // productUpdate
+      // 1) productUpdate (title/descriptionHtml/seo)
       if (updateTitle || updateBody || updateSeo) {
         const input = { id: productId };
         if (updateTitle && seo.title) input.title = seo.title;
-        // IMPORTANT: Admin API uses descriptionHtml in ProductInput (not bodyHtml)
         if (updateBody && seo.bodyHtml) input.descriptionHtml = seo.bodyHtml;
         if (updateSeo && (seo.title || seo.metaDescription)) {
           input.seo = {
-            title: seo.title || undefined,
-            description: seo.metaDescription || undefined,
+            ...(seo.title ? { title: seo.title } : {}),
+            ...(seo.metaDescription ? { description: seo.metaDescription } : {}),
           };
         }
-
         if (Object.keys(input).length > 1) {
-          const q = `
-            mutation productUpdate($input: ProductInput!) {
+          const mut = `
+            mutation UpdateProduct($input: ProductInput!) {
               productUpdate(input: $input) {
                 product { id }
                 userErrors { field message }
               }
             }
           `;
-          const rsp = await adminGraphQL({
-            shop,
-            accessToken,
-            query: q,
-            variables: { input },
-          });
-          const errs = rsp?.data?.productUpdate?.userErrors || [];
-          if (errs.length) errors.push({ step: 'productUpdate', errors: errs });
-          else {
+          try {
+            await shopGraphQL(shop, mut, { input });
             updated.title = !!input.title;
             updated.body = !!input.descriptionHtml;
             updated.seo = !!input.seo;
+          } catch (e) {
+            errors.push(`productUpdate: ${e.message}`);
           }
         }
       }
 
-      // metafieldsSet for seo_ai.bullets / seo_ai.faq
-      const metafields = [];
+      // 2) metafieldsSet (bullets, faq)
+      const metaInputs = [];
       if (updateBullets && Array.isArray(seo.bullets)) {
-        metafields.push({
+        metaInputs.push({
           ownerId: productId,
           namespace: 'seo_ai',
           key: 'bullets',
@@ -558,7 +537,7 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
         });
       }
       if (updateFaq && Array.isArray(seo.faq)) {
-        metafields.push({
+        metaInputs.push({
           ownerId: productId,
           namespace: 'seo_ai',
           key: 'faq',
@@ -566,40 +545,70 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
           value: JSON.stringify(seo.faq),
         });
       }
-      if (metafields.length) {
-        const q = `
-          mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-            metafieldsSet(metafields: $metafields) {
-              metafields { id key namespace type }
+      if (metaInputs.length) {
+        const mut = `
+          mutation SetMetafields($m: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $m) {
+              metafields { key namespace type }
               userErrors { field message }
             }
           }
         `;
-        const rsp = await adminGraphQL({
-          shop,
-          accessToken,
-          query: q,
-          variables: { metafields },
-        });
-        const errs = rsp?.data?.metafieldsSet?.userErrors || [];
-        if (errs.length) errors.push({ step: 'metafieldsSet', errors: errs });
-        else {
-          updated.bullets = !!metafields.find((m) => m.key === 'bullets');
-          updated.faq = !!metafields.find((m) => m.key === 'faq');
+        try {
+          await shopGraphQL(shop, mut, { m: metaInputs });
+          updated.bullets = metaInputs.some(m => m.key === 'bullets');
+          updated.faq = metaInputs.some(m => m.key === 'faq');
+        } catch (e) {
+          errors.push(`metafieldsSet: ${e.message}`);
         }
       }
 
-      // image alt (optional 2.1) — omitted in this minimal version
-      if (updateAlt && Array.isArray(seo.imageAlt) && seo.imageAlt.length) {
-        // TODO: implement productImageUpdate loop (requires image IDs)
-        updated.imageAlt = false;
+      // 3) (Optional) create metafield definitions if missing (so Admin UI shows them)
+      try {
+        const defsQ = `
+          query {
+            metafieldDefinitions(ownerType: PRODUCT, first: 20, namespace: "seo_ai") {
+              edges { node { id name key namespace type } }
+            }
+          }
+        `;
+        const defs = await shopGraphQL(shop, defsQ);
+        const haveBullets = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'bullets');
+        const haveFaq = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'faq');
+        const createMut = `
+          mutation($def: MetafieldDefinitionInput!) {
+            metafieldDefinitionCreate(definition: $def) {
+              createdDefinition { id }
+              userErrors { field message }
+            }
+          }
+        `;
+        if (!haveBullets) {
+          await shopGraphQL(shop, createMut, {
+            def: { name: 'AI Bullets', namespace: 'seo_ai', key: 'bullets', type: 'json', ownerType: 'PRODUCT' },
+          });
+        }
+        if (!haveFaq) {
+          await shopGraphQL(shop, createMut, {
+            def: { name: 'AI FAQ', namespace: 'seo_ai', key: 'faq', type: 'json', ownerType: 'PRODUCT' },
+          });
+        }
+      } catch (e) {
+        // Non-fatal
+        errors.push(`metafieldDefinitionCreate: ${e.message}`);
       }
     }
 
-    return res.status(200).json({ ok: true, shop, productId, updated, errors });
-  } catch (e) {
-    const status = e.status || 500;
-    res.status(status).json({ error: e.message });
+    return res.json({
+      ok: errors.length === 0,
+      shop,
+      productId,
+      updated,
+      errors,
+    });
+  } catch (err) {
+    console.error('seo/apply error:', err);
+    res.status(err?.status || 500).json({ error: err.message || 'Apply error' });
   }
 });
 
