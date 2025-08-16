@@ -1,20 +1,26 @@
 // backend/controllers/seoController.js
 // Routes: GET /plans/me, POST /seo/generate, POST /seo/apply
 // - /seo/generate: auto-fetches product by productId via Admin API (offline token).
-//   shop is inferred from Shopify session (embedded) and model defaults to the first allowed for the plan.
-// - Validates the LLM output with AJV against a strict schema and applies safe "fixups".
+//   shop is inferred from session (middleware) and model defaults to the first allowed for the plan.
+// - Validates the LLM output with AJV and applies safe "fixups" to satisfy schema.
 // - /seo/apply: Updates product title/body/seo + metafields (seo_ai.bullets/faq).
 
 import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { callOpenRouterJSON } from '../ai/openrouter.js';
-import { withSubscription, enforceQuota, consumeQuery, buildPlanView } from '../middleware/quota.js';
+import {
+  withSubscription,
+  enforceQuota,
+  consumeQuery,
+  buildPlanView,
+} from '../middleware/quota.js';
 import { allowedModelsForPlan } from '../plans.js';
 
 const router = express.Router();
 
-// ----------------------------- Helpers -----------------------------
+/* -------------------------------- Helpers -------------------------------- */
+
 function getAdminApiVersion() {
   return process.env.SHOPIFY_API_VERSION || '2025-07';
 }
@@ -40,13 +46,13 @@ async function adminGraphQL({ shop, accessToken, query, variables }) {
   return json;
 }
 
-/** Try to resolve an offline Admin API token for this shop. */
+/** Resolve an offline Admin API token for this shop. */
 async function resolveAccessToken(shop, res) {
-  // If Shopify auth middleware populated a session, use it
+  // 1) If Shopify auth middleware populated a session, use it
   const sessToken = res?.locals?.shopify?.session?.accessToken;
   if (sessToken) return sessToken;
 
-  // Try common session storages dynamically (Mongo-based)
+  // 2) Try common session storages dynamically (Mongo-based setups)
   const candidates = [
     '../db/ShopifySession.js',
     '../models/ShopifySession.js',
@@ -59,7 +65,7 @@ async function resolveAccessToken(shop, res) {
       const Model = mod.default || mod.Session || mod.ShopifySession || mod;
       if (!Model?.findOne) continue;
 
-      // Look for classic offline session: id = "offline_<shop>"
+      // Classic offline session: id = "offline_<shop>"
       const byId = await Model.findOne({ id: `offline_${shop}` }).lean();
       if (byId?.session) {
         try {
@@ -82,11 +88,11 @@ async function resolveAccessToken(shop, res) {
         } catch {}
       }
     } catch {
-      // try next candidate
+      // try next candidate path
     }
   }
 
-  // Fallback for single-shop setups: env var
+  // 3) Fallback for single-shop/dev
   if (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN) return process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
 
   const e = new Error('No Admin API token available for this shop');
@@ -110,7 +116,7 @@ async function fetchProductById(shop, accessToken, productId) {
           edges { node { id altText } }
         }
         variants(first: 25) {
-          edges { node { id price } }  # Admin API: price only (no currencyCode/availableForSale)
+          edges { node { id price } }  # Admin API: price only
         }
         seo { title description }
         metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") { value }
@@ -126,6 +132,12 @@ async function fetchProductById(shop, accessToken, productId) {
     throw e;
   }
   return node;
+}
+
+async function fetchShopCurrency(shop, accessToken) {
+  const q = `query { shop { currencyCode } }`;
+  const rsp = await adminGraphQL({ shop, accessToken, query: q, variables: {} });
+  return rsp?.data?.shop?.currencyCode || null;
 }
 
 function sanitizeHtmlBasic(html = '') {
@@ -158,7 +170,109 @@ const toGid = (maybeNumeric) => {
   return s;
 };
 
-// ----------------------------- AJV Schema -----------------------------
+function stripHtml(s = '') {
+  return String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const ALLOWED_ROOT_KEYS = new Set(['productId', 'provider', 'model', 'language', 'seo', 'quality']);
+const SEO_FIELD_KEYS = ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd', 'imageAlt'];
+
+/**
+ * Normalize LLM output:
+ * - Move stray top-level SEO fields under seo.{...}
+ * - Delete unknown root keys (schema additionalProperties: false)
+ * - Fill missing/empty fields from product (fallbacks)
+ * - Enforce limits (lengths, counts) and sanitize HTML
+ */
+function normalizeAndFix(parsed, product) {
+  parsed.seo = parsed.seo || {};
+
+  // Move stray top-level SEO fields into seo.{...} and remove from root
+  for (const k of SEO_FIELD_KEYS) {
+    if (parsed[k] != null && parsed.seo[k] == null) {
+      parsed.seo[k] = parsed[k];
+    }
+    delete parsed[k];
+  }
+
+  // Keep only allowed root keys
+  for (const k of Object.keys(parsed)) {
+    if (!ALLOWED_ROOT_KEYS.has(k)) delete parsed[k];
+  }
+
+  // Title
+  const productTitle = String(product?.title || '');
+  parsed.seo.title = truncate(parsed.seo.title || productTitle, 70);
+
+  // Slug
+  parsed.seo.slug = kebab(parsed.seo.slug || product?.handle || parsed.seo.title || productTitle);
+
+  // Meta description (>=20 chars). Prefer model, else derive from product description.
+  let meta = String(parsed.seo.metaDescription || '').trim();
+  if (meta.length < 20) {
+    const base = stripHtml(product?.descriptionHtml || productTitle);
+    meta = base.slice(0, 180);
+    if (meta.length < 20) {
+      meta = `${productTitle} by ${product?.vendor || 'our store'}`;
+    }
+  }
+  parsed.seo.metaDescription = truncate(meta, 200);
+
+  // Body HTML (sanitize; if empty, build from meta)
+  let bodyHtml = String(parsed.seo.bodyHtml || '').trim();
+  bodyHtml = sanitizeHtmlBasic(bodyHtml);
+  if (!bodyHtml) {
+    bodyHtml = `<p>${parsed.seo.metaDescription}</p>`;
+  }
+  parsed.seo.bodyHtml = bodyHtml;
+
+  // Bullets: need >=2. If missing, derive from product/vendor/tags.
+  let bullets = Array.isArray(parsed.seo.bullets) ? parsed.seo.bullets.filter(Boolean) : [];
+  if (bullets.length < 2) {
+    const tags = Array.isArray(product?.tags) ? product.tags.slice(0, 3) : [];
+    const vendor = product?.vendor ? [`Made by ${product.vendor}`] : [];
+    const basics = [productTitle, ...vendor, ...tags].filter(Boolean);
+    bullets = bullets.concat(basics).slice(0, 6);
+  }
+  bullets = bullets.map((s) => truncate(stripHtml(String(s)), 120)).filter(Boolean);
+  if (bullets.length < 2) {
+    bullets = ['Key benefits and features', 'Quality materials and design'];
+  }
+  parsed.seo.bullets = bullets.slice(0, 6);
+
+  // FAQ: need >=1. If missing, create a generic one.
+  let faq = Array.isArray(parsed.seo.faq) ? parsed.seo.faq : [];
+  faq = faq
+    .map((qa) => ({
+      q: truncate(stripHtml(qa?.q || ''), 140),
+      a: truncate(stripHtml(qa?.a || ''), 400),
+    }))
+    .filter((qa) => qa.q && qa.a);
+  if (faq.length < 1) {
+    faq = [
+      {
+        q: `Who is ${productTitle} best for?`,
+        a: `Ideal for customers seeking quality and value. See details above for specs and usage recommendations.`,
+      },
+    ];
+  }
+  parsed.seo.faq = faq.slice(0, 5);
+
+  // JSON-LD: ensure minimal object exists
+  if (!parsed.seo.jsonLd || typeof parsed.seo.jsonLd !== 'object') {
+    parsed.seo.jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: parsed.seo.title,
+      description: stripHtml(product?.descriptionHtml || parsed.seo.metaDescription),
+    };
+  }
+
+  return parsed;
+}
+
+/* ------------------------------ AJV Schema ------------------------------ */
+
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
@@ -186,10 +300,7 @@ const OutputSchema = {
           items: {
             type: 'object',
             required: ['q', 'a'],
-            properties: {
-              q: { type: 'string' },
-              a: { type: 'string' },
-            },
+            properties: { q: { type: 'string' }, a: { type: 'string' } },
             additionalProperties: false,
           },
         },
@@ -198,10 +309,7 @@ const OutputSchema = {
           items: {
             type: 'object',
             required: ['imageId', 'alt'],
-            properties: {
-              imageId: { type: 'string' },
-              alt: { type: 'string' },
-            },
+            properties: { imageId: { type: 'string' }, alt: { type: 'string' } },
             additionalProperties: false,
           },
         },
@@ -226,7 +334,8 @@ const OutputSchema = {
 
 const validateOutput = ajv.compile(OutputSchema);
 
-// ----------------------------- Prompts -----------------------------
+/* ------------------------------- Prompts -------------------------------- */
+
 function buildSystemPrompt(lang = 'en') {
   return [
     `You are an SEO generator for Shopify product pages. Return ONLY valid JSON that matches the given schema.`,
@@ -239,10 +348,10 @@ function buildSystemPrompt(lang = 'en') {
   ].join('\n');
 }
 
-function buildUserPrompt(product) {
+function buildUserPrompt(product, shopCurrency) {
   const priceEdge = product?.variants?.edges?.[0]?.node;
-  const price = priceEdge?.price || priceEdge?.priceV2?.amount;
-  const currency = priceEdge?.currencyCode || priceEdge?.priceV2?.currencyCode;
+  const price = priceEdge?.price || null; // Admin API: price only
+  const currency = shopCurrency || null;
 
   const ctx = {
     id: product?.id,
@@ -252,7 +361,7 @@ function buildUserPrompt(product) {
     tags: product?.tags,
     url: product?.onlineStoreUrl,
     price,
-    currency,
+    currency, // pass shop currency to help LLM build relevant JSON-LD offers
     descriptionHtml: product?.descriptionHtml,
     images: (product?.images?.edges || []).map((e) => ({
       id: e?.node?.id,
@@ -266,9 +375,9 @@ function buildUserPrompt(product) {
   });
 }
 
-// ----------------------------- Routes -----------------------------
+/* -------------------------------- Routes -------------------------------- */
 
-// GET /plans/me (uses subscription middleware)
+// GET /plans/me
 router.get('/plans/me', withSubscription, (req, res) => {
   try {
     const view = buildPlanView(req.subscription);
@@ -281,8 +390,8 @@ router.get('/plans/me', withSubscription, (req, res) => {
 // POST /seo/generate
 router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) => {
   try {
-    // Accept shop from session/middleware; model may be omitted (we'll auto-pick).
-    const shop = req.shop || req.body?.shop || res?.locals?.shopify?.session?.shop || '';
+    // Shop is inferred by middleware (embedded Admin), model may be omitted
+    const shop = req.shop || res?.locals?.shopify?.session?.shop || req.body?.shop || '';
     let { model, language = 'en' } = req.body || {};
     let productId = toGid(req.body?.productId || req.query?.productId);
 
@@ -299,39 +408,35 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
       }
     }
 
-    // Ensure product context: fetch via Admin API
+    // Fetch product and shop currency via Admin API
     const accessToken = await resolveAccessToken(shop, res);
-    const product = await fetchProductById(shop, accessToken, productId);
+    const [product, shopCurrency] = await Promise.all([
+      fetchProductById(shop, accessToken, productId),
+      fetchShopCurrency(shop, accessToken),
+    ]);
 
     const system = buildSystemPrompt(language);
-    const user = buildUserPrompt(product);
+    const user = buildUserPrompt(product, shopCurrency);
     const llm = await callOpenRouterJSON({ model, system, user });
 
-    // Parse + validate
+    // Parse LLM output
     let parsed;
     try {
       parsed = JSON.parse(llm.text);
     } catch {
-      return res.status(400).json({ error: 'Model did not return valid JSON', raw: llm.text?.slice(0, 800) });
+      return res
+        .status(400)
+        .json({ error: 'Model did not return valid JSON', raw: llm.text?.slice(0, 800) });
     }
 
-    // Minimal fixups before validation (lengths/slug/html sanitize)
-    parsed.productId = parsed.productId || productId;
+    // Fixups & normalization BEFORE validation
+    parsed.productId = toGid(parsed.productId || productId);
     parsed.provider = 'openrouter';
     parsed.model = llm.model || model;
     parsed.language = language;
-    parsed.seo = parsed.seo || {};
+    parsed = normalizeAndFix(parsed, product);
 
-    parsed.seo.title = truncate(parsed.seo.title || product?.title || '', 70);
-    parsed.seo.metaDescription = truncate(parsed.seo.metaDescription || '', 200);
-    parsed.seo.slug = kebab(parsed.seo.slug || product?.handle || parsed.seo.title || '');
-    parsed.seo.bodyHtml = sanitizeHtmlBasic(parsed.seo.bodyHtml || '');
-    parsed.seo.bullets = Array.isArray(parsed.seo.bullets) ? parsed.seo.bullets.slice(0, 6) : [];
-    parsed.seo.faq = Array.isArray(parsed.seo.faq) ? parsed.seo.faq.slice(0, 5) : [];
-    parsed.seo.jsonLd = parsed.seo.jsonLd || {};
-
-    parsed.quality = parsed.quality || { warnings: [], model: parsed.model, tokens: llm.tokens || 0, costUsd: llm.costUsd || 0 };
-
+    // Validate schema
     const ok = validateOutput(parsed);
     if (!ok) {
       return res.status(400).json({
@@ -341,7 +446,7 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
       });
     }
 
-    // Count query
+    // Consume one AI query from plan
     await consumeQuery(shop, 1);
 
     return res.status(200).json(parsed);
@@ -354,11 +459,12 @@ router.post('/seo/generate', withSubscription, enforceQuota(), async (req, res) 
 // POST /seo/apply
 router.post('/seo/apply', withSubscription, async (req, res) => {
   try {
-    const shop = req.shop || req.body?.shop || res?.locals?.shopify?.session?.shop || '';
-    const { productId: productIdRaw, seo, options = {} } = req.body || {};
-    const productId = toGid(productIdRaw);
-
-    if (!shop || !productId || !seo) return res.status(400).json({ error: 'Missing shop, productId or seo' });
+    const shop = req.shop || res?.locals?.shopify?.session?.shop || req.body?.shop || '';
+    const productId = toGid(req.body?.productId);
+    const { seo, options = {} } = req.body || {};
+    if (!shop || !productId || !seo) {
+      return res.status(400).json({ error: 'Missing shop, productId or seo' });
+    }
 
     const {
       updateTitle = true,
@@ -366,13 +472,20 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
       updateSeo = true,
       updateBullets = true,
       updateFaq = true,
-      updateAlt = false, // not implemented here
+      updateAlt = false, // not implemented in this minimal version
       dryRun = false,
     } = options;
 
     const accessToken = await resolveAccessToken(shop, res);
 
-    const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
+    const updated = {
+      title: false,
+      body: false,
+      seo: false,
+      bullets: false,
+      faq: false,
+      imageAlt: false,
+    };
     const errors = [];
 
     if (!dryRun) {
@@ -397,7 +510,12 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
               }
             }
           `;
-          const rsp = await adminGraphQL({ shop, accessToken, query: q, variables: { input } });
+          const rsp = await adminGraphQL({
+            shop,
+            accessToken,
+            query: q,
+            variables: { input },
+          });
           const errs = rsp?.data?.productUpdate?.userErrors || [];
           if (errs.length) errors.push({ step: 'productUpdate', errors: errs });
           else {
@@ -437,7 +555,12 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
             }
           }
         `;
-        const rsp = await adminGraphQL({ shop, accessToken, query: q, variables: { metafields } });
+        const rsp = await adminGraphQL({
+          shop,
+          accessToken,
+          query: q,
+          variables: { metafields },
+        });
         const errs = rsp?.data?.metafieldsSet?.userErrors || [];
         if (errs.length) errors.push({ step: 'metafieldsSet', errors: errs });
         else {
@@ -446,7 +569,7 @@ router.post('/seo/apply', withSubscription, async (req, res) => {
         }
       }
 
-      // image alt (optional step 2.1) — omitted in this minimal version
+      // image alt (optional 2.1) — omitted in this minimal version
       if (updateAlt && Array.isArray(seo.imageAlt) && seo.imageAlt.length) {
         // TODO: implement productImageUpdate loop (requires image IDs)
         updated.imageAlt = false;
