@@ -1,20 +1,37 @@
-// App frame with real LEFT Shopify sidebar menu via App Bridge actions (no TitleBar).
-// Keeps your TopNav, AppHeader and the working AiSeoPanel (Generate → Apply).
-// Outside Admin (no ?host) shows fallback internal SideNav so nothing breaks during local preview.
-
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
-import { AppProvider, Frame, Page, Box, Text } from '@shopify/polaris';
-import { NavigationMenu as ABNavigationMenu } from '@shopify/app-bridge/actions';
+import {
+  AppProvider, Frame, Page, Layout, Card, Text, Box,
+  Button, TextField, Select, InlineStack, Divider, Toast
+} from '@shopify/polaris';
 
-import TopNav from './components/TopNav.jsx';
-import AppHeader from './components/AppHeader.jsx';
-import AiSeoPanel from './components/AiSeoPanel.jsx';
-import SideNav from './components/SideNav.jsx'; // fallback only
+import TopNav from './components/TopNav.jsx';         // твоята лента с езиците (без TitleBar)
+import AppHeader from './components/AppHeader.jsx';   // вътрешен хедър със секция + език
+import SideNav from './components/SideNav.jsx';       // fallback меню за локален преглед
 
-const POLARIS_I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
+const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
-function useRouter() {
+// ---- helpers
+const qs = (k, d='') => {
+  try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
+};
+const pretty = (v) => JSON.stringify(v, null, 2);
+
+// ---- Admin LEFT sidebar via App Bridge v4 custom elements
+function AdminNavMenu({ active }) {
+  // Shopify ще “изтегли” тези елементи и ще покажe подменюто под Apps → NEW AI SEO
+  return (
+    <ui-nav-menu>
+      <ui-nav-menu-item url="/dashboard" selected={active.startsWith('/dashboard') || active === '/'}>Dashboard</ui-nav-menu-item>
+      <ui-nav-menu-item url="/ai-seo"   selected={active.startsWith('/ai-seo')}>AI SEO</ui-nav-menu-item>
+      <ui-nav-menu-item url="/billing"  selected={active.startsWith('/billing')}>Billing</ui-nav-menu-item>
+      <ui-nav-menu-item url="/settings" selected={active.startsWith('/settings')}>Settings</ui-nav-menu-item>
+    </ui-nav-menu>
+  );
+}
+
+// ---- mini router
+function useRoute() {
   const [path, setPath] = useState(() => window.location.pathname || '/dashboard');
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname || '/dashboard');
@@ -24,141 +41,217 @@ function useRouter() {
   return { path, setPath };
 }
 
-class ErrorBoundary extends React.Component {
-  constructor(p){ super(p); this.state={hasError:false,message:''}; }
-  static getDerivedStateFromError(err){ return {hasError:true,message:err?.message||'Unknown error'}; }
-  componentDidCatch(err){ console.error('FE ErrorBoundary:', err); }
-  render(){
-    if (this.state.hasError) {
-      return (
-        <Page>
-          <Box padding="400">
-            <Text as="h2" variant="headingMd">Something went wrong.</Text>
-            <Text as="p" tone="critical">{this.state.message}</Text>
-          </Box>
-        </Page>
-      );
-    }
-    return this.props.children;
-  }
-}
+// ---- Dashboard (както на снимката – текущ план)
+function DashboardCard() {
+  const [state, setState] = useState({ loading:false, err:'', data:null });
 
-// Simple placeholders (Dashboard/Billing/Settings panes)
-function DashboardPage() {
+  useEffect(() => {
+    const shop = qs('shop','');
+    if (!shop) { setState({loading:false, err:'Missing ?shop in URL', data:null}); return; }
+    (async () => {
+      try {
+        setState({loading:true, err:'', data:null});
+        const r = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`);
+        const j = await r.json();
+        setState({ loading:false, err:'', data:j });
+      } catch(e) {
+        setState({ loading:false, err:e.message, data:null });
+      }
+    })();
+  }, []);
+
+  const Row = ({k,v}) => (
+    <InlineStack wrap={false} gap="200" align="space-between">
+      <Text as="span" variant="bodyMd" tone="subdued">{k}</Text>
+      <Text as="span" variant="bodyMd">{v}</Text>
+    </InlineStack>
+  );
+
   return (
-    <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
-      Welcome to the dashboard. Use Shopify’s left sidebar to open <b>AI SEO</b>.
-    </Box>
+    <Card>
+      <Box padding="400">
+        <Text as="h3" variant="headingMd">Current plan</Text>
+        <Divider />
+        {state.err && <Box paddingBlockStart="300"><Text tone="critical">{state.err}</Text></Box>}
+        {!state.err && !state.data && <Box paddingBlockStart="300"><Text tone="subdued">Loading…</Text></Box>}
+        {state.data && (
+          <Box paddingBlockStart="300">
+            <Row k="Shop" v={state.data.shop || '—'} />
+            <Row k="AI queries" v={
+              state.data.queryLimit
+                ? `${state.data.queryCount ?? 0} / ${state.data.queryLimit}`
+                : '—'
+            } />
+            <Row k="Product limit" v={state.data.productLimit ?? '—'} />
+            <Row k="Allowed AI providers" v={(state.data.providersAllowed||[]).join(', ') || '—'} />
+            <Row k="Trial ends at" v={state.data.trialEndsAt ? new Date(state.data.trialEndsAt).toISOString().slice(0,10) : '—'} />
+          </Box>
+        )}
+      </Box>
+    </Card>
   );
 }
-function BillingPage() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Billing page placeholder.</Box>; }
-function SettingsPage() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Settings page placeholder.</Box>; }
-function NotFound() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Page not found.</Box>; }
 
-export default function App() {
-  // App Bridge instance (set in main.jsx when ?host is present)
-  const app = typeof window !== 'undefined' ? window.__APP_BRIDGE__ : null;
+// ---- AI SEO (Generate → JSON → Apply) – запазва бекенд пътищата
+function AiSeoPanel() {
+  const [shop, setShop] = useState(() => qs('shop',''));
+  const [productId, setProductId] = useState('');
+  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
+  const [language, setLanguage] = useState('en');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [toast, setToast] = useState('');
 
-  const navRef = useRef(null);
-
-  // UI language for AppHeader/LangButton (generation language is inside AiSeoPanel)
-  const [lang, setLang] = useState(() => {
-    try { return localStorage.getItem('app_lang') || 'en'; } catch { return 'en'; }
-  });
-  useEffect(() => { try { localStorage.setItem('app_lang', lang || 'en'); } catch {} }, [lang]);
-
-  const { path, setPath } = useRouter();
-
-  // Compute section title for AppHeader
-  const sectionTitle = useMemo(() => {
-    if (path.startsWith('/billing')) return 'Billing';
-    if (path.startsWith('/settings')) return 'Settings';
-    if (path.startsWith('/ai-seo')) return 'AI SEO';
-    if (path === '/' || path.startsWith('/dashboard')) return 'Dashboard';
-    return 'Shopify App';
-  }, [path]);
-
-  // Create LEFT sidebar menu via App Bridge (no TitleBar)
-  useEffect(() => {
-    if (!app) return;
-
-    const items = [
-      { label: 'Dashboard', destination: '/dashboard' },
-      { label: 'AI SEO',    destination: '/ai-seo' },
-      { label: 'Billing',   destination: '/billing' },
-      { label: 'Settings',  destination: '/settings' },
-    ];
-
-    if (!navRef.current) {
-      navRef.current = ABNavigationMenu.create(app, {
-        items,
-        active: window.location.pathname || '/dashboard',
+  async function generate() {
+    setBusy(true); setResult(null);
+    try {
+      const r = await fetch('/seo/generate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ shop, productId, model, language }),
       });
-
-      // (Optional) react to menu navigate events if present in your App Bridge version
-      try {
-        navRef.current.subscribe(ABNavigationMenu.Action.NAVIGATE, ({ id, destination }) => {
-          if (destination && destination !== window.location.pathname) {
-            window.history.pushState({}, '', destination);
-            setPath(destination);
-          }
-        });
-      } catch { /* safe no-op for versions without NAVIGATE */ }
-    } else {
-      navRef.current.set({ items, active: window.location.pathname || '/dashboard' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Generation failed');
+      setResult(j);
+    } catch(e) {
+      setResult({ error: e.message });
+    } finally {
+      setBusy(false);
     }
-  }, [app, setPath]);
+  }
 
-  // Keep highlight in sync on client-side route changes
-  useEffect(() => {
-    if (navRef.current) navRef.current.set({ active: path || '/dashboard' });
-  }, [path]);
-
-  const isInAdmin = !!app; // if false → use fallback internal SideNav (local preview)
+  async function apply() {
+    if (!result || !result.seo) return;
+    setBusy(true);
+    try {
+      const payload = {
+        shop,
+        productId: result.productId || productId,
+        seo: result.seo,
+        options: {
+          updateTitle: true,
+          updateBody: true,
+          updateSeo: true,
+          updateBullets: true,
+          updateFaq: true,
+          updateAlt: false
+        }
+      };
+      const r = await fetch('/seo/apply', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors[0]) || j.error || 'Apply failed');
+      setToast('Applied ✓');
+    } catch(e) {
+      setToast(`Apply error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <AppProvider i18n={POLARIS_I18N}>
-      <ErrorBoundary>
-        <Frame
-          navigation={isInAdmin ? undefined : <SideNav />} // no in-iframe menu when embedded
-          topBar={<TopNav lang={lang} setLang={setLang} t={(k, d) => d} />}
-        >
-          {(path === '/' || path.startsWith('/dashboard')) && (
-            <Page>
-              <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} />
-              <Box padding="400"><DashboardPage /></Box>
-            </Page>
-          )}
+    <>
+      <Card>
+        <Box padding="400">
+          <Text as="h3" variant="headingMd">AI SEO</Text>
+          <Box paddingBlockStart="300">
+            <Layout>
+              <Layout.Section oneHalf>
+                <TextField label="Shop" value={shop} onChange={setShop} placeholder="your-shop.myshopify.com" autoComplete="off" />
+              </Layout.Section>
+              <Layout.Section oneHalf>
+                <TextField label="Product ID" value={productId} onChange={setProductId} placeholder="gid://shopify/Product/…" autoComplete="off" />
+              </Layout.Section>
+              <Layout.Section oneHalf>
+                <Select
+                  label="Model"
+                  options={[
+                    {label:'anthropic/claude-3.5-sonnet', value:'anthropic/claude-3.5-sonnet'},
+                    {label:'openai/gpt-4o-mini', value:'openai/gpt-4o-mini'},
+                    {label:'google/gemini-1.5-flash', value:'google/gemini-1.5-flash'},
+                  ]}
+                  value={model}
+                  onChange={setModel}
+                />
+              </Layout.Section>
+              <Layout.Section oneHalf>
+                <Select
+                  label="Language"
+                  options={[
+                    {label:'EN', value:'en'},
+                    {label:'DE', value:'de'},
+                    {label:'ES', value:'es'},
+                    {label:'FR', value:'fr'},
+                  ]}
+                  value={language}
+                  onChange={setLanguage}
+                />
+              </Layout.Section>
+              <Layout.Section>
+                <InlineStack gap="300">
+                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId}>Generate</Button>
+                  <Button onClick={apply} disabled={!result || !result.seo || busy}>Apply to product</Button>
+                </InlineStack>
+              </Layout.Section>
+            </Layout>
+          </Box>
+        </Box>
+      </Card>
 
-          {path.startsWith('/ai-seo') && (
-            <Page>
-              <AppHeader sectionTitle="AI SEO" lang={lang} setLang={setLang} />
-              <Box padding="400"><AiSeoPanel /></Box>
-            </Page>
-          )}
+      <Box paddingBlockStart="300">
+        <Card>
+          <Box padding="400">
+            <Text as="h3" variant="headingMd">Result</Text>
+            <Divider />
+            <pre style={{whiteSpace:'pre-wrap', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:12, marginTop:12}}>
+{`${result ? pretty(result) : '—'}`}
+            </pre>
+          </Box>
+        </Card>
+      </Box>
 
-          {path.startsWith('/billing') && (
-            <Page>
-              <AppHeader sectionTitle="Billing" lang={lang} setLang={setLang} />
-              <Box padding="400"><BillingPage /></Box>
-            </Page>
-          )}
+      {toast && <Toast content={toast} onDismiss={()=>setToast('')} />}
+    </>
+  );
+}
 
-          {path.startsWith('/settings') && (
-            <Page>
-              <AppHeader sectionTitle="Settings" lang={lang} setLang={setLang} />
-              <Box padding="400"><SettingsPage /></Box>
-            </Page>
-          )}
+// ---- App
+export default function App() {
+  const { path } = useRoute();
+  const [lang, setLang] = useState('en');
 
-          {!['/','/dashboard','/ai-seo','/billing','/settings'].some(p => path === p || path.startsWith(p)) && (
-            <Page>
-              <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} />
-              <Box padding="400"><NotFound /></Box>
-            </Page>
+  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host')); // ако е в Admin – Shopify ще изрисува лявото меню от <ui-nav-menu>
+
+  const sectionTitle = useMemo(() => {
+    if (path.startsWith('/ai-seo')) return 'AI SEO';
+    if (path.startsWith('/billing')) return 'Billing';
+    if (path.startsWith('/settings')) return 'Settings';
+    return 'Dashboard';
+  }, [path]);
+
+  return (
+    <AppProvider i18n={I18N}>
+      {isEmbedded && <AdminNavMenu active={path} /> /* НЯМА TitleBar; само лявото меню */}
+      <Frame
+        navigation={isEmbedded ? undefined : <SideNav /> /* fallback локално */}
+        topBar={<TopNav lang={lang} setLang={setLang} t={(k,d)=>d} />}
+      >
+        <Page>
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k,d)=>d} />
+          {path.startsWith('/ai-seo') ? (
+            <AiSeoPanel />
+          ) : path.startsWith('/billing') ? (
+            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
+          ) : path.startsWith('/settings') ? (
+            <Card><Box padding="400"><Text>Settings page</Text></Box></Card>
+          ) : (
+            <DashboardCard />
           )}
-        </Frame>
-      </ErrorBoundary>
+        </Page>
+      </Frame>
     </AppProvider>
   );
 }
