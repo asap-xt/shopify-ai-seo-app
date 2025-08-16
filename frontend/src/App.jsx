@@ -1,17 +1,16 @@
-// frontend/src/App.jsx
-// Classic Shopify shell with App Bridge TitleBar + real LEFT sidebar menu via actions.
-// Keeps your TopNav, AppHeader, and the working AiSeoPanel (Generate → Apply).
-// Includes a fallback internal SideNav ONLY if App Bridge isn't available (e.g. outside Admin).
+// App frame with real LEFT Shopify sidebar menu via App Bridge actions (no TitleBar).
+// Keeps your TopNav, AppHeader and the working AiSeoPanel (Generate → Apply).
+// Outside Admin (no ?host) shows fallback internal SideNav so nothing breaks during local preview.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import { AppProvider, Frame, Page, Box, Text } from '@shopify/polaris';
-import { TitleBar as ABTitleBar, NavigationMenu as ABNavigationMenu } from '@shopify/app-bridge/actions';
+import { NavigationMenu as ABNavigationMenu } from '@shopify/app-bridge/actions';
 
 import TopNav from './components/TopNav.jsx';
 import AppHeader from './components/AppHeader.jsx';
 import AiSeoPanel from './components/AiSeoPanel.jsx';
-import SideNav from './components/SideNav.jsx'; // Fallback only
+import SideNav from './components/SideNav.jsx'; // fallback only
 
 const POLARIS_I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
@@ -22,7 +21,7 @@ function useRouter() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
-  return { path };
+  return { path, setPath };
 }
 
 class ErrorBoundary extends React.Component {
@@ -30,7 +29,7 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError(err){ return {hasError:true,message:err?.message||'Unknown error'}; }
   componentDidCatch(err){ console.error('FE ErrorBoundary:', err); }
   render(){
-    if(this.state.hasError){
+    if (this.state.hasError) {
       return (
         <Page>
           <Box padding="400">
@@ -44,6 +43,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Simple placeholders (Dashboard/Billing/Settings panes)
 function DashboardPage() {
   return (
     <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
@@ -56,19 +56,20 @@ function SettingsPage() { return <Box padding="400" background="bg" borderRadius
 function NotFound() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Page not found.</Box>; }
 
 export default function App() {
-  // App Bridge instance е вкаран в window от main.jsx (window.__APP_BRIDGE__), ако сме в Admin.
+  // App Bridge instance (set in main.jsx when ?host is present)
   const app = typeof window !== 'undefined' ? window.__APP_BRIDGE__ : null;
-  const navRef = useRef(null);
-  const titleRef = useRef(null);
 
-  // UI language (за AppHeader/LangButton). Генерационният език е отделен в AiSeoPanel.
+  const navRef = useRef(null);
+
+  // UI language for AppHeader/LangButton (generation language is inside AiSeoPanel)
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('app_lang') || 'en'; } catch { return 'en'; }
   });
   useEffect(() => { try { localStorage.setItem('app_lang', lang || 'en'); } catch {} }, [lang]);
 
-  const { path } = useRouter();
+  const { path, setPath } = useRouter();
 
+  // Compute section title for AppHeader
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
@@ -77,15 +78,9 @@ export default function App() {
     return 'Shopify App';
   }, [path]);
 
-  // App Bridge TitleBar + LEFT sidebar menu (реалното Shopify меню), ако сме в Admin
+  // Create LEFT sidebar menu via App Bridge (no TitleBar)
   useEffect(() => {
     if (!app) return;
-
-    if (!titleRef.current) {
-      titleRef.current = ABTitleBar.create(app, { title: 'NEW AI SEO' });
-    } else {
-      titleRef.current.set({ title: 'NEW AI SEO' });
-    }
 
     const items = [
       { label: 'Dashboard', destination: '/dashboard' },
@@ -93,22 +88,39 @@ export default function App() {
       { label: 'Billing',   destination: '/billing' },
       { label: 'Settings',  destination: '/settings' },
     ];
-    if (!navRef.current) {
-      navRef.current = ABNavigationMenu.create(app, { items });
-    } else {
-      navRef.current.set({ items });
-    }
-  }, [app]);
 
-  const isInAdmin = !!app; // ако няма App Bridge (локално без ?host), показваме fallback навигация
+    if (!navRef.current) {
+      navRef.current = ABNavigationMenu.create(app, {
+        items,
+        active: window.location.pathname || '/dashboard',
+      });
+
+      // (Optional) react to menu navigate events if present in your App Bridge version
+      try {
+        navRef.current.subscribe(ABNavigationMenu.Action.NAVIGATE, ({ id, destination }) => {
+          if (destination && destination !== window.location.pathname) {
+            window.history.pushState({}, '', destination);
+            setPath(destination);
+          }
+        });
+      } catch { /* safe no-op for versions without NAVIGATE */ }
+    } else {
+      navRef.current.set({ items, active: window.location.pathname || '/dashboard' });
+    }
+  }, [app, setPath]);
+
+  // Keep highlight in sync on client-side route changes
+  useEffect(() => {
+    if (navRef.current) navRef.current.set({ active: path || '/dashboard' });
+  }, [path]);
+
+  const isInAdmin = !!app; // if false → use fallback internal SideNav (local preview)
 
   return (
     <AppProvider i18n={POLARIS_I18N}>
       <ErrorBoundary>
         <Frame
-          /* В Shopify Admin НЕ подаваме internal navigation (лявото меню идва от App Bridge).
-             Извън Admin (без App Bridge) показваме fallback SideNav, за да имаш навигация при локален преглед. */
-          navigation={isInAdmin ? undefined : <SideNav />}
+          navigation={isInAdmin ? undefined : <SideNav />} // no in-iframe menu when embedded
           topBar={<TopNav lang={lang} setLang={setLang} t={(k, d) => d} />}
         >
           {(path === '/' || path.startsWith('/dashboard')) && (
