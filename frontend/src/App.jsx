@@ -10,12 +10,18 @@ import SideNav from './components/SideNav.jsx';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
-const qs = (k, d='') => {
+// --- utils
+const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
 };
 const pretty = (v) => JSON.stringify(v, null, 2);
+const toProductGID = (val) => {
+  if (!val) return val;
+  const s = String(val).trim();
+  return s.startsWith('gid://') ? s : `gid://shopify/Product/${s}`;
+};
 
-// ---- Admin LEFT sidebar via <ui-nav-menu> (App Bridge v4)
+// --- Left admin navigation (App Bridge v4): only <a> children are valid
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
@@ -42,26 +48,26 @@ function useRoute() {
   return { path, setPath };
 }
 
-// ---- Dashboard (от /plans/me)
+// --- Dashboard (fetches /plans/me and renders like your screenshot)
 function DashboardCard() {
-  const [state, setState] = useState({ loading:false, err:'', data:null });
+  const [state, setState] = useState({ loading: false, err: '', data: null });
 
   useEffect(() => {
-    const shop = qs('shop','');
-    if (!shop) { setState({loading:false, err:'Missing ?shop in URL', data:null}); return; }
+    const shop = qs('shop', '');
+    if (!shop) { setState({ loading: false, err: 'Missing ?shop in URL', data: null }); return; }
     (async () => {
       try {
-        setState({loading:true, err:'', data:null});
+        setState({ loading: true, err: '', data: null });
         const r = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`);
         const j = await r.json();
-        setState({ loading:false, err:'', data:j });
-      } catch(e) {
-        setState({ loading:false, err:e.message, data:null });
+        setState({ loading: false, err: '', data: j });
+      } catch (e) {
+        setState({ loading: false, err: e.message, data: null });
       }
     })();
   }, []);
 
-  const Row = ({k,v}) => (
+  const Row = ({ k, v }) => (
     <InlineStack wrap={false} gap="200" align="space-between">
       <Text as="span" variant="bodyMd" tone="subdued">{k}</Text>
       <Text as="span" variant="bodyMd">{v}</Text>
@@ -78,14 +84,19 @@ function DashboardCard() {
         {state.data && (
           <Box paddingBlockStart="300">
             <Row k="Shop" v={state.data.shop || '—'} />
-            <Row k="AI queries" v={
-              state.data.queryLimit
-                ? `${state.data.queryCount ?? 0} / ${state.data.queryLimit}`
-                : '—'
-            } />
+            <Row
+              k="AI queries"
+              v={state.data.queryLimit ? `${state.data.queryCount ?? 0} / ${state.data.queryLimit}` : '—'}
+            />
             <Row k="Product limit" v={state.data.productLimit ?? '—'} />
-            <Row k="Allowed AI providers" v={(state.data.providersAllowed||[]).join(', ') || '—'} />
-            <Row k="Trial ends at" v={state.data.trialEndsAt ? new Date(state.data.trialEndsAt).toISOString().slice(0,10) : '—'} />
+            <Row
+              k="Allowed AI providers"
+              v={(state.data.providersAllowed || []).join(', ') || '—'}
+            />
+            <Row
+              k="Trial ends at"
+              v={state.data.trialEndsAt ? new Date(state.data.trialEndsAt).toISOString().slice(0, 10) : '—'}
+            />
           </Box>
         )}
       </Box>
@@ -93,9 +104,9 @@ function DashboardCard() {
   );
 }
 
-// ---- AI SEO (Generate → Apply) – бекенд пътищата са непроменени
+// --- AI SEO (Generate → Apply). Backend endpoints are unchanged.
 function AiSeoPanel() {
-  const [shop, setShop] = useState(() => qs('shop',''));
+  const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
   const [language, setLanguage] = useState('en');
@@ -106,15 +117,16 @@ function AiSeoPanel() {
   async function generate() {
     setBusy(true); setResult(null);
     try {
+      const productIdGID = toProductGID(productId);
       const r = await fetch('/seo/generate', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ shop, productId, model, language }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop, productId: productIdGID, model, language }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Generation failed');
       setResult(j);
-    } catch(e) {
+    } catch (e) {
       setResult({ error: e.message });
     } finally {
       setBusy(false);
@@ -125,9 +137,12 @@ function AiSeoPanel() {
     if (!result || !result.seo) return;
     setBusy(true);
     try {
+      const pidRaw = (result.productId || productId || '').trim();
+      const productIdGID = toProductGID(pidRaw);
+
       const payload = {
         shop,
-        productId: result.productId || productId,
+        productId: productIdGID,
         seo: result.seo,
         options: {
           updateTitle: true,
@@ -135,18 +150,18 @@ function AiSeoPanel() {
           updateSeo: true,
           updateBullets: true,
           updateFaq: true,
-          updateAlt: false
-        }
+          updateAlt: false,
+        },
       };
       const r = await fetch('/seo/apply', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const j = await r.json();
       if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors[0]) || j.error || 'Apply failed');
       setToast('Applied ✓');
-    } catch(e) {
+    } catch (e) {
       setToast(`Apply error: ${e.message}`);
     } finally {
       setBusy(false);
@@ -161,18 +176,30 @@ function AiSeoPanel() {
           <Box paddingBlockStart="300">
             <Layout>
               <Layout.Section oneHalf>
-                <TextField label="Shop" value={shop} onChange={setShop} placeholder="your-shop.myshopify.com" autoComplete="off" />
+                <TextField
+                  label="Shop"
+                  value={shop}
+                  onChange={setShop}
+                  placeholder="your-shop.myshopify.com"
+                  autoComplete="off"
+                />
               </Layout.Section>
               <Layout.Section oneHalf>
-                <TextField label="Product ID" value={productId} onChange={setProductId} placeholder="gid://shopify/Product/…" autoComplete="off" />
+                <TextField
+                  label="Product ID (numeric or GID)"
+                  value={productId}
+                  onChange={setProductId}
+                  placeholder="1496335… or gid://shopify/Product/1496335…"
+                  autoComplete="off"
+                />
               </Layout.Section>
               <Layout.Section oneHalf>
                 <Select
                   label="Model"
                   options={[
-                    {label:'anthropic/claude-3.5-sonnet', value:'anthropic/claude-3.5-sonnet'},
-                    {label:'openai/gpt-4o-mini', value:'openai/gpt-4o-mini'},
-                    {label:'google/gemini-1.5-flash', value:'google/gemini-1.5-flash'},
+                    { label: 'anthropic/claude-3.5-sonnet', value: 'anthropic/claude-3.5-sonnet' },
+                    { label: 'openai/gpt-4o-mini', value: 'openai/gpt-4o-mini' },
+                    { label: 'google/gemini-1.5-flash', value: 'google/gemini-1.5-flash' },
                   ]}
                   value={model}
                   onChange={setModel}
@@ -182,10 +209,10 @@ function AiSeoPanel() {
                 <Select
                   label="Language"
                   options={[
-                    {label:'EN', value:'en'},
-                    {label:'DE', value:'de'},
-                    {label:'ES', value:'es'},
-                    {label:'FR', value:'fr'},
+                    { label: 'EN', value: 'en' },
+                    { label: 'DE', value: 'de' },
+                    { label: 'ES', value: 'es' },
+                    { label: 'FR', value: 'fr' },
                   ]}
                   value={language}
                   onChange={setLanguage}
@@ -193,8 +220,12 @@ function AiSeoPanel() {
               </Layout.Section>
               <Layout.Section>
                 <InlineStack gap="300">
-                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId}>Generate</Button>
-                  <Button onClick={apply} disabled={!result || !result.seo || busy}>Apply to product</Button>
+                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId}>
+                    Generate
+                  </Button>
+                  <Button onClick={apply} disabled={!result || !result.seo || busy}>
+                    Apply to product
+                  </Button>
                 </InlineStack>
               </Layout.Section>
             </Layout>
@@ -207,14 +238,14 @@ function AiSeoPanel() {
           <Box padding="400">
             <Text as="h3" variant="headingMd">Result</Text>
             <Divider />
-            <pre style={{whiteSpace:'pre-wrap', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:12, marginTop:12}}>
+            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, marginTop: 12 }}>
 {`${result ? pretty(result) : '—'}`}
             </pre>
           </Box>
         </Card>
       </Box>
 
-      {toast && <Toast content={toast} onDismiss={()=>setToast('')} />}
+      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </>
   );
 }
@@ -237,11 +268,11 @@ export default function App() {
       {isEmbedded && <AdminNavMenu active={path} />}
       <Frame
         navigation={isEmbedded ? undefined : <SideNav />}
-        // ⬇️ NO topBar here — removes the black bar and duplicate language selector
+        // No topBar here — we removed the black bar and duplicate language selector
       >
         <Page>
-          {/* AppHeader съдържа единствения language selector */}
-          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k,d)=>d} />
+          {/* AppHeader contains the only language selector */}
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k, d) => d} />
           {path.startsWith('/ai-seo') ? (
             <AiSeoPanel />
           ) : path.startsWith('/billing') ? (
