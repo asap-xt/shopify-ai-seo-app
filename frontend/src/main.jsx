@@ -1,42 +1,30 @@
-// main.jsx — App Bridge instance (no React Provider) + Polaris wrapper
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { AppProvider as PolarisAppProvider } from '@shopify/polaris';
-import '@shopify/polaris/build/esm/styles.css';
+// frontend/src/main.jsx
+// Expose getIdToken() that returns a Shopify session token via App Bridge.
+// Comments are in English, as requested.
 
-import { createApp } from '@shopify/app-bridge';
-import { getSessionToken } from '@shopify/app-bridge/utilities';
-import App from './App.jsx';
+import createApp from "@shopify/app-bridge";
+import { getSessionToken } from "@shopify/app-bridge/utilities";
 
-// Read query params from the Admin iframe URL
-function qp(name) {
-  const url = new URL(window.location.href);
-  return url.searchParams.get(name) || '';
+// Read API key from <meta name="shopify-api-key"> (already in your index.html)
+function getApiKeyFromMeta() {
+  const el = document.querySelector('meta[name="shopify-api-key"]');
+  return el ? el.getAttribute("content") : "";
 }
 
-const host = qp('host');
+// 'host' must come from the URL query (?host=...)
+function getHostFromSearch() {
+  const sp = new URLSearchParams(window.location.search);
+  return sp.get("host") || "";
+}
 
-// App Bridge config used by <ui-nav-menu> and TitleBar
-const appBridgeConfig = {
-  apiKey: import.meta.env.VITE_SHOPIFY_API_KEY,
-  host,
-  forceRedirect: true, // keep the app embedded inside Admin (iframe)
-};
+// Create a single App Bridge instance
+const app = createApp({
+  apiKey: getApiKeyFromMeta(),
+  host: getHostFromSearch(),
+});
 
-// Create a single App Bridge instance for the whole app
-export const appBridge = createApp(appBridgeConfig);
-
-// Export a helper to fetch a fresh session token for backend calls
+// Exported function used by App.jsx
 export async function getIdToken() {
-  try {
-    return await getSessionToken(appBridge);
-  } catch {
-    return '';
-  }
+  // Returns a short-lived Shopify session token (JWT)
+  return await getSessionToken(app);
 }
-
-createRoot(document.getElementById('root')).render(
-  <PolarisAppProvider i18n={{}}>
-    <App />
-  </PolarisAppProvider>
-);
