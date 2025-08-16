@@ -1,25 +1,20 @@
 // frontend/src/App.jsx
-// Classic Shopify shell: TopBar + left nav + routed pages (Polaris Frame)
-// Uses your own components: TopNav, SideNav, AppHeader (now under ./components).
-// Embeds the working AiSeoPanel (Generate → Preview/JSON → Apply).
+// Classic Shopify shell with App Bridge TitleBar + real LEFT sidebar menu via actions.
+// Keeps your TopNav, AppHeader, and the working AiSeoPanel (Generate → Apply).
+// Includes a fallback internal SideNav ONLY if App Bridge isn't available (e.g. outside Admin).
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import { AppProvider, Frame, Page, Box, Text } from '@shopify/polaris';
+import { TitleBar as ABTitleBar, NavigationMenu as ABNavigationMenu } from '@shopify/app-bridge/actions';
 
 import TopNav from './components/TopNav.jsx';
-import SideNav from './components/SideNav.jsx';
 import AppHeader from './components/AppHeader.jsx';
 import AiSeoPanel from './components/AiSeoPanel.jsx';
+import SideNav from './components/SideNav.jsx'; // Fallback only
 
-// ---- Minimal i18n for Polaris
-const POLARIS_I18N = {
-  Polaris: {
-    ResourceList: { sortingLabel: 'Sort by' },
-  },
-};
+const POLARIS_I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
-// ---- Tiny router (no external deps)
 function useRouter() {
   const [path, setPath] = useState(() => window.location.pathname || '/dashboard');
   useEffect(() => {
@@ -27,29 +22,15 @@ function useRouter() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
-  const navigate = (to) => {
-    if (!to || to === window.location.pathname) return;
-    window.history.pushState({}, '', to);
-    setPath(to);
-  };
-  return { path, navigate };
+  return { path };
 }
 
-// ---- Error boundary to avoid blank screens
 class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, message: '' };
-  }
-  static getDerivedStateFromError(err) {
-    return { hasError: true, message: err?.message || 'Unknown error' };
-  }
-  componentDidCatch(err) {
-    // eslint-disable-next-line no-console
-    console.error('FE ErrorBoundary:', err);
-  }
-  render() {
-    if (this.state.hasError) {
+  constructor(p){ super(p); this.state={hasError:false,message:''}; }
+  static getDerivedStateFromError(err){ return {hasError:true,message:err?.message||'Unknown error'}; }
+  componentDidCatch(err){ console.error('FE ErrorBoundary:', err); }
+  render(){
+    if(this.state.hasError){
       return (
         <Page>
           <Box padding="400">
@@ -63,57 +44,32 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function Section({ title, lang, setLang, children }) {
-  return (
-    <Page>
-      <AppHeader sectionTitle={title} lang={lang} setLang={setLang} />
-      <Box padding="400">{children}</Box>
-    </Page>
-  );
-}
-
-// ---- Simple placeholders
 function DashboardPage() {
   return (
     <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
-      Welcome to the dashboard. Use the left navigation to open <b>AI SEO</b>.
+      Welcome to the dashboard. Use Shopify’s left sidebar to open <b>AI SEO</b>.
     </Box>
   );
 }
-function BillingPage() {
-  return (
-    <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
-      Billing page placeholder.
-    </Box>
-  );
-}
-function SettingsPage() {
-  return (
-    <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
-      Settings page placeholder.
-    </Box>
-  );
-}
-function NotFound() {
-  return (
-    <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">
-      Page not found.
-    </Box>
-  );
-}
+function BillingPage() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Billing page placeholder.</Box>; }
+function SettingsPage() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Settings page placeholder.</Box>; }
+function NotFound() { return <Box padding="400" background="bg" borderRadius="200" borderWidth="025" borderColor="border">Page not found.</Box>; }
 
 export default function App() {
-  // Language persistence (used by AppHeader/LangButton)
+  // App Bridge instance е вкаран в window от main.jsx (window.__APP_BRIDGE__), ако сме в Admin.
+  const app = typeof window !== 'undefined' ? window.__APP_BRIDGE__ : null;
+  const navRef = useRef(null);
+  const titleRef = useRef(null);
+
+  // UI language (за AppHeader/LangButton). Генерационният език е отделен в AiSeoPanel.
   const [lang, setLang] = useState(() => {
     try { return localStorage.getItem('app_lang') || 'en'; } catch { return 'en'; }
   });
-  useEffect(() => {
-    try { localStorage.setItem('app_lang', lang || 'en'); } catch {}
-  }, [lang]);
+  useEffect(() => { try { localStorage.setItem('app_lang', lang || 'en'); } catch {} }, [lang]);
 
-  const { path, navigate } = useRouter();
+  const { path } = useRouter();
 
-  const title = useMemo(() => {
+  const sectionTitle = useMemo(() => {
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/ai-seo')) return 'AI SEO';
@@ -121,43 +77,73 @@ export default function App() {
     return 'Shopify App';
   }, [path]);
 
+  // App Bridge TitleBar + LEFT sidebar menu (реалното Shopify меню), ако сме в Admin
+  useEffect(() => {
+    if (!app) return;
+
+    if (!titleRef.current) {
+      titleRef.current = ABTitleBar.create(app, { title: 'NEW AI SEO' });
+    } else {
+      titleRef.current.set({ title: 'NEW AI SEO' });
+    }
+
+    const items = [
+      { label: 'Dashboard', destination: '/dashboard' },
+      { label: 'AI SEO',    destination: '/ai-seo' },
+      { label: 'Billing',   destination: '/billing' },
+      { label: 'Settings',  destination: '/settings' },
+    ];
+    if (!navRef.current) {
+      navRef.current = ABNavigationMenu.create(app, { items });
+    } else {
+      navRef.current.set({ items });
+    }
+  }, [app]);
+
+  const isInAdmin = !!app; // ако няма App Bridge (локално без ?host), показваме fallback навигация
+
   return (
     <AppProvider i18n={POLARIS_I18N}>
       <ErrorBoundary>
         <Frame
+          /* В Shopify Admin НЕ подаваме internal navigation (лявото меню идва от App Bridge).
+             Извън Admin (без App Bridge) показваме fallback SideNav, за да имаш навигация при локален преглед. */
+          navigation={isInAdmin ? undefined : <SideNav />}
           topBar={<TopNav lang={lang} setLang={setLang} t={(k, d) => d} />}
-          navigation={<SideNav navigate={navigate} activePath={path} />}
         >
-          {/* ROUTES */}
           {(path === '/' || path.startsWith('/dashboard')) && (
-            <Section title={title} lang={lang} setLang={setLang}>
-              <DashboardPage />
-            </Section>
+            <Page>
+              <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} />
+              <Box padding="400"><DashboardPage /></Box>
+            </Page>
           )}
 
           {path.startsWith('/ai-seo') && (
-            <Section title="AI SEO" lang={lang} setLang={setLang}>
-              <AiSeoPanel />
-            </Section>
+            <Page>
+              <AppHeader sectionTitle="AI SEO" lang={lang} setLang={setLang} />
+              <Box padding="400"><AiSeoPanel /></Box>
+            </Page>
           )}
 
           {path.startsWith('/billing') && (
-            <Section title="Billing" lang={lang} setLang={setLang}>
-              <BillingPage />
-            </Section>
+            <Page>
+              <AppHeader sectionTitle="Billing" lang={lang} setLang={setLang} />
+              <Box padding="400"><BillingPage /></Box>
+            </Page>
           )}
 
           {path.startsWith('/settings') && (
-            <Section title="Settings" lang={lang} setLang={setLang}>
-              <SettingsPage />
-            </Section>
+            <Page>
+              <AppHeader sectionTitle="Settings" lang={lang} setLang={setLang} />
+              <Box padding="400"><SettingsPage /></Box>
+            </Page>
           )}
 
-          {/* Fallback */}
           {!['/','/dashboard','/ai-seo','/billing','/settings'].some(p => path === p || path.startsWith(p)) && (
-            <Section title={title} lang={lang} setLang={setLang}>
-              <NotFound />
-            </Section>
+            <Page>
+              <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} />
+              <Box padding="400"><NotFound /></Box>
+            </Page>
           )}
         </Frame>
       </ErrorBoundary>
