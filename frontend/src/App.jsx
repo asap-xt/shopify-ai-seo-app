@@ -5,32 +5,34 @@ import {
   Button, TextField, Select, InlineStack, Divider, Toast
 } from '@shopify/polaris';
 
-import TopNav from './components/TopNav.jsx';         // твоята лента с езиците (без TitleBar)
-import AppHeader from './components/AppHeader.jsx';   // вътрешен хедър със секция + език
-import SideNav from './components/SideNav.jsx';       // fallback меню за локален преглед
+import TopNav from './components/TopNav.jsx';
+import AppHeader from './components/AppHeader.jsx';
+import SideNav from './components/SideNav.jsx';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
-// ---- helpers
 const qs = (k, d='') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
 };
 const pretty = (v) => JSON.stringify(v, null, 2);
 
-// ---- Admin LEFT sidebar via App Bridge v4 custom elements
+// ---------- FIXED: Admin left nav via <ui-nav-menu> with <a> items (no ui-nav-menu-item)
 function AdminNavMenu({ active }) {
-  // Shopify ще “изтегли” тези елементи и ще покажe подменюто под Apps → NEW AI SEO
+  const isDash = active === '/' || active.startsWith('/dashboard');
+  const isSeo  = active.startsWith('/ai-seo');
+  const isBill = active.startsWith('/billing');
+  const isSett = active.startsWith('/settings');
+
   return (
     <ui-nav-menu>
-      <ui-nav-menu-item url="/dashboard" selected={active.startsWith('/dashboard') || active === '/'}>Dashboard</ui-nav-menu-item>
-      <ui-nav-menu-item url="/ai-seo"   selected={active.startsWith('/ai-seo')}>AI SEO</ui-nav-menu-item>
-      <ui-nav-menu-item url="/billing"  selected={active.startsWith('/billing')}>Billing</ui-nav-menu-item>
-      <ui-nav-menu-item url="/settings" selected={active.startsWith('/settings')}>Settings</ui-nav-menu-item>
+      <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
+      <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
   );
 }
 
-// ---- mini router
 function useRoute() {
   const [path, setPath] = useState(() => window.location.pathname || '/dashboard');
   useEffect(() => {
@@ -41,7 +43,7 @@ function useRoute() {
   return { path, setPath };
 }
 
-// ---- Dashboard (както на снимката – текущ план)
+// ---------- Dashboard (pulls /plans/me as on your screenshot)
 function DashboardCard() {
   const [state, setState] = useState({ loading:false, err:'', data:null });
 
@@ -92,7 +94,7 @@ function DashboardCard() {
   );
 }
 
-// ---- AI SEO (Generate → JSON → Apply) – запазва бекенд пътищата
+// ---------- AI SEO panel (Generate → Apply) — unchanged endpoints
 function AiSeoPanel() {
   const [shop, setShop] = useState(() => qs('shop',''));
   const [productId, setProductId] = useState('');
@@ -218,12 +220,11 @@ function AiSeoPanel() {
   );
 }
 
-// ---- App
 export default function App() {
   const { path } = useRoute();
   const [lang, setLang] = useState('en');
 
-  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host')); // ако е в Admin – Shopify ще изрисува лявото меню от <ui-nav-menu>
+  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
 
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI SEO';
@@ -234,9 +235,9 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} /> /* НЯМА TitleBar; само лявото меню */}
+      {isEmbedded && <AdminNavMenu active={path} />}
       <Frame
-        navigation={isEmbedded ? undefined : <SideNav /> /* fallback локално */}
+        navigation={isEmbedded ? undefined : <SideNav />}
         topBar={<TopNav lang={lang} setLang={setLang} t={(k,d)=>d} />}
       >
         <Page>
