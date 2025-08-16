@@ -5,7 +5,6 @@ import {
   Button, TextField, Select, InlineStack, Divider, Toast
 } from '@shopify/polaris';
 
-import TopNav from './components/TopNav.jsx';
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
 
@@ -16,7 +15,7 @@ const qs = (k, d='') => {
 };
 const pretty = (v) => JSON.stringify(v, null, 2);
 
-// ---------- FIXED: Admin left nav via <ui-nav-menu> with <a> items (no ui-nav-menu-item)
+// ---- Admin LEFT sidebar via <ui-nav-menu> (App Bridge v4)
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
@@ -43,7 +42,7 @@ function useRoute() {
   return { path, setPath };
 }
 
-// ---------- Dashboard (pulls /plans/me as on your screenshot)
+// ---- Dashboard (от /plans/me)
 function DashboardCard() {
   const [state, setState] = useState({ loading:false, err:'', data:null });
 
@@ -94,7 +93,7 @@ function DashboardCard() {
   );
 }
 
-// ---------- AI SEO panel (Generate → Apply) — unchanged endpoints
+// ---- AI SEO (Generate → Apply) – бекенд пътищата са непроменени
 function AiSeoPanel() {
   const [shop, setShop] = useState(() => qs('shop',''));
   const [productId, setProductId] = useState('');
@@ -238,9 +237,10 @@ export default function App() {
       {isEmbedded && <AdminNavMenu active={path} />}
       <Frame
         navigation={isEmbedded ? undefined : <SideNav />}
-        topBar={<TopNav lang={lang} setLang={setLang} t={(k,d)=>d} />}
+        // ⬇️ NO topBar here — removes the black bar and duplicate language selector
       >
         <Page>
+          {/* AppHeader съдържа единствения language selector */}
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k,d)=>d} />
           {path.startsWith('/ai-seo') ? (
             <AiSeoPanel />
