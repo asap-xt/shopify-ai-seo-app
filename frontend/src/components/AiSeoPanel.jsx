@@ -1,10 +1,10 @@
 // frontend/src/AiSeoPanel.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Card, Page, Layout, TextField, Button, Select, Text, Box, InlineStack, Divider, Toast,
+  Box, Card, Text, TextField, InlineStack, Select, Button, Divider, Toast,
 } from '@shopify/polaris';
 
-// ---------- small utils
+// ---- helpers
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
 };
@@ -15,7 +15,6 @@ const toGID = (v) => {
 };
 const pretty = (x) => JSON.stringify(x, null, 2);
 async function readJson(response) {
-  // Robust JSON reader (survives HTML error pages)
   const text = await response.text();
   try { return JSON.parse(text || 'null'); }
   catch { return { __raw: text, error: 'Unexpected non-JSON response' }; }
@@ -25,23 +24,22 @@ export default function AiSeoPanel() {
   // Core inputs
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('');
-  const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
+  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
 
-  // Language state (dynamic from shop/product)
+  // Dynamic languages from shop/product
   const [shopLanguages, setShopLanguages] = useState([]);
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
   const [shouldShowLanguageSelector, setShouldShowLanguageSelector] = useState(false);
-  const [allLanguagesOption, setAllLanguagesOption] = useState(false);
-  const [language, setLanguage] = useState('en'); // selected; may be 'all'
+  const [allLanguagesOption, setAllLanguagesOption] = useState(null);
+  const [language, setLanguage] = useState('en'); // can be 'all'
 
-  // Result / UI state
-  const [result, setResult] = useState(null);
+  // Result / UI
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
 
-  // ---------- Load plan (modelsSuggested) for current shop
+  // -------- Load models from plan (kept simple; uses /plans/me?shop=…)
   useEffect(() => {
     const s = shop || qs('shop', '');
     if (!s) return;
@@ -50,38 +48,29 @@ export default function AiSeoPanel() {
         const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`, { credentials: 'include' });
         const j = await readJson(r);
         if (!r.ok) throw new Error(j?.error || 'Failed to load plan');
-        const opts = (j.modelsSuggested || []).map(m => ({ label: m, value: m }));
-        if (opts.length) {
-          setModelOptions(opts);
-          setModel(prev => (opts.find(o => o.value === prev)?.value || opts[0].value));
-        } else {
-          // Fallback list if backend doesn't return suggestions
-          const fallback = ['anthropic/claude-3.5-sonnet'];
-          setModelOptions(fallback.map(m => ({ label: m, value: m })));
-          setModel(fallback[0]);
+        const suggested = j?.modelsSuggested || [];
+        if (suggested.length && !suggested.includes(model)) {
+          setModel(suggested[0]);
         }
       } catch (e) {
-        setToast(`Failed to load plan: ${e.message}`);
+        // leave current model; show toast only if needed
       }
     })();
   }, [shop]);
 
-  // ---------- Load languages for shop + product
+  // -------- Load shop+product languages
   useEffect(() => {
     const s = shop || qs('shop', '');
     const pid = (productId || '').trim();
     if (!s || !pid) {
-      // Reset to defaults when input is incomplete
-      setShopLanguages([]); setProductLanguages([]);
-      setPrimaryLanguage('en'); setLanguage('en');
-      setShouldShowLanguageSelector(false); setAllLanguagesOption(false);
+      setShopLanguages([]); setProductLanguages([]); setPrimaryLanguage('en');
+      setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
       return;
     }
 
     let cancelled = false;
     (async () => {
       try {
-        // Backend uses session; shop param is in path only for clarity
         const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
         const rsp = await fetch(url, { credentials: 'include' });
         const data = await readJson(rsp);
@@ -91,69 +80,61 @@ export default function AiSeoPanel() {
         const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
         const prodLangs = (data.productLanguages || []).map(x => x.toLowerCase());
         const primary = (data.primaryLanguage || shopLangs[0] || 'en').toLowerCase();
-        const effective = (prodLangs.length ? prodLangs : shopLangs);
-        const showSel = effective.length > 1;
+        const showSel = Boolean(data.shouldShowSelector) || (prodLangs.length > 1 || shopLangs.length > 1);
 
         setShopLanguages(shopLangs);
         setProductLanguages(prodLangs);
         setPrimaryLanguage(primary);
-        setShouldShowLanguageSelector(!!data.shouldShowSelector || showSel);
-        setAllLanguagesOption(!!data.allLanguagesOption && showSel);
+        setShouldShowLanguageSelector(showSel);
+        setAllLanguagesOption(data.allLanguagesOption || (showSel ? { label: 'All languages', value: 'all' } : null));
 
-        // Default selected language: keep current if valid; else primary or first effective
+        // default selected language
         setLanguage(prev => {
-          if (prev && (prev === 'all' || effective.includes(prev))) return prev;
-          return showSel ? effective[0] : primary;
+          const effective = (prodLangs.length ? prodLangs : shopLangs);
+          if (prev === 'all' && showSel) return 'all';
+          if (prev && effective.includes(prev)) return prev;
+          return showSel ? (effective[0] || primary) : primary;
         });
       } catch (e) {
         if (!cancelled) {
-          // Fallback to single EN
-          setShopLanguages(['en']);
-          setProductLanguages(['en']);
-          setPrimaryLanguage('en');
-          setShouldShowLanguageSelector(false);
-          setAllLanguagesOption(false);
-          setLanguage('en');
+          setShopLanguages(['en']); setProductLanguages(['en']); setPrimaryLanguage('en');
+          setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('eN'.toLowerCase());
           setToast(`Languages fallback: ${e.message}`);
         }
       }
     })();
-
     return () => { cancelled = true; };
   }, [shop, productId]);
 
-  // ---------- Generate (single or multi)
+  // -------- Generate (single or multi)
   async function onGenerate() {
     setBusy(true); setToast(''); setResult(null);
     try {
       const pid = toGID(productId);
-      let response, data;
 
-      if (language === 'all' && (allLanguagesOption || (productLanguages.length + shopLanguages.length) > 1)) {
-        // Multi-language path: use product languages if any, otherwise shop languages
-        const langs = (productLanguages.length ? productLanguages : shopLanguages);
-        if (!langs.length) throw new Error('No languages found for this product/shop');
+      if (language === 'all' && (shouldShowLanguageSelector || allLanguagesOption)) {
+        const langs = productLanguages.length ? productLanguages : shopLanguages;
+        if (!langs.length) throw new Error('No languages available for this product/shop');
 
-        response = await fetch('/api/seo/generate-multi', {
+        const rsp = await fetch('/api/seo/generate-multi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ shop, productId: pid, model, languages: langs }),
         });
-        data = await readJson(response);
-        if (!response.ok) throw new Error(data?.error || 'Generate failed');
-        setResult(data);
+        const j = await readJson(rsp);
+        if (!rsp.ok) throw new Error(j?.error || 'Generate failed');
+        setResult(j);
       } else {
-        // Single language path
-        response = await fetch(`/seo/generate?shop=${encodeURIComponent(shop)}`, {
+        const rsp = await fetch(`/seo/generate?shop=${encodeURIComponent(shop)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ shop, productId: pid, model, language }),
         });
-        data = await readJson(response);
-        if (!response.ok) throw new Error(data?.error || 'Generate failed');
-        setResult(data);
+        const j = await readJson(rsp);
+        if (!rsp.ok) throw new Error(j?.error || 'Generate failed');
+        setResult(j);
       }
     } catch (e) {
       setResult({ error: e.message });
@@ -167,17 +148,14 @@ export default function AiSeoPanel() {
     }
   }
 
-  // ---------- Apply (single or multi)
+  // -------- Apply (single or multi)
   async function onApply() {
-    if (!canApply) return;
+    if (!result) return;
     setBusy(true); setToast('');
     try {
-      // Multi: array of per-language results
       if (Array.isArray(result?.results)) {
         const pid = toGID(productId || result.productId || '');
-        const results = result.results
-          .filter(r => r && r.seo)
-          .map(r => ({ language: r.language, seo: r.seo }));
+        const results = result.results.filter(r => r && r.seo).map(r => ({ language: r.language, seo: r.seo }));
         if (!results.length) throw new Error('Nothing to apply (no successful SEO results)');
 
         const rsp = await fetch('/api/seo/apply-multi', {
@@ -200,7 +178,6 @@ export default function AiSeoPanel() {
           throw new Error(err);
         }
       } else {
-        // Single
         const pid = toGID(result?.productId || productId);
         const rsp = await fetch(`/seo/apply?shop=${encodeURIComponent(shop)}`, {
           method: 'POST',
@@ -209,7 +186,7 @@ export default function AiSeoPanel() {
           body: JSON.stringify({
             shop,
             productId: pid,
-            seo: result?.seo, // IMPORTANT: send only the seo section
+            seo: result?.seo, // IMPORTANT: only seo section
             options: {
               updateTitle: true, updateBody: true, updateSeo: true,
               updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
@@ -230,108 +207,96 @@ export default function AiSeoPanel() {
     }
   }
 
-  // ---------- Derived UI state
+  // -------- Derived UI
   const languageOptions = useMemo(() => {
     const opts = [];
-    if (shouldShowLanguageSelector && (allLanguagesOption || (productLanguages.length + shopLanguages.length) > 1)) {
-      opts.push({ label: 'All languages', value: 'all' });
+    const many = (productLanguages.length || shopLanguages.length) > 1;
+    if (shouldShowLanguageSelector && (allLanguagesOption || many)) {
+      opts.push({ label: (allLanguagesOption?.label || 'All languages'), value: (allLanguagesOption?.value || 'all') });
     }
-    const effective = (productLanguages.length ? productLanguages : shopLanguages);
+    const effective = productLanguages.length ? productLanguages : shopLanguages;
     effective.forEach(l => opts.push({ label: l.toUpperCase(), value: l }));
     return opts;
   }, [shouldShowLanguageSelector, allLanguagesOption, productLanguages, shopLanguages]);
 
   const canApply =
     !!result &&
-    (Array.isArray(result?.results)
-      ? result.results.some(r => r && r.seo) // multi
-      : !!(result?.productId && result?.seo)); // single
+    (Array.isArray(result?.results) ? result.results.some(r => r && r.seo) : !!(result?.productId && result?.seo));
 
-  // ---------- Render
+  // -------- Render
   return (
-    <Page>
-      <Layout>
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <Text as="h3" variant="headingMd">AI SEO</Text>
-              <Box paddingBlockStart="300">
-                <Layout>
-                  <Layout.Section oneHalf>
-                    <TextField
-                      label="Shop"
-                      value={shop}
-                      onChange={setShop}
-                      autoComplete="off"
-                      placeholder="your-shop.myshopify.com"
-                    />
-                  </Layout.Section>
+    <>
+      <Card>
+        <Box padding="400">
+          <Text as="h3" variant="headingMd">AI SEO</Text>
+          <Box paddingBlockStart="300">
+            <div className="Polaris-Layout">
+              <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
+                <TextField
+                  label="Shop"
+                  value={shop}
+                  onChange={setShop}
+                  placeholder="your-shop.myshopify.com"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
+                <TextField
+                  label="Product ID (numeric or GID)"
+                  value={productId}
+                  onChange={setProductId}
+                  placeholder="1496335… or gid://shopify/Product/1496335…"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
+                <TextField label="Model" value={model} onChange={setModel} autoComplete="off" />
+              </div>
 
-                  <Layout.Section oneHalf>
-                    <TextField
-                      label="Product ID (numeric or GID)"
-                      value={productId}
-                      onChange={setProductId}
-                      autoComplete="off"
-                      placeholder="1496335… or gid://shopify/Product/1496335…"
-                    />
-                  </Layout.Section>
+              {shouldShowLanguageSelector && (
+                <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
+                  <Select
+                    label="Language (output)"
+                    options={languageOptions}
+                    value={language}
+                    onChange={setLanguage}
+                  />
+                </div>
+              )}
 
-                  <Layout.Section oneHalf>
-                    <Select
-                      label="Model"
-                      options={modelOptions}
-                      value={model}
-                      onChange={setModel}
-                    />
-                  </Layout.Section>
+              <div className="Polaris-Layout__Section">
+                <InlineStack gap="300">
+                  <Button
+                    variant="primary"
+                    loading={busy}
+                    onClick={onGenerate}
+                    disabled={!shop || !productId || !model}
+                  >
+                    Generate
+                  </Button>
+                  <Button onClick={onApply} disabled={!canApply || busy}>
+                    Apply to product
+                  </Button>
+                </InlineStack>
+              </div>
+            </div>
+          </Box>
+        </Box>
+      </Card>
 
-                  {shouldShowLanguageSelector && (
-                    <Layout.Section oneHalf>
-                      <Select
-                        label="Language (output)"
-                        options={languageOptions}
-                        value={language}
-                        onChange={setLanguage}
-                      />
-                    </Layout.Section>
-                  )}
-
-                  <Layout.Section>
-                    <InlineStack gap="300">
-                      <Button
-                        variant="primary"
-                        loading={busy}
-                        onClick={onGenerate}
-                        disabled={!shop || !productId || !model}
-                      >
-                        Generate
-                      </Button>
-                      <Button disabled={!canApply || busy} onClick={onApply}>
-                        Apply to product
-                      </Button>
-                    </InlineStack>
-                  </Layout.Section>
-                </Layout>
-              </Box>
-            </Box>
-          </Card>
-        </Layout.Section>
-
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <Text as="h3" variant="headingMd">Result</Text>
-              <Divider />
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, marginTop: 12 }}>
+      <Box paddingBlockStart="300">
+        <Card>
+          <Box padding="400">
+            <Text as="h3" variant="headingMd">Result</Text>
+            <Divider />
+            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, marginTop: 12 }}>
 {`${result ? pretty(result) : '—'}`}
-              </pre>
-            </Box>
-          </Card>
-        </Layout.Section>
-      </Layout>
+            </pre>
+          </Box>
+        </Card>
+      </Box>
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
-    </Page>
+    </>
   );
 }
