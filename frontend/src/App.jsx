@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import {
@@ -20,6 +21,11 @@ const toProductGID = (val) => {
   const s = String(val).trim();
   return s.startsWith('gid://') ? s : `gid://shopify/Product/${s}`;
 };
+async function readJson(response) {
+  const text = await response.text();
+  try { return JSON.parse(text || 'null'); }
+  catch { return { __raw: text, error: 'Unexpected non-JSON response' }; }
+}
 
 // -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
 function AdminNavMenu({ active }) {
@@ -58,8 +64,9 @@ function DashboardCard() {
     (async () => {
       try {
         setState({ loading: true, err: '', data: null });
-        const r = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`);
-        const j = await r.json();
+        const r = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`, { credentials: 'include' });
+        const j = await readJson(r);
+        if (!r.ok) throw new Error(j?.error || 'Failed to load plan');
         setState({ loading: false, err: '', data: j });
       } catch (e) {
         setState({ loading: false, err: e.message, data: null });
@@ -104,13 +111,22 @@ function DashboardCard() {
   );
 }
 
-// -------- AI SEO (Generate → Apply)
+// -------- AI SEO (Generate → Apply) WITH dynamic output language from shop/product
 function AiSeoPanel() {
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState(''); // will be set from /plans/me
   const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
-  const [language, setLanguage] = useState('en');
+
+  // Dynamic languages
+  const [shopLanguages, setShopLanguages] = useState([]);
+  const [productLanguages, setProductLanguages] = useState([]);
+  const [primaryLanguage, setPrimaryLanguage] = useState('en');
+  const [availableLanguages, setAvailableLanguages] = useState([]); // effective
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [language, setLanguage] = useState('en'); // selected; may be 'all'
+
+  // Result/UI state
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
@@ -121,14 +137,14 @@ function AiSeoPanel() {
     if (!s) return;
     (async () => {
       try {
-        const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`);
-        const j = await r.json();
+        const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`, { credentials: 'include' });
+        const j = await readJson(r);
+        if (!r.ok) throw new Error(j?.error || 'Failed to load plan');
         const opts = (j.modelsSuggested || []).map(m => ({ label: m, value: m }));
         if (opts.length) {
           setModelOptions(opts);
           setModel(prev => opts.find(o => o.value === prev)?.value || opts[0].value);
         } else {
-          // Fallback to a safe small set
           const fallback = [
             'anthropic/claude-3.5-sonnet',
             'openai/gpt-4o-mini',
@@ -136,29 +152,98 @@ function AiSeoPanel() {
           setModelOptions(fallback.map(m => ({ label: m, value: m })));
           setModel(fallback[0]);
         }
-      } catch {
-        // Keep whatever is there
+      } catch (e) {
+        setToast(`Failed to load plan: ${e.message}`);
       }
     })();
   }, [shop]);
 
+  // Load languages for shop/product (hides selector when single)
+  useEffect(() => {
+    const s = shop || qs('shop', '');
+    const pid = (productId || '').trim();
+    if (!s || !pid) {
+      setShopLanguages([]); setProductLanguages([]); setPrimaryLanguage('en');
+      setAvailableLanguages([]); setShowLanguageSelector(false); setLanguage('en');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        // product-level languages; backend uses session, shop in path is only informative
+        const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
+        const r = await fetch(url, { credentials: 'include' });
+        const j = await readJson(r);
+        if (cancelled) return;
+        if (!r.ok) throw new Error(j?.error || 'Failed to fetch languages');
+
+        const shopLangs = j.shopLanguages || [];
+        const prodLangs = j.productLanguages || [];
+        const primary = j.primaryLanguage || (shopLangs[0] || 'en');
+        const effective = (prodLangs.length ? prodLangs : shopLangs).map(x => x.toLowerCase());
+        const showSel = effective.length > 1;
+
+        setShopLanguages(shopLangs);
+        setProductLanguages(prodLangs);
+        setPrimaryLanguage(primary);
+        setAvailableLanguages(effective);
+        setShowLanguageSelector(showSel);
+
+        // default selected language:
+        setLanguage(showSel ? (language && effective.includes(language) ? language : effective[0]) : primary);
+      } catch (e) {
+        if (!cancelled) {
+          // Fallback (single EN, hide selector)
+          setShopLanguages(['en']);
+          setProductLanguages(['en']);
+          setPrimaryLanguage('en');
+          setAvailableLanguages(['en']);
+          setShowLanguageSelector(false);
+          setLanguage('en');
+          setToast(`Languages fallback: ${e.message}`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shop, productId]);
+
   async function generate() {
-    setBusy(true); setResult(null);
+    setBusy(true); setResult(null); setToast('');
     try {
       const productIdGID = toProductGID(productId);
-      const r = await fetch('/seo/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop, productId: productIdGID, model, language }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Generation failed');
-      setResult(j);
+      let r, j;
+
+      // Multi-language when "All" is selected
+      if (language === 'all') {
+        const langs = availableLanguages.slice();
+        if (!langs.length) throw new Error('No languages available');
+        r = await fetch('/api/seo/generate-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ shop, productId: productIdGID, model, languages: langs }),
+        });
+        j = await readJson(r);
+        if (!r.ok) throw new Error(j?.error || 'Generate failed');
+        setResult(j);
+      } else {
+        r = await fetch(`/seo/generate?shop=${encodeURIComponent(shop)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ shop, productId: productIdGID, model, language }),
+        });
+        j = await readJson(r);
+        if (!r.ok) throw new Error(j?.error || 'Generate failed');
+        setResult(j);
+      }
     } catch (e) {
       setResult({ error: e.message });
-      // Highlight the common OpenRouter model ID error
       if (String(e.message).toLowerCase().includes('not a valid model')) {
         setToast('Selected model is not enabled/valid. Pick another model from the list.');
+      } else {
+        setToast(`Generate error: ${e.message}`);
       }
     } finally {
       setBusy(false);
@@ -166,32 +251,59 @@ function AiSeoPanel() {
   }
 
   async function apply() {
-    if (!result || !result.seo) return;
-    setBusy(true);
+    if (!result) return;
+    setBusy(true); setToast('');
     try {
-      const pidRaw = (result.productId || productId || '').trim();
-      const productIdGID = toProductGID(pidRaw);
-
-      const payload = {
-        shop,
-        productId: productIdGID,
-        seo: result.seo,
-        options: {
-          updateTitle: true,
-          updateBody: true,
-          updateSeo: true,
-          updateBullets: true,
-          updateFaq: true,
-          updateAlt: false,
-        },
-      };
-      const r = await fetch('/seo/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json();
-      if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors[0]) || j.error || 'Apply failed');
+      // MULTI: result.results[]
+      if (Array.isArray(result.results)) {
+        const pid = toProductGID(productId || result.productId || '');
+        const results = result.results
+          .filter(r => r && r.seo) // keep only successful ones
+          .map(r => ({ language: r.language, seo: r.seo }));
+        if (!results.length) throw new Error('Nothing to apply (no successful generations)');
+        const r = await fetch('/api/seo/apply-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            productId: pid,
+            results,
+            options: {
+              updateTitle: true, updateBody: true, updateSeo: true,
+              updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
+            },
+          }),
+        });
+        const j = await readJson(r);
+        if (!r.ok || j?.ok === false) {
+          const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
+          throw new Error(err);
+        }
+      } else {
+        // SINGLE
+        const pidRaw = (result.productId || productId || '').trim();
+        const productIdGID = toProductGID(pidRaw);
+        const r = await fetch(`/seo/apply?shop=${encodeURIComponent(shop)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            productId: productIdGID,
+            seo: result.seo,
+            options: {
+              updateTitle: true, updateBody: true, updateSeo: true,
+              updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
+            },
+          }),
+        });
+        const j = await readJson(r);
+        if (!r.ok || j?.ok === false) {
+          const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
+          throw new Error(err);
+        }
+      }
       setToast('Applied ✓');
     } catch (e) {
       setToast(`Apply error: ${e.message}`);
@@ -199,6 +311,12 @@ function AiSeoPanel() {
       setBusy(false);
     }
   }
+
+  // Build language options (dynamic). Hide selector if only 1 language.
+  const languageOptions = [
+    ...(showLanguageSelector ? [{ label: 'All languages', value: 'all' }] : []),
+    ...availableLanguages.map(l => ({ label: l.toUpperCase(), value: l })),
+  ];
 
   return (
     <>
@@ -233,25 +351,30 @@ function AiSeoPanel() {
                   onChange={setModel}
                 />
               </Layout.Section>
-              <Layout.Section oneHalf>
-                <Select
-                  label="Language (output)"
-                  options={[
-                    { label: 'EN', value: 'en' },
-                    { label: 'DE', value: 'de' },
-                    { label: 'ES', value: 'es' },
-                    { label: 'FR', value: 'fr' },
-                  ]}
-                  value={language}
-                  onChange={setLanguage}
-                />
-              </Layout.Section>
+
+              {/* Output language selector — hidden if only one language */}
+              {showLanguageSelector && (
+                <Layout.Section oneHalf>
+                  <Select
+                    label="Language (output)"
+                    options={languageOptions}
+                    value={language}
+                    onChange={setLanguage}
+                  />
+                </Layout.Section>
+              )}
+
               <Layout.Section>
                 <InlineStack gap="300">
-                  <Button loading={busy} onClick={generate} variant="primary" disabled={!shop || !productId || !model}>
+                  <Button
+                    loading={busy}
+                    onClick={generate}
+                    variant="primary"
+                    disabled={!shop || !productId || !model}
+                  >
                     Generate
                   </Button>
-                  <Button onClick={apply} disabled={!result || !result.seo || busy}>
+                  <Button onClick={apply} disabled={!result || busy}>
                     Apply to product
                   </Button>
                 </InlineStack>
@@ -295,7 +418,7 @@ export default function App() {
       {isEmbedded && <AdminNavMenu active={path} />}
       <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
-          {/* Only header language selector remains */}
+          {/* Header language selector (UI only, 4 languages) remains */}
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k, d) => d} />
           {path.startsWith('/ai-seo') ? (
             <AiSeoPanel />

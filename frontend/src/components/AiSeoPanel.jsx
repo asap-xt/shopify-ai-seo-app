@@ -1,391 +1,337 @@
-// frontend/src/components/AiSeoPanel.jsx
-import React, { useEffect, useState } from 'react';
-import { Card, BlockStack, Box, Button, ButtonGroup, InlineStack, Text, TextField, Select, Tabs } from '@shopify/polaris';
+// frontend/src/AiSeoPanel.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Card, Page, Layout, TextField, Button, Select, Text, Box, InlineStack, Divider, Toast,
+} from '@shopify/polaris';
 
-const jsonPretty = (v) => JSON.stringify(v, null, 2);
-
-function getQS(name, def = '') {
-  try { return new URL(window.location.href).searchParams.get(name) || def; }
-  catch { return def; }
-}
-function toGID(idOrGid) {
-  const s = String(idOrGid || '').trim();
-  if (!s) return '';
-  if (s.startsWith('gid://')) return s;
-  if (/^\d+$/.test(s)) return `gid://shopify/Product/${s}`;
-  return s;
+// ---------- small utils
+const qs = (k, d = '') => {
+  try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
+};
+const toGID = (v) => {
+  if (!v) return v;
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? `gid://shopify/Product/${s}` : s;
+};
+const pretty = (x) => JSON.stringify(x, null, 2);
+async function readJson(response) {
+  // Robust JSON reader (survives HTML error pages)
+  const text = await response.text();
+  try { return JSON.parse(text || 'null'); }
+  catch { return { __raw: text, error: 'Unexpected non-JSON response' }; }
 }
 
 export default function AiSeoPanel() {
-  const [shop, setShop] = useState(() => getQS('shop', ''));
+  // Core inputs
+  const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
-  const [language, setLanguage] = useState('en');
+  const [model, setModel] = useState('');
+  const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
 
-  const [plan, setPlan] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState(null);
-  const [tabIndex, setTabIndex] = useState(0); // 0: Preview, 1: JSON
-
-  // New state for dynamic languages
+  // Language state (dynamic from shop/product)
   const [shopLanguages, setShopLanguages] = useState([]);
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
   const [shouldShowLanguageSelector, setShouldShowLanguageSelector] = useState(false);
-  const [allLanguagesOption, setAllLanguagesOption] = useState(null);
+  const [allLanguagesOption, setAllLanguagesOption] = useState(false);
+  const [language, setLanguage] = useState('en'); // selected; may be 'all'
 
-  const canGenerate = !!shop && !!productId;
-  const canApply = !!(result && result.productId && result.seo);
+  // Result / UI state
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
 
-  // Fetch languages when productId changes
+  // ---------- Load plan (modelsSuggested) for current shop
   useEffect(() => {
-    if (!shop || !productId) {
-      setShopLanguages([]);
-      setProductLanguages([]);
-      setPrimaryLanguage('en');
-      setShouldShowLanguageSelector(false);
-      setAllLanguagesOption(null);
+    const s = shop || qs('shop', '');
+    if (!s) return;
+    (async () => {
+      try {
+        const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`, { credentials: 'include' });
+        const j = await readJson(r);
+        if (!r.ok) throw new Error(j?.error || 'Failed to load plan');
+        const opts = (j.modelsSuggested || []).map(m => ({ label: m, value: m }));
+        if (opts.length) {
+          setModelOptions(opts);
+          setModel(prev => (opts.find(o => o.value === prev)?.value || opts[0].value));
+        } else {
+          // Fallback list if backend doesn't return suggestions
+          const fallback = ['anthropic/claude-3.5-sonnet'];
+          setModelOptions(fallback.map(m => ({ label: m, value: m })));
+          setModel(fallback[0]);
+        }
+      } catch (e) {
+        setToast(`Failed to load plan: ${e.message}`);
+      }
+    })();
+  }, [shop]);
+
+  // ---------- Load languages for shop + product
+  useEffect(() => {
+    const s = shop || qs('shop', '');
+    const pid = (productId || '').trim();
+    if (!s || !pid) {
+      // Reset to defaults when input is incomplete
+      setShopLanguages([]); setProductLanguages([]);
+      setPrimaryLanguage('en'); setLanguage('en');
+      setShouldShowLanguageSelector(false); setAllLanguagesOption(false);
       return;
     }
 
+    let cancelled = false;
     (async () => {
       try {
-        // Fetch product languages using new API endpoint
-        const response = await fetch(`/api/languages/product/${encodeURIComponent(shop)}/${encodeURIComponent(productId)}`);
-        if (!response.ok) throw new Error('Failed to fetch languages');
-        
-        const data = await response.json();
-        setShopLanguages(data.shopLanguages || []);
-        setProductLanguages(data.productLanguages || []);
-        setPrimaryLanguage(data.primaryLanguage || 'en');
-        setShouldShowLanguageSelector(data.shouldShowSelector || false);
-        setAllLanguagesOption(data.allLanguagesOption || null);
-        
-        // Set default language to primary language if no language is selected
-        if (!language || !data.productLanguages.includes(language)) {
-          setLanguage(data.primaryLanguage || 'en');
+        // Backend uses session; shop param is in path only for clarity
+        const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
+        const rsp = await fetch(url, { credentials: 'include' });
+        const data = await readJson(rsp);
+        if (!rsp.ok) throw new Error(data?.error || 'Failed to fetch languages');
+        if (cancelled) return;
+
+        const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
+        const prodLangs = (data.productLanguages || []).map(x => x.toLowerCase());
+        const primary = (data.primaryLanguage || shopLangs[0] || 'en').toLowerCase();
+        const effective = (prodLangs.length ? prodLangs : shopLangs);
+        const showSel = effective.length > 1;
+
+        setShopLanguages(shopLangs);
+        setProductLanguages(prodLangs);
+        setPrimaryLanguage(primary);
+        setShouldShowLanguageSelector(!!data.shouldShowSelector || showSel);
+        setAllLanguagesOption(!!data.allLanguagesOption && showSel);
+
+        // Default selected language: keep current if valid; else primary or first effective
+        setLanguage(prev => {
+          if (prev && (prev === 'all' || effective.includes(prev))) return prev;
+          return showSel ? effective[0] : primary;
+        });
+      } catch (e) {
+        if (!cancelled) {
+          // Fallback to single EN
+          setShopLanguages(['en']);
+          setProductLanguages(['en']);
+          setPrimaryLanguage('en');
+          setShouldShowLanguageSelector(false);
+          setAllLanguagesOption(false);
+          setLanguage('en');
+          setToast(`Languages fallback: ${e.message}`);
         }
-      } catch (error) {
-        console.error('Failed to fetch languages:', error);
-        // Fallback to default behavior
-        setShopLanguages(['en']);
-        setProductLanguages(['en']);
-        setPrimaryLanguage('en');
-        setShouldShowLanguageSelector(false);
-        setAllLanguagesOption(null);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [shop, productId]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const q = shop ? `?shop=${encodeURIComponent(shop)}` : '';
-        const r = await fetch(`/plans/me${q}`);
-        const j = await r.json();
-        setPlan(j);
-        if (j?.modelsSuggested?.length) setModel(j.modelsSuggested[0]);
-      } catch (e) {
-        setError(`Failed to load plan: ${e.message}`);
-      }
-    })();
-  }, [shop]); // Add shop dependency
-
-  const onGenerate = async () => {
-    if (!shop || !productId || !model || !language) {
-      setError('Missing required fields');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
+  // ---------- Generate (single or multi)
+  async function onGenerate() {
+    setBusy(true); setToast(''); setResult(null);
     try {
-      let response;
-      
-      if (language === 'all' && allLanguagesOption) {
-        // Use multi-language API for "All Languages"
+      const pid = toGID(productId);
+      let response, data;
+
+      if (language === 'all' && (allLanguagesOption || (productLanguages.length + shopLanguages.length) > 1)) {
+        // Multi-language path: use product languages if any, otherwise shop languages
+        const langs = (productLanguages.length ? productLanguages : shopLanguages);
+        if (!langs.length) throw new Error('No languages found for this product/shop');
+
         response = await fetch('/api/seo/generate-multi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: toGID(productId),
-            model,
-            languages: productLanguages
-          })
+          credentials: 'include',
+          body: JSON.stringify({ shop, productId: pid, model, languages: langs }),
         });
+        data = await readJson(response);
+        if (!response.ok) throw new Error(data?.error || 'Generate failed');
+        setResult(data);
       } else {
-        // Use single language API
+        // Single language path
         response = await fetch(`/seo/generate?shop=${encodeURIComponent(shop)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: toGID(productId),
-            model,
-            language
-          })
+          credentials: 'include',
+          body: JSON.stringify({ shop, productId: pid, model, language }),
         });
+        data = await readJson(response);
+        if (!response.ok) throw new Error(data?.error || 'Generate failed');
+        setResult(data);
       }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate SEO');
-      }
-
-      const data = await response.json();
-      setResult(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  async function onApply() {
-    if (!shop || !productId || !result) {
-      setError('Missing required fields');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      let response;
-      
-      if (result.language === 'all' && result.results) {
-        // Use multi-language API for "All Languages"
-        response = await fetch('/api/seo/apply-multi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: toGID(productId),
-            results: result.results,
-            options: {
-              updateTitle: true,
-              updateBody: true,
-              updateSeo: true,
-              updateBullets: true,
-              updateFaq: true,
-              updateAlt: false,
-              dryRun: false
-            }
-          })
-        });
+    } catch (e) {
+      setResult({ error: e.message });
+      if (String(e.message).toLowerCase().includes('not a valid model')) {
+        setToast('Selected model is not enabled/valid. Pick another model from the list.');
       } else {
-        // Use single language API
-        response = await fetch(`/seo/apply?shop=${encodeURIComponent(shop)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: toGID(productId),
-            seo: result,
-            options: {
-              updateTitle: true,
-              updateBody: true,
-              updateSeo: true,
-              updateBullets: true,
-              updateFaq: true,
-              updateAlt: false,
-              dryRun: false
-            }
-          })
-        });
+        setToast(`Generate error: ${e.message}`);
       }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to apply SEO');
-      }
-
-      const data = await response.json();
-      if (data.ok) {
-        setError('SEO applied successfully!');
-      } else {
-        setError(`Apply failed: ${data.errors?.join(', ') || 'Unknown error'}`);
-      }
-    } catch (err) {
-      setError(err.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  // Build language options for selector
-  const getLanguageOptions = () => {
-    const options = [];
-    
-    // Add product languages
-    productLanguages.forEach(lang => {
-      options.push({
-        label: lang.toUpperCase(),
-        value: lang
-      });
-    });
-    
-    // Add "all languages" option if available
-    if (allLanguagesOption) {
-      options.push({
-        label: 'All Languages',
-        value: 'all'
-      });
+  // ---------- Apply (single or multi)
+  async function onApply() {
+    if (!canApply) return;
+    setBusy(true); setToast('');
+    try {
+      // Multi: array of per-language results
+      if (Array.isArray(result?.results)) {
+        const pid = toGID(productId || result.productId || '');
+        const results = result.results
+          .filter(r => r && r.seo)
+          .map(r => ({ language: r.language, seo: r.seo }));
+        if (!results.length) throw new Error('Nothing to apply (no successful SEO results)');
+
+        const rsp = await fetch('/api/seo/apply-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            productId: pid,
+            results,
+            options: {
+              updateTitle: true, updateBody: true, updateSeo: true,
+              updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
+            },
+          }),
+        });
+        const j = await readJson(rsp);
+        if (!rsp.ok || j?.ok === false) {
+          const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
+          throw new Error(err);
+        }
+      } else {
+        // Single
+        const pid = toGID(result?.productId || productId);
+        const rsp = await fetch(`/seo/apply?shop=${encodeURIComponent(shop)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            productId: pid,
+            seo: result?.seo, // IMPORTANT: send only the seo section
+            options: {
+              updateTitle: true, updateBody: true, updateSeo: true,
+              updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
+            },
+          }),
+        });
+        const j = await readJson(rsp);
+        if (!rsp.ok || j?.ok === false) {
+          const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
+          throw new Error(err);
+        }
+      }
+      setToast('Applied ✓');
+    } catch (e) {
+      setToast(`Apply error: ${e.message}`);
+    } finally {
+      setBusy(false);
     }
-    
-    return options;
-  };
+  }
 
+  // ---------- Derived UI state
+  const languageOptions = useMemo(() => {
+    const opts = [];
+    if (shouldShowLanguageSelector && (allLanguagesOption || (productLanguages.length + shopLanguages.length) > 1)) {
+      opts.push({ label: 'All languages', value: 'all' });
+    }
+    const effective = (productLanguages.length ? productLanguages : shopLanguages);
+    effective.forEach(l => opts.push({ label: l.toUpperCase(), value: l }));
+    return opts;
+  }, [shouldShowLanguageSelector, allLanguagesOption, productLanguages, shopLanguages]);
+
+  const canApply =
+    !!result &&
+    (Array.isArray(result?.results)
+      ? result.results.some(r => r && r.seo) // multi
+      : !!(result?.productId && result?.seo)); // single
+
+  // ---------- Render
   return (
-    <BlockStack gap="400">
-      <Card>
-        <BlockStack gap="300">
-          <InlineStack gap="300" wrap={false} align="space-between">
-            <BlockStack gap="200" inlineAlign="start" style={{minWidth: 320}}>
-              <TextField label="Shop" value={shop} onChange={setShop} autoComplete="off" />
-              <TextField label="Product ID" value={productId} onChange={setProductId} autoComplete="off" />
-            </BlockStack>
+    <Page>
+      <Layout>
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <Text as="h3" variant="headingMd">AI SEO</Text>
+              <Box paddingBlockStart="300">
+                <Layout>
+                  <Layout.Section oneHalf>
+                    <TextField
+                      label="Shop"
+                      value={shop}
+                      onChange={setShop}
+                      autoComplete="off"
+                      placeholder="your-shop.myshopify.com"
+                    />
+                  </Layout.Section>
 
-            <BlockStack gap="200" inlineAlign="start" style={{minWidth: 320}}>
-              <Select
-                label="Model"
-                options={(plan?.modelsSuggested || [model]).map(m => ({label:m,value:m}))}
-                value={model}
-                onChange={setModel}
-              />
-              {shouldShowLanguageSelector ? (
-                <Select
-                  label="Language"
-                  options={getLanguageOptions()}
-                  value={language}
-                  onChange={setLanguage}
-                />
-              ) : (
-                <TextField
-                  label="Language"
-                  value={primaryLanguage.toUpperCase()}
-                  disabled
-                  helpText="Single language store"
-                />
-              )}
-            </BlockStack>
+                  <Layout.Section oneHalf>
+                    <TextField
+                      label="Product ID (numeric or GID)"
+                      value={productId}
+                      onChange={setProductId}
+                      autoComplete="off"
+                      placeholder="1496335… or gid://shopify/Product/1496335…"
+                    />
+                  </Layout.Section>
 
-            <BlockStack gap="200" inlineAlign="end">
-              <ButtonGroup>
-                <Button onClick={onGenerate} disabled={!canGenerate || loading} variant="primary">Generate</Button>
-                <Button onClick={onApply} disabled={!canApply || loading}>Apply to product</Button>
-              </ButtonGroup>
-              {!!error && (
-                <Text as="p" tone="critical">
-                  {error}
-                </Text>
-              )}
-            </BlockStack>
-          </InlineStack>
-        </BlockStack>
-      </Card>
+                  <Layout.Section oneHalf>
+                    <Select
+                      label="Model"
+                      options={modelOptions}
+                      value={model}
+                      onChange={setModel}
+                    />
+                  </Layout.Section>
 
-      {result && (
-        <Card>
-          <Tabs
-            tabs={[{id:'preview',content:'Preview'},{id:'json',content:'JSON'}]}
-            selected={tabIndex}
-            onSelect={setTabIndex}
-          />
-          <Box padding="400">
-            {tabIndex === 0 ? (
-              <BlockStack gap="300">
-                {result.language === 'all' && result.results ? (
-                  // Show results for all languages
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingMd">Multi-Language SEO Results</Text>
-                    {result.results.map((langResult, index) => (
-                      <Card key={index}>
-                        <BlockStack gap="300">
-                          <InlineStack gap="200" align="space-between">
-                            <Text as="h3" variant="headingSm">
-                              {langResult.language?.toUpperCase() || 'Unknown'} 
-                              {langResult.error && <Text tone="critical"> - Error: {langResult.error}</Text>}
-                            </Text>
-                            {langResult.quality && (
-                              <Text tone="subdued" variant="bodySm">
-                                Tokens: {langResult.quality.tokens}, Cost: ${langResult.quality.costUsd?.toFixed(4) || '0'}
-                              </Text>
-                            )}
-                          </InlineStack>
-                          
-                          {langResult.seo && !langResult.error ? (
-                            <BlockStack gap="200">
-                              <Text as="h4" variant="headingSm">{langResult.seo.title}</Text>
-                              <Text as="p" tone="subdued">{langResult.seo.metaDescription}</Text>
-                              <div dangerouslySetInnerHTML={{ __html: langResult.seo.bodyHtml }} />
-                              {!!langResult.seo.bullets?.length && (
-                                <BlockStack gap="100">
-                                  <Text as="h4" variant="headingSm">Bullets</Text>
-                                  <ul>{langResult.seo.bullets.map((b,i)=><li key={i}>{b}</li>)}</ul>
-                                </BlockStack>
-                              )}
-                              {!!langResult.seo.faq?.length && (
-                                <BlockStack gap="100">
-                                  <Text as="h4" variant="headingSm">FAQ</Text>
-                                  <dl>
-                                    {langResult.seo.faq.map((f,i)=>(
-                                      <div key={i} style={{marginBottom:8}}>
-                                        <dt><strong>{f.q}</strong></dt>
-                                        <dd>{f.a}</dd>
-                                      </div>
-                                    ))}
-                                  </dl>
-                                </BlockStack>
-                              )}
-                            </BlockStack>
-                          ) : (
-                            <Text tone="critical">Failed to generate SEO for this language</Text>
-                          )}
-                        </BlockStack>
-                      </Card>
-                    ))}
-                  </BlockStack>
-                ) : (
-                  // Show single language result (existing logic)
-                  <BlockStack gap="300">
-                    <Text as="h2" variant="headingMd">{result.seo.title}</Text>
-                    <Text as="p" tone="subdued">{result.seo.metaDescription}</Text>
-                    <div dangerouslySetInnerHTML={{ __html: result.seo.bodyHtml }} />
-                    {!!result.seo.bullets?.length && (
-                      <BlockStack gap="100">
-                        <Text as="h3" variant="headingSm">Bullets</Text>
-                        <ul>{result.seo.bullets.map((b,i)=><li key={i}>{b}</li>)}</ul>
-                      </BlockStack>
-                    )}
-                    {!!result.seo.faq?.length && (
-                      <BlockStack gap="100">
-                        <Text as="h3" variant="headingSm">FAQ</Text>
-                        <dl>
-                          {result.seo.faq.map((f,i)=>(
-                            <div key={i} style={{marginBottom:8}}>
-                              <dt><strong>{f.q}</strong></dt>
-                              <dd>{f.a}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      </BlockStack>
-                    )}
-                  </BlockStack>
-                )}
-              </BlockStack>
-            ) : (
-              <pre style={{whiteSpace:'pre-wrap', wordBreak:'break-word', margin:0}}>
-                {jsonPretty(result)}
+                  {shouldShowLanguageSelector && (
+                    <Layout.Section oneHalf>
+                      <Select
+                        label="Language (output)"
+                        options={languageOptions}
+                        value={language}
+                        onChange={setLanguage}
+                      />
+                    </Layout.Section>
+                  )}
+
+                  <Layout.Section>
+                    <InlineStack gap="300">
+                      <Button
+                        variant="primary"
+                        loading={busy}
+                        onClick={onGenerate}
+                        disabled={!shop || !productId || !model}
+                      >
+                        Generate
+                      </Button>
+                      <Button disabled={!canApply || busy} onClick={onApply}>
+                        Apply to product
+                      </Button>
+                    </InlineStack>
+                  </Layout.Section>
+                </Layout>
+              </Box>
+            </Box>
+          </Card>
+        </Layout.Section>
+
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <Text as="h3" variant="headingMd">Result</Text>
+              <Divider />
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, marginTop: 12 }}>
+{`${result ? pretty(result) : '—'}`}
               </pre>
-            )}
-          </Box>
-        </Card>
-      )}
-    </BlockStack>
+            </Box>
+          </Card>
+        </Layout.Section>
+      </Layout>
+
+      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
+    </Page>
   );
 }

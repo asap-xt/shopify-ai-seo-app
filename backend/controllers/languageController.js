@@ -1,67 +1,32 @@
 // backend/controllers/languageController.js
-// Router: mounted at /api/languages
-// Route(s):
+// Mounted at /api/languages
+// Routes:
+//   GET /api/languages/shop/:shop
 //   GET /api/languages/product/:shop/:productId
-//
-// Returns languages for the shop and for a specific product (where it actually has content).
-// We rely on Shopify Admin GraphQL with @inContext(language: ...).
-//
-// IMPORTANT: We forward the request cookies to keep the embedded admin session.
 
 import { Router } from 'express';
-
 const router = Router();
 
-const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
-const APP_URL = (process.env.SHOPIFY_APP_URL || '').replace(/\/+$/, '');
-
 const uniq = (arr) => Array.from(new Set(arr));
-const baseLang = (loc) => (loc || '').toLowerCase().split('-')[0]; // "en-GB" -> "en"
+const baseLang = (loc) => (loc || '').toLowerCase().split('-')[0];
+const toGID = (id) => (/^\d+$/.test(String(id)) ? `gid://shopify/Product/${id}` : String(id));
 
-// Normalize either numeric id -> GID, or pass-through a GID
-function toGID(productId) {
-  if (/^\d+$/.test(productId)) return `gid://shopify/Product/${productId}`;
-  return productId;
+function getGraphQL(res) {
+  const api = res.locals?.shopify?.api;
+  const session = res.locals?.shopify?.session;
+  if (!api || !session) return { error: 'Unauthorized: missing Shopify session' };
+  const Graphql = api.clients?.Graphql || api.clients?.graphql;
+  if (!Graphql) return { error: 'Shopify GraphQL client not available' };
+  return { client: new Graphql({ session }), session };
 }
 
-// Minimal Admin GraphQL helper using our app URL reverse proxy.
-// We forward cookies from the incoming request, so the Admin session is preserved.
-async function shopGraphQL(req, shop, query, variables) {
-  const endpoint = `${APP_URL}/api/${API_VERSION}/graphql.json?shop=${encodeURIComponent(shop)}`;
-  const rsp = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // forward cookies so the admin session is valid
-      Cookie: req.headers.cookie || '',
-      'X-Shop': shop,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const text = await rsp.text();
-  let json;
-  try { json = JSON.parse(text); } catch {
-    throw new Error(`Admin GraphQL returned non-JSON: ${text.slice(0, 200)}`);
-  }
-  if (!rsp.ok || json.errors) {
-    throw new Error(`Admin GraphQL error: ${JSON.stringify(json.errors || json)}`);
-  }
-  return json.data;
-}
-
-// GET /api/languages/product/:shop/:productId
-router.get('/product/:shop/:productId', async (req, res) => {
+// GET /api/languages/shop/:shop
+router.get('/shop/:shop', async (req, res) => {
   try {
-    const shop = String(req.params.shop || '').trim().toLowerCase();
-    const productIdRaw = String(req.params.productId || '').trim();
-    if (!shop || !productIdRaw) {
-      return res.status(400).json({ error: 'Missing shop or productId' });
-    }
-    const productId = toGID(productIdRaw);
+    const { client, error } = getGraphQL(res);
+    if (error) return res.status(401).json({ error });
 
-    // 1) Fetch published shop locales
-    const shopLocalesQ = /* GraphQL */ `
+    const q = /* GraphQL */ `
       query ShopLocales {
         shopLocales(published: true) {
           locale
@@ -70,17 +35,44 @@ router.get('/product/:shop/:productId', async (req, res) => {
         }
       }
     `;
-    const localesData = await shopGraphQL(req, shop, shopLocalesQ, {});
-    const published = (localesData?.shopLocales || []).filter(l => l.published);
-    const locales = published.map(l => l.locale);                   // e.g. ['en', 'it-IT', 'el']
-    const shopLanguages = uniq(locales.map(baseLang));              // e.g. ['en','it','el']
-    const primaryLocale = published.find(l => l.primary)?.locale || locales[0] || 'en';
-    const primaryLanguage = baseLang(primaryLocale);
+    const data = await client.request(q);
+    const published = (data?.data?.shopLocales || []).filter(l => l.published);
+    const locales = published.map(l => l.locale);
+    const shopLanguages = uniq(locales.map(baseLang));
+    const primaryLanguage = baseLang(published.find(l => l.primary)?.locale || locales[0] || 'en');
+    res.json({ shopLanguages, primaryLanguage });
+  } catch (err) {
+    console.error('GET /api/languages/shop error:', err);
+    res.status(500).json({ error: 'Failed to load shop languages' });
+  }
+});
 
-    // 2) For each published locale, check if product has content using @inContext(language: ...)
+// GET /api/languages/product/:shop/:productId
+router.get('/product/:shop/:productId', async (req, res) => {
+  try {
+    const { client, error } = getGraphQL(res);
+    if (error) return res.status(401).json({ error });
+
+    const { productId } = req.params;
+    const gid = toGID(productId);
+
+    const qLocales = /* GraphQL */ `
+      query ShopLocales {
+        shopLocales(published: true) {
+          locale
+          primary
+          published
+        }
+      }
+    `;
+    const localesData = await client.request(qLocales);
+    const publishedLocales = (localesData?.data?.shopLocales || [])
+      .filter(l => l.published)
+      .map(l => l.locale);
+
     const withContent = [];
-    for (const loc of locales) {
-      const productQ = /* GraphQL */ `
+    for (const loc of publishedLocales) {
+      const qProd = /* GraphQL */ `
         query ProductInLocale($id: ID!) @inContext(language: ${JSON.stringify(loc)}) {
           product(id: $id) {
             id
@@ -89,31 +81,30 @@ router.get('/product/:shop/:productId', async (req, res) => {
           }
         }
       `;
-      const pData = await shopGraphQL(req, shop, productQ, { id: productId });
-      const p = pData?.product;
+      const p = await client.request(qProd, { variables: { id: gid } });
+      const prod = p?.data?.product;
       const textFromHtml = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
       const hasContent =
-        p && ((p.title && p.title.trim().length > 0) ||
-              (p.descriptionHtml && textFromHtml(p.descriptionHtml).length > 0));
+        prod && ((prod.title && prod.title.trim().length > 0) ||
+                 (prod.descriptionHtml && textFromHtml(prod.descriptionHtml).length > 0));
       if (hasContent) withContent.push(loc);
     }
-    const productLanguages = uniq(withContent.map(baseLang));       // e.g. subset of shopLanguages
 
-    // 3) Decide UI flags
-    const effectiveLangs = productLanguages.length ? productLanguages : shopLanguages;
-    const shouldShowSelector = effectiveLangs.length > 1;
-    const allLanguagesOption = shouldShowSelector; // show "All" only when it makes sense
+    const productLanguages = uniq(withContent.map(baseLang));
+    const shopLanguages = uniq(publishedLocales.map(baseLang));
+    const primaryLanguage = baseLang(publishedLocales[0] || 'en');
+    const effective = productLanguages.length ? productLanguages : shopLanguages;
 
-    return res.json({
+    res.json({
       shopLanguages,
       productLanguages,
       primaryLanguage,
-      shouldShowSelector,
-      allLanguagesOption,
+      shouldShowSelector: effective.length > 1,
+      allLanguagesOption: effective.length > 1,
     });
   } catch (err) {
     console.error('GET /api/languages/product error:', err);
-    return res.status(500).json({ error: 'Failed to load languages' });
+    res.status(500).json({ error: 'Failed to load product languages' });
   }
 });
 
