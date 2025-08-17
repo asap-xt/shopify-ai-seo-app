@@ -1,6 +1,6 @@
 // controllers/debugRouter.js
 import express from 'express';
-import shopify from '@shopify/shopify-api';
+import shopify from '../shopify.js';
 
 const router = express.Router();
 
