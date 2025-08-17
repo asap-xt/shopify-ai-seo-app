@@ -1,5 +1,4 @@
-# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
-
+# shopify.app.toml
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
 name = "NEW AI SEO"
 handle = "new-ai-seo"
@@ -10,10 +9,14 @@ embedded = true
 api_version = "2025-07"
 
 [auth]
-redirect_urls = [ "https://new-ai-seo-app-production.up.railway.app/auth/callback" ]
+redirect_urls = ["https://new-ai-seo-app-production.up.railway.app/auth/callback"]
+
+[access_scopes]
+scopes = "read_products,write_products,read_locales,read_translations"
 
 [pos]
 embedded = false
 
 [build]
 include_config_on_deploy = true
+
