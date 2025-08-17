@@ -75,8 +75,8 @@ app.use(authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
 app.use('/billing', billingRouter);
 app.use(seoRouter);
-app.use('/api/languages', languageRouter);
-app.use('/api/seo', multiSeoRouter);
+app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
+app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
