@@ -67,12 +67,16 @@ import authRouter from './auth.js';                      // mounts /auth
 import tokenExchangeRouter from './token-exchange.js';   // mounts /token-exchange
 import billingRouter from './billing.js';                // mounts /billing/*
 import seoRouter from './controllers/seoController.js';  // mounts /plans/me, /seo/*
+import languageRouter from './controllers/languageController.js';  // mounts /api/languages/*
+import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
 
 // Mount core routers
 app.use(authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
 app.use('/billing', billingRouter);
 app.use(seoRouter);
+app.use('/api/languages', languageRouter);
+app.use('/api/seo', multiSeoRouter);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import

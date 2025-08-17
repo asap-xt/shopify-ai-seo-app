@@ -1,5 +1,5 @@
 // backend/controllers/seoController.js
-// Routes: /plans/me, /seo/generate, /seo/apply
+// Routes: /plans/me, /seo/generate, /seo/apply, /shop/languages
 // All comments are in English.
 
 import express from 'express';
@@ -345,6 +345,8 @@ function fixups(out, ctx = {}) {
 
 // ---------- Routes ----------
 
+// GET /shop/languages - REMOVED: moved to languageController.js
+
 // GET /plans/me
 router.get('/plans/me', async (req, res) => {
   try {
@@ -367,56 +369,135 @@ router.post('/seo/generate', async (req, res) => {
     if (!productId || !model) {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
-    const q = `
-      query Product($id: ID!) {
-        product(id: $id) {
-          id
-          title
-          descriptionHtml
-          vendor
-          productType
-          tags
-          images(first: 10) { edges { node { id altText } } }
-          priceRangeV2 { minVariantPrice { amount currencyCode } }
-          handle
+
+    // Check if we need to generate for all languages
+    const generateForAllLanguages = language === 'all';
+    
+    if (generateForAllLanguages) {
+      // Get product languages first
+      const productQuery = `
+        query ProductLanguages($id: ID!) {
+          product(id: $id) {
+            id
+            # Note: product.translations might not be available in all API versions
+          }
+        }
+      `;
+      
+      const productData = await shopGraphQL(shop, productQuery, { id: productId });
+      
+      // Get shop primary language
+      const shopQuery = `
+        query ShopLanguages {
+          shop {
+            primaryDomain {
+              locale
+            }
+          }
+        }
+      `;
+      
+      const shopData = await shopGraphQL(shop, shopQuery);
+      const primaryLanguage = shopData?.shop?.primaryDomain?.locale || 'en';
+      
+      // For now, we'll assume the product is available in the primary language
+      // In a real implementation, you might want to check actual translations
+      const languagesToGenerate = [primaryLanguage];
+      
+      // Generate SEO for each language
+      const results = [];
+      for (const lang of languagesToGenerate) {
+        try {
+          const result = await generateSEOForLanguage(shop, productId, model, lang);
+          results.push(result);
+        } catch (error) {
+          console.error(`Failed to generate SEO for language ${lang}:`, error);
+          results.push({
+            productId,
+            provider: 'openrouter',
+            model,
+            language: lang,
+            error: error.message,
+            seo: null,
+            quality: { warnings: [error.message], model, tokens: 0, costUsd: 0 }
+          });
         }
       }
-    `;
-    const data = await shopGraphQL(shop, q, { id: productId });
-    const p = data?.product;
-    if (!p) throw new Error('Product not found');
-
-    const ctx = {
-      id: p.id,
-      title: p.title,
-      descriptionHtml: p.descriptionHtml,
-      vendor: p.vendor,
-      productType: p.productType,
-      tags: p.tags,
-      handle: p.handle,
-      price: p?.priceRangeV2?.minVariantPrice?.amount || null,
-      currency: p?.priceRangeV2?.minVariantPrice?.currencyCode || null,
-      images: (p.images?.edges || []).map(e => ({ id: e.node.id, altText: e.node.altText || null })),
-    };
-
-    const messages = strictPrompt(ctx, language);
-    const content = await callOpenRouter(model, messages);
-
-    let candidate;
-    try { candidate = JSON.parse(content); }
-    catch { return res.status(400).json({ error: 'Model did not return valid JSON', raw: content.slice(0, 500) }); }
-
-    const fixed = fixups(candidate, { productId, model, language });
-    const ok = validateOutput(fixed);
-    if (!ok) {
-      return res.status(400).json({ error: 'Output failed schema validation', issues: validateOutput.errors, sample: fixed });
+      
+      return res.json({
+        productId,
+        provider: 'openrouter',
+        model,
+        language: 'all',
+        results,
+        seo: results[0]?.seo || null, // Use first result as main SEO
+        quality: {
+          warnings: results.flatMap(r => r.quality?.warnings || []),
+          model,
+          tokens: results.reduce((sum, r) => sum + (r.quality?.tokens || 0), 0),
+          costUsd: results.reduce((sum, r) => sum + (r.quality?.costUsd || 0), 0)
+        }
+      });
+    } else {
+      // Generate for single language (existing logic)
+      const result = await generateSEOForLanguage(shop, productId, model, language);
+      return res.json(result);
     }
-    return res.json(fixed);
   } catch (err) {
     console.error('seo/generate error:', err);
     res.status(err?.status || 500).json({ error: err.message || 'Generate error' });
   }
 });
+
+// Helper function to generate SEO for a specific language
+async function generateSEOForLanguage(shop, productId, model, language) {
+  const q = `
+    query Product($id: ID!) {
+      product(id: $id) {
+        id
+        title
+        descriptionHtml
+        vendor
+        productType
+        tags
+        images(first: 10) { edges { node { id altText } } }
+        priceRangeV2 { minVariantPrice { amount currencyCode } }
+        handle
+      }
+    }
+  `;
+  const data = await shopGraphQL(shop, q, { id: productId });
+  const p = data?.product;
+  if (!p) throw new Error('Product not found');
+
+  const ctx = {
+    id: p.id,
+    title: p.title,
+    descriptionHtml: p.descriptionHtml,
+    vendor: p.vendor,
+    productType: p.productType,
+    tags: p.tags,
+    handle: p.handle,
+    price: p?.priceRangeV2?.minVariantPrice?.amount || null,
+    currency: p?.priceRangeV2?.minVariantPrice?.currencyCode || null,
+    images: (p.images?.edges || []).map(e => ({ id: e.node.id, altText: e.node.altText || null })),
+  };
+
+  const messages = strictPrompt(ctx, language);
+  const content = await callOpenRouter(model, messages);
+
+  let candidate;
+  try { candidate = JSON.parse(content); }
+  catch { throw new Error('Model did not return valid JSON'); }
+
+  const fixed = fixups(candidate, { productId, model, language });
+  const ok = validateOutput(fixed);
+  if (!ok) {
+    throw new Error('Output failed schema validation');
+  }
+  
+  return fixed;
+}
 
 // POST /seo/apply
 router.post('/seo/apply', async (req, res) => {
@@ -438,123 +519,185 @@ router.post('/seo/apply', async (req, res) => {
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
-    if (!dryRun) {
-      // 1) productUpdate
-      if (updateTitle || updateBody || updateSeo) {
-        const input = { id: productId };
-        if (updateTitle && seo.title) input.title = seo.title;
-        if (updateBody && seo.bodyHtml) input.descriptionHtml = seo.bodyHtml;
-        if (updateSeo && (seo.title || seo.metaDescription)) {
-          input.seo = {
-            ...(seo.title ? { title: seo.title } : {}),
-            ...(seo.metaDescription ? { description: seo.metaDescription } : {}),
-          };
+    // Check if we have multi-language results
+    if (seo.language === 'all' && seo.results && Array.isArray(seo.results)) {
+      // Apply SEO for all languages
+      const results = [];
+      for (const langResult of seo.results) {
+        if (langResult.error || !langResult.seo) {
+          results.push({ language: langResult.language, success: false, error: langResult.error || 'No SEO data' });
+          continue;
         }
-        if (Object.keys(input).length > 1) {
-          const mut = `
-            mutation UpdateProduct($input: ProductInput!) {
-              productUpdate(input: $input) {
-                product { id }
-                userErrors { field message }
-              }
-            }
-          `;
-          try {
-            await shopGraphQL(shop, mut, { input });
-            updated.title = !!input.title;
-            updated.body = !!input.descriptionHtml;
-            updated.seo = !!input.seo;
-          } catch (e) {
-            errors.push(`productUpdate: ${e.message}`);
-          }
-        }
-      }
-
-      // 2) metafieldsSet
-      const metaInputs = [];
-      if (updateBullets && Array.isArray(seo.bullets)) {
-        metaInputs.push({
-          ownerId: productId,
-          namespace: 'seo_ai',
-          key: 'bullets',
-          type: 'json',
-          value: JSON.stringify(seo.bullets),
-        });
-      }
-      if (updateFaq && Array.isArray(seo.faq)) {
-        metaInputs.push({
-          ownerId: productId,
-          namespace: 'seo_ai',
-          key: 'faq',
-          type: 'json',
-          value: JSON.stringify(seo.faq),
-        });
-      }
-      if (metaInputs.length) {
-        const mut = `
-          mutation SetMetafields($m: [MetafieldsSetInput!]!) {
-            metafieldsSet(metafields: $m) {
-              metafields { key namespace type }
-              userErrors { field message }
-            }
-          }
-        `;
+        
         try {
-          await shopGraphQL(shop, mut, { m: metaInputs });
-          updated.bullets = metaInputs.some(m => m.key === 'bullets');
-          updated.faq = metaInputs.some(m => m.key === 'faq');
-        } catch (e) {
-          errors.push(`metafieldsSet: ${e.message}`);
+          const langUpdated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
+          const langErrors = [];
+          
+          // Apply SEO for this language
+          await applySEOForLanguage(shop, productId, langResult.seo, {
+            updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun
+          }, langUpdated, langErrors);
+          
+          results.push({
+            language: langResult.language,
+            success: true,
+            updated: langUpdated,
+            errors: langErrors
+          });
+          
+          // Update main updated object
+          Object.keys(langUpdated).forEach(key => {
+            if (langUpdated[key]) updated[key] = true;
+          });
+          
+        } catch (error) {
+          results.push({
+            language: langResult.language,
+            success: false,
+            error: error.message
+          });
+          errors.push(`${langResult.language}: ${error.message}`);
         }
       }
-
-      // 3) ensure metafield definitions exist (fixed: do not request .type)
-      try {
-        const defsQ = `
-          query {
-            metafieldDefinitions(ownerType: PRODUCT, first: 20, namespace: "seo_ai") {
-              edges { node { id name key namespace } }
-            }
-          }
-        `;
-        const defs = await shopGraphQL(shop, defsQ);
-        const haveBullets = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'bullets');
-        const haveFaq = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'faq');
-        const createMut = `
-          mutation($def: MetafieldDefinitionInput!) {
-            metafieldDefinitionCreate(definition: $def) {
-              createdDefinition { id }
-              userErrors { field message }
-            }
-          }
-        `;
-        if (!haveBullets) {
-          await shopGraphQL(shop, createMut, {
-            def: { name: 'AI Bullets', namespace: 'seo_ai', key: 'bullets', type: 'json', ownerType: 'PRODUCT' },
-          });
-        }
-        if (!haveFaq) {
-          await shopGraphQL(shop, createMut, {
-            def: { name: 'AI FAQ', namespace: 'seo_ai', key: 'faq', type: 'json', ownerType: 'PRODUCT' },
-          });
-        }
-      } catch (e) {
-        // Non-fatal
-        errors.push(`metafieldDefinitionCreate: ${e.message}`);
-      }
+      
+      return res.json({
+        ok: errors.length === 0,
+        shop,
+        productId,
+        updated,
+        errors,
+        multiLanguage: true,
+        results
+      });
+    } else {
+      // Apply SEO for single language (existing logic)
+      await applySEOForLanguage(shop, productId, seo, {
+        updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun
+      }, updated, errors);
+      
+      return res.json({
+        ok: errors.length === 0,
+        shop,
+        productId,
+        updated,
+        errors,
+      });
     }
-
-    return res.json({
-      ok: errors.length === 0,
-      shop,
-      productId,
-      updated,
-      errors,
-    });
   } catch (err) {
     console.error('seo/apply error:', err);
     res.status(err?.status || 500).json({ error: err.message || 'Apply error' });
   }
 });
+
+// Helper function to apply SEO for a specific language
+async function applySEOForLanguage(shop, productId, seo, options, updated, errors) {
+  const { updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun } = options;
+  
+  if (!dryRun) {
+    // 1) productUpdate
+    if (updateTitle || updateBody || updateSeo) {
+      const input = { id: productId };
+      if (updateTitle && seo.title) input.title = seo.title;
+      if (updateBody && seo.bodyHtml) input.descriptionHtml = seo.bodyHtml;
+      if (updateSeo && (seo.title || seo.metaDescription)) {
+        input.seo = {
+          ...(seo.title ? { title: seo.title } : {}),
+          ...(seo.metaDescription ? { description: seo.metaDescription } : {}),
+        };
+      }
+      if (Object.keys(input).length > 1) {
+        const mut = `
+          mutation UpdateProduct($input: ProductInput!) {
+            productUpdate(input: $input) {
+              product { id }
+              userErrors { field message }
+            }
+          }
+        `;
+        try {
+          await shopGraphQL(shop, mut, { input });
+          updated.title = !!input.title;
+          updated.body = !!input.descriptionHtml;
+          updated.seo = !!input.seo;
+        } catch (e) {
+          errors.push(`productUpdate: ${e.message}`);
+        }
+      }
+    }
+
+    // 2) metafieldsSet
+    const metaInputs = [];
+    if (updateBullets && Array.isArray(seo.bullets)) {
+      metaInputs.push({
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: 'bullets',
+        type: 'json',
+        value: JSON.stringify(seo.bullets),
+      });
+    }
+    if (updateFaq && Array.isArray(seo.faq)) {
+      metaInputs.push({
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: 'faq',
+        type: 'json',
+        value: JSON.stringify(seo.faq),
+      });
+    }
+    if (metaInputs.length) {
+      const mut = `
+        mutation SetMetafields($m: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $m) {
+            metafields { key namespace type }
+            userErrors { field message }
+          }
+        }
+      `;
+      try {
+        await shopGraphQL(shop, mut, { m: metaInputs });
+        updated.bullets = metaInputs.some(m => m.key === 'bullets');
+        updated.faq = metaInputs.some(m => m.key === 'faq');
+      } catch (e) {
+        errors.push(`metafieldsSet: ${e.message}`);
+      }
+    }
+
+    // 3) ensure metafield definitions exist (fixed: do not request .type)
+    try {
+      const defsQ = `
+        query {
+          metafieldDefinitions(ownerType: PRODUCT, first: 20, namespace: "seo_ai") {
+            edges { node { id name key namespace } }
+          }
+        }
+      `;
+      const defs = await shopGraphQL(shop, defsQ);
+      const haveBullets = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'bullets');
+      const haveFaq = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'faq');
+      const createMut = `
+        mutation($def: MetafieldDefinitionInput!) {
+          metafieldDefinitionCreate(definition: $def) {
+            createdDefinition { id }
+            userErrors { field message }
+          }
+        }
+      `;
+      if (!haveBullets) {
+        await shopGraphQL(shop, createMut, {
+          def: { name: 'AI Bullets', namespace: 'seo_ai', key: 'bullets', type: 'json', ownerType: 'PRODUCT' },
+        });
+      }
+      if (!haveFaq) {
+        await shopGraphQL(shop, createMut, {
+          def: { name: 'AI FAQ', namespace: 'seo_ai', key: 'faq', type: 'json', ownerType: 'PRODUCT' },
+        });
+      }
+    } catch (e) {
+      // Non-fatal
+      errors.push(`metafieldDefinitionCreate: ${e.message}`);
+    }
+  }
+}
 
 export default router;
