@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Card, Text, TextField, InlineStack, Select, Button, Divider, Toast,
 } from '@shopify/polaris';
+import { makeSessionFetch } from './lib/sessionFetch.js';
 
 // ---- helpers
 const qs = (k, d = '') => {
@@ -14,17 +15,14 @@ const toGID = (v) => {
   return /^\d+$/.test(s) ? `gid://shopify/Product/${s}` : s;
 };
 const pretty = (x) => JSON.stringify(x, null, 2);
-async function readJson(response) {
-  const text = await response.text();
-  try { return JSON.parse(text || 'null'); }
-  catch { return { __raw: text, error: 'Unexpected non-JSON response' }; }
-}
 
 export default function AiSeoPanel() {
+  const api = useMemo(() => makeSessionFetch(), []);
   // Core inputs
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
+  const [model, setModel] = useState(''); // will be set from /plans/me
+  const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
 
   // Dynamic languages from shop/product
   const [shopLanguages, setShopLanguages] = useState([]);
@@ -39,24 +37,22 @@ export default function AiSeoPanel() {
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
 
-  // -------- Load models from plan (kept simple; uses /plans/me?shop=…)
+  // -------- Load models from plan (uses /plans/me?shop=…)
   useEffect(() => {
     const s = shop || qs('shop', '');
     if (!s) return;
     (async () => {
       try {
-        const r = await fetch(`/plans/me?shop=${encodeURIComponent(s)}`, { credentials: 'include' });
-        const j = await readJson(r);
-        if (!r.ok) throw new Error(j?.error || 'Failed to load plan');
+        const j = await api(`/plans/me`, { shop: s });
         const suggested = j?.modelsSuggested || [];
-        if (suggested.length && !suggested.includes(model)) {
-          setModel(suggested[0]);
-        }
+        const opts = suggested.length ? suggested : ['anthropic/claude-3.5-sonnet'];
+        setModelOptions(opts.map(m => ({ label: m, value: m })));
+        setModel(prev => (opts.includes(prev) ? prev : opts[0]));
       } catch (e) {
-        // leave current model; show toast only if needed
+        setToast(`Failed to load plan: ${e.message}`);
       }
     })();
-  }, [shop]);
+  }, [shop, api]);
 
   // -------- Load shop+product languages
   useEffect(() => {
@@ -71,10 +67,7 @@ export default function AiSeoPanel() {
     let cancelled = false;
     (async () => {
       try {
-        const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
-        const rsp = await fetch(url, { credentials: 'include' });
-        const data = await readJson(rsp);
-        if (!rsp.ok) throw new Error(data?.error || 'Failed to fetch languages');
+        const data = await api(`/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`, { shop: s });
         if (cancelled) return;
 
         const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
@@ -88,7 +81,6 @@ export default function AiSeoPanel() {
         setShouldShowLanguageSelector(showSel);
         setAllLanguagesOption(data.allLanguagesOption || (showSel ? { label: 'All languages', value: 'all' } : null));
 
-        // default selected language
         setLanguage(prev => {
           const effective = (prodLangs.length ? prodLangs : shopLangs);
           if (prev === 'all' && showSel) return 'all';
@@ -96,15 +88,14 @@ export default function AiSeoPanel() {
           return showSel ? (effective[0] || primary) : primary;
         });
       } catch (e) {
-        if (!cancelled) {
-          setShopLanguages(['en']); setProductLanguages(['en']); setPrimaryLanguage('en');
-          setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('eN'.toLowerCase());
-          setToast(`Languages fallback: ${e.message}`);
-        }
+        // Fallback to single EN
+        setShopLanguages(['en']); setProductLanguages(['en']); setPrimaryLanguage('en');
+        setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
+        setToast(`Languages fallback: ${e.message}`);
       }
     })();
     return () => { cancelled = true; };
-  }, [shop, productId]);
+  }, [shop, productId, api]);
 
   // -------- Generate (single or multi)
   async function onGenerate() {
@@ -112,37 +103,30 @@ export default function AiSeoPanel() {
     try {
       const pid = toGID(productId);
 
-      if (language === 'all' && (shouldShowLanguageSelector || allLanguagesOption)) {
+      // Multi-language when visible selector and "all" chosen
+      if (language === 'all' && shouldShowLanguageSelector) {
         const langs = productLanguages.length ? productLanguages : shopLanguages;
         if (!langs.length) throw new Error('No languages available for this product/shop');
 
-        const rsp = await fetch('/api/seo/generate-multi', {
+        const j = await api(`/api/seo/generate-multi`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ shop, productId: pid, model, languages: langs }),
+          body: { shop, productId: pid, model, languages: langs },
+          shop,
         });
-        const j = await readJson(rsp);
-        if (!rsp.ok) throw new Error(j?.error || 'Generate failed');
         setResult(j);
       } else {
-        const rsp = await fetch(`/seo/generate?shop=${encodeURIComponent(shop)}`, {
+        // Single-language path
+        const j = await api(`/seo/generate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ shop, productId: pid, model, language }),
+          body: { shop, productId: pid, model, language },
+          shop,
         });
-        const j = await readJson(rsp);
-        if (!rsp.ok) throw new Error(j?.error || 'Generate failed');
         setResult(j);
       }
+      setToast('Generated ✓');
     } catch (e) {
       setResult({ error: e.message });
-      if (String(e.message).toLowerCase().includes('not a valid model')) {
-        setToast('Selected model is not enabled/valid. Pick another model from the list.');
-      } else {
-        setToast(`Generate error: ${e.message}`);
-      }
+      setToast(`Generate error: ${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -154,15 +138,14 @@ export default function AiSeoPanel() {
     setBusy(true); setToast('');
     try {
       if (Array.isArray(result?.results)) {
+        // Multi
         const pid = toGID(productId || result.productId || '');
         const results = result.results.filter(r => r && r.seo).map(r => ({ language: r.language, seo: r.seo }));
         if (!results.length) throw new Error('Nothing to apply (no successful SEO results)');
 
-        const rsp = await fetch('/api/seo/apply-multi', {
+        const j = await api(`/api/seo/apply-multi`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
+          body: {
             shop,
             productId: pid,
             results,
@@ -170,31 +153,30 @@ export default function AiSeoPanel() {
               updateTitle: true, updateBody: true, updateSeo: true,
               updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
             },
-          }),
+          },
+          shop,
         });
-        const j = await readJson(rsp);
-        if (!rsp.ok || j?.ok === false) {
+        if (j?.ok === false) {
           const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
           throw new Error(err);
         }
       } else {
+        // Single
         const pid = toGID(result?.productId || productId);
-        const rsp = await fetch(`/seo/apply?shop=${encodeURIComponent(shop)}`, {
+        const j = await api(`/seo/apply`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
+          body: {
             shop,
             productId: pid,
-            seo: result?.seo, // IMPORTANT: only seo section
+            seo: result?.seo, // only the seo section per backend contract
             options: {
               updateTitle: true, updateBody: true, updateSeo: true,
               updateBullets: true, updateFaq: true, updateAlt: false, dryRun: false,
             },
-          }),
+          },
+          shop,
         });
-        const j = await readJson(rsp);
-        if (!rsp.ok || j?.ok === false) {
+        if (j?.ok === false) {
           const err = (j?.errors || []).join('; ') || j?.error || 'Apply failed';
           throw new Error(err);
         }
@@ -208,16 +190,11 @@ export default function AiSeoPanel() {
   }
 
   // -------- Derived UI
-  const languageOptions = useMemo(() => {
-    const opts = [];
-    const many = (productLanguages.length || shopLanguages.length) > 1;
-    if (shouldShowLanguageSelector && (allLanguagesOption || many)) {
-      opts.push({ label: (allLanguagesOption?.label || 'All languages'), value: (allLanguagesOption?.value || 'all') });
-    }
-    const effective = productLanguages.length ? productLanguages : shopLanguages;
-    effective.forEach(l => opts.push({ label: l.toUpperCase(), value: l }));
-    return opts;
-  }, [shouldShowLanguageSelector, allLanguagesOption, productLanguages, shopLanguages]);
+  const hasMultiple = (productLanguages.length ? productLanguages : shopLanguages).length > 1;
+  const languageOptions = hasMultiple
+    ? [{ label: (allLanguagesOption?.label || 'All languages'), value: (allLanguagesOption?.value || 'all') },
+       ...((productLanguages.length ? productLanguages : shopLanguages).map(l => ({ label: l.toUpperCase(), value: l })))]
+    : [];
 
   const canApply =
     !!result &&
@@ -253,7 +230,7 @@ export default function AiSeoPanel() {
                 <TextField label="Model" value={model} onChange={setModel} autoComplete="off" />
               </div>
 
-              {shouldShowLanguageSelector && (
+              {shouldShowLanguageSelector && hasMultiple && (
                 <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
                   <Select
                     label="Language (output)"
