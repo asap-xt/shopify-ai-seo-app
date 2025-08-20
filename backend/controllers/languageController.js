@@ -1,106 +1,149 @@
 // backend/controllers/languageController.js
-// Mounted at /api/languages
-// Routes:
-//   GET /api/languages/shop/:shop
-//   GET /api/languages/product/:shop/:productId
+// Purpose: Secure endpoints to read shop locales and product locales using the SAME Shopify session
+// middleware that your /plans/me and /seo/* routes already use.
+// Comments are in English by request.
 
-import { Router } from 'express';
-const router = Router();
+import express from 'express';
+import { verifyShopifySession } from '../auth.js'; // <-- uses the same middleware you already rely on
+import shopify from '@shopify/shopify-api';
 
-const uniq = (arr) => Array.from(new Set(arr));
-const baseLang = (loc) => (loc || '').toLowerCase().split('-')[0];
-const toGID = (id) => (/^\d+$/.test(String(id)) ? `gid://shopify/Product/${id}` : String(id));
+const router = express.Router();
 
-function getGraphQL(res) {
-  const api = res.locals?.shopify?.api;
-  const session = res.locals?.shopify?.session;
-  if (!api || !session) return { error: 'Unauthorized: missing Shopify session' };
-  const Graphql = api.clients?.Graphql || api.clients?.graphql;
-  if (!Graphql) return { error: 'Shopify GraphQL client not available' };
-  return { client: new Graphql({ session }), session };
+// Apply the Shopify session guard to everything in this router.
+// This makes /api/languages/* behave like /plans/me and /seo/* (no more "missing Shopify session").
+router.use(verifyShopifySession);
+
+/**
+ * Helper: Admin REST client from current session.
+ */
+function restClient(session) {
+  return new shopify.clients.Rest({ session });
 }
 
-// GET /api/languages/shop/:shop
-router.get('/shop/:shop', async (req, res) => {
-  try {
-    const { client, error } = getGraphQL(res);
-    if (error) return res.status(401).json({ error });
+/**
+ * Helper: Admin GraphQL client from current session.
+ */
+function gqlClient(session) {
+  return new shopify.clients.Graphql({ session });
+}
 
-    const q = /* GraphQL */ `
-      query ShopLocales {
-        shopLocales(published: true) {
-          locale
-          primary
-          published
-        }
-      }
-    `;
-    const data = await client.request(q);
-    const published = (data?.data?.shopLocales || []).filter(l => l.published);
-    const locales = published.map(l => l.locale);
-    const shopLanguages = uniq(locales.map(baseLang));
-    const primaryLanguage = baseLang(published.find(l => l.primary)?.locale || locales[0] || 'en');
-    res.json({ shopLanguages, primaryLanguage });
+/**
+ * GET /api/languages/shop
+ * Returns active shop locales and primary locale.
+ * Response:
+ * {
+ *   shop: "example.myshopify.com",
+ *   primaryLanguage: "en",
+ *   shopLanguages: ["en","de","fr"],
+ * }
+ */
+router.get('/shop', async (req, res) => {
+  try {
+    const session = res.locals.shopify?.session;
+    if (!session) return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
+
+    // REST: GET /admin/api/*/shop_locales.json
+    const rest = restClient(session);
+    const rsp = await rest.get({ path: 'shop_locales' });
+    const locales = Array.isArray(rsp?.body?.locales) ? rsp.body.locales : [];
+
+    // Normalize: keep only active locales; determine primary
+    const active = locales.filter(l => l?.enabled).map(l => String(l.locale).toLowerCase());
+    const primary = String((locales.find(l => l?.primary)?.locale) || active[0] || 'en').toLowerCase();
+
+    res.json({
+      shop: session.shop,
+      primaryLanguage: primary,
+      shopLanguages: active.length ? active : [primary || 'en'],
+    });
   } catch (err) {
     console.error('GET /api/languages/shop error:', err);
     res.status(500).json({ error: 'Failed to load shop languages' });
   }
 });
 
-// GET /api/languages/product/:shop/:productId
+/**
+ * GET /api/languages/product/:shop/:productId
+ * Returns shop languages + product languages present for the given product.
+ * Product ID can be numeric or GID.
+ * Response:
+ * {
+ *   shop: "example.myshopify.com",
+ *   productId: "gid://shopify/Product/123456789",
+ *   primaryLanguage: "en",
+ *   shopLanguages: ["en","de","fr"],
+ *   productLanguages: ["en","de"],     // locales where product has translatable content
+ *   shouldShowSelector: true|false,    // show selector only if 2+ languages
+ *   allLanguagesOption: { label: "All languages", value: "all" } | null
+ * }
+ */
 router.get('/product/:shop/:productId', async (req, res) => {
   try {
-    const { client, error } = getGraphQL(res);
-    if (error) return res.status(401).json({ error });
+    const session = res.locals.shopify?.session;
+    if (!session) return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
 
     const { productId } = req.params;
-    const gid = toGID(productId);
 
-    const qLocales = /* GraphQL */ `
-      query ShopLocales {
-        shopLocales(published: true) {
-          locale
-          primary
-          published
+    // 1) Shop locales (REST)
+    const rest = restClient(session);
+    const rspLocales = await rest.get({ path: 'shop_locales' });
+    const locales = Array.isArray(rspLocales?.body?.locales) ? rspLocales.body.locales : [];
+    const shopLanguages = locales.filter(l => l?.enabled).map(l => String(l.locale).toLowerCase());
+    const primaryLanguage = String((locales.find(l => l?.primary)?.locale) || shopLanguages[0] || 'en').toLowerCase();
+
+    // 2) Normalize productId to GID
+    const gid = String(productId).startsWith('gid://')
+      ? productId
+      : `gid://shopify/Product/${String(productId).trim()}`;
+
+    // 3) Query translations via Admin GraphQL Translations API
+    // We'll check which locales have at least one translation or base content for common product keys.
+    // Keys we care about: title, body_html, handle, seo.title, seo.description
+    const gql = gqlClient(session);
+    const query = `
+      query ProductTranslations($id: ID!) {
+        translatableResource(resourceId: $id) {
+          resourceId
+          translatableContent {
+            key
+            locale
+            value
+          }
         }
       }
     `;
-    const localesData = await client.request(qLocales);
-    const publishedLocales = (localesData?.data?.shopLocales || [])
-      .filter(l => l.published)
-      .map(l => l.locale);
+    const resp = await gql.query({ data: { query, variables: { id: gid } } });
 
-    const withContent = [];
-    for (const loc of publishedLocales) {
-      const qProd = /* GraphQL */ `
-        query ProductInLocale($id: ID!) @inContext(language: ${JSON.stringify(loc)}) {
-          product(id: $id) {
-            id
-            title
-            descriptionHtml
-          }
-        }
-      `;
-      const p = await client.request(qProd, { variables: { id: gid } });
-      const prod = p?.data?.product;
-      const textFromHtml = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      const hasContent =
-        prod && ((prod.title && prod.title.trim().length > 0) ||
-                 (prod.descriptionHtml && textFromHtml(prod.descriptionHtml).length > 0));
-      if (hasContent) withContent.push(loc);
+    const content = resp?.body?.data?.translatableResource?.translatableContent || [];
+    // Collect locales that have any content for the keys we care about
+    const KEYS = new Set(['title', 'body_html', 'handle', 'seo.title', 'seo.description']);
+    const productLocalesSet = new Set(
+      content
+        .filter(c => KEYS.has(String(c?.key)))
+        .map(c => String(c?.locale || '').toLowerCase())
+        .filter(Boolean)
+    );
+
+    // If no translations at all, but product exists, ensure primary is included
+    if (!productLocalesSet.size && shopLanguages.length) {
+      productLocalesSet.add(primaryLanguage);
     }
 
-    const productLanguages = uniq(withContent.map(baseLang));
-    const shopLanguages = uniq(publishedLocales.map(baseLang));
-    const primaryLanguage = baseLang(publishedLocales[0] || 'en');
+    const productLanguages = Array.from(productLocalesSet).filter(l => shopLanguages.includes(l));
+
+    // 4) Decide selector visibility
     const effective = productLanguages.length ? productLanguages : shopLanguages;
+    const shouldShowSelector = effective.length > 1;
+    const allLanguagesOption = shouldShowSelector ? { label: 'All languages', value: 'all' } : null;
 
     res.json({
-      shopLanguages,
-      productLanguages,
+      shop: session.shop,
+      productId: gid,
       primaryLanguage,
-      shouldShowSelector: effective.length > 1,
-      allLanguagesOption: effective.length > 1,
+      shopLanguages: shopLanguages.length ? shopLanguages : [primaryLanguage || 'en'],
+      productLanguages,
+      shouldShowSelector,
+      allLanguagesOption,
     });
   } catch (err) {
     console.error('GET /api/languages/product error:', err);
