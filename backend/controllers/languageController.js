@@ -1,23 +1,46 @@
 // backend/controllers/languageController.js
-// Purpose: Secure endpoints to read shop locales and product locales using the SAME Shopify session
-// middleware that your /plans/me and /seo/* routes already use.
-// Comments are in English by request.
+// Purpose: Return real shop locales and product locales using the same Shopify session
+// as your existing /plans/me and /seo/* routes. Minimal & defensive integration.
+//
+// Notes:
+// - We DO NOT import a non-existing named export from ../auth.js.
+// - If auth.validateAuthenticatedSession(req, res) exists, we use it.
+// - Else we fall back to res.locals.shopify.session (if present) or 401.
 
 import express from 'express';
-import { verifyShopifySession } from '../auth.js'; // same guard as /plans/me and /seo/*
-import * as Shopify from '@shopify/shopify-api';  // <-- FIX: no default export; use namespace import
+import * as Shopify from '@shopify/shopify-api';
+import * as auth from '../auth.js'; // defensive import (may or may not export validateAuthenticatedSession)
 
 const router = express.Router();
 
-// Guard all routes in this router with Shopify session
-router.use(verifyShopifySession);
+/**
+ * Session guard that works with different auth.js shapes.
+ * Tries, in order:
+ *  1) auth.validateAuthenticatedSession(req, res)
+ *  2) existing res.locals.shopify.session
+ *  3) 401
+ */
+async function sessionGuard(req, res, next) {
+  try {
+    if (typeof auth.validateAuthenticatedSession === 'function') {
+      await auth.validateAuthenticatedSession(req, res);
+      if (res.headersSent) return;
+      if (res.locals?.shopify?.session) return next();
+      return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
+    }
+    if (res.locals?.shopify?.session) return next();
+    return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
+  } catch (err) {
+    return res.status(401).json({ error: 'Unauthorized: ' + (err?.message || 'missing Shopify session') });
+  }
+}
 
-/** Helper: Admin REST client from current session. */
+/** Create REST client from current session. */
 function restClient(session) {
   return new Shopify.clients.Rest({ session });
 }
 
-/** Helper: Admin GraphQL client from current session. */
+/** Create GraphQL client from current session. */
 function gqlClient(session) {
   return new Shopify.clients.Graphql({ session });
 }
@@ -25,19 +48,17 @@ function gqlClient(session) {
 /**
  * GET /api/languages/shop
  * Returns active shop locales and primary locale.
- * Response:
  * {
  *   shop: "example.myshopify.com",
  *   primaryLanguage: "en",
- *   shopLanguages: ["en","de","fr"],
+ *   shopLanguages: ["en","de","fr"]
  * }
  */
-router.get('/shop', async (req, res) => {
+router.get('/shop', sessionGuard, async (req, res) => {
   try {
     const session = res.locals.shopify?.session;
     if (!session) return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
 
-    // REST: GET /admin/api/*/shop_locales.json
     const rest = restClient(session);
     const rsp = await rest.get({ path: 'shop_locales' });
     const locales = Array.isArray(rsp?.body?.locales) ? rsp.body.locales : [];
@@ -58,9 +79,8 @@ router.get('/shop', async (req, res) => {
 
 /**
  * GET /api/languages/product/:shop/:productId
- * Returns shop languages + product languages present for the given product.
- * Product ID can be numeric or GID.
- * Response:
+ * Returns shop languages + product languages for the given product.
+ * productId may be numeric or a GID.
  * {
  *   shop: "example.myshopify.com",
  *   productId: "gid://shopify/Product/123456789",
@@ -71,7 +91,7 @@ router.get('/shop', async (req, res) => {
  *   allLanguagesOption: { label: "All languages", value: "all" } | null
  * }
  */
-router.get('/product/:shop/:productId', async (req, res) => {
+router.get('/product/:shop/:productId', sessionGuard, async (req, res) => {
   try {
     const session = res.locals.shopify?.session;
     if (!session) return res.status(401).json({ error: 'Unauthorized: missing Shopify session' });
@@ -90,7 +110,7 @@ router.get('/product/:shop/:productId', async (req, res) => {
       ? productId
       : `gid://shopify/Product/${String(productId).trim()}`;
 
-    // 3) Query translations via Admin GraphQL Translations API
+    // 3) Product translations (GraphQL Translations API)
     const gql = gqlClient(session);
     const query = `
       query ProductTranslations($id: ID!) {
@@ -107,7 +127,6 @@ router.get('/product/:shop/:productId', async (req, res) => {
     const resp = await gql.query({ data: { query, variables: { id: gid } } });
     const content = resp?.body?.data?.translatableResource?.translatableContent || [];
 
-    // Collect locales that have any content for keys we care about
     const KEYS = new Set(['title', 'body_html', 'handle', 'seo.title', 'seo.description']);
     const productLocalesSet = new Set(
       content
@@ -116,14 +135,12 @@ router.get('/product/:shop/:productId', async (req, res) => {
         .filter(Boolean)
     );
 
-    // If no translations at all, ensure primary is included (base content)
     if (!productLocalesSet.size && shopLanguages.length) {
       productLocalesSet.add(primaryLanguage);
     }
 
     const productLanguages = Array.from(productLocalesSet).filter(l => shopLanguages.includes(l));
 
-    // 4) Decide selector visibility
     const effective = productLanguages.length ? productLanguages : shopLanguages;
     const shouldShowSelector = effective.length > 1;
     const allLanguagesOption = shouldShowSelector ? { label: 'All languages', value: 'all' } : null;
