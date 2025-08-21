@@ -4,27 +4,22 @@
 // Comments are in English by request.
 
 import express from 'express';
-import { verifyShopifySession } from '../auth.js'; // <-- uses the same middleware you already rely on
-import shopify from '@shopify/shopify-api';
+import { verifyShopifySession } from '../auth.js'; // same guard as /plans/me and /seo/*
+import * as Shopify from '@shopify/shopify-api';  // <-- FIX: no default export; use namespace import
 
 const router = express.Router();
 
-// Apply the Shopify session guard to everything in this router.
-// This makes /api/languages/* behave like /plans/me and /seo/* (no more "missing Shopify session").
+// Guard all routes in this router with Shopify session
 router.use(verifyShopifySession);
 
-/**
- * Helper: Admin REST client from current session.
- */
+/** Helper: Admin REST client from current session. */
 function restClient(session) {
-  return new shopify.clients.Rest({ session });
+  return new Shopify.clients.Rest({ session });
 }
 
-/**
- * Helper: Admin GraphQL client from current session.
- */
+/** Helper: Admin GraphQL client from current session. */
 function gqlClient(session) {
-  return new shopify.clients.Graphql({ session });
+  return new Shopify.clients.Graphql({ session });
 }
 
 /**
@@ -47,7 +42,6 @@ router.get('/shop', async (req, res) => {
     const rsp = await rest.get({ path: 'shop_locales' });
     const locales = Array.isArray(rsp?.body?.locales) ? rsp.body.locales : [];
 
-    // Normalize: keep only active locales; determine primary
     const active = locales.filter(l => l?.enabled).map(l => String(l.locale).toLowerCase());
     const primary = String((locales.find(l => l?.primary)?.locale) || active[0] || 'en').toLowerCase();
 
@@ -72,8 +66,8 @@ router.get('/shop', async (req, res) => {
  *   productId: "gid://shopify/Product/123456789",
  *   primaryLanguage: "en",
  *   shopLanguages: ["en","de","fr"],
- *   productLanguages: ["en","de"],     // locales where product has translatable content
- *   shouldShowSelector: true|false,    // show selector only if 2+ languages
+ *   productLanguages: ["en","de"],
+ *   shouldShowSelector: true|false,
  *   allLanguagesOption: { label: "All languages", value: "all" } | null
  * }
  */
@@ -97,8 +91,6 @@ router.get('/product/:shop/:productId', async (req, res) => {
       : `gid://shopify/Product/${String(productId).trim()}`;
 
     // 3) Query translations via Admin GraphQL Translations API
-    // We'll check which locales have at least one translation or base content for common product keys.
-    // Keys we care about: title, body_html, handle, seo.title, seo.description
     const gql = gqlClient(session);
     const query = `
       query ProductTranslations($id: ID!) {
@@ -113,9 +105,9 @@ router.get('/product/:shop/:productId', async (req, res) => {
       }
     `;
     const resp = await gql.query({ data: { query, variables: { id: gid } } });
-
     const content = resp?.body?.data?.translatableResource?.translatableContent || [];
-    // Collect locales that have any content for the keys we care about
+
+    // Collect locales that have any content for keys we care about
     const KEYS = new Set(['title', 'body_html', 'handle', 'seo.title', 'seo.description']);
     const productLocalesSet = new Set(
       content
@@ -124,7 +116,7 @@ router.get('/product/:shop/:productId', async (req, res) => {
         .filter(Boolean)
     );
 
-    // If no translations at all, but product exists, ensure primary is included
+    // If no translations at all, ensure primary is included (base content)
     if (!productLocalesSet.size && shopLanguages.length) {
       productLocalesSet.add(primaryLanguage);
     }
