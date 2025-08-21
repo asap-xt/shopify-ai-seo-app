@@ -5,7 +5,6 @@ import {
 } from '@shopify/polaris';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 
-// ---- helpers
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
 };
@@ -18,26 +17,23 @@ const pretty = (x) => JSON.stringify(x, null, 2);
 
 export default function AiSeoPanel() {
   const api = useMemo(() => makeSessionFetch(), []);
-  // Core inputs
+
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState('');
   const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
 
-  // Dynamic languages
   const [shopLanguages, setShopLanguages] = useState([]);
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
   const [shouldShowLanguageSelector, setShouldShowLanguageSelector] = useState(false);
   const [allLanguagesOption, setAllLanguagesOption] = useState(null);
-  const [language, setLanguage] = useState('en'); // 'all' or specific
+  const [language, setLanguage] = useState('en');
 
-  // Result / UI
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
 
-  // Load models from plan
   useEffect(() => {
     const s = shop || qs('shop', '');
     if (!s) return;
@@ -54,29 +50,26 @@ export default function AiSeoPanel() {
     })();
   }, [shop, api]);
 
-  // Load shop+product languages
   useEffect(() => {
     const s = shop || qs('shop', '');
     const pid = (productId || '').trim();
     if (!s || !pid) {
       setShopLanguages([]); setProductLanguages([]); setPrimaryLanguage('en');
       setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
-      if (!pid && (s && productId !== '')) setToast('Please enter a Product ID first.');
       return;
     }
 
     let cancelled = false;
     (async () => {
       try {
-        // IMPORTANT: route expects params in PATH
-        const path = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
-        const data = await api(path, { shop: s });
+        const data = await api(`/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`, { shop: s });
+
         if (cancelled) return;
 
         const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
         const prodLangs = (data.productLanguages || []).map(x => x.toLowerCase());
         const primary = (data.primaryLanguage || shopLangs[0] || 'en').toLowerCase();
-        const showSel = Boolean(data.shouldShowSelector) || (prodLangs.length > 1 || shopLangs.length > 1);
+        const showSel = Boolean(data.shouldShowSelector);
 
         setShopLanguages(shopLangs);
         setProductLanguages(prodLangs);
@@ -91,24 +84,23 @@ export default function AiSeoPanel() {
           return showSel ? (effective[0] || primary) : primary;
         });
       } catch (e) {
+        // По-тих фолбек, без да спираме UX-а
         setShopLanguages(['en']); setProductLanguages(['en']); setPrimaryLanguage('en');
         setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
         setToast(`Languages fallback: ${e.message}`);
       }
     })();
+
     return () => { cancelled = true; };
   }, [shop, productId, api]);
 
-  // Generate
   async function onGenerate() {
     setBusy(true); setToast(''); setResult(null);
     try {
       const pid = toGID(productId);
-
       if (language === 'all' && shouldShowLanguageSelector) {
         const langs = productLanguages.length ? productLanguages : shopLanguages;
         if (!langs.length) throw new Error('No languages available for this product/shop');
-
         const j = await api(`/api/seo/generate-multi`, {
           method: 'POST',
           body: { shop, productId: pid, model, languages: langs },
@@ -132,7 +124,6 @@ export default function AiSeoPanel() {
     }
   }
 
-  // Apply
   async function onApply() {
     if (!result) return;
     setBusy(true); setToast('');
@@ -141,7 +132,6 @@ export default function AiSeoPanel() {
         const pid = toGID(productId || result.productId || '');
         const results = result.results.filter(r => r && r.seo).map(r => ({ language: r.language, seo: r.seo }));
         if (!results.length) throw new Error('Nothing to apply (no successful SEO results)');
-
         const j = await api(`/api/seo/apply-multi`, {
           method: 'POST',
           body: {
@@ -187,11 +177,10 @@ export default function AiSeoPanel() {
     }
   }
 
-  const effectiveLangs = (productLanguages.length ? productLanguages : shopLanguages);
-  const hasMultiple = effectiveLangs.length > 1;
+  const hasMultiple = (productLanguages.length ? productLanguages : shopLanguages).length > 1;
   const languageOptions = hasMultiple
     ? [{ label: (allLanguagesOption?.label || 'All languages'), value: (allLanguagesOption?.value || 'all') },
-       ...effectiveLangs.map(l => ({ label: l.toUpperCase(), value: l }))]
+       ...((productLanguages.length ? productLanguages : shopLanguages).map(l => ({ label: l.toUpperCase(), value: l })))]
     : [];
 
   const canApply =
@@ -219,7 +208,7 @@ export default function AiSeoPanel() {
                   label="Product ID (numeric or GID)"
                   value={productId}
                   onChange={setProductId}
-                  placeholder="1496335… or gid://shopify/Product/1496335…"
+                  placeholder="1496335… или gid://shopify/Product/1496335…"
                   autoComplete="off"
                 />
               </div>
