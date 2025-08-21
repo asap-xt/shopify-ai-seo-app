@@ -1,9 +1,12 @@
 // backend/controllers/languageController.js
-// Reads real shop locales and product translation locales.
-// Adds deep DEBUG endpoints to verify token validity and scopes.
-// Uses Admin API v2025-07 by default (override with SHOPIFY_API_VERSION).
-// Falls back from shop_locales.json -> locales.json if needed.
-// Comments in English (per your request).
+// Reads real shop locales (GraphQL) and product translation locales (GraphQL Translations).
+// Avoids REST /shop_locales.json /locales.json (they return 404 on some shops).
+// Supports two auth paths:
+//   1) Embedded session (res.locals.shopify.session.shop/accessToken)
+//   2) Admin API token(s) from ENV (SHOPIFY_ADMIN_API_ACCESS_TOKEN or SHOP_TOKENS JSON)
+//
+// Includes debug endpoints: /_ping, /_routes, /_debug, /_check
+// Comments in English.
 
 import express from 'express';
 
@@ -16,7 +19,7 @@ function listCookies(req) {
   const c = req.headers?.cookie || '';
   return c ? c.split(';').map(s => s.trim().split('=')[0]).filter(Boolean) : [];
 }
-function adminRestUrl(shop, path) {
+function adminApiUrl(shop, path) {
   const base = `https://${shop}/admin/api/${API_VERSION}`;
   return path.startsWith('/') ? (base + path) : `${base}/${path}`;
 }
@@ -38,7 +41,6 @@ async function getJson(url, token) {
   if (!ok) {
     const e = new Error(data?.errors || data?.error || `HTTP ${status}`);
     e.status = status; e.payload = data;
-    if (status === 404) e.hint = `Check Admin API version (${API_VERSION}) or endpoint availability.`;
     throw e;
   }
   return data;
@@ -48,7 +50,6 @@ async function postJson(url, token, body) {
   if (!ok) {
     const e = new Error(data?.errors || data?.error || `HTTP ${status}`);
     e.status = status; e.payload = data;
-    if (status === 404) e.hint = `Check Admin API version (${API_VERSION}) or endpoint availability.`;
     throw e;
   }
   return data;
@@ -86,7 +87,7 @@ function getAdminAuth(req, res) {
   return null;
 }
 
-// ---------- DEBUG endpoints (do NOT call Shopify for _ping/_routes/_debug) ----------
+// ---------- DEBUG endpoints (no Shopify calls for _ping/_routes/_debug) ----------
 router.get('/_ping', (req, res) => {
   res.json({ ok: true, path: req.originalUrl, ts: Date.now() });
 });
@@ -135,11 +136,10 @@ router.get('/_debug', (req, res) => {
 // ---------- DEEP CHECK endpoint (calls Shopify) ----------
 /**
  * GET /api/languages/_check?shop=<shop>
- * Verifies token works and scopes are present:
+ * Verifies token works and scopes are present, and tests GraphQL for locales:
  *  - GET /admin/api/<ver>/shop.json
- *  - GET /admin/oauth/access_scopes.json  (lists granted scopes for the token)
- *  - GET /admin/api/<ver>/shop_locales.json  (primary path)
- *  - (fallback) GET /admin/api/<ver>/locales.json
+ *  - GET /admin/oauth/access_scopes.json  (granted scopes for token)
+ *  - POST /admin/api/<ver>/graphql.json  (shop { primaryLocale, enabledLocales })
  */
 router.get('/_check', async (req, res) => {
   try {
@@ -154,10 +154,10 @@ router.get('/_check', async (req, res) => {
 
     // 1) shop.json
     try {
-      const shopRsp = await getJson(adminRestUrl(auth.shop, 'shop.json'), auth.token);
+      const shopRsp = await getJson(adminApiUrl(auth.shop, 'shop.json'), auth.token);
       out.steps.shop = { ok: true, name: shopRsp?.shop?.name || null, myshopify_domain: shopRsp?.shop?.myshopify_domain || null };
     } catch (e) {
-      out.steps.shop = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
+      out.steps.shop = { ok: false, status: e?.status, error: e?.message, payload: e?.payload };
     }
 
     // 2) access_scopes
@@ -165,22 +165,31 @@ router.get('/_check', async (req, res) => {
       const scopesRsp = await getJson(`https://${auth.shop}/admin/oauth/access_scopes.json`, auth.token);
       out.steps.scopes = { ok: true, scopes: scopesRsp?.access_scopes || [] };
     } catch (e) {
-      out.steps.scopes = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
+      out.steps.scopes = { ok: false, status: e?.status, error: e?.message, payload: e?.payload };
     }
 
-    // 3) shop_locales.json (primary)
+    // 3) locales via GraphQL
     try {
-      const localesRsp = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
-      out.steps.shop_locales = { ok: true, sample: (localesRsp?.locales || []).slice(0, 5) };
+      const gql = await postJson(adminApiUrl(auth.shop, 'graphql.json'), auth.token, {
+        query: `
+          query ShopLocales {
+            shop {
+              primaryLocale { isoCode }
+              enabledLocales { isoCode }
+            }
+          }
+        `,
+        variables: {},
+      });
+      const primaryIso = gql?.data?.shop?.primaryLocale?.isoCode || null;
+      const enabled = (gql?.data?.shop?.enabledLocales || []).map(l => l?.isoCode).filter(Boolean);
+      out.steps.locales_graphql = {
+        ok: true,
+        primaryIso,
+        enabled,
+      };
     } catch (e) {
-      out.steps.shop_locales = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
-      // 4) fallback to locales.json
-      try {
-        const fallbackRsp = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
-        out.steps.locales_fallback = { ok: true, sample: (fallbackRsp?.locales || []).slice(0, 5) };
-      } catch (e2) {
-        out.steps.locales_fallback = { ok: false, status: e2?.status, error: e2?.message, hint: e2?.hint, payload: e2?.payload };
-      }
+      out.steps.locales_graphql = { ok: false, status: e?.status, error: e?.message, payload: e?.payload };
     }
 
     res.json(out);
@@ -189,9 +198,10 @@ router.get('/_check', async (req, res) => {
   }
 });
 
-// ---------- REAL API: shop languages ----------
+// ---------- REAL API: shop languages (GraphQL) ----------
 /**
  * GET /api/languages/shop
+ * Returns active shop locales and primary locale (using GraphQL).
  */
 router.get('/shop', async (req, res) => {
   const t0 = Date.now();
@@ -204,42 +214,50 @@ router.get('/shop', async (req, res) => {
       });
     }
 
-    let locales = [];
-    let usedEndpoint = 'shop_locales.json';
-    try {
-      const data = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
-      locales = Array.isArray(data?.locales) ? data.locales : [];
-    } catch (e) {
-      // try fallback
-      const fallback = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
-      locales = Array.isArray(fallback?.locales) ? fallback.locales : [];
-      usedEndpoint = 'locales.json';
-    }
+    const gql = await postJson(adminApiUrl(auth.shop, 'graphql.json'), auth.token, {
+      query: `
+        query ShopLocales {
+          shop {
+            primaryLocale { isoCode }
+            enabledLocales { isoCode }
+          }
+        }
+      `,
+      variables: {},
+    });
 
-    const active = locales.filter(l => l?.enabled || l?.published || l?.available).map(l => normLocale(l.locale || l?.locale_code));
-    const primary = normLocale((locales.find(l => l?.primary)?.locale) || active[0] || 'en');
+    const primaryIso = gql?.data?.shop?.primaryLocale?.isoCode || 'EN';
+    const enabled = (gql?.data?.shop?.enabledLocales || []).map(l => l?.isoCode).filter(Boolean);
+
+    // normalize ISO (e.g. EN or EN_US) -> en / en-us
+    const normalizeIso = (iso) => {
+      const s = String(iso || '').toLowerCase();
+      return s.includes('_') ? s.replace('_', '-') : s;
+    };
+    const primary = normalizeIso(primaryIso);
+    const shopLanguages = enabled.length ? enabled.map(normalizeIso) : [primary];
 
     res.json({
       shop: auth.shop,
-      primaryLanguage: primary || 'en',
-      shopLanguages: active.length ? active : [primary || 'en'],
+      primaryLanguage: primary,
+      shopLanguages,
       authUsed: auth.used,
-      endpointUsed: usedEndpoint,
+      source: 'graphql',
       tookMs: Date.now() - t0,
     });
   } catch (err) {
-    console.error('[languages/shop] ERROR', err?.status, err?.message, err?.hint || '', err?.payload || '');
+    console.error('[languages/shop] ERROR', err?.status, err?.message, err?.payload || '');
     res.status(err?.status || 500).json({
       error: 'Failed to load shop languages',
       detail: err?.message || String(err),
-      hint: err?.hint || undefined,
     });
   }
 });
 
-// ---------- REAL API: product languages ----------
+// ---------- REAL API: product languages (GraphQL) ----------
 /**
  * GET /api/languages/product/:shop/:productId
+ * Returns shop languages + product languages for the given product.
  */
 router.get('/product/:shop/:productId', async (req, res) => {
   const t0 = Date.now();
@@ -254,27 +272,34 @@ router.get('/product/:shop/:productId', async (req, res) => {
 
     const { productId } = req.params;
 
-    // 1) shop locales with fallback
-    let locales = [];
-    try {
-      const data = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
-      locales = Array.isArray(data?.locales) ? data.locales : [];
-    } catch {
-      const fallback = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
-      locales = Array.isArray(fallback?.locales) ? fallback.locales : [];
-    }
-    const shopLanguages = locales
-      .filter(l => l?.enabled || l?.published || l?.available)
-      .map(l => normLocale(l.locale || l?.locale_code));
-    const primaryLanguage = normLocale((locales.find(l => l?.primary)?.locale) || shopLanguages[0] || 'en');
+    // 1) shop locales (GraphQL)
+    const gqlShop = await postJson(adminApiUrl(auth.shop, 'graphql.json'), auth.token, {
+      query: `
+        query ShopLocales {
+          shop {
+            primaryLocale { isoCode }
+            enabledLocales { isoCode }
+          }
+        }
+      `,
+      variables: {},
+    });
+    const normalizeIso = (iso) => {
+      const s = String(iso || '').toLowerCase();
+      return s.includes('_') ? s.replace('_', '-') : s;
+    };
+    const primaryIso = gqlShop?.data?.shop?.primaryLocale?.isoCode || 'EN';
+    const enabled = (gqlShop?.data?.shop?.enabledLocales || []).map(l => l?.isoCode).filter(Boolean);
+    const primaryLanguage = normalizeIso(primaryIso);
+    const shopLanguages = enabled.length ? enabled.map(normalizeIso) : [primaryLanguage];
 
     // 2) product GID
     const gid = String(productId).startsWith('gid://')
       ? productId
       : `gid://shopify/Product/${String(productId).trim()}`;
 
-    // 3) product translations via GraphQL Translations API
-    const gqlRsp = await postJson(adminRestUrl(auth.shop, 'graphql.json'), auth.token, {
+    // 3) product translations (GraphQL Translations API)
+    const gqlProd = await postJson(adminApiUrl(auth.shop, 'graphql.json'), auth.token, {
       query: `
         query ProductTranslations($id: ID!) {
           translatableResource(resourceId: $id) {
@@ -290,13 +315,15 @@ router.get('/product/:shop/:productId', async (req, res) => {
       variables: { id: gid },
     });
 
-    const content = gqlRsp?.data?.translatableResource?.translatableContent || [];
+    const content = gqlProd?.data?.translatableResource?.translatableContent || [];
     const KEYS = new Set(['title', 'body_html', 'handle', 'seo.title', 'seo.description']);
     const set = new Set(
-      content.filter(c => KEYS.has(String(c?.key)))
-             .map(c => normLocale(c?.locale))
-             .filter(Boolean)
+      content
+        .filter(c => KEYS.has(String(c?.key)))
+        .map(c => normLocale(c?.locale))
+        .filter(Boolean)
     );
+
     if (!set.size && shopLanguages.length) set.add(primaryLanguage);
 
     const productLanguages = Array.from(set).filter(l => shopLanguages.includes(l));
@@ -313,14 +340,14 @@ router.get('/product/:shop/:productId', async (req, res) => {
       shouldShowSelector,
       allLanguagesOption,
       authUsed: auth.used,
+      source: 'graphql',
       tookMs: Date.now() - t0,
     });
   } catch (err) {
-    console.error('[languages/product] ERROR', err?.status, err?.message, err?.hint || '', err?.payload || '');
+    console.error('[languages/product] ERROR', err?.status, err?.message, err?.payload || '');
     res.status(err?.status || 500).json({
       error: 'Failed to load product languages',
       detail: err?.message || String(err),
-      hint: err?.hint || undefined,
     });
   }
 });
