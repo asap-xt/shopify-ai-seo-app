@@ -1,23 +1,16 @@
 // backend/controllers/languageController.js
 // Reads real shop locales and product translation locales.
-// Uses Shopify Admin API with current stable version (default 2025-07) and
-// supports two auth paths:
-//   1) Embedded session (res.locals.shopify.session.shop/accessToken)
-//   2) Admin API token(s) from ENV (SHOPIFY_ADMIN_API_ACCESS_TOKEN or SHOP_TOKENS JSON)
-//
-// Includes safe debug endpoints: /_ping, /_routes, /_debug
-// Comments in English (as requested).
+// Adds deep DEBUG endpoints to verify token validity and scopes.
+// Uses Admin API v2025-07 by default (override with SHOPIFY_API_VERSION).
+// Falls back from shop_locales.json -> locales.json if needed.
+// Comments in English (per your request).
 
 import express from 'express';
 
 const router = express.Router();
-
-// ***** IMPORTANT *****
-// Default Admin API version must be current. 2024-07 is sunset → 404.
-// You can override via env SHOPIFY_API_VERSION in Railway if needed.
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
-// ---------- tiny utils ----------
+// ---------- helpers ----------
 function normLocale(x) { return String(x || '').toLowerCase().trim(); }
 function listCookies(req) {
   const c = req.headers?.cookie || '';
@@ -27,35 +20,35 @@ function adminRestUrl(shop, path) {
   const base = `https://${shop}/admin/api/${API_VERSION}`;
   return path.startsWith('/') ? (base + path) : `${base}/${path}`;
 }
-async function getJson(url, token) {
-  const rsp = await fetch(url, { method: 'GET', headers: {
-    'X-Shopify-Access-Token': token, 'Content-Type': 'application/json',
-  }});
+async function fetchJson(url, token, method = 'GET', body) {
+  const rsp = await fetch(url, {
+    method,
+    headers: {
+      'X-Shopify-Access-Token': token,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   const text = await rsp.text();
-  let data; try { data = text ? JSON.parse(text) : null; } catch { data = { error: text?.slice(0,500)||'Non-JSON' }; }
-  if (!rsp.ok) {
-    const msg = data?.errors || data?.error || `HTTP ${rsp.status}`;
-    const e = new Error(typeof msg==='string'?msg:JSON.stringify(msg));
-    e.status = rsp.status;
-    e.payload = data;
-    // Helpful hint when version mismatch triggers 404
-    if (rsp.status === 404) e.hint = `Check Admin API version (${API_VERSION}). Old/sunset versions return 404.`;
+  let data; try { data = text ? JSON.parse(text) : null; } catch { data = { error: text?.slice(0, 2000) || 'Non-JSON' }; }
+  return { ok: rsp.ok, status: rsp.status, data, headers: Object.fromEntries(rsp.headers.entries()) };
+}
+async function getJson(url, token) {
+  const { ok, status, data } = await fetchJson(url, token, 'GET');
+  if (!ok) {
+    const e = new Error(data?.errors || data?.error || `HTTP ${status}`);
+    e.status = status; e.payload = data;
+    if (status === 404) e.hint = `Check Admin API version (${API_VERSION}) or endpoint availability.`;
     throw e;
   }
   return data;
 }
 async function postJson(url, token, body) {
-  const rsp = await fetch(url, { method: 'POST', headers: {
-    'X-Shopify-Access-Token': token, 'Content-Type': 'application/json',
-  }, body: JSON.stringify(body) });
-  const text = await rsp.text();
-  let data; try { data = text ? JSON.parse(text) : null; } catch { data = { error: text?.slice(0,500)||'Non-JSON' }; }
-  if (!rsp.ok) {
-    const msg = data?.errors || data?.error || `HTTP ${rsp.status}`;
-    const e = new Error(typeof msg==='string'?msg:JSON.stringify(msg));
-    e.status = rsp.status;
-    e.payload = data;
-    if (rsp.status === 404) e.hint = `Check Admin API version (${API_VERSION}). Old/sunset versions return 404.`;
+  const { ok, status, data } = await fetchJson(url, token, 'POST', body);
+  if (!ok) {
+    const e = new Error(data?.errors || data?.error || `HTTP ${status}`);
+    e.status = status; e.payload = data;
+    if (status === 404) e.hint = `Check Admin API version (${API_VERSION}) or endpoint availability.`;
     throw e;
   }
   return data;
@@ -93,7 +86,7 @@ function getAdminAuth(req, res) {
   return null;
 }
 
-// ---------- DEBUG ENDPOINTS (NO Shopify API calls). Placed FIRST ----------
+// ---------- DEBUG endpoints (do NOT call Shopify for _ping/_routes/_debug) ----------
 router.get('/_ping', (req, res) => {
   res.json({ ok: true, path: req.originalUrl, ts: Date.now() });
 });
@@ -103,6 +96,7 @@ router.get('/_routes', (req, res) => {
     '/_ping',
     '/_routes',
     '/_debug',
+    '/_check',
     '/shop',
     '/product/:shop/:productId',
   ];
@@ -132,24 +126,72 @@ router.get('/_debug', (req, res) => {
       hasSingleToken: !!(process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || process.env.SHOPIFY_ACCESS_TOKEN),
       hasTokenMap: !!(process.env.SHOP_TOKENS || process.env.SHOPIFY_SHOPS_TOKENS),
       apiVersion: API_VERSION,
-      nodeEnv: process.env.NODE_ENV || 'development',
+      nodeEnv: process.env.NODE_ENV || 'production',
     },
     note: 'This endpoint does not call Shopify APIs.',
   });
 });
 
-// ---------- REAL API ----------
+// ---------- DEEP CHECK endpoint (calls Shopify) ----------
+/**
+ * GET /api/languages/_check?shop=<shop>
+ * Verifies token works and scopes are present:
+ *  - GET /admin/api/<ver>/shop.json
+ *  - GET /admin/oauth/access_scopes.json  (lists granted scopes for the token)
+ *  - GET /admin/api/<ver>/shop_locales.json  (primary path)
+ *  - (fallback) GET /admin/api/<ver>/locales.json
+ */
+router.get('/_check', async (req, res) => {
+  try {
+    const auth = getAdminAuth(req, res);
+    if (!auth) {
+      return res.status(401).json({
+        error: 'Unauthorized: no session & no ENV token',
+        fix: 'Open inside embedded app or set SHOPIFY_ADMIN_API_ACCESS_TOKEN / SHOP_TOKENS for this shop.',
+      });
+    }
+    const out = { shop: auth.shop, authUsed: auth.used, version: API_VERSION, steps: {} };
 
+    // 1) shop.json
+    try {
+      const shopRsp = await getJson(adminRestUrl(auth.shop, 'shop.json'), auth.token);
+      out.steps.shop = { ok: true, name: shopRsp?.shop?.name || null, myshopify_domain: shopRsp?.shop?.myshopify_domain || null };
+    } catch (e) {
+      out.steps.shop = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
+    }
+
+    // 2) access_scopes
+    try {
+      const scopesRsp = await getJson(`https://${auth.shop}/admin/oauth/access_scopes.json`, auth.token);
+      out.steps.scopes = { ok: true, scopes: scopesRsp?.access_scopes || [] };
+    } catch (e) {
+      out.steps.scopes = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
+    }
+
+    // 3) shop_locales.json (primary)
+    try {
+      const localesRsp = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
+      out.steps.shop_locales = { ok: true, sample: (localesRsp?.locales || []).slice(0, 5) };
+    } catch (e) {
+      out.steps.shop_locales = { ok: false, status: e?.status, error: e?.message, hint: e?.hint, payload: e?.payload };
+      // 4) fallback to locales.json
+      try {
+        const fallbackRsp = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
+        out.steps.locales_fallback = { ok: true, sample: (fallbackRsp?.locales || []).slice(0, 5) };
+      } catch (e2) {
+        out.steps.locales_fallback = { ok: false, status: e2?.status, error: e2?.message, hint: e2?.hint, payload: e2?.payload };
+      }
+    }
+
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: 'check failed', detail: err?.message || String(err) });
+  }
+});
+
+// ---------- REAL API: shop languages ----------
 /**
  * GET /api/languages/shop
- * Returns active shop locales and primary locale.
- * Response:
- * {
- *   shop: "example.myshopify.com",
- *   primaryLanguage: "en",
- *   shopLanguages: ["en","de","fr"],
- *   authUsed: "session|map|single",
- * }
  */
 router.get('/shop', async (req, res) => {
   const t0 = Date.now();
@@ -162,16 +204,27 @@ router.get('/shop', async (req, res) => {
       });
     }
 
-    const data = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
-    const locales = Array.isArray(data?.locales) ? data.locales : [];
-    const active = locales.filter(l => l?.enabled).map(l => normLocale(l.locale));
-    const primary = normLocale(locales.find(l => l?.primary)?.locale || active[0] || 'en');
+    let locales = [];
+    let usedEndpoint = 'shop_locales.json';
+    try {
+      const data = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
+      locales = Array.isArray(data?.locales) ? data.locales : [];
+    } catch (e) {
+      // try fallback
+      const fallback = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
+      locales = Array.isArray(fallback?.locales) ? fallback.locales : [];
+      usedEndpoint = 'locales.json';
+    }
+
+    const active = locales.filter(l => l?.enabled || l?.published || l?.available).map(l => normLocale(l.locale || l?.locale_code));
+    const primary = normLocale((locales.find(l => l?.primary)?.locale) || active[0] || 'en');
 
     res.json({
       shop: auth.shop,
-      primaryLanguage: primary,
+      primaryLanguage: primary || 'en',
       shopLanguages: active.length ? active : [primary || 'en'],
       authUsed: auth.used,
+      endpointUsed: usedEndpoint,
       tookMs: Date.now() - t0,
     });
   } catch (err) {
@@ -184,9 +237,9 @@ router.get('/shop', async (req, res) => {
   }
 });
 
+// ---------- REAL API: product languages ----------
 /**
  * GET /api/languages/product/:shop/:productId
- * Returns shop languages + product languages for the given product.
  */
 router.get('/product/:shop/:productId', async (req, res) => {
   const t0 = Date.now();
@@ -201,18 +254,26 @@ router.get('/product/:shop/:productId', async (req, res) => {
 
     const { productId } = req.params;
 
-    // 1) shop locales
-    const shopLocalesRsp = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
-    const locales = Array.isArray(shopLocalesRsp?.locales) ? shopLocalesRsp.locales : [];
-    const shopLanguages = locales.filter(l => l?.enabled).map(l => normLocale(l.locale));
-    const primaryLanguage = normLocale(locales.find(l => l?.primary)?.locale || shopLanguages[0] || 'en');
+    // 1) shop locales with fallback
+    let locales = [];
+    try {
+      const data = await getJson(adminRestUrl(auth.shop, 'shop_locales.json'), auth.token);
+      locales = Array.isArray(data?.locales) ? data.locales : [];
+    } catch {
+      const fallback = await getJson(adminRestUrl(auth.shop, 'locales.json'), auth.token);
+      locales = Array.isArray(fallback?.locales) ? fallback.locales : [];
+    }
+    const shopLanguages = locales
+      .filter(l => l?.enabled || l?.published || l?.available)
+      .map(l => normLocale(l.locale || l?.locale_code));
+    const primaryLanguage = normLocale((locales.find(l => l?.primary)?.locale) || shopLanguages[0] || 'en');
 
     // 2) product GID
     const gid = String(productId).startsWith('gid://')
       ? productId
       : `gid://shopify/Product/${String(productId).trim()}`;
 
-    // 3) product translations via GraphQL
+    // 3) product translations via GraphQL Translations API
     const gqlRsp = await postJson(adminRestUrl(auth.shop, 'graphql.json'), auth.token, {
       query: `
         query ProductTranslations($id: ID!) {
@@ -236,7 +297,6 @@ router.get('/product/:shop/:productId', async (req, res) => {
              .map(c => normLocale(c?.locale))
              .filter(Boolean)
     );
-
     if (!set.size && shopLanguages.length) set.add(primaryLanguage);
 
     const productLanguages = Array.from(set).filter(l => shopLanguages.includes(l));
