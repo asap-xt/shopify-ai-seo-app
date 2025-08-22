@@ -1,10 +1,6 @@
 // backend/controllers/seoController.js
 // Routes: /plans/me, /seo/generate, /seo/apply
-// Minimal, focused fixes:
-//  - Accept ANY language (no enum)
-//  - "All languages" uses product.resourcePublications locales
-//  - Harden JSON-LD constants & slug fallback
-//  - Return AJV issues for easier debugging
+// This version enforces: do NOT generate for a language without real translations.
 // All comments are in English.
 
 import express from 'express';
@@ -303,32 +299,83 @@ function kebab(str = '') {
   return String(str)
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[^a-z0-9\s-]/g, '') // only ASCII letters/digits kept
+    .replace(/[^a-z0-9\s-]/g, '') // ASCII only
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
 }
-
 function sanitizeHtmlSafe(html = '') {
   return String(html || '').replace(/<\/?(script|style|iframe)[^>]*>/gi, '');
 }
-
 function clamp(s = '', max) {
   const x = String(s || '');
   if (x.length <= max) return x;
   return x.slice(0, max - 1).trimEnd() + '…';
 }
-
 function gidTail(gid = '') {
   const m = String(gid || '').match(/\/(\d+)$/);
   return m ? m[1] : '0';
 }
-
 function canonLang(locale) {
   const L = String(locale || 'en').toLowerCase();
   return L.split(/[_-]/)[0] || 'en';
 }
 
+// ---------- NEW: product locales & localized content ----------
+async function getProductLocales(shop, productId) {
+  const Q = `
+    query ProductLocales($id: ID!) {
+      product(id: $id) {
+        resourcePublications(first: 50) {
+          edges { node { locale { locale } } }
+        }
+      }
+    }
+  `;
+  const data = await shopGraphQL(shop, Q, { id: productId });
+  const edges = data?.product?.resourcePublications?.edges || [];
+  const locales = edges.map(e => e?.node?.locale?.locale).filter(Boolean);
+  // canon to language-only (bg-bg -> bg), uniq
+  return Array.from(new Set(locales.map(canonLang)));
+}
+
+async function getProductLocalizedContent(shop, productId, localeInput) {
+  // Shopify accepts "bg" or "bg-BG"; we pass what user gave if includes region, else canon lang.
+  const locale = String(localeInput || 'en').includes('-') ? String(localeInput) : canonLang(localeInput);
+  const Q = `
+    query ProductTranslations($id: ID!, $locale: String!) {
+      product(id: $id) {
+        id
+        translations(locale: $locale) {
+          key
+          value
+          locale
+        }
+      }
+    }
+  `;
+  const data = await shopGraphQL(shop, Q, { id: productId, locale });
+  const arr = data?.product?.translations || [];
+  const map = {};
+  for (const t of arr) {
+    if (!t || !t.key) continue;
+    map[t.key] = t.value;
+  }
+  const title = (map['title'] || '').trim();
+  const bodyHtml = (map['body_html'] || '').trim();
+  const seoTitle = (map['seo_title'] || '').trim();
+  const seoDescription = (map['seo_description'] || '').trim();
+
+  const hasAny =
+    (title && title.length > 0) ||
+    (bodyHtml && bodyHtml.length > 0) ||
+    (seoTitle && seoTitle.length > 0) ||
+    (seoDescription && seoDescription.length > 0);
+
+  return { locale, title, bodyHtml, seoTitle, seoDescription, hasAny };
+}
+
+// ---------- Fixup & validate ----------
 function fixupAndValidate(payload) {
   const p = { ...(payload || {}) };
   if (!p.seo) p.seo = {};
@@ -367,7 +414,7 @@ function fixupAndValidate(payload) {
     p.seo.slug = `${base}-${gidTail(p.productId)}`.replace(/-+$/, '');
   }
 
-  // Bullets: remove empties, ensure min 2 valid items
+  // Bullets
   let bullets = Array.isArray(p.seo.bullets) ? p.seo.bullets : [];
   bullets = bullets
     .map((s) => String(s || '').trim())
@@ -376,7 +423,7 @@ function fixupAndValidate(payload) {
   while (bullets.length < 2) bullets.push('Great value');
   p.seo.bullets = bullets.map((s) => s.slice(0, 160));
 
-  // FAQ: ensure min 1 item with min lengths
+  // FAQ
   let faq = Array.isArray(p.seo.faq) ? p.seo.faq : [];
   faq = faq
     .filter((x) => x && typeof x === 'object')
@@ -394,7 +441,7 @@ function fixupAndValidate(payload) {
   }
   p.seo.faq = faq;
 
-  // JSON-LD: force exact constants + Offer fields
+  // JSON-LD: force constants + Offer fields
   const fallbackName = p.seo.title || 'Product';
   const fallbackDesc = String(p.seo.bodyHtml || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -408,17 +455,15 @@ function fixupAndValidate(payload) {
     };
   } else {
     const jl = p.seo.jsonLd;
-    jl['@context'] = 'https://schema.org'; // force exact value
-    jl['@type'] = 'Product';               // force exact value
+    jl['@context'] = 'https://schema.org';
+    jl['@type'] = 'Product';
     if (!jl.name) jl.name = fallbackName;
     if (!jl.description) jl.description = clamp(fallbackDesc || fallbackName, META_MAX);
 
     if (!jl.offers || typeof jl.offers !== 'object') jl.offers = {};
-    jl.offers['@type'] = 'Offer'; // force exact value
-
+    jl.offers['@type'] = 'Offer';
     const priceEmpty = jl.offers.price === undefined || jl.offers.price === null || jl.offers.price === '';
     if (priceEmpty) jl.offers.price = '0';
-
     if (!jl.offers.priceCurrency || typeof jl.offers.priceCurrency !== 'string') {
       jl.offers.priceCurrency = 'USD';
     } else {
@@ -432,7 +477,7 @@ function fixupAndValidate(payload) {
 
 // ---------- Routes ----------
 
-// Plans (used by Dashboard/AI SEO form)
+// Plans
 router.get('/plans/me', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -457,37 +502,10 @@ router.post('/seo/generate', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
 
-    // "All" branch → generate for each product locale
     const isAll = String(language || '').toLowerCase() === 'all';
     if (isAll) {
-      const Q_PRODUCT_LOCALES = `
-        query ProductLocales($id: ID!) {
-          product(id: $id) {
-            id
-            resourcePublications(first: 50) {
-              edges { node { locale { locale } } }
-            }
-          }
-        }
-      `;
-      const Q_SHOP_PRIMARY = `
-        query ShopPrimary { shop { primaryDomain { locale } } }
-      `;
-
-      const prod = await shopGraphQL(shop, Q_PRODUCT_LOCALES, { id: productId });
-      const edges = prod?.product?.resourcePublications?.edges || [];
-      const locales = Array.from(new Set(
-        edges.map(e => e?.node?.locale?.locale).filter(Boolean)
-      ));
-
-      let langs = locales.map(canonLang);
-      if (langs.length === 0) {
-        const sh = await shopGraphQL(shop, Q_SHOP_PRIMARY);
-        langs = [canonLang(sh?.shop?.primaryDomain?.locale || 'en')];
-      }
-      // De-dup + hard cap to be safe
-      langs = Array.from(new Set(langs)).slice(0, 20);
-
+      // Use product publications to propose locales, then each run will enforce "has translation".
+      const langs = await getProductLocales(shop, productId);
       const results = [];
       for (const lang of langs) {
         try {
@@ -506,15 +524,19 @@ router.post('/seo/generate', async (req, res) => {
           });
         }
       }
-
-      return res.json({
-        language: 'all',
-        productId,
-        results,
-      });
+      return res.json({ language: 'all', productId, results });
     }
 
-    // Single language
+    // Single language → enforce "must have translation"
+    const langNorm = canonLang(language);
+    const productLangs = await getProductLocales(shop, productId);
+    if (!productLangs.includes(langNorm)) {
+      return res.status(400).json({
+        error: 'Product is not translated to the requested language',
+        language: langNorm,
+        availableLanguages: productLangs,
+      });
+    }
     const result = await generateSEOForLanguage(shop, productId, model, language);
     return res.json(result);
 
@@ -528,7 +550,8 @@ router.post('/seo/generate', async (req, res) => {
 async function generateSEOForLanguage(shop, productId, model, language) {
   const langNormalized = canonLang(language);
 
-  const q = `
+  // Base product (non-localized fields we still need)
+  const Q_PRODUCT = `
     query Product($id: ID!) {
       product(id: $id) {
         id
@@ -543,14 +566,26 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       }
     }
   `;
-  const data = await shopGraphQL(shop, q, { id: productId });
+  const data = await shopGraphQL(shop, Q_PRODUCT, { id: productId });
   const p = data?.product;
   if (!p) throw new Error('Product not found');
 
+  // Localized content for requested language – REQUIRED
+  const loc = await getProductLocalizedContent(shop, productId, language);
+  if (!loc?.hasAny) {
+    const e = new Error('No translated content for requested language');
+    e.status = 400;
+    throw e;
+  }
+
+  // Prefer localized title/body if available
+  const localizedTitle = loc.title || p.title;
+  const localizedBody = loc.bodyHtml || p.descriptionHtml;
+
   const ctx = {
     id: p.id,
-    title: p.title,
-    descriptionHtml: p.descriptionHtml,
+    title: localizedTitle,
+    descriptionHtml: localizedBody,
     vendor: p.vendor,
     productType: p.productType,
     tags: p.tags,
@@ -574,18 +609,18 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     model,
     language: langNormalized,
     seo: {
-      title: candidate.title || p.title || 'Product',
+      title: candidate.title || localizedTitle || 'Product',
       metaDescription: candidate.metaDescription || '',
-      slug: candidate.slug || p.handle || kebab(p.title || 'product'),
-      bodyHtml: candidate.bodyHtml || p.descriptionHtml || '',
+      slug: candidate.slug || p.handle || kebab(localizedTitle || 'product'),
+      bodyHtml: candidate.bodyHtml || localizedBody || '',
       bullets: Array.isArray(candidate.bullets) ? candidate.bullets : [],
-      faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${p.title}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
+      faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${localizedTitle}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
       imageAlt: Array.isArray(candidate.imageAlt) ? candidate.imageAlt : [],
       jsonLd: candidate.jsonLd || {
         '@context': 'https://schema.org',
         '@type': 'Product',
-        name: p.title,
-        description: (p.descriptionHtml || '').replace(/<[^>]+>/g, ' ').trim(),
+        name: localizedTitle,
+        description: (localizedBody || '').replace(/<[^>]+>/g, ' ').trim(),
         offers: {
           '@type': 'Offer',
           price: String(p?.priceRangeV2?.minVariantPrice?.amount || '0'),
@@ -618,6 +653,7 @@ function strictPrompt(ctx, language) {
       content:
         `You are an SEO assistant for Shopify products. Output STRICT JSON only.\n` +
         `Language: ${language}\n` +
+        `Use ONLY the localized fields provided (title/bodyHtml) and do not invent translations.\n` +
         `Constraints:\n` +
         `- title <= ${TITLE_LIMIT} chars\n` +
         `- metaDescription ~${META_TARGET} (cap ${META_MAX})\n` +
