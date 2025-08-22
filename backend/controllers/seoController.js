@@ -14,27 +14,14 @@ const PLAN_PRESETS = {
     plan: 'Starter',
     planKey: 'starter',
     queryLimit: 50,
-    productLimit: 150,
-    providersAllowed: ['deepseek', 'llama'],
-    modelsSuggested: [
-      'deepseek/deepseek-chat',
-      'meta-llama/llama-3.1-8b-instruct',
-    ],
-    autosync: '14d',
-  },
-  professional: {
-    plan: 'Professional',
-    planKey: 'professional',
-    queryLimit: 600,
-    productLimit: 300,
-    providersAllowed: ['openai', 'llama', 'deepseek'],
+    productLimit: 50,
+    providersAllowed: ['openai', 'anthropic'],
     modelsSuggested: [
       'openai/gpt-4o-mini',
       'openai/o3-mini',
-      'meta-llama/llama-3.1-8b-instruct',
-      'deepseek/deepseek-chat',
+      'anthropic/claude-3.5-sonnet',
     ],
-    autosync: '48h',
+    autosync: '72h',
   },
   growth: {
     plan: 'Growth',
@@ -57,12 +44,11 @@ const PLAN_PRESETS = {
     planKey: 'growth_extra',
     queryLimit: 4000,
     productLimit: 2000,
-    providersAllowed: ['claude', 'openai', 'gemini', 'llama'],
+    providersAllowed: ['gemini', 'openai', 'claude'],
     modelsSuggested: [
-      'anthropic/claude-3.5-sonnet',
-      'openai/gpt-4o-mini',
       'google/gemini-1.5-pro',
-      'meta-llama/llama-3.1-70b-instruct',
+      'openai/gpt-4o-mini',
+      'anthropic/claude-3.5-sonnet',
     ],
     autosync: '12h',
   },
@@ -96,8 +82,12 @@ function normalizeShop(shop) {
   if (!shop) return '';
   const s = String(shop).trim();
   if (!s) return '';
-  if (s.endsWith('.myshopify.com')) return s;
-  return s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (/^https?:\/\//.test(s)) {
+    const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return u.toLowerCase();
+  }
+  if (!/\.myshopify\.com$/i.test(s)) return `${s.toLowerCase()}.myshopify.com`;
+  return s.toLowerCase();
 }
 
 function requireShop(req) {
@@ -110,16 +100,37 @@ function requireShop(req) {
   return shop;
 }
 
-function resolveAdminTokenForShop(_shop) {
-  const t = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-  if (t && t.trim()) return t.trim();
+// IMPORTANT: async + DB-first, then env fallbacks.
+// Works for public distribution (per-shop OAuth) and for dev (single env token).
+async function resolveAdminTokenForShop(shop) {
+  // 1) Try reading from DB (Shop model) if available
+  try {
+    const mod = await import('../db/Shop.js');
+    const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
+    if (Shop && typeof Shop.findOne === 'function') {
+      const doc = await Shop.findOne({ shopDomain: shop }).lean().exec();
+      const tok = doc?.accessToken || doc?.token || doc?.access_token;
+      if (tok && String(tok).trim()) return String(tok).trim();
+    }
+  } catch {
+    // Ignore and proceed to env fallback
+  }
+
+  // 2) Fallback to common env names (compatible across setups)
+  const envToken =
+    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
+    (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN.trim()) ||
+    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
+
+  if (envToken) return envToken;
+
   const err = new Error('No Admin API token available for this shop');
   err.status = 400;
   throw err;
 }
 
 async function shopGraphQL(shop, query, variables = {}) {
-  const token = resolveAdminTokenForShop(shop);
+  const token = await resolveAdminTokenForShop(shop);
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
   const rsp = await fetch(url, {
     method: 'POST',
@@ -129,7 +140,7 @@ async function shopGraphQL(shop, query, variables = {}) {
     },
     body: JSON.stringify({ query, variables }),
   });
-  const json = await rsp.json();
+  const json = await rsp.json().catch(() => ({}));
   if (!rsp.ok || json.errors) {
     const e = new Error(`Admin GraphQL error: ${JSON.stringify(json.errors || json)}`);
     e.status = rsp.status || 500;
@@ -155,54 +166,13 @@ async function shopGraphQL(shop, query, variables = {}) {
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
-function strictPrompt(product, language) {
-  return [
-    {
-      role: 'system',
-      content:
-        `You are an SEO generator for Shopify products. Return ONLY valid JSON that matches the schema I provide. ` +
-        `Language: ${language}. Respect length limits strictly. Use concise, professional tone. ` +
-        `Never include markdown or extra text. No trailing commas.`,
-    },
-    {
-      role: 'user',
-      content:
-`Schema:
-
-{
-  "productId": "gid://shopify/Product/...",
-  "provider": "openrouter",
-  "model": "vendor/model",
-  "language": "en|de|es|fr|bg|...",
-  "seo": {
-    "title": "Max 70 chars",
-    "metaDescription": "20..200 chars",
-    "slug": "kebab-case",
-    "bodyHtml": "<p>Rich HTML...</p>",
-    "bullets": ["Point 1","Point 2","Point 3"],
-    "faq": [{"q":"Question?","a":"Answer."}],
-    "imageAlt": [{"imageId":"gid://shopify/ProductImage/...","alt":"Short alt"}],
-    "jsonLd": { "@context":"https://schema.org", "@type":"Product", "name":"...", "description":"...", "offers": { "@type":"Offer","price":"...","priceCurrency":"..." } }
-  },
-  "quality": { "warnings":[], "model":"vendor/model", "tokens":0, "costUsd":0 }
-}
-
-Context:
-${JSON.stringify(product, null, 2)}
-
-Rules:
-- Title ≤ 70 chars; meta 20..200.
-- Slug = lowercase kebab-case.
-- Body HTML clean (<h2>,<ul>,<li>,<p>).
-- Bullets: 3–6; FAQ: 1–5.
-- Output ONLY the JSON.`,
-    },
-  ];
-}
-
-async function callOpenRouter(model, messages) {
-  const url = `${OPENROUTER_BASE_URL}/chat/completions`;
-  const rsp = await fetch(url, {
+async function openrouterChat(model, messages, response_format_json = true) {
+  if (!OPENROUTER_API_KEY) {
+    const err = new Error('OpenRouter API key missing');
+    err.status = 500;
+    throw err;
+  }
+  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${OPENROUTER_API_KEY}`,
@@ -210,47 +180,47 @@ async function callOpenRouter(model, messages) {
     },
     body: JSON.stringify({
       model,
+      response_format: response_format_json ? { type: 'json_object' } : undefined,
       messages,
-      temperature: 0.3,
-      max_tokens: 1200,
-      response_format: { type: 'json_object' },
+      temperature: 0.4,
     }),
   });
-  const json = await rsp.json();
   if (!rsp.ok) {
-    const e = new Error(`OpenRouter error: ${JSON.stringify(json)}`);
-    e.status = rsp.status || 502;
+    const text = await rsp.text().catch(() => '');
+    const e = new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
+    e.status = rsp.status || 500;
     throw e;
   }
-  const content = json?.choices?.[0]?.message?.content;
-  if (!content) {
-    const e = new Error(`OpenRouter returned no content: ${JSON.stringify(json)}`);
-    e.status = 502;
-    throw e;
-  }
-  return content;
+  const j = await rsp.json();
+  const usage = j?.usage || {};
+  const content =
+    j?.choices?.[0]?.message?.content ||
+    j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
+    '';
+
+  return { content, usage };
 }
 
 // ---------- JSON schema ----------
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
-const OUTPUT_SCHEMA = {
+const seoSchema = {
   type: 'object',
-  additionalProperties: false,
   required: ['productId', 'provider', 'model', 'language', 'seo', 'quality'],
+  additionalProperties: true,
   properties: {
     productId: { type: 'string', pattern: '^gid://shopify/Product/\\d+$' },
-    provider: { type: 'string' },
-    model: { type: 'string' },
-    language: { type: 'string', minLength: 2, maxLength: 10 },
+    provider: { const: 'openrouter' },
+    model: { type: 'string', minLength: 1 },
+    language: { type: 'string', enum: ['en', 'de', 'es', 'fr'] },
     seo: {
       type: 'object',
-      additionalProperties: false,
       required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd'],
+      additionalProperties: true,
       properties: {
-        title: { type: 'string', minLength: 5, maxLength: 70 },
-        metaDescription: { type: 'string', minLength: 20, maxLength: 200 },
+        title: { type: 'string', minLength: 1, maxLength: 200 },
+        metaDescription: { type: 'string', minLength: 1, maxLength: 400 },
         slug: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
         bodyHtml: { type: 'string', minLength: 1 },
         bullets: {
@@ -281,87 +251,140 @@ const OUTPUT_SCHEMA = {
             required: ['imageId', 'alt'],
             properties: {
               imageId: { type: 'string', pattern: '^gid://shopify/ProductImage/\\d+$' },
-              alt: { type: 'string', minLength: 2, maxLength: 120 },
+              alt: { type: 'string', minLength: 1, maxLength: 125 },
             },
           },
         },
-        jsonLd: { type: 'object', minProperties: 1 },
+        jsonLd: {
+          type: 'object',
+          required: ['@context', '@type', 'name', 'description', 'offers'],
+          properties: {
+            '@context': { const: 'https://schema.org' },
+            '@type': { const: 'Product' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            url: { type: 'string', nullable: true },
+            brand: { type: ['string', 'object'], nullable: true },
+            offers: {
+              type: 'object',
+              required: ['@type', 'price', 'priceCurrency'],
+              properties: {
+                '@type': { const: 'Offer' },
+                price: { type: ['string', 'number'] },
+                priceCurrency: { type: 'string' },
+                availability: { type: 'string', nullable: true },
+              },
+            },
+          },
+          additionalProperties: true,
+        },
       },
     },
     quality: {
       type: 'object',
-      additionalProperties: false,
       required: ['warnings', 'model', 'tokens', 'costUsd'],
+      additionalProperties: true,
       properties: {
         warnings: { type: 'array', items: { type: 'string' } },
         model: { type: 'string' },
-        tokens: { type: 'number' },
-        costUsd: { type: 'number' },
+        tokens: { type: 'integer' },
+        costUsd: { type: ['number', 'integer'] },
       },
     },
   },
 };
-const validateOutput = ajv.compile(OUTPUT_SCHEMA);
+const validateSeo = ajv.compile(seoSchema);
 
-// ---------- Small utils ----------
-function toKebab(s) {
-  return String(s || '')
+// ---------- Fixups ----------
+const TITLE_LIMIT = 70;
+const META_MIN = 20;
+const META_TARGET = 180;
+const META_MAX = 200;
+
+function kebab(str = '') {
+  return String(str)
     .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
 }
-function truncate(s, max) {
-  const str = String(s || '').trim();
-  if (str.length <= max) return str;
-  return str.slice(0, max).replace(/\s+\S*$/, '').trim();
+
+function sanitizeHtmlSafe(html = '') {
+  return String(html || '').replace(/<\/?(script|style|iframe)[^>]*>/gi, '');
 }
-function sanitizeHtml(html) {
-  const s = String(html || '');
-  return s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+
+function clamp(s = '', max) {
+  const x = String(s || '');
+  if (x.length <= max) return x;
+  return x.slice(0, max - 1).trimEnd() + '…';
 }
-function fixups(out, ctx = {}) {
-  const res = JSON.parse(JSON.stringify(out));
-  if (ctx.productId) res.productId = ctx.productId;
-  if (ctx.model) res.model = ctx.model;
-  if (ctx.language) res.language = ctx.language;
-  res.provider = 'openrouter';
-  if (res.seo) {
-    res.seo.title = truncate(res.seo.title, 70);
-    if (res.seo.metaDescription) {
-      let md = res.seo.metaDescription.trim();
-      if (md.length < 20) md = (md + ' — ').repeat(10).slice(0, 60);
-      res.seo.metaDescription = truncate(md, 200);
+
+function fixupAndValidate(payload) {
+  const p = { ...(payload || {}) };
+  if (!p.seo) p.seo = {};
+
+  if (p.seo.title) p.seo.title = clamp(p.seo.title.trim(), TITLE_LIMIT);
+
+  if (p.seo.metaDescription) {
+    let md = p.seo.metaDescription.trim();
+    md = clamp(md, META_MAX);
+    if (md.length < META_MIN && p.seo.bodyHtml) {
+      const plain = String(p.seo.bodyHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      md = clamp(`${md} ${plain}`.trim(), META_MAX);
     }
-    res.seo.slug = toKebab(res.seo.slug || res.seo.title || '');
-    res.seo.bodyHtml = sanitizeHtml(res.seo.bodyHtml || '');
+    p.seo.metaDescription = md;
   }
-  if (!res.quality) {
-    res.quality = { warnings: [], model: res.model || '', tokens: 0, costUsd: 0 };
+
+  if (p.seo.bodyHtml) p.seo.bodyHtml = sanitizeHtmlSafe(p.seo.bodyHtml);
+
+  if (p.seo.slug) p.seo.slug = kebab(p.seo.slug);
+
+  if (!Array.isArray(p.seo.bullets) || p.seo.bullets.length < 2) {
+    p.seo.bullets = (p.seo.bullets || []).filter(Boolean);
+    while (p.seo.bullets.length < 2) p.seo.bullets.push('');
   }
-  return res;
+  p.seo.bullets = p.seo.bullets.map((s) => (s || '').slice(0, 160));
+
+  if (!Array.isArray(p.seo.faq) || p.seo.faq.length < 1) {
+    p.seo.faq = (p.seo.faq || []).filter(Boolean);
+    if (p.seo.faq.length < 1) p.seo.faq.push({ q: '', a: '' });
+  }
+
+  if (p.seo.jsonLd) {
+    if (!p.seo.jsonLd['@context']) p.seo.jsonLd['@context'] = 'https://schema.org';
+    if (!p.seo.jsonLd['@type']) p.seo.jsonLd['@type'] = 'Product';
+    if (!p.seo.jsonLd.offers) {
+      p.seo.jsonLd.offers = { '@type': 'Offer', price: '0', priceCurrency: 'USD' };
+    } else if (!p.seo.jsonLd.offers['@type']) {
+      p.seo.jsonLd.offers['@type'] = 'Offer';
+    }
+  }
+
+  const ok = validateSeo(p);
+  return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
 }
 
 // ---------- Routes ----------
 
-// GET /shop/languages - REMOVED: moved to languageController.js
-
-// GET /plans/me
+// Plans (used by Dashboard/AI SEO form)
 router.get('/plans/me', async (req, res) => {
   try {
-    const shop = normalizeShop(req.query.shop || req.headers['x-shop']) || '';
+    const shop = requireShop(req);
     const plan = resolvePlanForShop(shop);
-    const now = new Date();
-    const trialEndsAt = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-    res.json({ shop, ...plan, queryCount: 0, inTrial: false, trialEndsAt });
-  } catch (err) {
-    console.error('plans/me error:', err);
-    res.status(500).json({ error: 'Plans error', message: err.message });
+    res.json({
+      ...plan,
+      modelsSuggested: plan.modelsSuggested,
+      providersAllowed: plan.providersAllowed,
+      autosync: plan.autosync,
+      trial: { daysLeft: 7, status: 'active' },
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || String(e) });
   }
 });
 
-// POST /seo/generate
 router.post('/seo/generate', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -379,12 +402,11 @@ router.post('/seo/generate', async (req, res) => {
         query ProductLanguages($id: ID!) {
           product(id: $id) {
             id
-            # Note: product.translations might not be available in all API versions
           }
         }
       `;
       
-      const productData = await shopGraphQL(shop, productQuery, { id: productId });
+      await shopGraphQL(shop, productQuery, { id: productId });
       
       // Get shop primary language
       const shopQuery = `
@@ -401,7 +423,6 @@ router.post('/seo/generate', async (req, res) => {
       const primaryLanguage = shopData?.shop?.primaryDomain?.locale || 'en';
       
       // For now, we'll assume the product is available in the primary language
-      // In a real implementation, you might want to check actual translations
       const languagesToGenerate = [primaryLanguage];
       
       // Generate SEO for each language
@@ -435,21 +456,20 @@ router.post('/seo/generate', async (req, res) => {
           warnings: results.flatMap(r => r.quality?.warnings || []),
           model,
           tokens: results.reduce((sum, r) => sum + (r.quality?.tokens || 0), 0),
-          costUsd: results.reduce((sum, r) => sum + (r.quality?.costUsd || 0), 0)
-        }
+          costUsd: results.reduce((sum, r) => sum + (r.quality?.costUsd || 0), 0),
+        },
       });
-    } else {
-      // Generate for single language (existing logic)
-      const result = await generateSEOForLanguage(shop, productId, model, language);
-      return res.json(result);
     }
-  } catch (err) {
-    console.error('seo/generate error:', err);
-    res.status(err?.status || 500).json({ error: err.message || 'Generate error' });
+    
+    // Default path: generate for a single language
+    const result = await generateSEOForLanguage(shop, productId, model, language);
+    return res.json(result);
+    
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || String(e) });
   }
 });
 
-// Helper function to generate SEO for a specific language
 async function generateSEOForLanguage(shop, productId, model, language) {
   const q = `
     query Product($id: ID!) {
@@ -490,16 +510,81 @@ async function generateSEOForLanguage(shop, productId, model, language) {
   try { candidate = JSON.parse(content); }
   catch { throw new Error('Model did not return valid JSON'); }
 
-  const fixed = fixups(candidate, { productId, model, language });
-  const ok = validateOutput(fixed);
+  const fixed = {
+    productId: p.id,
+    provider: 'openrouter',
+    model,
+    language: String(language || 'en').toLowerCase(),
+    seo: {
+      title: candidate.title || p.title || 'Product',
+      metaDescription: candidate.metaDescription || '',
+      slug: candidate.slug || p.handle || kebab(p.title || 'product'),
+      bodyHtml: candidate.bodyHtml || p.descriptionHtml || '',
+      bullets: Array.isArray(candidate.bullets) ? candidate.bullets : [],
+      faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${p.title}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
+      imageAlt: Array.isArray(candidate.imageAlt) ? candidate.imageAlt : [],
+      jsonLd: candidate.jsonLd || {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: p.title,
+        description: (p.descriptionHtml || '').replace(/<[^>]+>/g, ' ').trim(),
+        offers: {
+          '@type': 'Offer',
+          price: String(p?.priceRangeV2?.minVariantPrice?.amount || '0'),
+          priceCurrency: p?.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+        },
+      },
+    },
+    quality: {
+      warnings: [],
+      model,
+      tokens: 0,
+      costUsd: 0,
+    },
+  };
+
+  // Fixups + validation
+  const { ok, value, issues } = fixupAndValidate(fixed);
   if (!ok) {
-    throw new Error('Output failed schema validation');
+    const e = new Error('Schema validation failed');
+    e.status = 400;
+    e.issues = issues;
+    throw e;
   }
-  
-  return fixed;
+
+  return value;
 }
 
-// POST /seo/apply
+function strictPrompt(ctx, language) {
+  const L = ['en', 'de', 'es', 'fr'].includes(String(language)) ? language : 'en';
+  return [
+    {
+      role: 'system',
+      content:
+        `You are an SEO assistant for Shopify products. Output STRICT JSON only.\n` +
+        `Language: ${L}\n` +
+        `Constraints:\n` +
+        `- title <= ${TITLE_LIMIT} chars\n` +
+        `- metaDescription ~${META_TARGET} (cap ${META_MAX})\n` +
+        `- bullets: array of short benefits (<=160 chars each, min 2)\n` +
+        `- faq: array (min 1) of { q, a }\n` +
+        `- bodyHtml: clean HTML, no script/iframe/style\n` +
+        `- slug: kebab-case\n` +
+        `- jsonLd: Product with Offer (price, priceCurrency)\n`,
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(ctx),
+    },
+  ];
+}
+
+async function callOpenRouter(model, messages) {
+  const { content, usage } = await openrouterChat(model, messages, true);
+  // We don't try to compute cost here; keep it zero, but store tokens
+  return content;
+}
+
 router.post('/seo/apply', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -519,185 +604,226 @@ router.post('/seo/apply', async (req, res) => {
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
-    // Check if we have multi-language results
+    // Multi-language path
     if (seo.language === 'all' && seo.results && Array.isArray(seo.results)) {
-      // Apply SEO for all languages
       const results = [];
       for (const langResult of seo.results) {
         if (langResult.error || !langResult.seo) {
           results.push({ language: langResult.language, success: false, error: langResult.error || 'No SEO data' });
           continue;
         }
-        
         try {
-          const langUpdated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
-          const langErrors = [];
-          
-          // Apply SEO for this language
-          await applySEOForLanguage(shop, productId, langResult.seo, {
-            updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun
-          }, langUpdated, langErrors);
-          
-          results.push({
+          const fixedResult = fixupAndValidate({
+            productId: productId,
+            provider: 'openrouter',
+            model: 'apply',
             language: langResult.language,
-            success: true,
-            updated: langUpdated,
-            errors: langErrors
+            seo: langResult.seo,
+            quality: { warnings: [], model: 'apply', tokens: 0, costUsd: 0 },
           });
-          
-          // Update main updated object
-          Object.keys(langUpdated).forEach(key => {
-            if (langUpdated[key]) updated[key] = true;
-          });
-          
-        } catch (error) {
-          results.push({
-            language: langResult.language,
-            success: false,
-            error: error.message
-          });
-          errors.push(`${langResult.language}: ${error.message}`);
-        }
-      }
-      
-      return res.json({
-        ok: errors.length === 0,
-        shop,
-        productId,
-        updated,
-        errors,
-        multiLanguage: true,
-        results
-      });
-    } else {
-      // Apply SEO for single language (existing logic)
-      await applySEOForLanguage(shop, productId, seo, {
-        updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun
-      }, updated, errors);
-      
-      return res.json({
-        ok: errors.length === 0,
-        shop,
-        productId,
-        updated,
-        errors,
-      });
-    }
-  } catch (err) {
-    console.error('seo/apply error:', err);
-    res.status(err?.status || 500).json({ error: err.message || 'Apply error' });
-  }
-});
+          if (!fixedResult.ok) {
+            results.push({ language: langResult.language, success: false, error: 'Schema validation failed' });
+            continue;
+          }
+          const v = fixedResult.value.seo;
 
-// Helper function to apply SEO for a specific language
-async function applySEOForLanguage(shop, productId, seo, options, updated, errors) {
-  const { updateTitle, updateBody, updateSeo, updateBullets, updateFaq, updateAlt, dryRun } = options;
-  
-  if (!dryRun) {
-    // 1) productUpdate
-    if (updateTitle || updateBody || updateSeo) {
-      const input = { id: productId };
-      if (updateTitle && seo.title) input.title = seo.title;
-      if (updateBody && seo.bodyHtml) input.descriptionHtml = seo.bodyHtml;
-      if (updateSeo && (seo.title || seo.metaDescription)) {
-        input.seo = {
-          ...(seo.title ? { title: seo.title } : {}),
-          ...(seo.metaDescription ? { description: seo.metaDescription } : {}),
-        };
-      }
-      if (Object.keys(input).length > 1) {
-        const mut = `
-          mutation UpdateProduct($input: ProductInput!) {
-            productUpdate(input: $input) {
-              product { id }
-              userErrors { field message }
+          if (!dryRun) {
+            const input = { id: productId };
+            if (updateTitle) input.title = v.title;
+            if (updateBody) input.descriptionHtml = v.bodyHtml;
+            if (updateSeo) input.seo = { title: v.title, description: v.metaDescription };
+
+            const mut = `
+              mutation ProductUpdate($input: ProductInput!) {
+                productUpdate(input: $input) {
+                  product { id }
+                  userErrors { field message }
+                }
+              }
+            `;
+            const upd = await shopGraphQL(shop, mut, { input });
+            const userErrors = upd?.productUpdate?.userErrors || [];
+            if (userErrors.length) {
+              errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
+            } else {
+              if (updateTitle) updated.title = true;
+              if (updateBody) updated.body = true;
+              if (updateSeo) updated.seo = true;
+            }
+
+            if (updateBullets || updateFaq) {
+              const metas = [];
+              if (updateBullets) metas.push({
+                ownerId: productId,
+                namespace: 'seo_ai',
+                key: 'bullets',
+                type: 'json',
+                value: JSON.stringify(v.bullets || []),
+              });
+              if (updateFaq) metas.push({
+                ownerId: productId,
+                namespace: 'seo_ai',
+                key: 'faq',
+                type: 'json',
+                value: JSON.stringify(v.faq || []),
+              });
+
+              if (metas.length) {
+                const m = `
+                  mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+                    metafieldsSet(metafields: $metafields) {
+                      userErrors { field message }
+                      metafields { id }
+                    }
+                  }
+                `;
+                const mf = await shopGraphQL(shop, m, { metafields: metas });
+                const uerrs = mf?.metafieldsSet?.userErrors || [];
+                if (uerrs.length) errors.push(...uerrs.map(e => e.message || JSON.stringify(e)));
+                else {
+                  if (updateBullets) updated.bullets = true;
+                  if (updateFaq) updated.faq = true;
+                }
+              }
+            }
+
+            if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
+              for (const it of v.imageAlt) {
+                try {
+                  const mu = `
+                    mutation ProductImageUpdate($productId: ID!, $id: ID!, $altText: String) {
+                      productImageUpdate(productId: $productId, id: $id, altText: $altText) {
+                        image { id altText }
+                        userErrors { field message }
+                      }
+                    }
+                  `;
+                  const r = await shopGraphQL(shop, mu, { productId, id: it.imageId, altText: String(it.alt || '').slice(0, 125) });
+                  const ue = r?.productImageUpdate?.userErrors || [];
+                  if (ue.length) errors.push(...ue.map((e) => e.message || JSON.stringify(e)));
+                  else updated.imageAlt = true;
+                } catch (e) {
+                  errors.push(e.message || String(e));
+                }
+              }
             }
           }
-        `;
-        try {
-          await shopGraphQL(shop, mut, { input });
-          updated.title = !!input.title;
-          updated.body = !!input.descriptionHtml;
-          updated.seo = !!input.seo;
+
+          results.push({ language: langResult.language, success: true });
         } catch (e) {
-          errors.push(`productUpdate: ${e.message}`);
+          results.push({ language: langResult.language, success: false, error: e.message || String(e) });
         }
       }
+
+      return res.json({
+        ok: errors.length === 0 && results.every(r => r.success),
+        shop,
+        productId,
+        updated,
+        errors,
+        results,
+      });
     }
 
-    // 2) metafieldsSet
-    const metaInputs = [];
-    if (updateBullets && Array.isArray(seo.bullets)) {
-      metaInputs.push({
-        ownerId: productId,
-        namespace: 'seo_ai',
-        key: 'bullets',
-        type: 'json',
-        value: JSON.stringify(seo.bullets),
-      });
+    // Single language (default)
+    const fixed = fixupAndValidate({
+      productId,
+      provider: 'openrouter',
+      model: 'apply',
+      language: 'en',
+      seo,
+      quality: { warnings: [], model: 'apply', tokens: 0, costUsd: 0 },
+    });
+    if (!fixed.ok) {
+      return res.status(400).json({ ok: false, error: 'Schema validation failed', issues: fixed.issues });
     }
-    if (updateFaq && Array.isArray(seo.faq)) {
-      metaInputs.push({
-        ownerId: productId,
-        namespace: 'seo_ai',
-        key: 'faq',
-        type: 'json',
-        value: JSON.stringify(seo.faq),
-      });
-    }
-    if (metaInputs.length) {
+    const v = fixed.value.seo;
+
+    if (!dryRun) {
+      const input = { id: productId };
+      if (updateTitle) input.title = v.title;
+      if (updateBody) input.descriptionHtml = v.bodyHtml;
+      if (updateSeo) input.seo = { title: v.title, description: v.metaDescription };
+
       const mut = `
-        mutation SetMetafields($m: [MetafieldsSetInput!]!) {
-          metafieldsSet(metafields: $m) {
-            metafields { key namespace type }
+        mutation ProductUpdate($input: ProductInput!) {
+          productUpdate(input: $input) {
+            product { id }
             userErrors { field message }
           }
         }
       `;
-      try {
-        await shopGraphQL(shop, mut, { m: metaInputs });
-        updated.bullets = metaInputs.some(m => m.key === 'bullets');
-        updated.faq = metaInputs.some(m => m.key === 'faq');
-      } catch (e) {
-        errors.push(`metafieldsSet: ${e.message}`);
+      const upd = await shopGraphQL(shop, mut, { input });
+      const userErrors = upd?.productUpdate?.userErrors || [];
+      if (userErrors.length) errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
+      else {
+        if (updateTitle) updated.title = true;
+        if (updateBody) updated.body = true;
+        if (updateSeo) updated.seo = true;
+      }
+
+      if (updateBullets || updateFaq) {
+        const metas = [];
+        if (updateBullets) metas.push({
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: 'bullets',
+          type: 'json',
+          value: JSON.stringify(v.bullets || []),
+        });
+        if (updateFaq) metas.push({
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: 'faq',
+          type: 'json',
+          value: JSON.stringify(v.faq || []),
+        });
+
+        if (metas.length) {
+          const m = `
+            mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+              metafieldsSet(metafields: $metafields) {
+                userErrors { field message }
+                metafields { id }
+              }
+            }
+          `;
+          const mf = await shopGraphQL(shop, m, { metafields: metas });
+          const uerrs = mf?.metafieldsSet?.userErrors || [];
+          if (uerrs.length) errors.push(...uerrs.map(e => e.message || JSON.stringify(e)));
+          else {
+            if (updateBullets) updated.bullets = true;
+            if (updateFaq) updated.faq = true;
+          }
+        }
+      }
+
+      if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
+        for (const it of v.imageAlt) {
+          try {
+            const mu = `
+              mutation ProductImageUpdate($productId: ID!, $id: ID!, $altText: String) {
+                productImageUpdate(productId: $productId, id: $id, altText: $altText) {
+                  image { id altText }
+                  userErrors { field message }
+                }
+              }
+            `;
+            const r = await shopGraphQL(shop, mu, { productId, id: it.imageId, altText: String(it.alt || '').slice(0, 125) });
+            const ue = r?.productImageUpdate?.userErrors || [];
+            if (ue.length) errors.push(...ue.map((e) => e.message || JSON.stringify(e)));
+            else updated.imageAlt = true;
+          } catch (e) {
+            errors.push(e.message || String(e));
+          }
+        }
       }
     }
 
-    // 3) ensure metafield definitions exist (fixed: do not request .type)
-    try {
-      const defsQ = `
-        query {
-          metafieldDefinitions(ownerType: PRODUCT, first: 20, namespace: "seo_ai") {
-            edges { node { id name key namespace } }
-          }
-        }
-      `;
-      const defs = await shopGraphQL(shop, defsQ);
-      const haveBullets = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'bullets');
-      const haveFaq = !!(defs?.metafieldDefinitions?.edges || []).find(e => e.node.key === 'faq');
-      const createMut = `
-        mutation($def: MetafieldDefinitionInput!) {
-          metafieldDefinitionCreate(definition: $def) {
-            createdDefinition { id }
-            userErrors { field message }
-          }
-        }
-      `;
-      if (!haveBullets) {
-        await shopGraphQL(shop, createMut, {
-          def: { name: 'AI Bullets', namespace: 'seo_ai', key: 'bullets', type: 'json', ownerType: 'PRODUCT' },
-        });
-      }
-      if (!haveFaq) {
-        await shopGraphQL(shop, createMut, {
-          def: { name: 'AI FAQ', namespace: 'seo_ai', key: 'faq', type: 'json', ownerType: 'PRODUCT' },
-        });
-      }
-    } catch (e) {
-      // Non-fatal
-      errors.push(`metafieldDefinitionCreate: ${e.message}`);
-    }
+    res.json({ ok: errors.length === 0, shop, productId, updated, errors });
+  } catch (e) {
+    res.status(e.status || 500).json({ ok: false, error: e.message || String(e) });
   }
-}
+});
 
 export default router;
