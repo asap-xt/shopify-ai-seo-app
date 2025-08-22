@@ -1,6 +1,10 @@
 // backend/controllers/seoController.js
 // Routes: /plans/me, /seo/generate, /seo/apply
-// Minimal edits to: accept ANY language & harden schema fixups.
+// Minimal, focused fixes:
+//  - Accept ANY language (no enum)
+//  - "All languages" uses product.resourcePublications locales
+//  - Harden JSON-LD constants & slug fallback
+//  - Return AJV issues for easier debugging
 // All comments are in English.
 
 import express from 'express';
@@ -102,7 +106,6 @@ function requireShop(req) {
 }
 
 // Async token resolver: DB first (OAuth per-shop), then env fallbacks.
-// Works for both public distribution and local/dev.
 async function resolveAdminTokenForShop(shop) {
   try {
     const mod = await import('../db/Shop.js');
@@ -196,7 +199,7 @@ async function openrouterChat(model, messages, response_format_json = true) {
   return { content, usage: j?.usage || {} };
 }
 
-// ---------- JSON schema (ALLOW ANY LANGUAGE) ----------
+// ---------- JSON schema (ANY language accepted) ----------
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 
@@ -208,8 +211,7 @@ const seoSchema = {
     productId: { type: 'string', pattern: '^gid://shopify/Product/\\d+$' },
     provider: { const: 'openrouter' },
     model: { type: 'string', minLength: 1 },
-    // Accept ANY language code (lowercased later). No enum here.
-    language: { type: 'string', minLength: 2, maxLength: 32 },
+    language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
       type: 'object',
       required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd'],
@@ -301,7 +303,7 @@ function kebab(str = '') {
   return String(str)
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '') // only ASCII letters/digits kept
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
@@ -315,6 +317,16 @@ function clamp(s = '', max) {
   const x = String(s || '');
   if (x.length <= max) return x;
   return x.slice(0, max - 1).trimEnd() + '…';
+}
+
+function gidTail(gid = '') {
+  const m = String(gid || '').match(/\/(\d+)$/);
+  return m ? m[1] : '0';
+}
+
+function canonLang(locale) {
+  const L = String(locale || 'en').toLowerCase();
+  return L.split(/[_-]/)[0] || 'en';
 }
 
 function fixupAndValidate(payload) {
@@ -348,8 +360,12 @@ function fixupAndValidate(payload) {
     p.seo.metaDescription = clamp(plain || (p.seo.title || 'Great product'), META_MAX);
   }
 
-  // Slug: normalize to kebab-case
+  // Slug: normalize to kebab-case; ensure non-empty & pattern-safe
   if (p.seo.slug) p.seo.slug = kebab(p.seo.slug);
+  if (!p.seo.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.seo.slug)) {
+    const base = kebab(p.seo?.title || '') || 'product';
+    p.seo.slug = `${base}-${gidTail(p.productId)}`.replace(/-+$/, '');
+  }
 
   // Bullets: remove empties, ensure min 2 valid items
   let bullets = Array.isArray(p.seo.bullets) ? p.seo.bullets : [];
@@ -378,7 +394,7 @@ function fixupAndValidate(payload) {
   }
   p.seo.faq = faq;
 
-  // JSON-LD: enforce required structure + Offer fields
+  // JSON-LD: force exact constants + Offer fields
   const fallbackName = p.seo.title || 'Product';
   const fallbackDesc = String(p.seo.bodyHtml || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -392,17 +408,22 @@ function fixupAndValidate(payload) {
     };
   } else {
     const jl = p.seo.jsonLd;
-    if (!jl['@context']) jl['@context'] = 'https://schema.org';
-    if (!jl['@type']) jl['@type'] = 'Product';
+    jl['@context'] = 'https://schema.org'; // force exact value
+    jl['@type'] = 'Product';               // force exact value
     if (!jl.name) jl.name = fallbackName;
     if (!jl.description) jl.description = clamp(fallbackDesc || fallbackName, META_MAX);
 
     if (!jl.offers || typeof jl.offers !== 'object') jl.offers = {};
-    if (!jl.offers['@type']) jl.offers['@type'] = 'Offer';
-    if (jl.offers.price === undefined || jl.offers.price === null || jl.offers.price === '') {
-      jl.offers.price = '0';
+    jl.offers['@type'] = 'Offer'; // force exact value
+
+    const priceEmpty = jl.offers.price === undefined || jl.offers.price === null || jl.offers.price === '';
+    if (priceEmpty) jl.offers.price = '0';
+
+    if (!jl.offers.priceCurrency || typeof jl.offers.priceCurrency !== 'string') {
+      jl.offers.priceCurrency = 'USD';
+    } else {
+      jl.offers.priceCurrency = jl.offers.priceCurrency.toString().toUpperCase();
     }
-    if (!jl.offers.priceCurrency) jl.offers.priceCurrency = 'USD';
   }
 
   const ok = validateSeo(p);
@@ -436,21 +457,39 @@ router.post('/seo/generate', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
 
-    // Allow "all" branch (unchanged behavior)
-    const generateForAllLanguages = String(language || '').toLowerCase() === 'all';
+    // "All" branch → generate for each product locale
+    const isAll = String(language || '').toLowerCase() === 'all';
+    if (isAll) {
+      const Q_PRODUCT_LOCALES = `
+        query ProductLocales($id: ID!) {
+          product(id: $id) {
+            id
+            resourcePublications(first: 50) {
+              edges { node { locale { locale } } }
+            }
+          }
+        }
+      `;
+      const Q_SHOP_PRIMARY = `
+        query ShopPrimary { shop { primaryDomain { locale } } }
+      `;
 
-    if (generateForAllLanguages) {
-      // Minimal check calls — left intact / not central to validation issue
-      const productQuery = `query Product($id: ID!) { product(id: $id) { id } }`;
-      await shopGraphQL(shop, productQuery, { id: productId });
+      const prod = await shopGraphQL(shop, Q_PRODUCT_LOCALES, { id: productId });
+      const edges = prod?.product?.resourcePublications?.edges || [];
+      const locales = Array.from(new Set(
+        edges.map(e => e?.node?.locale?.locale).filter(Boolean)
+      ));
 
-      const shopQuery = `query ShopLang { shop { primaryDomain { locale } } }`;
-      const shopData = await shopGraphQL(shop, shopQuery);
-      const primaryLanguage = shopData?.shop?.primaryDomain?.locale || 'en';
-      const languagesToGenerate = [String(primaryLanguage).toLowerCase()];
+      let langs = locales.map(canonLang);
+      if (langs.length === 0) {
+        const sh = await shopGraphQL(shop, Q_SHOP_PRIMARY);
+        langs = [canonLang(sh?.shop?.primaryDomain?.locale || 'en')];
+      }
+      // De-dup + hard cap to be safe
+      langs = Array.from(new Set(langs)).slice(0, 20);
 
       const results = [];
-      for (const lang of languagesToGenerate) {
+      for (const lang of langs) {
         try {
           const result = await generateSEOForLanguage(shop, productId, model, lang);
           results.push(result);
@@ -459,8 +498,9 @@ router.post('/seo/generate', async (req, res) => {
             productId,
             provider: 'openrouter',
             model,
-            language: String(lang || '').toLowerCase(),
+            language: canonLang(lang),
             error: error.message,
+            issues: error.issues || undefined,
             seo: null,
             quality: { warnings: [error.message], model, tokens: 0, costUsd: 0 }
           });
@@ -468,18 +508,9 @@ router.post('/seo/generate', async (req, res) => {
       }
 
       return res.json({
-        productId,
-        provider: 'openrouter',
-        model,
         language: 'all',
+        productId,
         results,
-        seo: results[0]?.seo || null,
-        quality: {
-          warnings: results.flatMap(r => r.quality?.warnings || []),
-          model,
-          tokens: results.reduce((sum, r) => sum + (r.quality?.tokens || 0), 0),
-          costUsd: results.reduce((sum, r) => sum + (r.quality?.costUsd || 0), 0),
-        },
       });
     }
 
@@ -495,7 +526,7 @@ router.post('/seo/generate', async (req, res) => {
 });
 
 async function generateSEOForLanguage(shop, productId, model, language) {
-  const langNormalized = String(language || 'en').toLowerCase();
+  const langNormalized = canonLang(language);
 
   const q = `
     query Product($id: ID!) {
@@ -558,7 +589,7 @@ async function generateSEOForLanguage(shop, productId, model, language) {
         offers: {
           '@type': 'Offer',
           price: String(p?.priceRangeV2?.minVariantPrice?.amount || '0'),
-          priceCurrency: p?.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          priceCurrency: (p?.priceRangeV2?.minVariantPrice?.currencyCode || 'USD'),
         },
       },
     },
@@ -624,7 +655,7 @@ router.post('/seo/apply', async (req, res) => {
       productId,
       provider: 'openrouter',
       model: 'apply',
-      language: String(seo?.language || 'en').toLowerCase(),
+      language: canonLang(seo?.language || 'en'),
       seo,
       quality: { warnings: [], model: 'apply', tokens: 0, costUsd: 0 },
     });
