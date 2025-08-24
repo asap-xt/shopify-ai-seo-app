@@ -123,9 +123,9 @@ function AiSeoPanel() {
   
   // Form states
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('');
+  const [model, setModel] = useState('none'); // ПРОМЕНЕНО: Хардкоднато за локално генериране
   const [language, setLanguage] = useState('en');
-  const [models, setModels] = useState([]);
+  const [models, setModels] = useState([]); // Вече не се използва, но запазваме за бъдеще
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [result, setResult] = useState(null);
@@ -137,6 +137,8 @@ function AiSeoPanel() {
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
 
+  // ЗАКОМЕНТИРАНО - вече не използваме AI модели
+  /*
   // Load models from /plans/me
   useEffect(() => {
     if (!shop) return;
@@ -151,6 +153,7 @@ function AiSeoPanel() {
       })
       .catch((e) => console.error('Failed to load models:', e));
   }, [shop, model]);
+  */
 
   // Load languages for shop/product (hides selector when single)
   useEffect(() => {
@@ -194,7 +197,7 @@ function AiSeoPanel() {
   }, [shop, productId]);
 
   const handleGenerate = async () => {
-    if (!shop || !productId || !model) {
+    if (!shop || !productId) { // ПРОМЕНЕНО: Премахнахме проверката за model
       setToast('Please fill in all fields');
       return;
     }
@@ -384,12 +387,14 @@ function AiSeoPanel() {
                 placeholder="123456789 or gid://shopify/Product/123456789"
                 autoComplete="off"
               />
+              {/* ЗАКОМЕНТИРАН AI MODEL SELECTOR - може да се върне за enhanced SEO планове
               <Select
                 label="AI Provider"
                 options={models}
                 value={model}
                 onChange={setModel}
               />
+              */}
               {showLanguageSelector && (
                 <Select
                   label="Output Language"
