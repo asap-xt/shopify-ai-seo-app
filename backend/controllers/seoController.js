@@ -680,29 +680,45 @@ function strictPrompt(ctx, language) {
 
 router.post('/seo/apply', async (req, res) => {
   try {
-    const shop = requireShop(req);
-    const { productId, seo, options = {} } = req.body || {};
-    if (!productId || !seo) {
-      return res.status(400).json({ error: 'Missing productId or seo' });
+    const shop = req.query.shop || req.body?.shop;
+    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+
+    const { productId, seo, options = {}, language } = req.body;
+    if (!productId) return res.status(400).json({ error: 'Missing productId' });
+
+    // Get language from body (required now)
+    if (!language) {
+      return res.status(400).json({ error: "Missing 'language' for /seo/apply" });
     }
 
-    const updateTitle = options.updateTitle !== false;
-    const updateBody = options.updateBody !== false;
-    const updateSeo = options.updateSeo !== false;
-    const updateBullets = options.updateBullets !== false;
-    const updateFaq = options.updateFaq !== false;
-    const updateAlt = options.updateAlt === true;
-    const dryRun = options.dryRun === true;
+    // Validate and get shop locales
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales { locale primary published }
+      }
+    `;
+    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
+    const isPrimary = language.toLowerCase() === primary.toLowerCase();
+
+    // Decide what to update based on primary/secondary language
+    const updateTitle = isPrimary && (options?.updateTitle !== false);
+    const updateBody = isPrimary && (options?.updateBody !== false);
+    const updateSeo = isPrimary && (options?.updateSeo !== false);
+    const updateBullets = options?.updateBullets !== false;
+    const updateFaq = options?.updateFaq !== false;
+    const updateAlt = options?.updateAlt === true;
+    const dryRun = options?.dryRun === true;
 
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
-    // Validate/normalize before applying
+    // Validate/normalize
     const fixed = fixupAndValidate({
       productId,
       provider: 'openrouter',
       model: 'apply',
-      language: canonLang(seo?.language || 'en'),
+      language: canonLang(language),
       seo,
       quality: { warnings: [], model: 'apply', tokens: 0, costUsd: 0 },
     });
@@ -712,67 +728,83 @@ router.post('/seo/apply', async (req, res) => {
     const v = fixed.value.seo;
 
     if (!dryRun) {
-      // Update product (base fields)
-      const input = { id: productId };
-      if (updateTitle) input.title = v.title;
-      if (updateBody) input.descriptionHtml = v.bodyHtml;
-      if (updateSeo) input.seo = { title: v.title, description: v.metaDescription };
+      // 1. Update product base fields ONLY for primary language
+      if (isPrimary && (updateTitle || updateBody || updateSeo)) {
+        const input = { id: productId };
+        if (updateTitle) input.title = v.title;
+        if (updateBody) input.descriptionHtml = v.bodyHtml;
+        if (updateSeo) input.seo = { title: v.title, description: v.metaDescription };
 
-      const mut = `
-        mutation ProductUpdate($input: ProductInput!) {
-          productUpdate(input: $input) {
-            product { id }
+        const mut = `
+          mutation ProductUpdate($input: ProductInput!) {
+            productUpdate(input: $input) {
+              product { id }
+              userErrors { field message }
+            }
+          }
+        `;
+        const upd = await shopGraphQL(shop, mut, { input });
+        const userErrors = upd?.productUpdate?.userErrors || [];
+        if (userErrors.length) errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
+        else {
+          if (updateTitle) updated.title = true;
+          if (updateBody) updated.body = true;
+          if (updateSeo) updated.seo = true;
+        }
+      }
+
+      // 2. Always write language-specific metafield with full SEO data
+      const metaMutation = `
+        mutation SetAiSeo($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) {
             userErrors { field message }
+            metafields { id }
           }
         }
       `;
-      const upd = await shopGraphQL(shop, mut, { input });
-      const userErrors = upd?.productUpdate?.userErrors || [];
-      if (userErrors.length) errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
-      else {
-        if (updateTitle) updated.title = true;
-        if (updateBody) updated.body = true;
-        if (updateSeo) updated.seo = true;
-      }
+      const mfKey = `seo__${language.toLowerCase()}`;
+      const metafields = [{
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: mfKey,
+        type: 'json',
+        value: JSON.stringify({
+          ...v,
+          language: language.toLowerCase(),
+          updatedAt: new Date().toISOString()
+        }),
+      }];
 
-      // Metafields: bullets + faq
-      if (updateBullets || updateFaq) {
-        const metas = [];
-        if (updateBullets) metas.push({
+      // 3. Also update bullets/faq if requested
+      if (updateBullets) {
+        metafields.push({
           ownerId: productId,
           namespace: 'seo_ai',
-          key: 'bullets',
+          key: `bullets__${language.toLowerCase()}`,
           type: 'json',
           value: JSON.stringify(v.bullets || []),
         });
-        if (updateFaq) metas.push({
+      }
+      if (updateFaq) {
+        metafields.push({
           ownerId: productId,
           namespace: 'seo_ai',
-          key: 'faq',
+          key: `faq__${language.toLowerCase()}`,
           type: 'json',
           value: JSON.stringify(v.faq || []),
         });
-
-        if (metas.length) {
-          const m = `
-            mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
-              metafieldsSet(metafields: $metafields) {
-                userErrors { field message }
-                metafields { id }
-              }
-            }
-          `;
-          const mf = await shopGraphQL(shop, m, { metafields: metas });
-          const uerrs = mf?.metafieldsSet?.userErrors || [];
-          if (uerrs.length) errors.push(...uerrs.map(e => e.message || JSON.stringify(e)));
-          else {
-            if (updateBullets) updated.bullets = true;
-            if (updateFaq) updated.faq = true;
-          }
-        }
       }
 
-      // Optional: image alts
+      const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
+      const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
+      if (mfErrs.length) {
+        errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
+      } else {
+        updated.bullets = updateBullets;
+        updated.faq = updateFaq;
+      }
+
+      // 4. Optional: image alts (if needed)
       if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
         for (const it of v.imageAlt) {
           try {
@@ -795,7 +827,15 @@ router.post('/seo/apply', async (req, res) => {
       }
     }
 
-    res.json({ ok: errors.length === 0, shop, productId, updated, errors });
+    res.json({ 
+      ok: errors.length === 0, 
+      shop, 
+      productId, 
+      updated, 
+      errors,
+      language,
+      isPrimary 
+    });
   } catch (e) {
     res.status(e.status || 500).json({ ok: false, error: e.message || String(e) });
   }
