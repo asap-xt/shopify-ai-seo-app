@@ -794,8 +794,7 @@ function strictPrompt(ctx, language) {
         `- bullets: array of short benefits (<=160 chars each, min 2)\n` +
         `- faq: array (min 1) of { q, a }\n` +
         `- bodyHtml: clean HTML, no script/iframe/style\n` +
-        `- slug: kebab-case\n` +
-        `- jsonLd: Product with Offer (price, priceCurrency)\n`,
+        `- slug: kebab-case\n`,  // <-- БЕЗ jsonLd
     },
     { role: 'user', content: JSON.stringify(ctx) },
   ];
