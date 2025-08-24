@@ -196,71 +196,112 @@ async function openrouterChat(model, messages, response_format_json = true) {
 }
 
 /* --------------------------- Metafield Definition Helper --------------------------- */
-async function ensureMetafieldDefinitionREST(shop, language) {
+async function ensureMetafieldDefinition(shop, language) {
   const key = `seo__${language}`;
-  const token = await resolveAdminTokenForShop(shop);
+  console.log(`[METAFIELD DEF] Starting for shop: ${shop}, language: ${language}, key: ${key}`);
   
-  // Check if exists
-  const checkUrl = `https://${shop}/admin/api/${API_VERSION}/metafield_definitions.json?namespace=seo_ai&key=${key}&owner_type=PRODUCT`;
+  // Skip definition creation for now - just log
+  console.log(`[METAFIELD DEF] Skipping definition creation - metafields will still work without definitions`);
+  return { skipped: true, reason: 'Definitions are optional in Shopify' };
+  
+  /* ЗАКОМЕНТИРАН КОД ЗА СЪЗДАВАНЕ НА DEFINITIONS - МОЖЕ ДА СЕ ИЗПОЛЗВА ПО-КЪСНО
+  
+  // First check if definition already exists
+  const checkQuery = `
+    query CheckMetafieldDefinition($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!) {
+      metafieldDefinitions(
+        first: 1,
+        query: "namespace:$namespace AND key:$key",
+        ownerType: $ownerType
+      ) {
+        edges {
+          node {
+            id
+            key
+          }
+        }
+      }
+    }
+  `;
   
   try {
-    const checkResponse = await fetch(checkUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      }
+    const checkData = await shopGraphQL(shop, checkQuery, {
+      namespace: "seo_ai",
+      key: key,
+      ownerType: "PRODUCT"
     });
     
-    const checkData = await checkResponse.json();
-    if (checkData.metafield_definitions && checkData.metafield_definitions.length > 0) {
+    if (checkData?.metafieldDefinitions?.edges?.length > 0) {
       console.log(`Definition already exists for seo_ai.${key}`);
       return { exists: true };
     }
   } catch (e) {
-    console.log(`Check error:`, e.message);
+    console.log(`Check definition error for ${key}:`, e.message);
   }
   
-  // Create if doesn't exist
-  const createUrl = `https://${shop}/admin/api/${API_VERSION}/metafield_definitions.json`;
-  
-  const body = {
-    metafield_definition: {
-      namespace: "seo_ai",
-      key: key,
-      name: `AI SEO - ${language.toUpperCase()}`,
-      description: `AI-generated SEO content for ${language.toUpperCase()}`,
-      type: "json",
-      owner_type: "PRODUCT",
-      validations: [],
-      access: {
-        admin: "MERCHANT_READ_WRITE"
+  // Create definition if it doesn't exist
+  const createMutation = `
+    mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+      metafieldDefinitionCreate(definition: $definition) {
+        createdDefinition {
+          id
+          key
+          name
+          namespace
+        }
+        userErrors {
+          field
+          message
+          code
+        }
       }
     }
+  `;
+  
+  const definitionInput = {
+    name: `AI SEO - ${language.toUpperCase()}`,
+    namespace: "seo_ai",
+    key: key,
+    description: `AI-generated SEO content for ${language.toUpperCase()} language`,
+    type: "json",
+    ownerType: "PRODUCT",
+    access: {
+      admin: "MERCHANT_READ_WRITE",
+      storefront: "PUBLIC_READ"
+    },
+    validations: []
   };
   
   try {
-    const createResponse = await fetch(createUrl, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
+    console.log(`Creating metafield definition for seo_ai.${key}...`);
+    const createData = await shopGraphQL(shop, createMutation, { 
+      definition: definitionInput 
     });
     
-    const createData = await createResponse.json();
-    
-    if (createResponse.ok) {
-      console.log(`Created metafield definition:`, createData.metafield_definition);
-      return { created: true };
-    } else {
-      console.error(`Failed to create definition:`, createData);
-      return { created: false, errors: createData.errors };
+    const errors = createData?.metafieldDefinitionCreate?.userErrors || [];
+    if (errors.length > 0) {
+      console.error(`Failed to create definition for ${key}:`, JSON.stringify(errors, null, 2));
+      return { created: false, errors };
     }
+    
+    const created = createData?.metafieldDefinitionCreate?.createdDefinition;
+    if (created) {
+      console.log(`Successfully created metafield definition:`, {
+        id: created.id,
+        namespace: created.namespace,
+        key: created.key,
+        name: created.name
+      });
+      return { created: true, definition: created };
+    }
+    
+    return { created: false, error: 'No definition returned' };
   } catch (e) {
-    console.error(`Create error:`, e.message);
+    console.error(`Create definition error for ${key}:`, e.message);
     return { created: false, error: e.message };
   }
+  
+  */ // КРАЙ НА ЗАКОМЕНТИРАНИЯ КОД
 }
 
 /* --------------------------- JSON schema (ANY language) --------------------------- */
