@@ -163,6 +163,15 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
 async function openrouterChat(model, messages, response_format_json = true) {
+  console.log('🔴 [AI CALL] Starting AI request with model:', model);
+  console.log('🔴 [AI CALL] Messages being sent:', JSON.stringify(messages, null, 2));
+  
+  // ВРЕМЕНЕН БЛОК НА CLAUDE - премахнете ако искате да използвате Claude
+  if (model.includes('claude')) {
+    console.error('🚫 BLOCKED: Claude model calls are disabled');
+    throw new Error('Claude models are temporarily disabled to save costs');
+  }
+  
   if (!OPENROUTER_API_KEY) {
     const err = new Error('OpenRouter API key missing');
     err.status = 500;
@@ -192,6 +201,10 @@ async function openrouterChat(model, messages, response_format_json = true) {
     j?.choices?.[0]?.message?.content ||
     j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
     '';
+  
+  console.log('🔴 [AI RESPONSE] Received from AI:', content);
+  console.log('🔴 [AI USAGE] Tokens used:', j?.usage);
+  
   return { content, usage: j?.usage || {} };
 }
 
@@ -251,6 +264,8 @@ async function ensureMetafieldDefinition(shop, language) {
 
 /* --------------------------- Product JSON-LD Generator --------------------------- */
 function generateProductJsonLd(product, seoData, language) {
+  console.log('🟢 [JSON-LD] Generating locally (NOT via AI) for language:', language);
+  
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -285,6 +300,7 @@ function generateProductJsonLd(product, seoData, language) {
     jsonLd.inLanguage = language;
   }
   
+  console.log('🟢 [JSON-LD] Generated:', JSON.stringify(jsonLd, null, 2));
   return jsonLd;
 }
 
@@ -619,6 +635,8 @@ return res.json(result);
 });
 
 async function generateSEOForLanguage(shop, productId, model, language) {
+  console.log('🟡 [GENERATE] Starting generation for language:', language, 'model:', model);
+  
   const langNormalized = canonLang(language);
   
   // Get shop's primary language
@@ -638,12 +656,16 @@ async function generateSEOForLanguage(shop, productId, model, language) {
         id title handle descriptionHtml productType vendor tags
         seo { title description }
         images(first: 10) {
-          edges { node { id altText } }
+          edges { node { id altText url } }
         }
         priceRangeV2 {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
+        variants(first: 1) {
+          edges { node { sku } }
+        }
+        onlineStoreUrl
       }
     }
   `;
@@ -688,10 +710,15 @@ async function generateSEOForLanguage(shop, productId, model, language) {
   };
 
   const messages = strictPrompt(ctx, langNormalized);
+  console.log('🟡 [PROMPT] Sending to AI:', JSON.stringify(messages, null, 2));
+  
   const { content } = await openrouterChat(model, messages, true);
 
   let candidate;
-  try { candidate = JSON.parse(content); }
+  try { 
+    candidate = JSON.parse(content);
+    console.log('🟡 [AI PARSED] AI returned:', JSON.stringify(candidate, null, 2));
+  }
   catch { throw new Error('Model did not return valid JSON'); }
 
   const fixed = {
@@ -738,13 +765,15 @@ function strictPrompt(ctx, language) {
         `You are an SEO assistant for Shopify products. Output STRICT JSON only.\n` +
         `Language: ${language}\n` +
         `Use ONLY the localized fields provided (title/bodyHtml) and do not invent translations.\n` +
+        `IMPORTANT: Do NOT generate jsonLd field - it will be generated separately.\n` + // EXPLICIT INSTRUCTION
         `Constraints:\n` +
         `- title <= ${TITLE_LIMIT} chars\n` +
         `- metaDescription ~${META_TARGET} (cap ${META_MAX})\n` +
         `- bullets: array of short benefits (<=160 chars each, min 2)\n` +
         `- faq: array (min 1) of { q, a }\n` +
         `- bodyHtml: clean HTML, no script/iframe/style\n` +
-        `- slug: kebab-case\n`,  // REMOVED jsonLd constraint
+        `- slug: kebab-case\n` +
+        `DO NOT include jsonLd in your response!`,  // DOUBLE EMPHASIS
     },
     { role: 'user', content: JSON.stringify(ctx) },
   ];
