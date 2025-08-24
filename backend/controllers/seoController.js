@@ -869,6 +869,7 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
+      /* ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
       // 4. Also update bullets/faq if requested
       if (updateBullets) {
         metafields.push({
@@ -888,6 +889,7 @@ router.post('/seo/apply', async (req, res) => {
           value: JSON.stringify(v.faq || []),
         });
       }
+      */
 
       const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
