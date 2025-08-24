@@ -31,11 +31,10 @@ const PLAN_PRESETS = {
     productLimit: 1000,
     providersAllowed: ['claude', 'openai', 'gemini'],
     modelsSuggested: [
-      'anthropic/claude-3.5-sonnet',
+      'google/gemini-1.5-flash',  // Най-евтин
       'anthropic/claude-3-haiku',
       'openai/gpt-4o-mini',
       'openai/o3-mini',
-      'google/gemini-1.5-flash',
       'google/gemini-1.5-pro',
     ],
     autosync: '24h',
@@ -47,6 +46,7 @@ const PLAN_PRESETS = {
     productLimit: 2000,
     providersAllowed: ['gemini', 'openai', 'claude'],
     modelsSuggested: [
+      'google/gemini-1.5-flash',
       'google/gemini-1.5-pro',
       'openai/gpt-4o-mini',
       'anthropic/claude-3.5-sonnet',
@@ -636,6 +636,7 @@ return res.json(result);
 
 async function generateSEOForLanguage(shop, productId, model, language) {
   console.log('🟡 [GENERATE] Starting generation for language:', language, 'model:', model);
+  console.log('🚀 [LOCAL MODE] Using product data directly - NO AI costs!');
   
   const langNormalized = canonLang(language);
   
@@ -678,11 +679,15 @@ async function generateSEOForLanguage(shop, productId, model, language) {
   }
 
   let localizedTitle, localizedBody;
+  let seoTitle = '';
+  let seoDescription = '';
 
   if (isPrimary) {
     // For primary language, use base product data
     localizedTitle = p.title;
     localizedBody = p.descriptionHtml;
+    seoTitle = p.seo?.title || '';
+    seoDescription = p.seo?.description || '';
   } else {
     // For other languages, require translations
     const loc = await getProductLocalizedContent(shop, productId, language);
@@ -693,8 +698,11 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     }
     localizedTitle = loc.title || p.title;
     localizedBody = loc.bodyHtml || p.descriptionHtml;
+    seoTitle = loc.seoTitle || '';
+    seoDescription = loc.seoDescription || '';
   }
 
+  /* ЗАКОМЕНТИРАН AI КОД - може да се включи в бъдеще за enhanced SEO
   const ctx = {
     id: p.id,
     title: localizedTitle,
@@ -720,30 +728,49 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     console.log('🟡 [AI PARSED] AI returned:', JSON.stringify(candidate, null, 2));
   }
   catch { throw new Error('Model did not return valid JSON'); }
+  */
+
+  // ЛОКАЛНО ГЕНЕРИРАНЕ НА SEO ДАННИ
+  console.log('💰 [ZERO COST] Generating SEO data locally from product data');
+  
+  // Генерираме метаописание от body или title
+  let metaDescription = seoDescription;
+  if (!metaDescription && localizedBody) {
+    // Вземаме първите 160 символа от body без HTML тагове
+    metaDescription = localizedBody
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, META_TARGET);
+  }
+  if (!metaDescription) {
+    metaDescription = localizedTitle || 'Quality product from our store';
+  }
+
+  const localSeoData = {
+    title: seoTitle || localizedTitle || 'Product',
+    metaDescription: metaDescription,
+    slug: kebab(localizedTitle || p.handle || 'product'),
+    bodyHtml: localizedBody || `<p>${localizedTitle}</p>`,
+    bullets: [], // Вече не използваме bullets
+    faq: [],     // Вече не използваме FAQ
+    imageAlt: [] // Може да добавим от product.images ако има altText
+  };
 
   const fixed = {
     productId: p.id,
-    provider: 'openrouter',
-    model,
+    provider: 'local',  // Променено от 'openrouter'
+    model: 'none',      // Няма модел - локално генериране
     language: langNormalized,
     seo: {
-      title: candidate.title || localizedTitle || 'Product',
-      metaDescription: candidate.metaDescription || '',
-      slug: candidate.slug || p.handle || kebab(localizedTitle || 'product'),
-      bodyHtml: candidate.bodyHtml || localizedBody || '',
-      bullets: Array.isArray(candidate.bullets) ? candidate.bullets : [],
-      faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${localizedTitle}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
-      imageAlt: Array.isArray(candidate.imageAlt) ? candidate.imageAlt : [],
-      jsonLd: generateProductJsonLd(p, {
-        title: candidate.title || localizedTitle,
-        metaDescription: candidate.metaDescription
-      }, langNormalized),
+      ...localSeoData,
+      jsonLd: generateProductJsonLd(p, localSeoData, langNormalized),
     },
     quality: {
       warnings: [],
-      model,
-      tokens: 0,
-      costUsd: 0,
+      model: 'none',
+      tokens: 0,      // 0 токена!
+      costUsd: 0,     // $0.00 разходи!
     },
   };
 
@@ -754,6 +781,8 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     e.issues = issues;
     throw e;
   }
+  
+  console.log('✅ [SUCCESS] SEO data generated locally with ZERO AI costs!');
   return value;
 }
 
@@ -814,14 +843,14 @@ router.post('/seo/apply', async (req, res) => {
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
-    // Validate/normalize
+    // Validate/normalize - променяме provider на 'local'
     const fixed = fixupAndValidate({
       productId,
-      provider: 'openrouter',
-      model: 'apply',
+      provider: 'local',    // Променено от 'openrouter'
+      model: 'none',        // Променено от 'apply'
       language: canonLang(language),
       seo,
-      quality: { warnings: [], model: 'apply', tokens: 0, costUsd: 0 },
+      quality: { warnings: [], model: 'none', tokens: 0, costUsd: 0 },
     });
     if (!fixed.ok) {
       return res.status(400).json({ ok: false, error: 'Schema validation failed', issues: fixed.issues });
