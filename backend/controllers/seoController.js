@@ -577,36 +577,58 @@ return res.json(result);
 
 async function generateSEOForLanguage(shop, productId, model, language) {
   const langNormalized = canonLang(language);
+  
+  // Get shop's primary language
+  const Q_SHOP_LOCALES = `
+    query ShopLocales {
+      shopLocales { locale primary published }
+    }
+  `;
+  const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+  const primaryLang = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
+  const isPrimary = langNormalized.toLowerCase() === primaryLang.toLowerCase();
 
-  // Base product (shared fields)
-  const Q_PRODUCT = `
-    query Product($id: ID!) {
+  // Get base product
+  const Q = `
+    query GetProduct($id: ID!) {
       product(id: $id) {
-        id
-        title
-        descriptionHtml
-        vendor
-        productType
-        tags
-        images(first: 10) { edges { node { id altText } } }
-        priceRangeV2 { minVariantPrice { amount currencyCode } }
-        handle
+        id title handle descriptionHtml productType vendor tags
+        seo { title description }
+        images(first: 10) {
+          edges { node { id altText } }
+        }
+        priceRangeV2 {
+          minVariantPrice { amount currencyCode }
+          maxVariantPrice { amount currencyCode }
+        }
       }
     }
   `;
-  const data = await shopGraphQL(shop, Q_PRODUCT, { id: productId });
-  const p = data?.product;
-  if (!p) throw new Error('Product not found');
-
-  // Localized content is required (already checked in handler, but enforce again here)
-  const loc = await getProductLocalizedContent(shop, productId, language);
-  if (!loc?.hasAny) {
-    const e = new Error('No translated content for requested language');
-    e.status = 400;
+  const pd = await shopGraphQL(shop, Q, { id: productId });
+  const p = pd?.product;
+  if (!p) {
+    const e = new Error('Product not found');
+    e.status = 404;
     throw e;
   }
-  const localizedTitle = loc.title || p.title;
-  const localizedBody = loc.bodyHtml || p.descriptionHtml;
+
+  let localizedTitle, localizedBody;
+
+  if (isPrimary) {
+    // For primary language, use base product data
+    localizedTitle = p.title;
+    localizedBody = p.descriptionHtml;
+  } else {
+    // For other languages, require translations
+    const loc = await getProductLocalizedContent(shop, productId, language);
+    if (!loc?.hasAny) {
+      const e = new Error('No translated content for requested language');
+      e.status = 400;
+      throw e;
+    }
+    localizedTitle = loc.title || p.title;
+    localizedBody = loc.bodyHtml || p.descriptionHtml;
+  }
 
   const ctx = {
     id: p.id,

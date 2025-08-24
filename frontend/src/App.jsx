@@ -232,7 +232,15 @@ function AiSeoPanel() {
       data = await readJson(response);
       if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       setResult(data);
-      console.log('Generated result:', data);
+      
+      // Enhanced logging
+      console.log('=== GENERATED RESULT ===');
+      console.log('Full result:', data);
+      console.log('Result has language?', !!data.language);
+      console.log('Result language value:', data.language);
+      console.log('Result structure keys:', Object.keys(data));
+      console.log('Is multi-result?', !!data.results);
+      
       setToast('SEO generated successfully');
     } catch (e) {
       const msg = e?.message || 'Failed to generate SEO';
@@ -244,131 +252,112 @@ function AiSeoPanel() {
   };
 
   const handleApply = async () => {
-  if (!shop || !result) {
-    setToast('No SEO data to apply');
-    return;
-  }
-  setLoading(true);
-  setToast('');
+    if (!shop || !result) {
+      setToast('No SEO data to apply');
+      return;
+    }
+    setLoading(true);
+    setToast('');
 
-  // Debug logging
-  console.log('Apply started with result:', result);
-  console.log('Current language state:', language);
-  console.log('Primary language:', primaryLanguage);
+    // Debug logging
+    console.log('=== APPLY STARTED ===');
+    console.log('Result object:', result);
+    console.log('Current language from dropdown:', language);
+    console.log('Primary language:', primaryLanguage);
 
-  try {
-    const gid = toProductGID(productId);
-    let response, data;
+    try {
+      const gid = toProductGID(productId);
+      let response, data;
 
-    // Check if this is a multi-language result
-    if (result.results && Array.isArray(result.results)) {
-      console.log('Detected multi-language result');
-      
-      // Multi-language apply
-      const validResults = result.results
-        .filter(r => r && r.seo)
-        .map(r => ({
-          language: r.language,
-          seo: r.seo
-        }));
+      // Check if this is a multi-language result
+      if (result.results && Array.isArray(result.results)) {
+        console.log('Detected multi-language result');
         
-      if (!validResults.length) {
-        throw new Error('No valid SEO results to apply');
-      }
+        // Multi-language apply
+        const validResults = result.results
+          .filter(r => r && r.seo)
+          .map(r => ({
+            language: r.language,
+            seo: r.seo
+          }));
+          
+        if (!validResults.length) {
+          throw new Error('No valid SEO results to apply');
+        }
 
-      console.log('Sending multi-apply with results:', validResults);
+        console.log('Sending multi-apply with results:', validResults);
 
-      response = await fetch('/api/seo/apply-multi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        response = await fetch('/api/seo/apply-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            productId: gid,
+            results: validResults,
+            primaryLanguage,
+            options: {
+              updateTitle: true,
+              updateBody: true,
+              updateSeo: true,
+              updateBullets: true,
+              updateFaq: true,
+            },
+          }),
+        });
+      } else {
+        console.log('Single language apply');
+        
+        // IMPORTANT FIX: Always use the language from dropdown since result doesn't have it
+        const applyLanguage = language !== 'all' ? language : primaryLanguage;
+        
+        console.log('Using language from dropdown:', applyLanguage);
+        
+        const isPrimary = applyLanguage.toLowerCase() === primaryLanguage.toLowerCase();
+        
+        const requestBody = {
           shop,
           productId: gid,
-          results: validResults,
-          primaryLanguage,
+          seo: result.seo || result,
+          language: applyLanguage,  // USE DROPDOWN LANGUAGE
           options: {
-            updateTitle: true,
-            updateBody: true,
-            updateSeo: true,
+            updateTitle: isPrimary,
+            updateBody: isPrimary,
+            updateSeo: isPrimary,
             updateBullets: true,
             updateFaq: true,
           },
-        }),
-      });
-    } else {
-      console.log('Detected single language result');
-      console.log('Result structure:', result);
-      
-      // Try to find the language from various places
-      let resultLanguage = null;
-      
-      // Check if result has language property
-      if (result.language) {
-        resultLanguage = result.language;
-      } 
-      // Check if result has seo.language
-      else if (result.seo && result.seo.language) {
-        resultLanguage = result.seo.language;
-      }
-      // Check if we have it in the result anywhere
-      else if (result.productId && result.model && result.seo) {
-        // This might be the direct response from /seo/generate
-        // Use the current language selection
-        resultLanguage = language;
-      }
-      
-      console.log('Detected language:', resultLanguage);
-      
-      if (!resultLanguage || resultLanguage === 'all') {
-        throw new Error('Cannot apply - no specific language found in result');
+        };
+        
+        console.log('Request body being sent:', JSON.stringify(requestBody, null, 2));
+        
+        response = await fetch('/seo/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(requestBody),
+        });
       }
 
-      const isPrimary = resultLanguage.toLowerCase() === primaryLanguage.toLowerCase();
+      data = await readJson(response);
+      console.log('Apply response:', data);
       
-      const requestBody = {
-        shop,
-        productId: gid,
-        seo: result.seo || result,
-        language: resultLanguage,
-        options: {
-          updateTitle: isPrimary,
-          updateBody: isPrimary,
-          updateSeo: isPrimary,
-          updateBullets: true,
-          updateFaq: true,
-        },
-      };
+      if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       
-      console.log('Sending single apply with body:', requestBody);
+      // Show success with language info
+      const appliedLangs = result.results 
+        ? result.results.filter(r => r.seo).map(r => r.language).join(', ')
+        : language;
       
-      response = await fetch('/seo/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(requestBody),
-      });
+      setToast(`SEO applied successfully for: ${appliedLangs.toUpperCase()}`);
+    } catch (e) {
+      const msg = e?.message || 'Failed to apply SEO';
+      setToast(msg);
+      console.error('Apply error:', e);
+    } finally {
+      setLoading(false);
     }
-
-    data = await readJson(response);
-    console.log('Apply response:', data);
-    
-    if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
-    
-    // Show success with language info
-    const appliedLangs = result.results 
-      ? result.results.filter(r => r.seo).map(r => r.language).join(', ')
-      : (result.language || language);
-    
-    setToast(`SEO applied successfully for: ${appliedLangs}`);
-  } catch (e) {
-    const msg = e?.message || 'Failed to apply SEO';
-    setToast(msg);
-    console.error('Apply error details:', e);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleClear = () => {
     setResult(null);
