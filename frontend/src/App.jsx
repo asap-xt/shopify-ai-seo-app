@@ -243,72 +243,97 @@ function AiSeoPanel() {
   };
 
   const handleApply = async () => {
-    if (!shop || !result) {
-      setToast('No SEO data to apply');
-      return;
-    }
-    setLoading(true);
-    setToast('');
+  if (!shop || !result) {
+    setToast('No SEO data to apply');
+    return;
+  }
+  setLoading(true);
+  setToast('');
 
-    try {
-      const gid = toProductGID(productId);
-      let response, data;
+  try {
+    const gid = toProductGID(productId);
+    let response, data;
 
-      if (result.results && Array.isArray(result.results)) {
-        // Multi-language apply
-        const validResults = result.results.filter(r => r && r.seo);
-        response = await fetch('/api/seo/apply-multi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            shop,
-            productId: gid,
-            results: validResults,
-            primaryLanguage,
-            options: {
-              updateTitle: true,
-              updateBody: true,
-              updateSeo: true,
-              updateBullets: true,
-              updateFaq: true,
-            },
-          }),
-        });
-      } else {
-        // Single language apply
-        const isPrimary = language.toLowerCase() === primaryLanguage.toLowerCase();
-        response = await fetch('/seo/apply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            shop,
-            productId: gid,
-            seo: result,
-            language,  // <-- IMPORTANT: Add language parameter
-            options: {
-              updateTitle: isPrimary,
-              updateBody: isPrimary,
-              updateSeo: isPrimary,
-              updateBullets: true,
-              updateFaq: true,
-            },
-          }),
-        });
+    // Check if this is a multi-language result
+    if (result.results && Array.isArray(result.results)) {
+      // Multi-language apply
+      const validResults = result.results
+        .filter(r => r && r.seo)
+        .map(r => ({
+          language: r.language,
+          seo: r.seo
+        }));
+        
+      if (!validResults.length) {
+        throw new Error('No valid SEO results to apply');
       }
 
-      data = await readJson(response);
-      if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
-      setToast('SEO applied successfully');
-    } catch (e) {
-      const msg = e?.message || 'Failed to apply SEO';
-      setToast(msg);
-      console.error(e);
-    } finally {
-      setLoading(false);
+      response = await fetch('/api/seo/apply-multi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          shop,
+          productId: gid,
+          results: validResults,
+          primaryLanguage,
+          options: {
+            updateTitle: true,
+            updateBody: true,
+            updateSeo: true,
+            updateBullets: true,
+            updateFaq: true,
+          },
+        }),
+      });
+    } else {
+      // Single language apply
+      // Get the language from the result OR from the current selection
+      const resultLanguage = result.language || language;
+      
+      if (!resultLanguage || resultLanguage === 'all') {
+        throw new Error('Cannot apply - no specific language selected');
+      }
+
+      const isPrimary = resultLanguage.toLowerCase() === primaryLanguage.toLowerCase();
+      
+      response = await fetch('/seo/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          shop,
+          productId: gid,
+          seo: result.seo || result,  // Handle both result.seo and direct result
+          language: resultLanguage,   // Use the language from result
+          options: {
+            updateTitle: isPrimary,
+            updateBody: isPrimary,
+            updateSeo: isPrimary,
+            updateBullets: true,
+            updateFaq: true,
+          },
+        }),
+      });
     }
-  };
+
+    data = await readJson(response);
+    if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+    
+    // Show success with language info
+    const appliedLangs = result.results 
+      ? result.results.filter(r => r.seo).map(r => r.language).join(', ')
+      : (result.language || language);
+    
+    setToast(`SEO applied successfully for: ${appliedLangs}`);
+  } catch (e) {
+    const msg = e?.message || 'Failed to apply SEO';
+    setToast(msg);
+    console.error('Apply error:', e);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleClear = () => {
     setResult(null);
