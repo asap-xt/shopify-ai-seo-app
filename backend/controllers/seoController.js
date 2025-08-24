@@ -195,6 +195,90 @@ async function openrouterChat(model, messages, response_format_json = true) {
   return { content, usage: j?.usage || {} };
 }
 
+/* --------------------------- Metafield Definition Helper --------------------------- */
+async function ensureMetafieldDefinition(shop, language) {
+  const key = `seo__${language}`;
+  
+  // First check if definition already exists
+  const checkQuery = `
+    query CheckMetafieldDefinition {
+      metafieldDefinitions(
+        ownerType: PRODUCT, 
+        namespace: "seo_ai",
+        key: "${key}",
+        first: 1
+      ) {
+        edges {
+          node {
+            id
+            key
+          }
+        }
+      }
+    }
+  `;
+  
+  try {
+    const checkData = await shopGraphQL(shop, checkQuery, {});
+    if (checkData?.metafieldDefinitions?.edges?.length > 0) {
+      // Definition already exists
+      return { exists: true };
+    }
+  } catch (e) {
+    console.log(`Check definition error for ${key}:`, e.message);
+  }
+  
+  // Create definition if it doesn't exist
+  const createMutation = `
+    mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+      metafieldDefinitionCreate(definition: $definition) {
+        createdDefinition {
+          id
+          key
+          name
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+  
+  const definitionInput = {
+    ownerType: "PRODUCT",
+    namespace: "seo_ai", 
+    key: key,
+    name: `AI SEO - ${language.toUpperCase()}`,
+    description: {
+      value: `AI-generated SEO content for ${language.toUpperCase()} language`
+    },
+    type: "json",
+    visibleToStorefrontApi: true,
+    access: {
+      admin: "MERCHANT_READ_WRITE"
+    }
+  };
+  
+  try {
+    const createData = await shopGraphQL(shop, createMutation, { 
+      definition: definitionInput 
+    });
+    
+    const errors = createData?.metafieldDefinitionCreate?.userErrors || [];
+    if (errors.length > 0) {
+      console.error(`Failed to create definition for ${key}:`, errors);
+      return { created: false, errors };
+    }
+    
+    console.log(`Created metafield definition: seo_ai.${key}`);
+    return { created: true };
+  } catch (e) {
+    console.error(`Create definition error for ${key}:`, e.message);
+    return { created: false, error: e.message };
+  }
+}
+
 /* --------------------------- JSON schema (ANY language) --------------------------- */
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -790,7 +874,10 @@ router.post('/seo/apply', async (req, res) => {
         }
       }
 
-      // 2. Always write language-specific metafield with full SEO data
+      // 2. Ensure metafield definition exists
+      await ensureMetafieldDefinition(shop, language.toLowerCase());
+
+      // 3. Always write language-specific metafield with full SEO data
       const metaMutation = `
         mutation SetAiSeo($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
@@ -812,7 +899,7 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
-      // 3. Also update bullets/faq if requested
+      // 4. Also update bullets/faq if requested
       if (updateBullets) {
         metafields.push({
           ownerId: productId,
@@ -841,7 +928,7 @@ router.post('/seo/apply', async (req, res) => {
         updated.faq = updateFaq;
       }
 
-      // 4. Optional: image alts (if needed)
+      // 5. Optional: image alts (if needed)
       if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
         for (const it of v.imageAlt) {
           try {
