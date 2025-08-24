@@ -314,7 +314,7 @@ const seoSchema = {
   additionalProperties: true,
   properties: {
     productId: { type: 'string', pattern: '^gid://shopify/Product/\\d+$' },
-    provider: { const: 'openrouter' },
+    provider: { type: 'string', minLength: 1 },
     model: { type: 'string', minLength: 1 },
     language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
