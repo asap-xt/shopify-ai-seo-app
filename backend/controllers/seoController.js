@@ -201,12 +201,11 @@ async function ensureMetafieldDefinition(shop, language) {
   
   // First check if definition already exists
   const checkQuery = `
-    query CheckMetafieldDefinition {
+    query CheckMetafieldDefinition($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!) {
       metafieldDefinitions(
-        ownerType: PRODUCT, 
-        namespace: "seo_ai",
-        key: "${key}",
-        first: 1
+        first: 1,
+        query: "namespace:$namespace AND key:$key",
+        ownerType: $ownerType
       ) {
         edges {
           node {
@@ -219,9 +218,14 @@ async function ensureMetafieldDefinition(shop, language) {
   `;
   
   try {
-    const checkData = await shopGraphQL(shop, checkQuery, {});
+    const checkData = await shopGraphQL(shop, checkQuery, {
+      namespace: "seo_ai",
+      key: key,
+      ownerType: "PRODUCT"
+    });
+    
     if (checkData?.metafieldDefinitions?.edges?.length > 0) {
-      // Definition already exists
+      console.log(`Definition already exists for seo_ai.${key}`);
       return { exists: true };
     }
   } catch (e) {
@@ -236,43 +240,55 @@ async function ensureMetafieldDefinition(shop, language) {
           id
           key
           name
+          namespace
         }
         userErrors {
           field
           message
+          code
         }
       }
     }
   `;
   
   const definitionInput = {
-    ownerType: "PRODUCT",
-    namespace: "seo_ai", 
-    key: key,
     name: `AI SEO - ${language.toUpperCase()}`,
-    description: {
-      value: `AI-generated SEO content for ${language.toUpperCase()} language`
-    },
+    namespace: "seo_ai",
+    key: key,
+    description: `AI-generated SEO content for ${language.toUpperCase()} language`,
     type: "json",
-    visibleToStorefrontApi: true,
+    ownerType: "PRODUCT",
     access: {
-      admin: "MERCHANT_READ_WRITE"
-    }
+      admin: "MERCHANT_READ_WRITE",
+      storefront: "PUBLIC_READ"
+    },
+    validations: []
   };
   
   try {
+    console.log(`Creating metafield definition for seo_ai.${key}...`);
     const createData = await shopGraphQL(shop, createMutation, { 
       definition: definitionInput 
     });
     
     const errors = createData?.metafieldDefinitionCreate?.userErrors || [];
     if (errors.length > 0) {
-      console.error(`Failed to create definition for ${key}:`, errors);
+      console.error(`Failed to create definition for ${key}:`, JSON.stringify(errors, null, 2));
       return { created: false, errors };
     }
     
-    console.log(`Created metafield definition: seo_ai.${key}`);
-    return { created: true };
+    const created = createData?.metafieldDefinitionCreate?.createdDefinition;
+    if (created) {
+      console.log(`Successfully created metafield definition:`, {
+        id: created.id,
+        namespace: created.namespace,
+        key: created.key,
+        name: created.name
+      });
+      return { created: true, definition: created };
+    }
+    
+    return { created: false, error: 'No definition returned' };
   } catch (e) {
     console.error(`Create definition error for ${key}:`, e.message);
     return { created: false, error: e.message };
