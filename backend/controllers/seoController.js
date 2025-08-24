@@ -303,7 +303,7 @@ const seoSchema = {
     language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
       type: 'object',
-      required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq', 'jsonLd'],
+      required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq'], // REMOVED jsonLd
       additionalProperties: true,
       properties: {
         title: { type: 'string', minLength: 1, maxLength: 200 },
@@ -342,29 +342,7 @@ const seoSchema = {
             },
           },
         },
-        jsonLd: {
-          type: 'object',
-          required: ['@context', '@type', 'name', 'description', 'offers'],
-          properties: {
-            '@context': { const: 'https://schema.org' },
-            '@type': { const: 'Product' },
-            name: { type: 'string' },
-            description: { type: 'string' },
-            url: { type: 'string', nullable: true },
-            brand: { type: ['string', 'object'], nullable: true },
-            offers: {
-              type: 'object',
-              required: ['@type', 'price', 'priceCurrency'],
-              properties: {
-                '@type': { const: 'Offer' },
-                price: { type: ['string', 'number'] },
-                priceCurrency: { type: 'string' },
-                availability: { type: 'string', nullable: true },
-              },
-            },
-          },
-          additionalProperties: true,
-        },
+        // REMOVED jsonLd property definition
       },
     },
     quality: {
@@ -539,35 +517,7 @@ function fixupAndValidate(payload) {
   }
   p.seo.faq = faq;
 
-  // jsonLd constants + Offer fields
-  const fallbackName = p.seo.title || 'Product';
-  const fallbackDesc = String(p.seo.bodyHtml || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-  if (!p.seo.jsonLd || typeof p.seo.jsonLd !== 'object') {
-    p.seo.jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'Product',
-      name: fallbackName,
-      description: clamp(fallbackDesc || fallbackName, META_MAX),
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    };
-  } else {
-    const jl = p.seo.jsonLd;
-    jl['@context'] = 'https://schema.org';
-    jl['@type'] = 'Product';
-    if (!jl.name) jl.name = fallbackName;
-    if (!jl.description) jl.description = clamp(fallbackDesc || fallbackName, META_MAX);
-
-    if (!jl.offers || typeof jl.offers !== 'object') jl.offers = {};
-    jl.offers['@type'] = 'Offer';
-    const priceEmpty = jl.offers.price === undefined || jl.offers.price === null || jl.offers.price === '';
-    if (priceEmpty) jl.offers.price = '0';
-    if (!jl.offers.priceCurrency || typeof jl.offers.priceCurrency !== 'string') {
-      jl.offers.priceCurrency = 'USD';
-    } else {
-      jl.offers.priceCurrency = jl.offers.priceCurrency.toString().toUpperCase();
-    }
-  }
+  // REMOVED jsonLd fixup/validation code
 
   const ok = validateSeo(p);
   return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
@@ -758,10 +708,10 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${localizedTitle}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
       imageAlt: Array.isArray(candidate.imageAlt) ? candidate.imageAlt : [],
       jsonLd: generateProductJsonLd(p, {
-  title: candidate.title || localizedTitle,
-  metaDescription: candidate.metaDescription
-}, langNormalized),
-        },
+        title: candidate.title || localizedTitle,
+        metaDescription: candidate.metaDescription
+      }, langNormalized),
+    },
     quality: {
       warnings: [],
       model,
@@ -794,7 +744,7 @@ function strictPrompt(ctx, language) {
         `- bullets: array of short benefits (<=160 chars each, min 2)\n` +
         `- faq: array (min 1) of { q, a }\n` +
         `- bodyHtml: clean HTML, no script/iframe/style\n` +
-        `- slug: kebab-case\n`,  // <-- БЕЗ jsonLd
+        `- slug: kebab-case\n`,  // REMOVED jsonLd constraint
     },
     { role: 'user', content: JSON.stringify(ctx) },
   ];
