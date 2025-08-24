@@ -249,6 +249,45 @@ async function ensureMetafieldDefinition(shop, language) {
   return { attempted: true };
 }
 
+/* --------------------------- Product JSON-LD Generator --------------------------- */
+function generateProductJsonLd(product, seoData, language) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": seoData.title || product.title,
+    "description": seoData.metaDescription || "",
+    "image": product.images?.edges?.map(e => e.node.url).filter(Boolean) || [],
+    "brand": {
+      "@type": "Brand",
+      "name": product.vendor || "Unknown"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": product.priceRangeV2?.minVariantPrice?.amount || "0",
+      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "USD",
+      "availability": "https://schema.org/InStock",
+      "priceValidUntil": new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    }
+  };
+  
+  // Добавяме URL само ако има
+  if (product.onlineStoreUrl) {
+    jsonLd.url = product.onlineStoreUrl;
+  }
+  
+  // Добавяме SKU ако има
+  if (product.variants?.edges?.[0]?.node?.sku) {
+    jsonLd.sku = product.variants.edges[0].node.sku;
+  }
+  
+  // За различни езици можем да добавим inLanguage
+  if (language && language !== 'en') {
+    jsonLd.inLanguage = language;
+  }
+  
+  return jsonLd;
+}
+
 /* --------------------------- JSON schema (ANY language) --------------------------- */
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -718,18 +757,11 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       bullets: Array.isArray(candidate.bullets) ? candidate.bullets : [],
       faq: Array.isArray(candidate.faq) ? candidate.faq : [{ q: `What is ${localizedTitle}?`, a: `A product by ${p.vendor || 'our brand'}.` }],
       imageAlt: Array.isArray(candidate.imageAlt) ? candidate.imageAlt : [],
-      jsonLd: candidate.jsonLd || {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: localizedTitle,
-        description: (localizedBody || '').replace(/<[^>]+>/g, ' ').trim(),
-        offers: {
-          '@type': 'Offer',
-          price: String(p?.priceRangeV2?.minVariantPrice?.amount || '0'),
-          priceCurrency: (p?.priceRangeV2?.minVariantPrice?.currencyCode || 'USD'),
+      jsonLd: generateProductJsonLd(p, {
+  title: candidate.title || localizedTitle,
+  metaDescription: candidate.metaDescription
+}, langNormalized),
         },
-      },
-    },
     quality: {
       warnings: [],
       model,
