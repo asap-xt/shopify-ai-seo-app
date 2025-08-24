@@ -541,17 +541,32 @@ router.post('/seo/generate', async (req, res) => {
       return res.json({ language: 'all', productId, results });
     }
 
-    // Single language — require real translations first
-    const langNorm = canonLang(language);
-    const hasLoc = await hasProductTranslation(shop, productId, language); // pass user's locale; canon only for prompt
-    if (!hasLoc) {
-      return res.status(400).json({
-        error: 'Product is not translated to the requested language',
-        language: langNorm
-      });
-    }
-    const result = await generateSEOForLanguage(shop, productId, model, language);
-    return res.json(result);
+// Single language - check if we need translation
+const langNorm = canonLang(language);
+
+// Get shop's primary language
+const Q_SHOP_LOCALES = `
+  query ShopLocales {
+    shopLocales { locale primary published }
+  }
+`;
+const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+const primaryLang = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
+const isPrimary = langNorm.toLowerCase() === primaryLang.toLowerCase();
+
+// Only check for translations if NOT primary language
+if (!isPrimary) {
+  const hasLoc = await hasProductTranslation(shop, productId, language);
+  if (!hasLoc) {
+    return res.status(400).json({
+      error: 'Product is not translated to the requested language',
+      language: langNorm
+    });
+  }
+}
+
+const result = await generateSEOForLanguage(shop, productId, model, language);
+return res.json(result);
 
   } catch (e) {
     const payload = { error: e.message || String(e) };

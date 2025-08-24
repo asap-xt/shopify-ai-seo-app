@@ -232,6 +232,7 @@ function AiSeoPanel() {
       data = await readJson(response);
       if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       setResult(data);
+      console.log('Generated result:', data);
       setToast('SEO generated successfully');
     } catch (e) {
       const msg = e?.message || 'Failed to generate SEO';
