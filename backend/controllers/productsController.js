@@ -205,43 +205,66 @@ router.get('/seo-status', async (req, res) => {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
 
-    // Build safe query to avoid invalid productId values
-    const safeQuery = {
-      shop,
-      $and: [
-        {
-          $or: [
-            { productId: { $type: 'number' } },
-            { productId: { $exists: false } }
-          ]
-        },
-        { productId: { $ne: null } }
-      ]
-    };
+    console.log(`Getting SEO status for shop: ${shop}`);
 
-    // Get counts using safe queries
-    const [total, optimized, invalidCount] = await Promise.all([
-      Product.countDocuments(safeQuery),
-      Product.countDocuments({ 
-        ...safeQuery,
-        'seoStatus.optimized': true 
-      }),
-      // Count invalid products separately
-      Product.countDocuments({
-        shop,
-        $or: [
-          { productId: { $type: 'string' } },
-          { productId: null },
-          { productId: { $eq: NaN } }
-        ]
-      })
+    // Use aggregation to safely count products
+    const countPipeline = [
+      { $match: { shop } },
+      {
+        $addFields: {
+          isValidProduct: {
+            $and: [
+              { $isNumber: "$productId" },
+              { $ne: ["$productId", null] },
+              { $ne: [{ $toString: "$productId" }, "NaN"] }
+            ]
+          }
+        }
+      }
+    ];
+
+    // Get total valid products
+    const totalResult = await Product.aggregate([
+      ...countPipeline,
+      { $match: { isValidProduct: true } },
+      { $count: "total" }
     ]);
+    const total = totalResult[0]?.total || 0;
+
+    // Get optimized products
+    const optimizedResult = await Product.aggregate([
+      ...countPipeline,
+      { $match: { isValidProduct: true, 'seoStatus.optimized': true } },
+      { $count: "optimized" }
+    ]);
+    const optimized = optimizedResult[0]?.optimized || 0;
+
+    // Get invalid products count
+    const invalidResult = await Product.aggregate([
+      { $match: { shop } },
+      {
+        $addFields: {
+          isInvalid: {
+            $or: [
+              { $eq: [{ $type: "$productId" }, "string"] },
+              { $eq: ["$productId", null] },
+              { $not: [{ $isNumber: "$productId" }] },
+              { $eq: [{ $toString: "$productId" }, "NaN"] }
+            ]
+          }
+        }
+      },
+      { $match: { isInvalid: true } },
+      { $count: "invalid" }
+    ]);
+    const invalidCount = invalidResult[0]?.invalid || 0;
 
     const unoptimized = total - optimized;
 
     // Get products by language using aggregation
     const languageStats = await Product.aggregate([
-      { $match: safeQuery },
+      ...countPipeline,
+      { $match: { isValidProduct: true } },
       { $match: { 'seoStatus.languages': { $exists: true, $type: 'array' } } },
       { $unwind: '$seoStatus.languages' },
       { $match: { 'seoStatus.languages.optimized': true } },
@@ -254,10 +277,14 @@ router.get('/seo-status', async (req, res) => {
     ]);
 
     // Get last sync info
-    const lastSync = await Product.findOne(safeQuery)
-      .sort({ syncedAt: -1 })
-      .select('syncedAt')
-      .lean();
+    const lastSyncResult = await Product.aggregate([
+      ...countPipeline,
+      { $match: { isValidProduct: true } },
+      { $sort: { syncedAt: -1 } },
+      { $limit: 1 },
+      { $project: { syncedAt: 1 } }
+    ]);
+    const lastSync = lastSyncResult[0];
 
     res.json({
       shop,
@@ -276,16 +303,6 @@ router.get('/seo-status', async (req, res) => {
 
   } catch (error) {
     console.error('GET /api/products/seo-status error:', error);
-    
-    // Handle specific MongoDB casting errors
-    if (error.name === 'CastError' || error.message.includes('Cast to Number failed')) {
-      return res.status(500).json({ 
-        error: 'Database contains invalid product data',
-        message: 'Please run the cleanup script to remove invalid products',
-        details: error.message 
-      });
-    }
-    
     res.status(500).json({ error: error.message || 'Failed to fetch SEO status' });
   }
 });
@@ -319,29 +336,52 @@ router.post('/cleanup', async (req, res) => {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
 
-    // Find and remove products with invalid productId
-    const invalidProducts = await Product.find({
-      shop,
-      $or: [
-        { productId: { $type: 'string' } },
-        { productId: null },
-        { productId: { $eq: NaN } }
-      ]
-    }).lean();
+    console.log(`Starting cleanup for shop: ${shop}`);
 
-    const deleteResult = await Product.deleteMany({
-      shop,
-      $or: [
-        { productId: { $type: 'string' } },
-        { productId: null },
-        { productId: { $eq: NaN } }
-      ]
-    });
+    // Use aggregation to find invalid products without triggering cast errors
+    const invalidProducts = await Product.aggregate([
+      { $match: { shop } },
+      {
+        $addFields: {
+          isInvalid: {
+            $or: [
+              { $eq: [{ $type: "$productId" }, "string"] },
+              { $eq: ["$productId", null] },
+              { $not: [{ $isNumber: "$productId" }] },
+              { $eq: [{ $toString: "$productId" }, "NaN"] }
+            ]
+          }
+        }
+      },
+      { $match: { isInvalid: true } },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          productId: 1,
+          productIdType: { $type: "$productId" },
+          productIdString: { $toString: "$productId" }
+        }
+      }
+    ]);
 
-    // Get remaining valid products count
+    console.log(`Found ${invalidProducts.length} invalid products`);
+
+    // Delete invalid products using their _id
+    const idsToDelete = invalidProducts.map(p => p._id);
+    let deleteResult = { deletedCount: 0 };
+    
+    if (idsToDelete.length > 0) {
+      deleteResult = await Product.deleteMany({
+        _id: { $in: idsToDelete }
+      });
+      console.log(`Deleted ${deleteResult.deletedCount} products`);
+    }
+
+    // Count remaining valid products
     const remainingCount = await Product.countDocuments({
       shop,
-      productId: { $type: 'number', $ne: null }
+      productId: { $type: 'number' }
     });
 
     res.json({
@@ -354,7 +394,8 @@ router.post('/cleanup', async (req, res) => {
           _id: p._id,
           title: p.title,
           productId: p.productId,
-          type: typeof p.productId
+          type: p.productIdType,
+          asString: p.productIdString
         }))
       },
       remaining: remainingCount
