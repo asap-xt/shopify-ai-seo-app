@@ -177,77 +177,6 @@ router.post('/sync', async (req, res) => {
   }
 });
 
-// GET /api/products/:productId - Get single product with full details
-router.get('/:productId', async (req, res) => {
-  try {
-    const shop = requireShop(req);
-    const { productId } = req.params;
-    const gid = toGID(productId);
-    
-    // Parse numeric ID safely
-    const numericId = parseInt(productId);
-    const isValidNumeric = !isNaN(numericId) && isFinite(numericId);
-    
-    // Build query conditions
-    const queryConditions = [{ gid }];
-    if (isValidNumeric) {
-      queryConditions.push({ productId: numericId });
-    }
-    
-    // Try to find in MongoDB first
-    let product = await Product.findOne({ 
-      shop, 
-      $or: queryConditions
-    }).lean();
-
-    if (!product) {
-      // If not in DB, fetch from Shopify
-      const query = `
-        query GetProduct($id: ID!) {
-          product(id: $id) {
-            id
-            title
-            handle
-            descriptionHtml
-            status
-            vendor
-            productType
-            tags
-            createdAt
-            publishedAt
-            totalInventory
-            featuredImage {
-              url
-              altText
-            }
-          }
-        }
-      `;
-      
-      const data = await shopGraphQL(shop, query, { id: gid });
-      
-      if (!data.product) {
-        return res.status(404).json({ error: 'Product not found' });
-      }
-      
-      // Return Shopify data (not saved to DB yet)
-      product = {
-        ...data.product,
-        productId: numericId,
-        shop,
-        gid,
-        seoStatus: { optimized: false, languages: [] }
-      };
-    }
-
-    res.json({ product });
-
-  } catch (error) {
-    console.error('GET /api/products/:productId error:', error);
-    res.status(error.status || 500).json({ error: error.message });
-  }
-});
-
 // GET /api/products/tags/list - Get all unique tags for filtering
 router.get('/tags/list', async (req, res) => {
   try {
@@ -486,6 +415,78 @@ router.get('/bulk-select', async (req, res) => {
 
   } catch (error) {
     console.error('GET /api/products/bulk-select error:', error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// GET /api/products/:productId - Get single product with full details
+// ВАЖНО: Този route е последен, защото съдържа динамичен параметър
+router.get('/:productId', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { productId } = req.params;
+    const gid = toGID(productId);
+    
+    // Parse numeric ID safely
+    const numericId = parseInt(productId);
+    const isValidNumeric = !isNaN(numericId) && isFinite(numericId);
+    
+    // Build query conditions
+    const queryConditions = [{ gid }];
+    if (isValidNumeric) {
+      queryConditions.push({ productId: numericId });
+    }
+    
+    // Try to find in MongoDB first
+    let product = await Product.findOne({ 
+      shop, 
+      $or: queryConditions
+    }).lean();
+
+    if (!product) {
+      // If not in DB, fetch from Shopify
+      const query = `
+        query GetProduct($id: ID!) {
+          product(id: $id) {
+            id
+            title
+            handle
+            descriptionHtml
+            status
+            vendor
+            productType
+            tags
+            createdAt
+            publishedAt
+            totalInventory
+            featuredImage {
+              url
+              altText
+            }
+          }
+        }
+      `;
+      
+      const data = await shopGraphQL(shop, query, { id: gid });
+      
+      if (!data.product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      // Return Shopify data (not saved to DB yet)
+      product = {
+        ...data.product,
+        productId: numericId,
+        shop,
+        gid,
+        seoStatus: { optimized: false, languages: [] }
+      };
+    }
+
+    res.json({ product });
+
+  } catch (error) {
+    console.error('GET /api/products/:productId error:', error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });
