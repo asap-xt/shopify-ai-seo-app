@@ -70,6 +70,7 @@ import seoRouter from './controllers/seoController.js';  // mounts /plans/me, /s
 import languageRouter from './controllers/languageController.js';  // mounts /api/languages/*
 import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
 import debugRouter from './controllers/debugRouter.js';
+import productsRouter from './controllers/productsController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -79,6 +80,7 @@ app.use(seoRouter);
 app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
 app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
 app.use('/debug', debugRouter);
+app.use('/api/products', productsRouter);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import

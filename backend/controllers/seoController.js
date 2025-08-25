@@ -976,4 +976,10 @@ router.post('/seo/apply', async (req, res) => {
   }
 });
 
+// Export helper functions for use in other controllers
+export { 
+  requireShop, 
+  shopGraphQL,
+};
+
 export default router;
