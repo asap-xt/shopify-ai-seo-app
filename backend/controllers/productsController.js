@@ -23,7 +23,7 @@ function getValidProductsQuery(baseQuery) {
           { productId: { $exists: false } } // Allow products without productId
         ]
       },
-      { productId: { $ne: NaN } },
+      // ПРЕМАХНИ: { productId: { $ne: NaN } }, // MongoDB не може да сравнява с NaN
       { productId: { $ne: null } }
     ]
   };
@@ -131,8 +131,8 @@ router.get('/sync-status', async (req, res) => {
         shop,
         $or: [
           { productId: { $type: 'string' } },
-          { productId: NaN },
-          { productId: null }
+          { productId: null },
+          { productId: { $exists: false } }
         ]
       })
     ]);

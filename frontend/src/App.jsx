@@ -3,11 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import {
   AppProvider, Frame, Page, Layout, Card, Text, Box,
-  Button, TextField, Select, InlineStack, Divider, Toast
+  Button, TextField, Select, InlineStack, Divider, Toast, Tabs
 } from '@shopify/polaris';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
+import BulkEdit from './pages/BulkEdit.jsx';
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -117,10 +118,8 @@ function DashboardCard() {
   );
 }
 
-// -------- AI SEO Panel (main form)
-function AiSeoPanel() {
-  const shop = qs('shop', '');
-  
+// -------- Single Product Panel (original AiSeoPanel content)
+function SingleProductPanel({ shop }) {
   // Form states
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState('none'); // ПРОМЕНЕНО: Хардкоднато за локално генериране
@@ -429,6 +428,35 @@ function AiSeoPanel() {
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </>
+  );
+}
+
+// -------- AI SEO Panel with Tabs
+function AiSeoPanel() {
+  const shop = qs('shop', '');
+  const [selectedTab, setSelectedTab] = useState(0);
+  
+  const tabs = [
+    {
+      id: 'single-product',
+      content: 'Single Product',
+      panelID: 'single-product-panel',
+    },
+    {
+      id: 'bulk-edit',
+      content: 'Bulk Edit',
+      panelID: 'bulk-edit-panel',
+    },
+  ];
+  
+  return (
+    <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+      {selectedTab === 0 ? (
+        <SingleProductPanel shop={shop} />
+      ) : (
+        <BulkEdit shop={shop} />
+      )}
+    </Tabs>
   );
 }
 

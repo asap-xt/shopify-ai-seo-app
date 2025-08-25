@@ -1,9 +1,10 @@
-// frontend/src/AiSeoPanel.jsx
+// frontend/src/components/AiSeoPanel.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Card, Text, TextField, InlineStack, Select, Button, Divider, Toast,
+  Box, Card, Text, TextField, InlineStack, Select, Button, Divider, Toast, Tabs,
 } from '@shopify/polaris';
-import { makeSessionFetch } from './lib/sessionFetch.js';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
+import BulkEdit from '../pages/BulkEdit.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -16,20 +17,33 @@ const toGID = (v) => {
 const pretty = (x) => JSON.stringify(x, null, 2);
 
 export default function AiSeoPanel() {
-  const api = useMemo(() => makeSessionFetch(), []);
+  const [selectedTab, setSelectedTab] = useState(0);
+  
+  const tabs = [
+    {
+      id: 'single-product',
+      content: 'Single Product',
+      panelID: 'single-product-panel',
+    },
+    {
+      id: 'bulk-edit',
+      content: 'Bulk Edit',
+      panelID: 'bulk-edit-panel',
+    },
+  ];
 
+  // All existing state and logic for single product
+  const api = useMemo(() => makeSessionFetch(), []);
   const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState('');
   const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
-
   const [shopLanguages, setShopLanguages] = useState([]);
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
   const [shouldShowLanguageSelector, setShouldShowLanguageSelector] = useState(false);
   const [allLanguagesOption, setAllLanguagesOption] = useState(null);
   const [language, setLanguage] = useState('en');
-
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [toast, setToast] = useState('');
@@ -63,7 +77,6 @@ export default function AiSeoPanel() {
     (async () => {
       try {
         const data = await api(`/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`, { shop: s });
-
         if (cancelled) return;
 
         const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
@@ -84,7 +97,6 @@ export default function AiSeoPanel() {
           return showSel ? (effective[0] || primary) : primary;
         });
       } catch (e) {
-        // По-тих фолбек, без да спираме UX-а
         setShopLanguages(['en']); setProductLanguages(['en']); setPrimaryLanguage('en');
         setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
         setToast(`Languages fallback: ${e.message}`);
@@ -187,11 +199,12 @@ export default function AiSeoPanel() {
     !!result &&
     (Array.isArray(result?.results) ? result.results.some(r => r && r.seo) : !!(result?.productId && result?.seo));
 
-  return (
+  // Single Product Panel (original content)
+  const singleProductPanel = (
     <>
       <Card>
         <Box padding="400">
-          <Text as="h3" variant="headingMd">AI SEO</Text>
+          <Text as="h3" variant="headingMd">Generate SEO</Text>
           <Box paddingBlockStart="300">
             <div className="Polaris-Layout">
               <div className="Polaris-Layout__Section Polaris-Layout__Section--oneHalf">
@@ -208,7 +221,7 @@ export default function AiSeoPanel() {
                   label="Product ID (numeric or GID)"
                   value={productId}
                   onChange={setProductId}
-                  placeholder="1496335… или gid://shopify/Product/1496335…"
+                  placeholder="1496335… or gid://shopify/Product/1496335…"
                   autoComplete="off"
                 />
               </div>
@@ -253,7 +266,7 @@ export default function AiSeoPanel() {
             <Text as="h3" variant="headingMd">Result</Text>
             <Divider />
             <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, marginTop: 12 }}>
-{`${result ? pretty(result) : '—'}`}
+              {`${result ? pretty(result) : '—'}`}
             </pre>
           </Box>
         </Card>
@@ -261,5 +274,15 @@ export default function AiSeoPanel() {
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </>
+  );
+
+  return (
+    <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+      {selectedTab === 0 ? (
+        singleProductPanel
+      ) : (
+        <BulkEdit shop={shop} />
+      )}
+    </Tabs>
   );
 }
