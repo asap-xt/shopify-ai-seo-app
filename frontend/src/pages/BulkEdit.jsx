@@ -60,6 +60,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const [searchValue, setSearchValue] = useState('');
   const [productIdSearch, setProductIdSearch] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
+  const [languageFilter, setLanguageFilter] = useState('');
   
   // SEO generation state
   const [model, setModel] = useState('');
@@ -93,13 +94,13 @@ export default function BulkEdit({ shop: shopProp }) {
       .catch(err => setToast(`Error loading models: ${err.message}`));
   }, [shop]);
   
-  // Load shop languages
+  // Load shop languages - FIXED API ENDPOINT
   useEffect(() => {
     if (!shop) return;
-    fetch(`/api/shop/languages?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
+    fetch(`/api/languages/shop/${shop}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        const langs = data?.languages || ['en'];
+        const langs = data?.shopLanguages || ['en'];
         setAvailableLanguages(langs);
         setSelectedLanguages([]); // User must select
       })
@@ -109,7 +110,7 @@ export default function BulkEdit({ shop: shopProp }) {
       });
   }, [shop]);
   
-  // Load products
+  // Load products - ADDED languageFilter support
   const loadProducts = useCallback(async (pageNum = 1) => {
     setLoading(true);
     try {
@@ -119,6 +120,7 @@ export default function BulkEdit({ shop: shopProp }) {
         limit: 50,
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
         ...(searchValue && { search: searchValue }),
+        ...(languageFilter && { languageFilter }),
       });
       
       const response = await fetch(`/api/products/list?${params}`, { credentials: 'include' });
@@ -128,19 +130,19 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setProducts(pageNum === 1 ? data.products : [...products, ...data.products]);
       setPage(pageNum);
-      setHasMore(data.hasMore);
-      setTotalCount(data.total || 0);
+      setHasMore(data.pagination?.hasNext || false);
+      setTotalCount(data.pagination?.total || 0);
     } catch (err) {
       setToast(`Error loading products: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, searchValue, products]);
+  }, [shop, optimizedFilter, searchValue, languageFilter, products]);
   
-  // Initial load
+  // Initial load and reload on filter change
   useEffect(() => {
     if (shop) loadProducts(1);
-  }, [shop, optimizedFilter]);
+  }, [shop, optimizedFilter, languageFilter]);
   
   // Search specific product by ID
   const searchProductById = async () => {
@@ -229,15 +231,31 @@ export default function BulkEdit({ shop: shopProp }) {
           setCurrentProduct(product.title || product.handle || 'Product');
           
           try {
+            // Get product's existing SEO languages
+            const productGid = product.gid || toProductGID(product.productId || product.id);
+            
+            // Filter languages - only generate for missing ones
+            const existingLanguages = product.optimizationSummary?.optimizedLanguages || [];
+            const languagesToGenerate = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
+            
+            if (languagesToGenerate.length === 0) {
+              results[product._id] = {
+                success: true,
+                skipped: true,
+                message: 'All selected languages already have SEO'
+              };
+              return;
+            }
+            
             const response = await fetch('/api/seo/generate-multi', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
               body: JSON.stringify({
                 shop,
-                productId: product.id,
+                productId: productGid,
                 model,
-                languages: selectedLanguages,
+                languages: languagesToGenerate,
               }),
             });
             
@@ -248,7 +266,7 @@ export default function BulkEdit({ shop: shopProp }) {
             results[product._id] = {
               success: true,
               data,
-              languages: selectedLanguages,
+              languages: languagesToGenerate,
             };
           } catch (err) {
             results[product._id] = {
@@ -268,7 +286,15 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setResults(results);
       setShowResultsModal(true);
-      setToast(`Generated SEO for ${Object.keys(results).filter(k => results[k].success).length} products`);
+      
+      const successCount = Object.keys(results).filter(k => results[k].success && !results[k].skipped).length;
+      const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
+      
+      if (skippedCount > 0) {
+        setToast(`Generated SEO for ${successCount} products (${skippedCount} already had SEO)`);
+      } else {
+        setToast(`Generated SEO for ${successCount} products`);
+      }
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
@@ -284,7 +310,7 @@ export default function BulkEdit({ shop: shopProp }) {
     setProgress({ current: 0, total: 0, percent: 0 });
     
     try {
-      const successfulResults = Object.entries(results).filter(([_, r]) => r.success);
+      const successfulResults = Object.entries(results).filter(([_, r]) => r.success && !r.skipped);
       const total = successfulResults.length;
       setProgress({ current: 0, total, percent: 0 });
       
@@ -297,13 +323,15 @@ export default function BulkEdit({ shop: shopProp }) {
         setCurrentProduct(product.title || 'Product');
         
         try {
+          const productGid = product.gid || toProductGID(product.productId || product.id);
+          
           const response = await fetch('/api/seo/apply-multi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
               shop,
-              productId: product.id,
+              productId: productGid,
               results: result.data.results.filter(r => r?.seo).map(r => ({
                 language: r.language,
                 seo: r.seo,
@@ -348,8 +376,8 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Resource list items
   const resourceItems = products.map((product) => {
-    const numericId = extractNumericId(product.id);
-    const optimizedLanguages = product.languages?.optimized || [];
+    const numericId = extractNumericId(product.productId || product.id);
+    const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
     return (
       <ResourceItem
@@ -360,7 +388,7 @@ export default function BulkEdit({ shop: shopProp }) {
       >
         <InlineStack gap="300" align="center" blockAlign="center">
           <Thumbnail
-            source={product.image || ''}
+            source={product.images?.[0]?.url || ''}
             alt={product.title}
             size="small"
           />
@@ -421,7 +449,7 @@ export default function BulkEdit({ shop: shopProp }) {
       primaryAction={{
         content: 'Apply SEO',
         onAction: applySEO,
-        disabled: !Object.values(results).some(r => r.success),
+        disabled: !Object.values(results).some(r => r.success && !r.skipped),
       }}
       secondaryActions={[
         {
@@ -436,7 +464,13 @@ export default function BulkEdit({ shop: shopProp }) {
             <Box>
               <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
               <Text variant="headingLg" fontWeight="bold" tone="success">
-                {Object.values(results).filter(r => r.success).length}
+                {Object.values(results).filter(r => r.success && !r.skipped).length}
+              </Text>
+            </Box>
+            <Box>
+              <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
+              <Text variant="headingLg" fontWeight="bold" tone="info">
+                {Object.values(results).filter(r => r.skipped).length}
               </Text>
             </Box>
             <Box>
@@ -477,6 +511,7 @@ export default function BulkEdit({ shop: shopProp }) {
         setSearchValue('');
         setProductIdSearch('');
         setOptimizedFilter('all');
+        setLanguageFilter('');
         loadProducts(1);
       }}}
       image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
@@ -503,11 +538,41 @@ export default function BulkEdit({ shop: shopProp }) {
           titleHidden
           choices={[
             { label: 'All products', value: 'all' },
-            { label: 'Optimized', value: 'true' },
-            { label: 'Not optimized', value: 'false' },
+            { label: 'Has SEO', value: 'true' },
+            { label: 'Missing SEO', value: 'false' },
           ]}
           selected={[optimizedFilter]}
-          onChange={(value) => setOptimizedFilter(value[0])}
+          onChange={(value) => {
+            setOptimizedFilter(value[0]);
+            setLanguageFilter('');
+            loadProducts(1);
+          }}
+        />
+      ),
+    },
+    {
+      key: 'language',
+      label: 'Language Status',
+      filter: (
+        <ChoiceList
+          title="Language Status"
+          titleHidden
+          choices={[
+            { label: 'All languages', value: '' },
+            ...availableLanguages.map(lang => ({
+              label: `Has ${lang.toUpperCase()}`,
+              value: `has_${lang}`
+            })),
+            ...availableLanguages.map(lang => ({
+              label: `Missing ${lang.toUpperCase()}`,
+              value: `missing_${lang}`
+            })),
+          ]}
+          selected={languageFilter ? [languageFilter] : []}
+          onChange={(value) => {
+            setLanguageFilter(value[0] || '');
+            loadProducts(1);
+          }}
         />
       ),
     },
@@ -538,6 +603,7 @@ export default function BulkEdit({ shop: shopProp }) {
               
               {/* Bulk Settings */}
               <InlineStack gap="400" wrap={false}>
+                {/* AI Model - HIDDEN as requested
                 <Box minWidth="200px">
                   <Select
                     label="AI Model"
@@ -547,6 +613,7 @@ export default function BulkEdit({ shop: shopProp }) {
                     onChange={setModel}
                   />
                 </Box>
+                */}
                 
                 <Box>
                   <Text variant="bodyMd" fontWeight="semibold">Languages:</Text>
@@ -616,6 +683,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   onClearAll={() => {
                     setSearchValue('');
                     setOptimizedFilter('all');
+                    setLanguageFilter('');
                   }}
                 />
               }

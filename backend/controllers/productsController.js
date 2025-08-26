@@ -63,6 +63,21 @@ router.get('/list', async (req, res) => {
       }
     }
 
+// Language filter
+if (req.query.languageFilter) {
+  const [action, lang] = req.query.languageFilter.split('_');
+  if (action === 'has') {
+    query['seoStatus.languages'] = { 
+      $elemMatch: { code: lang, optimized: true } 
+    };
+  } else if (action === 'missing') {
+    query['$or'] = [
+      { 'seoStatus.languages': { $not: { $elemMatch: { code: lang, optimized: true } } } },
+      { 'seoStatus.languages': { $exists: false } }
+    ];
+  }
+}
+
     // SEO optimization filter
     if (optimized !== undefined && optimized !== '') {
       query['seoStatus.optimized'] = optimized === 'true';
