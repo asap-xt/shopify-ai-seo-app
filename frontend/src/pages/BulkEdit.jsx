@@ -26,7 +26,6 @@ import {
   ActionList,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
-import { SearchIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
