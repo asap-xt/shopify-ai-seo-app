@@ -61,6 +61,10 @@ export default function BulkEdit({ shop: shopProp }) {
   const [productIdSearch, setProductIdSearch] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
   
   // SEO generation state
   const [model, setModel] = useState('');
@@ -77,6 +81,7 @@ export default function BulkEdit({ shop: shopProp }) {
   // Results state
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   
   // Toast
   const [toast, setToast] = useState('');
@@ -109,9 +114,20 @@ export default function BulkEdit({ shop: shopProp }) {
         setAvailableLanguages(['en']);
       });
   }, [shop]);
+
+  // Load available tags
+  useEffect(() => {
+    if (!shop) return;
+    fetch(`/api/products/tags/list?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        setAvailableTags(data?.tags || []);
+      })
+      .catch(err => console.error('Failed to load tags:', err));
+  }, [shop]);
   
-  // Load products - ADDED languageFilter support
-  const loadProducts = useCallback(async (pageNum = 1) => {
+  // Load products
+  const loadProducts = useCallback(async (pageNum = 1, append = false) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -121,6 +137,9 @@ export default function BulkEdit({ shop: shopProp }) {
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
         ...(searchValue && { search: searchValue }),
         ...(languageFilter && { languageFilter }),
+        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
+        sortBy,
+        sortOrder,
       });
       
       const response = await fetch(`/api/products/list?${params}`, { credentials: 'include' });
@@ -128,7 +147,12 @@ export default function BulkEdit({ shop: shopProp }) {
       
       if (!response.ok) throw new Error(data?.error || 'Failed to load products');
       
-      setProducts(pageNum === 1 ? data.products : [...products, ...data.products]);
+      if (append) {
+        setProducts(prev => [...prev, ...data.products]);
+      } else {
+        setProducts(data.products || []);
+      }
+      
       setPage(pageNum);
       setHasMore(data.pagination?.hasNext || false);
       setTotalCount(data.pagination?.total || 0);
@@ -137,12 +161,12 @@ export default function BulkEdit({ shop: shopProp }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, searchValue, languageFilter, products]);
+  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder]);
   
-  // Initial load and reload on filter change
+  // Initial load
   useEffect(() => {
     if (shop) loadProducts(1);
-  }, [shop, optimizedFilter, languageFilter]);
+  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
   // Search specific product by ID
   const searchProductById = async () => {
@@ -173,15 +197,28 @@ export default function BulkEdit({ shop: shopProp }) {
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
     setSelectedItems(items);
-    setSelectAllPages(false);
+    if (items.length === 0) {
+      setSelectAllPages(false);
+    }
   }, []);
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
     if (checked) {
       setSelectedItems(products.map(p => p._id));
+    } else {
+      setSelectedItems([]);
     }
   }, [products]);
+
+  // Open language selection modal
+  const openLanguageModal = () => {
+    if (selectedItems.length === 0 && !selectAllPages) {
+      setToast('Please select products first');
+      return;
+    }
+    setShowLanguageModal(true);
+  };
   
   // Generate SEO for selected products
   const generateSEO = async () => {
@@ -190,12 +227,7 @@ export default function BulkEdit({ shop: shopProp }) {
       return;
     }
     
-    const productIds = selectAllPages ? 'ALL' : selectedItems;
-    if (!selectAllPages && (!productIds.length)) {
-      setToast('Please select products');
-      return;
-    }
-    
+    setShowLanguageModal(false);
     setIsProcessing(true);
     setProgress({ current: 0, total: 0, percent: 0 });
     setErrors([]);
@@ -440,6 +472,66 @@ export default function BulkEdit({ shop: shopProp }) {
       </Modal.Section>
     </Modal>
   );
+
+  // Language selection modal
+  const languageModal = (
+    <Modal
+      open={showLanguageModal}
+      title="Select Languages"
+      primaryAction={{
+        content: 'Generate SEO',
+        onAction: generateSEO,
+        disabled: selectedLanguages.length === 0,
+      }}
+      secondaryActions={[
+        {
+          content: 'Cancel',
+          onAction: () => setShowLanguageModal(false),
+        },
+      ]}
+    >
+      <Modal.Section>
+        <BlockStack gap="300">
+          <Text variant="bodyMd">Select languages to generate SEO for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
+          <Box paddingBlockStart="200">
+            <InlineStack gap="200" wrap>
+              {availableLanguages.map(lang => (
+                <Checkbox
+                  key={lang}
+                  label={lang.toUpperCase()}
+                  checked={selectedLanguages.includes(lang)}
+                  onChange={(checked) => {
+                    setSelectedLanguages(
+                      checked
+                        ? [...selectedLanguages, lang]
+                        : selectedLanguages.filter(l => l !== lang)
+                    );
+                  }}
+                />
+              ))}
+            </InlineStack>
+          </Box>
+          <Box paddingBlockStart="200">
+            <Button
+              plain
+              onClick={() => {
+                setSelectedLanguages(
+                  selectedLanguages.length === availableLanguages.length
+                    ? []
+                    : [...availableLanguages]
+                );
+              }}
+            >
+              {selectedLanguages.length === availableLanguages.length ? 'Deselect all' : 'Select all'}
+            </Button>
+          </Box>
+          <Text variant="bodySm" tone="subdued">
+            Note: SEO will only be generated for languages that don't already have optimization.
+          </Text>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
   
   // Results modal
   const resultsModal = (
@@ -512,6 +604,7 @@ export default function BulkEdit({ shop: shopProp }) {
         setProductIdSearch('');
         setOptimizedFilter('all');
         setLanguageFilter('');
+        setSelectedTags([]);
         loadProducts(1);
       }}}
       image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
@@ -520,12 +613,16 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
-  const bulkActions = [
+  const bulkActions = selectAllPages || selectedItems.length > 0 ? [
     {
-      content: `Generate SEO (${selectAllPages ? 'All' : selectedItems.length} selected)`,
-      onAction: generateSEO,
-      disabled: !selectedItems.length && !selectAllPages,
+      content: `Generate AI optimisation`,
+      onAction: openLanguageModal,
     },
+  ] : [];
+  
+  const sortOptions = [
+    { label: 'Newest first', value: 'newest' },
+    { label: 'Oldest first', value: 'oldest' },
   ];
   
   const filters = [
@@ -545,7 +642,6 @@ export default function BulkEdit({ shop: shopProp }) {
           onChange={(value) => {
             setOptimizedFilter(value[0]);
             setLanguageFilter('');
-            loadProducts(1);
           }}
         />
       ),
@@ -569,10 +665,21 @@ export default function BulkEdit({ shop: shopProp }) {
             })),
           ]}
           selected={languageFilter ? [languageFilter] : []}
-          onChange={(value) => {
-            setLanguageFilter(value[0] || '');
-            loadProducts(1);
-          }}
+          onChange={(value) => setLanguageFilter(value[0] || '')}
+        />
+      ),
+    },
+    {
+      key: 'tags',
+      label: 'Tags',
+      filter: (
+        <ChoiceList
+          title="Tags"
+          titleHidden
+          allowMultiple
+          choices={availableTags.map(tag => ({ label: tag, value: tag }))}
+          selected={selectedTags}
+          onChange={setSelectedTags}
         />
       ),
     },
@@ -601,63 +708,35 @@ export default function BulkEdit({ shop: shopProp }) {
                 />
               </InlineStack>
               
-              {/* Bulk Settings */}
-              <InlineStack gap="400" wrap={false}>
-                {/* AI Model - HIDDEN as requested
-                <Box minWidth="200px">
-                  <Select
-                    label="AI Model"
-                    labelHidden
-                    options={modelOptions}
-                    value={model}
-                    onChange={setModel}
-                  />
+              {/* Languages and Select All */}
+              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+                <Box>
+                  <InlineStack gap="200" align="center">
+                    {/* Select all products checkbox */}
+                    {totalCount > 0 && (
+                      <Checkbox
+                        label={`Select all ${totalCount} products in your store`}
+                        checked={selectAllPages}
+                        onChange={handleSelectAllPages}
+                      />
+                    )}
+                  </InlineStack>
                 </Box>
-                */}
                 
                 <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Languages:</Text>
-                  <InlineStack gap="200">
-                    {availableLanguages.map(lang => (
-                      <Checkbox
-                        key={lang}
-                        label={lang.toUpperCase()}
-                        checked={selectedLanguages.includes(lang)}
-                        onChange={(checked) => {
-                          setSelectedLanguages(
-                            checked
-                              ? [...selectedLanguages, lang]
-                              : selectedLanguages.filter(l => l !== lang)
-                          );
-                        }}
-                      />
-                    ))}
-                    <Button
-                      plain
-                      onClick={() => {
-                        setSelectedLanguages(
-                          selectedLanguages.length === availableLanguages.length
-                            ? []
-                            : [...availableLanguages]
-                        );
+                  <InlineStack gap="300" align="center">
+                    <Select
+                      label="Sort by"
+                      labelHidden
+                      options={sortOptions}
+                      value={sortOrder === 'desc' ? 'newest' : 'oldest'}
+                      onChange={(value) => {
+                        setSortOrder(value === 'newest' ? 'desc' : 'asc');
                       }}
-                    >
-                      {selectedLanguages.length === availableLanguages.length ? 'Deselect all' : 'Select all'}
-                    </Button>
+                    />
                   </InlineStack>
                 </Box>
               </InlineStack>
-              
-              {/* Select all products checkbox */}
-              {totalCount > 0 && (
-                <Box paddingBlockStart="200">
-                  <Checkbox
-                    label={`Select all ${totalCount} products in your store`}
-                    checked={selectAllPages}
-                    onChange={handleSelectAllPages}
-                  />
-                </Box>
-              )}
             </BlockStack>
           </Card>
         </Layout.Section>
@@ -678,20 +757,39 @@ export default function BulkEdit({ shop: shopProp }) {
                 <Filters
                   queryValue={searchValue}
                   filters={filters}
+                  appliedFilters={[
+                    ...(optimizedFilter !== 'all' ? [{
+                      key: 'optimized',
+                      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
+                      onRemove: () => setOptimizedFilter('all'),
+                    }] : []),
+                    ...(languageFilter ? [{
+                      key: 'language',
+                      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                      onRemove: () => setLanguageFilter(''),
+                    }] : []),
+                    ...selectedTags.map(tag => ({
+                      key: `tag-${tag}`,
+                      label: `Tag: ${tag}`,
+                      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
+                    })),
+                  ]}
                   onQueryChange={setSearchValue}
                   onQueryClear={() => setSearchValue('')}
                   onClearAll={() => {
                     setSearchValue('');
                     setOptimizedFilter('all');
                     setLanguageFilter('');
+                    setSelectedTags([]);
                   }}
                 />
               }
+              showHeader
             />
             
             {hasMore && !loading && (
               <Box padding="400" textAlign="center">
-                <Button onClick={() => loadProducts(page + 1)}>
+                <Button onClick={() => loadProducts(page + 1, true)}>
                   Load more products
                 </Button>
               </Box>
@@ -701,6 +799,7 @@ export default function BulkEdit({ shop: shopProp }) {
       </Layout>
       
       {progressModal}
+      {languageModal}
       {resultsModal}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </Page>
