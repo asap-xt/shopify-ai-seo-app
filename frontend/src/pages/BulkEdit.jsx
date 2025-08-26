@@ -260,7 +260,7 @@ export default function BulkEdit({ shop: shopProp }) {
               results[product._id] = {
                 success: true,
                 skipped: true,
-                message: 'All selected languages already have SEO'
+                message: 'All selected languages already have AI optimisation'
               };
               return;
             }
@@ -309,9 +309,9 @@ export default function BulkEdit({ shop: shopProp }) {
       const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
       
       if (skippedCount > 0) {
-        setToast(`Generated SEO for ${successCount} products (${skippedCount} already had SEO)`);
+        setToast(`Generated AI optimisation for ${successCount} products (${skippedCount} already had AI optimisation)`);
       } else {
-        setToast(`Generated SEO for ${successCount} products`);
+        setToast(`Generated AI optimisation for ${successCount} products`);
       }
       
     } catch (err) {
@@ -378,12 +378,12 @@ export default function BulkEdit({ shop: shopProp }) {
         setProgress({ current, total, percent });
       }
       
-      setToast('SEO applied successfully!');
+      setToast('AI optimisation applied successfully!');
       setShowResultsModal(false);
       loadProducts(1);
       
     } catch (err) {
-      setToast(`Error applying SEO: ${err.message}`);
+      setToast(`Error applying AI optimisation: ${err.message}`);
     } finally {
       setIsProcessing(false);
       setCurrentProduct('');
@@ -475,7 +475,7 @@ export default function BulkEdit({ shop: shopProp }) {
       open={showLanguageModal}
       title="Select Languages"
       primaryAction={{
-        content: 'Generate SEO',
+        content: 'Generate AI optimisation',
         onAction: generateSEO,
         disabled: selectedLanguages.length === 0,
       }}
@@ -488,7 +488,7 @@ export default function BulkEdit({ shop: shopProp }) {
     >
       <Modal.Section>
         <BlockStack gap="300">
-          <Text variant="bodyMd">Select languages to generate SEO for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
+          <Text variant="bodyMd">Select languages to generate AI optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
               {availableLanguages.map(lang => (
@@ -522,7 +522,7 @@ export default function BulkEdit({ shop: shopProp }) {
             </Button>
           </Box>
           <Text variant="bodySm" tone="subdued">
-            Note: SEO will only be generated for languages that don't already have optimization.
+            Note: AI optimisation will only be generated for languages that don't already have optimization.
           </Text>
         </BlockStack>
       </Modal.Section>
@@ -533,9 +533,9 @@ export default function BulkEdit({ shop: shopProp }) {
   const resultsModal = (
     <Modal
       open={showResultsModal && !isProcessing}
-      title="SEO Generation Results"
+      title="AI Optimisation Generation Results"
       primaryAction={{
-        content: 'Apply SEO',
+        content: 'Apply AI optimisation',
         onAction: applySEO,
         disabled: !Object.values(results).some(r => r.success && !r.skipped),
       }}
@@ -621,7 +621,7 @@ export default function BulkEdit({ shop: shopProp }) {
   ];
   
   return (
-    <Page title="Bulk Edit SEO">
+    <Page title="Bulk Edit AI Optimisation">
       <Layout>
         <Layout.Section>
           <Card>
@@ -688,17 +688,7 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
                       removeUnderline
                     >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>AI Search Status</span>
-                        {optimizedFilter !== 'all' && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setOptimizedFilter('all');
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
+                      AI Search Status
                     </Button>
                   }
                   onClose={() => setShowOptimizedPopover(false)}
@@ -709,8 +699,8 @@ export default function BulkEdit({ shop: shopProp }) {
                       titleHidden
                       choices={[
                         { label: 'All products', value: 'all' },
-                        { label: 'Has SEO', value: 'true' },
-                        { label: 'Missing SEO', value: 'false' },
+                        { label: 'Has AI Optimisation', value: 'true' },
+                        { label: 'No AI Optimisation', value: 'false' },
                       ]}
                       selected={[optimizedFilter]}
                       onChange={(value) => {
@@ -731,17 +721,7 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowLanguagePopover(!showLanguagePopover)}
                       removeUnderline
                     >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>Language Status</span>
-                        {languageFilter && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setLanguageFilter('');
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
+                      Language Status
                     </Button>
                   }
                   onClose={() => setShowLanguagePopover(false)}
@@ -779,17 +759,7 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowTagsPopover(!showTagsPopover)}
                       removeUnderline
                     >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>Tags</span>
-                        {selectedTags.length > 0 && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTags([]);
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
+                      Tags
                     </Button>
                   }
                   onClose={() => setShowTagsPopover(false)}
@@ -823,7 +793,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   <InlineStack gap="100" wrap>
                     {optimizedFilter !== 'all' && (
                       <Badge onRemove={() => setOptimizedFilter('all')}>
-                        {optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO'}
+                        {optimizedFilter === 'true' ? 'Has AI Optimisation' : 'No AI Optimisation'}
                       </Badge>
                     )}
                     {languageFilter && (
