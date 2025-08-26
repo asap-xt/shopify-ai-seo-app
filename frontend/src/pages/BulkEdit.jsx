@@ -98,7 +98,7 @@ export default function BulkEdit({ shop: shopProp }) {
       .catch(err => setToast(`Error loading models: ${err.message}`));
   }, [shop]);
   
-  // Load shop languages - FIXED API ENDPOINT
+  // Load shop languages
   useEffect(() => {
     if (!shop) return;
     fetch(`/api/languages/shop/${shop}`, { credentials: 'include' })
@@ -106,10 +106,9 @@ export default function BulkEdit({ shop: shopProp }) {
       .then(data => {
         const langs = data?.shopLanguages || ['en'];
         setAvailableLanguages(langs);
-        setSelectedLanguages([]); // User must select
+        setSelectedLanguages([]);
       })
       .catch(() => {
-        // Fallback
         setAvailableLanguages(['en']);
       });
   }, [shop]);
@@ -183,12 +182,11 @@ export default function BulkEdit({ shop: shopProp }) {
     return () => clearTimeout(timer);
   }, [searchValue]);
   
-  // Search specific product by ID - FIXED: Added proper function declaration
+  // Search specific product by ID
   const searchProductById = async (productIdSearch) => {
     setLoading(true);
     try {
       const searchTerm = productIdSearch.trim();
-      // Try as numeric ID first
       const numericId = searchTerm.replace(/\D/g, '');
       
       const response = await fetch(`/api/products/list?shop=${encodeURIComponent(shop)}&search=${numericId}&limit=50`, {
@@ -252,11 +250,9 @@ export default function BulkEdit({ shop: shopProp }) {
     setResults({});
     
     try {
-      // Get actual product list to process
       let productsToProcess = [];
       
       if (selectAllPages) {
-        // Fetch all product IDs
         const response = await fetch(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`, {
           credentials: 'include'
         });
@@ -269,22 +265,18 @@ export default function BulkEdit({ shop: shopProp }) {
       const total = productsToProcess.length;
       setProgress({ current: 0, total, percent: 0 });
       
-      // Process in batches
       const batchSize = 5;
       const results = {};
       
       for (let i = 0; i < productsToProcess.length; i += batchSize) {
         const batch = productsToProcess.slice(i, Math.min(i + batchSize, productsToProcess.length));
         
-        // Process batch in parallel
         const batchPromises = batch.map(async (product) => {
           setCurrentProduct(product.title || product.handle || 'Product');
           
           try {
-            // Get product's existing SEO languages
             const productGid = product.gid || toProductGID(product.productId || product.id);
             
-            // Filter languages - only generate for missing ones
             const existingLanguages = product.optimizationSummary?.optimizedLanguages || [];
             const languagesToGenerate = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
             
@@ -413,7 +405,6 @@ export default function BulkEdit({ shop: shopProp }) {
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
       
-      // Reload products to show updated status
       loadProducts(1);
       
     } catch (err) {
@@ -424,13 +415,12 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   };
   
-  // Resource list items - Fixed with proper alignment and images
+  // Resource list items
   const renderItem = (item) => {
     const product = item;
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
-    // Fixed media to use correct image property names
     const media = product.images?.[0] ? (
       <Thumbnail
         source={product.images[0].url || product.images[0].src || product.images[0]}
@@ -455,13 +445,11 @@ export default function BulkEdit({ shop: shopProp }) {
         accessibilityLabel={`View details for ${product.title}`}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
-          {/* Product info */}
           <Box style={{ flex: '1 1 40%', minWidth: '250px' }}>
             <Text variant="bodyMd" fontWeight="semibold">{product.title}</Text>
             <Text variant="bodySm" tone="subdued">ID: {numericId}</Text>
           </Box>
           
-          {/* Language badges */}
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             <InlineStack gap="100">
               {availableLanguages.map(lang => (
@@ -476,7 +464,6 @@ export default function BulkEdit({ shop: shopProp }) {
             </InlineStack>
           </Box>
           
-          {/* Status */}
           <Box style={{ flex: '0 0 20%', minWidth: '100px', textAlign: 'center' }}>
             <Badge tone="success">Active</Badge>
           </Box>
@@ -725,7 +712,6 @@ export default function BulkEdit({ shop: shopProp }) {
           <Card>
             <Box padding="400">
               <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-                {/* Search field */}
                 <Box minWidth="400px">
                   <TextField
                     label=""
@@ -738,7 +724,6 @@ export default function BulkEdit({ shop: shopProp }) {
                   />
                 </Box>
                 
-                {/* Right side - Sort and Generate button */}
                 <Box>
                   <InlineStack gap="300" align="center">
                     <Select
@@ -761,7 +746,6 @@ export default function BulkEdit({ shop: shopProp }) {
                 </Box>
               </InlineStack>
               
-              {/* Select all checkbox */}
               {totalCount > 0 && (
                 <Box paddingBlockStart="300">
                   <Checkbox
@@ -817,14 +801,9 @@ export default function BulkEdit({ shop: shopProp }) {
                   }}
                   hideQueryField
                 />
-              }' }}>
-                    <Button disclosure>Filter +</Button>
-                  </div>
-                </Filters>
               }
             />
             
-            {/* Load more button */}
             {hasMore && !loading && (
               <Box padding="400" textAlign="center">
                 <Button onClick={() => loadProducts(page + 1, true)}>
