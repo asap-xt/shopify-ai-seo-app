@@ -58,7 +58,6 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Filter state
   const [searchValue, setSearchValue] = useState('');
-  const [productIdSearch, setProductIdSearch] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
@@ -168,10 +167,15 @@ export default function BulkEdit({ shop: shopProp }) {
     if (shop) loadProducts(1);
   }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
+  // Unified search function
+  const handleSearch = useCallback((value) => {
+    setSearchValue(value);
+  }, []);
+  
   // Search debounce effect
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchValue && shop) {
+      if (shop) {
         loadProducts(1);
       }
     }, 500);
@@ -422,37 +426,39 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   };
   
-  // Resource list items
-  const resourceItems = products.map((product) => {
+  // Resource list items - Fixed with proper alignment and images
+  const renderItem = (item) => {
+    const product = item;
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+    
+    const media = product.images?.[0]?.url ? (
+      <Thumbnail
+        source={product.images[0].url}
+        alt={product.title}
+        size="small"
+      />
+    ) : (
+      <Box width="40px" height="40px" background="neutral-subtle" borderRadius="100" />
+    );
     
     return (
       <ResourceItem
         id={product._id}
-        key={product._id}
-        onClick={() => {}}
+        url=""
+        media={media}
         accessibilityLabel={`View details for ${product.title}`}
       >
-        <InlineStack gap="400" align="start" blockAlign="center" wrap={false}>
-          {/* Thumbnail */}
-          <Box minWidth="40px">
-            <Thumbnail
-              source={product.images?.[0]?.url || ''}
-              alt={product.title}
-              size="small"
-            />
-          </Box>
-          
+        <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
           {/* Product info */}
-          <Box minWidth="300px">
+          <Box style={{ flex: '1 1 40%', minWidth: '300px' }}>
             <Text variant="bodyMd" fontWeight="semibold">{product.title}</Text>
             <Text variant="bodySm" tone="subdued">ID: {numericId}</Text>
           </Box>
           
           {/* Language badges */}
-          <Box minWidth="200px">
-            <InlineStack gap="100" wrap>
+          <Box style={{ flex: '0 0 20%', minWidth: '160px' }}>
+            <InlineStack gap="100">
               {availableLanguages.map(lang => (
                 <Badge
                   key={lang}
@@ -466,20 +472,21 @@ export default function BulkEdit({ shop: shopProp }) {
           </Box>
           
           {/* Status */}
-          <Box minWidth="100px" textAlign="right">
+          <Box style={{ flex: '0 0 15%', minWidth: '80px', textAlign: 'center' }}>
             <Badge tone="success">Active</Badge>
           </Box>
           
-          {/* Date */}
-          <Box minWidth="120px" textAlign="right">
+          {/* Spacer */}
+          <Box style={{ flex: '0 0 25%', minWidth: '100px', textAlign: 'right' }}>
+            {/* Empty for now, but maintains spacing */}
             <Text variant="bodySm" tone="subdued">
-              {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : '—'}
+              —
             </Text>
           </Box>
         </InlineStack>
       </ResourceItem>
     );
-  });
+  };
   
   // Progress modal
   const progressModal = isProcessing && (
@@ -626,12 +633,13 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
+  const [showFilters, setShowFilters] = useState(false);
+  
   const emptyState = (
     <EmptyState
       heading="No products found"
       action={{ content: 'Clear filters', onAction: () => {
         setSearchValue('');
-        setProductIdSearch('');
         setOptimizedFilter('all');
         setLanguageFilter('');
         setSelectedTags([]);
@@ -712,35 +720,24 @@ export default function BulkEdit({ shop: shopProp }) {
   
   return (
     <Page title="Bulk Edit SEO">
+  return (
+    <Page title="Bulk Edit SEO">
       <Layout>
         <Layout.Section>
           <Card>
             <Box padding="400">
               <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-                {/* Left side - Product search and select all */}
-                <Box>
-                  <InlineStack gap="300" align="center">
-                    <TextField
-                      label=""
-                      placeholder="Enter product ID or GID..."
-                      value={productIdSearch}
-                      onChange={setProductIdSearch}
-                      prefix={<SearchIcon />}
-                      connectedRight={
-                        <Button onClick={searchProductById} disabled={!productIdSearch.trim()}>
-                          Search
-                        </Button>
-                      }
-                    />
-                    
-                    {totalCount > 0 && (
-                      <Checkbox
-                        label={`Select all ${totalCount} products in your store`}
-                        checked={selectAllPages}
-                        onChange={handleSelectAllPages}
-                      />
-                    )}
-                  </InlineStack>
+                {/* Search field */}
+                <Box minWidth="400px">
+                  <TextField
+                    label=""
+                    placeholder="Search by product ID, name, or details..."
+                    value={searchValue}
+                    onChange={handleSearch}
+                    prefix={<SearchIcon />}
+                    clearButton
+                    onClearButtonClick={() => handleSearch('')}
+                  />
                 </Box>
                 
                 {/* Right side - Sort and Generate button */}
@@ -765,6 +762,17 @@ export default function BulkEdit({ shop: shopProp }) {
                   </InlineStack>
                 </Box>
               </InlineStack>
+              
+              {/* Select all checkbox */}
+              {totalCount > 0 && (
+                <Box paddingBlockStart="300">
+                  <Checkbox
+                    label={`Select all ${totalCount} products in your store`}
+                    checked={selectAllPages}
+                    onChange={handleSelectAllPages}
+                  />
+                </Box>
+              )}
             </Box>
           </Card>
         </Layout.Section>
@@ -774,7 +782,7 @@ export default function BulkEdit({ shop: shopProp }) {
             <ResourceList
               resourceName={{ singular: 'product', plural: 'products' }}
               items={products}
-              renderItem={(item) => resourceItems.find(ri => ri.key === item._id)}
+              renderItem={renderItem}
               selectedItems={selectedItems}
               onSelectionChange={handleSelectionChange}
               bulkActions={bulkActions}
@@ -782,35 +790,45 @@ export default function BulkEdit({ shop: shopProp }) {
               totalItemsCount={totalCount}
               emptyState={emptyState}
               filterControl={
-                <Filters
-                  queryValue={searchValue}
-                  filters={filters}
-                  appliedFilters={[
-                    ...(optimizedFilter !== 'all' ? [{
-                      key: 'optimized',
-                      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
-                      onRemove: () => setOptimizedFilter('all'),
-                    }] : []),
-                    ...(languageFilter ? [{
-                      key: 'language',
-                      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                      onRemove: () => setLanguageFilter(''),
-                    }] : []),
-                    ...selectedTags.map(tag => ({
-                      key: `tag-${tag}`,
-                      label: `Tag: ${tag}`,
-                      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
-                    })),
-                  ]}
-                  onQueryChange={setSearchValue}
-                  onQueryClear={() => setSearchValue('')}
-                  onClearAll={() => {
-                    setSearchValue('');
-                    setOptimizedFilter('all');
-                    setLanguageFilter('');
-                    setSelectedTags([]);
-                  }}
-                />
+                <Box>
+                  <Filters
+                    queryValue=""
+                    queryPlaceholder="Search..."
+                    filters={filters}
+                    appliedFilters={[
+                      ...(optimizedFilter !== 'all' ? [{
+                        key: 'optimized',
+                        label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
+                        onRemove: () => setOptimizedFilter('all'),
+                      }] : []),
+                      ...(languageFilter ? [{
+                        key: 'language',
+                        label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                        onRemove: () => setLanguageFilter(''),
+                      }] : []),
+                      ...selectedTags.map(tag => ({
+                        key: `tag-${tag}`,
+                        label: `Tag: ${tag}`,
+                        onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
+                      })),
+                    ]}
+                    onQueryChange={() => {}}
+                    onQueryClear={() => {}}
+                    onClearAll={() => {
+                      setOptimizedFilter('all');
+                      setLanguageFilter('');
+                      setSelectedTags([]);
+                    }}
+                    hideQueryField
+                  >
+                    <div style={{ paddingLeft: '8px' }}>
+                      <Button icon={<svg viewBox="0 0 20 20" style={{width: '20px', height: '20px'}}>
+                        <path d="M7 9h6v2H7zm0-3h6v2H7zm0 6h3v2H7z" fill="currentColor"/>
+                        <path fillRule="evenodd" d="M3 4.5A1.5 1.5 0 014.5 3h11A1.5 1.5 0 0117 4.5v11a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 15.5v-11zM4.5 5a.5.5 0 00-.5.5v9a.5.5 0 00.5.5h11a.5.5 0 00.5-.5v-9a.5.5 0 00-.5-.5h-11z" fill="currentColor"/>
+                      </svg>}>Filter</Button>
+                    </div>
+                  </Filters>
+                </Box>
               }
             />
             

@@ -47,13 +47,35 @@ router.get('/list', async (req, res) => {
     // Build MongoDB query
     const query = { shop };
 
-    // Search filter (title or handle)
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { handle: { $regex: search, $options: 'i' } }
-      ];
+   // Search filter (title, handle, or productId)
+if (search) {
+  const searchConditions = [
+    { title: { $regex: search, $options: 'i' } },
+    { handle: { $regex: search, $options: 'i' } }
+  ];
+  
+  // Safe numeric check
+  const trimmedSearch = search.trim();
+  if (/^\d+$/.test(trimmedSearch)) {
+    const numericId = parseInt(trimmedSearch);
+    if (Number.isFinite(numericId) && numericId > 0) {
+      searchConditions.push({ productId: numericId });
     }
+  }
+  
+  // Check for GID format
+  if (trimmedSearch.startsWith('gid://')) {
+    const match = trimmedSearch.match(/\/(\d+)$/);
+    if (match && match[1]) {
+      const extractedId = parseInt(match[1]);
+      if (Number.isFinite(extractedId) && extractedId > 0) {
+        searchConditions.push({ productId: extractedId });
+      }
+    }
+  }
+  
+  query.$or = searchConditions;
+}
 
     // Tags filter
     if (tags) {
