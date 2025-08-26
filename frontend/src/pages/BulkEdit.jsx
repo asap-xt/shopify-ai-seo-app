@@ -648,10 +648,10 @@ export default function BulkEdit({ shop: shopProp }) {
   const filters = [
     {
       key: 'optimized',
-      label: 'SEO Status',
+      label: 'AI Search Status',
       filter: (
         <ChoiceList
-          title="SEO Status"
+          title="AI Search Status"
           titleHidden
           choices={[
             { label: 'All products', value: 'all' },
@@ -665,7 +665,7 @@ export default function BulkEdit({ shop: shopProp }) {
           }}
         />
       ),
-      shortcut: true,
+      pinned: true,
     },
     {
       key: 'language',
@@ -689,7 +689,7 @@ export default function BulkEdit({ shop: shopProp }) {
           onChange={(value) => setLanguageFilter(value[0] || '')}
         />
       ),
-      shortcut: true,
+      pinned: true,
     },
     {
       key: 'tags',
@@ -704,7 +704,7 @@ export default function BulkEdit({ shop: shopProp }) {
           onChange={setSelectedTags}
         />
       ),
-      shortcut: true,
+      pinned: true,
     },
   ];
   
@@ -764,6 +764,14 @@ export default function BulkEdit({ shop: shopProp }) {
         
         <Layout.Section>
           <Card>
+            <Box padding="400">
+              {/* Custom filter buttons */}
+              <InlineStack gap="200" wrap={false}>
+                <Button disclosure onClick={() => {}}>AI Search Status</Button>
+                <Button disclosure onClick={() => {}}>Language Status</Button>
+                <Button disclosure onClick={() => {}}>Tags</Button>
+              </InlineStack>
+            </Box>
             <ResourceList
               resourceName={{ singular: 'product', plural: 'products' }}
               items={products}
@@ -774,37 +782,25 @@ export default function BulkEdit({ shop: shopProp }) {
               loading={loading}
               totalItemsCount={totalCount}
               emptyState={emptyState}
-              filterControl={
-                <Filters
-                  queryValue=""
-                  filters={filters}
-                  appliedFilters={[
-                    ...(optimizedFilter !== 'all' ? [{
-                      key: 'optimized',
-                      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
-                      onRemove: () => setOptimizedFilter('all'),
-                    }] : []),
-                    ...(languageFilter ? [{
-                      key: 'language',
-                      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                      onRemove: () => setLanguageFilter(''),
-                    }] : []),
-                    ...selectedTags.map(tag => ({
-                      key: `tag-${tag}`,
-                      label: `Tag: ${tag}`,
-                      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
-                    })),
-                  ]}
-                  onQueryChange={() => {}}
-                  onQueryClear={() => {}}
-                  onClearAll={() => {
-                    setOptimizedFilter('all');
-                    setLanguageFilter('');
-                    setSelectedTags([]);
-                  }}
-                  hideQueryField
-                />
-              }
+              filters={filters}
+              appliedFilters={[
+                ...(optimizedFilter !== 'all' ? [{
+                  key: 'optimized',
+                  label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
+                  onRemove: () => setOptimizedFilter('all'),
+                }] : []),
+                ...(languageFilter ? [{
+                  key: 'language',
+                  label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                  onRemove: () => setLanguageFilter(''),
+                }] : []),
+                ...selectedTags.map(tag => ({
+                  key: `tag-${tag}`,
+                  label: `Tag: ${tag}`,
+                  onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
+                })),
+              ]}
+              onFiltersChange={() => {}}
             />
             
             {hasMore && !loading && (
