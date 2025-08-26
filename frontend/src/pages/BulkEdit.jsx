@@ -790,7 +790,6 @@ export default function BulkEdit({ shop: shopProp }) {
               filterControl={
                 <Filters
                   queryValue=""
-                  queryPlaceholder="Search..."
                   filters={filters}
                   appliedFilters={[
                     ...(optimizedFilter !== 'all' ? [{
@@ -817,8 +816,11 @@ export default function BulkEdit({ shop: shopProp }) {
                     setSelectedTags([]);
                   }}
                   hideQueryField
-                  addFilterLabel="Filter +"
-                />
+                >
+                  <div style={{ paddingLeft: '0' }}>
+                    <Button disclosure>Filter +</Button>
+                  </div>
+                </Filters>
               }
             />
             
