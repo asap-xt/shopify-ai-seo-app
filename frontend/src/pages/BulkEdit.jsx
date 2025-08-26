@@ -183,8 +183,8 @@ export default function BulkEdit({ shop: shopProp }) {
     return () => clearTimeout(timer);
   }, [searchValue]);
   
-  // Search specific product by ID
-    
+  // Search specific product by ID - FIXED: Added proper function declaration
+  const searchProductById = async (productIdSearch) => {
     setLoading(true);
     try {
       const searchTerm = productIdSearch.trim();
@@ -631,8 +631,6 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
-  const [showFilters, setShowFilters] = useState(false);
-  
   const emptyState = (
     <EmptyState
       heading="No products found"
@@ -828,4 +826,25 @@ export default function BulkEdit({ shop: shopProp }) {
               }
             />
             
-            
+            {/* Load more button */}
+            {hasMore && !loading && (
+              <Box padding="400" textAlign="center">
+                <Button onClick={() => loadProducts(page + 1, true)}>
+                  Load more
+                </Button>
+              </Box>
+            )}
+          </Card>
+        </Layout.Section>
+      </Layout>
+      
+      {progressModal}
+      {languageModal}
+      {resultsModal}
+      
+      {toast && (
+        <Toast content={toast} onDismiss={() => setToast('')} />
+      )}
+    </Page>
+  );
+}
