@@ -6,7 +6,6 @@ import {
   ResourceList,
   ResourceItem,
   Button,
-  Select,
   Box,
   InlineStack,
   Text,
@@ -19,12 +18,11 @@ import {
   Checkbox,
   BlockStack,
   Divider,
-  TextField,
   Thumbnail,
-  Filters,
+  IndexFilters,
   ChoiceList,
+  useSetIndexFiltersMode,
 } from '@shopify/polaris';
-import { SearchIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -44,6 +42,7 @@ const extractNumericId = (gid) => {
 
 export default function BulkEdit({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
+  const { mode, setMode } = useSetIndexFiltersMode();
   
   // Product list state
   const [products, setProducts] = useState([]);
@@ -57,11 +56,9 @@ export default function BulkEdit({ shop: shopProp }) {
   const [selectAllPages, setSelectAllPages] = useState(false);
   
   // Filter state
-  const [searchValue, setSearchValue] = useState('');
+  const [queryValue, setQueryValue] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('');
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState('desc');
   const [selectedTags, setSelectedTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   
@@ -133,11 +130,9 @@ export default function BulkEdit({ shop: shopProp }) {
         page: pageNum,
         limit: 50,
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(searchValue && { search: searchValue }),
+        ...(queryValue && { search: queryValue }),
         ...(languageFilter && { languageFilter }),
         ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
-        sortBy,
-        sortOrder,
       });
       
       const response = await fetch(`/api/products/list?${params}`, { credentials: 'include' });
@@ -159,56 +154,21 @@ export default function BulkEdit({ shop: shopProp }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder]);
+  }, [shop, optimizedFilter, queryValue, languageFilter, selectedTags]);
   
-  // Initial load
+  // Load on filter changes
   useEffect(() => {
     if (shop) loadProducts(1);
-  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
+  }, [shop, optimizedFilter, languageFilter, selectedTags]);
   
-  // Unified search function
-  const handleSearch = useCallback((value) => {
-    setSearchValue(value);
-  }, []);
-  
-  // Search debounce effect
+  // Search debounce
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (shop) {
-        loadProducts(1);
-      }
+      if (shop) loadProducts(1);
     }, 500);
     
     return () => clearTimeout(timer);
-  }, [searchValue]);
-  
-  // Search specific product by ID
-  const searchProductById = async (productIdSearch) => {
-    setLoading(true);
-    try {
-      const searchTerm = productIdSearch.trim();
-      const numericId = searchTerm.replace(/\D/g, '');
-      
-      const response = await fetch(`/api/products/list?shop=${encodeURIComponent(shop)}&search=${numericId}&limit=50`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data?.error || 'Failed to search');
-      
-      if (data.products && data.products.length > 0) {
-        setProducts(data.products);
-        setTotalCount(data.products.length);
-        setHasMore(false);
-      } else {
-        setToast('Product not found');
-      }
-    } catch (err) {
-      setToast(`Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [queryValue]);
   
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
@@ -404,7 +364,6 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
-      
       loadProducts(1);
       
     } catch (err) {
@@ -471,8 +430,111 @@ export default function BulkEdit({ shop: shopProp }) {
       </ResourceItem>
     );
   };
-  
-  // Progress modal
+
+  // Tabs for IndexFilters
+  const tabs = [
+    {
+      content: 'All',
+      id: 'all',
+      isLocked: true,
+      actions: [],
+      onAction: () => {},
+    }
+  ];
+
+  // Filters for IndexFilters
+  const filters = [
+    {
+      key: 'optimized',
+      label: 'AI Search Status',
+      filter: (
+        <ChoiceList
+          title="AI Search Status"
+          titleHidden
+          choices={[
+            { label: 'All products', value: 'all' },
+            { label: 'Has SEO', value: 'true' },
+            { label: 'Missing SEO', value: 'false' },
+          ]}
+          selected={[optimizedFilter]}
+          onChange={(value) => {
+            setOptimizedFilter(value[0]);
+            setLanguageFilter('');
+          }}
+        />
+      ),
+      shortcut: true,
+    },
+    {
+      key: 'language',
+      label: 'Language Status',
+      filter: (
+        <ChoiceList
+          title="Language Status"
+          titleHidden
+          choices={[
+            { label: 'All languages', value: '' },
+            ...availableLanguages.map(lang => ({
+              label: `Has ${lang.toUpperCase()}`,
+              value: `has_${lang}`
+            })),
+            ...availableLanguages.map(lang => ({
+              label: `Missing ${lang.toUpperCase()}`,
+              value: `missing_${lang}`
+            })),
+          ]}
+          selected={languageFilter ? [languageFilter] : []}
+          onChange={(value) => setLanguageFilter(value[0] || '')}
+        />
+      ),
+      shortcut: true,
+    },
+    {
+      key: 'tags',
+      label: 'Tags',
+      filter: (
+        <ChoiceList
+          title="Tags"
+          titleHidden
+          allowMultiple
+          choices={availableTags.map(tag => ({ label: tag, value: tag }))}
+          selected={selectedTags}
+          onChange={setSelectedTags}
+        />
+      ),
+      shortcut: true,
+    },
+  ];
+
+  const appliedFilters = [
+    ...(optimizedFilter !== 'all' ? [{
+      key: 'optimized',
+      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
+      onRemove: () => setOptimizedFilter('all'),
+    }] : []),
+    ...(languageFilter ? [{
+      key: 'language',
+      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      onRemove: () => setLanguageFilter(''),
+    }] : []),
+    ...selectedTags.map(tag => ({
+      key: `tag-${tag}`,
+      label: `Tag: ${tag}`,
+      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
+    })),
+  ];
+
+  const sortOptions = [
+    { label: 'Newest first', value: 'newest', directionLabel: 'Newest' },
+    { label: 'Oldest first', value: 'oldest', directionLabel: 'Oldest' },
+  ];
+
+  const primaryAction = selectedItems.length > 0 || selectAllPages ? {
+    content: 'Generate AI optimisation',
+    onAction: openLanguageModal,
+  } : undefined;
+
+  // Modals
   const progressModal = isProcessing && (
     <Modal
       open={isProcessing}
@@ -494,7 +556,6 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
 
-  // Language selection modal
   const languageModal = (
     <Modal
       open={showLanguageModal}
@@ -554,7 +615,6 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
-  // Results modal
   const resultsModal = (
     <Modal
       open={showResultsModal && !isProcessing}
@@ -621,7 +681,7 @@ export default function BulkEdit({ shop: shopProp }) {
     <EmptyState
       heading="No products found"
       action={{ content: 'Clear filters', onAction: () => {
-        setSearchValue('');
+        setQueryValue('');
         setOptimizedFilter('all');
         setLanguageFilter('');
         setSelectedTags([]);
@@ -633,174 +693,65 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
-  const bulkActions = [
-    {
-      content: 'Generate AI optimisation',
-      onAction: openLanguageModal,
-    }
-  ];
-  
-  const sortOptions = [
-    { label: 'Newest first', value: 'newest' },
-    { label: 'Oldest first', value: 'oldest' },
-  ];
-  
-  const filters = [
-    {
-      key: 'optimized',
-      label: 'AI Search Status',
-      filter: (
-        <ChoiceList
-          title="AI Search Status"
-          titleHidden
-          choices={[
-            { label: 'All products', value: 'all' },
-            { label: 'Has SEO', value: 'true' },
-            { label: 'Missing SEO', value: 'false' },
-          ]}
-          selected={[optimizedFilter]}
-          onChange={(value) => {
-            setOptimizedFilter(value[0]);
-            setLanguageFilter('');
-          }}
-        />
-      ),
-      pinned: true,
-    },
-    {
-      key: 'language',
-      label: 'Language Status',
-      filter: (
-        <ChoiceList
-          title="Language Status"
-          titleHidden
-          choices={[
-            { label: 'All languages', value: '' },
-            ...availableLanguages.map(lang => ({
-              label: `Has ${lang.toUpperCase()}`,
-              value: `has_${lang}`
-            })),
-            ...availableLanguages.map(lang => ({
-              label: `Missing ${lang.toUpperCase()}`,
-              value: `missing_${lang}`
-            })),
-          ]}
-          selected={languageFilter ? [languageFilter] : []}
-          onChange={(value) => setLanguageFilter(value[0] || '')}
-        />
-      ),
-      pinned: true,
-    },
-    {
-      key: 'tags',
-      label: 'Tags',
-      filter: (
-        <ChoiceList
-          title="Tags"
-          titleHidden
-          allowMultiple
-          choices={availableTags.map(tag => ({ label: tag, value: tag }))}
-          selected={selectedTags}
-          onChange={setSelectedTags}
-        />
-      ),
-      pinned: true,
-    },
-  ];
-  
   return (
     <Page title="Bulk Edit SEO">
       <Layout>
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-                <Box minWidth="400px">
-                  <TextField
-                    label=""
-                    placeholder="Search by product ID, name, or details..."
-                    value={searchValue}
-                    onChange={handleSearch}
-                    prefix={<SearchIcon />}
-                    clearButton
-                    onClearButtonClick={() => handleSearch('')}
-                  />
-                </Box>
-                
-                <Box>
-                  <InlineStack gap="300" align="center">
-                    <Select
-                      label=""
-                      options={sortOptions}
-                      value={sortOrder === 'desc' ? 'newest' : 'oldest'}
-                      onChange={(value) => {
-                        setSortOrder(value === 'newest' ? 'desc' : 'asc');
-                      }}
-                    />
-                    
-                    <Button
-                      primary
-                      onClick={openLanguageModal}
-                      disabled={selectedItems.length === 0 && !selectAllPages}
-                    >
-                      Generate AI optimisation
-                    </Button>
-                  </InlineStack>
-                </Box>
-              </InlineStack>
-              
-              {totalCount > 0 && (
-                <Box paddingBlockStart="300">
-                  <Checkbox
-                    label={`Select all ${totalCount} products in your store`}
-                    checked={selectAllPages}
-                    onChange={handleSelectAllPages}
-                  />
-                </Box>
-              )}
-            </Box>
-          </Card>
-        </Layout.Section>
+        {totalCount > 0 && (
+          <Layout.Section>
+            <Card>
+              <Box padding="400">
+                <Checkbox
+                  label={`Select all ${totalCount} products in your store`}
+                  checked={selectAllPages}
+                  onChange={handleSelectAllPages}
+                />
+              </Box>
+            </Card>
+          </Layout.Section>
+        )}
         
         <Layout.Section>
           <Card>
-            <Box padding="400">
-              {/* Custom filter buttons */}
-              <InlineStack gap="200" wrap={false}>
-                <Button disclosure onClick={() => {}}>AI Search Status</Button>
-                <Button disclosure onClick={() => {}}>Language Status</Button>
-                <Button disclosure onClick={() => {}}>Tags</Button>
-              </InlineStack>
-            </Box>
+            <IndexFilters
+              loading={loading}
+              sortOptions={sortOptions}
+              sortSelected={sortOptions[0].value}
+              onSort={() => {}}
+              queryValue={queryValue}
+              queryPlaceholder="Search by product ID, name, or details..."
+              onQueryChange={setQueryValue}
+              onQueryClear={() => setQueryValue('')}
+              primaryAction={primaryAction}
+              cancelAction={{
+                onAction: () => {},
+                disabled: false,
+                loading: false,
+              }}
+              tabs={tabs}
+              selected={0}
+              onSelect={() => {}}
+              canCreateNewView={false}
+              filters={filters}
+              appliedFilters={appliedFilters}
+              onClearAll={() => {
+                setOptimizedFilter('all');
+                setLanguageFilter('');
+                setSelectedTags([]);
+              }}
+              mode={mode}
+              setMode={setMode}
+              filteringAccessibilityTooltip="Search and filter products"
+            />
+            
             <ResourceList
               resourceName={{ singular: 'product', plural: 'products' }}
               items={products}
               renderItem={renderItem}
               selectedItems={selectedItems}
               onSelectionChange={handleSelectionChange}
-              bulkActions={bulkActions}
               loading={loading}
               totalItemsCount={totalCount}
               emptyState={emptyState}
-              filters={filters}
-              appliedFilters={[
-                ...(optimizedFilter !== 'all' ? [{
-                  key: 'optimized',
-                  label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
-                  onRemove: () => setOptimizedFilter('all'),
-                }] : []),
-                ...(languageFilter ? [{
-                  key: 'language',
-                  label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                  onRemove: () => setLanguageFilter(''),
-                }] : []),
-                ...selectedTags.map(tag => ({
-                  key: `tag-${tag}`,
-                  label: `Tag: ${tag}`,
-                  onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
-                })),
-              ]}
-              onFiltersChange={() => {}}
             />
             
             {hasMore && !loading && (
