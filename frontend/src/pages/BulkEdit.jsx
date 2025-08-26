@@ -430,14 +430,21 @@ export default function BulkEdit({ shop: shopProp }) {
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
-    const media = product.images?.[0]?.url ? (
+    // Fixed media to use correct image property names
+    const media = product.images?.[0] ? (
       <Thumbnail
-        source={product.images[0].url}
+        source={product.images[0].url || product.images[0].src || product.images[0]}
+        alt={product.title}
+        size="small"
+      />
+    ) : product.imageUrl ? (
+      <Thumbnail
+        source={product.imageUrl}
         alt={product.title}
         size="small"
       />
     ) : (
-      <Box width="40px" height="40px" background="neutral-subtle" borderRadius="100" />
+      <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
     );
     
     return (
@@ -449,13 +456,13 @@ export default function BulkEdit({ shop: shopProp }) {
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
           {/* Product info */}
-          <Box style={{ flex: '1 1 40%', minWidth: '300px' }}>
+          <Box style={{ flex: '1 1 40%', minWidth: '250px' }}>
             <Text variant="bodyMd" fontWeight="semibold">{product.title}</Text>
             <Text variant="bodySm" tone="subdued">ID: {numericId}</Text>
           </Box>
           
           {/* Language badges */}
-          <Box style={{ flex: '0 0 20%', minWidth: '160px' }}>
+          <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             <InlineStack gap="100">
               {availableLanguages.map(lang => (
                 <Badge
@@ -470,16 +477,8 @@ export default function BulkEdit({ shop: shopProp }) {
           </Box>
           
           {/* Status */}
-          <Box style={{ flex: '0 0 15%', minWidth: '80px', textAlign: 'center' }}>
+          <Box style={{ flex: '0 0 20%', minWidth: '100px', textAlign: 'center' }}>
             <Badge tone="success">Active</Badge>
-          </Box>
-          
-          {/* Spacer */}
-          <Box style={{ flex: '0 0 25%', minWidth: '100px', textAlign: 'right' }}>
-            {/* Empty for now, but maintains spacing */}
-            <Text variant="bodySm" tone="subdued">
-              -
-            </Text>
           </Box>
         </InlineStack>
       </ResourceItem>
@@ -647,7 +646,12 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
-  const bulkActions = [];
+  const bulkActions = [
+    {
+      content: 'Generate AI optimisation',
+      onAction: openLanguageModal,
+    }
+  ];
   
   const sortOptions = [
     { label: 'Newest first', value: 'newest' },
@@ -784,45 +788,37 @@ export default function BulkEdit({ shop: shopProp }) {
               totalItemsCount={totalCount}
               emptyState={emptyState}
               filterControl={
-                <Box>
-                  <Filters
-                    queryValue=""
-                    queryPlaceholder="Search..."
-                    filters={filters}
-                    appliedFilters={[
-                      ...(optimizedFilter !== 'all' ? [{
-                        key: 'optimized',
-                        label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
-                        onRemove: () => setOptimizedFilter('all'),
-                      }] : []),
-                      ...(languageFilter ? [{
-                        key: 'language',
-                        label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                        onRemove: () => setLanguageFilter(''),
-                      }] : []),
-                      ...selectedTags.map(tag => ({
-                        key: `tag-${tag}`,
-                        label: `Tag: ${tag}`,
-                        onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
-                      })),
-                    ]}
-                    onQueryChange={() => {}}
-                    onQueryClear={() => {}}
-                    onClearAll={() => {
-                      setOptimizedFilter('all');
-                      setLanguageFilter('');
-                      setSelectedTags([]);
-                    }}
-                    hideQueryField
-                  >
-                    <div style={{ paddingLeft: '8px' }}>
-                      <Button icon={<svg viewBox="0 0 20 20" style={{width: '20px', height: '20px'}}>
-                        <path d="M7 9h6v2H7zm0-3h6v2H7zm0 6h3v2H7z" fill="currentColor"/>
-                        <path fillRule="evenodd" d="M3 4.5A1.5 1.5 0 014.5 3h11A1.5 1.5 0 0117 4.5v11a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 15.5v-11zM4.5 5a.5.5 0 00-.5.5v9a.5.5 0 00.5.5h11a.5.5 0 00.5-.5v-9a.5.5 0 00-.5-.5h-11z" fill="currentColor"/>
-                      </svg>}>Filter</Button>
-                    </div>
-                  </Filters>
-                </Box>
+                <Filters
+                  queryValue=""
+                  queryPlaceholder="Search..."
+                  filters={filters}
+                  appliedFilters={[
+                    ...(optimizedFilter !== 'all' ? [{
+                      key: 'optimized',
+                      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
+                      onRemove: () => setOptimizedFilter('all'),
+                    }] : []),
+                    ...(languageFilter ? [{
+                      key: 'language',
+                      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                      onRemove: () => setLanguageFilter(''),
+                    }] : []),
+                    ...selectedTags.map(tag => ({
+                      key: `tag-${tag}`,
+                      label: `Tag: ${tag}`,
+                      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
+                    })),
+                  ]}
+                  onQueryChange={() => {}}
+                  onQueryClear={() => {}}
+                  onClearAll={() => {
+                    setOptimizedFilter('all');
+                    setLanguageFilter('');
+                    setSelectedTags([]);
+                  }}
+                  hideQueryField
+                  addFilterLabel="Filter +"
+                />
               }
             />
             
