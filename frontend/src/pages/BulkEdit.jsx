@@ -816,7 +816,6 @@ export default function BulkEdit({ shop: shopProp }) {
                     setSelectedTags([]);
                   }}
                   hideQueryField
-                  hideTags
                 />
               }' }}>
                     <Button disclosure>Filter +</Button>
