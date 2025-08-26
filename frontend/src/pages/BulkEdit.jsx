@@ -184,8 +184,6 @@ export default function BulkEdit({ shop: shopProp }) {
   }, [searchValue]);
   
   // Search specific product by ID
-  const searchProductById = async () => {
-    if (!productIdSearch.trim()) return;
     
     setLoading(true);
     try {
@@ -480,7 +478,7 @@ export default function BulkEdit({ shop: shopProp }) {
           <Box style={{ flex: '0 0 25%', minWidth: '100px', textAlign: 'right' }}>
             {/* Empty for now, but maintains spacing */}
             <Text variant="bodySm" tone="subdued">
-              —
+              -
             </Text>
           </Box>
         </InlineStack>
@@ -720,8 +718,6 @@ export default function BulkEdit({ shop: shopProp }) {
   
   return (
     <Page title="Bulk Edit SEO">
-  return (
-    <Page title="Bulk Edit SEO">
       <Layout>
         <Layout.Section>
           <Card>
@@ -832,21 +828,4 @@ export default function BulkEdit({ shop: shopProp }) {
               }
             />
             
-            {hasMore && !loading && (
-              <Box padding="400" textAlign="center">
-                <Button onClick={() => loadProducts(page + 1, true)}>
-                  Load more products
-                </Button>
-              </Box>
-            )}
-          </Card>
-        </Layout.Section>
-      </Layout>
-      
-      {progressModal}
-      {languageModal}
-      {resultsModal}
-      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
-    </Page>
-  );
-}
+            
