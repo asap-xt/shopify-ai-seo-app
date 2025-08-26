@@ -648,7 +648,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const filters = [
     {
       key: 'optimized',
-      label: 'SEO Status +',
+      label: 'SEO Status',
       filter: (
         <ChoiceList
           title="SEO Status"
@@ -665,10 +665,11 @@ export default function BulkEdit({ shop: shopProp }) {
           }}
         />
       ),
+      shortcut: true,
     },
     {
       key: 'language',
-      label: 'Language Status +',
+      label: 'Language Status',
       filter: (
         <ChoiceList
           title="Language Status"
@@ -688,10 +689,11 @@ export default function BulkEdit({ shop: shopProp }) {
           onChange={(value) => setLanguageFilter(value[0] || '')}
         />
       ),
+      shortcut: true,
     },
     {
       key: 'tags',
-      label: 'Tags +',
+      label: 'Tags',
       filter: (
         <ChoiceList
           title="Tags"
@@ -702,6 +704,7 @@ export default function BulkEdit({ shop: shopProp }) {
           onChange={setSelectedTags}
         />
       ),
+      shortcut: true,
     },
   ];
   
