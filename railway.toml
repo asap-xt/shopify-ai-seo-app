@@ -1,9 +1,5 @@
 [build]
 builder = "NIXPACKS"
-nixpacksPlan = """
-[phases.setup]
-nixPkgs = ['nodejs_20', 'npm-9_x']
-"""
 buildCommand = "npm install && cd frontend && npm install && npm run build && cd .."
 
 [deploy]
