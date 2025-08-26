@@ -168,25 +168,41 @@ export default function BulkEdit({ shop: shopProp }) {
     if (shop) loadProducts(1);
   }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
+  // Search debounce effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchValue && shop) {
+        loadProducts(1);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+  
   // Search specific product by ID
   const searchProductById = async () => {
     if (!productIdSearch.trim()) return;
     
     setLoading(true);
     try {
-      const gid = toProductGID(productIdSearch);
-      const numericId = extractNumericId(gid);
+      const searchTerm = productIdSearch.trim();
+      // Try as numeric ID first
+      const numericId = searchTerm.replace(/\D/g, '');
       
-      const response = await fetch(`/api/products/bulk-select?shop=${encodeURIComponent(shop)}&ids=${numericId}`, {
+      const response = await fetch(`/api/products/list?shop=${encodeURIComponent(shop)}&search=${numericId}&limit=50`, {
         credentials: 'include'
       });
       const data = await response.json();
       
-      if (!response.ok) throw new Error(data?.error || 'Product not found');
+      if (!response.ok) throw new Error(data?.error || 'Failed to search');
       
-      setProducts(data.products || []);
-      setTotalCount(data.products?.length || 0);
-      setHasMore(false);
+      if (data.products && data.products.length > 0) {
+        setProducts(data.products);
+        setTotalCount(data.products.length);
+        setHasMore(false);
+      } else {
+        setToast('Product not found');
+      }
     } catch (err) {
       setToast(`Error: ${err.message}`);
     } finally {
@@ -418,22 +434,29 @@ export default function BulkEdit({ shop: shopProp }) {
         onClick={() => {}}
         accessibilityLabel={`View details for ${product.title}`}
       >
-        <InlineStack gap="300" align="center" blockAlign="center">
-          <Thumbnail
-            source={product.images?.[0]?.url || ''}
-            alt={product.title}
-            size="small"
-          />
-          <Box minWidth="200px">
+        <InlineStack gap="400" align="start" blockAlign="center" wrap={false}>
+          {/* Thumbnail */}
+          <Box minWidth="40px">
+            <Thumbnail
+              source={product.images?.[0]?.url || ''}
+              alt={product.title}
+              size="small"
+            />
+          </Box>
+          
+          {/* Product info */}
+          <Box minWidth="300px">
             <Text variant="bodyMd" fontWeight="semibold">{product.title}</Text>
             <Text variant="bodySm" tone="subdued">ID: {numericId}</Text>
           </Box>
-          <Box minWidth="150px">
-            <InlineStack gap="100">
+          
+          {/* Language badges */}
+          <Box minWidth="200px">
+            <InlineStack gap="100" wrap>
               {availableLanguages.map(lang => (
                 <Badge
                   key={lang}
-                  tone={optimizedLanguages.includes(lang) ? 'success' : 'warning'}
+                  tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
                   size="small"
                 >
                   {lang.toUpperCase()}
@@ -441,7 +464,14 @@ export default function BulkEdit({ shop: shopProp }) {
               ))}
             </InlineStack>
           </Box>
-          <Box minWidth="150px">
+          
+          {/* Status */}
+          <Box minWidth="100px" textAlign="right">
+            <Badge tone="success">Active</Badge>
+          </Box>
+          
+          {/* Date */}
+          <Box minWidth="120px" textAlign="right">
             <Text variant="bodySm" tone="subdued">
               {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : '—'}
             </Text>
@@ -613,12 +643,7 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
-  const bulkActions = selectAllPages || selectedItems.length > 0 ? [
-    {
-      content: `Generate AI optimisation`,
-      onAction: openLanguageModal,
-    },
-  ] : [];
+  const bulkActions = [];
   
   const sortOptions = [
     { label: 'Newest first', value: 'newest' },
@@ -690,29 +715,24 @@ export default function BulkEdit({ shop: shopProp }) {
       <Layout>
         <Layout.Section>
           <Card>
-            <BlockStack gap="400">
-              {/* Search by Product ID */}
-              <InlineStack gap="300">
-                <TextField
-                  label="Search by Product ID"
-                  labelHidden
-                  placeholder="Enter product ID or GID..."
-                  value={productIdSearch}
-                  onChange={setProductIdSearch}
-                  prefix={<SearchIcon />}
-                  connectedRight={
-                    <Button onClick={searchProductById} disabled={!productIdSearch.trim()}>
-                      Search
-                    </Button>
-                  }
-                />
-              </InlineStack>
-              
-              {/* Languages and Select All */}
+            <Box padding="400">
               <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+                {/* Left side - Product search and select all */}
                 <Box>
-                  <InlineStack gap="200" align="center">
-                    {/* Select all products checkbox */}
+                  <InlineStack gap="300" align="center">
+                    <TextField
+                      label=""
+                      placeholder="Enter product ID or GID..."
+                      value={productIdSearch}
+                      onChange={setProductIdSearch}
+                      prefix={<SearchIcon />}
+                      connectedRight={
+                        <Button onClick={searchProductById} disabled={!productIdSearch.trim()}>
+                          Search
+                        </Button>
+                      }
+                    />
+                    
                     {totalCount > 0 && (
                       <Checkbox
                         label={`Select all ${totalCount} products in your store`}
@@ -723,21 +743,29 @@ export default function BulkEdit({ shop: shopProp }) {
                   </InlineStack>
                 </Box>
                 
+                {/* Right side - Sort and Generate button */}
                 <Box>
                   <InlineStack gap="300" align="center">
                     <Select
-                      label="Sort by"
-                      labelHidden
+                      label=""
                       options={sortOptions}
                       value={sortOrder === 'desc' ? 'newest' : 'oldest'}
                       onChange={(value) => {
                         setSortOrder(value === 'newest' ? 'desc' : 'asc');
                       }}
                     />
+                    
+                    <Button
+                      primary
+                      onClick={openLanguageModal}
+                      disabled={selectedItems.length === 0 && !selectAllPages}
+                    >
+                      Generate AI optimisation
+                    </Button>
                   </InlineStack>
                 </Box>
               </InlineStack>
-            </BlockStack>
+            </Box>
           </Card>
         </Layout.Section>
         
@@ -784,7 +812,6 @@ export default function BulkEdit({ shop: shopProp }) {
                   }}
                 />
               }
-              showHeader
             />
             
             {hasMore && !loading && (
