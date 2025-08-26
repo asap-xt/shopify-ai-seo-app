@@ -6,6 +6,7 @@ import {
   ResourceList,
   ResourceItem,
   Button,
+  Select,
   Box,
   InlineStack,
   Text,
@@ -18,11 +19,13 @@ import {
   Checkbox,
   BlockStack,
   Divider,
+  TextField,
   Thumbnail,
-  IndexFilters,
   ChoiceList,
-  useSetIndexFiltersMode,
+  Popover,
+  ActionList,
 } from '@shopify/polaris';
+import { SearchIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -42,7 +45,6 @@ const extractNumericId = (gid) => {
 
 export default function BulkEdit({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
-  const { mode, setMode } = useSetIndexFiltersMode();
   
   // Product list state
   const [products, setProducts] = useState([]);
@@ -56,11 +58,16 @@ export default function BulkEdit({ shop: shopProp }) {
   const [selectAllPages, setSelectAllPages] = useState(false);
   
   // Filter state
-  const [queryValue, setQueryValue] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [selectedTags, setSelectedTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
+  const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
+  const [showLanguagePopover, setShowLanguagePopover] = useState(false);
+  const [showTagsPopover, setShowTagsPopover] = useState(false);
   
   // SEO generation state
   const [model, setModel] = useState('');
@@ -130,9 +137,11 @@ export default function BulkEdit({ shop: shopProp }) {
         page: pageNum,
         limit: 50,
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(queryValue && { search: queryValue }),
+        ...(searchValue && { search: searchValue }),
         ...(languageFilter && { languageFilter }),
         ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
+        sortBy,
+        sortOrder,
       });
       
       const response = await fetch(`/api/products/list?${params}`, { credentials: 'include' });
@@ -154,21 +163,28 @@ export default function BulkEdit({ shop: shopProp }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, queryValue, languageFilter, selectedTags]);
+  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder]);
   
-  // Load on filter changes
+  // Initial load
   useEffect(() => {
     if (shop) loadProducts(1);
-  }, [shop, optimizedFilter, languageFilter, selectedTags]);
+  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
-  // Search debounce
+  // Unified search function
+  const handleSearch = useCallback((value) => {
+    setSearchValue(value);
+  }, []);
+  
+  // Search debounce effect
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (shop) loadProducts(1);
+      if (shop) {
+        loadProducts(1);
+      }
     }, 500);
     
     return () => clearTimeout(timer);
-  }, [queryValue]);
+  }, [searchValue]);
   
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
@@ -430,111 +446,8 @@ export default function BulkEdit({ shop: shopProp }) {
       </ResourceItem>
     );
   };
-
-  // Tabs for IndexFilters
-  const tabs = [
-    {
-      content: 'All',
-      id: 'all',
-      isLocked: true,
-      actions: [],
-      onAction: () => {},
-    }
-  ];
-
-  // Filters for IndexFilters
-  const filters = [
-    {
-      key: 'optimized',
-      label: 'AI Search Status',
-      filter: (
-        <ChoiceList
-          title="AI Search Status"
-          titleHidden
-          choices={[
-            { label: 'All products', value: 'all' },
-            { label: 'Has SEO', value: 'true' },
-            { label: 'Missing SEO', value: 'false' },
-          ]}
-          selected={[optimizedFilter]}
-          onChange={(value) => {
-            setOptimizedFilter(value[0]);
-            setLanguageFilter('');
-          }}
-        />
-      ),
-      shortcut: true,
-    },
-    {
-      key: 'language',
-      label: 'Language Status',
-      filter: (
-        <ChoiceList
-          title="Language Status"
-          titleHidden
-          choices={[
-            { label: 'All languages', value: '' },
-            ...availableLanguages.map(lang => ({
-              label: `Has ${lang.toUpperCase()}`,
-              value: `has_${lang}`
-            })),
-            ...availableLanguages.map(lang => ({
-              label: `Missing ${lang.toUpperCase()}`,
-              value: `missing_${lang}`
-            })),
-          ]}
-          selected={languageFilter ? [languageFilter] : []}
-          onChange={(value) => setLanguageFilter(value[0] || '')}
-        />
-      ),
-      shortcut: true,
-    },
-    {
-      key: 'tags',
-      label: 'Tags',
-      filter: (
-        <ChoiceList
-          title="Tags"
-          titleHidden
-          allowMultiple
-          choices={availableTags.map(tag => ({ label: tag, value: tag }))}
-          selected={selectedTags}
-          onChange={setSelectedTags}
-        />
-      ),
-      shortcut: true,
-    },
-  ];
-
-  const appliedFilters = [
-    ...(optimizedFilter !== 'all' ? [{
-      key: 'optimized',
-      label: optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO',
-      onRemove: () => setOptimizedFilter('all'),
-    }] : []),
-    ...(languageFilter ? [{
-      key: 'language',
-      label: languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      onRemove: () => setLanguageFilter(''),
-    }] : []),
-    ...selectedTags.map(tag => ({
-      key: `tag-${tag}`,
-      label: `Tag: ${tag}`,
-      onRemove: () => setSelectedTags(prev => prev.filter(t => t !== tag)),
-    })),
-  ];
-
-  const sortOptions = [
-    { label: 'Newest first', value: 'newest', directionLabel: 'Newest' },
-    { label: 'Oldest first', value: 'oldest', directionLabel: 'Oldest' },
-  ];
-
-  const primaryAction = selectedItems.length > 0 || selectAllPages ? {
-    content: 'Generate AI optimisation',
-    onAction: openLanguageModal,
-  } : undefined;
-
-  // Modals
+  
+  // Progress modal
   const progressModal = isProcessing && (
     <Modal
       open={isProcessing}
@@ -556,6 +469,7 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
 
+  // Language selection modal
   const languageModal = (
     <Modal
       open={showLanguageModal}
@@ -615,6 +529,7 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
+  // Results modal
   const resultsModal = (
     <Modal
       open={showResultsModal && !isProcessing}
@@ -681,7 +596,7 @@ export default function BulkEdit({ shop: shopProp }) {
     <EmptyState
       heading="No products found"
       action={{ content: 'Clear filters', onAction: () => {
-        setQueryValue('');
+        setSearchValue('');
         setOptimizedFilter('all');
         setLanguageFilter('');
         setSelectedTags([]);
@@ -693,62 +608,213 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
+  const bulkActions = [
+    {
+      content: 'Generate AI optimisation',
+      onAction: openLanguageModal,
+    }
+  ];
+  
+  const sortOptions = [
+    { label: 'Newest first', value: 'newest' },
+    { label: 'Oldest first', value: 'oldest' },
+  ];
+  
   return (
     <Page title="Bulk Edit SEO">
       <Layout>
-        {totalCount > 0 && (
-          <Layout.Section>
-            <Card>
-              <Box padding="400">
-                <Checkbox
-                  label={`Select all ${totalCount} products in your store`}
-                  checked={selectAllPages}
-                  onChange={handleSelectAllPages}
-                />
-              </Box>
-            </Card>
-          </Layout.Section>
-        )}
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+                <Box minWidth="400px">
+                  <TextField
+                    label=""
+                    placeholder="Search by product ID, name, or details..."
+                    value={searchValue}
+                    onChange={handleSearch}
+                    prefix={<SearchIcon />}
+                    clearButton
+                    onClearButtonClick={() => handleSearch('')}
+                  />
+                </Box>
+                
+                <Box>
+                  <InlineStack gap="300" align="center">
+                    <Select
+                      label=""
+                      options={sortOptions}
+                      value={sortOrder === 'desc' ? 'newest' : 'oldest'}
+                      onChange={(value) => {
+                        setSortOrder(value === 'newest' ? 'desc' : 'asc');
+                      }}
+                    />
+                    
+                    <Button
+                      primary
+                      onClick={openLanguageModal}
+                      disabled={selectedItems.length === 0 && !selectAllPages}
+                    >
+                      Generate AI optimisation
+                    </Button>
+                  </InlineStack>
+                </Box>
+              </InlineStack>
+              
+              {totalCount > 0 && (
+                <Box paddingBlockStart="300">
+                  <Checkbox
+                    label={`Select all ${totalCount} products in your store`}
+                    checked={selectAllPages}
+                    onChange={handleSelectAllPages}
+                  />
+                </Box>
+              )}
+            </Box>
+          </Card>
+        </Layout.Section>
         
         <Layout.Section>
           <Card>
-            <IndexFilters
-              loading={loading}
-              sortOptions={sortOptions}
-              sortSelected={sortOptions[0].value}
-              onSort={() => {}}
-              queryValue={queryValue}
-              queryPlaceholder="Search by product ID, name, or details..."
-              onQueryChange={setQueryValue}
-              onQueryClear={() => setQueryValue('')}
-              primaryAction={primaryAction}
-              cancelAction={{
-                onAction: () => {},
-                disabled: false,
-                loading: false,
-              }}
-              tabs={tabs}
-              selected={0}
-              onSelect={() => {}}
-              canCreateNewView={false}
-              filters={filters}
-              appliedFilters={appliedFilters}
-              onClearAll={() => {
-                setOptimizedFilter('all');
-                setLanguageFilter('');
-                setSelectedTags([]);
-              }}
-              mode={mode}
-              setMode={setMode}
-              filteringAccessibilityTooltip="Search and filter products"
-            />
-            
+            {/* Filter buttons */}
+            <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+              <InlineStack gap="200" wrap>
+                {/* AI Search Status filter */}
+                <Popover
+                  active={showOptimizedPopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
+                    >
+                      AI Search Status
+                    </Button>
+                  }
+                  onClose={() => setShowOptimizedPopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="AI Search Status"
+                      titleHidden
+                      choices={[
+                        { label: 'All products', value: 'all' },
+                        { label: 'Has SEO', value: 'true' },
+                        { label: 'Missing SEO', value: 'false' },
+                      ]}
+                      selected={[optimizedFilter]}
+                      onChange={(value) => {
+                        setOptimizedFilter(value[0]);
+                        setLanguageFilter('');
+                        setShowOptimizedPopover(false);
+                      }}
+                    />
+                  </Box>
+                </Popover>
+                
+                {/* Language Status filter */}
+                <Popover
+                  active={showLanguagePopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowLanguagePopover(!showLanguagePopover)}
+                    >
+                      Language Status
+                    </Button>
+                  }
+                  onClose={() => setShowLanguagePopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="Language Status"
+                      titleHidden
+                      choices={[
+                        { label: 'All languages', value: '' },
+                        ...availableLanguages.map(lang => ({
+                          label: `Has ${lang.toUpperCase()}`,
+                          value: `has_${lang}`
+                        })),
+                        ...availableLanguages.map(lang => ({
+                          label: `Missing ${lang.toUpperCase()}`,
+                          value: `missing_${lang}`
+                        })),
+                      ]}
+                      selected={languageFilter ? [languageFilter] : []}
+                      onChange={(value) => {
+                        setLanguageFilter(value[0] || '');
+                        setShowLanguagePopover(false);
+                      }}
+                    />
+                  </Box>
+                </Popover>
+                
+                {/* Tags filter */}
+                <Popover
+                  active={showTagsPopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowTagsPopover(!showTagsPopover)}
+                    >
+                      Tags
+                    </Button>
+                  }
+                  onClose={() => setShowTagsPopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="Tags"
+                      titleHidden
+                      allowMultiple
+                      choices={availableTags.map(tag => ({ label: tag, value: tag }))}
+                      selected={selectedTags}
+                      onChange={(value) => {
+                        setSelectedTags(value);
+                      }}
+                    />
+                    <Box paddingBlockStart="200">
+                      <Button
+                        size="slim"
+                        onClick={() => setShowTagsPopover(false)}
+                      >
+                        Apply
+                      </Button>
+                    </Box>
+                  </Box>
+                </Popover>
+              </InlineStack>
+              
+              {/* Applied filters */}
+              {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
+                <Box paddingBlockStart="200">
+                  <InlineStack gap="100" wrap>
+                    {optimizedFilter !== 'all' && (
+                      <Badge onRemove={() => setOptimizedFilter('all')}>
+                        {optimizedFilter === 'true' ? 'Has SEO' : 'Missing SEO'}
+                      </Badge>
+                    )}
+                    {languageFilter && (
+                      <Badge onRemove={() => setLanguageFilter('')}>
+                        {languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </Badge>
+                    )}
+                    {selectedTags.map(tag => (
+                      <Badge key={tag} onRemove={() => setSelectedTags(prev => prev.filter(t => t !== tag))}>
+                        Tag: {tag}
+                      </Badge>
+                    ))}
+                  </InlineStack>
+                </Box>
+              )}
+            </Box>
+
             <ResourceList
               resourceName={{ singular: 'product', plural: 'products' }}
               items={products}
               renderItem={renderItem}
               selectedItems={selectedItems}
               onSelectionChange={handleSelectionChange}
+              bulkActions={bulkActions}
               loading={loading}
               totalItemsCount={totalCount}
               emptyState={emptyState}
