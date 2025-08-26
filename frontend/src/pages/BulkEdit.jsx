@@ -26,6 +26,7 @@ import {
   ActionList,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
+import { SearchIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -688,7 +689,17 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
                       removeUnderline
                     >
-                      AI Search Status
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>AI Search Status</span>
+                        {optimizedFilter !== 'all' && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setOptimizedFilter('all');
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
                     </Button>
                   }
                   onClose={() => setShowOptimizedPopover(false)}
@@ -721,7 +732,17 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowLanguagePopover(!showLanguagePopover)}
                       removeUnderline
                     >
-                      Language Status
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>Language Status</span>
+                        {languageFilter && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setLanguageFilter('');
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
                     </Button>
                   }
                   onClose={() => setShowLanguagePopover(false)}
@@ -759,7 +780,17 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowTagsPopover(!showTagsPopover)}
                       removeUnderline
                     >
-                      Tags
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>Tags</span>
+                        {selectedTags.length > 0 && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTags([]);
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
                     </Button>
                   }
                   onClose={() => setShowTagsPopover(false)}
