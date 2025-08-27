@@ -113,7 +113,7 @@ async function mountOptionalRouters(app) {
     app.use('/ai', feedRouter); // e.g. GET /ai/feed/catalog.ndjson
     console.log('✔ Feed controller mounted');
   } catch {
-    // not present – skip
+    // not present — skip
   }
 
   // Product sync admin endpoint (optional)
@@ -131,7 +131,7 @@ async function mountOptionalRouters(app) {
     });
     console.log('✔ Product sync endpoint mounted');
   } catch {
-    // not present – skip
+    // not present — skip
   }
 }
 
@@ -215,7 +215,7 @@ async function start() {
       await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
       console.log('✔ Mongo connected');
     } else {
-      console.log('ℹ No MONGODB_URI provided – skipping Mongo connection');
+      console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
 
     // Mount optional routers before listening
