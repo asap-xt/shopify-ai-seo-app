@@ -131,22 +131,28 @@ export default function StoreMetadata({ shop }) {
   }
 
   async function handleSave() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          metadata: formData,
-          options: {
-            updateSeo: true,
-            updateAiMetadata: true,
-            updateOrganization: formData.organizationSchema.enabled,
-            updateLocalBusiness: formData.localBusinessSchema.enabled
+  setSaving(true);
+  try {
+    const res = await fetch(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        metadata: {
+          ...formData,
+          seo: {
+            ...formData.seo,
+            description: formData.seo.metaDescription || formData.seo.description || ''
           }
-        })
-      });
+        },
+        options: {
+          updateSeo: true,
+          updateAiMetadata: true,
+          updateOrganization: formData.organizationSchema.enabled,
+          updateLocalBusiness: formData.localBusinessSchema.enabled
+        }
+      })
+    });
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save metadata');
