@@ -282,7 +282,14 @@ router.post('/apply', async (req, res) => {
         namespace: 'ai_seo_store',
         key: 'seo_metadata',
         type: 'json',
-        value: JSON.stringify(metadata.seo)
+        value: JSON.stringify({
+          title: metadata.seo.title,
+          description: metadata.seo.metaDescription || metadata.seo.description || '',
+          metaDescription: metadata.seo.metaDescription || metadata.seo.description || '',
+          keywords: Array.isArray(metadata.seo.keywords) 
+            ? metadata.seo.keywords 
+            : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
+        })
       });
     }
 
@@ -395,6 +402,59 @@ router.get('/public/:shop', async (req, res) => {
     if (!shopData) {
       return res.status(404).json({ error: 'Shop not found' });
     }
+
+    // Create metafield definitions for shop
+    router.post('/create-definitions', async (req, res) => {
+      try {
+        const shop = getShopFromReq(req);
+        if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+
+        const mutation = `
+          mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+            metafieldDefinitionCreate(definition: $definition) {
+              createdDefinition {
+                id
+                name
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+
+        const definitions = [
+          {
+            name: 'SEO Metadata',
+            namespace: 'ai_seo_store',
+            key: 'seo_metadata',
+            description: 'AI-generated SEO metadata',
+            type: 'json',
+            ownerType: 'SHOP'
+          },
+          {
+            name: 'AI Metadata',
+            namespace: 'ai_seo_store', 
+            key: 'ai_metadata',
+            description: 'AI business metadata',
+            type: 'json',
+            ownerType: 'SHOP'
+          }
+        ];
+
+        const results = [];
+        for (const def of definitions) {
+          const result = await shopGraphQL(shop, mutation, { definition: def });
+          results.push(result);
+        }
+
+        res.json({ success: true, results });
+      } catch (error) {
+        console.error('Error creating definitions:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
 
     // Parse metafields
     const metadata = {};

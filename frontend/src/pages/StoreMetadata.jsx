@@ -61,7 +61,13 @@ export default function StoreMetadata({ shop }) {
         const existing = data.existingMetadata;
         setFormData(prev => ({
           ...prev,
-          seo: existing.seo_metadata?.value || prev.seo,
+          seo: {
+            ...prev.seo,
+            ...(existing.seo_metadata?.value || {}),
+            keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
+              ? existing.seo_metadata.value.keywords.join(', ')
+              : existing.seo_metadata?.value?.keywords || prev.seo.keywords || ''
+          },
           aiMetadata: existing.ai_metadata?.value || prev.aiMetadata,
           organizationSchema: existing.organization_schema?.value || prev.organizationSchema,
           localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema
@@ -376,6 +382,7 @@ export default function StoreMetadata({ shop }) {
         <Card>
           <Box padding="400">
             <InlineStack gap="300">
+              {/* Временно скрито - ще се добави AI генерация по-късно
               <Button
                 primary
                 onClick={handleGenerate}
@@ -384,6 +391,7 @@ export default function StoreMetadata({ shop }) {
               >
                 Generate with AI
               </Button>
+              */}
               
               <Button
                 onClick={handleSave}
