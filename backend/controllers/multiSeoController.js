@@ -96,8 +96,13 @@ router.post('/apply-multi', async (req, res) => {
             'Content-Type': 'application/json',
             Cookie: req.headers.cookie || '',
           },
-          body: JSON.stringify({ shop, productId, seo: r.seo, options }),
-        });
+          body: JSON.stringify({ 
+            shop, 
+            productId, 
+            language: r.language,  // <-- ДОБАВЕТЕ ТОВА
+            seo: r.seo, 
+            options 
+          }),
         const text = await rsp.text();
         let json;
         try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
