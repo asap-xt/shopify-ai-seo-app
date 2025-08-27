@@ -52,7 +52,7 @@ function AdminNavMenu({ active }) {
   return (
     <ui-nav-menu>
       <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
-      <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI Search Optimisation</a>
       <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
       <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
@@ -118,7 +118,8 @@ function DashboardCard() {
   );
 }
 
-// -------- Single Product Panel (original AiSeoPanel content)
+// -------- Single Product Panel (original AiSeoPanel content) - ЗАКОМЕНТИРАНО
+/*
 function SingleProductPanel({ shop }) {
   // Form states
   const [productId, setProductId] = useState('');
@@ -137,22 +138,7 @@ function SingleProductPanel({ shop }) {
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
 
   // ЗАКОМЕНТИРАНО - вече не използваме AI модели
-  /*
-  // Load models from /plans/me
-  useEffect(() => {
-    if (!shop) return;
-    fetch(`/plans/me?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
-      .then(readJson)
-      .then((data) => {
-        if (data?.modelsSuggested) {
-          const opts = data.modelsSuggested.map((m) => ({ label: m, value: m }));
-          setModels(opts);
-          if (opts.length && !model) setModel(opts[0].value);
-        }
-      })
-      .catch((e) => console.error('Failed to load models:', e));
-  }, [shop, model]);
-  */
+  // Load models from /plans/me - коментар запазен за история
 
   // Load languages for shop/product (hides selector when single)
   useEffect(() => {
@@ -386,14 +372,6 @@ function SingleProductPanel({ shop }) {
                 placeholder="123456789 or gid://shopify/Product/123456789"
                 autoComplete="off"
               />
-              {/* ЗАКОМЕНТИРАН AI MODEL SELECTOR - може да се върне за enhanced SEO планове
-              <Select
-                label="AI Provider"
-                options={models}
-                value={model}
-                onChange={setModel}
-              />
-              */}
               {showLanguageSelector && (
                 <Select
                   label="Output Language"
@@ -430,31 +408,64 @@ function SingleProductPanel({ shop }) {
     </>
   );
 }
+*/
 
-// -------- AI SEO Panel with Tabs
-function AiSeoPanel() {
+// -------- AI Search Optimisation Panel with Tabs
+function AiSearchOptimisationPanel() {
   const shop = qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   
   const tabs = [
+    // ЗАКОМЕНТИРАН Single Product таб
+    // {
+    //   id: 'single-product',
+    //   content: 'Single Product',
+    //   panelID: 'single-product-panel',
+    // },
     {
-      id: 'single-product',
-      content: 'Single Product',
-      panelID: 'single-product-panel',
+      id: 'products',
+      content: 'Products',
+      panelID: 'products-panel',
     },
     {
-      id: 'bulk-edit',
-      content: 'Bulk Edit',
-      panelID: 'bulk-edit-panel',
+      id: 'sitemap',
+      content: 'Sitemap',
+      panelID: 'sitemap-panel',
+    },
+    {
+      id: 'store-seo',
+      content: 'Store SEO',
+      panelID: 'store-seo-panel',
+    },
+    {
+      id: 'schema-data',
+      content: 'Schema Data',
+      panelID: 'schema-data-panel',
     },
   ];
   
   return (
     <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
       {selectedTab === 0 ? (
-        <SingleProductPanel shop={shop} />
-      ) : (
         <BulkEdit shop={shop} />
+      ) : selectedTab === 1 ? (
+        <Card>
+          <Box padding="400">
+            <Text>Sitemap generator coming soon...</Text>
+          </Box>
+        </Card>
+      ) : selectedTab === 2 ? (
+        <Card>
+          <Box padding="400">
+            <Text>Store SEO settings coming soon...</Text>
+          </Box>
+        </Card>
+      ) : (
+        <Card>
+          <Box padding="400">
+            <Text>Schema Data configuration coming soon...</Text>
+          </Box>
+        </Card>
       )}
     </Tabs>
   );
@@ -466,7 +477,7 @@ export default function App() {
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
 
   const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'AI SEO';
+    if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
     return 'Dashboard';
@@ -479,7 +490,7 @@ export default function App() {
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
           {path.startsWith('/ai-seo') ? (
-            <AiSeoPanel />
+            <AiSearchOptimisationPanel />
           ) : path.startsWith('/billing') ? (
             <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
           ) : path.startsWith('/settings') ? (

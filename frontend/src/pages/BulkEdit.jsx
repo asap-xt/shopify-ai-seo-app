@@ -260,7 +260,7 @@ export default function BulkEdit({ shop: shopProp }) {
               results[product._id] = {
                 success: true,
                 skipped: true,
-                message: 'All selected languages already have AI optimisation'
+                message: 'All selected languages already have AI Search Optimisation'
               };
               return;
             }
@@ -309,9 +309,9 @@ export default function BulkEdit({ shop: shopProp }) {
       const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
       
       if (skippedCount > 0) {
-        setToast(`Generated AI optimisation for ${successCount} products (${skippedCount} already had AI optimisation)`);
+        setToast(`Generated AI Search Optimisation for ${successCount} products (${skippedCount} already optimised)`);
       } else {
-        setToast(`Generated AI optimisation for ${successCount} products`);
+        setToast(`Generated AI Search Optimisation for ${successCount} products`);
       }
       
     } catch (err) {
@@ -378,12 +378,12 @@ export default function BulkEdit({ shop: shopProp }) {
         setProgress({ current, total, percent });
       }
       
-      setToast('AI optimisation applied successfully!');
+      setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
       loadProducts(1);
       
     } catch (err) {
-      setToast(`Error applying AI optimisation: ${err.message}`);
+      setToast(`Error applying AI Search Optimisation: ${err.message}`);
     } finally {
       setIsProcessing(false);
       setCurrentProduct('');
@@ -475,7 +475,7 @@ export default function BulkEdit({ shop: shopProp }) {
       open={showLanguageModal}
       title="Select Languages"
       primaryAction={{
-        content: 'Generate AI optimisation',
+        content: 'Generate AI Search Optimisation',
         onAction: generateSEO,
         disabled: selectedLanguages.length === 0,
       }}
@@ -488,7 +488,7 @@ export default function BulkEdit({ shop: shopProp }) {
     >
       <Modal.Section>
         <BlockStack gap="300">
-          <Text variant="bodyMd">Select languages to generate AI optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
+          <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
               {availableLanguages.map(lang => (
@@ -522,7 +522,7 @@ export default function BulkEdit({ shop: shopProp }) {
             </Button>
           </Box>
           <Text variant="bodySm" tone="subdued">
-            Note: AI optimisation will only be generated for languages that don't already have optimization.
+            Note: AI Search Optimisation will only be generated for languages that don't already have optimisation.
           </Text>
         </BlockStack>
       </Modal.Section>
@@ -533,9 +533,9 @@ export default function BulkEdit({ shop: shopProp }) {
   const resultsModal = (
     <Modal
       open={showResultsModal && !isProcessing}
-      title="AI Optimisation Generation Results"
+      title="AI Search Optimisation Results"
       primaryAction={{
-        content: 'Apply AI optimisation',
+        content: 'Apply Optimisation',
         onAction: applySEO,
         disabled: !Object.values(results).some(r => r.success && !r.skipped),
       }}
@@ -610,7 +610,7 @@ export default function BulkEdit({ shop: shopProp }) {
   
   const bulkActions = [
     {
-      content: 'Generate AI optimisation',
+      content: 'Generate AI Search Optimisation',
       onAction: openLanguageModal,
     }
   ];
@@ -621,251 +621,247 @@ export default function BulkEdit({ shop: shopProp }) {
   ];
   
   return (
-    <Page title="Bulk Edit AI Optimisation">
-      <Layout>
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-                <Box minWidth="400px">
-                  <TextField
-                    label=""
-                    placeholder="Search by product ID, name, or details..."
-                    value={searchValue}
-                    onChange={handleSearch}
-                    prefix={<SearchIcon />}
-                    clearButton
-                    onClearButtonClick={() => handleSearch('')}
-                  />
-                </Box>
-                
-                <Box>
-                  <InlineStack gap="300" align="center">
-                    <Select
-                      label=""
-                      options={sortOptions}
-                      value={sortOrder === 'desc' ? 'newest' : 'oldest'}
-                      onChange={(value) => {
-                        setSortOrder(value === 'newest' ? 'desc' : 'asc');
-                      }}
-                    />
-                    
-                    <Button
-                      primary
-                      onClick={openLanguageModal}
-                      disabled={selectedItems.length === 0 && !selectAllPages}
-                    >
-                      Generate AI optimisation
-                    </Button>
-                  </InlineStack>
-                </Box>
-              </InlineStack>
-              
-              {totalCount > 0 && (
-                <Box paddingBlockStart="300">
-                  <Checkbox
-                    label={`Select all ${totalCount} products in your store`}
-                    checked={selectAllPages}
-                    onChange={handleSelectAllPages}
-                  />
-                </Box>
-              )}
+    <>
+      <Card>
+        <Box padding="400">
+          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+            <Box minWidth="400px">
+              <TextField
+                label=""
+                placeholder="Search by product ID, name, or details..."
+                value={searchValue}
+                onChange={handleSearch}
+                prefix={<SearchIcon />}
+                clearButton
+                onClearButtonClick={() => handleSearch('')}
+              />
             </Box>
-          </Card>
-        </Layout.Section>
-        
-        <Layout.Section>
-          <Card>
-            {/* Filter buttons */}
-            <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-              <InlineStack gap="200" wrap>
-                {/* AI Search Status filter */}
-                <Popover
-                  active={showOptimizedPopover}
-                  activator={
-                    <Button 
-                      disclosure="down"
-                      onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
-                      removeUnderline
-                    >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>AI Search Status</span>
-                        {optimizedFilter !== 'all' && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setOptimizedFilter('all');
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
-                    </Button>
-                  }
-                  onClose={() => setShowOptimizedPopover(false)}
-                >
-                  <Box padding="300" minWidth="200px">
-                    <ChoiceList
-                      title="AI Search Status"
-                      titleHidden
-                      choices={[
-                        { label: 'All products', value: 'all' },
-                        { label: 'Has AI Optimisation', value: 'true' },
-                        { label: 'No AI Optimisation', value: 'false' },
-                      ]}
-                      selected={[optimizedFilter]}
-                      onChange={(value) => {
-                        setOptimizedFilter(value[0]);
-                        setLanguageFilter('');
-                        setShowOptimizedPopover(false);
-                      }}
-                    />
-                  </Box>
-                </Popover>
-                
-                {/* Language Status filter */}
-                <Popover
-                  active={showLanguagePopover}
-                  activator={
-                    <Button 
-                      disclosure="down"
-                      onClick={() => setShowLanguagePopover(!showLanguagePopover)}
-                      removeUnderline
-                    >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>Language Status</span>
-                        {languageFilter && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setLanguageFilter('');
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
-                    </Button>
-                  }
-                  onClose={() => setShowLanguagePopover(false)}
-                >
-                  <Box padding="300" minWidth="200px">
-                    <ChoiceList
-                      title="Language Status"
-                      titleHidden
-                      choices={[
-                        { label: 'All languages', value: '' },
-                        ...availableLanguages.map(lang => ({
-                          label: `Has ${lang.toUpperCase()}`,
-                          value: `has_${lang}`
-                        })),
-                        ...availableLanguages.map(lang => ({
-                          label: `Missing ${lang.toUpperCase()}`,
-                          value: `missing_${lang}`
-                        })),
-                      ]}
-                      selected={languageFilter ? [languageFilter] : []}
-                      onChange={(value) => {
-                        setLanguageFilter(value[0] || '');
-                        setShowLanguagePopover(false);
-                      }}
-                    />
-                  </Box>
-                </Popover>
-                
-                {/* Tags filter */}
-                <Popover
-                  active={showTagsPopover}
-                  activator={
-                    <Button 
-                      disclosure="down"
-                      onClick={() => setShowTagsPopover(!showTagsPopover)}
-                      removeUnderline
-                    >
-                      <InlineStack gap="100" blockAlign="center">
-                        <span>Tags</span>
-                        {selectedTags.length > 0 && (
-                          <Box onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTags([]);
-                          }}>
-                            <Text as="span" tone="subdued">✕</Text>
-                          </Box>
-                        )}
-                      </InlineStack>
-                    </Button>
-                  }
-                  onClose={() => setShowTagsPopover(false)}
-                >
-                  <Box padding="300" minWidth="200px">
-                    <ChoiceList
-                      title="Tags"
-                      titleHidden
-                      allowMultiple
-                      choices={availableTags.map(tag => ({ label: tag, value: tag }))}
-                      selected={selectedTags}
-                      onChange={(value) => {
-                        setSelectedTags(value);
-                      }}
-                    />
-                    <Box paddingBlockStart="200">
-                      <Button
-                        size="slim"
-                        onClick={() => setShowTagsPopover(false)}
-                      >
-                        Apply
-                      </Button>
-                    </Box>
-                  </Box>
-                </Popover>
-              </InlineStack>
-              
-              {/* Applied filters */}
-              {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
-                <Box paddingBlockStart="200">
-                  <InlineStack gap="100" wrap>
-                    {optimizedFilter !== 'all' && (
-                      <Badge onRemove={() => setOptimizedFilter('all')}>
-                        {optimizedFilter === 'true' ? 'Has AI Optimisation' : 'No AI Optimisation'}
-                      </Badge>
-                    )}
-                    {languageFilter && (
-                      <Badge onRemove={() => setLanguageFilter('')}>
-                        {languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </Badge>
-                    )}
-                    {selectedTags.map(tag => (
-                      <Badge key={tag} onRemove={() => setSelectedTags(prev => prev.filter(t => t !== tag))}>
-                        Tag: {tag}
-                      </Badge>
-                    ))}
-                  </InlineStack>
-                </Box>
-              )}
-            </Box>
-
-            <ResourceList
-              resourceName={{ singular: 'product', plural: 'products' }}
-              items={products}
-              renderItem={renderItem}
-              selectedItems={selectedItems}
-              onSelectionChange={handleSelectionChange}
-              selectable={true}
-              // bulkActions={bulkActions}
-              loading={loading}
-              totalItemsCount={totalCount}
-              emptyState={emptyState}
-              showHeader={false}
-            />
             
-            {hasMore && !loading && (
-              <Box padding="400" textAlign="center">
-                <Button onClick={() => loadProducts(page + 1, true)}>
-                  Load more
+            <Box>
+              <InlineStack gap="300" align="center">
+                <Select
+                  label=""
+                  options={sortOptions}
+                  value={sortOrder === 'desc' ? 'newest' : 'oldest'}
+                  onChange={(value) => {
+                    setSortOrder(value === 'newest' ? 'desc' : 'asc');
+                  }}
+                />
+                
+                <Button
+                  primary
+                  onClick={openLanguageModal}
+                  disabled={selectedItems.length === 0 && !selectAllPages}
+                >
+                  Generate AI Search Optimisation
                 </Button>
+              </InlineStack>
+            </Box>
+          </InlineStack>
+          
+          {totalCount > 0 && (
+            <Box paddingBlockStart="300">
+              <Checkbox
+                label={`Select all ${totalCount} products in your store`}
+                checked={selectAllPages}
+                onChange={handleSelectAllPages}
+              />
+            </Box>
+          )}
+        </Box>
+      </Card>
+
+      <Box paddingBlockStart="400">
+        <Card>
+          {/* Filter buttons */}
+          <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+            <InlineStack gap="200" wrap>
+              {/* AI Search Status filter */}
+              <Popover
+                active={showOptimizedPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>AI Search Status</span>
+                      {optimizedFilter !== 'all' && (
+                        <Box onClick={(e) => {
+                          e.stopPropagation();
+                          setOptimizedFilter('all');
+                        }}>
+                          <Text as="span" tone="subdued">✕</Text>
+                        </Box>
+                      )}
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowOptimizedPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="AI Search Status"
+                    titleHidden
+                    choices={[
+                      { label: 'All products', value: 'all' },
+                      { label: 'Has AI Search Optimisation', value: 'true' },
+                      { label: 'No AI Search Optimisation', value: 'false' },
+                    ]}
+                    selected={[optimizedFilter]}
+                    onChange={(value) => {
+                      setOptimizedFilter(value[0]);
+                      setLanguageFilter('');
+                      setShowOptimizedPopover(false);
+                    }}
+                  />
+                </Box>
+              </Popover>
+              
+              {/* Language Status filter */}
+              <Popover
+                active={showLanguagePopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowLanguagePopover(!showLanguagePopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>Language Status</span>
+                      {languageFilter && (
+                        <Box onClick={(e) => {
+                          e.stopPropagation();
+                          setLanguageFilter('');
+                        }}>
+                          <Text as="span" tone="subdued">✕</Text>
+                        </Box>
+                      )}
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowLanguagePopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="Language Status"
+                    titleHidden
+                    choices={[
+                      { label: 'All languages', value: '' },
+                      ...availableLanguages.map(lang => ({
+                        label: `Has ${lang.toUpperCase()}`,
+                        value: `has_${lang}`
+                      })),
+                      ...availableLanguages.map(lang => ({
+                        label: `Missing ${lang.toUpperCase()}`,
+                        value: `missing_${lang}`
+                      })),
+                    ]}
+                    selected={languageFilter ? [languageFilter] : []}
+                    onChange={(value) => {
+                      setLanguageFilter(value[0] || '');
+                      setShowLanguagePopover(false);
+                    }}
+                  />
+                </Box>
+              </Popover>
+              
+              {/* Tags filter */}
+              <Popover
+                active={showTagsPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowTagsPopover(!showTagsPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>Tags</span>
+                      {selectedTags.length > 0 && (
+                        <Box onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTags([]);
+                        }}>
+                          <Text as="span" tone="subdued">✕</Text>
+                        </Box>
+                      )}
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowTagsPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="Tags"
+                    titleHidden
+                    allowMultiple
+                    choices={availableTags.map(tag => ({ label: tag, value: tag }))}
+                    selected={selectedTags}
+                    onChange={(value) => {
+                      setSelectedTags(value);
+                    }}
+                  />
+                  <Box paddingBlockStart="200">
+                    <Button
+                      size="slim"
+                      onClick={() => setShowTagsPopover(false)}
+                    >
+                      Apply
+                    </Button>
+                  </Box>
+                </Box>
+              </Popover>
+            </InlineStack>
+            
+            {/* Applied filters */}
+            {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
+              <Box paddingBlockStart="200">
+                <InlineStack gap="100" wrap>
+                  {optimizedFilter !== 'all' && (
+                    <Badge onRemove={() => setOptimizedFilter('all')}>
+                      {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
+                    </Badge>
+                  )}
+                  {languageFilter && (
+                    <Badge onRemove={() => setLanguageFilter('')}>
+                      {languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </Badge>
+                  )}
+                  {selectedTags.map(tag => (
+                    <Badge key={tag} onRemove={() => setSelectedTags(prev => prev.filter(t => t !== tag))}>
+                      Tag: {tag}
+                    </Badge>
+                  ))}
+                </InlineStack>
               </Box>
             )}
-          </Card>
-        </Layout.Section>
-      </Layout>
-      
+          </Box>
+
+          <ResourceList
+            resourceName={{ singular: 'product', plural: 'products' }}
+            items={products}
+            renderItem={renderItem}
+            selectedItems={selectedItems}
+            onSelectionChange={handleSelectionChange}
+            selectable={true}
+            // bulkActions={bulkActions}
+            loading={loading}
+            totalItemsCount={totalCount}
+            emptyState={emptyState}
+            showHeader={false}
+          />
+          
+          {hasMore && !loading && (
+            <Box padding="400" textAlign="center">
+              <Button onClick={() => loadProducts(page + 1, true)}>
+                Load more
+              </Button>
+            </Box>
+          )}
+        </Card>
+      </Box>
+
       {progressModal}
       {languageModal}
       {resultsModal}
@@ -873,6 +869,6 @@ export default function BulkEdit({ shop: shopProp }) {
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
       )}
-    </Page>
+    </>
   );
 }

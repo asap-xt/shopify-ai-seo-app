@@ -9,7 +9,7 @@ export default function SideNav() {
       <Navigation.Section
         items={[
           { url: '/dashboard', label: 'Dashboard', icon: HomeIcon },
-          { url: '/ai-seo',    label: 'AI SEO',   icon: ViewIcon },
+          { url: '/ai-seo',    label: 'AI Search Optimisation',   icon: ViewIcon },
           { url: '/billing',   label: 'Billing',  icon: ViewIcon },
         ]}
       />
