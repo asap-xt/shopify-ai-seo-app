@@ -6,7 +6,7 @@
 //
 // Implements "multi-language" flow by delegating to existing single endpoints
 //   /seo/generate  and  /seo/apply
-// We forward client cookies to preserve the embedded admin session for any Admin GraphQL calls.
+// We forward client cookies to preserve the embedded admin session for any Admin GraphQL calls. And other comments
 
 import { Router } from 'express';
 
