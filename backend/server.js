@@ -157,7 +157,11 @@ app.use(
 // Public sitemap route
 app.get('/sitemap.xml', (req, res) => {
   const shop = req.query.shop || req.headers.host?.replace('.myshopify.com', '');
-  sitemapController.serve({ params: { shop } }, res);
+  if (!shop) {
+    return res.status(400).send('Shop not specified');
+  }
+  // Redirect to the API endpoint
+  res.redirect(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`);
 });
 
 // Explicit SPA routes → serve fresh index.html

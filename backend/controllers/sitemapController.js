@@ -122,17 +122,32 @@ async function handleGenerate(req, res) {
         shop {
           primaryDomain { url }
         }
-        shopLocales {
-          locale
-          primary
-        }
       }
     `;
     
     console.log('[SITEMAP] Fetching shop data...');
     const shopData = await shopGraphQL(shop, shopQuery);
     const primaryDomain = shopData.shop.primaryDomain.url;
-    const locales = shopData.shopLocales || [{ locale: 'en', primary: true }];
+    
+    // Try to get locales, but fallback if no access
+    let locales = [{ locale: 'en', primary: true }];
+    try {
+      const localesQuery = `
+        query {
+          shopLocales {
+            locale
+            primary
+          }
+        }
+      `;
+      const localesData = await shopGraphQL(shop, localesQuery);
+      if (localesData.shopLocales) {
+        locales = localesData.shopLocales;
+      }
+    } catch (localeErr) {
+      console.log('[SITEMAP] Could not fetch locales (missing scope), using default:', locales);
+    }
+    
     console.log('[SITEMAP] Primary domain:', primaryDomain);
     console.log('[SITEMAP] Locales:', locales);
     
