@@ -277,6 +277,8 @@ router.post('/apply', async (req, res) => {
 
     // SEO metadata
     if (metadata.seo && options.updateSeo !== false) {
+      console.log('Received SEO metadata:', metadata.seo); // DEBUG
+  
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
