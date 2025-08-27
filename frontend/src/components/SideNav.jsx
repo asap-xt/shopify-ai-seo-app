@@ -10,7 +10,7 @@ export default function SideNav() {
         items={[
           { url: '/dashboard', label: 'Dashboard', icon: HomeIcon },
           { url: '/ai-seo',    label: 'AI SEO',   icon: ViewIcon },
-          { url: '/store-metadata', label: 'Store metadata for AI search', icon: StoreIcon },
+          // { url: '/store-metadata', label: 'Store metadata for AI search', icon: StoreIcon },
           { url: '/billing',   label: 'Billing',  icon: ViewIcon },
         ]}
       />
