@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
-// Progress tracking (in-memory for simplicity, could use Redis in production)
+// Progress tracking (in-memory for simplicity)
 const progressStore = new Map();
 
 // Helper: normalize shop domain
@@ -258,7 +258,7 @@ async function generateSitemapAsync(shop, limit) {
           
           if (locales.length > 1) {
             for (const altLocale of locales) {
-              const altPrefix = altLocale.locale === primaryLocale ? '' : `/${altLocale.locale}`;
+              const altPrefix = altLocale.locale === primaryLocale ? '' : '/' + altLocale.locale;
               xml += `    <xhtml:link rel="alternate" hreflang="${altLocale.locale}" href="${primaryDomain}${altPrefix}/products/${product.handle}"/>\n`;
             }
           }
@@ -294,8 +294,8 @@ async function generateSitemapAsync(shop, limit) {
     for (const edge of collectionsData.collections?.edges || []) {
       const collection = edge.node;
       xml += '  <url>\n';
-      xml += `    <loc>${primaryDomain}/collections/${collection.handle}</loc>\n';
-      xml += `    <lastmod>${new Date(collection.updatedAt).toISOString().split('T')[0]}</lastmod>\n';
+      xml += `    <loc>${primaryDomain}/collections/${collection.handle}</loc>\n`;
+      xml += `    <lastmod>${new Date(collection.updatedAt).toISOString().split('T')[0]}</lastmod>\n`;
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.7</priority>\n';
       xml += '  </url>\n';
@@ -305,7 +305,7 @@ async function generateSitemapAsync(shop, limit) {
     const standardPages = ['about-us', 'contact', 'privacy-policy', 'terms-of-service'];
     for (const page of standardPages) {
       xml += '  <url>\n';
-      xml += `    <loc>${primaryDomain}/pages/${page}</loc>\n';
+      xml += `    <loc>${primaryDomain}/pages/${page}</loc>\n`;
       xml += '    <changefreq>monthly</changefreq>\n';
       xml += '    <priority>0.5</priority>\n';
       xml += '  </url>\n';
