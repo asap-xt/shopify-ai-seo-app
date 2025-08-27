@@ -54,7 +54,8 @@ export default function Sitemap({ shop }) {
       const data = await response.json();
       if (response.ok) {
         setSitemapInfo(data);
-        setStatus(data.exists ? 'success' : null);
+        // Проверяваме 'generated' вместо 'exists'
+        setStatus(data.generated ? 'success' : null);
       }
     } catch (err) {
       setToast('Failed to load sitemap info');
@@ -81,32 +82,15 @@ export default function Sitemap({ shop }) {
         throw new Error(error.error || 'Generation failed');
       }
 
-      // Poll for progress
-      const pollInterval = setInterval(async () => {
-        try {
-          const progressResponse = await fetch(`/api/sitemap/progress?shop=${encodeURIComponent(shop)}`, {
-            credentials: 'include'
-          });
-          const progressData = await progressResponse.json();
-          
-          setProgress(progressData.progress || 0);
-          
-          if (progressData.status === 'completed') {
-            clearInterval(pollInterval);
-            setStatus('success');
-            await loadSitemapInfo();
-            setToast('Sitemap generated successfully!');
-          } else if (progressData.status === 'error') {
-            clearInterval(pollInterval);
-            setStatus('error');
-            setToast(progressData.error || 'Generation failed');
-          }
-        } catch (err) {
-          clearInterval(pollInterval);
-          setStatus('error');
-          setToast('Failed to check progress');
-        }
-      }, 1000);
+      // При успешен response
+      if (response.ok) {
+        // Директно презареждаме информацията
+        await loadSitemapInfo();
+        setStatus('success');
+        setToast('Sitemap generated successfully!');
+        setProgress(100);
+        return; // Не е нужно polling
+      }
 
     } catch (err) {
       setStatus('error');
@@ -117,8 +101,10 @@ export default function Sitemap({ shop }) {
   const getPlanLimit = () => {
     if (!plan) return 50;
     switch (plan.plan) {
-      case 'Growth': return 500;
-      case 'Professional': return 100;
+      case 'Growth': return 650;  // Променено от 500 на 650
+      case 'Professional': return 300;  // Променено от 100 на 300
+      case 'Growth Extra': return 2000;  // Добавено
+      case 'Enterprise': return 5000;  // Добавено
       default: return 50; // Starter
     }
   };
@@ -203,28 +189,28 @@ export default function Sitemap({ shop }) {
                     )}
                   </InlineStack>
 
-                  {sitemapInfo.exists && (
+                  {sitemapInfo.generated && (
                     <>
                       <BlockStack gap="200">
                         <InlineStack gap="400">
                           <Box>
                             <Text variant="bodySm" tone="subdued">Products included:</Text>
-                            <Text variant="bodyMd">{sitemapInfo.urlCount || 0} URLs</Text>
+                            <Text variant="bodyMd">{sitemapInfo.lastProductCount || 0} URLs</Text>
                           </Box>
                           <Box>
                             <Text variant="bodySm" tone="subdued">File size:</Text>
-                            <Text variant="bodyMd">{sitemapInfo.fileSize || 'Unknown'}</Text>
+                            <Text variant="bodyMd">{sitemapInfo.size ? `${(sitemapInfo.size / 1024).toFixed(2)} KB` : 'Unknown'}</Text>
                           </Box>
                           <Box>
                             <Text variant="bodySm" tone="subdued">Last updated:</Text>
-                            <Text variant="bodyMd">{formatDate(sitemapInfo.lastModified)}</Text>
+                            <Text variant="bodyMd">{formatDate(sitemapInfo.generatedAt)}</Text>
                           </Box>
                         </InlineStack>
 
                         <Box>
                           <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
-                          <Link url={sitemapUrl} external>
-                            {sitemapUrl}
+                          <Link url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`} external>
+                            View Sitemap
                           </Link>
                         </Box>
                       </BlockStack>

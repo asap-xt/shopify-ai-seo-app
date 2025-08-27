@@ -3,6 +3,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
+import Sitemap from '../db/Sitemap.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
@@ -247,6 +248,28 @@ async function handleGenerate(req, res) {
     
     xml += '</urlset>';
     
+    // Save sitemap info to database
+    try {
+      await Sitemap.findOneAndUpdate(
+        { shop },
+        {
+          shop,
+          generatedAt: new Date(),
+          url: `https://${shop}/sitemap.xml`,
+          productCount: allProducts.length,
+          size: Buffer.byteLength(xml, 'utf8'),
+          plan: plan,
+          status: 'completed',
+          content: xml
+        },
+        { upsert: true, new: true }
+      );
+      console.log(`[SITEMAP] Saved sitemap for ${shop}, ${allProducts.length} products`);
+    } catch (saveErr) {
+      console.error('[SITEMAP] Failed to save sitemap info:', saveErr);
+      // Continue even if save fails
+    }
+    
     // Set proper headers for AI crawlers
     res.set({
       'Content-Type': 'application/xml; charset=utf-8',
@@ -271,6 +294,9 @@ async function handleInfo(req, res) {
     }
     
     const { limit, plan } = await getPlanLimits(shop);
+    
+    // Check if sitemap exists
+    const existingSitemap = await Sitemap.findOne({ shop }).lean();
     
     // Get actual product count
     const countData = await shopGraphQL(shop, `
@@ -299,7 +325,10 @@ async function handleInfo(req, res) {
         aiOptimized: true,
         structuredData: true
       },
-      url: 'https://' + shop + '/sitemap.xml'
+      url: `https://${shop}/sitemap.xml`,
+      generated: !!existingSitemap,
+      generatedAt: existingSitemap?.generatedAt || null,
+      lastProductCount: existingSitemap?.productCount || 0
     });
     
   } catch (err) {
@@ -314,10 +343,41 @@ async function handleProgress(req, res) {
   res.json({ status: 'completed', progress: 100 });
 }
 
+// Add new function to serve saved sitemap
+async function serveSitemap(req, res) {
+  try {
+    const shop = normalizeShop(req.query.shop || req.params.shop);
+    if (!shop) {
+      return res.status(400).send('Missing shop parameter');
+    }
+    
+    // Get saved sitemap with content
+    const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean();
+    
+    if (!sitemapDoc || !sitemapDoc.content) {
+      return res.status(404).send('Sitemap not found. Please generate it first.');
+    }
+    
+    // Serve the saved sitemap
+    res.set({
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+      'Last-Modified': new Date(sitemapDoc.generatedAt).toUTCString()
+    });
+    res.send(sitemapDoc.content);
+    
+  } catch (err) {
+    console.error('[SITEMAP] Serve error:', err);
+    res.status(500).send('Failed to serve sitemap');
+  }
+}
+
 // Mount routes on router
-router.get('/generate', handleGenerate);
+router.get('/generate', serveSitemap); // GET returns saved sitemap
+router.post('/generate', handleGenerate); // POST generates new sitemap
 router.get('/info', handleInfo);
 router.get('/progress', handleProgress);
+router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 
 // POST /generate - redirect to GET for compatibility
 router.post('/generate', (req, res) => {
@@ -334,14 +394,7 @@ export const sitemapController = {
   getInfo: handleInfo,
   generate: handleGenerate,
   getProgress: handleProgress,
-  serve: (req, res) => {
-    const shop = req.params.shop || req.query.shop;
-    if (shop) {
-      res.redirect(301, '/api/sitemap/generate?shop=' + encodeURIComponent(shop));
-    } else {
-      res.status(404).send('Shop not specified');
-    }
-  }
+  serve: serveSitemap // Use the new serveSitemap function
 };
 
 export default router;
