@@ -74,10 +74,10 @@ async function getPlanLimits(shop) {
   }
 }
 
-// GET /api/sitemap/generate
-router.get('/generate', async (req, res) => {
+// Handler functions
+async function handleGenerate(req, res) {
   try {
-    const shop = normalizeShop(req.query.shop);
+    const shop = normalizeShop(req.query.shop || req.body.shop);
     if (!shop) {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
@@ -261,10 +261,9 @@ router.get('/generate', async (req, res) => {
       error: err.message || 'Failed to generate sitemap' 
     });
   }
-});
+}
 
-// GET /api/sitemap/info
-router.get('/info', async (req, res) => {
+async function handleInfo(req, res) {
   try {
     const shop = normalizeShop(req.query.shop);
     if (!shop) {
@@ -309,24 +308,32 @@ router.get('/info', async (req, res) => {
       error: err.message || 'Failed to get sitemap info' 
     });
   }
-});
+}
 
-// POST /api/sitemap/generate - redirect to GET for compatibility
+async function handleProgress(req, res) {
+  res.json({ status: 'completed', progress: 100 });
+}
+
+// Mount routes on router
+router.get('/generate', handleGenerate);
+router.get('/info', handleInfo);
+router.get('/progress', handleProgress);
+
+// POST /generate - redirect to GET for compatibility
 router.post('/generate', (req, res) => {
   const shop = req.body.shop || req.query.shop;
-  res.redirect(307, '/api/sitemap/generate?shop=' + encodeURIComponent(shop));
-});
-
-// GET /api/sitemap/progress - simple implementation
-router.get('/progress', (req, res) => {
-  res.json({ status: 'completed', progress: 100 });
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  // Just call the handler directly instead of redirect
+  handleGenerate(req, res);
 });
 
 // Export both router and controller for server.js
 export const sitemapController = {
-  getInfo: (req, res) => router.handle(req, res),
-  generate: (req, res) => router.handle(req, res), 
-  getProgress: (req, res) => router.handle(req, res),
+  getInfo: handleInfo,
+  generate: handleGenerate,
+  getProgress: handleProgress,
   serve: (req, res) => {
     const shop = req.params.shop || req.query.shop;
     if (shop) {
