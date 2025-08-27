@@ -98,6 +98,27 @@ async function getPlanLimits(shop) {
   }
 }
 
+// Helper: escape XML special characters
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.replace(/[<>&'"]/g, c => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
+// Helper: clean HTML for XML
+function cleanHtmlForXml(html) {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // Handler functions
 async function handleGenerate(req, res) {
   console.log('[SITEMAP] Generate called');
@@ -170,6 +191,12 @@ async function handleGenerate(req, res) {
                 tags
                 updatedAt
                 publishedAt
+                priceRangeV2 {
+                  minVariantPrice {
+                    amount
+                    currencyCode
+                  }
+                }
                 seo {
                   title
                   description
@@ -218,7 +245,8 @@ async function handleGenerate(req, res) {
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
     xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"\n';
     xml += '        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"\n';
-    xml += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n';
+    xml += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
+    xml += '        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0">\n';
     
     // Homepage with structured data hint
     xml += '  <url>\n';
@@ -234,12 +262,72 @@ async function handleGenerate(req, res) {
       
       const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
       
+      // Parse AI metafields
+      let bullets = null;
+      let faq = null;
+      product.metafields?.edges?.forEach(edge => {
+        const metafield = edge.node;
+        if (metafield.key === 'bullets' && metafield.value) {
+          try { bullets = JSON.parse(metafield.value); } catch {}
+        }
+        if (metafield.key === 'faq' && metafield.value) {
+          try { faq = JSON.parse(metafield.value); } catch {}
+        }
+      });
+      
       // Add product URL with metadata hints for AI
       xml += '  <url>\n';
       xml += '    <loc>' + primaryDomain + '/products/' + product.handle + '</loc>\n';
       xml += '    <lastmod>' + lastmod + '</lastmod>\n';
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.8</priority>\n';
+      
+      // Add AI-optimized metadata
+      xml += '    <ai:product>\n';
+      xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
+      xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
+      
+      if (product.priceRangeV2?.minVariantPrice) {
+        xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+      }
+      
+      if (product.vendor) {
+        xml += '      <ai:brand>' + escapeXml(product.vendor) + '</ai:brand>\n';
+      }
+      
+      if (product.productType) {
+        xml += '      <ai:category>' + escapeXml(product.productType) + '</ai:category>\n';
+      }
+      
+      if (product.tags && product.tags.length > 0) {
+        const tagArray = typeof product.tags === 'string' ? product.tags.split(',').map(t => t.trim()) : product.tags;
+        xml += '      <ai:tags>' + escapeXml(tagArray.join(', ')) + '</ai:tags>\n';
+      }
+      
+      // Add AI-generated bullets
+      if (bullets && Array.isArray(bullets) && bullets.length > 0) {
+        xml += '      <ai:features>\n';
+        bullets.forEach(bullet => {
+          xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+        });
+        xml += '      </ai:features>\n';
+      }
+      
+      // Add AI-generated FAQ
+      if (faq && Array.isArray(faq) && faq.length > 0) {
+        xml += '      <ai:faq>\n';
+        faq.forEach(item => {
+          if (item.q && item.a) {
+            xml += '        <ai:qa>\n';
+            xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
+            xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
+            xml += '        </ai:qa>\n';
+          }
+        });
+        xml += '      </ai:faq>\n';
+      }
+      
+      xml += '    </ai:product>\n';
       
       // Add language alternatives for multilingual AI indexing
       if (locales.length > 1) {
@@ -323,7 +411,7 @@ async function handleGenerate(req, res) {
         { 
           upsert: true, 
           new: true,
-          runValidators: false // Избягвай validation проблеми
+          runValidators: false // Skip validation issues
         }
       );
       
@@ -331,7 +419,7 @@ async function handleGenerate(req, res) {
       console.log('  - Document ID:', sitemapDoc._id);
       console.log('  - Content saved:', !!sitemapDoc.content);
       
-      // Провери дали content-а наистина е запазен
+      // Verify that content is actually saved
       const verification = await Sitemap.findById(sitemapDoc._id).select('+content').lean();
       console.log('[SITEMAP] Verification - content exists:', !!verification?.content);
       console.log('[SITEMAP] Verification - content length:', verification?.content?.length || 0);
@@ -437,14 +525,14 @@ async function serveSitemap(req, res) {
     
     console.log('[SITEMAP] Looking for sitemap for shop:', shop);
     
-    // Get saved sitemap with content - използвай .lean() за по-добра производителност
+    // Get saved sitemap with content - use .lean() for better performance
     const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
     console.log('[SITEMAP] Found sitemap:', !!sitemapDoc);
     console.log('[SITEMAP] Has content:', !!(sitemapDoc?.content));
     console.log('[SITEMAP] Content length:', sitemapDoc?.content?.length || 0);
     
     if (!sitemapDoc || !sitemapDoc.content) {
-      // Опитай да генерираш наново ако няма
+      // Try to generate new one if none exists
       console.log('[SITEMAP] No saved sitemap, returning 404');
       return res.status(404).send('Sitemap not found. Please generate it first.');
     }

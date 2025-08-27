@@ -48,7 +48,7 @@ function useRoute() {
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
-  const isStore = active.startsWith('/store-metadata');
+  // const isStore = active.startsWith('/store-metadata');
   const isBill = active.startsWith('/billing');
   const isSett = active.startsWith('/settings');
 
@@ -56,7 +56,7 @@ function AdminNavMenu({ active }) {
     <ui-nav-menu>
       <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
       <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI Search Optimisation</a>
-      <a href="/store-metadata" {...(isStore ? {'aria-current':'page'} : {})}>Store metadata</a>
+      {/* <a href="/store-metadata" {...(isStore ? {'aria-current':'page'} : {})}>Store metadata</a> //*/}
       <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
       <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
