@@ -71,7 +71,7 @@ import languageRouter from './controllers/languageController.js';  // mounts /ap
 import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
 import debugRouter from './controllers/debugRouter.js';
 import productsRouter from './controllers/productsController.js';
-import { sitemapController } from './controllers/sitemapController.js';
+import sitemapRouter from './controllers/sitemapController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -84,9 +84,7 @@ app.use('/debug', debugRouter);
 app.use('/api/products', productsRouter);
 
 // Sitemap routes
-app.get('/api/sitemap/info', sitemapController.getInfo);
-app.post('/api/sitemap/generate', sitemapController.generate);
-app.get('/api/sitemap/progress', sitemapController.getProgress);
+app.use('/api/sitemap', sitemapRouter);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import

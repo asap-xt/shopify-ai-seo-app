@@ -207,11 +207,18 @@ export default function Sitemap({ shop }) {
                           </Box>
                         </InlineStack>
 
-                        <Box>
-                          <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
-                          <Link url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`} external>
-                            View Sitemap
-                          </Link>
+                        <Box paddingBlockStart="200">
+                          <InlineStack gap="200" align="start">
+                            <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
+                            <Link url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`} external monochrome>
+                              /api/sitemap/generate?shop={shop}
+                            </Link>
+                          </InlineStack>
+                          <Box paddingBlockStart="100">
+                            <Button plain external url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`}>
+                              Open Sitemap →
+                            </Button>
+                          </Box>
                         </Box>
                       </BlockStack>
                     </>
@@ -225,19 +232,19 @@ export default function Sitemap({ shop }) {
               <Text variant="headingMd" as="h4">What's included:</Text>
               <Box paddingBlockStart="200">
                 <BlockStack gap="200">
-                  <InlineStack gap="200">
+                  <InlineStack gap="200" align="start">
                     <Icon source={CheckIcon} tone="positive" />
                     <Text>All active products with structured URLs for AI parsing</Text>
                   </InlineStack>
-                  <InlineStack gap="200">
+                  <InlineStack gap="200" align="start">
                     <Icon source={CheckIcon} tone="positive" />
                     <Text>Priority rankings to help AI models understand product importance</Text>
                   </InlineStack>
-                  <InlineStack gap="200">
+                  <InlineStack gap="200" align="start">
                     <Icon source={CheckIcon} tone="positive" />
                     <Text>Multi-language URLs for international AI search coverage</Text>
                   </InlineStack>
-                  <InlineStack gap="200">
+                  <InlineStack gap="200" align="start">
                     <Icon source={CheckIcon} tone="positive" />
                     <Text>Standard XML format that AI crawlers understand</Text>
                   </InlineStack>

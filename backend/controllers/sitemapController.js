@@ -373,10 +373,10 @@ async function serveSitemap(req, res) {
 }
 
 // Mount routes on router
-router.get('/generate', serveSitemap); // GET returns saved sitemap
-router.post('/generate', handleGenerate); // POST generates new sitemap
 router.get('/info', handleInfo);
 router.get('/progress', handleProgress);
+router.post('/generate', handleGenerate); // POST generates new sitemap
+router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 
 // POST /generate - redirect to GET for compatibility
