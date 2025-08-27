@@ -14,7 +14,7 @@ import {
   Banner,
   Icon,
 } from '@shopify/polaris';
-import { CheckIcon, AlertCircleIcon, ClockIcon } from '@shopify/polaris-icons';
+import { CheckIcon, AlertCircleIcon, ClockIcon, ExternalIcon } from '@shopify/polaris-icons';
 
 export default function Sitemap({ shop }) {
   const [status, setStatus] = useState(null); // null, 'generating', 'success', 'error'
@@ -213,38 +213,51 @@ export default function Sitemap({ shop }) {
                   </InlineStack>
 
                   {sitemapInfo.generated && (
-                    <>
-                      <BlockStack gap="200">
-                        <InlineStack gap="400">
-                          <Box>
-                            <Text variant="bodySm" tone="subdued">Products included:</Text>
-                            <Text variant="bodyMd">{sitemapInfo.lastProductCount || 0} URLs</Text>
-                          </Box>
-                          <Box>
-                            <Text variant="bodySm" tone="subdued">File size:</Text>
-                            <Text variant="bodyMd">{sitemapInfo.size ? `${(sitemapInfo.size / 1024).toFixed(2)} KB` : 'Unknown'}</Text>
-                          </Box>
-                          <Box>
-                            <Text variant="bodySm" tone="subdued">Last updated:</Text>
-                            <Text variant="bodyMd">{formatDate(sitemapInfo.generatedAt)}</Text>
-                          </Box>
-                        </InlineStack>
-
-                        <Box paddingBlockStart="200">
-                          <BlockStack gap="100">
-                            <InlineStack gap="200" blockAlign="start">
-                              <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
-                              <Link url={sitemapUrl} external monochrome>
-                                View Sitemap
-                              </Link>
+                    <BlockStack gap="400">
+                      {/* Info Table */}
+                      <Box>
+                        <BlockStack gap="200">
+                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">Products included</Text>
+                              <Text variant="bodyMd" fontWeight="semibold">{sitemapInfo.lastProductCount || 0} URLs</Text>
                             </InlineStack>
-                            <Text variant="bodySm" tone="subdued" breakWord>
-                              {window.location.origin}{sitemapUrl}
-                            </Text>
-                          </BlockStack>
-                        </Box>
-                      </BlockStack>
-                    </>
+                          </Box>
+                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">File size</Text>
+                              <Text variant="bodyMd" fontWeight="semibold">{sitemapInfo.size ? `${(sitemapInfo.size / 1024).toFixed(2)} KB` : 'Unknown'}</Text>
+                            </InlineStack>
+                          </Box>
+                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">Last updated</Text>
+                              <Text variant="bodyMd" fontWeight="semibold">{formatDate(sitemapInfo.generatedAt)}</Text>
+                            </InlineStack>
+                          </Box>
+                          <Box paddingBlockEnd="200">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">Sitemap URL</Text>
+                              <Text variant="bodyMd" fontWeight="semibold" breakWord>
+                                /api/sitemap/generate?shop={shop}
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                        </BlockStack>
+                      </Box>
+
+                      {/* View Button */}
+                      <Box>
+                        <Button
+                          fullWidth
+                          external
+                          url={sitemapUrl}
+                          icon={ExternalIcon}
+                        >
+                          View Sitemap
+                        </Button>
+                      </Box>
+                    </BlockStack>
                   )}
                 </BlockStack>
               </Box>
