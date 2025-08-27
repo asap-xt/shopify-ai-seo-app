@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
 // Progress tracking (in-memory for simplicity, could use Redis in production)
@@ -31,7 +32,7 @@ async function resolveAdminTokenForShop(shop) {
     const doc = await Shop.findOne({ shop }).lean().exec();
     const tok = doc?.accessToken || doc?.token || doc?.access_token;
     if (tok && String(tok).trim()) return String(tok).trim();
-  } catch { /* ignore */ }
+  } catch (e) { /* ignore */ }
 
   const err = new Error('No Admin API token available for this shop');
   err.status = 400;
@@ -63,9 +64,8 @@ async function shopGraphQL(shop, query, variables = {}) {
 async function getPlanLimits(shop) {
   try {
     const sub = await Subscription.findOne({ shop }).lean().exec();
-    if (!sub) return { limit: 50, plan: 'starter' }; // default to starter limits
+    if (!sub) return { limit: 50, plan: 'starter' };
     
-    // Map plan names to limits
     const planLimits = {
       'free': 50,
       'starter': 50,
@@ -75,7 +75,7 @@ async function getPlanLimits(shop) {
     
     const limit = planLimits[sub.plan?.toLowerCase()] || 50;
     return { limit, plan: sub.plan };
-  } catch {
+  } catch (e) {
     return { limit: 50, plan: 'starter' };
   }
 }
@@ -87,144 +87,108 @@ function formatFileSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
-// Export controller object for compatibility with existing server.js
-export const sitemapController = {
-  // GET /api/sitemap/info
-  async getInfo(req, res) {
-    try {
-      const shop = normalizeShop(req.query.shop);
-      if (!shop) {
-        return res.status(400).json({ error: 'Shop parameter required' });
-      }
-
-      // Check if sitemap exists
-      const sitemapPath = path.join(__dirname, '..', 'public', 'sitemaps', `${shop}-sitemap.xml`);
-      
-      try {
-        const stats = await fs.stat(sitemapPath);
-        const content = await fs.readFile(sitemapPath, 'utf-8');
-        const urlCount = (content.match(/<url>/g) || []).length;
-        
-        // Get product count
-        const countData = await shopGraphQL(shop, `
-          query {
-            productsCount {
-              count
-            }
-          }
-        `);
-
-        res.json({
-          exists: true,
-          lastModified: stats.mtime,
-          fileSize: formatFileSize(stats.size),
-          urlCount,
-          productCount: countData.productsCount?.count || 0,
-          url: `https://${shop}/sitemap.xml`,
-        });
-      } catch (error) {
-        // Sitemap doesn't exist
-        const countData = await shopGraphQL(shop, `
-          query {
-            productsCount {
-              count
-            }
-          }
-        `);
-
-        res.json({
-          exists: false,
-          productCount: countData.productsCount?.count || 0,
-          url: `https://${shop}/sitemap.xml`,
-        });
-      }
-    } catch (error) {
-      console.error('Error getting sitemap info:', error);
-      res.status(500).json({ error: error.message });
+// GET /api/sitemap/info
+router.get('/info', async (req, res) => {
+  try {
+    const shop = normalizeShop(req.query.shop);
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
     }
-  },
 
-  // POST /api/sitemap/generate
-  async generate(req, res) {
+    // Check if sitemap exists
+    const sitemapPath = path.join(__dirname, '..', 'public', 'sitemaps', `${shop}-sitemap.xml`);
+    
     try {
-      const shop = normalizeShop(req.body.shop);
-      if (!shop) {
-        return res.status(400).json({ error: 'Shop parameter required' });
-      }
-
-      // Get plan limit
-      const { limit, plan } = await getPlanLimits(shop);
-
-      // Start generation in background
-      progressStore.set(shop, { status: 'processing', progress: 0 });
-      
-      // Respond immediately
-      res.json({ status: 'started', message: 'Sitemap generation started' });
-
-      // Generate sitemap asynchronously
-      generateSitemapAsync(shop, limit);
-
-    } catch (error) {
-      console.error('Error starting sitemap generation:', error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  // GET /api/sitemap/progress
-  async getProgress(req, res) {
-    try {
-      const shop = normalizeShop(req.query.shop);
-      if (!shop) {
-        return res.status(400).json({ error: 'Shop parameter required' });
-      }
-
-      const progress = progressStore.get(shop) || { status: 'idle', progress: 0 };
-      res.json(progress);
-
-    } catch (error) {
-      console.error('Error getting progress:', error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  // GET /api/sitemap/serve/:shop
-  async serve(req, res) {
-    try {
-      const shop = normalizeShop(req.params.shop || req.query.shop || req.headers.host?.replace('.myshopify.com', ''));
-      if (!shop) {
-        return res.status(404).send('Sitemap not found');
-      }
-      
-      const sitemapPath = path.join(__dirname, '..', 'public', 'sitemaps', `${shop}-sitemap.xml`);
-      
-      // Check if file exists
-      await fs.access(sitemapPath);
-      
-      // Set proper headers
-      res.setHeader('Content-Type', 'application/xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-      
-      // Stream the file
+      const stats = await fs.stat(sitemapPath);
       const content = await fs.readFile(sitemapPath, 'utf-8');
-      res.send(content);
+      const urlCount = (content.match(/<url>/g) || []).length;
       
-    } catch (error) {
-      res.status(404).send('Sitemap not found');
-    }
-  }
-};
+      const countData = await shopGraphQL(shop, `
+        query {
+          productsCount {
+            count
+          }
+        }
+      `);
 
-// Async sitemap generation function
+      res.json({
+        exists: true,
+        lastModified: stats.mtime,
+        fileSize: formatFileSize(stats.size),
+        urlCount,
+        productCount: countData.productsCount?.count || 0,
+        url: `https://${shop}/sitemap.xml`,
+      });
+    } catch (error) {
+      // Sitemap doesn't exist
+      const countData = await shopGraphQL(shop, `
+        query {
+          productsCount {
+            count
+          }
+        }
+      `);
+
+      res.json({
+        exists: false,
+        productCount: countData.productsCount?.count || 0,
+        url: `https://${shop}/sitemap.xml`,
+      });
+    }
+  } catch (error) {
+    console.error('Error getting sitemap info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/sitemap/generate
+router.post('/generate', async (req, res) => {
+  try {
+    const shop = normalizeShop(req.body.shop);
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+
+    const { limit, plan } = await getPlanLimits(shop);
+    progressStore.set(shop, { status: 'processing', progress: 0 });
+    
+    res.json({ status: 'started', message: 'Sitemap generation started' });
+    
+    // Generate sitemap asynchronously
+    generateSitemapAsync(shop, limit);
+
+  } catch (error) {
+    console.error('Error starting sitemap generation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/sitemap/progress
+router.get('/progress', async (req, res) => {
+  try {
+    const shop = normalizeShop(req.query.shop);
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+
+    const progress = progressStore.get(shop) || { status: 'idle', progress: 0 };
+    res.json(progress);
+
+  } catch (error) {
+    console.error('Error getting progress:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Async sitemap generation
 async function generateSitemapAsync(shop, limit) {
   try {
-    // Get shop's primary domain and languages
     const shopInfoData = await shopGraphQL(shop, `
       query {
         shop {
           primaryDomain {
             url
           }
-          enabledPresentmentCurrencies
         }
         shopLocales {
           locale
@@ -233,28 +197,25 @@ async function generateSitemapAsync(shop, limit) {
       }
     `);
 
-    const shopInfo = shopInfoData;
-    const primaryDomain = shopInfo.shop.primaryDomain.url;
-    const locales = shopInfo.shopLocales || [{ locale: 'en', primary: true }];
+    const primaryDomain = shopInfoData.shop.primaryDomain.url;
+    const locales = shopInfoData.shopLocales || [{ locale: 'en', primary: true }];
     const primaryLocale = locales.find(l => l.primary)?.locale || 'en';
 
-    // Start XML
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
     xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n';
 
-    // Add homepage
+    // Homepage
     xml += '  <url>\n';
     xml += `    <loc>${primaryDomain}</loc>\n`;
     xml += '    <changefreq>daily</changefreq>\n';
     xml += '    <priority>1.0</priority>\n';
     xml += '  </url>\n';
 
-    // Fetch products with pagination
+    // Products
     let hasNextPage = true;
     let cursor = null;
     let totalProcessed = 0;
-    const productsToInclude = [];
 
     while (hasNextPage && totalProcessed < limit) {
       const productsData = await shopGraphQL(shop, `
@@ -262,10 +223,8 @@ async function generateSitemapAsync(shop, limit) {
           products(first: $first, after: $cursor, query: "status:ACTIVE") {
             edges {
               node {
-                id
                 handle
                 updatedAt
-                status
                 publishedAt
               }
               cursor
@@ -281,47 +240,44 @@ async function generateSitemapAsync(shop, limit) {
       });
 
       const products = productsData.products;
-      productsToInclude.push(...products.edges.map(e => e.node));
+      
+      for (const edge of products.edges) {
+        const product = edge.node;
+        if (!product.publishedAt) continue;
+
+        const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
+        
+        for (const locale of locales) {
+          const localePrefix = locale.locale === primaryLocale ? '' : `/${locale.locale}`;
+          
+          xml += '  <url>\n';
+          xml += `    <loc>${primaryDomain}${localePrefix}/products/${product.handle}</loc>\n`;
+          xml += `    <lastmod>${lastmod}</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.8</priority>\n';
+          
+          if (locales.length > 1) {
+            for (const altLocale of locales) {
+              const altPrefix = altLocale.locale === primaryLocale ? '' : `/${altLocale.locale}`;
+              xml += `    <xhtml:link rel="alternate" hreflang="${altLocale.locale}" href="${primaryDomain}${altPrefix}/products/${product.handle}"/>\n`;
+            }
+          }
+          
+          xml += '  </url>\n';
+        }
+      }
       
       hasNextPage = products.pageInfo.hasNextPage;
       cursor = products.edges[products.edges.length - 1]?.cursor;
       totalProcessed += products.edges.length;
 
-      // Update progress
-      const progress = Math.round((totalProcessed / limit) * 100);
-      progressStore.set(shop, { status: 'processing', progress });
+      progressStore.set(shop, { 
+        status: 'processing', 
+        progress: Math.round((totalProcessed / limit) * 100) 
+      });
     }
 
-    // Add products to sitemap
-    for (const product of productsToInclude) {
-      // Skip unpublished products
-      if (!product.publishedAt) continue;
-
-      const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
-      
-      // Add URL for each locale
-      for (const locale of locales) {
-        const localePrefix = locale.locale === primaryLocale ? '' : `/${locale.locale}`;
-        
-        xml += '  <url>\n';
-        xml += `    <loc>${primaryDomain}${localePrefix}/products/${product.handle}</loc>\n`;
-        xml += `    <lastmod>${lastmod}</lastmod>\n';
-        xml += '    <changefreq>weekly</changefreq>\n';
-        xml += '    <priority>0.8</priority>\n';
-        
-        // Add alternate language links
-        if (locales.length > 1) {
-          for (const altLocale of locales) {
-            const altPrefix = altLocale.locale === primaryLocale ? '' : `/${altLocale.locale}`;
-            xml += `    <xhtml:link rel="alternate" hreflang="${altLocale.locale}" href="${primaryDomain}${altPrefix}/products/${product.handle}"/>\n`;
-          }
-        }
-        
-        xml += '  </url>\n';
-      }
-    }
-
-    // Add collections
+    // Collections
     const collectionsData = await shopGraphQL(shop, `
       query {
         collections(first: 20, query: "published_status:published") {
@@ -335,16 +291,17 @@ async function generateSitemapAsync(shop, limit) {
       }
     `);
 
-    for (const collection of collectionsData.collections?.edges || []) {
+    for (const edge of collectionsData.collections?.edges || []) {
+      const collection = edge.node;
       xml += '  <url>\n';
-      xml += `    <loc>${primaryDomain}/collections/${collection.node.handle}</loc>\n`;
-      xml += `    <lastmod>${new Date(collection.node.updatedAt).toISOString().split('T')[0]}</lastmod>\n`;
+      xml += `    <loc>${primaryDomain}/collections/${collection.handle}</loc>\n';
+      xml += `    <lastmod>${new Date(collection.updatedAt).toISOString().split('T')[0]}</lastmod>\n';
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.7</priority>\n';
       xml += '  </url>\n';
     }
 
-    // Add standard pages
+    // Standard pages
     const standardPages = ['about-us', 'contact', 'privacy-policy', 'terms-of-service'];
     for (const page of standardPages) {
       xml += '  <url>\n';
@@ -356,66 +313,13 @@ async function generateSitemapAsync(shop, limit) {
 
     xml += '</urlset>';
 
-    // Save sitemap
+    // Save
     const sitemapsDir = path.join(__dirname, '..', 'public', 'sitemaps');
     await fs.mkdir(sitemapsDir, { recursive: true });
     await fs.writeFile(path.join(sitemapsDir, `${shop}-sitemap.xml`), xml);
 
-    // Update progress
     progressStore.set(shop, { status: 'completed', progress: 100 });
-
-    // Save sitemap URL and generation date in metafields
-    try {
-      // Get shop GID
-      const shopData = await shopGraphQL(shop, `
-        query {
-          shop {
-            id
-          }
-        }
-      `);
-      
-      const shopGid = shopData.shop.id;
-      
-      // Save metafields
-      await shopGraphQL(shop, `
-        mutation {
-          metafieldsSet(metafields: [{
-            ownerId: "${shopGid}",
-            namespace: "seo_ai",
-            key: "sitemap_url",
-            type: "single_line_text_field",
-            value: "https://${shop}/apps/ai-seo/sitemap.xml"
-          }, {
-            ownerId: "${shopGid}",
-            namespace: "seo_ai", 
-            key: "sitemap_generated_at",
-            type: "date_time",
-            value: "${new Date().toISOString()}"
-          }, {
-            ownerId: "${shopGid}",
-            namespace: "seo_ai",
-            key: "sitemap_product_count",
-            type: "number_integer",
-            value: "${totalProcessed}"
-          }]) {
-            metafields {
-              id
-              value
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `);
-    } catch (metafieldError) {
-      console.error('Failed to save sitemap metafield:', metafieldError);
-      // Don't fail the whole process - sitemap is already generated
-    }
-
-    // Clean up progress after 5 minutes
+    
     setTimeout(() => progressStore.delete(shop), 5 * 60 * 1000);
 
   } catch (error) {
@@ -427,3 +331,35 @@ async function generateSitemapAsync(shop, limit) {
     });
   }
 }
+
+// Export for server.js compatibility
+export const sitemapController = {
+  getInfo(req, res) {
+    return router.handle(req, res);
+  },
+  generate(req, res) {
+    return router.handle(req, res);
+  },
+  getProgress(req, res) {
+    return router.handle(req, res);
+  },
+  serve(req, res) {
+    const shop = normalizeShop(req.params.shop || req.query.shop || req.headers.host?.replace('.myshopify.com', ''));
+    if (!shop) {
+      return res.status(404).send('Sitemap not found');
+    }
+    
+    const sitemapPath = path.join(__dirname, '..', 'public', 'sitemaps', `${shop}-sitemap.xml`);
+    
+    fs.access(sitemapPath)
+      .then(() => fs.readFile(sitemapPath, 'utf-8'))
+      .then(content => {
+        res.setHeader('Content-Type', 'application/xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.send(content);
+      })
+      .catch(() => res.status(404).send('Sitemap not found'));
+  }
+};
+
+export default router;
