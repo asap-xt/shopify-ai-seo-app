@@ -847,7 +847,8 @@ export default function BulkEdit({ shop: shopProp }) {
               renderItem={renderItem}
               selectedItems={selectedItems}
               onSelectionChange={handleSelectionChange}
-              bulkActions={[]}
+              selectable={true}
+              // bulkActions={bulkActions}
               loading={loading}
               totalItemsCount={totalCount}
               emptyState={emptyState}
