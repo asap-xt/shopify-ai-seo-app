@@ -290,6 +290,9 @@ async function handleGenerate(req, res) {
     
     // Save sitemap info to database
     try {
+      console.log('[SITEMAP] Attempting to save sitemap...');
+      console.log('[SITEMAP] XML size:', Buffer.byteLength(xml, 'utf8'), 'bytes');
+      
       const sitemapDoc = await Sitemap.findOneAndUpdate(
         { shop },
         {
@@ -302,9 +305,22 @@ async function handleGenerate(req, res) {
           status: 'completed',
           content: xml
         },
-        { upsert: true, new: true }
+        { 
+          upsert: true, 
+          new: true,
+          runValidators: false // Избягвай validation проблеми
+        }
       );
-      console.log('[SITEMAP] Saved sitemap for', shop, 'ID:', sitemapDoc._id, 'products:', allProducts.length);
+      
+      console.log('[SITEMAP] Save result:');
+      console.log('  - Document ID:', sitemapDoc._id);
+      console.log('  - Content saved:', !!sitemapDoc.content);
+      
+      // Провери дали content-а наистина е запазен
+      const verification = await Sitemap.findById(sitemapDoc._id).select('+content').lean();
+      console.log('[SITEMAP] Verification - content exists:', !!verification?.content);
+      console.log('[SITEMAP] Verification - content length:', verification?.content?.length || 0);
+      
     } catch (saveErr) {
       console.error('[SITEMAP] Failed to save sitemap info:', saveErr);
       // Continue even if save fails
@@ -406,11 +422,15 @@ async function serveSitemap(req, res) {
     
     console.log('[SITEMAP] Looking for sitemap for shop:', shop);
     
-    // Get saved sitemap with content
-    const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean();
-    console.log('[SITEMAP] Found sitemap:', !!sitemapDoc, 'has content:', !!(sitemapDoc?.content));
+    // Get saved sitemap with content - използвай .lean() за по-добра производителност
+    const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+    console.log('[SITEMAP] Found sitemap:', !!sitemapDoc);
+    console.log('[SITEMAP] Has content:', !!(sitemapDoc?.content));
+    console.log('[SITEMAP] Content length:', sitemapDoc?.content?.length || 0);
     
     if (!sitemapDoc || !sitemapDoc.content) {
+      // Опитай да генерираш наново ако няма
+      console.log('[SITEMAP] No saved sitemap, returning 404');
       return res.status(404).send('Sitemap not found. Please generate it first.');
     }
     
