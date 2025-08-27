@@ -9,6 +9,7 @@ import {
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
 import BulkEdit from './pages/BulkEdit.jsx';
+import Sitemap from './pages/Sitemap.jsx';
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -449,11 +450,7 @@ function AiSearchOptimisationPanel() {
       {selectedTab === 0 ? (
         <BulkEdit shop={shop} />
       ) : selectedTab === 1 ? (
-        <Card>
-          <Box padding="400">
-            <Text>Sitemap generator coming soon...</Text>
-          </Box>
-        </Card>
+        <Sitemap shop={shop} />
       ) : selectedTab === 2 ? (
         <Card>
           <Box padding="400">

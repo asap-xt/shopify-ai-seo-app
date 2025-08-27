@@ -71,6 +71,7 @@ import languageRouter from './controllers/languageController.js';  // mounts /ap
 import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
 import debugRouter from './controllers/debugRouter.js';
 import productsRouter from './controllers/productsController.js';
+import { sitemapController } from './controllers/sitemapController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -81,6 +82,11 @@ app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:p
 app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
 app.use('/debug', debugRouter);
 app.use('/api/products', productsRouter);
+
+// Sitemap routes
+app.get('/api/sitemap/info', sitemapController.getInfo);
+app.post('/api/sitemap/generate', sitemapController.generate);
+app.get('/api/sitemap/progress', sitemapController.getProgress);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
@@ -107,7 +113,7 @@ async function mountOptionalRouters(app) {
     app.use('/ai', feedRouter); // e.g. GET /ai/feed/catalog.ndjson
     console.log('✔ Feed controller mounted');
   } catch {
-    // not present — skip
+    // not present – skip
   }
 
   // Product sync admin endpoint (optional)
@@ -125,7 +131,7 @@ async function mountOptionalRouters(app) {
     });
     console.log('✔ Product sync endpoint mounted');
   } catch {
-    // not present — skip
+    // not present – skip
   }
 }
 
@@ -149,6 +155,12 @@ app.use(
     },
   })
 );
+
+// Public sitemap route
+app.get('/sitemap.xml', (req, res) => {
+  const shop = req.query.shop || req.headers.host?.replace('.myshopify.com', '');
+  sitemapController.serve({ params: { shop } }, res);
+});
 
 // Explicit SPA routes → serve fresh index.html
 const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings'];
@@ -203,7 +215,7 @@ async function start() {
       await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
       console.log('✔ Mongo connected');
     } else {
-      console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
+      console.log('ℹ No MONGODB_URI provided – skipping Mongo connection');
     }
 
     // Mount optional routers before listening
