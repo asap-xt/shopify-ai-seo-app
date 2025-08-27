@@ -39,9 +39,10 @@ export default function Sitemap({ shop }) {
       const data = await response.json();
       if (response.ok) {
         setPlan(data);
+        console.log('[SITEMAP UI] Plan loaded:', data);
       }
     } catch (err) {
-      console.error('Failed to load plan:', err);
+      console.error('[SITEMAP UI] Failed to load plan:', err);
     }
   };
 
@@ -52,12 +53,15 @@ export default function Sitemap({ shop }) {
         credentials: 'include'
       });
       const data = await response.json();
+      console.log('[SITEMAP UI] Info loaded:', data);
+      
       if (response.ok) {
         setSitemapInfo(data);
-        // Проверяваме 'generated' вместо 'exists'
+        // Check 'generated' field
         setStatus(data.generated ? 'success' : null);
       }
     } catch (err) {
+      console.error('[SITEMAP UI] Failed to load sitemap info:', err);
       setToast('Failed to load sitemap info');
     } finally {
       setLoading(false);
@@ -69,6 +73,8 @@ export default function Sitemap({ shop }) {
     setProgress(0);
     
     try {
+      console.log('[SITEMAP UI] Starting generation for shop:', shop);
+      
       // Start generation
       const response = await fetch('/api/sitemap/generate', {
         method: 'POST',
@@ -82,17 +88,16 @@ export default function Sitemap({ shop }) {
         throw new Error(error.error || 'Generation failed');
       }
 
-      // При успешен response
-      if (response.ok) {
-        // Директно презареждаме информацията
-        await loadSitemapInfo();
-        setStatus('success');
-        setToast('Sitemap generated successfully!');
-        setProgress(100);
-        return; // Не е нужно polling
-      }
+      console.log('[SITEMAP UI] Generation successful');
+      
+      // Reload sitemap info
+      await loadSitemapInfo();
+      setStatus('success');
+      setToast('Sitemap generated successfully!');
+      setProgress(100);
 
     } catch (err) {
+      console.error('[SITEMAP UI] Generation error:', err);
       setStatus('error');
       setToast(err.message);
     }
@@ -101,10 +106,10 @@ export default function Sitemap({ shop }) {
   const getPlanLimit = () => {
     if (!plan) return 50;
     switch (plan.plan) {
-      case 'Growth': return 650;  // Променено от 500 на 650
-      case 'Professional': return 300;  // Променено от 100 на 300
-      case 'Growth Extra': return 2000;  // Добавено
-      case 'Enterprise': return 5000;  // Добавено
+      case 'Growth': return 650;
+      case 'Professional': return 300;
+      case 'Growth Extra': return 2000;
+      case 'Enterprise': return 5000;
       default: return 50; // Starter
     }
   };
@@ -114,7 +119,7 @@ export default function Sitemap({ shop }) {
     return new Date(dateString).toLocaleString();
   };
 
-  const sitemapUrl = sitemapInfo?.url || `https://${shop}/sitemap.xml`;
+  const sitemapUrl = `/api/sitemap/generate?shop=${encodeURIComponent(shop)}`;
 
   return (
     <BlockStack gap="400">
@@ -140,14 +145,32 @@ export default function Sitemap({ shop }) {
                 </Text>
               </Box>
               
-              <Button
-                primary
-                onClick={generateSitemap}
-                loading={status === 'generating'}
-                disabled={status === 'generating'}
-              >
-                {status === 'generating' ? 'Generating...' : 'Generate Sitemap'}
-              </Button>
+              {status !== 'success' || !sitemapInfo?.generated ? (
+                <Button
+                  primary
+                  onClick={generateSitemap}
+                  loading={status === 'generating'}
+                  disabled={status === 'generating'}
+                >
+                  {status === 'generating' ? 'Generating...' : 'Generate Sitemap'}
+                </Button>
+              ) : (
+                <InlineStack gap="200">
+                  <Button
+                    onClick={generateSitemap}
+                    loading={status === 'generating'}
+                  >
+                    Regenerate
+                  </Button>
+                  <Button
+                    primary
+                    external
+                    url={sitemapUrl}
+                  >
+                    View Sitemap
+                  </Button>
+                </InlineStack>
+              )}
             </InlineStack>
 
             {/* Progress Bar */}
@@ -165,7 +188,7 @@ export default function Sitemap({ shop }) {
               <Box background="bg-surface-secondary" padding="400" borderRadius="200">
                 <BlockStack gap="300">
                   <InlineStack gap="200" blockAlign="center">
-                    {status === 'success' ? (
+                    {sitemapInfo.generated && status === 'success' ? (
                       <>
                         <Icon source={CheckIcon} tone="success" />
                         <Text variant="bodyMd" fontWeight="semibold" tone="success">
@@ -208,17 +231,17 @@ export default function Sitemap({ shop }) {
                         </InlineStack>
 
                         <Box paddingBlockStart="200">
-                          <InlineStack gap="200" align="start">
-                            <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
-                            <Link url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`} external monochrome>
-                              /api/sitemap/generate?shop={shop}
-                            </Link>
-                          </InlineStack>
-                          <Box paddingBlockStart="100">
-                            <Button plain external url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`}>
-                              Open Sitemap →
-                            </Button>
-                          </Box>
+                          <BlockStack gap="100">
+                            <InlineStack gap="200" blockAlign="start">
+                              <Text variant="bodySm" tone="subdued">Sitemap URL:</Text>
+                              <Link url={sitemapUrl} external monochrome>
+                                View Sitemap
+                              </Link>
+                            </InlineStack>
+                            <Text variant="bodySm" tone="subdued" breakWord>
+                              {window.location.origin}{sitemapUrl}
+                            </Text>
+                          </BlockStack>
                         </Box>
                       </BlockStack>
                     </>
@@ -232,20 +255,28 @@ export default function Sitemap({ shop }) {
               <Text variant="headingMd" as="h4">What's included:</Text>
               <Box paddingBlockStart="200">
                 <BlockStack gap="200">
-                  <InlineStack gap="200" align="start">
-                    <Icon source={CheckIcon} tone="positive" />
+                  <InlineStack gap="200" blockAlign="start">
+                    <Box minWidth="24px">
+                      <Icon source={CheckIcon} tone="positive" />
+                    </Box>
                     <Text>All active products with structured URLs for AI parsing</Text>
                   </InlineStack>
-                  <InlineStack gap="200" align="start">
-                    <Icon source={CheckIcon} tone="positive" />
+                  <InlineStack gap="200" blockAlign="start">
+                    <Box minWidth="24px">
+                      <Icon source={CheckIcon} tone="positive" />
+                    </Box>
                     <Text>Priority rankings to help AI models understand product importance</Text>
                   </InlineStack>
-                  <InlineStack gap="200" align="start">
-                    <Icon source={CheckIcon} tone="positive" />
+                  <InlineStack gap="200" blockAlign="start">
+                    <Box minWidth="24px">
+                      <Icon source={CheckIcon} tone="positive" />
+                    </Box>
                     <Text>Multi-language URLs for international AI search coverage</Text>
                   </InlineStack>
-                  <InlineStack gap="200" align="start">
-                    <Icon source={CheckIcon} tone="positive" />
+                  <InlineStack gap="200" blockAlign="start">
+                    <Box minWidth="24px">
+                      <Icon source={CheckIcon} tone="positive" />
+                    </Box>
                     <Text>Standard XML format that AI crawlers understand</Text>
                   </InlineStack>
                 </BlockStack>

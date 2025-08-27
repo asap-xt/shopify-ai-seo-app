@@ -22,11 +22,25 @@ function normalizeShop(s) {
 
 // Helper: get access token
 async function resolveAdminTokenForShop(shop) {
+  console.log('[SITEMAP] Resolving token for shop:', shop);
   try {
     const doc = await Shop.findOne({ shop }).lean().exec();
+    console.log('[SITEMAP] Shop doc found:', !!doc);
     const tok = doc?.accessToken || doc?.token || doc?.access_token;
-    if (tok && String(tok).trim()) return String(tok).trim();
-  } catch (e) { /* ignore */ }
+    if (tok && String(tok).trim()) {
+      console.log('[SITEMAP] Token found in database');
+      return String(tok).trim();
+    }
+  } catch (e) { 
+    console.error('[SITEMAP] Error finding shop token:', e.message);
+  }
+
+  // Try env fallback
+  const envToken = process.env.SHOPIFY_ACCESS_TOKEN;
+  if (envToken) {
+    console.log('[SITEMAP] Using env fallback token');
+    return envToken;
+  }
 
   const err = new Error('No Admin API token available for this shop');
   err.status = 400;
@@ -37,6 +51,8 @@ async function resolveAdminTokenForShop(shop) {
 async function shopGraphQL(shop, query, variables = {}) {
   const token = await resolveAdminTokenForShop(shop);
   const url = 'https://' + shop + '/admin/api/' + API_VERSION + '/graphql.json';
+  console.log('[SITEMAP] GraphQL request to:', url);
+  
   const rsp = await fetch(url, {
     method: 'POST',
     headers: {
@@ -45,12 +61,16 @@ async function shopGraphQL(shop, query, variables = {}) {
     },
     body: JSON.stringify({ query, variables }),
   });
+  
   const json = await rsp.json().catch(() => ({}));
+  
   if (!rsp.ok || json.errors) {
+    console.error('[SITEMAP] GraphQL errors:', json.errors || json);
     const e = new Error('Admin GraphQL error: ' + JSON.stringify(json.errors || json));
     e.status = rsp.status || 500;
     throw e;
   }
+  
   return json.data;
 }
 
@@ -58,6 +78,8 @@ async function shopGraphQL(shop, query, variables = {}) {
 async function getPlanLimits(shop) {
   try {
     const sub = await Subscription.findOne({ shop }).lean().exec();
+    console.log('[SITEMAP] Subscription found:', !!sub, 'plan:', sub?.plan);
+    
     if (!sub) return { limit: 50, plan: 'starter' };
     
     const planLimits = {
@@ -71,19 +93,28 @@ async function getPlanLimits(shop) {
     const limit = planLimits[sub.plan?.toLowerCase()] || 50;
     return { limit, plan: sub.plan };
   } catch (e) {
+    console.error('[SITEMAP] Error getting plan limits:', e.message);
     return { limit: 50, plan: 'starter' };
   }
 }
 
 // Handler functions
 async function handleGenerate(req, res) {
+  console.log('[SITEMAP] Generate called');
+  console.log('[SITEMAP] Request body:', req.body);
+  console.log('[SITEMAP] Request query:', req.query);
+  
   try {
     const shop = normalizeShop(req.query.shop || req.body.shop);
     if (!shop) {
+      console.error('[SITEMAP] Missing shop parameter');
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
+    console.log('[SITEMAP] Normalized shop:', shop);
+    
     const { limit, plan } = await getPlanLimits(shop);
+    console.log('[SITEMAP] Plan limits:', { limit, plan });
     
     // Get shop info and languages for AI discovery
     const shopQuery = `
@@ -98,9 +129,12 @@ async function handleGenerate(req, res) {
       }
     `;
     
+    console.log('[SITEMAP] Fetching shop data...');
     const shopData = await shopGraphQL(shop, shopQuery);
     const primaryDomain = shopData.shop.primaryDomain.url;
     const locales = shopData.shopLocales || [{ locale: 'en', primary: true }];
+    console.log('[SITEMAP] Primary domain:', primaryDomain);
+    console.log('[SITEMAP] Locales:', locales);
     
     // Fetch products with AI-relevant data
     let allProducts = [];
@@ -144,6 +178,8 @@ async function handleGenerate(req, res) {
       `;
       
       const batchSize = Math.min(50, limit - allProducts.length);
+      console.log('[SITEMAP] Fetching products batch, size:', batchSize, 'cursor:', cursor);
+      
       const data = await shopGraphQL(shop, productsQuery, {
         first: batchSize,
         cursor: cursor
@@ -154,10 +190,13 @@ async function handleGenerate(req, res) {
         hasMore = data.products.pageInfo.hasNextPage;
         const lastEdge = data.products.edges[data.products.edges.length - 1];
         cursor = lastEdge?.cursor;
+        console.log('[SITEMAP] Fetched', data.products.edges.length, 'products, total:', allProducts.length);
       } else {
         hasMore = false;
       }
     }
+    
+    console.log('[SITEMAP] Total products fetched:', allProducts.length);
     
     // Generate AI-optimized XML
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -202,6 +241,7 @@ async function handleGenerate(req, res) {
     
     // Add collections for AI category understanding
     if (['growth', 'professional'].includes(plan?.toLowerCase())) {
+      console.log('[SITEMAP] Including collections for plan:', plan);
       const collectionsQuery = `
         query {
           collections(first: 20, query: "published_status:published") {
@@ -250,7 +290,7 @@ async function handleGenerate(req, res) {
     
     // Save sitemap info to database
     try {
-      await Sitemap.findOneAndUpdate(
+      const sitemapDoc = await Sitemap.findOneAndUpdate(
         { shop },
         {
           shop,
@@ -264,7 +304,7 @@ async function handleGenerate(req, res) {
         },
         { upsert: true, new: true }
       );
-      console.log(`[SITEMAP] Saved sitemap for ${shop}, ${allProducts.length} products`);
+      console.log('[SITEMAP] Saved sitemap for', shop, 'ID:', sitemapDoc._id, 'products:', allProducts.length);
     } catch (saveErr) {
       console.error('[SITEMAP] Failed to save sitemap info:', saveErr);
       // Continue even if save fails
@@ -287,16 +327,21 @@ async function handleGenerate(req, res) {
 }
 
 async function handleInfo(req, res) {
+  console.log('[SITEMAP] Info called, query:', req.query);
+  
   try {
     const shop = normalizeShop(req.query.shop);
     if (!shop) {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
+    console.log('[SITEMAP] Getting info for shop:', shop);
+    
     const { limit, plan } = await getPlanLimits(shop);
     
     // Check if sitemap exists
-    const existingSitemap = await Sitemap.findOne({ shop }).lean();
+    const existingSitemap = await Sitemap.findOne({ shop }).select('-content').lean();
+    console.log('[SITEMAP] Existing sitemap found:', !!existingSitemap);
     
     // Get actual product count
     const countData = await shopGraphQL(shop, `
@@ -310,7 +355,7 @@ async function handleInfo(req, res) {
     const productCount = countData.productsCount?.count || 0;
     const includesCollections = ['growth', 'professional'].includes(plan?.toLowerCase());
     
-    return res.json({
+    const response = {
       shop,
       plan,
       productCount,
@@ -328,8 +373,12 @@ async function handleInfo(req, res) {
       url: `https://${shop}/sitemap.xml`,
       generated: !!existingSitemap,
       generatedAt: existingSitemap?.generatedAt || null,
-      lastProductCount: existingSitemap?.productCount || 0
-    });
+      lastProductCount: existingSitemap?.productCount || 0,
+      size: existingSitemap?.size || 0
+    };
+    
+    console.log('[SITEMAP] Returning info:', response);
+    return res.json(response);
     
   } catch (err) {
     console.error('[SITEMAP] Info error:', err);
@@ -340,19 +389,26 @@ async function handleInfo(req, res) {
 }
 
 async function handleProgress(req, res) {
+  // Simple implementation - sitemap generation is synchronous
   res.json({ status: 'completed', progress: 100 });
 }
 
 // Add new function to serve saved sitemap
 async function serveSitemap(req, res) {
+  console.log('[SITEMAP] Serve sitemap called, query:', req.query);
+  
   try {
     const shop = normalizeShop(req.query.shop || req.params.shop);
     if (!shop) {
+      console.error('[SITEMAP] Missing shop parameter');
       return res.status(400).send('Missing shop parameter');
     }
     
+    console.log('[SITEMAP] Looking for sitemap for shop:', shop);
+    
     // Get saved sitemap with content
     const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean();
+    console.log('[SITEMAP] Found sitemap:', !!sitemapDoc, 'has content:', !!(sitemapDoc?.content));
     
     if (!sitemapDoc || !sitemapDoc.content) {
       return res.status(404).send('Sitemap not found. Please generate it first.');
@@ -379,22 +435,10 @@ router.post('/generate', handleGenerate); // POST generates new sitemap
 router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 
-// POST /generate - redirect to GET for compatibility
+// POST /generate - also handle body shop parameter
 router.post('/generate', (req, res) => {
-  const shop = req.body.shop || req.query.shop;
-  if (!shop) {
-    return res.status(400).json({ error: 'Missing shop parameter' });
-  }
-  // Just call the handler directly instead of redirect
   handleGenerate(req, res);
 });
 
-// Export both router and controller for server.js
-export const sitemapController = {
-  getInfo: handleInfo,
-  generate: handleGenerate,
-  getProgress: handleProgress,
-  serve: serveSitemap // Use the new serveSitemap function
-};
-
+// Export default router
 export default router;
