@@ -41,4 +41,48 @@ export async function fetchProducts(shop, accessToken) {
   return response.body.products;
 }
 
+// Get shop from session (for controllers that use res.locals)
+export function getShopFromSession(req) {
+  return req.res?.locals?.shopify?.session?.shop || 
+         req.query?.shop || 
+         req.body?.shop || 
+         null;
+}
+
+// GraphQL helper function for shop-level queries
+export async function shopGraphQL(shop, query, variables = {}) {
+  // First try to get token from session
+  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  
+  // Otherwise use environment token (single-tenant setup)
+  const token = sessionToken || 
+                process.env.SHOPIFY_ADMIN_API_TOKEN ||
+                process.env.SHOPIFY_ACCESS_TOKEN ||
+                process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+
+  if (!token) {
+    throw new Error('No Shopify Admin API token available');
+  }
+
+  const client = new shopify.clients.Graphql({ shop, accessToken: token });
+  
+  try {
+    const response = await client.query({
+      data: {
+        query,
+        variables
+      }
+    });
+    
+    if (response.body.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(response.body.errors)}`);
+    }
+    
+    return response.body.data;
+  } catch (error) {
+    console.error('GraphQL query error:', error);
+    throw error;
+  }
+}
+
 export default shopify;

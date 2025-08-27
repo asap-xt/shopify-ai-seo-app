@@ -72,6 +72,7 @@ import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /ap
 import debugRouter from './controllers/debugRouter.js';
 import productsRouter from './controllers/productsController.js';
 import sitemapRouter from './controllers/sitemapController.js';
+import storeRouter from './controllers/storeController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -85,6 +86,9 @@ app.use('/api/products', productsRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);
+
+// Store metadata routes
+app.use('/api/store', storeRouter);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
@@ -111,7 +115,7 @@ async function mountOptionalRouters(app) {
     app.use('/ai', feedRouter); // e.g. GET /ai/feed/catalog.ndjson
     console.log('✔ Feed controller mounted');
   } catch {
-    // not present — skip
+    // not present – skip
   }
 
   // Product sync admin endpoint (optional)
@@ -129,7 +133,7 @@ async function mountOptionalRouters(app) {
     });
     console.log('✔ Product sync endpoint mounted');
   } catch {
-    // not present — skip
+    // not present – skip
   }
 }
 
@@ -165,7 +169,7 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 // Explicit SPA routes → serve fresh index.html
-const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings'];
+const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings', '/store-metadata'];
 spaRoutes.forEach((route) => {
   app.get(route, (_req, res) => {
     res.set('Cache-Control', 'no-store');

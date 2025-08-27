@@ -10,6 +10,7 @@ import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
 import BulkEdit from './pages/BulkEdit.jsx';
 import Sitemap from './pages/Sitemap.jsx';
+import StoreMetadata from './pages/StoreMetadata.jsx';
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -47,6 +48,7 @@ function useRoute() {
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
+  const isStore = active.startsWith('/store-metadata');
   const isBill = active.startsWith('/billing');
   const isSett = active.startsWith('/settings');
 
@@ -54,6 +56,7 @@ function AdminNavMenu({ active }) {
     <ui-nav-menu>
       <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
       <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI Search Optimisation</a>
+      <a href="/store-metadata" {...(isStore ? {'aria-current':'page'} : {})}>Store metadata</a>
       <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
       <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
@@ -417,7 +420,7 @@ function AiSearchOptimisationPanel() {
   const [selectedTab, setSelectedTab] = useState(0);
   
   const tabs = [
-    // ЗАКОМЕНТИРАН Single Product таб
+    // ЗАКОМЕНТИРАНО Single Product таб
     // {
     //   id: 'single-product',
     //   content: 'Single Product',
@@ -434,9 +437,9 @@ function AiSearchOptimisationPanel() {
       panelID: 'sitemap-panel',
     },
     {
-      id: 'store-seo',
-      content: 'Store SEO',
-      panelID: 'store-seo-panel',
+      id: 'store-metadata',
+      content: 'Store metadata for AI search',
+      panelID: 'store-metadata-panel',
     },
     {
       id: 'schema-data',
@@ -452,11 +455,7 @@ function AiSearchOptimisationPanel() {
       ) : selectedTab === 1 ? (
         <Sitemap shop={shop} />
       ) : selectedTab === 2 ? (
-        <Card>
-          <Box padding="400">
-            <Text>Store SEO settings coming soon...</Text>
-          </Box>
-        </Card>
+        <StoreMetadata shop={shop} />
       ) : (
         <Card>
           <Box padding="400">
@@ -475,6 +474,7 @@ export default function App() {
 
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
+    if (path.startsWith('/store-metadata')) return 'Store Metadata';
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
     return 'Dashboard';
@@ -488,6 +488,8 @@ export default function App() {
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
           {path.startsWith('/ai-seo') ? (
             <AiSearchOptimisationPanel />
+          ) : path.startsWith('/store-metadata') ? (
+            <StoreMetadata shop={qs('shop', '')} />
           ) : path.startsWith('/billing') ? (
             <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
           ) : path.startsWith('/settings') ? (

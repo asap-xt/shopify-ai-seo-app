@@ -12,7 +12,7 @@ api_version = "2025-07"
 redirect_urls = ["https://new-ai-seo-app-production.up.railway.app/auth/callback"]
 
 [access_scopes]
-scopes = "read_products,write_products,read_locales,read_translations"
+scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,write_metafields,read_metafields,read_metaobjects,write_metaobjects"
 
 [pos]
 embedded = false
