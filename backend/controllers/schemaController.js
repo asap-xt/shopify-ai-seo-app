@@ -1,5 +1,6 @@
 // backend/controllers/schemaController.js
 import express from 'express';
+import fetch from 'node-fetch';
 
 const router = express.Router();
 
@@ -11,8 +12,44 @@ function normalizeShop(shop) {
   return s;
 }
 
+// Resolve access token - same pattern as seoController.js
+async function resolveAccessToken(shop) {
+  // First try to get from database (if you have MongoDB)
+  try {
+    const Shop = (await import('../models/Shop.js')).default;
+    const shopDoc = await Shop.findOne({ shop });
+    if (shopDoc?.accessToken) return shopDoc.accessToken;
+  } catch (err) {
+    // No DB available, continue to env fallback
+    console.log('Shop model not available, using env token');
+  }
+  
+  // Fallback to env variable
+  return process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || null;
+}
+
+// Admin GraphQL helper
+async function shopGraphQL(shop, query, variables = {}) {
+  const accessToken = await resolveAccessToken(shop);
+  if (!accessToken) throw new Error('No access token available');
+  
+  const url = `https://${shop}/admin/api/2025-07/graphql.json`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  
+  const data = await response.json();
+  if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL error');
+  return data.data;
+}
+
 // Helper to get shop's primary locale
-async function getShopLocale(shop, accessToken) {
+async function getShopLocale(shop) {
   try {
     const query = `
       query {
@@ -28,21 +65,12 @@ async function getShopLocale(shop, accessToken) {
       }
     `;
     
-    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query })
-    });
-    
-    const data = await response.json();
+    const data = await shopGraphQL(shop, query);
     return {
-      url: data.data?.shop?.primaryDomain?.url || `https://${shop}`,
-      currency: data.data?.shop?.currencyCode || 'USD',
-      language: data.data?.localization?.primaryLanguage?.isoCode || 'en',
-      languages: data.data?.localization?.availableLanguages || []
+      url: data?.shop?.primaryDomain?.url || `https://${shop}`,
+      currency: data?.shop?.currencyCode || 'USD',
+      language: data?.localization?.primaryLanguage?.isoCode || 'en',
+      languages: data?.localization?.availableLanguages || []
     };
   } catch (err) {
     console.error('Failed to get shop locale:', err);
@@ -63,10 +91,13 @@ router.get('/api/schema/preview', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Missing shop parameter' });
     }
 
-    // Get access token (you'll need to implement this based on your auth)
-    const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-    if (!accessToken) {
-      return res.status(401).json({ ok: false, error: 'Access token not configured' });
+    // Check if we have access token
+    const hasToken = await resolveAccessToken(shop);
+    if (!hasToken) {
+      return res.status(401).json({ 
+        ok: false, 
+        error: 'Access token not configured. Please ensure SHOPIFY_ADMIN_API_ACCESS_TOKEN is set in your environment or shop is authenticated.' 
+      });
     }
 
     // Fetch store metadata
@@ -91,24 +122,14 @@ router.get('/api/schema/preview', async (req, res) => {
       }
     `;
 
-    const storeResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: storeMetaQuery })
-    });
-
-    const storeData = await storeResponse.json();
-    const shopInfo = storeData.data?.shop;
-    const localeInfo = await getShopLocale(shop, accessToken);
+    const shopInfo = await shopGraphQL(shop, storeMetaQuery);
+    const localeInfo = await getShopLocale(shop);
 
     // Parse store metadata if exists
     let storeMetadata = {};
-    if (shopInfo?.metafield?.value) {
+    if (shopInfo?.shop?.metafield?.value) {
       try {
-        storeMetadata = JSON.parse(shopInfo.metafield.value);
+        storeMetadata = JSON.parse(shopInfo.shop.metafield.value);
       } catch (e) {
         console.error('Failed to parse store metadata:', e);
       }
@@ -118,11 +139,11 @@ router.get('/api/schema/preview', async (req, res) => {
     const organizationSchema = {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: storeMetadata.businessName || shopInfo?.name || shop,
+      name: storeMetadata.businessName || shopInfo?.shop?.name || shop,
       url: localeInfo.url,
-      ...(shopInfo?.brand?.logo?.image?.url && { logo: shopInfo.brand.logo.image.url }),
+      ...(shopInfo?.shop?.brand?.logo?.image?.url && { logo: shopInfo.shop.brand.logo.image.url }),
       ...(storeMetadata.description && { description: storeMetadata.description }),
-      ...(shopInfo?.email && { email: shopInfo.email }),
+      ...(shopInfo?.shop?.email && { email: shopInfo.shop.email }),
       contactPoint: {
         '@type': 'ContactPoint',
         telephone: storeMetadata.phone || '',
@@ -140,10 +161,10 @@ router.get('/api/schema/preview', async (req, res) => {
         storeMetadata.instagram,
         storeMetadata.twitter,
         storeMetadata.youtube,
-        shopInfo?.brand?.socialMediaProfiles?.facebook?.url,
-        shopInfo?.brand?.socialMediaProfiles?.instagram?.url,
-        shopInfo?.brand?.socialMediaProfiles?.twitter?.url,
-        shopInfo?.brand?.socialMediaProfiles?.youtube?.url
+        shopInfo?.shop?.brand?.socialMediaProfiles?.facebook?.url,
+        shopInfo?.shop?.brand?.socialMediaProfiles?.instagram?.url,
+        shopInfo?.shop?.brand?.socialMediaProfiles?.twitter?.url,
+        shopInfo?.shop?.brand?.socialMediaProfiles?.youtube?.url
       ].filter(Boolean),
       ...(storeMetadata.address && {
         address: {
@@ -160,7 +181,7 @@ router.get('/api/schema/preview', async (req, res) => {
     const websiteSchema = {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: storeMetadata.businessName || shopInfo?.name || shop,
+      name: storeMetadata.businessName || shopInfo?.shop?.name || shop,
       url: localeInfo.url,
       potentialAction: {
         '@type': 'SearchAction',
@@ -189,17 +210,8 @@ router.get('/api/schema/preview', async (req, res) => {
       }
     `;
 
-    const productResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: productCountQuery })
-    });
-
-    const productData = await productResponse.json();
-    const products = productData.data?.products?.edges || [];
+    const productData = await shopGraphQL(shop, productCountQuery);
+    const products = productData?.products?.edges || [];
 
     res.json({
       ok: true,
@@ -241,8 +253,6 @@ router.get('/api/schema/validate', async (req, res) => {
     if (!shop) {
       return res.status(400).json({ ok: false, error: 'Missing shop parameter' });
     }
-
-    const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
     
     // Check various aspects of the installation
     const checks = {
@@ -264,19 +274,10 @@ router.get('/api/schema/validate', async (req, res) => {
       }
     `;
 
-    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: metaQuery })
-    });
-
-    const data = await response.json();
+    const data = await shopGraphQL(shop, metaQuery);
     
-    checks.hasStoreMetadata = !!data.data?.shop?.metafield?.value;
-    checks.hasProductsWithSEO = (data.data?.products?.edges?.length || 0) > 0;
+    checks.hasStoreMetadata = !!data?.shop?.metafield?.value;
+    checks.hasProductsWithSEO = (data?.products?.edges?.length || 0) > 0;
     
     // Note: We can't directly check theme files, but we can provide guidance
     checks.hasThemeInstallation = 'manual_check_required';
