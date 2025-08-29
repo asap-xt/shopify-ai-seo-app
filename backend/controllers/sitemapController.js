@@ -201,13 +201,11 @@ async function handleGenerate(req, res) {
                   title
                   description
                 }
-                metafields(namespace: "seo_ai", first: 10) {
-                  edges {
-                    node {
-                      key
-                      value
-                    }
-                  }
+                metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") {
+                  value
+                }
+                metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") {
+                  value
                 }
               }
               cursor
@@ -262,18 +260,15 @@ async function handleGenerate(req, res) {
       
       const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
       
-      // Parse AI metafields
+      // Parse AI metafields directly from aliased fields
       let bullets = null;
       let faq = null;
-      product.metafields?.edges?.forEach(edge => {
-        const metafield = edge.node;
-        if (metafield.key === 'bullets' && metafield.value) {
-          try { bullets = JSON.parse(metafield.value); } catch {}
-        }
-        if (metafield.key === 'faq' && metafield.value) {
-          try { faq = JSON.parse(metafield.value); } catch {}
-        }
-      });
+      if (product.metafield_seo_ai_bullets?.value) {
+        try { bullets = JSON.parse(product.metafield_seo_ai_bullets.value); } catch {}
+      }
+      if (product.metafield_seo_ai_faq?.value) {
+        try { faq = JSON.parse(product.metafield_seo_ai_faq.value); } catch {}
+      }
       
       // Add product URL with metadata hints for AI
       xml += '  <url>\n';
