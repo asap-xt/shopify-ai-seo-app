@@ -24,8 +24,12 @@ async function resolveAccessToken(shop) {
     console.log('Shop model not available, using env token');
   }
   
-  // Fallback to env variable
-  return process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || null;
+  // Check both possible env variable names (like in seoController.js)
+  const token = 
+    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
+    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
+    
+  return token || null;
 }
 
 // Admin GraphQL helper
