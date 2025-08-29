@@ -1,0 +1,400 @@
+// frontend/src/pages/SchemaData.jsx
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  Box,
+  Text,
+  Button,
+  InlineStack,
+  Banner,
+  Link,
+  Toast,
+  BlockStack,
+  Tabs,
+  TextField,
+  Spinner,
+  Badge,
+  List,
+  Divider
+} from '@shopify/polaris';
+
+export default function SchemaData({ shop }) {
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [schemas, setSchemas] = useState({
+    organization: null,
+    website: null,
+    products: []
+  });
+  const [validationResults, setValidationResults] = useState(null);
+  const [toastContent, setToastContent] = useState('');
+  const [schemaScript, setSchemaScript] = useState('');
+
+  useEffect(() => {
+    if (shop) {
+      loadSchemas();
+    }
+  }, [shop]);
+
+  const loadSchemas = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/schema/preview?shop=${encodeURIComponent(shop)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (data.ok) {
+        setSchemas(data.schemas);
+        generateSchemaScript(data.schemas);
+      } else {
+        setToastContent(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      setToastContent(`Failed to load schemas: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateSchemaScript = (schemaData) => {
+    const allSchemas = [];
+    
+    if (schemaData.organization) {
+      allSchemas.push(schemaData.organization);
+    }
+    
+    if (schemaData.website) {
+      allSchemas.push(schemaData.website);
+    }
+    
+    // For products, we'll show instructions to use dynamic generation
+    const script = `<script type="application/ld+json">
+${JSON.stringify(allSchemas, null, 2)}
+</script>`;
+    
+    setSchemaScript(script);
+  };
+
+  const handleValidate = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/schema/validate?shop=${encodeURIComponent(shop)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      setValidationResults(data);
+      setToastContent(data.ok ? 'Validation complete!' : 'Validation found issues');
+    } catch (err) {
+      setToastContent(`Validation failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/schema/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ shop })
+      });
+      const data = await response.json();
+      if (data.ok) {
+        setToastContent('Schemas regenerated successfully!');
+        loadSchemas();
+      } else {
+        setToastContent(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      setToastContent(`Failed to regenerate: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'overview', content: 'Overview', accessibilityLabel: 'Overview' },
+    { id: 'installation', content: 'Installation', accessibilityLabel: 'Installation' },
+    { id: 'validation', content: 'Validation', accessibilityLabel: 'Validation' }
+  ];
+
+  if (loading) {
+    return (
+      <Card>
+        <Box padding="400">
+          <BlockStack gap="400" align="center">
+            <Spinner />
+            <Text>Loading schema data...</Text>
+          </BlockStack>
+        </Box>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <Box padding="400">
+          <BlockStack gap="400">
+            <Text as="h3" variant="headingMd">Schema.org Structured Data</Text>
+            
+            <Banner tone="info">
+              <Text>Schema.org structured data helps search engines understand your store content better, improving your visibility in search results.</Text>
+            </Banner>
+
+            <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+              {selectedTab === 0 && (
+                <Box paddingBlockStart="400">
+                  <BlockStack gap="400">
+                    {/* Organization Schema */}
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <InlineStack align="space-between">
+                            <Text as="h4" variant="headingSm">Organization Schema</Text>
+                            <Badge tone={schemas.organization ? 'success' : 'warning'}>
+                              {schemas.organization ? 'Active' : 'Not configured'}
+                            </Badge>
+                          </InlineStack>
+                          
+                          {schemas.organization && (
+                            <Box background="bg-surface-secondary" padding="200" borderRadius="200">
+                              <pre style={{ fontSize: '12px', overflow: 'auto' }}>
+                                {JSON.stringify(schemas.organization, null, 2)}
+                              </pre>
+                            </Box>
+                          )}
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
+                    {/* Website Schema */}
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <InlineStack align="space-between">
+                            <Text as="h4" variant="headingSm">WebSite Schema</Text>
+                            <Badge tone={schemas.website ? 'success' : 'warning'}>
+                              {schemas.website ? 'Active' : 'Not configured'}
+                            </Badge>
+                          </InlineStack>
+                          
+                          {schemas.website && (
+                            <Box background="bg-surface-secondary" padding="200" borderRadius="200">
+                              <pre style={{ fontSize: '12px', overflow: 'auto' }}>
+                                {JSON.stringify(schemas.website, null, 2)}
+                              </pre>
+                            </Box>
+                          )}
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
+                    {/* Product Schema Info */}
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <InlineStack align="space-between">
+                            <Text as="h4" variant="headingSm">Product Schemas</Text>
+                            <Badge tone="success">Auto-generated</Badge>
+                          </InlineStack>
+                          
+                          <Text tone="subdued">
+                            Product schemas are automatically generated from your AI SEO data when pages load.
+                            {schemas.products.length > 0 && ` ${schemas.products.length} products have SEO data.`}
+                          </Text>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
+                    <InlineStack gap="300">
+                      <Button onClick={handleRegenerate} loading={loading}>
+                        Regenerate Schemas
+                      </Button>
+                      <Button variant="plain" url="https://developers.google.com/search/docs/appearance/structured-data">
+                        Learn about Schema.org
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              )}
+
+              {selectedTab === 1 && (
+                <Box paddingBlockStart="400">
+                  <BlockStack gap="400">
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <Text as="h4" variant="headingSm">Theme Installation</Text>
+                          
+                          <List type="number">
+                            <List.Item>
+                              Go to your Shopify Admin → Online Store → Themes
+                            </List.Item>
+                            <List.Item>
+                              Click "Actions" → "Edit code" on your current theme
+                            </List.Item>
+                            <List.Item>
+                              Open the file: <code>layout/theme.liquid</code>
+                            </List.Item>
+                            <List.Item>
+                              Add this code before the closing <code>&lt;/head&gt;</code> tag:
+                            </List.Item>
+                          </List>
+
+                          <Box background="bg-surface-secondary" padding="200" borderRadius="200">
+                            <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+{`{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
+${schemaScript}
+
+{% comment %} Product Schema - Dynamic {% endcomment %}
+{% if template contains 'product' %}
+  {% assign seo_bullets = product.metafields.seo_ai.bullets %}
+  {% assign seo_faq = product.metafields.seo_ai.faq %}
+  {% assign seo_data = product.metafields.seo_ai['seo__' | append: request.locale.iso_code] | default: product.metafields.seo_ai.seo__en %}
+  
+  {% if seo_data %}
+    <script type="application/ld+json">
+    {{ seo_data.jsonLd | json }}
+    </script>
+  {% endif %}
+{% endif %}`}
+                            </pre>
+                          </Box>
+
+                          <Banner tone="warning">
+                            <Text>Always backup your theme before making changes!</Text>
+                          </Banner>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <Text as="h4" variant="headingSm">Testing Your Installation</Text>
+                          
+                          <List>
+                            <List.Item>
+                              After installation, visit your store's homepage and product pages
+                            </List.Item>
+                            <List.Item>
+                              View the page source (right-click → View Source)
+                            </List.Item>
+                            <List.Item>
+                              Search for <code>application/ld+json</code> to find your schemas
+                            </List.Item>
+                            <List.Item>
+                              Use the Validation tab to test with Google's tools
+                            </List.Item>
+                          </List>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+                  </BlockStack>
+                </Box>
+              )}
+
+              {selectedTab === 2 && (
+                <Box paddingBlockStart="400">
+                  <BlockStack gap="400">
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <Text as="h4" variant="headingSm">Validation Tools</Text>
+                          
+                          <TextField
+                            label="Test URL"
+                            value={`https://${shop}`}
+                            readOnly
+                            helpText="Use this URL to test your schemas in the tools below"
+                          />
+
+                          <Divider />
+
+                          <BlockStack gap="200">
+                            <InlineStack align="space-between">
+                              <Text>Google Rich Results Test</Text>
+                              <Button
+                                url={`https://search.google.com/test/rich-results?url=${encodeURIComponent(`https://${shop}`)}`}
+                                external
+                                variant="plain"
+                              >
+                                Open Tool
+                              </Button>
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>Schema Markup Validator</Text>
+                              <Button
+                                url={`https://validator.schema.org/#url=${encodeURIComponent(`https://${shop}`)}`}
+                                external
+                                variant="plain"
+                              >
+                                Open Tool
+                              </Button>
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>Google Search Console</Text>
+                              <Button
+                                url="https://search.google.com/search-console"
+                                external
+                                variant="plain"
+                              >
+                                Open Console
+                              </Button>
+                            </InlineStack>
+                          </BlockStack>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
+                    {validationResults && (
+                      <Card>
+                        <Box padding="300">
+                          <BlockStack gap="300">
+                            <Text as="h4" variant="headingSm">Internal Validation Results</Text>
+                            
+                            <Badge tone={validationResults.ok ? 'success' : 'warning'}>
+                              {validationResults.ok ? 'All checks passed' : 'Issues found'}
+                            </Badge>
+
+                            {validationResults.checks && (
+                              <List>
+                                {Object.entries(validationResults.checks).map(([key, value]) => (
+                                  <List.Item key={key}>
+                                    <InlineStack gap="200">
+                                      <Text>{key}:</Text>
+                                      <Badge tone={value ? 'success' : 'critical'}>
+                                        {value ? '✓' : '✗'}
+                                      </Badge>
+                                    </InlineStack>
+                                  </List.Item>
+                                ))}
+                              </List>
+                            )}
+                          </BlockStack>
+                        </Box>
+                      </Card>
+                    )}
+
+                    <Button onClick={handleValidate} loading={loading} variant="primary">
+                      Run Validation Check
+                    </Button>
+                  </BlockStack>
+                </Box>
+              )}
+            </Tabs>
+          </BlockStack>
+        </Box>
+      </Card>
+
+      {toastContent && (
+        <Toast content={toastContent} onDismiss={() => setToastContent('')} />
+      )}
+    </>
+  );
+}

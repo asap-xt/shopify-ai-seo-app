@@ -11,6 +11,7 @@ import SideNav from './components/SideNav.jsx';
 import BulkEdit from './pages/BulkEdit.jsx';
 import Sitemap from './pages/Sitemap.jsx';
 import StoreMetadata from './pages/StoreMetadata.jsx';
+import SchemaData from './pages/SchemaData.jsx';
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -457,11 +458,7 @@ function AiSearchOptimisationPanel() {
       ) : selectedTab === 2 ? (
         <StoreMetadata shop={shop} />
       ) : (
-        <Card>
-          <Box padding="400">
-            <Text>Schema Data configuration coming soon...</Text>
-          </Box>
-        </Card>
+        <SchemaData shop={shop} />
       )}
     </Tabs>
   );
