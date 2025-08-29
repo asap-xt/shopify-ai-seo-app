@@ -112,15 +112,6 @@ router.get('/api/schema/preview', async (req, res) => {
           description
           email
           primaryDomain { url }
-          brand {
-            logo { image { url } }
-            socialMediaProfiles {
-              instagram { url }
-              facebook { url }
-              twitter { url }
-              youtube { url }
-            }
-          }
           metafield(namespace: "seo_ai", key: "store_metadata") { value }
         }
       }
@@ -164,7 +155,7 @@ router.get('/api/schema/preview', async (req, res) => {
         storeMetadata.facebook,
         storeMetadata.instagram,
         storeMetadata.twitter,
-        storeMetadata.youtube,
+        storeMetadata.youtube, 
         shopInfo?.shop?.brand?.socialMediaProfiles?.facebook?.url,
         shopInfo?.shop?.brand?.socialMediaProfiles?.instagram?.url,
         shopInfo?.shop?.brand?.socialMediaProfiles?.twitter?.url,
