@@ -141,7 +141,7 @@ ${JSON.stringify(allSchemas, null, 2)}
             <Text as="h3" variant="headingMd">Schema.org Structured Data</Text>
             
             <Banner tone="info">
-              <Text>Schema.org structured data helps search engines understand your store content better, improving your visibility to AI models and search results.</Text>
+              <Text>Schema.org structured data helps AI models understand your store content better, improving your visibility and search results.</Text>
             </Banner>
 
             <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
@@ -445,7 +445,7 @@ ${schemaScript}
                                 
                                 {!validationResults.checks.hasProductsWithSEO && (
                                   <Banner tone="warning">
-                                    <Text>No products have SEO data. Generate SEO for products first.</Text>
+                                    <Text>No products have Optimisation data. Generate AI Optimisation for products first.</Text>
                                   </Banner>
                                 )}
                               </BlockStack>
