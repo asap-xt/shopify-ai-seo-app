@@ -1,4 +1,6 @@
-// backend/controllers/sitemapController.js
+// backend/controllers/sitemapController.js - Enhanced version with debugging
+// Key changes marked with // DEBUG: comments
+
 import express from 'express';
 import fetch from 'node-fetch';
 import Shop from '../db/Shop.js';
@@ -101,7 +103,7 @@ async function getPlanLimits(shop) {
 // Helper: escape XML special characters
 function escapeXml(unsafe) {
   if (!unsafe) return '';
-  return unsafe.replace(/[<>&'"]/g, c => {
+  return String(unsafe).replace(/[<>&'"]/g, c => {
     switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';
@@ -183,6 +185,7 @@ async function handleGenerate(req, res) {
           products(first: $first, after: $cursor, query: "status:active") {
             edges {
               node {
+                id
                 handle
                 title
                 descriptionHtml
@@ -203,9 +206,11 @@ async function handleGenerate(req, res) {
                 }
                 metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") {
                   value
+                  type
                 }
                 metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") {
                   value
+                  type
                 }
               }
               cursor
@@ -238,6 +243,16 @@ async function handleGenerate(req, res) {
     
     console.log('[SITEMAP] Total products fetched:', allProducts.length);
     
+    // DEBUG: Log first product's metafields to check data
+    if (allProducts.length > 0) {
+      const firstProduct = allProducts[0].node;
+      console.log('[DEBUG] First product metafields:');
+      console.log('  - ID:', firstProduct.id);
+      console.log('  - Title:', firstProduct.title);
+      console.log('  - Bullets metafield:', firstProduct.metafield_seo_ai_bullets);
+      console.log('  - FAQ metafield:', firstProduct.metafield_seo_ai_faq);
+    }
+    
     // Generate AI-optimized XML
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
@@ -254,20 +269,46 @@ async function handleGenerate(req, res) {
     xml += '  </url>\n';
     
     // Products with AI hints
+    let debugProductCount = 0;
+    let debugProductsWithBullets = 0;
+    let debugProductsWithFaq = 0;
+    
     for (const edge of allProducts) {
       const product = edge.node;
       if (!product.publishedAt || !product.handle) continue;
       
+      debugProductCount++;
       const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
       
       // Parse AI metafields directly from aliased fields
       let bullets = null;
       let faq = null;
+      
+      // DEBUG: Enhanced parsing with logging
       if (product.metafield_seo_ai_bullets?.value) {
-        try { bullets = JSON.parse(product.metafield_seo_ai_bullets.value); } catch {}
+        try { 
+          bullets = JSON.parse(product.metafield_seo_ai_bullets.value);
+          if (bullets && bullets.length > 0) {
+            debugProductsWithBullets++;
+            console.log(`[DEBUG] Product ${product.id} has ${bullets.length} bullets`);
+          }
+        } catch (e) {
+          console.error(`[DEBUG] Failed to parse bullets for product ${product.id}:`, e.message);
+          console.error('  Raw value:', product.metafield_seo_ai_bullets.value);
+        }
       }
+      
       if (product.metafield_seo_ai_faq?.value) {
-        try { faq = JSON.parse(product.metafield_seo_ai_faq.value); } catch {}
+        try { 
+          faq = JSON.parse(product.metafield_seo_ai_faq.value);
+          if (faq && faq.length > 0) {
+            debugProductsWithFaq++;
+            console.log(`[DEBUG] Product ${product.id} has ${faq.length} FAQ items`);
+          }
+        } catch (e) {
+          console.error(`[DEBUG] Failed to parse FAQ for product ${product.id}:`, e.message);
+          console.error('  Raw value:', product.metafield_seo_ai_faq.value);
+        }
       }
       
       // Add product URL with metadata hints for AI
@@ -303,7 +344,9 @@ async function handleGenerate(req, res) {
       if (bullets && Array.isArray(bullets) && bullets.length > 0) {
         xml += '      <ai:features>\n';
         bullets.forEach(bullet => {
-          xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+          if (bullet && bullet.trim()) { // Extra safety check
+            xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+          }
         });
         xml += '      </ai:features>\n';
       }
@@ -312,7 +355,7 @@ async function handleGenerate(req, res) {
       if (faq && Array.isArray(faq) && faq.length > 0) {
         xml += '      <ai:faq>\n';
         faq.forEach(item => {
-          if (item.q && item.a) {
+          if (item && item.q && item.a) { // Extra safety check
             xml += '        <ai:qa>\n';
             xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
             xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
@@ -337,8 +380,14 @@ async function handleGenerate(req, res) {
       xml += '  </url>\n';
     }
     
+    // DEBUG: Summary statistics
+    console.log('[DEBUG] Sitemap generation summary:');
+    console.log('  - Total products processed:', debugProductCount);
+    console.log('  - Products with bullets:', debugProductsWithBullets);
+    console.log('  - Products with FAQ:', debugProductsWithFaq);
+    
     // Add collections for AI category understanding
-    if (['growth', 'professional'].includes(plan?.toLowerCase())) {
+    if (['growth', 'professional', 'growth_extra', 'enterprise'].includes(plan?.toLowerCase())) {
       console.log('[SITEMAP] Including collections for plan:', plan);
       const collectionsQuery = `
         query {
@@ -467,7 +516,7 @@ async function handleInfo(req, res) {
     `);
     
     const productCount = countData.productsCount?.count || 0;
-    const includesCollections = ['growth', 'professional'].includes(plan?.toLowerCase());
+    const includesCollections = ['growth', 'professional', 'growth_extra', 'enterprise'].includes(plan?.toLowerCase());
     
     const response = {
       shop,
@@ -482,7 +531,9 @@ async function handleInfo(req, res) {
         collections: includesCollections,
         multiLanguage: true,
         aiOptimized: true,
-        structuredData: true
+        structuredData: true,
+        bullets: true,
+        faq: true
       },
       url: `https://${shop}/sitemap.xml`,
       generated: !!existingSitemap,
@@ -552,11 +603,6 @@ router.get('/progress', handleProgress);
 router.post('/generate', handleGenerate); // POST generates new sitemap
 router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
-
-// POST /generate - also handle body shop parameter
-router.post('/generate', (req, res) => {
-  handleGenerate(req, res);
-});
 
 // Export default router
 export default router;
