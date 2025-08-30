@@ -242,6 +242,78 @@ router.post('/api/schema/generate', async (req, res) => {
   }
 });
 
+// GET /api/schema/status
+router.get('/status', async (req, res) => {
+  try {
+    const shop = getShopFromReq(req);
+    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+
+    // Get existing metafields to check what's configured
+    const metafieldsQuery = `{
+      shop {
+        metafields(namespace: "ai_seo_store", first: 10) {
+          edges {
+            node {
+              key
+              value
+            }
+          }
+        }
+      }
+      products(first: 250, query: "metafield_namespace:seo_ai") {
+        pageInfo {
+          hasNextPage
+        }
+        edges {
+          node {
+            id
+          }
+        }
+      }
+    }`;
+
+    const data = await shopGraphQL(shop, metafieldsQuery);
+    
+    // Check which schemas are configured
+    const schemas = {
+      organization: false,
+      localBusiness: false,
+      breadcrumb: false,
+      collections: false
+    };
+    
+    // Parse metafields
+    data?.shop?.metafields?.edges?.forEach(edge => {
+      const node = edge.node;
+      if (node.key === 'organization_schema') {
+        const value = JSON.parse(node.value);
+        schemas.organization = value?.enabled || false;
+      }
+      if (node.key === 'local_business_schema') {
+        const value = JSON.parse(node.value);
+        schemas.localBusiness = value?.enabled || false;
+      }
+      // Add more schema checks as needed
+    });
+    
+    // Count products with SEO
+    const productsWithSchema = data?.products?.edges?.length || 0;
+    
+    res.json({
+      schemas,
+      stats: {
+        productsWithSchema,
+        totalSchemas: Object.values(schemas).filter(v => v).length,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error getting schema status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/schema/validate - Check schema installation
 router.get('/api/schema/validate', async (req, res) => {
   try {

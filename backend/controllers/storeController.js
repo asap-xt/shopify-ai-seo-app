@@ -76,6 +76,11 @@ async function shopGraphQL(shop, query, variables = {}) {
 
 // Load plan data for shop
 async function fetchPlan(shop) {
+  
+  // DEBUG
+  console.log('ENV APP_PLAN:', process.env.APP_PLAN);
+  console.log('All ENV:', Object.keys(process.env).filter(k => k.includes('APP')));
+
   // FIRST: Check environment variable
   const envPlan = process.env.APP_PLAN;
   if (envPlan) {
