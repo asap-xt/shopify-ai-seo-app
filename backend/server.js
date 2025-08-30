@@ -74,6 +74,7 @@ import productsRouter from './controllers/productsController.js';
 import sitemapRouter from './controllers/sitemapController.js';
 import storeRouter from './controllers/storeController.js';
 import schemaRouter from './controllers/schemaController.js';
+import testRouter from './controllers/testController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -85,6 +86,7 @@ app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/app
 app.use('/debug', debugRouter);
 app.use('/api/products', productsRouter);
 app.use(schemaRouter);
+app.use('/api', testRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);

@@ -3,6 +3,7 @@
 // Behavior: Do NOT generate if the product has no real translation for the requested language.
 // All comments are in English.
 
+import { getTestPlanOverride } from './testController.js';
 import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
@@ -70,7 +71,15 @@ const PLAN_PRESETS = {
   },
 };
 
-function resolvePlanForShop(_shop) {
+// След това замени resolvePlanForShop функцията с:
+function resolvePlanForShop(shop) {
+  // Check test override first
+  const testPlan = getTestPlanOverride(shop);
+  if (testPlan && PLAN_PRESETS[testPlan]) {
+    return PLAN_PRESETS[testPlan];
+  }
+  
+  // Normal logic
   const envKey = (process.env.APP_PLAN || '').toLowerCase();
   if (envKey && PLAN_PRESETS[envKey]) return PLAN_PRESETS[envKey];
   return PLAN_PRESETS.growth;

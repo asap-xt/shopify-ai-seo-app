@@ -13,6 +13,7 @@ import Sitemap from './pages/Sitemap.jsx';
 import StoreMetadata from './pages/StoreMetadata.jsx';
 import SchemaData from './pages/SchemaData.jsx';
 import useI18n from './hooks/useI18n.js';
+import TestPlans from './pages/TestPlans.jsx';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
@@ -51,14 +52,16 @@ function AdminNavMenu({ active }) {
   const isSeo  = active.startsWith('/ai-seo');
   // const isStore = active.startsWith('/store-metadata');
   const isBill = active.startsWith('/billing');
+  const isTest = active.startsWith('/test-plans');  // ДОБАВИ ТОВА
   const isSett = active.startsWith('/settings');
 
   return (
     <ui-nav-menu>
       <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
       <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI Search Optimisation</a>
-      {/* <a href="/store-metadata" {...(isStore ? {'aria-current':'page'} : {})}>Store metadata</a> //*/}
+      {/* <a href="/store-metadata" {...(isStore ? {'aria-current':'page'} : {})}>Store metadata</a> */}
       <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href="/test-plans" {...(isTest ? {'aria-current':'page'} : {})}>Test Plans</a>
       <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
   );
@@ -447,21 +450,28 @@ function AiSearchOptimisationPanel() {
       content: 'Schema Data',
       panelID: 'schema-data-panel',
     },
+    {
+      id: 'test-plans',
+      content: 'Test Plans',
+      panelID: 'test-plans-panel',
+    },
   ];
   
-  return (
-    <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
-      {selectedTab === 0 ? (
-        <BulkEdit shop={shop} />
-      ) : selectedTab === 1 ? (
-        <Sitemap shop={shop} />
-      ) : selectedTab === 2 ? (
-        <StoreMetadata shop={shop} />
-      ) : (
-        <SchemaData shop={shop} />
-      )}
-    </Tabs>
-  );
+return (
+  <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+    {selectedTab === 0 ? (
+      <BulkEdit shop={shop} />
+    ) : selectedTab === 1 ? (
+      <Sitemap shop={shop} />
+    ) : selectedTab === 2 ? (
+      <StoreMetadata shop={shop} />
+    ) : selectedTab === 3 ? (
+      <SchemaData shop={shop} />
+    ) : selectedTab === 4 ? (
+      <TestPlans shop={shop} />
+    ) : null}
+  </Tabs>
+);
 }
 
 export default function App() {
