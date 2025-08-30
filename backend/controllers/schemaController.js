@@ -100,11 +100,11 @@ router.get('/api/schema/preview', async (req, res) => {
     if (!hasToken) {
       return res.status(401).json({ 
         ok: false, 
-        error: 'Access token not configured. Please ensure SHOPIFY_ADMIN_API_ACCESS_TOKEN is set in your environment or shop is authenticated.' 
+        error: 'Access token not configured. Please ensure SHOPIFY_ADMIN_API_TOKEN is set in your environment or shop is authenticated.' 
       });
     }
 
-    // Fetch store metadata
+    // Fetch store metadata - UPDATED to use correct namespace and key
     const storeMetaQuery = `
       query {
         shop {
@@ -112,7 +112,9 @@ router.get('/api/schema/preview', async (req, res) => {
           description
           email
           primaryDomain { url }
-          metafield(namespace: "seo_ai", key: "store_metadata") { value }
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
+          aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") { value }
         }
       }
     `;
@@ -120,64 +122,63 @@ router.get('/api/schema/preview', async (req, res) => {
     const shopInfo = await shopGraphQL(shop, storeMetaQuery);
     const localeInfo = await getShopLocale(shop);
 
-    // Parse store metadata if exists
-    let storeMetadata = {};
-    if (shopInfo?.shop?.metafield?.value) {
+    // Parse organization metadata if exists
+    let organizationData = {};
+    if (shopInfo?.shop?.organizationMetafield?.value) {
       try {
-        storeMetadata = JSON.parse(shopInfo.shop.metafield.value);
+        organizationData = JSON.parse(shopInfo.shop.organizationMetafield.value);
+        console.log('Parsed organization data:', organizationData); // DEBUG
       } catch (e) {
-        console.error('Failed to parse store metadata:', e);
+        console.error('Failed to parse organization metadata:', e);
       }
     }
 
-    // Generate Organization schema
-    const organizationSchema = {
+    // Parse SEO metadata if exists
+    let seoData = {};
+    if (shopInfo?.shop?.seoMetafield?.value) {
+      try {
+        seoData = JSON.parse(shopInfo.shop.seoMetafield.value);
+      } catch (e) {
+        console.error('Failed to parse SEO metadata:', e);
+      }
+    }
+
+    // Generate Organization schema - UPDATED to use organizationData structure
+    const organizationSchema = organizationData.enabled ? {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: storeMetadata.businessName || shopInfo?.shop?.name || shop,
+      name: organizationData.name || shopInfo?.shop?.name || shop,
       url: localeInfo.url,
-      ...(shopInfo?.shop?.brand?.logo?.image?.url && { logo: shopInfo.shop.brand.logo.image.url }),
-      ...(storeMetadata.description && { description: storeMetadata.description }),
-      ...(shopInfo?.shop?.email && { email: shopInfo.shop.email }),
-      contactPoint: {
-        '@type': 'ContactPoint',
-        telephone: storeMetadata.phone || '',
-        contactType: 'customer service',
-        ...(localeInfo.languages.length > 1 && {
-          availableLanguage: localeInfo.languages.map(l => ({
-            '@type': 'Language',
-            name: l.name,
-            alternateName: l.isoCode
-          }))
-        })
-      },
-      sameAs: [
-        storeMetadata.facebook,
-        storeMetadata.instagram,
-        storeMetadata.twitter,
-        storeMetadata.youtube, 
-        shopInfo?.shop?.brand?.socialMediaProfiles?.facebook?.url,
-        shopInfo?.shop?.brand?.socialMediaProfiles?.instagram?.url,
-        shopInfo?.shop?.brand?.socialMediaProfiles?.twitter?.url,
-        shopInfo?.shop?.brand?.socialMediaProfiles?.youtube?.url
-      ].filter(Boolean),
-      ...(storeMetadata.address && {
-        address: {
-          '@type': 'PostalAddress',
-          streetAddress: storeMetadata.address,
-          addressLocality: storeMetadata.city,
-          postalCode: storeMetadata.postalCode,
-          addressCountry: storeMetadata.country
+      ...(organizationData.logo && { logo: organizationData.logo }),
+      ...(seoData.description && { description: seoData.description }),
+      ...(organizationData.email && { email: organizationData.email }),
+      ...(organizationData.phone && {
+        contactPoint: {
+          '@type': 'ContactPoint',
+          telephone: organizationData.phone,
+          contactType: 'customer service',
+          ...(localeInfo.languages.length > 1 && {
+            availableLanguage: localeInfo.languages.map(l => ({
+              '@type': 'Language',
+              name: l.name,
+              alternateName: l.isoCode
+            }))
+          })
         }
+      }),
+      // Parse sameAs from comma-separated string to array
+      ...(organizationData.sameAs && {
+        sameAs: organizationData.sameAs.split(',').map(url => url.trim()).filter(Boolean)
       })
-    };
+    } : null;
 
     // Generate WebSite schema
     const websiteSchema = {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: storeMetadata.businessName || shopInfo?.shop?.name || shop,
+      name: organizationData.name || shopInfo?.shop?.name || shop,
       url: localeInfo.url,
+      ...(seoData.description && { description: seoData.description }),
       potentialAction: {
         '@type': 'SearchAction',
         target: {
@@ -257,11 +258,12 @@ router.get('/api/schema/validate', async (req, res) => {
       hasValidSchemas: false
     };
 
-    // Check store metadata
+    // Check store metadata - UPDATED to check organization_schema
     const metaQuery = `
       query {
         shop {
-          metafield(namespace: "seo_ai", key: "store_metadata") { value }
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
         }
         products(first: 10, query: "metafields.seo_ai.bullets:*") {
           edges { node { id } }
@@ -271,7 +273,18 @@ router.get('/api/schema/validate', async (req, res) => {
 
     const data = await shopGraphQL(shop, metaQuery);
     
-    checks.hasStoreMetadata = !!data?.shop?.metafield?.value;
+    // Check if organization schema exists and is enabled
+    let hasOrgSchema = false;
+    if (data?.shop?.organizationMetafield?.value) {
+      try {
+        const orgData = JSON.parse(data.shop.organizationMetafield.value);
+        hasOrgSchema = orgData.enabled === true;
+      } catch (e) {
+        console.error('Failed to parse org schema:', e);
+      }
+    }
+    
+    checks.hasStoreMetadata = hasOrgSchema || !!data?.shop?.seoMetafield?.value;
     checks.hasProductsWithSEO = (data?.products?.edges?.length || 0) > 0;
     
     // Note: We can't directly check theme files, but we can provide guidance
