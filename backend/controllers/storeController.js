@@ -75,6 +75,23 @@ async function shopGraphQL(shop, query, variables = {}) {
 
 // Load plan data for shop
 async function fetchPlan(shop) {
+  // FIRST: Check environment variable
+  const envPlan = process.env.APP_PLAN;
+  if (envPlan) {
+    const planMappings = {
+      'starter': { plan: 'Starter', queryLimit: 50, queryCount: 0, productLimit: 50 },
+      'professional': { plan: 'Professional', queryLimit: 600, queryCount: 0, productLimit: 300 },
+      'growth': { plan: 'Growth', queryLimit: 1500, queryCount: 0, productLimit: 1000 },
+      'growth_extra': { plan: 'Growth Extra', queryLimit: 4000, queryCount: 0, productLimit: 2000 },
+      'enterprise': { plan: 'Enterprise', queryLimit: 10000, queryCount: 0, productLimit: 10000 }
+    };
+    
+    if (planMappings[envPlan.toLowerCase()]) {
+      console.log(`Using APP_PLAN from environment: ${envPlan}`);
+      return planMappings[envPlan.toLowerCase()];
+    }
+  }
+
   // Check if we have MongoDB and Subscription model
   if (mongoose.connection.readyState === 1) {
     try {
@@ -96,10 +113,10 @@ async function fetchPlan(shop) {
   
   // Default plan if no subscription found
   return {
-    plan: 'Starter',
-    queryLimit: 10,
+    plan: 'Growth',  // Changed from Starter to Growth as default
+    queryLimit: 1500,
     queryCount: 0,
-    productLimit: 50
+    productLimit: 1000
   };
 }
 
