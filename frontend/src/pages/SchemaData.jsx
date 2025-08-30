@@ -141,7 +141,7 @@ ${JSON.stringify(allSchemas, null, 2)}
             <Text as="h3" variant="headingMd">Schema.org Structured Data</Text>
             
             <Banner tone="info">
-              <Text>Schema.org structured data helps search engines understand your store content better, improving your visibility in search results.</Text>
+              <Text>Schema.org structured data helps search engines understand your store content better, improving your visibility to AI models and search results.</Text>
             </Banner>
 
             <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
@@ -202,7 +202,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                           </InlineStack>
                           
                           <Text tone="subdued">
-                            Product schemas are automatically generated from your AI SEO data when pages load.
+                            Product schemas are automatically generated from your AI Optimisation data when pages load.
                             {schemas.products.length > 0 && ` ${schemas.products.length} products have SEO data.`}
                           </Text>
                         </BlockStack>
@@ -363,18 +363,92 @@ ${schemaScript}
                             </Badge>
 
                             {validationResults.checks && (
-                              <List>
-                                {Object.entries(validationResults.checks).map(([key, value]) => (
-                                  <List.Item key={key}>
+                              <BlockStack gap="200">
+                                <List>
+                                  <List.Item>
+                                    <InlineStack gap="200" align="space-between">
+                                      <InlineStack gap="200">
+                                        <Text>hasStoreMetadata:</Text>
+                                        <Badge tone={validationResults.checks.hasStoreMetadata ? 'success' : 'critical'}>
+                                          {validationResults.checks.hasStoreMetadata ? '✓' : '✗'}
+                                        </Badge>
+                                      </InlineStack>
+                                      {!validationResults.checks.hasStoreMetadata && (
+                                        <Button 
+                                          size="slim" 
+                                          variant="plain"
+                                          onClick={() => {
+                                            setSelectedTab(0);
+                                            setTimeout(() => {
+                                              const storeTab = document.querySelector('[id="store-metadata"]');
+                                              if (storeTab) storeTab.click();
+                                            }, 100);
+                                          }}
+                                        >
+                                          Add store metadata →
+                                        </Button>
+                                      )}
+                                    </InlineStack>
+                                  </List.Item>
+                                  
+                                  <List.Item>
+                                    <InlineStack gap="200" align="space-between">
+                                      <InlineStack gap="200">
+                                        <Text>hasProductsWithSEO:</Text>
+                                        <Badge tone={validationResults.checks.hasProductsWithSEO ? 'success' : 'critical'}>
+                                          {validationResults.checks.hasProductsWithSEO ? '✓' : '✗'}
+                                        </Badge>
+                                      </InlineStack>
+                                      {!validationResults.checks.hasProductsWithSEO && (
+                                        <Button 
+                                          size="slim" 
+                                          variant="plain"
+                                          onClick={() => {
+                                            setSelectedTab(0);
+                                            setTimeout(() => {
+                                              const productsTab = document.querySelector('[id="products"]');
+                                              if (productsTab) productsTab.click();
+                                            }, 100);
+                                          }}
+                                        >
+                                          Generate product SEO →
+                                        </Button>
+                                      )}
+                                    </InlineStack>
+                                  </List.Item>
+                                  
+                                  <List.Item>
                                     <InlineStack gap="200">
-                                      <Text>{key}:</Text>
-                                      <Badge tone={value ? 'success' : 'critical'}>
-                                        {value ? '✓' : '✗'}
+                                      <Text>hasThemeInstallation:</Text>
+                                      <Badge tone={validationResults.checks.hasThemeInstallation === 'manual_check_required' ? 'info' : 'success'}>
+                                        {validationResults.checks.hasThemeInstallation === 'manual_check_required' ? '?' : '✓'}
+                                      </Badge>
+                                      <Text tone="subdued" variant="bodySm">Manual check required</Text>
+                                    </InlineStack>
+                                  </List.Item>
+                                  
+                                  <List.Item>
+                                    <InlineStack gap="200">
+                                      <Text>hasValidSchemas:</Text>
+                                      <Badge tone={validationResults.checks.hasValidSchemas ? 'success' : 'critical'}>
+                                        {validationResults.checks.hasValidSchemas ? '✓' : '✗'}
                                       </Badge>
                                     </InlineStack>
                                   </List.Item>
-                                ))}
-                              </List>
+                                </List>
+                                
+                                {!validationResults.checks.hasStoreMetadata && (
+                                  <Banner tone="warning">
+                                    <Text>Missing store metadata. This is needed for Organization schema.</Text>
+                                  </Banner>
+                                )}
+                                
+                                {!validationResults.checks.hasProductsWithSEO && (
+                                  <Banner tone="warning">
+                                    <Text>No products have SEO data. Generate SEO for products first.</Text>
+                                  </Banner>
+                                )}
+                              </BlockStack>
                             )}
                           </BlockStack>
                         </Box>
