@@ -16,7 +16,13 @@ const Collections = ({ shop }) => {
   const [seoResults, setSeoResults] = useState({});
   const [model, setModel] = useState('');
   const [models, setModels] = useState([]);
-  const [language, setLanguage] = useState('en');
+  
+  // Language states - динамични от магазина
+  const [language, setLanguage] = useState('all');
+  const [shopLanguages, setShopLanguages] = useState([]);
+  const [primaryLanguage, setPrimaryLanguage] = useState('en');
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
 
@@ -34,14 +40,37 @@ const Collections = ({ shop }) => {
       .catch(e => console.error('Failed to load models:', e));
   }, [shop]);
 
-  // Load collections
+  // Load shop languages
+  useEffect(() => {
+    if (!shop) return;
+    
+    fetch(`/api/languages/shop/${encodeURIComponent(shop)}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.shopLanguages && data.shopLanguages.length > 0) {
+          setShopLanguages(data.shopLanguages);
+          setPrimaryLanguage(data.primaryLanguage || data.shopLanguages[0] || 'en');
+          setShowLanguageSelector(data.shopLanguages.length > 1);
+          
+          // Set default language
+          if (data.shopLanguages.length === 1) {
+            setLanguage(data.shopLanguages[0]);
+          } else {
+            setLanguage('all');
+          }
+        }
+      })
+      .catch(e => console.error('Failed to load languages:', e));
+  }, [shop]);
+
+  // Load collections - поправен URL
   const loadCollections = useCallback(async () => {
     if (!shop) return;
     setLoading(true);
     setError('');
     
     try {
-      const response = await fetch(`/api/collections/list?shop=${encodeURIComponent(shop)}`, {
+      const response = await fetch(`/collections/list?shop=${encodeURIComponent(shop)}`, {
         credentials: 'include'
       });
       const data = await response.json();
@@ -70,24 +99,48 @@ const Collections = ({ shop }) => {
     setError('');
     const results = {};
 
+    // Determine languages to generate for
+    const languagesToGenerate = language === 'all' ? shopLanguages : [language];
+
     for (const collectionId of selectedCollections) {
       try {
-        const response = await fetch('/api/seo/generate-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            shop,
-            collectionId,
-            model,
-            language
-          })
-        });
+        if (language === 'all' && shopLanguages.length > 1) {
+          // Multi-language generation
+          const response = await fetch('/seo/generate-collection-multi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              shop,
+              collectionId,
+              model,
+              languages: shopLanguages
+            })
+          });
 
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Generation failed');
-        
-        results[collectionId] = data;
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Generation failed');
+          
+          results[collectionId] = data;
+        } else {
+          // Single language generation
+          const response = await fetch('/seo/generate-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              shop,
+              collectionId,
+              model,
+              language: language === 'all' ? primaryLanguage : language
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Generation failed');
+          
+          results[collectionId] = data;
+        }
       } catch (e) {
         results[collectionId] = { error: e.message };
       }
@@ -103,22 +156,47 @@ const Collections = ({ shop }) => {
     if (!seoData || seoData.error) return;
 
     try {
-      const response = await fetch('/api/seo/apply-collection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          shop,
-          collectionId,
-          seo: seoData.seo,
-          language,
-          options: {
-            updateTitle: true,
-            updateDescription: true,
-            updateMetafields: true
-          }
-        })
-      });
+      let response;
+      
+      if (seoData.results && Array.isArray(seoData.results)) {
+        // Multi-language apply
+        response = await fetch('/seo/apply-collection-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            collectionId,
+            results: seoData.results,
+            primaryLanguage,
+            options: {
+              updateTitle: true,
+              updateDescription: true,
+              updateSeo: true,
+              updateMetafields: true
+            }
+          })
+        });
+      } else {
+        // Single language apply
+        response = await fetch('/seo/apply-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            shop,
+            collectionId,
+            seo: seoData.seo,
+            language: seoData.language || primaryLanguage,
+            options: {
+              updateTitle: true,
+              updateDescription: true,
+              updateSeo: true,
+              updateMetafields: true
+            }
+          })
+        });
+      }
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Apply failed');
@@ -142,6 +220,17 @@ const Collections = ({ shop }) => {
       setShowPreview(true);
     }
   };
+
+  // Build language options
+  const languageOptions = showLanguageSelector
+    ? [
+        { label: 'All languages', value: 'all' },
+        ...shopLanguages.map(l => ({ 
+          label: l.toUpperCase(), 
+          value: l 
+        }))
+      ]
+    : [];
 
   const rowMarkup = collections.map((collection, index) => {
     const hasResult = !!seoResults[collection.id];
@@ -206,31 +295,33 @@ const Collections = ({ shop }) => {
             <Text as="h2" variant="headingMd">Collection SEO Generator</Text>
             
             <InlineStack gap="300" align="end">
+              {/* Временно скриваме AI Model селектора
               <Select
                 label="AI Model"
                 options={models}
                 value={model}
                 onChange={setModel}
               />
-              <Select
-                label="Language"
-                options={[
-                  { label: 'English', value: 'en' },
-                  { label: 'German', value: 'de' },
-                  { label: 'Spanish', value: 'es' },
-                  { label: 'French', value: 'fr' }
-                ]}
-                value={language}
-                onChange={setLanguage}
-              />
+              */}
+              
+              {showLanguageSelector && (
+                <Select
+                  label="Language"
+                  options={languageOptions}
+                  value={language}
+                  onChange={setLanguage}
+                />
+              )}
+              
               <Button
                 primary
                 onClick={handleGenerateSEO}
                 loading={generating}
-                disabled={!selectedCollections.length || !model}
+                disabled={!selectedCollections.length} // махаме проверката за model
               >
                 Generate SEO ({selectedCollections.length})
               </Button>
+              
               <Button onClick={loadCollections} loading={loading}>
                 Refresh
               </Button>
@@ -240,25 +331,36 @@ const Collections = ({ shop }) => {
       </Card>
 
       <Card>
-        <IndexTable
-          resourceName={{ singular: 'collection', plural: 'collections' }}
-          itemCount={collections.length}
-          selectedItemsCount={selectedCollections.length}
-          onSelectionChange={(selectionType, isSelecting, selection) => {
-            if (selectionType === 'all') {
-              setSelectedCollections(isSelecting ? collections.map(c => c.id) : []);
-            }
-          }}
-          headings={[
-            { title: 'Collection' },
-            { title: 'Products' },
-            { title: 'SEO Status' },
-            { title: 'Actions' }
-          ]}
-          loading={loading}
-        >
-          {rowMarkup}
-        </IndexTable>
+        {loading ? (
+          <Box padding="400">
+            <InlineStack align="center">
+              <Spinner size="large" />
+            </InlineStack>
+          </Box>
+        ) : collections.length === 0 ? (
+          <Box padding="400">
+            <Text tone="subdued">No collections found</Text>
+          </Box>
+        ) : (
+          <IndexTable
+            resourceName={{ singular: 'collection', plural: 'collections' }}
+            itemCount={collections.length}
+            selectedItemsCount={selectedCollections.length}
+            onSelectionChange={(selectionType, isSelecting, selection) => {
+              if (selectionType === 'all') {
+                setSelectedCollections(isSelecting ? collections.map(c => c.id) : []);
+              }
+            }}
+            headings={[
+              { title: 'Collection' },
+              { title: 'Products' },
+              { title: 'SEO Status' },
+              { title: 'Actions' }
+            ]}
+          >
+            {rowMarkup}
+          </IndexTable>
+        )}
       </Card>
 
       <Modal
@@ -280,10 +382,6 @@ const Collections = ({ shop }) => {
               <Box>
                 <Text variant="headingSm">Meta Description</Text>
                 <Text>{previewData.seo?.metaDescription}</Text>
-              </Box>
-              <Box>
-                <Text variant="headingSm">Category Keywords</Text>
-                <Text>{previewData.seo?.categoryKeywords?.join(', ')}</Text>
               </Box>
               {previewData.seo?.jsonLd && (
                 <Box>

@@ -908,7 +908,7 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
-      /* ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
+      ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
       // 4. Also update bullets/faq if requested
       if (updateBullets) {
         metafields.push({
@@ -928,7 +928,6 @@ router.post('/seo/apply', async (req, res) => {
           value: JSON.stringify(v.faq || []),
         });
       }
-      */
 
       const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
@@ -975,6 +974,374 @@ router.post('/seo/apply', async (req, res) => {
     res.status(e.status || 500).json({ ok: false, error: e.message || String(e) });
   }
 });
+
+Анализирайки seoController.js, виждам структурата:
+Imports и setup (редове 1-60)
+Plan presets (PLAN_PRESETS обект)
+Helper функции (normalizeShop, requireShop, shopGraphQL, etc.)
+Съществуващи routes:
+router.get('/plans/me', ...)
+router.post('/seo/generate', ...)
+router.post('/seo/apply', ...)
+Exports в края
+Новите collections endpoints трябва да се добавят точно преди реда с export default router; (в края на файла, след съществуващите routes).
+Ето къде и как да ги добавиш:
+javascript
+// ... съществуващ код ...
+
+// Последният съществуващ route е router.post('/seo/apply', ...)
+// След него, преди export default router, добави:
+
+// ==================== COLLECTIONS ENDPOINTS ====================
+
+// GET /collections/list - List collections with SEO status
+router.get('/collections/list', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    const query = `
+      query GetCollections($first: Int!) {
+        collections(first: $first, sortKey: UPDATED_AT) {
+          edges {
+            node {
+              id
+              title
+              handle
+              descriptionHtml
+              productsCount
+              seo {
+                title
+                description
+              }
+              metafield_seo_ai: metafield(namespace: "seo_ai_collections", key: "seo_data") {
+                value
+              }
+              updatedAt
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query, { first: 50 });
+    
+    const collections = data.collections.edges.map(edge => ({
+      id: edge.node.id,
+      title: edge.node.title,
+      handle: edge.node.handle,
+      description: edge.node.descriptionHtml,
+      productsCount: edge.node.productsCount,
+      seo: edge.node.seo,
+      hasSeoData: !!edge.node.metafield_seo_ai?.value,
+      updatedAt: edge.node.updatedAt
+    }));
+    
+    res.json({ collections });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// POST /seo/generate-collection
+router.post('/seo/generate-collection', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { collectionId, model, language = 'en' } = req.body;
+    
+    if (!collectionId) {
+      return res.status(400).json({ error: 'Missing required field: collectionId' });
+    }
+    
+    // Fetch collection data
+    const query = `
+      query GetCollection($id: ID!) {
+        collection(id: $id) {
+          id
+          title
+          handle
+          descriptionHtml
+          productsCount
+          products(first: 10) {
+            edges {
+              node {
+                title
+                productType
+                vendor
+                priceRangeV2 {
+                  minVariantPrice { amount currencyCode }
+                  maxVariantPrice { amount currencyCode }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query, { id: collectionId });
+    const collection = data?.collection;
+    
+    if (!collection) {
+      return res.status(404).json({ error: 'Collection not found' });
+    }
+    
+    // Generate SEO data locally (no AI costs)
+    const cleanDescription = (collection.descriptionHtml || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    const seoData = {
+      title: collection.title.slice(0, 70),
+      metaDescription: cleanDescription.slice(0, 160) || `Shop our ${collection.title} collection`,
+      slug: kebab(collection.handle || collection.title),
+      categoryKeywords: extractCategoryKeywords(collection),
+      bullets: generateCollectionBullets(collection),
+      faq: generateCollectionFAQ(collection),
+      jsonLd: generateCollectionJsonLd(collection)
+    };
+    
+    const result = {
+      collectionId: collection.id,
+      provider: 'local',
+      model: 'none',
+      language: canonLang(language),
+      seo: seoData,
+      quality: {
+        warnings: [],
+        model: 'none',
+        tokens: 0,
+        costUsd: 0
+      }
+    };
+    
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// POST /seo/apply-collection
+router.post('/seo/apply-collection', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { collectionId, seo, language = 'en', options = {} } = req.body;
+    
+    if (!collectionId || !seo) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const updated = {
+      title: false,
+      description: false,
+      seo: false,
+      metafields: false
+    };
+    const errors = [];
+    
+    // Get shop's primary language
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales { locale primary published }
+      }
+    `;
+    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
+    const isPrimary = language.toLowerCase() === primary.toLowerCase();
+    
+    // Update collection base fields (only for primary language)
+    if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
+      const input = { id: collectionId };
+      if (options.updateTitle) input.title = seo.title;
+      if (options.updateDescription) input.descriptionHtml = seo.metaDescription ? `<p>${seo.metaDescription}</p>` : '';
+      if (options.updateSeo) input.seo = {
+        title: seo.title,
+        description: seo.metaDescription
+      };
+      
+      const mutation = `
+        mutation UpdateCollection($input: CollectionInput!) {
+          collectionUpdate(collection: $input) {
+            collection { id }
+            userErrors { field message }
+          }
+        }
+      `;
+      
+      const result = await shopGraphQL(shop, mutation, { input });
+      const userErrors = result?.collectionUpdate?.userErrors || [];
+      
+      if (userErrors.length) {
+        errors.push(...userErrors.map(e => e.message));
+      } else {
+        if (options.updateTitle) updated.title = true;
+        if (options.updateDescription) updated.description = true;
+        if (options.updateSeo) updated.seo = true;
+      }
+    }
+    
+    // Update metafields
+    if (options.updateMetafields !== false) {
+      const metafields = [{
+        ownerId: collectionId,
+        namespace: 'seo_ai_collections',
+        key: 'seo_data',
+        type: 'json',
+        value: JSON.stringify({
+          ...seo,
+          language,
+          updatedAt: new Date().toISOString()
+        })
+      }];
+      
+      const metaMutation = `
+        mutation SetCollectionMetafields($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) {
+            userErrors { field message }
+            metafields { id }
+          }
+        }
+      `;
+      
+      const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
+      const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
+      
+      if (mfErrors.length) {
+        errors.push(...mfErrors.map(e => e.message));
+      } else {
+        updated.metafields = true;
+      }
+    }
+    
+    res.json({
+      ok: errors.length === 0,
+      collectionId,
+      updated,
+      errors,
+      language,
+      isPrimary
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// Helper functions за collections (добави ги преди export default router)
+function extractCategoryKeywords(collection) {
+  const keywords = new Set();
+  
+  // From title
+  collection.title.toLowerCase().split(/\s+/).forEach(w => {
+    if (w.length > 3) keywords.add(w);
+  });
+  
+  // From product types
+  collection.products?.edges?.forEach(({ node }) => {
+    if (node.productType) {
+      node.productType.toLowerCase().split(/\s+/).forEach(w => {
+        if (w.length > 3) keywords.add(w);
+      });
+    }
+  });
+  
+  return Array.from(keywords).slice(0, 10);
+}
+
+function generateCollectionBullets(collection) {
+  const bullets = [];
+  
+  if (collection.productsCount > 10) {
+    bullets.push(`Over ${collection.productsCount} products to choose from`);
+  }
+  
+  const priceRange = getPriceRange(collection.products?.edges || []);
+  if (priceRange) {
+    bullets.push(`Prices from ${priceRange.min} to ${priceRange.max}`);
+  }
+  
+  const brands = getUniqueBrands(collection.products?.edges || []);
+  if (brands.length > 0) {
+    bullets.push(`Featuring brands: ${brands.slice(0, 3).join(', ')}`);
+  }
+  
+  bullets.push('Free shipping on orders over $50');
+  bullets.push('Easy returns within 30 days');
+  
+  return bullets.slice(0, 5);
+}
+
+function generateCollectionFAQ(collection) {
+  return [
+    {
+      q: `How many products are in the ${collection.title} collection?`,
+      a: `This collection contains ${collection.productsCount} carefully selected products.`
+    },
+    {
+      q: 'Do you offer free shipping?',
+      a: 'Yes, we offer free shipping on all orders over $50.'
+    },
+    {
+      q: 'What is your return policy?',
+      a: 'We accept returns within 30 days of purchase for a full refund.'
+    }
+  ];
+}
+
+function generateCollectionJsonLd(collection) {
+  const priceRange = getPriceRange(collection.products?.edges || []);
+  
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": collection.title,
+    "description": (collection.descriptionHtml || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    "numberOfItems": collection.productsCount,
+    "offers": priceRange ? {
+      "@type": "AggregateOffer",
+      "lowPrice": priceRange.min,
+      "highPrice": priceRange.max,
+      "priceCurrency": priceRange.currency || "USD"
+    } : undefined
+  };
+}
+
+function getPriceRange(productEdges) {
+  if (!productEdges.length) return null;
+  
+  let min = Infinity;
+  let max = 0;
+  let currency = 'USD';
+  
+  productEdges.forEach(({ node }) => {
+    if (node.priceRangeV2?.minVariantPrice) {
+      const price = parseFloat(node.priceRangeV2.minVariantPrice.amount);
+      min = Math.min(min, price);
+      max = Math.max(max, price);
+      currency = node.priceRangeV2.minVariantPrice.currencyCode;
+    }
+  });
+  
+  if (min === Infinity) return null;
+  
+  return {
+    min: min.toFixed(2),
+    max: max.toFixed(2),
+    currency
+  };
+}
+
+function getUniqueBrands(productEdges) {
+  const brands = new Set();
+  productEdges.forEach(({ node }) => {
+    if (node.vendor) brands.add(node.vendor);
+  });
+  return Array.from(brands);
+}
+
+// ==================== END COLLECTIONS ENDPOINTS ====================
 
 // Export helper functions for use in other controllers
 export { 
