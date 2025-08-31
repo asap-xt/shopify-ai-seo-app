@@ -977,8 +977,7 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - със дебъг логове
-// GET /collections/list - List collections with SEO status (REST API version)
+// GET /collections/list - List collections with SEO status (REST API version - FIXED)
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -986,8 +985,8 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
     
-    // Вземи custom collections
-    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50`;
+    // Вземи custom collections с повече полета
+    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50&fields=id,title,handle,body_html,updated_at,products_count`;
     const customResponse = await fetch(customUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -1003,7 +1002,7 @@ router.get('/collections/list', async (req, res) => {
     const collections = customData.custom_collections || [];
     
     // Вземи и smart collections
-    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50`;
+    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50&fields=id,title,handle,body_html,updated_at,products_count`;
     const smartResponse = await fetch(smartUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -1018,20 +1017,45 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Found', collections.length, 'collections');
     
-    res.json({ 
-      collections: collections.map(c => ({
-        id: `gid://shopify/Collection/${c.id}`,
-        title: c.title,
-        handle: c.handle,
-        description: c.body_html || '',
-        productsCount: 0, // REST API не връща това директно
-        seo: {
+    // За всяка колекция проверяваме дали има SEO metafield
+    const collectionsWithSeo = await Promise.all(
+      collections.map(async (c) => {
+        // Опитваме да вземем metafield за SEO
+        let hasSeoData = false;
+        try {
+          const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections&key=seo_data`;
+          const mfResponse = await fetch(metafieldUrl, {
+            headers: {
+              'X-Shopify-Access-Token': token,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (mfResponse.ok) {
+            const mfData = await mfResponse.json();
+            hasSeoData = mfData.metafields && mfData.metafields.length > 0;
+          }
+        } catch (e) {
+          console.error('[COLLECTIONS] Error fetching metafield for collection', c.id, e);
+        }
+        
+        return {
+          id: `gid://shopify/Collection/${c.id}`,
           title: c.title,
-          description: c.body_html ? c.body_html.substring(0, 160) : ''
-        },
-        updatedAt: c.updated_at
-      }))
-    });
+          handle: c.handle,
+          description: c.body_html || '',
+          productsCount: c.products_count || 0, // REST API връща products_count
+          seo: hasSeoData ? {
+            title: c.title,
+            description: (c.body_html || '').substring(0, 160)
+          } : null,
+          hasSeoData,
+          updatedAt: c.updated_at
+        };
+      })
+    );
+    
+    res.json({ collections: collectionsWithSeo });
   } catch (e) {
     console.error('[COLLECTIONS] Error:', e);
     res.status(e.status || 500).json({ error: e.message });

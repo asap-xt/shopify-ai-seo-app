@@ -257,10 +257,10 @@ const Collections = ({ shop }) => {
           {collection.productsCount} products
         </IndexTable.Cell>
         <IndexTable.Cell>
-          {collection.seo?.title ? (
-            <Badge status="success">Has SEO</Badge>
+          {collection.hasSeoData ? (
+            <Badge status="success">Has AI Search Optimisation</Badge>
           ) : (
-            <Badge status="attention">No SEO</Badge>
+            <Badge status="attention">No AI Search Optimisation</Badge>
           )}
         </IndexTable.Cell>
         <IndexTable.Cell>
