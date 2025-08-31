@@ -9,6 +9,7 @@ import {
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
 import BulkEdit from './pages/BulkEdit.jsx';
+import Collections from './pages/Collections.jsx';
 import Sitemap from './pages/Sitemap.jsx';
 import StoreMetadata from './pages/StoreMetadata.jsx';
 import SchemaData from './pages/SchemaData.jsx';
@@ -433,6 +434,11 @@ function AiSearchOptimisationPanel() {
       panelID: 'products-panel',
     },
     {
+      id: 'collections',
+      content: 'Collections',
+      panelID: 'collections-panel',
+    },
+    {
       id: 'sitemap',
       content: 'Sitemap',
       panelID: 'sitemap-panel',
@@ -451,15 +457,17 @@ function AiSearchOptimisationPanel() {
   
   return (
     <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
-      {selectedTab === 0 ? (
-        <BulkEdit shop={shop} />
-      ) : selectedTab === 1 ? (
-        <Sitemap shop={shop} />
-      ) : selectedTab === 2 ? (
-        <StoreMetadata shop={shop} />
-      ) : (
-        <SchemaData shop={shop} />
-      )}
+     {selectedTab === 0 ? (
+      <BulkEdit shop={shop} />
+    ) : selectedTab === 1 ? (
+      <Collections shop={shop} />  // НОВО
+    ) : selectedTab === 2 ? (
+      <Sitemap shop={shop} />
+    ) : selectedTab === 3 ? (
+      <StoreMetadata shop={shop} />
+    ) : (
+      <SchemaData shop={shop} />
+    )}
     </Tabs>
   );
 }
