@@ -1000,6 +1000,10 @@ router.get('/collections/list', async (req, res) => {
     
     const customData = await customResponse.json();
     const collections = customData.custom_collections || [];
+
+    if (collections.length > 0) {
+      console.log('[COLLECTIONS] Sample collection data:', JSON.stringify(collections[0], null, 2));
+    }
     
     // Вземи и smart collections
     const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50&fields=id,title,handle,body_html,updated_at,products_count`;

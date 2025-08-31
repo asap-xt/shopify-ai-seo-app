@@ -354,7 +354,7 @@ const Collections = ({ shop }) => {
             headings={[
               { title: 'Collection' },
               { title: 'Products' },
-              { title: 'SEO Status' },
+              { title: 'AI Optimisation Status' },
               { title: 'Actions' }
             ]}
           >
