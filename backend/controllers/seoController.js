@@ -1087,7 +1087,6 @@ router.post('/seo/generate-collection', async (req, res) => {
           title
           handle
           descriptionHtml
-          productsCount
           products(first: 10) {
             edges {
               node {
