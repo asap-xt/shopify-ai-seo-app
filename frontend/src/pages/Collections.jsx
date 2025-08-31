@@ -266,6 +266,10 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
+          console.log('Applying SEO for collection:', collectionId);
+          console.log('Result data:', result.data);
+          console.log('SEO data:', result.data?.seo);
+          
           const response = await fetch('/seo/apply-collection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
