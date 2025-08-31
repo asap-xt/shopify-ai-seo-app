@@ -1039,20 +1039,11 @@ router.get('/collections/list', async (req, res) => {
           }
           
           // Проверка за SEO metafield - използваме GraphQL
-          const metafieldQuery = `
-            query {
-              collection(id: "gid://shopify/Collection/${c.id}") {
-                metafield(namespace: "seo_ai_collections", key: "seo_data") {
-                  value
-                }
-              }
-            }
-          `;
-          
-          const mfData = await shopGraphQL(shop, metafieldQuery);
-          hasSeoData = !!(mfData?.collection?.metafield?.value);
-          
-          console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
+          // Временно изключваме GraphQL проверката
+// TODO: Да се оправи проверката за metafield
+hasSeoData = false; // За сега винаги false
+
+console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
           
         } catch (e) {
           console.error('[COLLECTIONS] Error checking collection data:', e.message);
@@ -1159,11 +1150,18 @@ router.post('/seo/generate-collection', async (req, res) => {
 
 // POST /seo/apply-collection
 router.post('/seo/apply-collection', async (req, res) => {
+  console.log('[APPLY-COLLECTION] Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const shop = requireShop(req);
+    console.log('[APPLY-COLLECTION] Shop:', shop);
+    
     const { collectionId, seo, language = 'en', options = {} } = req.body;
+    console.log('[APPLY-COLLECTION] CollectionId:', collectionId);
+    console.log('[APPLY-COLLECTION] Language:', language);
     
     if (!collectionId || !seo) {
+      console.error('[APPLY-COLLECTION] Missing required fields');
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
