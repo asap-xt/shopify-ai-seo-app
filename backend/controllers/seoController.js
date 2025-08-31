@@ -977,7 +977,7 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - Хибридна версия с правилен count
+// GET /collections/list - Поправена версия
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -1017,17 +1017,15 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Found', collections.length, 'collections');
     
-    // ТАЗИ ЧАСТ ЗАМЕНИ - за всяка колекция вземи броя продукти
-    const collectionsWithCounts = await Promise.all(
+    // За всяка колекция вземи броя продукти И проверяваме за SEO metafield
+    const collectionsWithData = await Promise.all(
       collections.map(async (c) => {
         let productsCount = 0;
+        let hasSeoData = false;
         
         try {
-          // Използваме products endpoint с collection_id филтър за всички колекции
+          // Вземи броя продукти
           const countUrl = `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`;
-          
-          console.log(`[COLLECTIONS] Fetching count for "${c.title}" from: ${countUrl}`);
-          
           const countResponse = await fetch(countUrl, {
             headers: {
               'X-Shopify-Access-Token': token,
@@ -1038,12 +1036,26 @@ router.get('/collections/list', async (req, res) => {
           if (countResponse.ok) {
             const countData = await countResponse.json();
             productsCount = countData.count || 0;
-            console.log(`[COLLECTIONS] Collection "${c.title}" has ${productsCount} products`);
-          } else {
-            console.error(`[COLLECTIONS] Failed to get count for "${c.title}": ${countResponse.status}`);
           }
+          
+          // Проверка за SEO metafield - използваме GraphQL
+          const metafieldQuery = `
+            query {
+              collection(id: "gid://shopify/Collection/${c.id}") {
+                metafield(namespace: "seo_ai_collections", key: "seo_data") {
+                  value
+                }
+              }
+            }
+          `;
+          
+          const mfData = await shopGraphQL(shop, metafieldQuery);
+          hasSeoData = !!(mfData?.collection?.metafield?.value);
+          
+          console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
+          
         } catch (e) {
-          console.error('[COLLECTIONS] Error fetching product count for collection', c.id, e.message);
+          console.error('[COLLECTIONS] Error checking collection data:', e.message);
         }
         
         return {
@@ -1052,14 +1064,14 @@ router.get('/collections/list', async (req, res) => {
           handle: c.handle,
           description: c.body_html || '',
           productsCount: productsCount,
-          seo: null,
-          hasSeoData: false,
+          seo: c.seo || null,
+          hasSeoData: hasSeoData,
           updatedAt: c.updated_at
         };
       })
     );
     
-    res.json({ collections: collectionsWithCounts });
+    res.json({ collections: collectionsWithData });
   } catch (e) {
     console.error('[COLLECTIONS] Error:', e);
     res.status(e.status || 500).json({ error: e.message });

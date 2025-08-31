@@ -291,22 +291,24 @@ const Collections = ({ shop }) => {
           setErrors(prev => [...prev, { collection: collection.title, error: `Apply failed: ${err.message}` }]);
         }
         
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
+      const current = i + 1;
+      const percent = Math.round((current / total) * 100);
+      setProgress({ current, total, percent });
       }
-      
+
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
-      loadCollections();
-      
-    } catch (err) {
-      setToast(`Error applying SEO: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentCollection('');
-    }
-  };
+      setResults({}); // Изчистваме резултатите
+      setSelectedItems([]); // Изчистваме селекцията
+      await loadCollections(); // Презареждаме колекциите за да видим новите статуси
+
+      } catch (err) {
+        setToast(`Error applying SEO: ${err.message}`);
+      } finally {
+        setIsProcessing(false);
+        setCurrentCollection('');
+      }
+    };
   
   // Resource list items
   const renderItem = (collection) => {
