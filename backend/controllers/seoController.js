@@ -977,7 +977,7 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - List collections with SEO status (REST API version - FIXED)
+// GET /collections/list - Хибридна версия с допълнителна заявка за броя продукти
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -985,8 +985,8 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
     
-    // Вземи custom collections с повече полета
-    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50&fields=id,title,handle,body_html,updated_at,products_count`;
+    // Вземи custom collections
+    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50`;
     const customResponse = await fetch(customUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -1000,13 +1000,9 @@ router.get('/collections/list', async (req, res) => {
     
     const customData = await customResponse.json();
     const collections = customData.custom_collections || [];
-
-    if (collections.length > 0) {
-      console.log('[COLLECTIONS] Sample collection data:', JSON.stringify(collections[0], null, 2));
-    }
     
     // Вземи и smart collections
-    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50&fields=id,title,handle,body_html,updated_at,products_count`;
+    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50`;
     const smartResponse = await fetch(smartUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -1021,26 +1017,31 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Found', collections.length, 'collections');
     
-    // За всяка колекция проверяваме дали има SEO metafield
-    const collectionsWithSeo = await Promise.all(
+    // За всяка колекция вземи броя продукти чрез отделна заявка
+    const collectionsWithCounts = await Promise.all(
       collections.map(async (c) => {
-        // Опитваме да вземем metafield за SEO
-        let hasSeoData = false;
+        let productsCount = 0;
+        
         try {
-          const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections&key=seo_data`;
-          const mfResponse = await fetch(metafieldUrl, {
+          // Специална обработка за Home page (id заявка не работи)
+          const countUrl = c.handle === 'frontpage' 
+            ? `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`
+            : `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/products/count.json`;
+            
+          const countResponse = await fetch(countUrl, {
             headers: {
               'X-Shopify-Access-Token': token,
               'Content-Type': 'application/json',
             }
           });
           
-          if (mfResponse.ok) {
-            const mfData = await mfResponse.json();
-            hasSeoData = mfData.metafields && mfData.metafields.length > 0;
+          if (countResponse.ok) {
+            const countData = await countResponse.json();
+            productsCount = countData.count || 0;
+            console.log(`[COLLECTIONS] Collection "${c.title}" has ${productsCount} products`);
           }
         } catch (e) {
-          console.error('[COLLECTIONS] Error fetching metafield for collection', c.id, e);
+          console.error('[COLLECTIONS] Error fetching product count for collection', c.id, e.message);
         }
         
         return {
@@ -1048,18 +1049,15 @@ router.get('/collections/list', async (req, res) => {
           title: c.title,
           handle: c.handle,
           description: c.body_html || '',
-          productsCount: c.products_count || 0, // REST API връща products_count
-          seo: hasSeoData ? {
-            title: c.title,
-            description: (c.body_html || '').substring(0, 160)
-          } : null,
-          hasSeoData,
+          productsCount: productsCount,
+          seo: null,
+          hasSeoData: false,
           updatedAt: c.updated_at
         };
       })
     );
     
-    res.json({ collections: collectionsWithSeo });
+    res.json({ collections: collectionsWithCounts });
   } catch (e) {
     console.error('[COLLECTIONS] Error:', e);
     res.status(e.status || 500).json({ error: e.message });
