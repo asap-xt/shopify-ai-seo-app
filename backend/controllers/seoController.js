@@ -977,10 +977,11 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - List collections with SEO status
+// GET /collections/list - със дебъг логове
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
+    console.log('[COLLECTIONS] Fetching for shop:', shop);
     
     const query = `
       query GetCollections($first: Int!) {
@@ -996,9 +997,6 @@ router.get('/collections/list', async (req, res) => {
                 title
                 description
               }
-              metafield_seo_ai: metafield(namespace: "seo_ai_collections", key: "seo_data") {
-                value
-              }
               updatedAt
             }
           }
@@ -1007,20 +1005,27 @@ router.get('/collections/list', async (req, res) => {
     `;
     
     const data = await shopGraphQL(shop, query, { first: 50 });
+    console.log('[COLLECTIONS] Raw GraphQL response:', JSON.stringify(data, null, 2));
     
-    const collections = data.collections.edges.map(edge => ({
+    if (!data || !data.collections) {
+      console.log('[COLLECTIONS] No collections data in response');
+      return res.json({ collections: [] });
+    }
+    
+    const collections = (data.collections.edges || []).map(edge => ({
       id: edge.node.id,
       title: edge.node.title,
       handle: edge.node.handle,
       description: edge.node.descriptionHtml,
       productsCount: edge.node.productsCount,
       seo: edge.node.seo,
-      hasSeoData: !!edge.node.metafield_seo_ai?.value,
       updatedAt: edge.node.updatedAt
     }));
     
+    console.log('[COLLECTIONS] Processed collections:', collections.length);
     res.json({ collections });
   } catch (e) {
+    console.error('[COLLECTIONS] Error:', e);
     res.status(e.status || 500).json({ error: e.message });
   }
 });
