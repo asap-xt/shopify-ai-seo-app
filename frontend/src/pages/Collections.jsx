@@ -55,6 +55,7 @@ const Collections = ({ shop }) => {
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [appliedSeoData, setAppliedSeoData] = useState({}); // Пази SEO данни след apply
   
   // Preview state
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -300,6 +301,15 @@ const Collections = ({ shop }) => {
         setProgress({ current, total, percent });
       }
       
+      // Запазваме успешните резултати за preview
+      const successfulData = {};
+      Object.entries(results).forEach(([collId, result]) => {
+        if (result.success) {
+          successfulData[collId] = result.data;
+        }
+      });
+      setAppliedSeoData(prev => ({ ...prev, ...successfulData }));
+      
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
       setResults({});
@@ -316,7 +326,8 @@ const Collections = ({ shop }) => {
   
   // Resource list items
   const renderItem = (collection) => {
-    const hasResult = results[collection.id] && results[collection.id].success;
+    const hasResult = results[collection.id]?.success || appliedSeoData[collection.id];
+    const seoData = results[collection.id]?.data || appliedSeoData[collection.id];
     
     const media = (
       <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
@@ -352,7 +363,7 @@ const Collections = ({ shop }) => {
               <Button
                 size="slim"
                 onClick={() => {
-                  setPreviewData(results[collection.id].data);
+                  setPreviewData(seoData);
                   setShowPreviewModal(true);
                 }}
               >
