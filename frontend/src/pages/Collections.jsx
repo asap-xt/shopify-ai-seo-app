@@ -224,7 +224,7 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          // Използваме multi-language endpoint като в BulkEdit
+          // Use multi-language endpoint like in BulkEdit
           const response = await fetch('/seo/generate-collection-multi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -291,7 +291,7 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          // Използваме multi endpoint като в BulkEdit
+          // Use multi endpoint like in BulkEdit
           const response = await fetch('/seo/apply-collection-multi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
