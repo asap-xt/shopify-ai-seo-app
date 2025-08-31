@@ -1,4 +1,5 @@
 // backend/controllers/storeController.js
+import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 
@@ -184,10 +185,28 @@ router.get('/generate', async (req, res) => {
     
     metafieldsData?.shop?.metafields?.edges?.forEach(edge => {
       const node = edge.node;
-      metafields[node.key] = {
-        id: node.id,
-        value: node.type === 'json' ? JSON.parse(node.value) : node.value
-      };
+      if (node.type === 'json') {
+        const parsed = JSON.parse(node.value);
+        // Special handling for organization_schema to ensure enabled state is preserved
+        if (node.key === 'organization_schema') {
+          metafields[node.key] = {
+            id: node.id,
+            value: parsed,
+            // Explicitly check for enabled state
+            enabled: parsed.enabled === true
+          };
+        } else {
+          metafields[node.key] = {
+            id: node.id,
+            value: parsed
+          };
+        }
+      } else {
+        metafields[node.key] = {
+          id: node.id,
+          value: node.value
+        };
+      }
     });
 
     res.json({
@@ -329,14 +348,20 @@ router.post('/apply', async (req, res) => {
       });
     }
 
-    // Organization schema
-    if (metadata.organizationSchema && options.updateOrganization !== false) {
+    // Organization schema - always save to preserve enabled state
+    if (metadata.organizationSchema) {
+      // Ensure we have an explicit enabled state
+      const orgSchemaData = {
+        ...metadata.organizationSchema,
+        enabled: metadata.organizationSchema.enabled === true
+      };
+      
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
         key: 'organization_schema',
         type: 'json',
-        value: JSON.stringify(metadata.organizationSchema)
+        value: JSON.stringify(orgSchemaData)
       });
     }
 

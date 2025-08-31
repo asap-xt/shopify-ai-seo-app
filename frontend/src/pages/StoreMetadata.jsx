@@ -69,7 +69,12 @@ export default function StoreMetadata({ shop }) {
               : existing.seo_metadata?.value?.keywords || prev.seo.keywords || ''
           },
           aiMetadata: existing.ai_metadata?.value || prev.aiMetadata,
-          organizationSchema: existing.organization_schema?.value || prev.organizationSchema,
+          organizationSchema: {
+            ...prev.organizationSchema,
+            ...(existing.organization_schema?.value || {}),
+            // Explicitly handle enabled state
+            enabled: existing.organization_schema?.value?.enabled === true
+          },
           localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema
         }));
       }
@@ -131,22 +136,40 @@ export default function StoreMetadata({ shop }) {
   }
 
   async function handleSave() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          metadata: formData,
-          options: {
-            updateSeo: true,
-            updateAiMetadata: true,
-            updateOrganization: formData.organizationSchema.enabled,
-            updateLocalBusiness: formData.localBusinessSchema.enabled
+  setSaving(true);
+  try {
+    const res = await fetch(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        metadata: {
+          ...formData,
+          // Ensure organization schema always has explicit enabled state
+          organizationSchema: {
+            ...formData.organizationSchema,
+            enabled: formData.organizationSchema.enabled === true
           }
-        })
-      });
+        },
+        options: {
+          updateSeo: true,
+          updateAiMetadata: true,
+          updateOrganization: true, // Always update to save enabled state
+          updateLocalBusiness: formData.localBusinessSchema.enabled
+        }
+      })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save metadata');
+    
+    setToast('Metadata saved successfully!');
+  } catch (error) {
+    setToast(error.message);
+  } finally {
+    setSaving(false);
+  }
+}
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save metadata');
