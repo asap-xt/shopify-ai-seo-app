@@ -1374,6 +1374,198 @@ function getUniqueBrands(productEdges) {
   return Array.from(brands);
 }
 
+// POST /api/seo/generate-collection-multi
+router.post('/seo/generate-collection-multi', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { collectionId, model, languages = [] } = req.body;
+    
+    if (!collectionId || !languages.length) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const results = [];
+    
+    for (const language of languages) {
+      try {
+        // Използваме съществуващия single-language endpoint вътрешно
+        const query = `
+          query GetCollection($id: ID!) {
+            collection(id: $id) {
+              id
+              title
+              handle
+              descriptionHtml
+              products(first: 10) {
+                edges {
+                  node {
+                    title
+                    productType
+                    vendor
+                    priceRangeV2 {
+                      minVariantPrice { amount currencyCode }
+                      maxVariantPrice { amount currencyCode }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `;
+        
+        const data = await shopGraphQL(shop, query, { id: collectionId });
+        const collection = data?.collection;
+        
+        if (!collection) {
+          throw new Error('Collection not found');
+        }
+        
+        // Generate SEO data locally
+        const cleanDescription = (collection.descriptionHtml || '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        const seoData = {
+          title: collection.title.slice(0, 70),
+          metaDescription: cleanDescription.slice(0, 160) || `Shop our ${collection.title} collection`,
+          slug: kebab(collection.handle || collection.title),
+          categoryKeywords: extractCategoryKeywords(collection),
+          bullets: generateCollectionBullets(collection),
+          faq: generateCollectionFAQ(collection),
+          jsonLd: generateCollectionJsonLd(collection)
+        };
+        
+        results.push({
+          language: canonLang(language),
+          seo: seoData,
+          success: true
+        });
+      } catch (err) {
+        results.push({
+          language: canonLang(language),
+          error: err.message,
+          success: false
+        });
+      }
+    }
+    
+    res.json({
+      collectionId,
+      results,
+      language: 'multi',
+      provider: 'local',
+      model: 'none'
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// POST /api/seo/apply-collection-multi
+router.post('/seo/apply-collection-multi', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { collectionId, results = [], options = {} } = req.body;
+    
+    if (!collectionId || !results.length) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const updated = [];
+    const errors = [];
+    
+    // Get primary language
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales { locale primary published }
+      }
+    `;
+    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
+    
+    for (const result of results) {
+      try {
+        const { language, seo } = result;
+        const isPrimary = language.toLowerCase() === primary.toLowerCase();
+        
+        // Update collection base fields only for primary language
+        if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
+          const input = { id: collectionId };
+          if (options.updateTitle) input.title = seo.title;
+          if (options.updateDescription) input.descriptionHtml = seo.metaDescription ? `<p>${seo.metaDescription}</p>` : '';
+          if (options.updateSeo) input.seo = {
+            title: seo.title,
+            description: seo.metaDescription
+          };
+          
+          const mutation = `
+            mutation UpdateCollection($input: CollectionInput!) {
+              collectionUpdate(collection: $input) {
+                collection { id }
+                userErrors { field message }
+              }
+            }
+          `;
+          
+          const updateResult = await shopGraphQL(shop, mutation, { input });
+          const userErrors = updateResult?.collectionUpdate?.userErrors || [];
+          
+          if (userErrors.length) {
+            errors.push(...userErrors.map(e => `${language}: ${e.message}`));
+          } else {
+            updated.push({ language, fields: ['title', 'description', 'seo'] });
+          }
+        }
+        
+        // Always update metafields
+        if (options.updateMetafields !== false) {
+          const metafields = [{
+            ownerId: collectionId,
+            namespace: 'seo_ai_collections',
+            key: `seo_data_${language}`,
+            type: 'json',
+            value: JSON.stringify({
+              ...seo,
+              language,
+              updatedAt: new Date().toISOString()
+            })
+          }];
+          
+          const metaMutation = `
+            mutation SetCollectionMetafields($metafields: [MetafieldsSetInput!]!) {
+              metafieldsSet(metafields: $metafields) {
+                userErrors { field message }
+                metafields { id }
+              }
+            }
+          `;
+          
+          const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
+          const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
+          
+          if (mfErrors.length) {
+            errors.push(...mfErrors.map(e => `${language} metafield: ${e.message}`));
+          } else {
+            updated.push({ language, fields: ['metafields'] });
+          }
+        }
+      } catch (err) {
+        errors.push(`${result.language}: ${err.message}`);
+      }
+    }
+    
+    res.json({
+      ok: errors.length === 0,
+      collectionId,
+      updated,
+      errors
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // ==================== END COLLECTIONS ENDPOINTS ====================
 
 // Export helper functions for use in other controllers
