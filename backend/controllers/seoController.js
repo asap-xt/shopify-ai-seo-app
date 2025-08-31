@@ -1038,28 +1038,27 @@ router.get('/collections/list', async (req, res) => {
             productsCount = countData.count || 0;
           }
           
-          // Проверка за SEO metafield - използваме GraphQL
-          /try {
-  const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
-  const mfResponse = await fetch(metafieldUrl, {
-    headers: {
-      'X-Shopify-Access-Token': token,
-      'Content-Type': 'application/json',
-    }
-  });
-  
-  if (mfResponse.ok) {
-    const mfData = await mfResponse.json();
-    // Проверяваме дали има metafields започващи с seo_data_
-    hasSeoData = mfData.metafields && mfData.metafields.some(mf => 
-      mf.key && (mf.key === 'seo_data' || mf.key.startsWith('seo_data_'))
-    );
-  }
-} catch (e) {
-  console.error('[COLLECTIONS] Error checking metafields:', e);
-  hasSeoData = false;
-}
-
+          // Проверка за SEO metafield чрез REST API
+        try {
+          const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
+          const mfResponse = await fetch(metafieldUrl, {
+            headers: {
+              'X-Shopify-Access-Token': token,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (mfResponse.ok) {
+            const mfData = await mfResponse.json();
+            // Проверяваме дали има metafields започващи с seo_data_
+            hasSeoData = mfData.metafields && mfData.metafields.some(mf => 
+              mf.key && (mf.key === 'seo_data' || mf.key.startsWith('seo_data_'))
+            );
+          }
+        } catch (e) {
+          console.error('[COLLECTIONS] Error checking metafields:', e);
+          hasSeoData = false;
+        }
 console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
           
         } catch (e) {
