@@ -187,6 +187,23 @@ function SingleProductPanel({ shop }) {
     return () => { cancelled = true; };
   }, [shop, productId]);
 
+  // Инициализирай metafield definitions за колекции при първо зареждане
+  useEffect(() => {
+    const s = shop || qs('shop', '');
+    if (!s) return;
+    
+    // Инициализирай metafield definitions за колекции
+    fetch('/collections/init-metafields', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ shop: s })
+    })
+    .then(r => r.json())
+    .then(data => console.log('Collection metafields initialized:', data))
+    .catch(err => console.error('Failed to init collection metafields:', err));
+  }, [shop]);
+
   const handleGenerate = async () => {
     if (!shop || !productId) { // ПРОМЕНЕНО: Премахнахме проверката за model
       setToast('Please fill in all fields');

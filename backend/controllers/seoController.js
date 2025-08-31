@@ -262,6 +262,66 @@ async function ensureMetafieldDefinition(shop, language) {
   return { attempted: true };
 }
 
+/* --------------------------- Collection Metafield Definition Helper --------------------------- */
+// Създава metafield definitions за колекции
+async function ensureCollectionMetafieldDefinitions(shop, languages) {
+  console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
+  
+  const results = [];
+  
+  for (const lang of languages) {
+    const key = `seo__${lang}`;
+    
+    const createMutation = `
+      mutation {
+        metafieldDefinitionCreate(definition: {
+          namespace: "seo_ai"
+          key: "${key}"
+          name: "AI SEO - ${lang.toUpperCase()}"
+          type: "json"
+          ownerType: COLLECTION
+          description: "AI-generated SEO content for ${lang.toUpperCase()} language"
+          pin: true
+          visibleToStorefrontApi: true
+        }) {
+          createdDefinition {
+            id
+            namespace
+            key
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    try {
+      const result = await shopGraphQL(shop, createMutation, {});
+      
+      if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
+        const errors = result.metafieldDefinitionCreate.userErrors;
+        if (errors.some(e => e.message.includes('already exists'))) {
+          console.log(`[COLLECTION METAFIELDS] Definition already exists for ${key} - OK`);
+          results.push({ lang, status: 'exists' });
+        } else {
+          console.error(`[COLLECTION METAFIELDS] Errors for ${key}:`, errors);
+          results.push({ lang, status: 'error', errors });
+        }
+      } else if (result?.metafieldDefinitionCreate?.createdDefinition) {
+        console.log(`[COLLECTION METAFIELDS] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
+        results.push({ lang, status: 'created' });
+      }
+    } catch (e) {
+      console.error(`[COLLECTION METAFIELDS] Exception for ${key}:`, e.message);
+      results.push({ lang, status: 'error', error: e.message });
+    }
+  }
+  
+  return results;
+}
+
 /* --------------------------- Product JSON-LD Generator --------------------------- */
 function generateProductJsonLd(product, seoData, language) {
   console.log('🟢 [JSON-LD] Generating locally (NOT via AI) for language:', language);
@@ -1041,7 +1101,7 @@ router.get('/collections/list', async (req, res) => {
           
           // Проверка за SEO metafields и езици
           try {
-            const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
+            const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai`;
             const mfResponse = await fetch(metafieldUrl, {
               headers: {
                 'X-Shopify-Access-Token': token,
@@ -1053,10 +1113,10 @@ router.get('/collections/list', async (req, res) => {
               const mfData = await mfResponse.json();
               const metafields = mfData.metafields || [];
               
-              // Извличаме езиците от keys като seo_data_en, seo_data_bg и т.н.
+              // Извличаме езиците от keys като seo__en, seo__bg и т.н.
               metafields.forEach(mf => {
-                if (mf.key && mf.key.startsWith('seo_data_')) {
-                  const lang = mf.key.replace('seo_data_', '');
+                if (mf.key && mf.key.startsWith('seo__')) {
+                  const lang = mf.key.replace('seo__', '');
                   if (lang && !optimizedLanguages.includes(lang)) {
                     optimizedLanguages.push(lang);
                   }
@@ -1244,8 +1304,8 @@ router.post('/seo/apply-collection', async (req, res) => {
     if (options.updateMetafields !== false) {
       const metafields = [{
         ownerId: collectionId,
-        namespace: 'seo_ai_collections',
-        key: 'seo_data',
+        namespace: 'seo_ai',  // Същият namespace като продуктите!
+        key: `seo__${language}`,  // Същият формат като продуктите!
         type: 'json',
         value: JSON.stringify({
           ...seo,
@@ -1549,8 +1609,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         if (options.updateMetafields !== false) {
           const metafields = [{
             ownerId: collectionId,
-            namespace: 'seo_ai_collections',
-            key: `seo_data_${language}`,
+            namespace: 'seo_ai',  // Същият namespace като продуктите!
+            key: `seo__${language}`,  // Същият формат като продуктите!
             type: 'json',
             value: JSON.stringify({
               ...seo,
@@ -1595,6 +1655,37 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
 
 // ==================== END COLLECTIONS ENDPOINTS ====================
 
+// POST /collections/init-metafields - Създава metafield definitions за колекции
+router.post('/collections/init-metafields', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Вземи езиците на магазина
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales { locale primary published }
+      }
+    `;
+    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const languages = (shopData?.shopLocales || [])
+      .filter(l => l.published)
+      .map(l => canonLang(l.locale));
+    
+    const uniqueLanguages = [...new Set(languages)];
+    console.log('[INIT] Creating collection metafield definitions for languages:', uniqueLanguages);
+    
+    const results = await ensureCollectionMetafieldDefinitions(shop, uniqueLanguages);
+    
+    res.json({
+      ok: true,
+      languages: uniqueLanguages,
+      results
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // Export helper functions for use in other controllers
 export { 
   requireShop, 
@@ -1609,7 +1700,7 @@ router.get('/collections/:id/seo-data', async (req, res) => {
     const collectionId = req.params.id;
     
     // Вземи metafields
-    const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${collectionId.split('/').pop()}/metafields.json?namespace=seo_ai_collections`;
+    const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${collectionId.split('/').pop()}/metafields.json?namespace=seo_ai`;
     const mfResponse = await fetch(metafieldUrl, {
       headers: {
         'X-Shopify-Access-Token': token,
@@ -1627,8 +1718,8 @@ router.get('/collections/:id/seo-data', async (req, res) => {
     // Групираме по език
     const results = [];
     metafields.forEach(mf => {
-      if (mf.key && mf.key.startsWith('seo_data_')) {
-        const lang = mf.key.replace('seo_data_', '');
+      if (mf.key && mf.key.startsWith('seo__')) {
+        const lang = mf.key.replace('seo__', '');
         try {
           const seoData = JSON.parse(mf.value);
           results.push({
