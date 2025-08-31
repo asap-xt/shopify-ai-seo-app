@@ -908,7 +908,7 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
-      ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
+      // ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
       // 4. Also update bullets/faq if requested
       if (updateBullets) {
         metafields.push({
