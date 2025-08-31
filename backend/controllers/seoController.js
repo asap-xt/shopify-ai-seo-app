@@ -975,23 +975,6 @@ router.post('/seo/apply', async (req, res) => {
   }
 });
 
-Анализирайки seoController.js, виждам структурата:
-Imports и setup (редове 1-60)
-Plan presets (PLAN_PRESETS обект)
-Helper функции (normalizeShop, requireShop, shopGraphQL, etc.)
-Съществуващи routes:
-router.get('/plans/me', ...)
-router.post('/seo/generate', ...)
-router.post('/seo/apply', ...)
-Exports в края
-Новите collections endpoints трябва да се добавят точно преди реда с export default router; (в края на файла, след съществуващите routes).
-Ето къде и как да ги добавиш:
-javascript
-// ... съществуващ код ...
-
-// Последният съществуващ route е router.post('/seo/apply', ...)
-// След него, преди export default router, добави:
-
 // ==================== COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/list - List collections with SEO status
