@@ -978,52 +978,60 @@ router.post('/seo/apply', async (req, res) => {
 // ==================== COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/list - със дебъг логове
+// GET /collections/list - List collections with SEO status (REST API version)
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
-    console.log('[COLLECTIONS] Fetching for shop:', shop);
+    const token = await resolveAdminTokenForShop(shop);
     
-    const query = `
-      query GetCollections($first: Int!) {
-        collections(first: $first, sortKey: UPDATED_AT) {
-          edges {
-            node {
-              id
-              title
-              handle
-              descriptionHtml
-              productsCount
-              seo {
-                title
-                description
-              }
-              updatedAt
-            }
-          }
-        }
+    console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
+    
+    // Вземи custom collections
+    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50`;
+    const customResponse = await fetch(customUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
       }
-    `;
+    });
     
-    const data = await shopGraphQL(shop, query, { first: 50 });
-    console.log('[COLLECTIONS] Raw GraphQL response:', JSON.stringify(data, null, 2));
-    
-    if (!data || !data.collections) {
-      console.log('[COLLECTIONS] No collections data in response');
-      return res.json({ collections: [] });
+    if (!customResponse.ok) {
+      throw new Error(`Failed to fetch custom collections: HTTP ${customResponse.status}`);
     }
     
-    const collections = (data.collections.edges || []).map(edge => ({
-      id: edge.node.id,
-      title: edge.node.title,
-      handle: edge.node.handle,
-      description: edge.node.descriptionHtml,
-      productsCount: edge.node.productsCount,
-      seo: edge.node.seo,
-      updatedAt: edge.node.updatedAt
-    }));
+    const customData = await customResponse.json();
+    const collections = customData.custom_collections || [];
     
-    console.log('[COLLECTIONS] Processed collections:', collections.length);
-    res.json({ collections });
+    // Вземи и smart collections
+    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50`;
+    const smartResponse = await fetch(smartUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (smartResponse.ok) {
+      const smartData = await smartResponse.json();
+      collections.push(...(smartData.smart_collections || []));
+    }
+    
+    console.log('[COLLECTIONS] Found', collections.length, 'collections');
+    
+    res.json({ 
+      collections: collections.map(c => ({
+        id: `gid://shopify/Collection/${c.id}`,
+        title: c.title,
+        handle: c.handle,
+        description: c.body_html || '',
+        productsCount: 0, // REST API не връща това директно
+        seo: {
+          title: c.title,
+          description: c.body_html ? c.body_html.substring(0, 160) : ''
+        },
+        updatedAt: c.updated_at
+      }))
+    });
   } catch (e) {
     console.error('[COLLECTIONS] Error:', e);
     res.status(e.status || 500).json({ error: e.message });
