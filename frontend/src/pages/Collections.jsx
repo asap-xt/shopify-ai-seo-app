@@ -60,6 +60,7 @@ const Collections = ({ shop }) => {
   // Preview state
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   
   // Toast
   const [toast, setToast] = useState('');
@@ -163,6 +164,28 @@ const Collections = ({ shop }) => {
       setSelectedItems([]);
     }
   }, [collections]);
+
+  // Load SEO data for preview
+  const loadSeoDataForPreview = async (collectionId) => {
+    setLoadingPreview(true);
+    try {
+      const response = await fetch(`/collections/${collectionId.split('/').pop()}/seo-data?shop=${encodeURIComponent(shop)}`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPreviewData(data);
+        setShowPreviewModal(true);
+      } else {
+        setToast('No SEO data found for this collection');
+      }
+    } catch (err) {
+      setToast('Failed to load SEO data');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   // Open language selection modal
   const openLanguageModal = () => {
@@ -328,6 +351,7 @@ const Collections = ({ shop }) => {
   const renderItem = (collection) => {
     const hasResult = results[collection.id]?.success || appliedSeoData[collection.id];
     const seoData = results[collection.id]?.data || appliedSeoData[collection.id];
+    const optimizedLanguages = collection.optimizedLanguages || [];
     
     const media = (
       <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
@@ -341,7 +365,7 @@ const Collections = ({ shop }) => {
         accessibilityLabel={`View details for ${collection.title}`}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
-          <Box style={{ flex: '1 1 35%', minWidth: '250px' }}>
+          <Box style={{ flex: '1 1 30%', minWidth: '200px' }}>
             <Text variant="bodyMd" fontWeight="semibold">{collection.title}</Text>
             <Text variant="bodySm" tone="subdued">Handle: {collection.handle}</Text>
           </Box>
@@ -352,7 +376,17 @@ const Collections = ({ shop }) => {
           
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             {collection.hasSeoData ? (
-              <Badge tone="success">Has AI Search Optimisation</Badge>
+              <InlineStack gap="100">
+                {availableLanguages.map(lang => (
+                  <Badge
+                    key={lang}
+                    tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
+                    size="small"
+                  >
+                    {lang.toUpperCase()}
+                  </Badge>
+                ))}
+              </InlineStack>
             ) : (
               <Badge tone="subdued">No AI Search Optimisation</Badge>
             )}
@@ -366,6 +400,15 @@ const Collections = ({ shop }) => {
                   setPreviewData(seoData);
                   setShowPreviewModal(true);
                 }}
+              >
+                Preview JSON
+              </Button>
+            )}
+            {!hasResult && collection.hasSeoData && (
+              <Button
+                size="slim"
+                loading={loadingPreview}
+                onClick={() => loadSeoDataForPreview(collection.id)}
               >
                 Preview JSON
               </Button>

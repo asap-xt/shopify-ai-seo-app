@@ -977,7 +977,7 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - Поправена версия
+// GET /collections/list - Обновена версия с езици
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -1017,14 +1017,15 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Found', collections.length, 'collections');
     
-    // За всяка колекция вземи броя продукти И проверяваме за SEO metafield
+    // За всяка колекция вземи брой продукти И проверяваме за SEO metafields
     const collectionsWithData = await Promise.all(
       collections.map(async (c) => {
         let productsCount = 0;
         let hasSeoData = false;
+        let optimizedLanguages = [];
         
         try {
-          // Вземи броя продукти
+          // Вземи брой продукти
           const countUrl = `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`;
           const countResponse = await fetch(countUrl, {
             headers: {
@@ -1038,28 +1039,37 @@ router.get('/collections/list', async (req, res) => {
             productsCount = countData.count || 0;
           }
           
-          // Проверка за aiSEO metafield чрез REST API
-        try {
-          const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
-          const mfResponse = await fetch(metafieldUrl, {
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'Content-Type': 'application/json',
+          // Проверка за SEO metafields и езици
+          try {
+            const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
+            const mfResponse = await fetch(metafieldUrl, {
+              headers: {
+                'X-Shopify-Access-Token': token,
+                'Content-Type': 'application/json',
+              }
+            });
+            
+            if (mfResponse.ok) {
+              const mfData = await mfResponse.json();
+              const metafields = mfData.metafields || [];
+              
+              // Извличаме езиците от keys като seo_data_en, seo_data_bg и т.н.
+              metafields.forEach(mf => {
+                if (mf.key && mf.key.startsWith('seo_data_')) {
+                  const lang = mf.key.replace('seo_data_', '');
+                  if (lang && !optimizedLanguages.includes(lang)) {
+                    optimizedLanguages.push(lang);
+                  }
+                }
+              });
+              
+              hasSeoData = optimizedLanguages.length > 0;
             }
-          });
-          
-          if (mfResponse.ok) {
-            const mfData = await mfResponse.json();
-            // Проверяваме дали има metafields започващи с seo_data_
-            hasSeoData = mfData.metafields && mfData.metafields.some(mf => 
-              mf.key && (mf.key === 'seo_data' || mf.key.startsWith('seo_data_'))
-            );
+          } catch (e) {
+            console.error('[COLLECTIONS] Error checking metafields:', e);
           }
-        } catch (e) {
-          console.error('[COLLECTIONS] Error checking metafields:', e);
-          hasSeoData = false;
-        }
-console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
+          
+          console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, languages: ${optimizedLanguages.join(',') || 'none'}`);
           
         } catch (e) {
           console.error('[COLLECTIONS] Error checking collection data:', e.message);
@@ -1073,6 +1083,7 @@ console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount},
           productsCount: productsCount,
           seo: c.seo || null,
           hasSeoData: hasSeoData,
+          optimizedLanguages: optimizedLanguages, // Нов масив с оптимизирани езици
           updatedAt: c.updated_at
         };
       })
@@ -1589,5 +1600,58 @@ export {
   requireShop, 
   shopGraphQL,
 };
+
+// GET /collections/:id/seo-data - Връща SEO данни за preview
+router.get('/collections/:id/seo-data', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const token = await resolveAdminTokenForShop(shop);
+    const collectionId = req.params.id;
+    
+    // Вземи metafields
+    const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${collectionId.split('/').pop()}/metafields.json?namespace=seo_ai_collections`;
+    const mfResponse = await fetch(metafieldUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!mfResponse.ok) {
+      return res.status(404).json({ error: 'No SEO data found' });
+    }
+    
+    const mfData = await mfResponse.json();
+    const metafields = mfData.metafields || [];
+    
+    // Групираме по език
+    const results = [];
+    metafields.forEach(mf => {
+      if (mf.key && mf.key.startsWith('seo_data_')) {
+        const lang = mf.key.replace('seo_data_', '');
+        try {
+          const seoData = JSON.parse(mf.value);
+          results.push({
+            language: lang,
+            seo: seoData,
+            success: true
+          });
+        } catch (e) {
+          console.error('Failed to parse SEO data:', e);
+        }
+      }
+    });
+    
+    res.json({
+      collectionId,
+      results,
+      language: 'multi',
+      provider: 'local',
+      model: 'none'
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message );
+  }
+});
 
 export default router;
