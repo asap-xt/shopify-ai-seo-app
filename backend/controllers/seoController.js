@@ -1039,9 +1039,26 @@ router.get('/collections/list', async (req, res) => {
           }
           
           // Проверка за SEO metafield - използваме GraphQL
-          // Временно изключваме GraphQL проверката
-// TODO: Да се оправи проверката за metafield
-hasSeoData = false; // За сега винаги false
+          /try {
+  const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
+  const mfResponse = await fetch(metafieldUrl, {
+    headers: {
+      'X-Shopify-Access-Token': token,
+      'Content-Type': 'application/json',
+    }
+  });
+  
+  if (mfResponse.ok) {
+    const mfData = await mfResponse.json();
+    // Проверяваме дали има metafields започващи с seo_data_
+    hasSeoData = mfData.metafields && mfData.metafields.some(mf => 
+      mf.key && (mf.key === 'seo_data' || mf.key.startsWith('seo_data_'))
+    );
+  }
+} catch (e) {
+  console.error('[COLLECTIONS] Error checking metafields:', e);
+  hasSeoData = false;
+}
 
 console.log(`[COLLECTIONS] Collection "${c.title}" - products: ${productsCount}, hasSEO: ${hasSeoData}`);
           
