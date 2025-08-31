@@ -977,93 +977,49 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - Хибридна версия с допълнителна заявка за броя продукти
-router.get('/collections/list', async (req, res) => {
-  try {
-    const shop = requireShop(req);
-    const token = await resolveAdminTokenForShop(shop);
-    
-    console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
-    
-    // Вземи custom collections
-    const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50`;
-    const customResponse = await fetch(customUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (!customResponse.ok) {
-      throw new Error(`Failed to fetch custom collections: HTTP ${customResponse.status}`);
-    }
-    
-    const customData = await customResponse.json();
-    const collections = customData.custom_collections || [];
-    
-    // Вземи и smart collections
-    const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50`;
-    const smartResponse = await fetch(smartUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (smartResponse.ok) {
-      const smartData = await smartResponse.json();
-      collections.push(...(smartData.smart_collections || []));
-    }
-    
-    console.log('[COLLECTIONS] Found', collections.length, 'collections');
-    
-    // За всяка колекция вземи броя продукти чрез отделна заявка
-    const collectionsWithCounts = await Promise.all(
-      collections.map(async (c) => {
-        let productsCount = 0;
-        
-        try {
-          // Специална обработка за Home page (id заявка не работи)
-          const countUrl = c.handle === 'frontpage' 
-            ? `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`
-            : `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/products/count.json`;
-            
-          const countResponse = await fetch(countUrl, {
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'Content-Type': 'application/json',
-            }
-          });
-          
-          if (countResponse.ok) {
-            const countData = await countResponse.json();
-            productsCount = countData.count || 0;
-            console.log(`[COLLECTIONS] Collection "${c.title}" has ${productsCount} products`);
-          }
-        } catch (e) {
-          console.error('[COLLECTIONS] Error fetching product count for collection', c.id, e.message);
-        }
-        
-        return {
-          id: `gid://shopify/Collection/${c.id}`,
-          title: c.title,
-          handle: c.handle,
-          description: c.body_html || '',
-          productsCount: productsCount,
-          seo: null,
-          hasSeoData: false,
-          updatedAt: c.updated_at
-        };
-      })
-    );
-    
-    res.json({ collections: collectionsWithCounts });
-  } catch (e) {
-    console.error('[COLLECTIONS] Error:', e);
-    res.status(e.status || 500).json({ error: e.message });
-  }
-});
+// В /collections/list endpoint-а, замени частта за броене на продукти с този код:
 
+// За всяка колекция вземи броя продукти чрез отделна заявка
+const collectionsWithCounts = await Promise.all(
+  collections.map(async (c) => {
+    let productsCount = 0;
+    
+    try {
+      // Използваме products endpoint с collection_id филтър за всички колекции
+      const countUrl = `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`;
+      
+      console.log(`[COLLECTIONS] Fetching count for "${c.title}" from: ${countUrl}`);
+      
+      const countResponse = await fetch(countUrl, {
+        headers: {
+          'X-Shopify-Access-Token': token,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (countResponse.ok) {
+        const countData = await countResponse.json();
+        productsCount = countData.count || 0;
+        console.log(`[COLLECTIONS] Collection "${c.title}" has ${productsCount} products`);
+      } else {
+        console.error(`[COLLECTIONS] Failed to get count for "${c.title}": ${countResponse.status}`);
+      }
+    } catch (e) {
+      console.error('[COLLECTIONS] Error fetching product count for collection', c.id, e.message);
+    }
+    
+    return {
+      id: `gid://shopify/Collection/${c.id}`,
+      title: c.title,
+      handle: c.handle,
+      description: c.body_html || '',
+      productsCount: productsCount,
+      seo: null,
+      hasSeoData: false,
+      updatedAt: c.updated_at
+    };
+  })
+);
 // POST /seo/generate-collection
 router.post('/seo/generate-collection', async (req, res) => {
   try {
