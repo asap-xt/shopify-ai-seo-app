@@ -1038,7 +1038,7 @@ router.get('/collections/list', async (req, res) => {
             productsCount = countData.count || 0;
           }
           
-          // Проверка за SEO metafield чрез REST API
+          // Проверка за aiSEO metafield чрез REST API
         try {
           const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai_collections`;
           const mfResponse = await fetch(metafieldUrl, {
