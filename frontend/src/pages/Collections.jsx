@@ -1,403 +1,620 @@
 // frontend/src/pages/Collections.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Box, Text, Button, InlineStack, BlockStack,
-  IndexTable, Badge, Toast, Banner, TextField,
-  Select, Divider, Modal, Spinner
+  Card,
+  ResourceList,
+  ResourceItem,
+  Button,
+  Select,
+  Box,
+  InlineStack,
+  Text,
+  Toast,
+  Badge,
+  ProgressBar,
+  EmptyState,
+  Modal,
+  BlockStack,
+  Divider,
+  TextField,
+  Thumbnail,
+  ChoiceList,
+  Popover,
+  Checkbox,
 } from '@shopify/polaris';
+import { SearchIcon } from '@shopify/polaris-icons';
 
 const Collections = ({ shop }) => {
+  // Collection list state
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedCollections, setSelectedCollections] = useState([]);
-  const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
-  const [seoResults, setSeoResults] = useState({});
+  const [totalCount, setTotalCount] = useState(0);
+  
+  // Selection state
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [selectAllPages, setSelectAllPages] = useState(false);
+  
+  // Filter state
+  const [searchValue, setSearchValue] = useState('');
+  const [optimizedFilter, setOptimizedFilter] = useState('all');
+  const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
+  
+  // SEO generation state
   const [model, setModel] = useState('');
-  const [models, setModels] = useState([]);
+  const [modelOptions, setModelOptions] = useState([]);
+  const [selectedLanguages, setSelectedLanguages] = useState([]);
+  const [availableLanguages, setAvailableLanguages] = useState([]);
   
-  // Language states - динамични от магазина
-  const [language, setLanguage] = useState('all');
-  const [shopLanguages, setShopLanguages] = useState([]);
-  const [primaryLanguage, setPrimaryLanguage] = useState('en');
-  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  // Progress state
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
+  const [currentCollection, setCurrentCollection] = useState('');
+  const [errors, setErrors] = useState([]);
   
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewData, setPreviewData] = useState(null);
-
-  // Load models from plan
+  // Results state
+  const [results, setResults] = useState({});
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  
+  // Toast
+  const [toast, setToast] = useState('');
+  
+  // Load models on mount
   useEffect(() => {
     if (!shop) return;
     fetch(`/plans/me?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (data.modelsSuggested) {
-          setModels(data.modelsSuggested.map(m => ({ label: m, value: m })));
-          setModel(data.modelsSuggested[0] || '');
-        }
+        const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
+        setModelOptions(models.map(m => ({ label: m, value: m })));
+        setModel(models[0]);
       })
-      .catch(e => console.error('Failed to load models:', e));
+      .catch(err => setToast(`Error loading models: ${err.message}`));
   }, [shop]);
-
+  
   // Load shop languages
   useEffect(() => {
     if (!shop) return;
-    
-    fetch(`/api/languages/shop/${encodeURIComponent(shop)}`, { credentials: 'include' })
+    fetch(`/api/languages/shop/${shop}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (data.shopLanguages && data.shopLanguages.length > 0) {
-          setShopLanguages(data.shopLanguages);
-          setPrimaryLanguage(data.primaryLanguage || data.shopLanguages[0] || 'en');
-          setShowLanguageSelector(data.shopLanguages.length > 1);
-          
-          // Set default language
-          if (data.shopLanguages.length === 1) {
-            setLanguage(data.shopLanguages[0]);
-          } else {
-            setLanguage('all');
-          }
-        }
+        const langs = data?.shopLanguages || ['en'];
+        setAvailableLanguages(langs);
+        setSelectedLanguages([]);
       })
-      .catch(e => console.error('Failed to load languages:', e));
-  }, [shop]);
-
-  // Load collections - поправен URL
-  const loadCollections = useCallback(async () => {
-    if (!shop) return;
-    setLoading(true);
-    setError('');
-    
-    try {
-      const response = await fetch(`/collections/list?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
+      .catch(() => {
+        setAvailableLanguages(['en']);
       });
+  }, [shop]);
+  
+  // Load collections
+  const loadCollections = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        shop,
+        ...(searchValue && { search: searchValue }),
+        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+      });
+      
+      const response = await fetch(`/collections/list?${params}`, { credentials: 'include' });
       const data = await response.json();
       
-      if (!response.ok) throw new Error(data.error || 'Failed to load collections');
+      if (!response.ok) throw new Error(data?.error || 'Failed to load collections');
       
-      setCollections(data.collections || []);
-    } catch (e) {
-      setError(e.message);
+      // Apply client-side filtering for search
+      let filteredCollections = data.collections || [];
+      
+      if (searchValue) {
+        const search = searchValue.toLowerCase();
+        filteredCollections = filteredCollections.filter(c => 
+          c.title.toLowerCase().includes(search) ||
+          c.handle.toLowerCase().includes(search)
+        );
+      }
+      
+      if (optimizedFilter !== 'all') {
+        filteredCollections = filteredCollections.filter(c => 
+          optimizedFilter === 'true' ? c.hasSeoData : !c.hasSeoData
+        );
+      }
+      
+      setCollections(filteredCollections);
+      setTotalCount(filteredCollections.length);
+    } catch (err) {
+      setToast(`Error loading collections: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, [shop]);
-
+  }, [shop, searchValue, optimizedFilter]);
+  
+  // Initial load and filter changes
   useEffect(() => {
-    loadCollections();
-  }, [loadCollections]);
+    if (shop) loadCollections();
+  }, [shop, optimizedFilter]);
+  
+  // Search debounce effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (shop) loadCollections();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+  
+  // Handle selection
+  const handleSelectionChange = useCallback((items) => {
+    setSelectedItems(items);
+    if (items.length === 0) {
+      setSelectAllPages(false);
+    }
+  }, []);
+  
+  const handleSelectAllPages = useCallback((checked) => {
+    setSelectAllPages(checked);
+    if (checked) {
+      setSelectedItems(collections.map(c => c.id));
+    } else {
+      setSelectedItems([]);
+    }
+  }, [collections]);
 
-  const handleGenerateSEO = async () => {
-    if (!selectedCollections.length || !model) {
-      setToast('Please select collections and model');
+  // Open language selection modal
+  const openLanguageModal = () => {
+    if (selectedItems.length === 0 && !selectAllPages) {
+      setToast('Please select collections first');
       return;
     }
-
-    setGenerating(true);
-    setError('');
-    const results = {};
-
-    // Determine languages to generate for
-    const languagesToGenerate = language === 'all' ? shopLanguages : [language];
-
-    for (const collectionId of selectedCollections) {
-      try {
-        if (language === 'all' && shopLanguages.length > 1) {
-          // Multi-language generation
-          const response = await fetch('/seo/generate-collection-multi', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              shop,
-              collectionId,
-              model,
-              languages: shopLanguages
-            })
-          });
-
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || 'Generation failed');
-          
-          results[collectionId] = data;
-        } else {
-          // Single language generation
+    setShowLanguageModal(true);
+  };
+  
+  // Generate SEO for selected collections
+  const generateSEO = async () => {
+    if (!selectedLanguages.length) {
+      setToast('Please select at least one language');
+      return;
+    }
+    
+    setShowLanguageModal(false);
+    setIsProcessing(true);
+    setProgress({ current: 0, total: 0, percent: 0 });
+    setErrors([]);
+    setResults({});
+    
+    try {
+      const collectionsToProcess = selectAllPages 
+        ? collections 
+        : collections.filter(c => selectedItems.includes(c.id));
+      
+      const total = collectionsToProcess.length;
+      setProgress({ current: 0, total, percent: 0 });
+      
+      const results = {};
+      
+      for (let i = 0; i < collectionsToProcess.length; i++) {
+        const collection = collectionsToProcess[i];
+        setCurrentCollection(collection.title);
+        
+        try {
           const response = await fetch('/seo/generate-collection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
               shop,
-              collectionId,
+              collectionId: collection.id,
               model,
-              language: language === 'all' ? primaryLanguage : language
-            })
+              language: selectedLanguages[0], // For now, single language
+            }),
           });
-
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || 'Generation failed');
           
-          results[collectionId] = data;
+          const data = await response.json();
+          
+          if (!response.ok) throw new Error(data?.error || 'Generation failed');
+          
+          results[collection.id] = {
+            success: true,
+            data,
+          };
+        } catch (err) {
+          results[collection.id] = {
+            success: false,
+            error: err.message,
+          };
+          setErrors(prev => [...prev, { collection: collection.title, error: err.message }]);
         }
-      } catch (e) {
-        results[collectionId] = { error: e.message };
+        
+        const current = i + 1;
+        const percent = Math.round((current / total) * 100);
+        setProgress({ current, total, percent });
       }
+      
+      setResults(results);
+      setShowResultsModal(true);
+      
+      const successCount = Object.values(results).filter(r => r.success).length;
+      setToast(`Generated SEO for ${successCount} collections`);
+      
+    } catch (err) {
+      setToast(`Error: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setCurrentCollection('');
     }
-
-    setSeoResults(results);
-    setGenerating(false);
-    setToast(`Generated SEO for ${Object.keys(results).length} collections`);
   };
-
-  const handleApplySEO = async (collectionId) => {
-    const seoData = seoResults[collectionId];
-    if (!seoData || seoData.error) return;
-
+  
+  // Apply SEO results
+  const applySEO = async () => {
+    setIsProcessing(true);
+    setProgress({ current: 0, total: 0, percent: 0 });
+    
     try {
-      let response;
+      const successfulResults = Object.entries(results).filter(([_, r]) => r.success);
+      const total = successfulResults.length;
+      setProgress({ current: 0, total, percent: 0 });
       
-      if (seoData.results && Array.isArray(seoData.results)) {
-        // Multi-language apply
-        response = await fetch('/seo/apply-collection-multi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            shop,
-            collectionId,
-            results: seoData.results,
-            primaryLanguage,
-            options: {
-              updateTitle: true,
-              updateDescription: true,
-              updateSeo: true,
-              updateMetafields: true
-            }
-          })
-        });
-      } else {
-        // Single language apply
-        response = await fetch('/seo/apply-collection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            shop,
-            collectionId,
-            seo: seoData.seo,
-            language: seoData.language || primaryLanguage,
-            options: {
-              updateTitle: true,
-              updateDescription: true,
-              updateSeo: true,
-              updateMetafields: true
-            }
-          })
-        });
+      for (let i = 0; i < successfulResults.length; i++) {
+        const [collectionId, result] = successfulResults[i];
+        const collection = collections.find(c => c.id === collectionId);
+        
+        if (!collection) continue;
+        
+        setCurrentCollection(collection.title);
+        
+        try {
+          const response = await fetch('/seo/apply-collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              shop,
+              collectionId,
+              seo: result.data.seo,
+              language: result.data.language,
+              options: {
+                updateTitle: true,
+                updateDescription: true,
+                updateSeo: true,
+                updateMetafields: true,
+              },
+            }),
+          });
+          
+          const data = await response.json();
+          if (!response.ok) throw new Error(data?.error || 'Apply failed');
+          
+        } catch (err) {
+          setErrors(prev => [...prev, { collection: collection.title, error: `Apply failed: ${err.message}` }]);
+        }
+        
+        const current = i + 1;
+        const percent = Math.round((current / total) * 100);
+        setProgress({ current, total, percent });
       }
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Apply failed');
       
-      setToast('SEO applied successfully');
-      // Remove from results after successful apply
-      setSeoResults(prev => {
-        const next = { ...prev };
-        delete next[collectionId];
-        return next;
-      });
-    } catch (e) {
-      setToast(`Failed to apply: ${e.message}`);
+      setToast('SEO applied successfully!');
+      setShowResultsModal(false);
+      loadCollections();
+      
+    } catch (err) {
+      setToast(`Error applying SEO: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setCurrentCollection('');
     }
   };
-
-  const handlePreview = (collectionId) => {
-    const data = seoResults[collectionId];
-    if (data && !data.error) {
-      setPreviewData(data);
-      setShowPreview(true);
-    }
-  };
-
-  // Build language options
-  const languageOptions = showLanguageSelector
-    ? [
-        { label: 'All languages', value: 'all' },
-        ...shopLanguages.map(l => ({ 
-          label: l.toUpperCase(), 
-          value: l 
-        }))
-      ]
-    : [];
-
-  const rowMarkup = collections.map((collection, index) => {
-    const hasResult = !!seoResults[collection.id];
-    const hasError = seoResults[collection.id]?.error;
+  
+  // Resource list items
+  const renderItem = (collection) => {
+    const media = (
+      <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
+    );
     
     return (
-      <IndexTable.Row
+      <ResourceItem
         id={collection.id}
-        key={collection.id}
-        position={index}
-        selected={selectedCollections.includes(collection.id)}
-        onSelectionChange={(selected) => {
-          if (selected) {
-            setSelectedCollections([...selectedCollections, collection.id]);
-          } else {
-            setSelectedCollections(selectedCollections.filter(id => id !== collection.id));
-          }
-        }}
+        url=""
+        media={media}
+        accessibilityLabel={`View details for ${collection.title}`}
       >
-        <IndexTable.Cell>
-          <Text variant="bodyMd" fontWeight="bold">{collection.title}</Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          {collection.productsCount} products
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          {collection.hasSeoData ? (
-            <Badge status="success">Has AI Search Optimisation</Badge>
-          ) : (
-            <Badge status="attention">No AI Search Optimisation</Badge>
-          )}
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          {hasResult && !hasError ? (
-            <InlineStack gap="200">
-              <Button size="slim" onClick={() => handlePreview(collection.id)}>
-                Preview
-              </Button>
-              <Button size="slim" primary onClick={() => handleApplySEO(collection.id)}>
-                Apply
-              </Button>
-            </InlineStack>
-          ) : hasError ? (
-            <Badge status="critical">Error</Badge>
-          ) : null}
-        </IndexTable.Cell>
-      </IndexTable.Row>
+        <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
+          <Box style={{ flex: '1 1 40%', minWidth: '250px' }}>
+            <Text variant="bodyMd" fontWeight="semibold">{collection.title}</Text>
+            <Text variant="bodySm" tone="subdued">Handle: {collection.handle}</Text>
+          </Box>
+          
+          <Box style={{ flex: '0 0 20%', minWidth: '120px', textAlign: 'center' }}>
+            <Text variant="bodyMd">{collection.productsCount} products</Text>
+          </Box>
+          
+          <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
+            {collection.hasSeoData ? (
+              <Badge tone="success">Has AI Search Optimisation</Badge>
+            ) : (
+              <Badge tone="subdued">No AI Search Optimisation</Badge>
+            )}
+          </Box>
+        </InlineStack>
+      </ResourceItem>
     );
-  });
+  };
+  
+  // Progress modal
+  const progressModal = isProcessing && (
+    <Modal
+      open={isProcessing}
+      title="Processing Collections"
+      onClose={() => {}}
+      noScroll
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">
+            {currentCollection ? `Processing: ${currentCollection}` : 'Preparing...'}
+          </Text>
+          <ProgressBar progress={progress.percent} />
+          <Text variant="bodySm" tone="subdued">
+            {progress.current} of {progress.total} collections ({progress.percent}%)
+          </Text>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
 
+  // Language selection modal
+  const languageModal = (
+    <Modal
+      open={showLanguageModal}
+      title="Select Languages"
+      primaryAction={{
+        content: 'Generate AI Search Optimisation',
+        onAction: generateSEO,
+        disabled: selectedLanguages.length === 0,
+      }}
+      secondaryActions={[
+        {
+          content: 'Cancel',
+          onAction: () => setShowLanguageModal(false),
+        },
+      ]}
+    >
+      <Modal.Section>
+        <BlockStack gap="300">
+          <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected collections:</Text>
+          <Box paddingBlockStart="200">
+            <InlineStack gap="200" wrap>
+              {availableLanguages.map(lang => (
+                <Checkbox
+                  key={lang}
+                  label={lang.toUpperCase()}
+                  checked={selectedLanguages.includes(lang)}
+                  onChange={(checked) => {
+                    setSelectedLanguages(
+                      checked
+                        ? [...selectedLanguages, lang]
+                        : selectedLanguages.filter(l => l !== lang)
+                    );
+                  }}
+                />
+              ))}
+            </InlineStack>
+          </Box>
+          <Box paddingBlockStart="200">
+            <Button
+              plain
+              onClick={() => {
+                setSelectedLanguages(
+                  selectedLanguages.length === availableLanguages.length
+                    ? []
+                    : [...availableLanguages]
+                );
+              }}
+            >
+              {selectedLanguages.length === availableLanguages.length ? 'Deselect all' : 'Select all'}
+            </Button>
+          </Box>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
+  // Results modal
+  const resultsModal = (
+    <Modal
+      open={showResultsModal && !isProcessing}
+      title="AI Search Optimisation Results"
+      primaryAction={{
+        content: 'Apply Optimisation',
+        onAction: applySEO,
+        disabled: !Object.values(results).some(r => r.success),
+      }}
+      secondaryActions={[
+        {
+          content: 'Cancel',
+          onAction: () => setShowResultsModal(false),
+        },
+      ]}
+    >
+      <Modal.Section>
+        <BlockStack gap="300">
+          <InlineStack gap="400">
+            <Box>
+              <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
+              <Text variant="headingLg" fontWeight="bold" tone="success">
+                {Object.values(results).filter(r => r.success).length}
+              </Text>
+            </Box>
+            <Box>
+              <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
+              <Text variant="headingLg" fontWeight="bold" tone="critical">
+                {Object.values(results).filter(r => !r.success).length}
+              </Text>
+            </Box>
+          </InlineStack>
+          
+          {errors.length > 0 && (
+            <>
+              <Divider />
+              <Text variant="bodyMd" fontWeight="semibold">Errors:</Text>
+              <Box maxHeight="200px" overflowY="scroll">
+                {errors.slice(0, 10).map((err, idx) => (
+                  <Text key={idx} variant="bodySm" tone="critical">
+                    {err.collection}: {err.error}
+                  </Text>
+                ))}
+                {errors.length > 10 && (
+                  <Text variant="bodySm" tone="subdued">
+                    ... and {errors.length - 10} more errors
+                  </Text>
+                )}
+              </Box>
+            </>
+          )}
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
+  const emptyState = (
+    <EmptyState
+      heading="No collections found"
+      action={{ 
+        content: 'Clear filters', 
+        onAction: () => {
+          setSearchValue('');
+          setOptimizedFilter('all');
+          loadCollections();
+        }
+      }}
+      image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+    >
+      <p>Try adjusting your filters or search terms</p>
+    </EmptyState>
+  );
+  
   return (
-    <BlockStack gap="400">
-      {error && (
-        <Banner status="critical" onDismiss={() => setError('')}>
-          <p>{error}</p>
-        </Banner>
-      )}
-
+    <>
       <Card>
         <Box padding="400">
-          <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">Collection SEO Generator</Text>
-            
-            <InlineStack gap="300" align="end">
-              {/* Временно скриваме AI Model селектора
-              <Select
-                label="AI Model"
-                options={models}
-                value={model}
-                onChange={setModel}
+          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+            <Box minWidth="400px">
+              <TextField
+                label=""
+                placeholder="Search by collection name..."
+                value={searchValue}
+                onChange={setSearchValue}
+                prefix={<SearchIcon />}
+                clearButton
+                onClearButtonClick={() => setSearchValue('')}
               />
-              */}
-              
-              {showLanguageSelector && (
-                <Select
-                  label="Language"
-                  options={languageOptions}
-                  value={language}
-                  onChange={setLanguage}
-                />
-              )}
-              
+            </Box>
+            
+            <Box>
               <Button
                 primary
-                onClick={handleGenerateSEO}
-                loading={generating}
-                disabled={!selectedCollections.length} // махаме проверката за model
+                onClick={openLanguageModal}
+                disabled={selectedItems.length === 0 && !selectAllPages}
               >
-                Generate SEO ({selectedCollections.length})
+                Generate AI Search Optimisation
               </Button>
-              
-              <Button onClick={loadCollections} loading={loading}>
-                Refresh
-              </Button>
-            </InlineStack>
-          </BlockStack>
+            </Box>
+          </InlineStack>
+          
+          {totalCount > 0 && (
+            <Box paddingBlockStart="300">
+              <Checkbox
+                label={`Select all ${totalCount} collections`}
+                checked={selectAllPages}
+                onChange={handleSelectAllPages}
+              />
+            </Box>
+          )}
         </Box>
       </Card>
 
-      <Card>
-        {loading ? (
-          <Box padding="400">
-            <InlineStack align="center">
-              <Spinner size="large" />
-            </InlineStack>
-          </Box>
-        ) : collections.length === 0 ? (
-          <Box padding="400">
-            <Text tone="subdued">No collections found</Text>
-          </Box>
-        ) : (
-          <IndexTable
-            resourceName={{ singular: 'collection', plural: 'collections' }}
-            itemCount={collections.length}
-            selectedItemsCount={selectedCollections.length}
-            onSelectionChange={(selectionType, isSelecting, selection) => {
-              if (selectionType === 'all') {
-                setSelectedCollections(isSelecting ? collections.map(c => c.id) : []);
-              }
-            }}
-            headings={[
-              { title: 'Collection' },
-              { title: 'Products' },
-              { title: 'AI Optimisation Status' },
-              { title: 'Actions' }
-            ]}
-          >
-            {rowMarkup}
-          </IndexTable>
-        )}
-      </Card>
-
-      <Modal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        title="SEO Preview"
-        primaryAction={{
-          content: 'Close',
-          onAction: () => setShowPreview(false)
-        }}
-      >
-        <Modal.Section>
-          {previewData && (
-            <BlockStack gap="300">
-              <Box>
-                <Text variant="headingSm">Title</Text>
-                <Text>{previewData.seo?.title}</Text>
-              </Box>
-              <Box>
-                <Text variant="headingSm">Meta Description</Text>
-                <Text>{previewData.seo?.metaDescription}</Text>
-              </Box>
-              {previewData.seo?.jsonLd && (
-                <Box>
-                  <Text variant="headingSm">Structured Data</Text>
-                  <pre style={{ fontSize: '12px', overflow: 'auto' }}>
-                    {JSON.stringify(previewData.seo.jsonLd, null, 2)}
-                  </pre>
+      <Box paddingBlockStart="400">
+        <Card>
+          {/* Filter buttons */}
+          <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+            <InlineStack gap="200" wrap>
+              {/* AI Search Status filter */}
+              <Popover
+                active={showOptimizedPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>AI Search Status</span>
+                      {optimizedFilter !== 'all' && (
+                        <Box onClick={(e) => {
+                          e.stopPropagation();
+                          setOptimizedFilter('all');
+                        }}>
+                          <Text as="span" tone="subdued">✕</Text>
+                        </Box>
+                      )}
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowOptimizedPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="AI Search Status"
+                    titleHidden
+                    choices={[
+                      { label: 'All collections', value: 'all' },
+                      { label: 'Has AI Search Optimisation', value: 'true' },
+                      { label: 'No AI Search Optimisation', value: 'false' },
+                    ]}
+                    selected={[optimizedFilter]}
+                    onChange={(value) => {
+                      setOptimizedFilter(value[0]);
+                      setShowOptimizedPopover(false);
+                    }}
+                  />
                 </Box>
-              )}
-            </BlockStack>
-          )}
-        </Modal.Section>
-      </Modal>
+              </Popover>
+            </InlineStack>
+            
+            {/* Applied filters */}
+            {optimizedFilter !== 'all' && (
+              <Box paddingBlockStart="200">
+                <InlineStack gap="100" wrap>
+                  <Badge onRemove={() => setOptimizedFilter('all')}>
+                    {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
+                  </Badge>
+                </InlineStack>
+              </Box>
+            )}
+          </Box>
 
-      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
-    </BlockStack>
+          <ResourceList
+            resourceName={{ singular: 'collection', plural: 'collections' }}
+            items={collections}
+            renderItem={renderItem}
+            selectedItems={selectedItems}
+            onSelectionChange={handleSelectionChange}
+            selectable={true}
+            loading={loading}
+            totalItemsCount={totalCount}
+            emptyState={emptyState}
+            showHeader={false}
+          />
+        </Card>
+      </Box>
+
+      {progressModal}
+      {languageModal}
+      {resultsModal}
+      
+      {toast && (
+        <Toast content={toast} onDismiss={() => setToast('')} />
+      )}
+    </>
   );
 };
 
