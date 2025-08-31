@@ -1650,7 +1650,7 @@ router.get('/collections/:id/seo-data', async (req, res) => {
       model: 'none'
     });
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.message );
+    res.status(e.status || 500).json({ error: e.message });
   }
 });
 
