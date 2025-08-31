@@ -56,6 +56,10 @@ const Collections = ({ shop }) => {
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   
+  // Preview state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  
   // Toast
   const [toast, setToast] = useState('');
   
@@ -306,6 +310,8 @@ const Collections = ({ shop }) => {
   
   // Resource list items
   const renderItem = (collection) => {
+    const hasResult = results[collection.id] && results[collection.id].success;
+    
     const media = (
       <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
     );
@@ -318,12 +324,12 @@ const Collections = ({ shop }) => {
         accessibilityLabel={`View details for ${collection.title}`}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
-          <Box style={{ flex: '1 1 40%', minWidth: '250px' }}>
+          <Box style={{ flex: '1 1 35%', minWidth: '250px' }}>
             <Text variant="bodyMd" fontWeight="semibold">{collection.title}</Text>
             <Text variant="bodySm" tone="subdued">Handle: {collection.handle}</Text>
           </Box>
           
-          <Box style={{ flex: '0 0 20%', minWidth: '120px', textAlign: 'center' }}>
+          <Box style={{ flex: '0 0 15%', minWidth: '100px', textAlign: 'center' }}>
             <Text variant="bodyMd">{collection.productsCount} products</Text>
           </Box>
           
@@ -332,6 +338,20 @@ const Collections = ({ shop }) => {
               <Badge tone="success">Has AI Search Optimisation</Badge>
             ) : (
               <Badge tone="subdued">No AI Search Optimisation</Badge>
+            )}
+          </Box>
+          
+          <Box style={{ flex: '0 0 15%', minWidth: '120px' }}>
+            {hasResult && (
+              <Button
+                size="slim"
+                onClick={() => {
+                  setPreviewData(results[collection.id].data);
+                  setShowPreviewModal(true);
+                }}
+              >
+                Preview JSON
+              </Button>
             )}
           </Box>
         </InlineStack>
@@ -475,6 +495,40 @@ const Collections = ({ shop }) => {
     </Modal>
   );
   
+  // Preview modal
+  const previewModal = (
+    <Modal
+      open={showPreviewModal}
+      title="SEO Data Preview"
+      secondaryActions={[
+        {
+          content: 'Close',
+          onAction: () => {
+            setShowPreviewModal(false);
+            setPreviewData(null);
+          },
+        },
+      ]}
+    >
+      <Modal.Section>
+        <Box>
+          <pre style={{ 
+            whiteSpace: 'pre-wrap', 
+            wordBreak: 'break-word',
+            fontSize: '12px',
+            backgroundColor: '#f6f6f7',
+            padding: '12px',
+            borderRadius: '4px',
+            maxHeight: '400px',
+            overflow: 'auto'
+          }}>
+            {previewData ? JSON.stringify(previewData, null, 2) : ''}
+          </pre>
+        </Box>
+      </Modal.Section>
+    </Modal>
+  );
+  
   const emptyState = (
     <EmptyState
       heading="No collections found"
@@ -610,6 +664,7 @@ const Collections = ({ shop }) => {
       {progressModal}
       {languageModal}
       {resultsModal}
+      {previewModal}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
