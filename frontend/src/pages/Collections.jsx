@@ -200,7 +200,8 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          const response = await fetch('/seo/generate-collection', {
+          // Използваме multi-language endpoint като в BulkEdit
+          const response = await fetch('/api/seo/generate-collection-multi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -208,7 +209,7 @@ const Collections = ({ shop }) => {
               shop,
               collectionId: collection.id,
               model,
-              language: selectedLanguages[0], // For now, single language
+              languages: selectedLanguages,
             }),
           });
           
@@ -266,19 +267,18 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          console.log('Applying SEO for collection:', collectionId);
-          console.log('Result data:', result.data);
-          console.log('SEO data:', result.data?.seo);
-          
-          const response = await fetch('/seo/apply-collection', {
+          // Използваме multi endpoint като в BulkEdit
+          const response = await fetch('/api/seo/apply-collection-multi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
               shop,
               collectionId,
-              seo: result.data.seo,
-              language: result.data.language,
+              results: result.data.results.filter(r => r?.seo).map(r => ({
+                language: r.language,
+                seo: r.seo,
+              })),
               options: {
                 updateTitle: true,
                 updateDescription: true,
@@ -295,24 +295,24 @@ const Collections = ({ shop }) => {
           setErrors(prev => [...prev, { collection: collection.title, error: `Apply failed: ${err.message}` }]);
         }
         
-      const current = i + 1;
-      const percent = Math.round((current / total) * 100);
-      setProgress({ current, total, percent });
+        const current = i + 1;
+        const percent = Math.round((current / total) * 100);
+        setProgress({ current, total, percent });
       }
-
+      
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
-      setResults({}); // Изчистваме резултатите
-      setSelectedItems([]); // Изчистваме селекцията
-      await loadCollections(); // Презареждаме колекциите за да видим новите статуси
-
-      } catch (err) {
-        setToast(`Error applying SEO: ${err.message}`);
-      } finally {
-        setIsProcessing(false);
-        setCurrentCollection('');
-      }
-    };
+      setResults({});
+      setSelectedItems([]);
+      await loadCollections();
+      
+    } catch (err) {
+      setToast(`Error applying SEO: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setCurrentCollection('');
+    }
+  };
   
   // Resource list items
   const renderItem = (collection) => {
