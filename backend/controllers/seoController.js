@@ -1598,6 +1598,7 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         
         // Update collection base fields only for primary language
         if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
+          console.log(`[APPLY-MULTI] ENTERING primary language update block for ${language}`);
           const input = { id: collectionId };
           if (options.updateTitle) input.title = seo.title;
           if (options.updateDescription) input.descriptionHtml = seo.metaDescription ? `<p>${seo.metaDescription}</p>` : '';
@@ -1623,6 +1624,7 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           } else {
             updated.push({ language, fields: ['title', 'description', 'seo'] });
           }
+          console.log(`[APPLY-MULTI] EXITING primary language update block for ${language}`);
         }
         
         console.log(`[APPLY-MULTI] About to update metafields, options.updateMetafields = ${options.updateMetafields}`);
