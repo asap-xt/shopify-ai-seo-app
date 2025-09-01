@@ -1616,15 +1616,20 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
             }
           `;
           
-          const updateResult = await shopGraphQL(shop, mutation, { input });
-          const userErrors = updateResult?.collectionUpdate?.userErrors || [];
-          
-          if (userErrors.length) {
-            errors.push(...userErrors.map(e => `${language}: ${e.message}`));
-          } else {
-            updated.push({ language, fields: ['title', 'description', 'seo'] });
+          try {
+            const updateResult = await shopGraphQL(shop, mutation, { input });
+            const userErrors = updateResult?.collectionUpdate?.userErrors || [];
+            
+            if (userErrors.length) {
+              errors.push(...userErrors.map(e => `${language}: ${e.message}`));
+            } else {
+              updated.push({ language, fields: ['title', 'description', 'seo'] });
+            }
+            console.log(`[APPLY-MULTI] EXITING primary language update block for ${language}`);
+          } catch (e) {
+            console.error(`[APPLY-MULTI] Error in primary language update:`, e.message);
+            errors.push(`${language}: ${e.message}`);
           }
-          console.log(`[APPLY-MULTI] EXITING primary language update block for ${language}`);
         }
         
         console.log(`[APPLY-MULTI] About to update metafields, options.updateMetafields = ${options.updateMetafields}`);
