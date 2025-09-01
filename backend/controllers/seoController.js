@@ -270,7 +270,7 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
   const results = [];
   
   for (const lang of languages) {
-    const key = `seo__${lang}`;
+    const key = `seo__${lang.toLowerCase()}`; // ВИНАГИ lowercase
     
     const createMutation = `
       mutation {
@@ -1619,17 +1619,25 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         if (options.updateMetafields !== false) {
           console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
           
+          // Валидация за празни SEO данни
+          if (!seo || !seo.title || !seo.metaDescription) {
+            console.error(`[APPLY-MULTI] Empty SEO data for ${language}, skipping`);
+            errors.push(`${language}: Empty SEO data`);
+            continue;
+          }
+          
           // Ensure definition exists for this language
           await ensureCollectionMetafieldDefinitions(shop, [language]);
           
+          const key = `seo__${String(language || 'en').toLowerCase()}`; // ВИНАГИ lowercase!
           const metafields = [{
             ownerId: collectionId,
             namespace: 'seo_ai',  // Същият namespace като продуктите!
-            key: `seo__${language}`,  // Същият формат като продуктите!
+            key,
             type: 'json',
             value: JSON.stringify({
               ...seo,
-              language,
+              language: key.replace('seo__', ''), // също lowercase
               updatedAt: new Date().toISOString()
             })
           }];
@@ -1651,6 +1659,21 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           if (mfErrors.length) {
             errors.push(...mfErrors.map(e => `${language} metafield: ${e.message}`));
           } else {
+            // Веднага провери с GraphQL
+            const verifyQuery = `
+              query {
+                collection(id: "${collectionId}") {
+                  metafield(namespace: "seo_ai", key: "${key}") {
+                    id
+                    value
+                  }
+                }
+              }
+            `;
+            
+            const verifyResult = await shopGraphQL(shop, verifyQuery);
+            console.log(`[APPLY-MULTI] Verify ${key}:`, !!verifyResult?.collection?.metafield);
+            
             updated.push({ language, fields: ['metafields'] });
           }
         }
