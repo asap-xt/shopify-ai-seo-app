@@ -1112,6 +1112,8 @@ router.get('/collections/list', async (req, res) => {
               const mfData = await mfResponse.json();
               const metafields = mfData.metafields || [];
               
+              console.log(`[COLLECTIONS] Metafields for "${c.title}":`, metafields.map(m => m.key));
+              
               // Извличаме езиците от keys като seo__en, seo__bg и т.н.
               metafields.forEach(mf => {
                 if (mf.key && mf.key.startsWith('seo__')) {
