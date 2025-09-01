@@ -380,7 +380,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      loadProducts(1);
+      await loadProducts(1);
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
