@@ -967,32 +967,17 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
-      // ЗАКОМЕНТИРАНО - Вече не записваме отделни bullets/faq метафийлди
-      // 4. Also update bullets/faq if requested
-      if (updateBullets) {
-        metafields.push({
-          ownerId: productId,
-          namespace: 'seo_ai',
-          key: `bullets__${language.toLowerCase()}`,
-          type: 'json',
-          value: JSON.stringify(v.bullets || []),
-        });
-      }
-      if (updateFaq) {
-        metafields.push({
-          ownerId: productId,
-          namespace: 'seo_ai',
-          key: `faq__${language.toLowerCase()}`,
-          type: 'json',
-          value: JSON.stringify(v.faq || []),
-        });
-      }
+      // Bullets и faq се записват в основния SEO metafield (ред 963-967)
+      // Не се записват като отделни metafields
 
       const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
       if (mfErrs.length) {
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
       } else {
+        // Маркираме успешно записаните metafields
+        updated.seoMetafield = true; // Основният SEO metafield винаги се записва
+        // Bullets и faq са включени в основния metafield
         updated.bullets = updateBullets;
         updated.faq = updateFaq;
       }
@@ -1021,7 +1006,8 @@ router.post('/seo/apply', async (req, res) => {
     }
 
     // 6. Update MongoDB seoStatus after successful metafield save
-    if (updated.bullets || updated.faq) {
+    // Проверяваме дали има успешно записани metafields
+    if (updated.seoMetafield) {
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
