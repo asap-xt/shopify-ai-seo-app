@@ -144,8 +144,11 @@ if (req.query.languageFilter) {
     ]);
 
     // Add optimization summary to each product by reading metafields from Shopify
+    console.log('[PRODUCTS] Starting to fetch metafields for', products.length, 'products');
+    const startTime = Date.now();
+    
     const productsWithSummary = await Promise.all(
-      products.map(async (product) => {
+      products.map(async (product, index) => {
         let optimizedLanguages = [];
         
         try {
@@ -172,6 +175,10 @@ if (req.query.languageFilter) {
                 }
               }
             });
+            
+            if (index < 3) { // Debug първите 3 продукта
+              console.log(`[PRODUCTS] Product ${product.productId} (${product.title}): metafields:`, metafields.map(m => m.key), 'optimizedLanguages:', optimizedLanguages);
+            }
           }
         } catch (e) {
           console.error('[PRODUCTS] Error checking metafields for product:', product.productId, e.message);
@@ -192,6 +199,9 @@ if (req.query.languageFilter) {
         };
       })
     );
+    
+    const endTime = Date.now();
+    console.log('[PRODUCTS] Finished fetching metafields in', endTime - startTime, 'ms');
 
     res.json({
       products: productsWithSummary,
