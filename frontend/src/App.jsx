@@ -82,24 +82,29 @@ function DashboardCard() {
   useEffect(() => {
     if (!shop) return;
     
-    // Еднократна инициализация на collection metafield definitions
     fetch(`/collections/check-definitions?shop=${encodeURIComponent(shop)}`, {
       credentials: 'include'
     })
       .then(r => r.json())
       .then(data => {
-        if (!data.hasDefinitions) {
+        console.log('Existing definitions:', data);
+        // Създай само липсващите definitions
+        const existingKeys = (data.definitions || []).map(d => d.key);
+        const requiredLangs = ['en', 'bg', 'fr'];
+        const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
+        
+        if (missingLangs.length > 0) {
           return fetch('/collections/create-definitions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ shop })
+            body: JSON.stringify({ shop, languages: missingLangs })
           });
         }
       })
       .then(r => r && r.json())
-      .then(data => data && console.log('Collection definitions:', data))
-      .catch(err => console.error('Collection definitions error:', err));
+      .then(data => data && console.log('Created definitions:', data))
+      .catch(err => console.error('Definitions error:', err));
   }, [shop]);
 
   if (!plan) {

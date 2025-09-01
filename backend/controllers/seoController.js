@@ -1572,6 +1572,11 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
     const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
     
+    // Ensure EN definition always exists
+    const allLanguages = results.map(r => r.language);
+    console.log('[APPLY-MULTI] Ensuring definitions for:', allLanguages);
+    await ensureCollectionMetafieldDefinitions(shop, allLanguages);
+    
     for (const result of results) {
       try {
         const { language, seo } = result;
@@ -1664,6 +1669,57 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
 });
 
 // ==================== END COLLECTIONS ENDPOINTS ====================
+
+// GET /collections/check-definitions
+router.get('/collections/check-definitions', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    const query = `
+      query {
+        metafieldDefinitions(first: 10, ownerType: COLLECTION, namespace: "seo_ai") {
+          edges {
+            node {
+              key
+              name
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query);
+    const definitions = data?.metafieldDefinitions?.edges || [];
+    
+    res.json({ 
+      hasDefinitions: definitions.length > 0,
+      definitions: definitions.map(e => e.node),
+      count: definitions.length 
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /collections/create-definitions
+router.post('/collections/create-definitions', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { languages = ['en'] } = req.body;
+    
+    console.log('[CREATE-DEFINITIONS] Creating definitions for languages:', languages);
+    
+    const results = await ensureCollectionMetafieldDefinitions(shop, languages);
+    
+    res.json({
+      ok: true,
+      languages,
+      results
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
 
 // POST /collections/init-metafields - Създава metafield definitions за колекции
 router.post('/collections/init-metafields', async (req, res) => {
