@@ -1556,6 +1556,7 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     const shop = requireShop(req);
     const { collectionId, results = [], options = {} } = req.body;
     
+    console.log('[APPLY-MULTI] Full request body:', JSON.stringify(req.body, null, 2));
     console.log('[APPLY-MULTI] Request languages:', results.map(r => r.language));
     
     if (!collectionId || !results.length) {
@@ -1579,12 +1580,21 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     console.log('[APPLY-MULTI] Ensuring definitions for:', allLanguages);
     await ensureCollectionMetafieldDefinitions(shop, allLanguages);
     
+    console.log('[APPLY-MULTI] Options:', options);
+    console.log('[APPLY-MULTI] options.updateMetafields:', options.updateMetafields);
+    
     for (const result of results) {
       try {
         const { language, seo } = result;
         const isPrimary = language.toLowerCase() === primary.toLowerCase();
         
         console.log(`[APPLY-MULTI] Processing ${language}, isPrimary: ${isPrimary}`);
+        console.log(`[APPLY-MULTI] Processing ${language} with options:`, {
+          updateTitle: options.updateTitle,
+          updateDescription: options.updateDescription,
+          updateSeo: options.updateSeo,
+          updateMetafields: options.updateMetafields
+        });
         
         // Update collection base fields only for primary language
         if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
