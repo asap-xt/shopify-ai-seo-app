@@ -1615,6 +1615,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           }
         }
         
+        console.log(`[APPLY-MULTI] About to update metafields, options.updateMetafields = ${options.updateMetafields}`);
+        
         // Always update metafields
         if (options.updateMetafields !== false) {
           console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
