@@ -378,7 +378,7 @@ const seoSchema = {
     language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
       type: 'object',
-      required: ['title', 'metaDescription', 'slug', 'bodyHtml', 'bullets', 'faq'], // REMOVED jsonLd
+      required: ['title', 'metaDescription', 'slug', 'bodyHtml'], // bullets & faq са optional (за по-високи планове)
       additionalProperties: true,
       properties: {
         title: { type: 'string', minLength: 1, maxLength: 200 },
@@ -977,9 +977,13 @@ router.post('/seo/apply', async (req, res) => {
       } else {
         // Маркираме успешно записаните metafields
         updated.seoMetafield = true; // Основният SEO metafield винаги се записва
-        // Bullets и faq са включени в основния metafield
-        updated.bullets = updateBullets;
-        updated.faq = updateFaq;
+        // Bullets и faq са optional (за по-високи планове)
+        if (v.bullets && Array.isArray(v.bullets) && v.bullets.length > 0) {
+          updated.bullets = updateBullets;
+        }
+        if (v.faq && Array.isArray(v.faq) && v.faq.length > 0) {
+          updated.faq = updateFaq;
+        }
       }
 
       // 5. Optional: image alts (if needed)
@@ -1008,14 +1012,14 @@ router.post('/seo/apply', async (req, res) => {
     // 6. Update MongoDB seoStatus after successful metafield save
     // Проверяваме дали има успешно записани metafields
     if (updated.seoMetafield) {
-      console.log('[SEO-APPLY] Updating MongoDB seoStatus for product:', productId, 'language:', language);
+      
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
         
         // Първо намерим продукта и неговия текущ seoStatus
         const product = await Product.findOne({ shop, productId: parseInt(numericId) });
-        console.log('[SEO-APPLY] Found product in MongoDB:', !!product, 'numericId:', numericId);
+
         if (product) {
           const currentLanguages = product.seoStatus?.languages || [];
           const langCode = language.toLowerCase();
@@ -1050,18 +1054,17 @@ router.post('/seo/apply', async (req, res) => {
               }
             }
           );
-          console.log('[SEO-APPLY] Successfully updated MongoDB seoStatus for language:', langCode);
+          
         }
       } catch (e) {
         console.error('Failed to update MongoDB seoStatus:', e.message);
         // Не спираме процеса заради MongoDB грешка
       }
     } else {
-      console.log('[SEO-APPLY] Skipping MongoDB update - no metafields saved. Updated object:', updated);
+
     }
 
-    console.log('[SEO-APPLY] Final updated object:', updated);
-    console.log('[SEO-APPLY] updated.seoMetafield:', updated.seoMetafield);
+
 
     res.json({ 
       ok: errors.length === 0, 

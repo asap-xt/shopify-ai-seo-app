@@ -2,6 +2,26 @@
 import { Router } from 'express';
 import Product from '../db/Product.js';
 import { requireShop, shopGraphQL } from './seoController.js';
+import fetch from 'node-fetch';
+
+// Import resolveAdminTokenForShop function
+async function resolveAdminTokenForShop(shop) {
+  try {
+    const mod = await import('../db/Shop.js');
+    const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
+    if (Shop && typeof Shop.findOne === 'function') {
+      const doc = await Shop.findOne({ shopDomain: shop }).lean().exec();
+      if (doc && doc.accessToken) return doc.accessToken;
+    }
+  } catch (e) {
+    console.warn('[TOKEN] DB lookup failed:', e.message);
+  }
+  
+  // Fallback to env
+  const fallback = process.env.SHOPIFY_ADMIN_TOKEN || '';
+  if (!fallback) throw new Error('No admin token available');
+  return fallback;
+}
 
 const router = Router();
 
@@ -123,18 +143,55 @@ if (req.query.languageFilter) {
       Product.countDocuments(safeQuery)
     ]);
 
-    // Add optimization summary to each product
-    const productsWithSummary = products.map(product => ({
-      ...product,
-      optimizationSummary: {
-        isOptimized: product.seoStatus?.optimized || false,
-        optimizedLanguages: product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [],
-        lastOptimized: product.seoStatus?.languages
-          ?.filter(l => l.optimized && l.lastOptimizedAt)
-          ?.map(l => l.lastOptimizedAt)
-          ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
-      }
-    }));
+    // Add optimization summary to each product by reading metafields from Shopify
+    const productsWithSummary = await Promise.all(
+      products.map(async (product) => {
+        let optimizedLanguages = [];
+        
+        try {
+          // Четем metafields директно от Shopify като Collections
+          const token = await resolveAdminTokenForShop(shop);
+          const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${product.productId}/metafields.json?namespace=seo_ai`;
+          const mfResponse = await fetch(metafieldUrl, {
+            headers: {
+              'X-Shopify-Access-Token': token,
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (mfResponse.ok) {
+            const mfData = await mfResponse.json();
+            const metafields = mfData.metafields || [];
+            
+            // Извличаме езиците от keys като seo__en, seo__bg и т.н.
+            metafields.forEach(mf => {
+              if (mf.key && mf.key.startsWith('seo__')) {
+                const lang = mf.key.replace('seo__', '');
+                if (lang && !optimizedLanguages.includes(lang)) {
+                  optimizedLanguages.push(lang);
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.error('[PRODUCTS] Error checking metafields for product:', product.productId, e.message);
+          // Fallback към MongoDB данните
+          optimizedLanguages = product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [];
+        }
+        
+        return {
+          ...product,
+          optimizationSummary: {
+            isOptimized: optimizedLanguages.length > 0,
+            optimizedLanguages,
+            lastOptimized: product.seoStatus?.languages
+              ?.filter(l => l.optimized && l.lastOptimizedAt)
+              ?.map(l => l.lastOptimizedAt)
+              ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
+          }
+        };
+      })
+    );
 
     res.json({
       products: productsWithSummary,
