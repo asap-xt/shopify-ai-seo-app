@@ -1556,7 +1556,6 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     const shop = requireShop(req);
     const { collectionId, results = [], options = {} } = req.body;
     
-    console.log('[APPLY-MULTI] Full request body:', JSON.stringify(req.body, null, 2));
     console.log('[APPLY-MULTI] Request languages:', results.map(r => r.language));
     
     if (!collectionId || !results.length) {
@@ -1580,25 +1579,15 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     console.log('[APPLY-MULTI] Ensuring definitions for:', allLanguages);
     await ensureCollectionMetafieldDefinitions(shop, allLanguages);
     
-    console.log('[APPLY-MULTI] Options:', options);
-    console.log('[APPLY-MULTI] options.updateMetafields:', options.updateMetafields);
-    
     for (const result of results) {
       try {
         const { language, seo } = result;
         const isPrimary = language.toLowerCase() === primary.toLowerCase();
         
         console.log(`[APPLY-MULTI] Processing ${language}, isPrimary: ${isPrimary}`);
-        console.log(`[APPLY-MULTI] Processing ${language} with options:`, {
-          updateTitle: options.updateTitle,
-          updateDescription: options.updateDescription,
-          updateSeo: options.updateSeo,
-          updateMetafields: options.updateMetafields
-        });
         
         // Update collection base fields only for primary language
         if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
-          console.log(`[APPLY-MULTI] ENTERING primary language update block for ${language}`);
           const input = { id: collectionId };
           if (options.updateTitle) input.title = seo.title;
           if (options.updateDescription) input.descriptionHtml = seo.metaDescription ? `<p>${seo.metaDescription}</p>` : '';
@@ -1625,14 +1614,11 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
             } else {
               updated.push({ language, fields: ['title', 'description', 'seo'] });
             }
-            console.log(`[APPLY-MULTI] EXITING primary language update block for ${language}`);
           } catch (e) {
             console.error(`[APPLY-MULTI] Error in primary language update:`, e.message);
             errors.push(`${language}: ${e.message}`);
           }
         }
-        
-        console.log(`[APPLY-MULTI] About to update metafields, options.updateMetafields = ${options.updateMetafields}`);
         
         // Валидация за празни SEO данни ПРЕДИ metafields блока
         if (!seo || !seo.title || !seo.metaDescription) {
@@ -1641,77 +1627,42 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         } else {
           // Always update metafields
           if (options.updateMetafields !== false) {
-            console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
-          
-          // Ensure definition exists for this language
-          await ensureCollectionMetafieldDefinitions(shop, [language]);
-          
-          const key = `seo__${String(language || 'en').toLowerCase()}`; // ВИНАГИ lowercase!
-          
-          // Добави логове
-          console.log(`[APPLY-MULTI] Writing metafield with key: ${key}`);
-          
-          const metafields = [{
-            ownerId: collectionId,
-            namespace: 'seo_ai',  // Същият namespace като продуктите!
-            key,
-            type: 'json',
-            value: JSON.stringify({
-              ...seo,
-              language: key.replace('seo__', ''), // също lowercase
-              updatedAt: new Date().toISOString()
-            })
-          }];
-          
-          const metaMutation = `
-            mutation SetCollectionMetafields($metafields: [MetafieldsSetInput!]!) {
-              metafieldsSet(metafields: $metafields) {
-                userErrors { field message }
-                metafields { id }
-              }
-            }
-          `;
-          
-          const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
-          const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
-          
-          console.log(`[APPLY-MULTI] MetafieldsSet response:`, {
-            metafieldId: mfResult?.metafieldsSet?.metafields?.[0]?.id,
-            key: mfResult?.metafieldsSet?.metafields?.[0]?.key,
-            errors: mfErrors
-          });
-          
-          console.log(`[APPLY-MULTI] Metafield result for ${language}:`, mfResult);
-          
-          if (mfErrors.length) {
-            errors.push(...mfErrors.map(e => `${language} metafield: ${e.message}`));
-          } else {
-            // Веднага провери с GraphQL
-            const verifyQuery = `
-              query {
-                collection(id: "${collectionId}") {
-                  metafield(namespace: "seo_ai", key: "${key}") {
-                    id
-                    value
-                  }
+            // Ensure definition exists for this language
+            await ensureCollectionMetafieldDefinitions(shop, [language]);
+            
+            const key = `seo__${String(language || 'en').toLowerCase()}`; // ВИНАГИ lowercase!
+            
+            const metafields = [{
+              ownerId: collectionId,
+              namespace: 'seo_ai',  // Същият namespace като продуктите!
+              key,
+              type: 'json',
+              value: JSON.stringify({
+                ...seo,
+                language: key.replace('seo__', ''), // също lowercase
+                updatedAt: new Date().toISOString()
+              })
+            }];
+            
+            const metaMutation = `
+              mutation SetCollectionMetafields($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                  userErrors { field message }
+                  metafields { id }
                 }
               }
             `;
             
-            try {
-              const verifyResult = await shopGraphQL(shop, verifyQuery);
-              console.log(`[APPLY-MULTI] GraphQL verify ${key}:`, {
-                exists: !!verifyResult?.collection?.metafield,
-                id: verifyResult?.collection?.metafield?.id
-              });
-            } catch (e) {
-              console.error(`[APPLY-MULTI] Verify failed:`, e.message);
-            }
+            const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
+            const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
             
-            updated.push({ language, fields: ['metafields'] });
+            if (mfErrors.length) {
+              errors.push(...mfErrors.map(e => `${language} metafield: ${e.message}`));
+            } else {
+              updated.push({ language, fields: ['metafields'] });
+            }
           }
         }
-        } // Затваря else блока за валидацията
       } catch (err) {
         errors.push(`${result.language}: ${err.message}`);
       }

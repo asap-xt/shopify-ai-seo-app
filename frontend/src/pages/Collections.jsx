@@ -238,9 +238,6 @@ const Collections = ({ shop }) => {
           });
           
           const data = await response.json();
-          
-          console.log('Generated SEO languages:', data.results.map(r => r.language));
-          
           if (!response.ok) throw new Error(data?.error || 'Generation failed');
           
           results[collection.id] = {

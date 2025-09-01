@@ -87,7 +87,7 @@ function DashboardCard() {
     })
       .then(r => r.json())
       .then(data => {
-        console.log('Existing definitions:', data);
+
         // Създай само липсващите definitions
         const existingKeys = (data.definitions || []).map(d => d.key);
         const requiredLangs = ['en', 'bg', 'fr'];
@@ -103,7 +103,7 @@ function DashboardCard() {
         }
       })
       .then(r => r && r.json())
-      .then(data => data && console.log('Created definitions:', data))
+
       .catch(err => console.error('Definitions error:', err));
   }, [shop]);
 
@@ -229,7 +229,7 @@ function SingleProductPanel({ shop }) {
       body: JSON.stringify({ shop: s })
     })
     .then(r => r.json())
-    .then(data => console.log('Collection metafields initialized:', data))
+
     .catch(err => console.error('Failed to init collection metafields:', err));
   }, [shop]);
 
@@ -273,14 +273,6 @@ function SingleProductPanel({ shop }) {
       if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       setResult(data);
       
-      // Enhanced logging
-      console.log('=== GENERATED RESULT ===');
-      console.log('Full result:', data);
-      console.log('Result has language?', !!data.language);
-      console.log('Result language value:', data.language);
-      console.log('Result structure keys:', Object.keys(data));
-      console.log('Is multi-result?', !!data.results);
-      
       setToast('SEO generated successfully');
     } catch (e) {
       const msg = e?.message || 'Failed to generate SEO';
@@ -299,11 +291,7 @@ function SingleProductPanel({ shop }) {
     setLoading(true);
     setToast('');
 
-    // Debug logging
-    console.log('=== APPLY STARTED ===');
-    console.log('Result object:', result);
-    console.log('Current language from dropdown:', language);
-    console.log('Primary language:', primaryLanguage);
+
 
     try {
       const gid = toProductGID(productId);
@@ -311,8 +299,6 @@ function SingleProductPanel({ shop }) {
 
       // Check if this is a multi-language result
       if (result.results && Array.isArray(result.results)) {
-        console.log('Detected multi-language result');
-        
         // Multi-language apply
         const validResults = result.results
           .filter(r => r && r.seo)
@@ -324,8 +310,6 @@ function SingleProductPanel({ shop }) {
         if (!validResults.length) {
           throw new Error('No valid SEO results to apply');
         }
-
-        console.log('Sending multi-apply with results:', validResults);
 
         response = await fetch('/api/seo/apply-multi', {
           method: 'POST',
@@ -346,12 +330,8 @@ function SingleProductPanel({ shop }) {
           }),
         });
       } else {
-        console.log('Single language apply');
-        
         // IMPORTANT FIX: Always use the language from dropdown since result doesn't have it
         const applyLanguage = language !== 'all' ? language : primaryLanguage;
-        
-        console.log('Using language from dropdown:', applyLanguage);
         
         const isPrimary = applyLanguage.toLowerCase() === primaryLanguage.toLowerCase();
         
@@ -369,8 +349,6 @@ function SingleProductPanel({ shop }) {
           },
         };
         
-        console.log('Request body being sent:', JSON.stringify(requestBody, null, 2));
-        
         response = await fetch('/seo/apply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -380,8 +358,6 @@ function SingleProductPanel({ shop }) {
       }
 
       data = await readJson(response);
-      console.log('Apply response:', data);
-      
       if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
       
       // Show success with language info
