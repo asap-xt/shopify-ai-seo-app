@@ -1607,6 +1607,9 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         
         // Always update metafields
         if (options.updateMetafields !== false) {
+          // Ensure definition exists for this language
+          await ensureCollectionMetafieldDefinitions(shop, [language]);
+          
           const metafields = [{
             ownerId: collectionId,
             namespace: 'seo_ai',  // Същият namespace като продуктите!
