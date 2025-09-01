@@ -472,7 +472,32 @@ function AiSearchOptimisationPanel() {
     },
   ];
   
+  // Инициализация на metafield definitions за колекции при първо зареждане
+  const initCollectionMetafields = async () => {
+    try {
+      const response = await fetch('/collections/init-metafield-definitions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ shop })
+      });
+      const data = await response.json();
+      console.log('Collection metafield definitions created:', data);
+    } catch (err) {
+      console.error('Failed to create definitions:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!shop) return;
+    initCollectionMetafields();
+  }, [shop]);
+  
   return (
+    <>
+    <Box paddingBlockEnd="200">
+      <Button onClick={initCollectionMetafields}>Init Collection Metafields</Button>
+    </Box>
     <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
      {selectedTab === 0 ? (
       <BulkEdit shop={shop} />
@@ -486,6 +511,7 @@ function AiSearchOptimisationPanel() {
       <SchemaData shop={shop} />
     )}
     </Tabs>
+    </>
   );
 }
 

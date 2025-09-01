@@ -1686,6 +1686,80 @@ router.post('/collections/init-metafields', async (req, res) => {
   }
 });
 
+// POST /collections/init-metafield-definitions - Създава metafield definitions за колекции
+router.post('/collections/init-metafield-definitions', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Вземи езиците на магазина
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales { locale primary published }
+      }
+    `;
+    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const languages = (shopData?.shopLocales || [])
+      .filter(l => l.published)
+      .map(l => canonLang(l.locale));
+    
+    const uniqueLanguages = [...new Set(languages)];
+    const results = [];
+    
+    // Създаваме definition за всеки език
+    for (const lang of uniqueLanguages) {
+      const mutation = `
+        mutation CreateCollectionMetafield {
+          metafieldDefinitionCreate(definition: {
+            name: "AI SEO - ${lang.toUpperCase()}"
+            namespace: "seo_ai"
+            key: "seo__${lang}"
+            type: "json"
+            ownerType: COLLECTION
+            pin: true
+            visibleToStorefrontApi: true
+          }) {
+            createdDefinition {
+              id
+              name
+              namespace
+              key
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      try {
+        const result = await shopGraphQL(shop, mutation, {});
+        
+        if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
+          const errors = result.metafieldDefinitionCreate.userErrors;
+          if (errors.some(e => e.message.includes('already exists'))) {
+            results.push({ lang, status: 'exists' });
+          } else {
+            results.push({ lang, status: 'error', errors });
+          }
+        } else if (result?.metafieldDefinitionCreate?.createdDefinition) {
+          results.push({ lang, status: 'created', definition: result.metafieldDefinitionCreate.createdDefinition });
+        }
+      } catch (e) {
+        results.push({ lang, status: 'error', error: e.message });
+      }
+    }
+    
+    res.json({
+      ok: true,
+      languages: uniqueLanguages,
+      results
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // Export helper functions for use in other controllers
 export { 
   requireShop, 
