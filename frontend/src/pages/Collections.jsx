@@ -134,19 +134,6 @@ const Collections = ({ shop }) => {
     }
   }, [shop, searchValue, optimizedFilter]);
   
-  // Debug function for collection metafields
-  const debugMetafields = async (collectionId) => {
-    try {
-      const response = await fetch(`/collections/${collectionId.split('/').pop()}/seo-data?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      console.log('Collection metafields:', data);
-    } catch (err) {
-      console.error('Debug error:', err);
-    }
-  };
-  
   // Initial load and filter changes
   useEffect(() => {
     if (shop) loadCollections();
@@ -426,9 +413,6 @@ const Collections = ({ shop }) => {
                 Preview JSON
               </Button>
             )}
-            <Button size="slim" onClick={() => debugMetafields(collection.id)}>
-              Debug
-            </Button>
           </Box>
         </InlineStack>
       </ResourceItem>

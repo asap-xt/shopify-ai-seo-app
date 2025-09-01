@@ -78,6 +78,30 @@ function DashboardCard() {
       .catch((e) => console.error('Failed to load plan:', e));
   }, [shop]);
 
+  // Еднократна инициализация на collection metafield definitions
+  useEffect(() => {
+    if (!shop) return;
+    
+    // Еднократна инициализация на collection metafield definitions
+    fetch(`/collections/check-definitions?shop=${encodeURIComponent(shop)}`, {
+      credentials: 'include'
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.hasDefinitions) {
+          return fetch('/collections/create-definitions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ shop })
+          });
+        }
+      })
+      .then(r => r && r.json())
+      .then(data => data && console.log('Collection definitions:', data))
+      .catch(err => console.error('Collection definitions error:', err));
+  }, [shop]);
+
   if (!plan) {
     return (
       <Card>
@@ -472,29 +496,7 @@ function AiSearchOptimisationPanel() {
     },
   ];
   
-  // Инициализация на metafield definitions за колекции при първо зареждане
-  const initCollectionMetafields = async () => {
-    try {
-      const response = await fetch('/collections/init-metafield-definitions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ shop })
-      });
-      const data = await response.json();
-      console.log('Collection metafield definitions created:', data);
-    } catch (err) {
-      console.error('Failed to create definitions:', err);
-    }
-  };
-
-
-  
   return (
-    <>
-    <Box paddingBlockEnd="200">
-      <Button onClick={initCollectionMetafields}>Init Collection Metafields</Button>
-    </Box>
     <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
      {selectedTab === 0 ? (
       <BulkEdit shop={shop} />
