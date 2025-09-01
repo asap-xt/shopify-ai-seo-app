@@ -402,6 +402,14 @@ export default function BulkEdit({ shop: shopProp }) {
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
+    // Debug log for first product
+    if (product.title && product.title.includes('Summer')) {
+      console.log('[BULK-EDIT] Rendering product:', product.title);
+      console.log('[BULK-EDIT] optimizationSummary:', product.optimizationSummary);
+      console.log('[BULK-EDIT] optimizedLanguages:', optimizedLanguages);
+      console.log('[BULK-EDIT] availableLanguages:', availableLanguages);
+    }
+    
     const media = product.images?.[0] ? (
       <Thumbnail
         source={product.images[0].url || product.images[0].src || product.images[0]}
