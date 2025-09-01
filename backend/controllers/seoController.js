@@ -282,7 +282,6 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
           ownerType: COLLECTION
           description: "AI-generated SEO content for ${lang.toUpperCase()} language"
           pin: true
-          visibleToStorefrontApi: true
         }) {
           createdDefinition {
             id
@@ -302,7 +301,7 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
       
       if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
         const errors = result.metafieldDefinitionCreate.userErrors;
-        if (errors.some(e => e.message.includes('already exists'))) {
+        if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
           console.log(`[COLLECTION METAFIELDS] Definition already exists for ${key} - OK`);
           results.push({ lang, status: 'exists' });
         } else {
@@ -1555,6 +1554,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
     const shop = requireShop(req);
     const { collectionId, results = [], options = {} } = req.body;
     
+    console.log('[APPLY-MULTI] Request languages:', results.map(r => r.language));
+    
     if (!collectionId || !results.length) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -1575,6 +1576,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
       try {
         const { language, seo } = result;
         const isPrimary = language.toLowerCase() === primary.toLowerCase();
+        
+        console.log(`[APPLY-MULTI] Processing ${language}, isPrimary: ${isPrimary}`);
         
         // Update collection base fields only for primary language
         if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
@@ -1607,6 +1610,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         
         // Always update metafields
         if (options.updateMetafields !== false) {
+          console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
+          
           // Ensure definition exists for this language
           await ensureCollectionMetafieldDefinitions(shop, [language]);
           
@@ -1633,6 +1638,8 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           
           const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
           const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
+          
+          console.log(`[APPLY-MULTI] Metafield result for ${language}:`, mfResult);
           
           if (mfErrors.length) {
             errors.push(...mfErrors.map(e => `${language} metafield: ${e.message}`));
