@@ -501,7 +501,7 @@ function AiSearchOptimisationPanel() {
      {selectedTab === 0 ? (
       <BulkEdit shop={shop} />
     ) : selectedTab === 1 ? (
-      <Collections shop={shop} />  // НОВО
+      <Collections shop={shop} />
     ) : selectedTab === 2 ? (
       <Sitemap shop={shop} />
     ) : selectedTab === 3 ? (
@@ -510,7 +510,6 @@ function AiSearchOptimisationPanel() {
       <SchemaData shop={shop} />
     )}
     </Tabs>
-    </>
   );
 }
 
