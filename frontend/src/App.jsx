@@ -488,10 +488,7 @@ function AiSearchOptimisationPanel() {
     }
   };
 
-  useEffect(() => {
-    if (!shop) return;
-    initCollectionMetafields();
-  }, [shop]);
+
   
   return (
     <>
