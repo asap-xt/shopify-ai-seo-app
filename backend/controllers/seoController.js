@@ -1627,16 +1627,14 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
         
         console.log(`[APPLY-MULTI] About to update metafields, options.updateMetafields = ${options.updateMetafields}`);
         
-        // Always update metafields
-        if (options.updateMetafields !== false) {
-          console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
-          
-          // Валидация за празни SEO данни
-          if (!seo || !seo.title || !seo.metaDescription) {
-            console.error(`[APPLY-MULTI] Empty SEO data for ${language}, skipping`);
-            errors.push(`${language}: Empty SEO data`);
-            continue;
-          }
+        // Валидация за празни SEO данни ПРЕДИ metafields блока
+        if (!seo || !seo.title || !seo.metaDescription) {
+          console.error(`[APPLY-MULTI] Empty SEO data for ${language}, skipping metafields`);
+          errors.push(`${language}: Empty SEO data`);
+        } else {
+          // Always update metafields
+          if (options.updateMetafields !== false) {
+            console.log(`[APPLY-MULTI] Creating metafield for ${language}`);
           
           // Ensure definition exists for this language
           await ensureCollectionMetafieldDefinitions(shop, [language]);
@@ -1706,6 +1704,7 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
             updated.push({ language, fields: ['metafields'] });
           }
         }
+        } // Затваря else блока за валидацията
       } catch (err) {
         errors.push(`${result.language}: ${err.message}`);
       }
