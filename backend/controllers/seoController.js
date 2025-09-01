@@ -1630,6 +1630,10 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           await ensureCollectionMetafieldDefinitions(shop, [language]);
           
           const key = `seo__${String(language || 'en').toLowerCase()}`; // ВИНАГИ lowercase!
+          
+          // Добави логове
+          console.log(`[APPLY-MULTI] Writing metafield with key: ${key}`);
+          
           const metafields = [{
             ownerId: collectionId,
             namespace: 'seo_ai',  // Същият namespace като продуктите!
@@ -1654,6 +1658,12 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
           const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
           
+          console.log(`[APPLY-MULTI] MetafieldsSet response:`, {
+            metafieldId: mfResult?.metafieldsSet?.metafields?.[0]?.id,
+            key: mfResult?.metafieldsSet?.metafields?.[0]?.key,
+            errors: mfErrors
+          });
+          
           console.log(`[APPLY-MULTI] Metafield result for ${language}:`, mfResult);
           
           if (mfErrors.length) {
@@ -1671,8 +1681,15 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
               }
             `;
             
-            const verifyResult = await shopGraphQL(shop, verifyQuery);
-            console.log(`[APPLY-MULTI] Verify ${key}:`, !!verifyResult?.collection?.metafield);
+            try {
+              const verifyResult = await shopGraphQL(shop, verifyQuery);
+              console.log(`[APPLY-MULTI] GraphQL verify ${key}:`, {
+                exists: !!verifyResult?.collection?.metafield,
+                id: verifyResult?.collection?.metafield?.id
+              });
+            } catch (e) {
+              console.error(`[APPLY-MULTI] Verify failed:`, e.message);
+            }
             
             updated.push({ language, fields: ['metafields'] });
           }
