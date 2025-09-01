@@ -130,7 +130,6 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false) => {
-    console.log('[BULK-EDIT] loadProducts called with pageNum:', pageNum, 'append:', append);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -149,9 +148,6 @@ export default function BulkEdit({ shop: shopProp }) {
       const data = await response.json();
       
       if (!response.ok) throw new Error(data?.error || 'Failed to load products');
-      
-      console.log('[BULK-EDIT] Loaded products:', data.products?.length, 'products');
-      console.log('[BULK-EDIT] First product optimizationSummary:', data.products?.[0]?.optimizationSummary);
       
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
@@ -384,9 +380,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      console.log('[BULK-EDIT] About to reload products after apply...');
       await loadProducts(1);
-      console.log('[BULK-EDIT] Products reloaded after apply');
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
@@ -402,13 +396,7 @@ export default function BulkEdit({ shop: shopProp }) {
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
-    // Debug log for first product
-    if (product.title && product.title.includes('Summer')) {
-      console.log('[BULK-EDIT] Rendering product:', product.title);
-      console.log('[BULK-EDIT] optimizationSummary:', product.optimizationSummary);
-      console.log('[BULK-EDIT] optimizedLanguages:', optimizedLanguages);
-      console.log('[BULK-EDIT] availableLanguages:', availableLanguages);
-    }
+
     
     const media = product.images?.[0] ? (
       <Thumbnail
@@ -441,7 +429,7 @@ export default function BulkEdit({ shop: shopProp }) {
           
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             <InlineStack gap="100">
-              {availableLanguages.map(lang => (
+              {availableLanguages.length > 0 ? availableLanguages.map(lang => (
                 <Badge
                   key={lang}
                   tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
@@ -449,7 +437,18 @@ export default function BulkEdit({ shop: shopProp }) {
                 >
                   {lang.toUpperCase()}
                 </Badge>
-              ))}
+              )) : (
+                // Fallback: показваме labels базирани на optimizedLanguages
+                optimizedLanguages.map(lang => (
+                  <Badge
+                    key={lang}
+                    tone="success"
+                    size="small"
+                  >
+                    {lang.toUpperCase()}
+                  </Badge>
+                ))
+              )}
             </InlineStack>
           </Box>
           
