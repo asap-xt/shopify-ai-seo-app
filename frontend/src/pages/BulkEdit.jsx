@@ -128,9 +128,41 @@ export default function BulkEdit({ shop: shopProp }) {
       .catch(err => console.error('Failed to load tags:', err));
   }, [shop]);
   
+  // Sync polling function
+  const startSyncPolling = useCallback(() => {
+    let pollCount = 0;
+    const maxPolls = 10; // Максимум 10 проверки (10 секунди)
+    
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/products/sync-status?shop=${encodeURIComponent(shop)}`, { 
+          credentials: 'include' 
+        });
+        const data = await response.json();
+        
+        if (data.syncing === false && pollCount > 0) {
+          // Sync-ът е приключил, презареждаме продуктите
+          console.log('[BULK-EDIT] Background sync completed, reloading products...');
+          await loadProducts(1);
+          return;
+        }
+        
+        pollCount++;
+        if (pollCount < maxPolls) {
+          // Продължаваме polling-а
+          setTimeout(poll, 1000); // Проверяваме на всеки 1 секунда
+        }
+      } catch (e) {
+        console.error('[BULK-EDIT] Sync polling error:', e);
+      }
+    };
+    
+    // Започваме polling-а след 2 секунди
+    setTimeout(poll, 2000);
+  }, [shop, loadProducts]);
+  
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false) => {
-    console.log('[BULK-EDIT] loadProducts called with pageNum:', pageNum, 'append:', append);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -149,9 +181,6 @@ export default function BulkEdit({ shop: shopProp }) {
       const data = await response.json();
       
       if (!response.ok) throw new Error(data?.error || 'Failed to load products');
-      
-      console.log('[BULK-EDIT] Loaded products:', data.products?.length, 'products');
-      console.log('[BULK-EDIT] First product optimizationSummary:', data.products?.[0]?.optimizationSummary);
       
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
@@ -384,9 +413,10 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      console.log('[BULK-EDIT] About to reload products after apply...');
       await loadProducts(1);
-      console.log('[BULK-EDIT] Products reloaded after apply');
+      
+      // Стартираме polling за background sync
+      startSyncPolling();
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
@@ -402,13 +432,7 @@ export default function BulkEdit({ shop: shopProp }) {
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
     
-    // Debug log for first product
-    if (product.title && product.title.includes('Summer')) {
-      console.log('[BULK-EDIT] Rendering product:', product.title);
-      console.log('[BULK-EDIT] optimizationSummary:', product.optimizationSummary);
-      console.log('[BULK-EDIT] optimizedLanguages:', optimizedLanguages);
-      console.log('[BULK-EDIT] availableLanguages:', availableLanguages);
-    }
+
     
     const media = product.images?.[0] ? (
       <Thumbnail

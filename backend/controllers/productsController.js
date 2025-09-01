@@ -11,17 +11,95 @@ async function resolveAdminTokenForShop(shop) {
     const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
     if (Shop && typeof Shop.findOne === 'function') {
       const doc = await Shop.findOne({ shopDomain: shop }).lean().exec();
-      if (doc && doc.accessToken) return doc.accessToken;
+      const tok = doc?.accessToken || doc?.token || doc?.access_token;
+      if (tok && String(tok).trim()) return String(tok).trim();
     }
   } catch (e) {
     console.warn('[TOKEN] DB lookup failed:', e.message);
   }
   
   // Fallback to env
-  const fallback = process.env.SHOPIFY_ADMIN_TOKEN || '';
-  if (!fallback) throw new Error('No admin token available');
-  return fallback;
+  const envToken =
+    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
+    (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN.trim()) ||
+    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
+  
+  if (!envToken) throw new Error('No admin token available');
+  return envToken;
 }
+
+// Sync function - проверява дали MongoDB е актуален с Shopify
+async function syncProductWithShopify(product, shop) {
+  try {
+    const token = await resolveAdminTokenForShop(shop);
+    const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${product.productId}/metafields.json?namespace=seo_ai`;
+    const mfResponse = await fetch(metafieldUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (mfResponse.ok) {
+      const mfData = await mfResponse.json();
+      const metafields = mfData.metafields || [];
+      
+      // Извличаме езиците от keys като seo__en, seo__bg и т.н.
+      const optimizedLanguages = [];
+      metafields.forEach(mf => {
+        if (mf.key && mf.key.startsWith('seo__')) {
+          const lang = mf.key.replace('seo__', '');
+          if (lang && !optimizedLanguages.includes(lang)) {
+            optimizedLanguages.push(lang);
+          }
+        }
+      });
+      
+      // Ако има разлика между MongoDB и Shopify, обновяваме MongoDB
+      const currentLanguages = product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [];
+      const languagesChanged = optimizedLanguages.length !== currentLanguages.length || 
+        !optimizedLanguages.every(lang => currentLanguages.includes(lang));
+      
+      if (languagesChanged) {
+        console.log(`[SYNC] Updating MongoDB for product ${product.productId}: ${currentLanguages.join(',')} → ${optimizedLanguages.join(',')}`);
+        
+        // Обновяваме MongoDB
+        const updatedLanguages = product.seoStatus?.languages || [];
+        updatedLanguages.forEach(lang => {
+          lang.optimized = optimizedLanguages.includes(lang.code);
+          if (lang.optimized && !lang.lastOptimizedAt) {
+            lang.lastOptimizedAt = new Date().toISOString();
+          }
+        });
+        
+        await Product.findOneAndUpdate(
+          { shop, productId: product.productId },
+          { 
+            'seoStatus.optimized': optimizedLanguages.length > 0,
+            'seoStatus.languages': updatedLanguages
+          }
+        );
+        
+        // Връщаме обновения продукт
+        return {
+          ...product,
+          seoStatus: {
+            ...product.seoStatus,
+            optimized: optimizedLanguages.length > 0,
+            languages: updatedLanguages
+          }
+        };
+      }
+    }
+  } catch (e) {
+    console.error('[SYNC] Error syncing product with Shopify:', product.productId, e.message);
+  }
+  
+  return product; // Връщаме оригиналния продукт ако няма промени или има грешка
+}
+
+
+
 
 const router = Router();
 
@@ -143,65 +221,42 @@ if (req.query.languageFilter) {
       Product.countDocuments(safeQuery)
     ]);
 
-    // Add optimization summary to each product by reading metafields from Shopify
-    console.log('[PRODUCTS] Starting to fetch metafields for', products.length, 'products');
-    const startTime = Date.now();
+    // 1. Веднага връщаме MongoDB данните (бързо)
+    const productsWithSummary = products.map(product => ({
+      ...product,
+      optimizationSummary: {
+        isOptimized: product.seoStatus?.optimized || false,
+        optimizedLanguages: product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [],
+        lastOptimized: product.seoStatus?.languages
+          ?.filter(l => l.optimized && l.lastOptimizedAt)
+          ?.map(l => l.lastOptimizedAt)
+          ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
+      }
+    }));
     
-    const productsWithSummary = await Promise.all(
-      products.map(async (product, index) => {
-        let optimizedLanguages = [];
-        
+    // 2. Стартираме background sync (асинхронно)
+    setImmediate(async () => {
+      console.log('[PRODUCTS] Starting background sync for', products.length, 'products...');
+      const startTime = Date.now();
+      
+      let syncedCount = 0;
+      for (const product of products) {
         try {
-          // Четем metafields директно от Shopify като Collections
-          const token = await resolveAdminTokenForShop(shop);
-          const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${product.productId}/metafields.json?namespace=seo_ai`;
-          const mfResponse = await fetch(metafieldUrl, {
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'Content-Type': 'application/json',
-            }
-          });
+          await syncProductWithShopify(product, shop);
+          syncedCount++;
           
-          if (mfResponse.ok) {
-            const mfData = await mfResponse.json();
-            const metafields = mfData.metafields || [];
-            
-            // Извличаме езиците от keys като seo__en, seo__bg и т.н.
-            metafields.forEach(mf => {
-              if (mf.key && mf.key.startsWith('seo__')) {
-                const lang = mf.key.replace('seo__', '');
-                if (lang && !optimizedLanguages.includes(lang)) {
-                  optimizedLanguages.push(lang);
-                }
-              }
-            });
-            
-            if (index < 3) { // Debug първите 3 продукта
-              console.log(`[PRODUCTS] Product ${product.productId} (${product.title}): metafields:`, metafields.map(m => m.key), 'optimizedLanguages:', optimizedLanguages);
-            }
+          // Лог на всеки 10 продукта
+          if (syncedCount % 10 === 0) {
+            console.log(`[PRODUCTS] Background sync progress: ${syncedCount}/${products.length}`);
           }
         } catch (e) {
-          console.error('[PRODUCTS] Error checking metafields for product:', product.productId, e.message);
-          // Fallback към MongoDB данните
-          optimizedLanguages = product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [];
+          console.error('[PRODUCTS] Background sync error for product:', product.productId, e.message);
         }
-        
-        return {
-          ...product,
-          optimizationSummary: {
-            isOptimized: optimizedLanguages.length > 0,
-            optimizedLanguages,
-            lastOptimized: product.seoStatus?.languages
-              ?.filter(l => l.optimized && l.lastOptimizedAt)
-              ?.map(l => l.lastOptimizedAt)
-              ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
-          }
-        };
-      })
-    );
-    
-    const endTime = Date.now();
-    console.log('[PRODUCTS] Finished fetching metafields in', endTime - startTime, 'ms');
+      }
+      
+      const endTime = Date.now();
+      console.log(`[PRODUCTS] Background sync completed: ${syncedCount}/${products.length} products in ${endTime - startTime}ms`);
+    });
 
     res.json({
       products: productsWithSummary,
@@ -633,6 +688,106 @@ router.get('/:productId', async (req, res) => {
   } catch (error) {
     console.error('GET /api/products/:productId error:', error);
     res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB
+router.delete('/:id/metafields', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const productId = req.params.id;
+    
+    // Конвертираме в GID ако е необходимо
+    const productGid = toGID(productId);
+    
+    console.log('[DELETE-METAFIELDS] Deleting metafields for product:', productGid);
+    
+    // 1. Изтриваме metafields от Shopify
+    const token = await resolveAdminTokenForShop(shop);
+    
+    // Първо вземаме metafields за да видим какви има
+    const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${productId}/metafields.json?namespace=seo_ai`;
+    const mfResponse = await fetch(metafieldUrl, {
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (mfResponse.ok) {
+      const mfData = await mfResponse.json();
+      const metafields = mfData.metafields || [];
+      
+      // Изтриваме всеки metafield
+      for (const mf of metafields) {
+        if (mf.key && mf.key.startsWith('seo__')) {
+          const deleteUrl = `https://${shop}/admin/api/2025-07/metafields/${mf.id}.json`;
+          await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: {
+              'X-Shopify-Access-Token': token,
+              'Content-Type': 'application/json',
+            }
+          });
+          console.log(`[DELETE-METAFIELDS] Deleted metafield: ${mf.key}`);
+        }
+      }
+    }
+    
+    // 2. Обновяваме MongoDB - маркираме всички езици като неоптимизирани
+    const numericId = productId.replace('gid://shopify/Product/', '');
+    const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+    
+    if (product && product.seoStatus) {
+      const updatedLanguages = product.seoStatus.languages || [];
+      updatedLanguages.forEach(lang => {
+        lang.optimized = false;
+      });
+      
+      await Product.findOneAndUpdate(
+        { shop, productId: parseInt(numericId) },
+        { 
+          'seoStatus.optimized': false,
+          'seoStatus.languages': updatedLanguages
+        }
+      );
+      
+      console.log(`[DELETE-METAFIELDS] Updated MongoDB for product ${numericId}`);
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: 'SEO metafields deleted and MongoDB updated',
+      productId: productGid
+    });
+    
+  } catch (err) {
+    console.error('[DELETE-METAFIELDS] Error:', err.message);
+    res.status(500).json({ 
+      ok: false, 
+      error: err.message || 'Failed to delete metafields' 
+    });
+  }
+});
+
+// GET /api/products/sync-status - Проверява дали има background sync в ход
+router.get('/sync-status', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Това е опростена версия - в реалност може да използваме Redis или друг cache
+    // За сега просто връщаме че sync-ът е готов
+    res.json({ 
+      syncing: false, 
+      message: 'Background sync completed' 
+    });
+    
+  } catch (err) {
+    console.error('[SYNC-STATUS] Error:', err.message);
+    res.status(500).json({ 
+      ok: false, 
+      error: err.message || 'Failed to get sync status' 
+    });
   }
 });
 
