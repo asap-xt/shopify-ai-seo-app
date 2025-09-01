@@ -130,6 +130,7 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false) => {
+    console.log('[BULK-EDIT] loadProducts called with pageNum:', pageNum, 'append:', append);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -148,6 +149,9 @@ export default function BulkEdit({ shop: shopProp }) {
       const data = await response.json();
       
       if (!response.ok) throw new Error(data?.error || 'Failed to load products');
+      
+      console.log('[BULK-EDIT] Loaded products:', data.products?.length, 'products');
+      console.log('[BULK-EDIT] First product optimizationSummary:', data.products?.[0]?.optimizationSummary);
       
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
@@ -380,7 +384,9 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
+      console.log('[BULK-EDIT] About to reload products after apply...');
       await loadProducts(1);
+      console.log('[BULK-EDIT] Products reloaded after apply');
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
