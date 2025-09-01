@@ -235,7 +235,7 @@ if (req.query.languageFilter) {
     }));
     
     // 2. Стартираме background sync (асинхронно)
-    setImmediate(async () => {
+    setTimeout(async () => {
       console.log('[PRODUCTS] Starting background sync for', products.length, 'products...');
       const startTime = Date.now();
       
@@ -256,7 +256,7 @@ if (req.query.languageFilter) {
       
       const endTime = Date.now();
       console.log(`[PRODUCTS] Background sync completed: ${syncedCount}/${products.length} products in ${endTime - startTime}ms`);
-    });
+    }, 0);
 
     res.json({
       products: productsWithSummary,
