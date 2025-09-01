@@ -1020,6 +1020,55 @@ router.post('/seo/apply', async (req, res) => {
       }
     }
 
+    // 6. Update MongoDB seoStatus after successful metafield save
+    if (updated.bullets || updated.faq) {
+      try {
+        const Product = (await import('../db/Product.js')).default;
+        const numericId = productId.replace('gid://shopify/Product/', '');
+        
+        // Първо намерим продукта и неговия текущ seoStatus
+        const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+        if (product) {
+          const currentLanguages = product.seoStatus?.languages || [];
+          const langCode = language.toLowerCase();
+          
+          // Проверяваме дали езикът вече съществува
+          const existingLangIndex = currentLanguages.findIndex(l => l.code === langCode);
+          
+          let updatedLanguages;
+          if (existingLangIndex >= 0) {
+            // Обновяваме съществуващия език
+            updatedLanguages = [...currentLanguages];
+            updatedLanguages[existingLangIndex] = {
+              code: langCode,
+              optimized: true,
+              lastOptimizedAt: new Date()
+            };
+          } else {
+            // Добавяме нов език
+            updatedLanguages = [
+              ...currentLanguages,
+              { code: langCode, optimized: true, lastOptimizedAt: new Date() }
+            ];
+          }
+          
+          // Обновяваме продукта
+          await Product.findOneAndUpdate(
+            { shop, productId: parseInt(numericId) },
+            { 
+              $set: { 
+                'seoStatus.languages': updatedLanguages,
+                'seoStatus.optimized': true
+              }
+            }
+          );
+        }
+      } catch (e) {
+        console.error('Failed to update MongoDB seoStatus:', e.message);
+        // Не спираме процеса заради MongoDB грешка
+      }
+    }
+
     res.json({ 
       ok: errors.length === 0, 
       shop, 
