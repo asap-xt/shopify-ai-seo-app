@@ -1045,7 +1045,8 @@ router.post('/seo/apply', async (req, res) => {
           }
           
           // Обновяваме продукта
-          await Product.findOneAndUpdate(
+          console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
+          const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
             { 
               $set: { 
@@ -1054,6 +1055,7 @@ router.post('/seo/apply', async (req, res) => {
               }
             }
           );
+          console.log(`[SEO-CONTROLLER] MongoDB update result:`, updateResult ? 'SUCCESS' : 'NO DOCUMENT FOUND');
           
         }
       } catch (e) {

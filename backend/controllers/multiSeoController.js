@@ -110,6 +110,7 @@ router.post('/apply-multi', async (req, res) => {
         const text = await rsp.text();
         let json;
         try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
+        console.log(`[MULTI-SEO] Apply result for ${r.language}:`, json?.ok ? 'SUCCESS' : 'FAILED', json);
         if (!rsp.ok || json?.ok === false) {
           const err = json?.errors?.join('; ') || json?.error || `Apply failed (${rsp.status})`;
           errors.push(`[${r.language}] ${err}`);
