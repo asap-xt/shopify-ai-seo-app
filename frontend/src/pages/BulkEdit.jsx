@@ -108,7 +108,9 @@ export default function BulkEdit({ shop: shopProp }) {
     fetch(`/api/languages/shop/${shop}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
+        console.log('[BULK-EDIT] Languages API response:', data);
         const langs = data?.shopLanguages || ['en'];
+        console.log('[BULK-EDIT] Setting availableLanguages to:', langs);
         setAvailableLanguages(langs);
         setSelectedLanguages([]);
       })
@@ -404,6 +406,11 @@ export default function BulkEdit({ shop: shopProp }) {
     const product = item;
     const numericId = extractNumericId(product.productId || product.id);
     const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+    
+    console.log(`[BULK-EDIT] Rendering product: "${product.title}"`);
+    console.log(`[BULK-EDIT] optimizationSummary:`, product.optimizationSummary);
+    console.log(`[BULK-EDIT] optimizedLanguages:`, optimizedLanguages);
+    console.log(`[BULK-EDIT] availableLanguages:`, availableLanguages);
     
 
     
