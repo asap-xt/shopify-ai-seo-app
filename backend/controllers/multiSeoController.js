@@ -83,27 +83,30 @@ router.post('/apply-multi', async (req, res) => {
     const productId = toGID(String(pid));
 
     const errors = [];
+    
+    // Изпълняваме всички /seo/apply заявки последователно с await
+    // за да се уверим че всички MongoDB updates са завършени
     for (const r of results) {
       if (!r || !r.seo) {
         errors.push(`Missing seo for language ${r?.language || '?'}`);
         continue;
       }
       try {
-  const url = `${APP_URL}/seo/apply?shop=${encodeURIComponent(shop)}`;
-  const rsp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: req.headers.cookie || '',
-    },
-    body: JSON.stringify({ 
-      shop, 
-      productId, 
-      language: r.language,  // <-- ДОБАВЕТЕ ТОВА
-      seo: r.seo, 
-      options 
-    })
-  });
+        const url = `${APP_URL}/seo/apply?shop=${encodeURIComponent(shop)}`;
+        const rsp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: req.headers.cookie || '',
+          },
+          body: JSON.stringify({ 
+            shop, 
+            productId, 
+            language: r.language,
+            seo: r.seo, 
+            options 
+          })
+        });
         const text = await rsp.text();
         let json;
         try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
