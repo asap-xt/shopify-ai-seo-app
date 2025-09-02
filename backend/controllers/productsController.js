@@ -28,75 +28,7 @@ async function resolveAdminTokenForShop(shop) {
   return envToken;
 }
 
-// Sync function - проверява дали MongoDB е актуален с Shopify
-async function syncProductWithShopify(product, shop) {
-  try {
-    const token = await resolveAdminTokenForShop(shop);
-    const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${product.productId}/metafields.json?namespace=seo_ai`;
-    const mfResponse = await fetch(metafieldUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (mfResponse.ok) {
-      const mfData = await mfResponse.json();
-      const metafields = mfData.metafields || [];
-      
-      // Извличаме езиците от keys като seo__en, seo__bg и т.н.
-      const optimizedLanguages = [];
-      metafields.forEach(mf => {
-        if (mf.key && mf.key.startsWith('seo__')) {
-          const lang = mf.key.replace('seo__', '');
-          if (lang && !optimizedLanguages.includes(lang)) {
-            optimizedLanguages.push(lang);
-          }
-        }
-      });
-      
-      // Ако има разлика между MongoDB и Shopify, обновяваме MongoDB
-      const currentLanguages = product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [];
-      const languagesChanged = optimizedLanguages.length !== currentLanguages.length || 
-        !optimizedLanguages.every(lang => currentLanguages.includes(lang));
-      
-      if (languagesChanged) {
-        console.log(`[SYNC] Updating MongoDB for product ${product.productId}: ${currentLanguages.join(',')} → ${optimizedLanguages.join(',')}`);
-        
-        // Обновяваме MongoDB
-        const updatedLanguages = product.seoStatus?.languages || [];
-        updatedLanguages.forEach(lang => {
-          lang.optimized = optimizedLanguages.includes(lang.code);
-          if (lang.optimized && !lang.lastOptimizedAt) {
-            lang.lastOptimizedAt = new Date().toISOString();
-          }
-        });
-        
-        await Product.findOneAndUpdate(
-          { shop, productId: product.productId },
-          { 
-            'seoStatus.optimized': optimizedLanguages.length > 0,
-            'seoStatus.languages': updatedLanguages
-          }
-        );
-        
-        // Връщаме обновения продукт
-        return {
-          ...product,
-          seoStatus: {
-            ...product.seoStatus,
-            optimized: optimizedLanguages.length > 0,
-            languages: updatedLanguages
-          }
-        };
-      }
-    }
-  } catch (e) {
-    console.error('[SYNC] Error syncing product with Shopify:', product.productId, e.message);
-  }
-  
-  return product; // Връщаме оригиналния продукт ако няма промени или има грешка
-}
+
 
 
 
@@ -221,7 +153,7 @@ if (req.query.languageFilter) {
       Product.countDocuments(safeQuery)
     ]);
 
-    // 1. Веднага връщаме MongoDB данните (бързо)
+    // Add optimization summary to each product (MongoDB only - no API calls)
     const productsWithSummary = products.map(product => ({
       ...product,
       optimizationSummary: {
@@ -233,30 +165,6 @@ if (req.query.languageFilter) {
           ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
       }
     }));
-    
-    // 2. Стартираме background sync (асинхронно)
-    setTimeout(async () => {
-      console.log('[PRODUCTS] Starting background sync for', products.length, 'products...');
-      const startTime = Date.now();
-      
-      let syncedCount = 0;
-      for (const product of products) {
-        try {
-          await syncProductWithShopify(product, shop);
-          syncedCount++;
-          
-          // Лог на всеки 10 продукта
-          if (syncedCount % 10 === 0) {
-            console.log(`[PRODUCTS] Background sync progress: ${syncedCount}/${products.length}`);
-          }
-        } catch (e) {
-          console.error('[PRODUCTS] Background sync error for product:', product.productId, e.message);
-        }
-      }
-      
-      const endTime = Date.now();
-      console.log(`[PRODUCTS] Background sync completed: ${syncedCount}/${products.length} products in ${endTime - startTime}ms`);
-    }, 0);
 
     res.json({
       products: productsWithSummary,
@@ -770,25 +678,6 @@ router.delete('/:id/metafields', async (req, res) => {
   }
 });
 
-// GET /api/products/sync-status - Проверява дали има background sync в ход
-router.get('/sync-status', async (req, res) => {
-  try {
-    const shop = requireShop(req);
-    
-    // Това е опростена версия - в реалност може да използваме Redis или друг cache
-    // За сега просто връщаме че sync-ът е готов
-    res.json({ 
-      syncing: false, 
-      message: 'Background sync completed' 
-    });
-    
-  } catch (err) {
-    console.error('[SYNC-STATUS] Error:', err.message);
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message || 'Failed to get sync status' 
-    });
-  }
-});
+
 
 export default router;

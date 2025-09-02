@@ -165,38 +165,7 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder]);
   
-  // Sync polling function
-  const startSyncPolling = useCallback(() => {
-    let pollCount = 0;
-    const maxPolls = 10; // Максимум 10 проверки (10 секунди)
-    
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/products/sync-status?shop=${encodeURIComponent(shop)}`, { 
-          credentials: 'include' 
-        });
-        const data = await response.json();
-        
-        if (data.syncing === false && pollCount > 0) {
-          // Sync-ът е приключил, презареждаме продуктите
-          console.log('[BULK-EDIT] Background sync completed, reloading products...');
-          await loadProducts(1);
-          return;
-        }
-        
-        pollCount++;
-        if (pollCount < maxPolls) {
-          // Продължаваме polling-а
-          setTimeout(poll, 1000); // Проверяваме на всеки 1 секунда
-        }
-      } catch (e) {
-        console.error('[BULK-EDIT] Sync polling error:', e);
-      }
-    };
-    
-    // Започваме polling-а след 2 секунди
-    setTimeout(poll, 2000);
-  }, [shop, loadProducts]);
+
   
   // Initial load
   useEffect(() => {
@@ -414,9 +383,6 @@ export default function BulkEdit({ shop: shopProp }) {
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
       await loadProducts(1);
-      
-      // Стартираме polling за background sync
-      startSyncPolling();
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
