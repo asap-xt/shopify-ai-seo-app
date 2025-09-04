@@ -196,6 +196,7 @@ router.get('/shop/:shop', async (req, res) => {
     // remove product-specific fields
     const { productLanguages, allLanguagesOption, shouldShowSelector, ...rest } = out;
     rest.source = rest.source.split('|')[0];
+    console.log(`[LANGUAGE-CONTROLLER] Shop languages response for ${shop}:`, rest);
     return res.json(rest);
   } catch (e) {
     return res.status(200).json({

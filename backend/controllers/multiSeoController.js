@@ -83,6 +83,7 @@ router.post('/apply-multi', async (req, res) => {
     const productId = toGID(String(pid));
 
     const errors = [];
+    const appliedLanguages = [];
     
     // Изпълняваме всички /seo/apply заявки последователно с await
     // за да се уверим че всички MongoDB updates са завършени
@@ -114,6 +115,9 @@ router.post('/apply-multi', async (req, res) => {
         if (!rsp.ok || json?.ok === false) {
           const err = json?.errors?.join('; ') || json?.error || `Apply failed (${rsp.status})`;
           errors.push(`[${r.language}] ${err}`);
+        } else {
+          // Добавяме успешно приложените езици
+          appliedLanguages.push(r.language);
         }
       } catch (e) {
         errors.push(`[${r.language}] ${e.message || 'Apply exception'}`);
@@ -123,6 +127,8 @@ router.post('/apply-multi', async (req, res) => {
     return res.json({
       ok: errors.length === 0,
       errors,
+      appliedLanguages,
+      productId
     });
   } catch (err) {
     console.error('POST /api/seo/apply-multi error:', err);

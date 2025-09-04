@@ -1044,7 +1044,7 @@ router.post('/seo/apply', async (req, res) => {
             ];
           }
           
-          // Обновяваме продукта
+          // Обновяваме продукта с new: true за да получим обновения документ
           console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
@@ -1053,9 +1053,18 @@ router.post('/seo/apply', async (req, res) => {
                 'seoStatus.languages': updatedLanguages,
                 'seoStatus.optimized': true
               }
+            },
+            { 
+              new: true, // Връща обновения документ
+              upsert: false // Не създава нов документ ако не съществува
             }
           );
           console.log(`[SEO-CONTROLLER] MongoDB update result:`, updateResult ? 'SUCCESS' : 'NO DOCUMENT FOUND');
+          
+          // Проверяваме дали update-ът е бил успешен
+          if (!updateResult) {
+            console.warn(`[SEO-CONTROLLER] Failed to update MongoDB for product ${numericId} - document not found`);
+          }
           
         }
       } catch (e) {

@@ -147,7 +147,13 @@ export default function BulkEdit({ shop: shopProp }) {
         sortOrder,
       });
       
-      const response = await fetch(`/api/products/list?${params}`, { credentials: 'include' });
+      const response = await fetch(`/api/products/list?${params}&_t=${Date.now()}`, { 
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await response.json();
       console.log(`[BULK-EDIT] Loaded products: ${data.products?.length || 0} products`);
       if (data.products?.length > 0) {
@@ -378,6 +384,28 @@ export default function BulkEdit({ shop: shopProp }) {
           const data = await response.json();
           if (!response.ok) throw new Error(data?.error || 'Apply failed');
           
+          // Optimistic update - веднага обновяваме локалното състояние
+          if (data.appliedLanguages && data.appliedLanguages.length > 0) {
+            setProducts(prevProducts => 
+              prevProducts.map(prod => {
+                if (prod._id === productId) {
+                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
+                  const newOptimized = [...new Set([...currentOptimized, ...data.appliedLanguages])];
+                  
+                  return {
+                    ...prod,
+                    optimizationSummary: {
+                      ...prod.optimizationSummary,
+                      optimizedLanguages: newOptimized,
+                      optimized: true
+                    }
+                  };
+                }
+                return prod;
+              })
+            );
+          }
+          
         } catch (err) {
           setErrors(prev => [...prev, { product: product.title, error: `Apply failed: ${err.message}` }]);
         }
@@ -389,9 +417,15 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      console.log('[BULK-EDIT] About to reload products after apply...');
-      await loadProducts(1);
-      console.log('[BULK-EDIT] Products reloaded after apply');
+      console.log('[BULK-EDIT] Applied optimistically, will reload in background...');
+      
+      // Reload products in background за да синхронизираме с базата данни
+      // но потребителят вече вижда optimistic updates
+      setTimeout(async () => {
+        console.log('[BULK-EDIT] Background reloading products...');
+        await loadProducts(1);
+        console.log('[BULK-EDIT] Background reload completed');
+      }, 1000);
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
@@ -445,26 +479,40 @@ export default function BulkEdit({ shop: shopProp }) {
           
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             <InlineStack gap="100">
-              {availableLanguages.length > 0 ? availableLanguages.map(lang => (
-                <Badge
-                  key={lang}
-                  tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
-                  size="small"
-                >
-                  {lang.toUpperCase()}
-                </Badge>
-              )) : (
-                // Fallback: показваме labels базирани на optimizedLanguages
-                optimizedLanguages.map(lang => (
-                  <Badge
-                    key={lang}
-                    tone="success"
-                    size="small"
-                  >
-                    {lang.toUpperCase()}
-                  </Badge>
-                ))
-              )}
+              {(() => {
+                console.log(`[BULK-EDIT] Rendering badges for "${product.title}"`);
+                console.log(`[BULK-EDIT] availableLanguages.length:`, availableLanguages.length);
+                console.log(`[BULK-EDIT] availableLanguages:`, availableLanguages);
+                console.log(`[BULK-EDIT] optimizedLanguages:`, optimizedLanguages);
+                
+                if (availableLanguages.length > 0) {
+                  console.log(`[BULK-EDIT] Using availableLanguages.map`);
+                  return availableLanguages.map(lang => {
+                    const isOptimized = optimizedLanguages.includes(lang);
+                    console.log(`[BULK-EDIT] Language ${lang}: optimized=${isOptimized}`);
+                    return (
+                      <Badge
+                        key={lang}
+                        tone={isOptimized ? 'success' : 'subdued'}
+                        size="small"
+                      >
+                        {lang.toUpperCase()}
+                      </Badge>
+                    );
+                  });
+                } else {
+                  console.log(`[BULK-EDIT] Using fallback optimizedLanguages.map`);
+                  return optimizedLanguages.map(lang => (
+                    <Badge
+                      key={lang}
+                      tone="success"
+                      size="small"
+                    >
+                      {lang.toUpperCase()}
+                    </Badge>
+                  ));
+                }
+              })()}
             </InlineStack>
           </Box>
           
