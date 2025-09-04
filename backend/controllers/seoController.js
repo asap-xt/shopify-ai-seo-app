@@ -1009,26 +1009,26 @@ router.post('/seo/apply', async (req, res) => {
       }
     }
 
-    // 6. Update MongoDB seoStatus after successful metafield save
-    // ГАРАНТИРАМЕ че MongoDB update е завършен преди response
-    if (updated.seoMetafield) {
+    // 6. Update MongoDB seoStatus BEFORE sending response
+    // This ensures the database is updated before the client reloads data
+    if (updated.seoMetafield && !dryRun) {
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
         
-        // Първо намерим продукта и неговия текущ seoStatus
+        // First find the product and its current seoStatus
         const product = await Product.findOne({ shop, productId: parseInt(numericId) });
 
         if (product) {
           const currentLanguages = product.seoStatus?.languages || [];
           const langCode = language.toLowerCase();
           
-          // Проверяваме дали езикът вече съществува
+          // Check if language already exists
           const existingLangIndex = currentLanguages.findIndex(l => l.code === langCode);
           
           let updatedLanguages;
           if (existingLangIndex >= 0) {
-            // Обновяваме съществуващия език
+            // Update existing language
             updatedLanguages = [...currentLanguages];
             updatedLanguages[existingLangIndex] = {
               code: langCode,
@@ -1036,14 +1036,14 @@ router.post('/seo/apply', async (req, res) => {
               lastOptimizedAt: new Date()
             };
           } else {
-            // Добавяме нов език
+            // Add new language
             updatedLanguages = [
               ...currentLanguages,
               { code: langCode, optimized: true, lastOptimizedAt: new Date() }
             ];
           }
           
-          // Обновяваме продукта с гарантирано завършване
+          // Update the product and WAIT for completion
           console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
@@ -1054,27 +1054,25 @@ router.post('/seo/apply', async (req, res) => {
               }
             },
             { 
-              new: true, // Връща обновения документ
-              runValidators: true, // Гарантира валидност
-              upsert: false // Не създава нов документ ако не съществува
+              new: true, // Return the updated document
+              runValidators: true // Ensure validity
             }
           );
           
-          // Изчакваме MongoDB write propagation
           if (updateResult) {
-            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for write propagation
-            console.log(`[SEO-CONTROLLER] MongoDB update completed for product ${numericId}`);
+            console.log(`[SEO-CONTROLLER] MongoDB update completed successfully`);
+            // Ensure the write is propagated
+            await new Promise(resolve => setTimeout(resolve, 50));
           } else {
-            console.warn(`[SEO-CONTROLLER] Failed to update MongoDB for product ${numericId} - document not found`);
-            errors.push(`Database update failed: Product not found`);
+            console.log(`[SEO-CONTROLLER] MongoDB update failed - document not found`);
+            errors.push('Failed to update optimization status in database');
           }
         } else {
-          console.warn(`[SEO-CONTROLLER] Product not found in MongoDB: ${numericId}`);
-          errors.push(`Database update failed: Product not found`);
+          console.log(`[SEO-CONTROLLER] Product not found in MongoDB: ${numericId}`);
         }
       } catch (e) {
         console.error('Failed to update MongoDB seoStatus:', e.message);
-        errors.push(`Database update failed: ${e.message}`);
+        errors.push(`Database update error: ${e.message}`);
       }
     }
 

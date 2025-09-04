@@ -123,6 +123,9 @@ router.post('/apply-multi', async (req, res) => {
         errors.push(`[${r.language}] ${e.message || 'Apply exception'}`);
       }
     }
+    
+    // Add a small delay to ensure all MongoDB operations are completed
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     return res.json({
       ok: errors.length === 0,

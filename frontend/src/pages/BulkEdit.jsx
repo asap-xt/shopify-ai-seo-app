@@ -419,20 +419,52 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      console.log('[BULK-EDIT] Applied optimistically, will sync in background...');
       
-      // Background sync за да гарантираме консистентност с базата данни
-      // Потребителят вече вижда optimistic updates, но правим background check
-      setTimeout(async () => {
-        console.log('[BULK-EDIT] Background syncing with database...');
-        try {
-          await loadProducts(1);
-          console.log('[BULK-EDIT] Background sync completed successfully');
-        } catch (err) {
-          console.warn('[BULK-EDIT] Background sync failed:', err.message);
-          // Не показваме грешка на потребителя, тъй като optimistic update вече е направен
+      // Clear selected items
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      
+      // Add delay to ensure MongoDB writes are propagated
+      console.log('[BULK-EDIT] Waiting for database propagation...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force a complete refresh of the products list
+      console.log('[BULK-EDIT] Clearing products state before reload...');
+      setProducts([]); // Clear current products to force re-render
+      
+      // Load products with cache bypass
+      console.log('[BULK-EDIT] Reloading products with cache bypass...');
+      const params = new URLSearchParams({
+        shop,
+        page: 1,
+        limit: 50,
+        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+        ...(searchValue && { search: searchValue }),
+        ...(languageFilter && { languageFilter }),
+        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
+        sortBy,
+        sortOrder,
+        _t: Date.now() // Cache buster
+      });
+      
+      const response = await fetch(`/api/products/list?${params}`, { 
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
-      }, 1500); // Увеличаваме закъснението за да дадем време на MongoDB
+      });
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data?.error || 'Failed to load products');
+      
+      console.log('[BULK-EDIT] Products reloaded, first product:', data.products[0]?.title);
+      console.log('[BULK-EDIT] First product optimization summary:', data.products[0]?.optimizationSummary);
+      
+      setProducts(data.products || []);
+      setPage(1);
+      setHasMore(data.pagination?.hasNext || false);
+      setTotalCount(data.pagination?.total || 0);
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);

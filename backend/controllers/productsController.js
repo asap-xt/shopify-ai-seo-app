@@ -143,14 +143,15 @@ if (req.query.languageFilter) {
     // Apply valid products filter
     const safeQuery = getValidProductsQuery(query);
 
-    // Execute queries
+    // Execute queries with read preference set to primary to avoid replication lag
     const [products, total] = await Promise.all([
       Product.find(safeQuery)
         .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
         .skip((page - 1) * limit)
         .limit(Number(limit))
+        .read('primary')  // Force read from primary node
         .lean(),
-      Product.countDocuments(safeQuery)
+      Product.countDocuments(safeQuery).read('primary')  // Force count from primary too
     ]);
 
     // Add optimization summary to each product (MongoDB only - no API calls)
@@ -192,8 +193,8 @@ router.get('/sync-status', async (req, res) => {
     const safeQuery = getValidProductsQuery({ shop });
     
     const [totalInDB, lastSync, invalidCount] = await Promise.all([
-      Product.countDocuments(safeQuery),
-      Product.findOne(safeQuery).sort({ syncedAt: -1 }).select('syncedAt').lean(),
+      Product.countDocuments(safeQuery).read('primary'),
+      Product.findOne(safeQuery).sort({ syncedAt: -1 }).select('syncedAt').read('primary').lean(),
       Product.countDocuments({
         shop,
         $or: [
@@ -201,7 +202,7 @@ router.get('/sync-status', async (req, res) => {
           { productId: null },
           { productId: { $exists: false } }
         ]
-      })
+      }).read('primary')
     ]);
 
     res.json({
@@ -251,8 +252,8 @@ router.get('/tags/list', async (req, res) => {
     
     const safeQuery = getValidProductsQuery({ shop });
     
-    // Use MongoDB aggregation to get unique tags
-    const tags = await Product.distinct('tags', safeQuery);
+    // Use MongoDB aggregation to get unique tags with primary read
+    const tags = await Product.distinct('tags', safeQuery).read('primary');
     
     res.json({
       tags: tags.filter(Boolean).sort(),
@@ -290,23 +291,23 @@ router.get('/seo-status', async (req, res) => {
       }
     ];
 
-    // Get total valid products
+    // Get total valid products with primary read
     const totalResult = await Product.aggregate([
       ...countPipeline,
       { $match: { isValidProduct: true } },
       { $count: "total" }
-    ]);
+    ]).read('primary');
     const total = totalResult[0]?.total || 0;
 
-    // Get optimized products
+    // Get optimized products with primary read
     const optimizedResult = await Product.aggregate([
       ...countPipeline,
       { $match: { isValidProduct: true, 'seoStatus.optimized': true } },
       { $count: "optimized" }
-    ]);
+    ]).read('primary');
     const optimized = optimizedResult[0]?.optimized || 0;
 
-    // Get invalid products count
+    // Get invalid products count with primary read
     const invalidResult = await Product.aggregate([
       { $match: { shop } },
       {
@@ -323,12 +324,12 @@ router.get('/seo-status', async (req, res) => {
       },
       { $match: { isInvalid: true } },
       { $count: "invalid" }
-    ]);
+    ]).read('primary');
     const invalidCount = invalidResult[0]?.invalid || 0;
 
     const unoptimized = total - optimized;
 
-    // Get products by language using aggregation
+    // Get products by language using aggregation with primary read
     const languageStats = await Product.aggregate([
       ...countPipeline,
       { $match: { isValidProduct: true } },
@@ -341,16 +342,16 @@ router.get('/seo-status', async (req, res) => {
         }
       },
       { $sort: { _id: 1 } }
-    ]);
+    ]).read('primary');
 
-    // Get last sync info
+    // Get last sync info with primary read
     const lastSyncResult = await Product.aggregate([
       ...countPipeline,
       { $match: { isValidProduct: true } },
       { $sort: { syncedAt: -1 } },
       { $limit: 1 },
       { $project: { syncedAt: 1 } }
-    ]);
+    ]).read('primary');
     const lastSync = lastSyncResult[0];
 
     res.json({
@@ -405,7 +406,7 @@ router.post('/cleanup', async (req, res) => {
 
     console.log(`Starting cleanup for shop: ${shop}`);
 
-    // Use aggregation to find invalid products without triggering cast errors
+    // Use aggregation to find invalid products without triggering cast errors with primary read
     const invalidProducts = await Product.aggregate([
       { $match: { shop } },
       {
@@ -430,7 +431,7 @@ router.post('/cleanup', async (req, res) => {
           productIdString: { $toString: "$productId" }
         }
       }
-    ]);
+    ]).read('primary');
 
     console.log(`Found ${invalidProducts.length} invalid products`);
 
@@ -445,11 +446,11 @@ router.post('/cleanup', async (req, res) => {
       console.log(`Deleted ${deleteResult.deletedCount} products`);
     }
 
-    // Count remaining valid products
+    // Count remaining valid products with primary read
     const remainingCount = await Product.countDocuments({
       shop,
       productId: { $type: 'number' }
-    });
+    }).read('primary');
 
     res.json({
       success: true,
@@ -506,6 +507,7 @@ router.get('/bulk-select', async (req, res) => {
     const products = await Product.find(query)
       .select('productId title handle seoStatus tags images')
       .limit(200) // Limit for bulk operations
+      .read('primary')  // Force read from primary node
       .lean();
 
     res.json({
@@ -545,11 +547,11 @@ router.get('/:productId', async (req, res) => {
       queryConditions.push({ productId: numericId });
     }
     
-    // Try to find in MongoDB first
+    // Try to find in MongoDB first with primary read
     let product = await Product.findOne({ 
       shop, 
       $or: queryConditions
-    }).lean();
+    }).read('primary').lean();
 
     if (!product) {
       // If not in DB, fetch from Shopify
@@ -644,7 +646,7 @@ router.delete('/:id/metafields', async (req, res) => {
     
     // 2. Обновяваме MongoDB - маркираме всички езици като неоптимизирани
     const numericId = productId.replace('gid://shopify/Product/', '');
-    const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+    const product = await Product.findOne({ shop, productId: parseInt(numericId) }).read('primary');
     
     if (product && product.seoStatus) {
       const updatedLanguages = product.seoStatus.languages || [];
