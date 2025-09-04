@@ -1010,9 +1010,8 @@ router.post('/seo/apply', async (req, res) => {
     }
 
     // 6. Update MongoDB seoStatus after successful metafield save
-    // Проверяваме дали има успешно записани metafields
+    // ГАРАНТИРАМЕ че MongoDB update е завършен преди response
     if (updated.seoMetafield) {
-      
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
@@ -1044,7 +1043,7 @@ router.post('/seo/apply', async (req, res) => {
             ];
           }
           
-          // Обновяваме продукта с new: true за да получим обновения документ
+          // Обновяваме продукта с гарантирано завършване
           console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
@@ -1056,23 +1055,27 @@ router.post('/seo/apply', async (req, res) => {
             },
             { 
               new: true, // Връща обновения документ
+              runValidators: true, // Гарантира валидност
               upsert: false // Не създава нов документ ако не съществува
             }
           );
-          console.log(`[SEO-CONTROLLER] MongoDB update result:`, updateResult ? 'SUCCESS' : 'NO DOCUMENT FOUND');
           
-          // Проверяваме дали update-ът е бил успешен
-          if (!updateResult) {
+          // Изчакваме MongoDB write propagation
+          if (updateResult) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for write propagation
+            console.log(`[SEO-CONTROLLER] MongoDB update completed for product ${numericId}`);
+          } else {
             console.warn(`[SEO-CONTROLLER] Failed to update MongoDB for product ${numericId} - document not found`);
+            errors.push(`Database update failed: Product not found`);
           }
-          
+        } else {
+          console.warn(`[SEO-CONTROLLER] Product not found in MongoDB: ${numericId}`);
+          errors.push(`Database update failed: Product not found`);
         }
       } catch (e) {
         console.error('Failed to update MongoDB seoStatus:', e.message);
-        // Не спираме процеса заради MongoDB грешка
+        errors.push(`Database update failed: ${e.message}`);
       }
-    } else {
-
     }
 
 

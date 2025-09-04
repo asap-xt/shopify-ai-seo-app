@@ -386,6 +386,7 @@ export default function BulkEdit({ shop: shopProp }) {
           
           // Optimistic update - веднага обновяваме локалното състояние
           if (data.appliedLanguages && data.appliedLanguages.length > 0) {
+            console.log(`[BULK-EDIT] Optimistic update for product ${productId}, languages:`, data.appliedLanguages);
             setProducts(prevProducts => 
               prevProducts.map(prod => {
                 if (prod._id === productId) {
@@ -397,7 +398,8 @@ export default function BulkEdit({ shop: shopProp }) {
                     optimizationSummary: {
                       ...prod.optimizationSummary,
                       optimizedLanguages: newOptimized,
-                      optimized: true
+                      optimized: true,
+                      lastOptimized: new Date().toISOString()
                     }
                   };
                 }
@@ -417,15 +419,20 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast('AI Search Optimisation applied successfully!');
       setShowResultsModal(false);
-      console.log('[BULK-EDIT] Applied optimistically, will reload in background...');
+      console.log('[BULK-EDIT] Applied optimistically, will sync in background...');
       
-      // Reload products in background за да синхронизираме с базата данни
-      // но потребителят вече вижда optimistic updates
+      // Background sync за да гарантираме консистентност с базата данни
+      // Потребителят вече вижда optimistic updates, но правим background check
       setTimeout(async () => {
-        console.log('[BULK-EDIT] Background reloading products...');
-        await loadProducts(1);
-        console.log('[BULK-EDIT] Background reload completed');
-      }, 1000);
+        console.log('[BULK-EDIT] Background syncing with database...');
+        try {
+          await loadProducts(1);
+          console.log('[BULK-EDIT] Background sync completed successfully');
+        } catch (err) {
+          console.warn('[BULK-EDIT] Background sync failed:', err.message);
+          // Не показваме грешка на потребителя, тъй като optimistic update вече е направен
+        }
+      }, 1500); // Увеличаваме закъснението за да дадем време на MongoDB
       
     } catch (err) {
       setToast(`Error applying AI Search Optimisation: ${err.message}`);
