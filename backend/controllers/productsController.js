@@ -680,6 +680,203 @@ router.delete('/:id/metafields', async (req, res) => {
   }
 });
 
+// GET /api/products/verify-seo/:productId - Verify real SEO status from Shopify
+router.get('/verify-seo/:productId', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { productId } = req.params;
+    const gid = toGID(productId);
+    
+    console.log('[VERIFY-SEO] Checking real status for:', gid);
+    
+    // Get available languages from shop
+    const languagesQuery = `
+      query {
+        shopLocales {
+          locale
+          primary
+          published
+        }
+      }
+    `;
+    
+    const languagesResult = await shopGraphQL(shop, languagesQuery);
+    const shopLanguages = (languagesResult?.shopLocales || [])
+      .filter(l => l.published)
+      .map(l => l.locale.toLowerCase().split('-')[0]);
+    
+    // Check metafields directly in Shopify
+    const metafieldsQuery = `
+      query GetProductMetafields($id: ID!) {
+        product(id: $id) {
+          id
+          title
+          ${shopLanguages.map(lang => `
+            metafield_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") {
+              id
+              value
+            }
+          `).join('')}
+        }
+      }
+    `;
+    
+    const result = await shopGraphQL(shop, metafieldsQuery, { id: gid });
+    
+    if (!result?.product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    
+    // Check which languages have valid SEO data
+    const optimizedLanguages = [];
+    shopLanguages.forEach(lang => {
+      const metafieldKey = `metafield_${lang}`;
+      if (result.product[metafieldKey]?.value) {
+        try {
+          const parsed = JSON.parse(result.product[metafieldKey].value);
+          if (parsed?.title || parsed?.metaDescription) {
+            optimizedLanguages.push(lang);
+          }
+        } catch (e) {
+          // Invalid JSON
+        }
+      }
+    });
+    
+    // Update MongoDB with real data
+    const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
+    if (!isNaN(numericId)) {
+      await Product.findOneAndUpdate(
+        { shop, productId: numericId },
+        { 
+          $set: {
+            'seoStatus.optimized': optimizedLanguages.length > 0,
+            'seoStatus.languages': optimizedLanguages.map(lang => ({
+              code: lang,
+              optimized: true,
+              lastOptimizedAt: new Date()
+            }))
+          }
+        },
+        { upsert: true }
+      );
+    }
+    
+    res.json({
+      productId: gid,
+      title: result.product.title,
+      shopLanguages,
+      optimizedLanguages,
+      isOptimized: optimizedLanguages.length > 0,
+      realTimeCheck: true
+    });
+    
+  } catch (error) {
+    console.error('[VERIFY-SEO] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// POST /api/products/resync-all - Force resync all products with Shopify
+router.post('/resync-all', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { limit = 50 } = req.body;
+    
+    console.log('[RESYNC-ALL] Starting full resync for shop:', shop);
+    
+    // Get languages
+    const languagesQuery = `
+      query {
+        shopLocales {
+          locale
+          primary
+          published
+        }
+      }
+    `;
+    
+    const languagesResult = await shopGraphQL(shop, languagesQuery);
+    const shopLanguages = (languagesResult?.shopLocales || [])
+      .filter(l => l.published)
+      .map(l => l.locale.toLowerCase().split('-')[0]);
+    
+    // Get products with metafields
+    const productsQuery = `
+      query GetProducts($first: Int!) {
+        products(first: $first) {
+          edges {
+            node {
+              id
+              title
+              ${shopLanguages.map(lang => `
+                metafield_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") {
+                  id
+                  value
+                }
+              `).join('')}
+            }
+          }
+        }
+      }
+    `;
+    
+    const result = await shopGraphQL(shop, productsQuery, { first: limit });
+    
+    let syncedCount = 0;
+    
+    for (const { node } of result.products.edges) {
+      const optimizedLanguages = [];
+      
+      shopLanguages.forEach(lang => {
+        const metafieldKey = `metafield_${lang}`;
+        if (node[metafieldKey]?.value) {
+          try {
+            const parsed = JSON.parse(node[metafieldKey].value);
+            if (parsed?.title || parsed?.metaDescription) {
+              optimizedLanguages.push(lang);
+            }
+          } catch (e) {
+            // Invalid JSON
+          }
+        }
+      });
+      
+      const numericId = parseInt(node.id.replace('gid://shopify/Product/', ''));
+      
+      await Product.findOneAndUpdate(
+        { shop, productId: numericId },
+        {
+          $set: {
+            gid: node.id,
+            title: node.title,
+            'seoStatus.optimized': optimizedLanguages.length > 0,
+            'seoStatus.languages': optimizedLanguages.map(lang => ({
+              code: lang,
+              optimized: true,
+              lastOptimizedAt: new Date()
+            }))
+          }
+        },
+        { upsert: true }
+      );
+      
+      syncedCount++;
+    }
+    
+    console.log('[RESYNC-ALL] Synced', syncedCount, 'products');
+    
+    res.json({
+      success: true,
+      shop,
+      synced: syncedCount,
+      message: `Successfully resynced ${syncedCount} products with real Shopify data`
+    });
+    
+  } catch (error) {
+    console.error('[RESYNC-ALL] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 export default router;
