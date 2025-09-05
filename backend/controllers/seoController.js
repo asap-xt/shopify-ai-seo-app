@@ -2007,15 +2007,10 @@ router.delete('/seo/delete', async (req, res) => {
       if (metafieldId) {
         console.log(`[DELETE-SEO] Found metafield with ID: ${metafieldId}, proceeding to delete`);
         
-        // Use metafieldsDelete with correct syntax for 2025-07
+        // Simplified mutation - just check for errors
         const deleteMutation = `
           mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
             metafieldsDelete(metafields: $metafields) {
-              deletedMetafields {
-                id
-                key
-                namespace
-              }
               userErrors {
                 field
                 message
@@ -2036,7 +2031,8 @@ router.delete('/seo/delete', async (req, res) => {
           const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
           console.error('[DELETE-SEO] Delete errors:', errorMessages);
           errors.push(...errorMessages);
-        } else if (deleteResult?.metafieldsDelete?.deletedMetafields?.length > 0) {
+        } else {
+          // If no errors, consider it successful
           deleted.metafield = true;
           console.log(`[DELETE-SEO] Successfully deleted metafield ${metafieldKey}`);
         }
