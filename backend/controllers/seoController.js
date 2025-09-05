@@ -6,6 +6,7 @@
 import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
