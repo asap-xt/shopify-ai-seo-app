@@ -600,9 +600,45 @@ export default function BulkEdit({ shop: shopProp }) {
         setToast(`Deleted AI Search Optimisation from ${successCount} products`);
       }
       
-      // Reload products after delay
+      // Add delay to ensure MongoDB writes are propagated
+      console.log('[BULK-EDIT] Waiting for database propagation...');
       await new Promise(resolve => setTimeout(resolve, 1000));
-      await loadProducts(1);
+
+      // Force a complete refresh of the products list
+      console.log('[BULK-EDIT] Clearing products state before reload...');
+      setProducts([]); // Clear current products to force re-render
+
+      // Load products with cache bypass
+      console.log('[BULK-EDIT] Reloading products with cache bypass...');
+      const params = new URLSearchParams({
+        shop,
+        page: 1,
+        limit: 50,
+        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+        ...(searchValue && { search: searchValue }),
+        ...(languageFilter && { languageFilter }),
+        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
+        sortBy,
+        sortOrder,
+        _t: Date.now() // Cache buster
+      });
+
+      const response = await fetch(`/api/products/list?${params}`, { 
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data?.error || 'Failed to load products');
+
+      console.log('[BULK-EDIT] Products reloaded after delete');
+      setProducts(data.products || []);
+      setPage(1);
+      setHasMore(data.pagination?.hasNext || false);
+      setTotalCount(data.pagination?.total || 0);
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
