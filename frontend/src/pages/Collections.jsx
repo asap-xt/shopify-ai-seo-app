@@ -61,6 +61,9 @@ const Collections = ({ shop }) => {
   const [deleteLanguages, setDeleteLanguages] = useState([]);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   
+  // Track selected collections with SEO
+  const [selectedHaveSEO, setSelectedHaveSEO] = useState(false);
+  
   // Results state
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -146,7 +149,10 @@ const Collections = ({ shop }) => {
   
   // Initial load and filter changes
   useEffect(() => {
-    if (shop) loadCollections();
+    if (shop) {
+      loadCollections();
+      setSelectedHaveSEO(false); // Reset SEO tracking on reload
+    }
   }, [shop, optimizedFilter]);
   
   // Search debounce effect
@@ -161,17 +167,29 @@ const Collections = ({ shop }) => {
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
     setSelectedItems(items);
+    
+    // Check if any selected collections have SEO
+    const haveSEO = items.some(id => {
+      const collection = collections.find(c => c.id === id);
+      return collection?.hasSeoData;
+    });
+    setSelectedHaveSEO(haveSEO);
+    
     if (items.length === 0) {
       setSelectAllPages(false);
     }
-  }, []);
+  }, [collections]);
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
     if (checked) {
       setSelectedItems(collections.map(c => c.id));
+      // Check if any collections have SEO
+      const haveSEO = collections.some(c => c.hasSeoData);
+      setSelectedHaveSEO(haveSEO);
     } else {
       setSelectedItems([]);
+      setSelectedHaveSEO(false);
     }
   }, [collections]);
 
@@ -825,7 +843,7 @@ const Collections = ({ shop }) => {
     <>
       <Card>
         <Box padding="400">
-          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+          <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
             {/* Search field on the left */}
             <Box minWidth="400px" maxWidth="600px">
               <TextField
@@ -839,8 +857,8 @@ const Collections = ({ shop }) => {
               />
             </Box>
             
-            {/* Buttons on the right */}
-            <InlineStack gap="200">
+            {/* Buttons stacked vertically on the right */}
+            <BlockStack gap="200">
               <Button
                 primary
                 onClick={openLanguageModal}
@@ -850,13 +868,14 @@ const Collections = ({ shop }) => {
               </Button>
               
               <Button
-                tone="critical"
+                outline
+                destructive
                 onClick={() => setShowBulkDeleteModal(true)}
-                disabled={selectedItems.length === 0 && !selectAllPages}
+                disabled={selectedItems.length === 0 || !selectedHaveSEO}
               >
                 Delete AI Search Optimisation
               </Button>
-            </InlineStack>
+            </BlockStack>
           </InlineStack>
           
           {/* Select all checkbox below */}
