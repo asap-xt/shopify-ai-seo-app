@@ -721,29 +721,44 @@ const Collections = ({ shop }) => {
       <Modal.Section>
         <BlockStack gap="400">
           <Text variant="bodyMd">
-            Select languages to delete AI Search Optimisation from {selectAllPages ? 'all' : selectedItems.length} selected collections:
+            Select languages to delete AI Search Optimisation from {selectAllPages ? totalCount : selectedItems.length} selected collections:
           </Text>
           
+          {/* Custom checkbox row to match Products design */}
           <Box paddingBlockStart="200">
-            <BlockStack gap="200">
+            <InlineStack gap="400" wrap={false}>
               {availableLanguages.map(lang => (
-                <Checkbox
-                  key={lang}
-                  label={lang.toUpperCase()}
-                  checked={deleteLanguages.includes(lang)}
-                  onChange={(checked) => {
-                    setDeleteLanguages(
-                      checked
-                        ? [...deleteLanguages, lang]
-                        : deleteLanguages.filter(l => l !== lang)
-                    );
-                  }}
-                />
+                <label key={lang} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  cursor: 'pointer',
+                  userSelect: 'none' 
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={deleteLanguages.includes(lang)}
+                    onChange={(e) => {
+                      setDeleteLanguages(
+                        e.target.checked
+                          ? [...deleteLanguages, lang]
+                          : deleteLanguages.filter(l => l !== lang)
+                      );
+                    }}
+                    style={{ 
+                      marginRight: '8px',
+                      width: '18px',
+                      height: '18px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <Text variant="bodyMd">{lang.toUpperCase()}</Text>
+                </label>
               ))}
-            </BlockStack>
+            </InlineStack>
           </Box>
           
-          <Box paddingBlockStart="200">
+          {/* Select all button */}
+          <Box>
             <Button
               plain
               onClick={() => {
@@ -758,11 +773,32 @@ const Collections = ({ shop }) => {
             </Button>
           </Box>
           
-          <Box paddingBlockStart="400">
-            <Text variant="bodySm" tone="critical">
+          {/* Warning text */}
+          <Box paddingBlockStart="300">
+            <Text variant="bodySm">
               Warning: This will permanently delete AI Search Optimisation data for selected languages.
             </Text>
           </Box>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
+  // Delete progress modal
+  const deleteProgressModal = isDeletingBulk && (
+    <Modal
+      open={isDeletingBulk}
+      title="Deleting SEO Data"
+      onClose={() => {}}
+      noScroll
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">Deleting selected languages...</Text>
+          <ProgressBar progress={progress.percent} />
+          <Text variant="bodySm" tone="subdued">
+            {progress.current} of {progress.total} operations ({progress.percent}%)
+          </Text>
         </BlockStack>
       </Modal.Section>
     </Modal>
@@ -789,8 +825,9 @@ const Collections = ({ shop }) => {
     <>
       <Card>
         <Box padding="400">
-          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-            <Box minWidth="400px">
+          <BlockStack gap="300">
+            {/* Search field */}
+            <Box>
               <TextField
                 label=""
                 placeholder="Search by collection name..."
@@ -802,8 +839,10 @@ const Collections = ({ shop }) => {
               />
             </Box>
             
-            <InlineStack gap="200">
+            {/* Buttons stacked vertically */}
+            <BlockStack gap="200">
               <Button
+                fullWidth
                 primary
                 onClick={openLanguageModal}
                 disabled={selectedItems.length === 0 && !selectAllPages}
@@ -812,24 +851,25 @@ const Collections = ({ shop }) => {
               </Button>
               
               <Button
+                fullWidth
                 tone="critical"
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={selectedItems.length === 0 && !selectAllPages}
               >
-                Delete AI Search
+                Delete AI Search Optimisation
               </Button>
-            </InlineStack>
-          </InlineStack>
-          
-          {totalCount > 0 && (
-            <Box paddingBlockStart="300">
-              <Checkbox
-                label={`Select all ${totalCount} collections`}
-                checked={selectAllPages}
-                onChange={handleSelectAllPages}
-              />
-            </Box>
-          )}
+            </BlockStack>
+            
+            {totalCount > 0 && (
+              <Box>
+                <Checkbox
+                  label={`Select all ${totalCount} collections`}
+                  checked={selectAllPages}
+                  onChange={handleSelectAllPages}
+                />
+              </Box>
+            )}
+          </BlockStack>
         </Box>
       </Card>
 
@@ -913,6 +953,7 @@ const Collections = ({ shop }) => {
       {resultsModal}
       {previewModal}
       {bulkDeleteModal}
+      {deleteProgressModal}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
