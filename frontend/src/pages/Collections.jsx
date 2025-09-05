@@ -56,6 +56,11 @@ const Collections = ({ shop }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Bulk delete state
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [deleteLanguages, setDeleteLanguages] = useState([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  
   // Results state
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -386,6 +391,67 @@ const Collections = ({ shop }) => {
     }
   };
   
+  // Bulk delete SEO for selected collections and languages
+  const deleteSEOBulk = async () => {
+    if (!deleteLanguages.length) {
+      setToast('Please select at least one language');
+      return;
+    }
+    
+    setIsDeletingBulk(true);
+    setProgress({ current: 0, total: 0, percent: 0 });
+    
+    try {
+      const collectionsToProcess = selectAllPages 
+        ? collections 
+        : collections.filter(c => selectedItems.includes(c.id));
+        
+      const total = collectionsToProcess.length * deleteLanguages.length;
+      let current = 0;
+      
+      for (const collection of collectionsToProcess) {
+        for (const language of deleteLanguages) {
+          try {
+            const response = await fetch('/collections/delete-seo', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                shop,
+                collectionId: collection.id,
+                language
+              })
+            });
+            
+            if (!response.ok) {
+              const data = await response.json();
+              throw new Error(data?.error || 'Delete failed');
+            }
+          } catch (err) {
+            console.error(`Failed to delete ${language} for ${collection.title}:`, err);
+          }
+          
+          current++;
+          setProgress({ 
+            current, 
+            total, 
+            percent: Math.round((current / total) * 100) 
+          });
+        }
+      }
+      
+      setToast(`Deleted SEO for ${deleteLanguages.join(', ').toUpperCase()}`);
+      setShowBulkDeleteModal(false);
+      setDeleteLanguages([]);
+      await loadCollections();
+      
+    } catch (err) {
+      setToast(`Delete error: ${err.message}`);
+    } finally {
+      setIsDeletingBulk(false);
+    }
+  };
+  
   // Resource list items
   const renderItem = (collection) => {
     const hasResult = results[collection.id]?.success || appliedSeoData[collection.id];
@@ -451,24 +517,6 @@ const Collections = ({ shop }) => {
               >
                 Preview JSON
               </Button>
-            )}
-            {collection.hasSeoData && (
-              <Box style={{ flex: '0 0 10%', minWidth: '100px' }}>
-                <Button
-                  size="slim"
-                  tone="critical"
-                  onClick={() => {
-                    setDeleteTarget({
-                      collectionId: collection.id,
-                      collectionTitle: collection.title,
-                      languages: collection.optimizedLanguages
-                    });
-                    setShowDeleteModal(true);
-                  }}
-                >
-                  Delete SEO
-                </Button>
-              </Box>
             )}
           </Box>
         </InlineStack>
@@ -646,43 +694,73 @@ const Collections = ({ shop }) => {
     </Modal>
   );
   
-  // Delete modal
-  const deleteModal = (
+  // Bulk delete modal
+  const bulkDeleteModal = (
     <Modal
-      open={showDeleteModal}
-      title="Delete Collection SEO"
+      open={showBulkDeleteModal}
+      title="Delete AI Search Optimisation"
       onClose={() => {
-        setShowDeleteModal(false);
-        setDeleteTarget(null);
+        setShowBulkDeleteModal(false);
+        setDeleteLanguages([]);
       }}
+      primaryAction={{
+        content: 'Continue',
+        destructive: true,
+        onAction: deleteSEOBulk,
+        loading: isDeletingBulk,
+        disabled: deleteLanguages.length === 0
+      }}
+      secondaryActions={[{
+        content: 'Cancel',
+        onAction: () => {
+          setShowBulkDeleteModal(false);
+          setDeleteLanguages([]);
+        }
+      }]}
     >
       <Modal.Section>
         <BlockStack gap="400">
           <Text variant="bodyMd">
-            Select languages to delete SEO for "{deleteTarget?.collectionTitle}":
+            Select languages to delete AI Search Optimisation from {selectAllPages ? 'all' : selectedItems.length} selected collections:
           </Text>
           
           <Box paddingBlockStart="200">
-            {deleteTarget?.languages?.map(lang => (
-              <Box key={lang} paddingBlockStart="200">
-                <InlineStack align="space-between">
-                  <Badge tone="warning">{lang.toUpperCase()}</Badge>
-                  <Button
-                    size="slim"
-                    tone="critical"
-                    loading={isDeleting}
-                    onClick={() => deleteSEO(deleteTarget.collectionId, lang)}
-                  >
-                    Delete {lang.toUpperCase()}
-                  </Button>
-                </InlineStack>
-              </Box>
-            ))}
+            <BlockStack gap="200">
+              {availableLanguages.map(lang => (
+                <Checkbox
+                  key={lang}
+                  label={lang.toUpperCase()}
+                  checked={deleteLanguages.includes(lang)}
+                  onChange={(checked) => {
+                    setDeleteLanguages(
+                      checked
+                        ? [...deleteLanguages, lang]
+                        : deleteLanguages.filter(l => l !== lang)
+                    );
+                  }}
+                />
+              ))}
+            </BlockStack>
+          </Box>
+          
+          <Box paddingBlockStart="200">
+            <Button
+              plain
+              onClick={() => {
+                setDeleteLanguages(
+                  deleteLanguages.length === availableLanguages.length
+                    ? []
+                    : [...availableLanguages]
+                );
+              }}
+            >
+              Select all
+            </Button>
           </Box>
           
           <Box paddingBlockStart="400">
-            <Text variant="bodySm" tone="subdued">
-              This action cannot be undone. The SEO data will be permanently deleted.
+            <Text variant="bodySm" tone="critical">
+              Warning: This will permanently delete AI Search Optimisation data for selected languages.
             </Text>
           </Box>
         </BlockStack>
@@ -724,7 +802,7 @@ const Collections = ({ shop }) => {
               />
             </Box>
             
-            <Box>
+            <InlineStack gap="200">
               <Button
                 primary
                 onClick={openLanguageModal}
@@ -732,7 +810,15 @@ const Collections = ({ shop }) => {
               >
                 Generate AI Search Optimisation
               </Button>
-            </Box>
+              
+              <Button
+                tone="critical"
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={selectedItems.length === 0 && !selectAllPages}
+              >
+                Delete AI Search
+              </Button>
+            </InlineStack>
           </InlineStack>
           
           {totalCount > 0 && (
@@ -826,7 +912,7 @@ const Collections = ({ shop }) => {
       {languageModal}
       {resultsModal}
       {previewModal}
-      {deleteModal}
+      {bulkDeleteModal}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
