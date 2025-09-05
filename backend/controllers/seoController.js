@@ -2007,11 +2007,15 @@ router.delete('/seo/delete', async (req, res) => {
       if (metafieldId) {
         console.log(`[DELETE-SEO] Found metafield with ID: ${metafieldId}, proceeding to delete`);
         
-        // Use the new metafieldsDelete mutation (plural)
+        // Use metafieldsDelete with correct syntax for 2025-07
         const deleteMutation = `
-          mutation DeleteMetafields($metafieldIds: [ID!]!) {
-            metafieldsDelete(metafieldIds: $metafieldIds) {
-              deletedMetafieldIds
+          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+            metafieldsDelete(metafields: $metafields) {
+              deletedMetafields {
+                id
+                key
+                namespace
+              }
               userErrors {
                 field
                 message
@@ -2021,7 +2025,9 @@ router.delete('/seo/delete', async (req, res) => {
         `;
         
         const deleteResult = await shopGraphQL(shop, deleteMutation, {
-          metafieldIds: [metafieldId]
+          metafields: [{
+            id: metafieldId
+          }]
         });
         
         console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
@@ -2030,7 +2036,7 @@ router.delete('/seo/delete', async (req, res) => {
           const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
           console.error('[DELETE-SEO] Delete errors:', errorMessages);
           errors.push(...errorMessages);
-        } else if (deleteResult?.metafieldsDelete?.deletedMetafieldIds?.length > 0) {
+        } else if (deleteResult?.metafieldsDelete?.deletedMetafields?.length > 0) {
           deleted.metafield = true;
           console.log(`[DELETE-SEO] Successfully deleted metafield ${metafieldKey}`);
         }
@@ -2064,7 +2070,7 @@ router.delete('/seo/delete', async (req, res) => {
         
         const isStillOptimized = updatedLanguages.some(l => l.optimized);
         
-        const updateResult = await Product.findOneAndUpdate(
+        await Product.findOneAndUpdate(
           { shop, productId: parseInt(numericId) },
           { 
             $set: { 
@@ -2075,8 +2081,8 @@ router.delete('/seo/delete', async (req, res) => {
           { new: true }
         );
         
-        console.log('[DELETE-SEO] MongoDB update successful');
         deleted.mongodb = true;
+        console.log('[DELETE-SEO] MongoDB update successful');
         
         // Ensure write propagation
         await new Promise(resolve => setTimeout(resolve, 50));
