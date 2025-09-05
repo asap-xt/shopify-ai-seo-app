@@ -463,16 +463,22 @@ const Collections = ({ shop }) => {
       }
       
       setToast(`Deleted SEO for ${deleteLanguages.join(', ').toUpperCase()}`);
-      setShowBulkDeleteModal(false);
-      setDeleteLanguages([]);
-      await loadCollections();
+      
+      // Important: reload AFTER we finish
+      setTimeout(async () => {
+        await loadCollections();
+        // Reset selections
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        setSelectedHaveSEO(false);
+      }, 100);
       
     } catch (err) {
       setToast(`Delete error: ${err.message}`);
     } finally {
       setIsDeletingBulk(false);
-      setPendingDeleteLanguages([]); // Clear pending languages
-      setDeleteLanguages([]); // Clear selected languages
+      setPendingDeleteLanguages([]);
+      setDeleteLanguages([]);
     }
   };
   
@@ -824,10 +830,11 @@ const Collections = ({ shop }) => {
         destructive: true,
         onAction: async () => {
           setShowConfirmModal(false);
-          setDeleteLanguages(pendingDeleteLanguages);
-          await deleteSEOBulk();
-        },
-        loading: isDeletingBulk
+          // Small delay to close the modal
+          setTimeout(() => {
+            deleteSEOBulk();
+          }, 100);
+        }
       }}
       secondaryActions={[{
         content: 'Cancel',
