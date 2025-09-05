@@ -2108,4 +2108,138 @@ router.delete('/seo/delete', async (req, res) => {
   }
 });
 
+// DELETE /seo/bulk-delete - Delete SEO for multiple products
+router.delete('/seo/bulk-delete', async (req, res) => {
+  console.log('[BULK-DELETE-SEO] Request received');
+  
+  try {
+    const shop = requireShop(req);
+    const { items } = req.body; // Array of { productId, language }
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Missing or invalid items array' });
+    }
+    
+    const results = [];
+    const metafieldsToDelete = [];
+    const mongoUpdates = [];
+    
+    // Prepare all metafields for deletion
+    items.forEach(({ productId, language }) => {
+      if (productId && language) {
+        metafieldsToDelete.push({
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: `seo__${language.toLowerCase()}`
+        });
+        mongoUpdates.push({ productId, language });
+      }
+    });
+    
+    console.log(`[BULK-DELETE-SEO] Deleting ${metafieldsToDelete.length} metafields`);
+    
+    // 1. Delete all metafields in one GraphQL call
+    if (metafieldsToDelete.length > 0) {
+      try {
+        const deleteMutation = `
+          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+            metafieldsDelete(metafields: $metafields) {
+              deletedMetafields {
+                key
+                namespace
+                ownerId
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+        
+        const deleteResult = await shopGraphQL(shop, deleteMutation, {
+          metafields: metafieldsToDelete
+        });
+        
+        console.log('[BULK-DELETE-SEO] GraphQL result:', JSON.stringify(deleteResult, null, 2));
+        
+        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+          results.push({
+            type: 'error',
+            source: 'shopify',
+            errors: deleteResult.metafieldsDelete.userErrors
+          });
+        }
+        
+        if (deleteResult?.metafieldsDelete?.deletedMetafields) {
+          results.push({
+            type: 'success',
+            source: 'shopify',
+            deletedCount: deleteResult.metafieldsDelete.deletedMetafields.length,
+            deleted: deleteResult.metafieldsDelete.deletedMetafields
+          });
+        }
+      } catch (e) {
+        console.error('[BULK-DELETE-SEO] GraphQL error:', e);
+        results.push({
+          type: 'error',
+          source: 'shopify',
+          error: e.message
+        });
+      }
+    }
+    
+    // 2. Update MongoDB for all products
+    if (mongoUpdates.length > 0) {
+      try {
+        const db = await dbConnect();
+        const collection = db.collection('shopify_products');
+        
+        // Update each product
+        const mongoResults = await Promise.all(
+          mongoUpdates.map(async ({ productId, language }) => {
+            try {
+              const result = await collection.updateOne(
+                { _id: productId },
+                { $pull: { languages: language } }
+              );
+              return { productId, language, success: true, modified: result.modifiedCount > 0 };
+            } catch (err) {
+              return { productId, language, success: false, error: err.message };
+            }
+          })
+        );
+        
+        results.push({
+          type: 'mongodb',
+          updates: mongoResults
+        });
+        
+      } catch (e) {
+        console.error('[BULK-DELETE-SEO] MongoDB error:', e);
+        results.push({
+          type: 'error',
+          source: 'mongodb',
+          error: e.message
+        });
+      }
+    }
+    
+    // Return consolidated results
+    res.json({
+      ok: true,
+      shop,
+      totalRequested: items.length,
+      results
+    });
+    
+  } catch (error) {
+    console.error('[BULK-DELETE-SEO] Fatal error:', error);
+    res.status(500).json({ 
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
