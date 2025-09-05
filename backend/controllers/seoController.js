@@ -2007,11 +2007,11 @@ router.delete('/seo/delete', async (req, res) => {
       if (metafieldId) {
         console.log(`[DELETE-SEO] Found metafield with ID: ${metafieldId}, proceeding to delete`);
         
-        // Now delete it
+        // Use the new metafieldsDelete mutation (plural)
         const deleteMutation = `
-          mutation DeleteMetafield($input: MetafieldDeleteInput!) {
-            metafieldDelete(input: $input) {
-              deletedId
+          mutation DeleteMetafields($metafieldIds: [ID!]!) {
+            metafieldsDelete(metafieldIds: $metafieldIds) {
+              deletedMetafieldIds
               userErrors {
                 field
                 message
@@ -2021,16 +2021,16 @@ router.delete('/seo/delete', async (req, res) => {
         `;
         
         const deleteResult = await shopGraphQL(shop, deleteMutation, {
-          input: { id: metafieldId }
+          metafieldIds: [metafieldId]
         });
         
         console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
         
-        if (deleteResult?.metafieldDelete?.userErrors?.length > 0) {
-          const errorMessages = deleteResult.metafieldDelete.userErrors.map(e => e.message);
+        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+          const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
           console.error('[DELETE-SEO] Delete errors:', errorMessages);
           errors.push(...errorMessages);
-        } else if (deleteResult?.metafieldDelete?.deletedId) {
+        } else if (deleteResult?.metafieldsDelete?.deletedMetafieldIds?.length > 0) {
           deleted.metafield = true;
           console.log(`[DELETE-SEO] Successfully deleted metafield ${metafieldKey}`);
         }
