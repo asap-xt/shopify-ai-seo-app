@@ -64,6 +64,10 @@ const Collections = ({ shop }) => {
   // Track selected collections with SEO
   const [selectedHaveSEO, setSelectedHaveSEO] = useState(false);
   
+  // Confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingDeleteLanguages, setPendingDeleteLanguages] = useState([]);
+  
   // Results state
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -467,6 +471,8 @@ const Collections = ({ shop }) => {
       setToast(`Delete error: ${err.message}`);
     } finally {
       setIsDeletingBulk(false);
+      setPendingDeleteLanguages([]); // Clear pending languages
+      setDeleteLanguages([]); // Clear selected languages
     }
   };
   
@@ -723,9 +729,11 @@ const Collections = ({ shop }) => {
       }}
       primaryAction={{
         content: 'Continue',
-        destructive: true,
-        onAction: deleteSEOBulk,
-        loading: isDeletingBulk,
+        onAction: () => {
+          setPendingDeleteLanguages(deleteLanguages);
+          setShowBulkDeleteModal(false);
+          setShowConfirmModal(true);
+        },
         disabled: deleteLanguages.length === 0
       }}
       secondaryActions={[{
@@ -795,6 +803,67 @@ const Collections = ({ shop }) => {
           <Box paddingBlockStart="300">
             <Text variant="bodySm">
               Warning: This will permanently delete AI Search Optimisation data for selected languages.
+            </Text>
+          </Box>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
+  // Confirmation delete modal
+  const confirmDeleteModal = (
+    <Modal
+      open={showConfirmModal}
+      title="Confirm Deletion"
+      onClose={() => {
+        setShowConfirmModal(false);
+        setPendingDeleteLanguages([]);
+      }}
+      primaryAction={{
+        content: 'Delete',
+        destructive: true,
+        onAction: async () => {
+          setShowConfirmModal(false);
+          setDeleteLanguages(pendingDeleteLanguages);
+          await deleteSEOBulk();
+        },
+        loading: isDeletingBulk
+      }}
+      secondaryActions={[{
+        content: 'Cancel',
+        onAction: () => {
+          setShowConfirmModal(false);
+          setPendingDeleteLanguages([]);
+          setDeleteLanguages([]);
+        }
+      }]}
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">
+            Are you sure you want to delete AI Search Optimisation for the following languages?
+          </Text>
+          
+          {/* Language badges */}
+          <Box paddingBlockStart="200">
+            <InlineStack gap="200">
+              {pendingDeleteLanguages.map(lang => (
+                <Badge key={lang} tone="warning">
+                  {lang.toUpperCase()}
+                </Badge>
+              ))}
+            </InlineStack>
+          </Box>
+          
+          {/* Collection count */}
+          <Text variant="bodyMd">
+            This will delete optimisation from {selectAllPages ? totalCount : selectedItems.length} selected collections.
+          </Text>
+          
+          {/* Warning */}
+          <Box paddingBlockStart="200">
+            <Text variant="bodySm" tone="critical">
+              This action cannot be undone.
             </Text>
           </Box>
         </BlockStack>
@@ -971,6 +1040,7 @@ const Collections = ({ shop }) => {
       {resultsModal}
       {previewModal}
       {bulkDeleteModal}
+      {confirmDeleteModal}
       {deleteProgressModal}
       
       {toast && (
