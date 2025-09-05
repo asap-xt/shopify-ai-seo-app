@@ -2023,16 +2023,39 @@ router.delete('/seo/delete', async (req, res) => {
     try {
       console.log('[DELETE-SEO] Updating MongoDB for product ID:', productId);
       
-      const db = await dbConnect();
+      // Extract numeric ID
+      const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
+      
+      // Direct MongoDB update using mongoose
+      const db = mongoose.connection.db;
       const collection = db.collection('shopify_products');
       
-      const updateResult = await collection.updateOne(
-        { _id: productId },
-        { $pull: { languages: language } }
+      // Remove the language from languages array
+      await collection.updateOne(
+        { shop, productId: numericId },
+        { 
+          $pull: { 
+            'seoStatus.languages': { code: language } 
+          } 
+        }
       );
       
-      console.log('[DELETE-SEO] MongoDB update result:', updateResult);
-      deleted.mongodb = updateResult.modifiedCount > 0;
+      // Get updated document to check remaining languages
+      const updatedDoc = await collection.findOne({ shop, productId: numericId });
+      const remainingOptimized = updatedDoc?.seoStatus?.languages?.filter(l => l.optimized) || [];
+      
+      // Update optimized flag
+      await collection.updateOne(
+        { shop, productId: numericId },
+        { 
+          $set: { 
+            'seoStatus.optimized': remainingOptimized.length > 0 
+          } 
+        }
+      );
+      
+      deleted.mongodb = true;
+      console.log('[DELETE-SEO] MongoDB updated successfully');
       
     } catch (e) {
       console.error('[DELETE-SEO] MongoDB error:', e);
