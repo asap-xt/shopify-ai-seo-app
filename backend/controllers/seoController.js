@@ -1956,6 +1956,8 @@ router.get('/collections/:id/seo-data', async (req, res) => {
 
 // DELETE /seo/delete - Delete SEO for specific language
 router.delete('/seo/delete', async (req, res) => {
+  console.log('[DELETE-SEO] Request received:', req.body);
+  
   try {
     const shop = requireShop(req);
     const { productId, language } = req.body;
@@ -1966,51 +1968,80 @@ router.delete('/seo/delete', async (req, res) => {
     
     const errors = [];
     const deleted = { metafield: false, mongodb: false };
+    const metafieldKey = `seo__${language.toLowerCase()}`;
     
-    // 1. Delete language-specific metafield from Shopify
+    console.log(`[DELETE-SEO] Attempting to delete metafield: ${metafieldKey} for product: ${productId}`);
+    
+    // 1. Delete language-specific metafield from Shopify using GraphQL
     try {
-      const key = `seo__${language.toLowerCase()}`;
-      const metafieldsQuery = `
-        query GetMetafields($ownerId: ID!) {
+      // First, find the metafield ID
+      const findQuery = `
+        query FindMetafield($ownerId: ID!, $namespace: String!, $key: String!) {
           product(id: $ownerId) {
-            metafields(first: 100, namespace: "seo_ai") {
-              edges {
-                node {
-                  id
-                  key
-                  namespace
-                }
-              }
+            id
+            metafield(namespace: $namespace, key: $key) {
+              id
+              key
+              value
             }
           }
         }
       `;
       
-      const metafieldsData = await shopGraphQL(shop, metafieldsQuery, { ownerId: productId });
-      const metafields = metafieldsData?.product?.metafields?.edges || [];
+      console.log('[DELETE-SEO] Searching for metafield with params:', {
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: metafieldKey
+      });
       
-      // Find the specific metafield to delete
-      const metafieldToDelete = metafields.find(edge => edge.node.key === key);
+      const findResult = await shopGraphQL(shop, findQuery, {
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: metafieldKey
+      });
       
-      if (metafieldToDelete) {
+      console.log('[DELETE-SEO] Find result:', JSON.stringify(findResult, null, 2));
+      
+      const metafieldId = findResult?.product?.metafield?.id;
+      
+      if (metafieldId) {
+        console.log(`[DELETE-SEO] Found metafield with ID: ${metafieldId}, proceeding to delete`);
+        
+        // Now delete it
         const deleteMutation = `
-          mutation DeleteMetafield($id: ID!) {
-            metafieldDelete(input: { id: $id }) {
-              userErrors { field message }
+          mutation DeleteMetafield($input: MetafieldDeleteInput!) {
+            metafieldDelete(input: $input) {
               deletedId
+              userErrors {
+                field
+                message
+              }
             }
           }
         `;
         
-        const deleteResult = await shopGraphQL(shop, deleteMutation, { id: metafieldToDelete.node.id });
+        const deleteResult = await shopGraphQL(shop, deleteMutation, {
+          input: { id: metafieldId }
+        });
+        
+        console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
         
         if (deleteResult?.metafieldDelete?.userErrors?.length > 0) {
-          errors.push(...deleteResult.metafieldDelete.userErrors.map(e => e.message));
-        } else {
+          const errorMessages = deleteResult.metafieldDelete.userErrors.map(e => e.message);
+          console.error('[DELETE-SEO] Delete errors:', errorMessages);
+          errors.push(...errorMessages);
+        } else if (deleteResult?.metafieldDelete?.deletedId) {
           deleted.metafield = true;
+          console.log(`[DELETE-SEO] Successfully deleted metafield ${metafieldKey}`);
         }
+      } else {
+        // Metafield doesn't exist - consider it success
+        deleted.metafield = true;
+        console.log(`[DELETE-SEO] Metafield ${metafieldKey} not found, considering as already deleted`);
       }
     } catch (e) {
+      console.error('[DELETE-SEO] GraphQL error:', e);
+      console.error('[DELETE-SEO] Error stack:', e.stack);
       errors.push(`Metafield deletion failed: ${e.message}`);
     }
     
@@ -2019,15 +2050,21 @@ router.delete('/seo/delete', async (req, res) => {
       const Product = (await import('../db/Product.js')).default;
       const numericId = productId.replace('gid://shopify/Product/', '');
       
+      console.log(`[DELETE-SEO] Updating MongoDB for product ID: ${numericId}`);
+      
       const product = await Product.findOne({ shop, productId: parseInt(numericId) });
       
       if (product) {
+        console.log('[DELETE-SEO] Current languages in MongoDB:', product.seoStatus?.languages);
+        
         const currentLanguages = product.seoStatus?.languages || [];
         const updatedLanguages = currentLanguages.filter(l => l.code !== language.toLowerCase());
         
+        console.log('[DELETE-SEO] Updated languages will be:', updatedLanguages);
+        
         const isStillOptimized = updatedLanguages.some(l => l.optimized);
         
-        await Product.findOneAndUpdate(
+        const updateResult = await Product.findOneAndUpdate(
           { shop, productId: parseInt(numericId) },
           { 
             $set: { 
@@ -2038,24 +2075,33 @@ router.delete('/seo/delete', async (req, res) => {
           { new: true }
         );
         
+        console.log('[DELETE-SEO] MongoDB update successful');
         deleted.mongodb = true;
         
         // Ensure write propagation
         await new Promise(resolve => setTimeout(resolve, 50));
+      } else {
+        console.log(`[DELETE-SEO] Product not found in MongoDB: ${numericId}`);
+        deleted.mongodb = true; // Don't fail if not in MongoDB
       }
     } catch (e) {
-      errors.push(`MongoDB update failed: ${e.message}`);
+      console.error('[DELETE-SEO] MongoDB error:', e);
+      errors.push(`Database update failed: ${e.message}`);
     }
     
-    res.json({
+    const response = {
       ok: errors.length === 0,
       deleted,
       errors,
       productId,
       language
-    });
+    };
+    
+    console.log('[DELETE-SEO] Final response:', response);
+    res.json(response);
     
   } catch (e) {
+    console.error('[DELETE-SEO] General error:', e);
     res.status(e.status || 500).json({ error: e.message });
   }
 });
