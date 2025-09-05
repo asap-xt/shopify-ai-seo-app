@@ -135,7 +135,8 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false) => {
-    console.log(`[BULK-EDIT] loadProducts called with pageNum: ${pageNum}, append: ${append}`);
+    console.log(`[BULK-EDIT-LOAD] loadProducts called with pageNum: ${pageNum}, append: ${append}`);
+    console.log('[BULK-EDIT-LOAD] Current products state:', products.length);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -158,9 +159,15 @@ export default function BulkEdit({ shop: shopProp }) {
         }
       });
       const data = await response.json();
-      console.log(`[BULK-EDIT] Loaded products: ${data.products?.length || 0} products`);
+      console.log(`[BULK-EDIT-LOAD] API returned ${data.products?.length || 0} products`);
+      
+      // Log първия продукт за проверка
       if (data.products?.length > 0) {
-        console.log(`[BULK-EDIT] First product optimizationSummary:`, data.products[0].optimizationSummary);
+        console.log('[BULK-EDIT-LOAD] First product data:', {
+          id: data.products[0]._id,
+          title: data.products[0].title,
+          optimizationSummary: data.products[0].optimizationSummary
+        });
       }
       
       if (!response.ok) throw new Error(data?.error || 'Failed to load products');
@@ -549,11 +556,16 @@ export default function BulkEdit({ shop: shopProp }) {
           });
           
           const data = await response.json();
+          console.log('[BULK-DELETE] Delete response:', data);
+          console.log('[BULK-DELETE] Deleted languages:', data.deletedLanguages);
           
           if (!response.ok) throw new Error(data?.error || 'Delete failed');
           
           // Optimistic update - immediately update local state
           if (data.deletedLanguages && data.deletedLanguages.length > 0) {
+            console.log('[BULK-DELETE] Before optimistic update, product:', product);
+            console.log('[BULK-DELETE] Current optimized languages:', product.optimizationSummary?.optimizedLanguages);
+            
             setProducts(prevProducts => 
               prevProducts.map(prod => {
                 if (prod._id === product._id) {
@@ -561,6 +573,10 @@ export default function BulkEdit({ shop: shopProp }) {
                   const newOptimized = currentOptimized.filter(lang => 
                     !data.deletedLanguages.includes(lang)
                   );
+                  
+                  console.log('[BULK-DELETE] Updating product:', prod._id);
+                  console.log('[BULK-DELETE] Languages before:', currentOptimized);
+                  console.log('[BULK-DELETE] Languages after:', newOptimized);
                   
                   return {
                     ...prod,
@@ -618,6 +634,14 @@ export default function BulkEdit({ shop: shopProp }) {
       console.log('[BULK-EDIT] Waiting for database propagation...');
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      // След await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('[BULK-DELETE] Before reload, checking state...');
+      console.log('[BULK-DELETE] Products in state:', products.map(p => ({
+        id: p._id,
+        title: p.title,
+        optimizedLanguages: p.optimizationSummary?.optimizedLanguages
+      })));
+
       // Force a complete refresh of the products list
       console.log('[BULK-EDIT] Clearing products state before reload...');
       setProducts([]); // Clear current products to force re-render
@@ -653,6 +677,16 @@ export default function BulkEdit({ shop: shopProp }) {
       setPage(1);
       setHasMore(data.pagination?.hasNext || false);
       setTotalCount(data.pagination?.total || 0);
+
+      // Force reload
+      console.log('[BULK-DELETE] Calling loadProducts(1)...');
+      await loadProducts(1);
+
+      console.log('[BULK-DELETE] After reload, new products:', products.map(p => ({
+        id: p._id,
+        title: p.title,
+        optimizedLanguages: p.optimizationSummary?.optimizedLanguages
+      })));
       
     } catch (err) {
       setToast(`Error: ${err.message}`);

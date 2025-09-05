@@ -145,6 +145,8 @@ router.post('/apply-multi', async (req, res) => {
 router.post('/delete-multi', async (req, res) => {
   try {
     const { shop, productId: pid, languages } = req.body || {};
+    console.log('[DELETE-MULTI] Request:', { shop, productId: pid, languages });
+    
     if (!shop || !pid || !Array.isArray(languages) || languages.length === 0) {
       return res.status(400).json({ error: 'Missing shop, productId or languages[]' });
     }
@@ -187,12 +189,16 @@ router.post('/delete-multi', async (req, res) => {
 
     // Update MongoDB to reflect the deletions
     if (deletedLanguages.length > 0) {
+      console.log('[DELETE-MULTI] Successfully deleted languages:', deletedLanguages);
+      
       try {
         // Import Product model
         const Product = (await import('../db/Product.js')).default;
         
         // Extract numeric ID
         const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
+        
+        console.log('[DELETE-MULTI] Updating MongoDB for product:', numericId);
         
         if (!isNaN(numericId)) {
           // Get current product
@@ -204,7 +210,7 @@ router.post('/delete-multi', async (req, res) => {
               .filter(lang => !deletedLanguages.includes(lang.code));
             
             // Update product
-            await Product.updateOne(
+            const updateResult = await Product.updateOne(
               { shop, productId: numericId },
               {
                 $set: {
@@ -213,6 +219,14 @@ router.post('/delete-multi', async (req, res) => {
                 }
               }
             );
+            
+            console.log('[DELETE-MULTI] MongoDB update result:', updateResult);
+            
+            // Check remaining languages
+            const updatedProduct = await Product.findOne({ shop, productId: numericId });
+            const remainingOptimized = updatedProduct?.seoStatus?.languages?.filter(l => l.optimized) || [];
+            
+            console.log('[DELETE-MULTI] Remaining optimized languages:', remainingOptimized.map(l => l.code));
             
             console.log(`[DELETE-MULTI] Updated Product collection for ${numericId}`);
           }
