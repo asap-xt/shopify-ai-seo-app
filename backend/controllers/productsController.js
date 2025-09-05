@@ -879,4 +879,41 @@ router.post('/resync-all', async (req, res) => {
   }
 });
 
+// POST /api/products/verify-after-delete
+router.post('/verify-after-delete', async (req, res) => {
+  try {
+    const { shop, productIds, deletedLanguages } = req.body;
+    
+    console.log('[VERIFY-AFTER-DELETE] Checking products:', productIds);
+    
+    for (const productId of productIds) {
+      const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
+      
+      // Update MongoDB - remove deleted languages
+      const product = await Product.findOne({ shop, productId: numericId });
+      
+      if (product?.seoStatus?.languages) {
+        const remainingLanguages = product.seoStatus.languages
+          .filter(lang => !deletedLanguages.includes(lang.code));
+        
+        await Product.updateOne(
+          { shop, productId: numericId },
+          {
+            $set: {
+              'seoStatus.optimized': remainingLanguages.length > 0,
+              'seoStatus.languages': remainingLanguages
+            }
+          }
+        );
+      }
+    }
+    
+    res.json({ ok: true, updated: productIds.length });
+    
+  } catch (error) {
+    console.error('[VERIFY-AFTER-DELETE] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

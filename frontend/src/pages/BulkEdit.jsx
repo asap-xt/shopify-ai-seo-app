@@ -580,6 +580,20 @@ export default function BulkEdit({ shop: shopProp }) {
           }
           
           successCount++;
+          
+          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
+            // Verify deletion in backend
+            await fetch('/api/products/verify-after-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                shop,
+                productIds: [productGid],
+                deletedLanguages: data.deletedLanguages
+              })
+            });
+          }
         } catch (err) {
           setErrors(prev => [...prev, { product: product.title, error: err.message }]);
         }

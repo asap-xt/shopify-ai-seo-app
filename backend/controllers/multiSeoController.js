@@ -188,33 +188,37 @@ router.post('/delete-multi', async (req, res) => {
     // Update MongoDB to reflect the deletions
     if (deletedLanguages.length > 0) {
       try {
-        const Product = mongoose.connection.db.collection('shopify_products');
+        // Import Product model
+        const Product = (await import('../db/Product.js')).default;
         
-        // Update the product's SEO status
-        const updateResult = await Product.updateOne(
-          { shop, gid: productId },
-          {
-            $pull: {
-              'seoStatus.languages': { code: { $in: deletedLanguages } }
-            }
+        // Extract numeric ID
+        const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
+        
+        if (!isNaN(numericId)) {
+          // Get current product
+          const product = await Product.findOne({ shop, productId: numericId });
+          
+          if (product) {
+            // Update languages - remove deleted ones
+            const remainingLanguages = (product.seoStatus?.languages || [])
+              .filter(lang => !deletedLanguages.includes(lang.code));
+            
+            // Update product
+            await Product.updateOne(
+              { shop, productId: numericId },
+              {
+                $set: {
+                  'seoStatus.optimized': remainingLanguages.length > 0,
+                  'seoStatus.languages': remainingLanguages
+                }
+              }
+            );
+            
+            console.log(`[DELETE-MULTI] Updated Product collection for ${numericId}`);
           }
-        );
-        
-        // Check if any languages remain
-        const updatedProduct = await Product.findOne({ shop, gid: productId });
-        const remainingLanguages = updatedProduct?.seoStatus?.languages || [];
-        
-        // Update optimized flag
-        await Product.updateOne(
-          { shop, gid: productId },
-          {
-            $set: {
-              'seoStatus.optimized': remainingLanguages.length > 0
-            }
-          }
-        );
+        }
       } catch (dbErr) {
-        console.error('MongoDB update error:', dbErr);
+        console.error('[DELETE-MULTI] Product update error:', dbErr);
         errors.push(`Database update failed: ${dbErr.message}`);
       }
     }
