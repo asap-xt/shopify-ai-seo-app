@@ -968,17 +968,17 @@ export default function BulkEdit({ shop: shopProp }) {
     </EmptyState>
   );
   
-  const bulkActions = [
-    {
-      content: 'Generate AI Search Optimisation',
-      onAction: openLanguageModal,
-    },
-    {
-      content: 'Delete AI Search Optimisation',
-      onAction: openDeleteModal,
-      destructive: true,
-    }
-  ];
+  // const bulkActions = [
+  //   {
+  //     content: 'Generate AI Search Optimisation',
+  //     onAction: openLanguageModal,
+  //   },
+  //   {
+  //     content: 'Delete AI Search Optimisation',
+  //     onAction: openDeleteModal,
+  //     destructive: true,
+  //   }
+  // ];
   
   const sortOptions = [
     { label: 'Newest first', value: 'newest' },
@@ -1013,13 +1013,33 @@ export default function BulkEdit({ shop: shopProp }) {
                   }}
                 />
                 
-                <Button
-                  primary
-                  onClick={openLanguageModal}
-                  disabled={selectedItems.length === 0 && !selectAllPages}
-                >
-                  Generate AI Search Optimisation
-                </Button>
+                <BlockStack gap="200">
+                  <Button
+                    primary
+                    onClick={openLanguageModal}
+                    disabled={selectedItems.length === 0 && !selectAllPages}
+                  >
+                    Generate AI Search Optimisation
+                  </Button>
+                  
+                  <Button
+                    onClick={openDeleteModal}
+                    disabled={(() => {
+                      if (selectedItems.length === 0 && !selectAllPages) return true;
+                      
+                      // Check if any selected product has optimization
+                      const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                      const hasOptimizedProducts = selectedProducts.some(p => 
+                        p.optimizationSummary?.optimizedLanguages?.length > 0
+                      );
+                      
+                      return !hasOptimizedProducts;
+                    })()}
+                    destructive
+                  >
+                    Delete AI Search Optimisation
+                  </Button>
+                </BlockStack>
               </InlineStack>
             </Box>
           </InlineStack>
@@ -1210,7 +1230,7 @@ export default function BulkEdit({ shop: shopProp }) {
             selectedItems={selectedItems}
             onSelectionChange={handleSelectionChange}
             selectable={true}
-            bulkActions={bulkActions}
+            // bulkActions={bulkActions}
             loading={loading}
             totalItemsCount={totalCount}
             emptyState={emptyState}
