@@ -1972,139 +1972,100 @@ router.delete('/seo/delete', async (req, res) => {
     
     console.log(`[DELETE-SEO] Attempting to delete metafield: ${metafieldKey} for product: ${productId}`);
     
-    // 1. Delete language-specific metafield from Shopify using GraphQL
+    // 1. Delete using metafieldsDelete - НЕ търсим ID, директно изтриваме
     try {
-      // First, find the metafield ID
-      const findQuery = `
-        query FindMetafield($ownerId: ID!, $namespace: String!, $key: String!) {
-          product(id: $ownerId) {
-            id
-            metafield(namespace: $namespace, key: $key) {
-              id
+      const deleteMutation = `
+        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields {
               key
-              value
+              namespace
+              ownerId
+            }
+            userErrors {
+              field
+              message
             }
           }
         }
       `;
       
-      console.log('[DELETE-SEO] Searching for metafield with params:', {
-        ownerId: productId,
-        namespace: 'seo_ai',
-        key: metafieldKey
-      });
+      // ВАЖНО: Подаваме ownerId, namespace и key - НЕ id!
+      const variables = {
+        metafields: [{
+          ownerId: productId,     // gid://shopify/Product/...
+          namespace: 'seo_ai',    
+          key: metafieldKey       // seo__en, seo__de, etc.
+        }]
+      };
       
-      const findResult = await shopGraphQL(shop, findQuery, {
-        ownerId: productId,
-        namespace: 'seo_ai',
-        key: metafieldKey
-      });
+      console.log('[DELETE-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
       
-      console.log('[DELETE-SEO] Find result:', JSON.stringify(findResult, null, 2));
+      const deleteResult = await shopGraphQL(shop, deleteMutation, variables);
       
-      const metafieldId = findResult?.product?.metafield?.id;
+      console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
       
-      if (metafieldId) {
-        console.log(`[DELETE-SEO] Found metafield with ID: ${metafieldId}, proceeding to delete`);
-        
-        // Simplified mutation - just check for errors
-        const deleteMutation = `
-          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
-            metafieldsDelete(metafields: $metafields) {
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `;
-        
-        const deleteResult = await shopGraphQL(shop, deleteMutation, {
-          metafields: [{
-            id: metafieldId
-          }]
-        });
-        
-        console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
-        
-        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
-          const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
-          console.error('[DELETE-SEO] Delete errors:', errorMessages);
-          errors.push(...errorMessages);
-        } else {
-          // If no errors, consider it successful
-          deleted.metafield = true;
-          console.log(`[DELETE-SEO] Successfully deleted metafield ${metafieldKey}`);
-        }
+      if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+        const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
+        console.error('[DELETE-SEO] Delete errors:', errorMessages);
+        errors.push(...errorMessages);
       } else {
-        // Metafield doesn't exist - consider it success
+        // Успешно изтриване или metafield не съществува
         deleted.metafield = true;
-        console.log(`[DELETE-SEO] Metafield ${metafieldKey} not found, considering as already deleted`);
+        console.log(`[DELETE-SEO] Metafield deletion completed`);
       }
     } catch (e) {
       console.error('[DELETE-SEO] GraphQL error:', e);
-      console.error('[DELETE-SEO] Error stack:', e.stack);
       errors.push(`Metafield deletion failed: ${e.message}`);
     }
     
-    // 2. Update MongoDB - remove language from seoStatus
+    // 2. Update MongoDB
     try {
-      const Product = (await import('../db/Product.js')).default;
-      const numericId = productId.replace('gid://shopify/Product/', '');
+      console.log('[DELETE-SEO] Updating MongoDB for product ID:', productId);
       
-      console.log(`[DELETE-SEO] Updating MongoDB for product ID: ${numericId}`);
+      const db = await dbConnect();
+      const collection = db.collection('shopify_products');
       
-      const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+      const updateResult = await collection.updateOne(
+        { _id: productId },
+        { $pull: { languages: language } }
+      );
       
-      if (product) {
-        console.log('[DELETE-SEO] Current languages in MongoDB:', product.seoStatus?.languages);
-        
-        const currentLanguages = product.seoStatus?.languages || [];
-        const updatedLanguages = currentLanguages.filter(l => l.code !== language.toLowerCase());
-        
-        console.log('[DELETE-SEO] Updated languages will be:', updatedLanguages);
-        
-        const isStillOptimized = updatedLanguages.some(l => l.optimized);
-        
-        await Product.findOneAndUpdate(
-          { shop, productId: parseInt(numericId) },
-          { 
-            $set: { 
-              'seoStatus.languages': updatedLanguages,
-              'seoStatus.optimized': isStillOptimized
-            }
-          },
-          { new: true }
-        );
-        
-        deleted.mongodb = true;
-        console.log('[DELETE-SEO] MongoDB update successful');
-        
-        // Ensure write propagation
-        await new Promise(resolve => setTimeout(resolve, 50));
-      } else {
-        console.log(`[DELETE-SEO] Product not found in MongoDB: ${numericId}`);
-        deleted.mongodb = true; // Don't fail if not in MongoDB
-      }
+      console.log('[DELETE-SEO] MongoDB update result:', updateResult);
+      deleted.mongodb = updateResult.modifiedCount > 0;
+      
     } catch (e) {
       console.error('[DELETE-SEO] MongoDB error:', e);
-      errors.push(`Database update failed: ${e.message}`);
+      errors.push(`MongoDB update failed: ${e.message}`);
     }
     
-    const response = {
-      ok: errors.length === 0,
-      deleted,
-      errors,
-      productId,
-      language
-    };
+    // Return response
+    if (errors.length === 0) {
+      res.json({ 
+        ok: true, 
+        shop,
+        productId,
+        language,
+        deleted,
+        message: `Successfully deleted SEO for language: ${language}`
+      });
+    } else {
+      res.status(400).json({ 
+        ok: false, 
+        shop,
+        productId,
+        language,
+        errors, 
+        deleted
+      });
+    }
     
-    console.log('[DELETE-SEO] Final response:', response);
-    res.json(response);
-    
-  } catch (e) {
-    console.error('[DELETE-SEO] General error:', e);
-    res.status(e.status || 500).json({ error: e.message });
+  } catch (error) {
+    console.error('[DELETE-SEO] Fatal error:', error);
+    res.status(500).json({ 
+      ok: false,
+      error: error.message
+    });
   }
 });
 
