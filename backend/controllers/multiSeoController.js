@@ -9,6 +9,7 @@
 // We forward client cookies to preserve the embedded admin session for any Admin GraphQL calls.
 
 import { Router } from 'express';
+import mongoose from 'mongoose';
 
 const router = Router();
 
@@ -148,48 +149,80 @@ router.post('/delete-multi', async (req, res) => {
       return res.status(400).json({ error: 'Missing shop, productId or languages[]' });
     }
     const productId = toGID(String(pid));
-    
+
     const errors = [];
     const deletedLanguages = [];
     
-    // Execute all delete operations sequentially
-    for (const language of languages) {
+    for (const lang of languages) {
       try {
-        const url = `${APP_URL}/seo/delete?shop=${encodeURIComponent(shop)}`;
+        // Delegate to single delete endpoint
+        const url = `${APP_URL}/seo/delete`;
         const rsp = await fetch(url, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
             Cookie: req.headers.cookie || '',
           },
-          body: JSON.stringify({ shop, productId, language })
+          body: JSON.stringify({ shop, productId, language: lang }),
         });
         
         const text = await rsp.text();
         let json;
-        try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
-        
-        console.log(`[MULTI-DELETE] Delete result for ${language}:`, json?.ok ? 'SUCCESS' : 'FAILED');
+        try { 
+          json = JSON.parse(text); 
+        } catch { 
+          throw new Error(text || 'Non-JSON response'); 
+        }
         
         if (!rsp.ok || json?.ok === false) {
           const err = json?.errors?.join('; ') || json?.error || `Delete failed (${rsp.status})`;
-          errors.push(`[${language}] ${err}`);
+          errors.push(`[${lang}] ${err}`);
         } else {
-          deletedLanguages.push(language);
+          deletedLanguages.push(lang);
         }
       } catch (e) {
-        errors.push(`[${language}] ${e.message || 'Delete exception'}`);
+        errors.push(`[${lang}] ${e.message || 'Delete exception'}`);
       }
     }
-    
-    // Add delay for MongoDB propagation
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
+
+    // Update MongoDB to reflect the deletions
+    if (deletedLanguages.length > 0) {
+      try {
+        const Product = mongoose.connection.db.collection('shopify_products');
+        
+        // Update the product's SEO status
+        const updateResult = await Product.updateOne(
+          { shop, gid: productId },
+          {
+            $pull: {
+              'seoStatus.languages': { code: { $in: deletedLanguages } }
+            }
+          }
+        );
+        
+        // Check if any languages remain
+        const updatedProduct = await Product.findOne({ shop, gid: productId });
+        const remainingLanguages = updatedProduct?.seoStatus?.languages || [];
+        
+        // Update optimized flag
+        await Product.updateOne(
+          { shop, gid: productId },
+          {
+            $set: {
+              'seoStatus.optimized': remainingLanguages.length > 0
+            }
+          }
+        );
+      } catch (dbErr) {
+        console.error('MongoDB update error:', dbErr);
+        errors.push(`Database update failed: ${dbErr.message}`);
+      }
+    }
+
     return res.json({
       ok: errors.length === 0,
       errors,
       deletedLanguages,
-      productId
     });
   } catch (err) {
     console.error('POST /api/seo/delete-multi error:', err);
