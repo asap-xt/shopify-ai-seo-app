@@ -825,9 +825,9 @@ const Collections = ({ shop }) => {
     <>
       <Card>
         <Box padding="400">
-          <BlockStack gap="300">
-            {/* Search field */}
-            <Box>
+          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+            {/* Search field on the left */}
+            <Box minWidth="400px" maxWidth="600px">
               <TextField
                 label=""
                 placeholder="Search by collection name..."
@@ -839,10 +839,9 @@ const Collections = ({ shop }) => {
               />
             </Box>
             
-            {/* Buttons stacked vertically */}
-            <BlockStack gap="200">
+            {/* Buttons on the right */}
+            <InlineStack gap="200">
               <Button
-                fullWidth
                 primary
                 onClick={openLanguageModal}
                 disabled={selectedItems.length === 0 && !selectAllPages}
@@ -851,25 +850,25 @@ const Collections = ({ shop }) => {
               </Button>
               
               <Button
-                fullWidth
                 tone="critical"
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={selectedItems.length === 0 && !selectAllPages}
               >
                 Delete AI Search Optimisation
               </Button>
-            </BlockStack>
-            
-            {totalCount > 0 && (
-              <Box>
-                <Checkbox
-                  label={`Select all ${totalCount} collections`}
-                  checked={selectAllPages}
-                  onChange={handleSelectAllPages}
-                />
-              </Box>
-            )}
-          </BlockStack>
+            </InlineStack>
+          </InlineStack>
+          
+          {/* Select all checkbox below */}
+          {totalCount > 0 && (
+            <Box paddingBlockStart="300">
+              <Checkbox
+                label={`Select all ${totalCount} collections`}
+                checked={selectAllPages}
+                onChange={handleSelectAllPages}
+              />
+            </Box>
+          )}
         </Box>
       </Card>
 
