@@ -2227,4 +2227,97 @@ router.delete('/seo/bulk-delete', async (req, res) => {
   }
 });
 
+// DELETE /collections/delete-seo - Delete collection SEO for specific language
+router.delete('/collections/delete-seo', async (req, res) => {
+  console.log('[DELETE-COLLECTION-SEO] Request received:', req.body);
+  
+  try {
+    const shop = requireShop(req);
+    const { collectionId, language } = req.body;
+    
+    if (!collectionId || !language) {
+      return res.status(400).json({ error: 'Missing collectionId or language' });
+    }
+    
+    const errors = [];
+    const deleted = { metafield: false };
+    const metafieldKey = `seo__${language.toLowerCase()}`;
+    
+    console.log(`[DELETE-COLLECTION-SEO] Attempting to delete metafield: ${metafieldKey} for collection: ${collectionId}`);
+    
+    // Delete using metafieldsDelete
+    try {
+      const deleteMutation = `
+        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields {
+              key
+              namespace
+              ownerId
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      const variables = {
+        metafields: [{
+          ownerId: collectionId,
+          namespace: 'seo_ai',    
+          key: metafieldKey
+        }]
+      };
+      
+      console.log('[DELETE-COLLECTION-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
+      
+      const deleteResult = await shopGraphQL(shop, deleteMutation, variables);
+      
+      console.log('[DELETE-COLLECTION-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
+      
+      if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+        const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
+        console.error('[DELETE-COLLECTION-SEO] Delete errors:', errorMessages);
+        errors.push(...errorMessages);
+      } else {
+        deleted.metafield = true;
+        console.log(`[DELETE-COLLECTION-SEO] Metafield deletion completed`);
+      }
+    } catch (e) {
+      console.error('[DELETE-COLLECTION-SEO] GraphQL error:', e);
+      errors.push(`Metafield deletion failed: ${e.message}`);
+    }
+    
+    // Return response
+    if (errors.length === 0) {
+      res.json({ 
+        ok: true, 
+        shop,
+        collectionId,
+        language,
+        deleted,
+        message: `Successfully deleted SEO for language: ${language}`
+      });
+    } else {
+      res.status(400).json({ 
+        ok: false, 
+        shop,
+        collectionId,
+        language,
+        errors, 
+        deleted
+      });
+    }
+    
+  } catch (error) {
+    console.error('[DELETE-COLLECTION-SEO] Fatal error:', error);
+    res.status(500).json({ 
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

@@ -51,6 +51,11 @@ const Collections = ({ shop }) => {
   const [currentCollection, setCurrentCollection] = useState('');
   const [errors, setErrors] = useState([]);
   
+  // Delete state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   // Results state
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -346,6 +351,41 @@ const Collections = ({ shop }) => {
     }
   };
   
+  // Delete SEO for a collection and language
+  const deleteSEO = async (collectionId, language) => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/collections/delete-seo', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          shop,
+          collectionId,
+          language
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data?.error || 'Delete failed');
+      }
+      
+      setToast(`Deleted ${language.toUpperCase()} SEO successfully`);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      
+      // Reload collections to update badges
+      await loadCollections();
+      
+    } catch (err) {
+      setToast(`Delete error: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+  
   // Resource list items
   const renderItem = (collection) => {
     const hasResult = results[collection.id]?.success || appliedSeoData[collection.id];
@@ -411,6 +451,24 @@ const Collections = ({ shop }) => {
               >
                 Preview JSON
               </Button>
+            )}
+            {collection.hasSeoData && (
+              <Box style={{ flex: '0 0 10%', minWidth: '100px' }}>
+                <Button
+                  size="slim"
+                  tone="critical"
+                  onClick={() => {
+                    setDeleteTarget({
+                      collectionId: collection.id,
+                      collectionTitle: collection.title,
+                      languages: collection.optimizedLanguages
+                    });
+                    setShowDeleteModal(true);
+                  }}
+                >
+                  Delete SEO
+                </Button>
+              </Box>
             )}
           </Box>
         </InlineStack>
@@ -588,6 +646,50 @@ const Collections = ({ shop }) => {
     </Modal>
   );
   
+  // Delete modal
+  const deleteModal = (
+    <Modal
+      open={showDeleteModal}
+      title="Delete Collection SEO"
+      onClose={() => {
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+      }}
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">
+            Select languages to delete SEO for "{deleteTarget?.collectionTitle}":
+          </Text>
+          
+          <Box paddingBlockStart="200">
+            {deleteTarget?.languages?.map(lang => (
+              <Box key={lang} paddingBlockStart="200">
+                <InlineStack align="space-between">
+                  <Badge tone="warning">{lang.toUpperCase()}</Badge>
+                  <Button
+                    size="slim"
+                    tone="critical"
+                    loading={isDeleting}
+                    onClick={() => deleteSEO(deleteTarget.collectionId, lang)}
+                  >
+                    Delete {lang.toUpperCase()}
+                  </Button>
+                </InlineStack>
+              </Box>
+            ))}
+          </Box>
+          
+          <Box paddingBlockStart="400">
+            <Text variant="bodySm" tone="subdued">
+              This action cannot be undone. The SEO data will be permanently deleted.
+            </Text>
+          </Box>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
   const emptyState = (
     <EmptyState
       heading="No collections found"
@@ -724,6 +826,7 @@ const Collections = ({ shop }) => {
       {languageModal}
       {resultsModal}
       {previewModal}
+      {deleteModal}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
