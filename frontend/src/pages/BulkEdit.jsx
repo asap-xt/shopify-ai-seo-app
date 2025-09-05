@@ -812,6 +812,10 @@ export default function BulkEdit({ shop: shopProp }) {
     <Modal
       open={showLanguageModal}
       title="Select Languages"
+      onClose={() => {
+        setShowLanguageModal(false);
+        setSelectedLanguages([]); // Reset selection
+      }}
       primaryAction={{
         content: 'Generate AI Search Optimisation',
         onAction: generateSEO,
@@ -820,7 +824,10 @@ export default function BulkEdit({ shop: shopProp }) {
       secondaryActions={[
         {
           content: 'Cancel',
-          onAction: () => setShowLanguageModal(false),
+          onAction: () => {
+            setShowLanguageModal(false);
+            setSelectedLanguages([]); // Reset selection
+          },
         },
       ]}
     >
@@ -935,6 +942,10 @@ export default function BulkEdit({ shop: shopProp }) {
     <Modal
       open={showDeleteModal}
       title="Delete AI Search Optimisation"
+      onClose={() => {
+        setShowDeleteModal(false);
+        setSelectedDeleteLanguages([]); // Reset selection
+      }}
       primaryAction={{
         content: 'Continue',
         onAction: () => {
@@ -947,7 +958,10 @@ export default function BulkEdit({ shop: shopProp }) {
       secondaryActions={[
         {
           content: 'Cancel',
-          onAction: () => setShowDeleteModal(false),
+          onAction: () => {
+            setShowDeleteModal(false);
+            setSelectedDeleteLanguages([]); // Reset selection
+          },
         },
       ]}
     >
@@ -1001,6 +1015,10 @@ export default function BulkEdit({ shop: shopProp }) {
     <Modal
       open={showDeleteConfirmModal}
       title="Confirm Deletion"
+      onClose={() => {
+        setShowDeleteConfirmModal(false);
+        // Don't reset selectedDeleteLanguages here as user might reopen
+      }}
       primaryAction={{
         content: 'Delete',
         onAction: deleteSEO,
