@@ -1954,4 +1954,110 @@ router.get('/collections/:id/seo-data', async (req, res) => {
   }
 });
 
+// DELETE /seo/delete - Delete SEO for specific language
+router.delete('/seo/delete', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const { productId, language } = req.body;
+    
+    if (!productId || !language) {
+      return res.status(400).json({ error: 'Missing productId or language' });
+    }
+    
+    const errors = [];
+    const deleted = { metafield: false, mongodb: false };
+    
+    // 1. Delete language-specific metafield from Shopify
+    try {
+      const key = `seo__${language.toLowerCase()}`;
+      const metafieldsQuery = `
+        query GetMetafields($ownerId: ID!) {
+          product(id: $ownerId) {
+            metafields(first: 100, namespace: "seo_ai") {
+              edges {
+                node {
+                  id
+                  key
+                  namespace
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      const metafieldsData = await shopGraphQL(shop, metafieldsQuery, { ownerId: productId });
+      const metafields = metafieldsData?.product?.metafields?.edges || [];
+      
+      // Find the specific metafield to delete
+      const metafieldToDelete = metafields.find(edge => edge.node.key === key);
+      
+      if (metafieldToDelete) {
+        const deleteMutation = `
+          mutation DeleteMetafield($id: ID!) {
+            metafieldDelete(input: { id: $id }) {
+              userErrors { field message }
+              deletedId
+            }
+          }
+        `;
+        
+        const deleteResult = await shopGraphQL(shop, deleteMutation, { id: metafieldToDelete.node.id });
+        
+        if (deleteResult?.metafieldDelete?.userErrors?.length > 0) {
+          errors.push(...deleteResult.metafieldDelete.userErrors.map(e => e.message));
+        } else {
+          deleted.metafield = true;
+        }
+      }
+    } catch (e) {
+      errors.push(`Metafield deletion failed: ${e.message}`);
+    }
+    
+    // 2. Update MongoDB - remove language from seoStatus
+    try {
+      const Product = (await import('../db/Product.js')).default;
+      const numericId = productId.replace('gid://shopify/Product/', '');
+      
+      const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+      
+      if (product) {
+        const currentLanguages = product.seoStatus?.languages || [];
+        const updatedLanguages = currentLanguages.filter(l => l.code !== language.toLowerCase());
+        
+        const isStillOptimized = updatedLanguages.some(l => l.optimized);
+        
+        await Product.findOneAndUpdate(
+          { shop, productId: parseInt(numericId) },
+          { 
+            $set: { 
+              'seoStatus.languages': updatedLanguages,
+              'seoStatus.optimized': isStillOptimized
+            }
+          },
+          { new: true }
+        );
+        
+        deleted.mongodb = true;
+        
+        // Ensure write propagation
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    } catch (e) {
+      errors.push(`MongoDB update failed: ${e.message}`);
+    }
+    
+    res.json({
+      ok: errors.length === 0,
+      deleted,
+      errors,
+      productId,
+      language
+    });
+    
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 export default router;

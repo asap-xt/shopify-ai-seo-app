@@ -85,6 +85,9 @@ export default function BulkEdit({ shop: shopProp }) {
   const [results, setResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedDeleteLanguages, setSelectedDeleteLanguages] = useState([]);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   
   // Toast
   const [toast, setToast] = useState('');
@@ -225,6 +228,16 @@ export default function BulkEdit({ shop: shopProp }) {
       return;
     }
     setShowLanguageModal(true);
+  };
+  
+  // Open delete language selection modal
+  const openDeleteModal = () => {
+    if (selectedItems.length === 0 && !selectAllPages) {
+      setToast('Please select products first');
+      return;
+    }
+    setSelectedDeleteLanguages([]);
+    setShowDeleteModal(true);
   };
   
   // Generate SEO for selected products
@@ -474,6 +487,131 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   };
   
+  // Delete SEO for selected products
+  const deleteSEO = async () => {
+    if (!selectedDeleteLanguages.length) {
+      setToast('Please select at least one language to delete');
+      return;
+    }
+    
+    setShowDeleteModal(false);
+    setShowDeleteConfirmModal(false);
+    setIsProcessing(true);
+    setProgress({ current: 0, total: 0, percent: 0 });
+    setErrors([]);
+    
+    try {
+      let productsToProcess = [];
+      
+      if (selectAllPages) {
+        const response = await fetch(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        productsToProcess = data.products || [];
+      } else {
+        productsToProcess = products.filter(p => selectedItems.includes(p._id));
+      }
+      
+      const total = productsToProcess.length;
+      setProgress({ current: 0, total, percent: 0 });
+      
+      let successCount = 0;
+      let skippedCount = 0;
+      
+      for (let i = 0; i < productsToProcess.length; i++) {
+        const product = productsToProcess[i];
+        setCurrentProduct(product.title || product.handle || 'Product');
+        
+        try {
+          const productGid = product.gid || toProductGID(product.productId || product.id);
+          const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+          
+          // Only delete languages that are actually optimized
+          const languagesToDelete = selectedDeleteLanguages.filter(lang => 
+            optimizedLanguages.includes(lang)
+          );
+          
+          if (languagesToDelete.length === 0) {
+            skippedCount++;
+            continue;
+          }
+          
+          const response = await fetch('/api/seo/delete-multi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              shop,
+              productId: productGid,
+              languages: languagesToDelete,
+            }),
+          });
+          
+          const data = await response.json();
+          
+          if (!response.ok) throw new Error(data?.error || 'Delete failed');
+          
+          // Optimistic update - immediately update local state
+          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
+            setProducts(prevProducts => 
+              prevProducts.map(prod => {
+                if (prod._id === product._id) {
+                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
+                  const newOptimized = currentOptimized.filter(lang => 
+                    !data.deletedLanguages.includes(lang)
+                  );
+                  
+                  return {
+                    ...prod,
+                    optimizationSummary: {
+                      ...prod.optimizationSummary,
+                      optimizedLanguages: newOptimized,
+                      optimized: newOptimized.length > 0,
+                      lastOptimized: newOptimized.length > 0 
+                        ? prod.optimizationSummary.lastOptimized 
+                        : null
+                    }
+                  };
+                }
+                return prod;
+              })
+            );
+          }
+          
+          successCount++;
+        } catch (err) {
+          setErrors(prev => [...prev, { product: product.title, error: err.message }]);
+        }
+        
+        const current = i + 1;
+        const percent = Math.round((current / total) * 100);
+        setProgress({ current, total, percent });
+      }
+      
+      // Clear selections
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      
+      // Show result toast
+      if (skippedCount > 0) {
+        setToast(`Deleted AI Search Optimisation from ${successCount} products (${skippedCount} had no optimisation to delete)`);
+      } else {
+        setToast(`Deleted AI Search Optimisation from ${successCount} products`);
+      }
+      
+      // Reload products after delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await loadProducts(1);
+      
+    } catch (err) {
+      setToast(`Error: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setCurrentProduct('');
+    }
+  };
+  
   // Resource list items
   const renderItem = (item) => {
     const product = item;
@@ -708,6 +846,112 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
+  // Delete language selection modal
+  const deleteModal = (
+    <Modal
+      open={showDeleteModal}
+      title="Delete AI Search Optimisation"
+      primaryAction={{
+        content: 'Continue',
+        onAction: () => {
+          setShowDeleteModal(false);
+          setShowDeleteConfirmModal(true);
+        },
+        disabled: selectedDeleteLanguages.length === 0,
+        destructive: true,
+      }}
+      secondaryActions={[
+        {
+          content: 'Cancel',
+          onAction: () => setShowDeleteModal(false),
+        },
+      ]}
+    >
+      <Modal.Section>
+        <BlockStack gap="300">
+          <Text variant="bodyMd">
+            Select languages to delete AI Search Optimisation from {selectAllPages ? 'all' : selectedItems.length} selected products:
+          </Text>
+          <Box paddingBlockStart="200">
+            <InlineStack gap="200" wrap>
+              {availableLanguages.map(lang => (
+                <Checkbox
+                  key={lang}
+                  label={lang.toUpperCase()}
+                  checked={selectedDeleteLanguages.includes(lang)}
+                  onChange={(checked) => {
+                    setSelectedDeleteLanguages(
+                      checked
+                        ? [...selectedDeleteLanguages, lang]
+                        : selectedDeleteLanguages.filter(l => l !== lang)
+                    );
+                  }}
+                />
+              ))}
+            </InlineStack>
+          </Box>
+          <Box paddingBlockStart="200">
+            <Button
+              plain
+              onClick={() => {
+                setSelectedDeleteLanguages(
+                  selectedDeleteLanguages.length === availableLanguages.length
+                    ? []
+                    : [...availableLanguages]
+                );
+              }}
+            >
+              {selectedDeleteLanguages.length === availableLanguages.length ? 'Deselect all' : 'Select all'}
+            </Button>
+          </Box>
+          <Text variant="bodySm" tone="caution">
+            Warning: This will permanently delete AI Search Optimisation data for selected languages.
+          </Text>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+
+  // Delete confirmation modal
+  const deleteConfirmModal = (
+    <Modal
+      open={showDeleteConfirmModal}
+      title="Confirm Deletion"
+      primaryAction={{
+        content: 'Delete',
+        onAction: deleteSEO,
+        destructive: true,
+      }}
+      secondaryActions={[
+        {
+          content: 'Cancel',
+          onAction: () => setShowDeleteConfirmModal(false),
+        },
+      ]}
+    >
+      <Modal.Section>
+        <BlockStack gap="300">
+          <Text variant="bodyMd" tone="critical">
+            Are you sure you want to delete AI Search Optimisation for the following languages?
+          </Text>
+          <Box paddingBlock="200">
+            <InlineStack gap="100">
+              {selectedDeleteLanguages.map(lang => (
+                <Badge key={lang} tone="critical">{lang.toUpperCase()}</Badge>
+              ))}
+            </InlineStack>
+          </Box>
+          <Text variant="bodyMd">
+            This will delete optimisation from {selectAllPages ? 'ALL' : selectedItems.length} selected products.
+          </Text>
+          <Text variant="bodySm" tone="critical" fontWeight="semibold">
+            This action cannot be undone.
+          </Text>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+  
   const emptyState = (
     <EmptyState
       heading="No products found"
@@ -728,6 +972,11 @@ export default function BulkEdit({ shop: shopProp }) {
     {
       content: 'Generate AI Search Optimisation',
       onAction: openLanguageModal,
+    },
+    {
+      content: 'Delete AI Search Optimisation',
+      onAction: openDeleteModal,
+      destructive: true,
     }
   ];
   
@@ -961,7 +1210,7 @@ export default function BulkEdit({ shop: shopProp }) {
             selectedItems={selectedItems}
             onSelectionChange={handleSelectionChange}
             selectable={true}
-            // bulkActions={bulkActions}
+            bulkActions={bulkActions}
             loading={loading}
             totalItemsCount={totalCount}
             emptyState={emptyState}
@@ -981,6 +1230,8 @@ export default function BulkEdit({ shop: shopProp }) {
       {progressModal}
       {languageModal}
       {resultsModal}
+      {deleteModal}
+      {deleteConfirmModal}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

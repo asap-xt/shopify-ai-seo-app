@@ -139,4 +139,62 @@ router.post('/apply-multi', async (req, res) => {
   }
 });
 
+// POST /api/seo/delete-multi
+// Body: { shop, productId, languages: ['en','bg',...] }
+router.post('/delete-multi', async (req, res) => {
+  try {
+    const { shop, productId: pid, languages } = req.body || {};
+    if (!shop || !pid || !Array.isArray(languages) || languages.length === 0) {
+      return res.status(400).json({ error: 'Missing shop, productId or languages[]' });
+    }
+    const productId = toGID(String(pid));
+    
+    const errors = [];
+    const deletedLanguages = [];
+    
+    // Execute all delete operations sequentially
+    for (const language of languages) {
+      try {
+        const url = `${APP_URL}/seo/delete?shop=${encodeURIComponent(shop)}`;
+        const rsp = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: req.headers.cookie || '',
+          },
+          body: JSON.stringify({ shop, productId, language })
+        });
+        
+        const text = await rsp.text();
+        let json;
+        try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
+        
+        console.log(`[MULTI-DELETE] Delete result for ${language}:`, json?.ok ? 'SUCCESS' : 'FAILED');
+        
+        if (!rsp.ok || json?.ok === false) {
+          const err = json?.errors?.join('; ') || json?.error || `Delete failed (${rsp.status})`;
+          errors.push(`[${language}] ${err}`);
+        } else {
+          deletedLanguages.push(language);
+        }
+      } catch (e) {
+        errors.push(`[${language}] ${e.message || 'Delete exception'}`);
+      }
+    }
+    
+    // Add delay for MongoDB propagation
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    return res.json({
+      ok: errors.length === 0,
+      errors,
+      deletedLanguages,
+      productId
+    });
+  } catch (err) {
+    console.error('POST /api/seo/delete-multi error:', err);
+    return res.status(500).json({ error: 'Failed to delete SEO for multiple languages' });
+  }
+});
+
 export default router;
