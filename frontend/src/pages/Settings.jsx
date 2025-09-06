@@ -25,7 +25,7 @@ const qs = (k, d = '') => {
   catch { return d; }
 };
 
-// Helper function to normalize plan names
+// Helper function to normalise plans names
 const normalizePlan = (plan) => {
   return (plan || 'starter').toLowerCase().replace(' ', '_');
 };
