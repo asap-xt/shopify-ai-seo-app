@@ -366,4 +366,27 @@ router.post('/ai/update-product', async (req, res) => {
   }
 });
 
+/**
+ * GET /ai/robots-dynamic
+ * Dynamic robots.txt generation
+ */
+router.get('/ai/robots-dynamic', async (req, res) => {
+  try {
+    const { shop } = req.query;
+    if (!shop) {
+      return res.status(400).send('Missing shop');
+    }
+    
+    const { session } = await getShopSession(shop);
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    const robotsTxt = aiDiscoveryService.generateRobotsTxt(settings, shop);
+    
+    res.type('text/plain');
+    res.send(robotsTxt);
+  } catch (error) {
+    console.error('Error generating dynamic robots.txt:', error);
+    res.status(500).send('# Error generating robots.txt');
+  }
+});
+
 export default router;
