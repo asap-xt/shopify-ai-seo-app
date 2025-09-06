@@ -134,9 +134,6 @@ router.get('/ai/welcome', async (req, res) => {
     const countData = await countResponse.json();
     const productCount = countData.count || 0;
 
-    // Get AI Discovery settings
-    const settings = await aiDiscoveryService.getSettings(shop, { accessToken: shopDoc.accessToken });
-
     // Generate HTML page
     const html = `<!DOCTYPE html>
 <html lang="en">
