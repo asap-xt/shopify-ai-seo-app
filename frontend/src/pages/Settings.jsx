@@ -72,6 +72,12 @@ export default function Settings() {
   };
 
   const toggleBot = (botKey) => {
+    // Check if bot is available for current plan
+    if (!settings?.availableBots?.includes(botKey)) {
+      setToast(`Upgrade your plan to enable ${settings.bots[botKey].name}`);
+      return;
+    }
+    
     setSettings(prev => ({
       ...prev,
       bots: {
@@ -210,39 +216,58 @@ export default function Settings() {
             <BlockStack gap="300">
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
                 gap: '1rem' 
               }}>
-                {Object.entries(settings?.bots || {}).map(([key, bot]) => (
-                  <Checkbox
-                    key={key}
-                    label={bot.name || key}
-                    checked={bot.enabled}
-                    onChange={() => toggleBot(key)}
-                    helpText={
-                      key === 'openai' ? 'Most popular AI assistant' :
-                      key === 'anthropic' ? 'Claude AI assistant' :
-                      key === 'google' ? 'Google Gemini' :
-                      key === 'perplexity' ? 'AI-powered search' :
-                      key === 'meta' ? 'Meta AI platforms' :
-                      key === 'others' ? 'Bytespider, DeepSeek, etc.' :
-                      ''
-                    }
-                  />
-                ))}
+                {Object.entries(settings?.bots || {}).map(([key, bot]) => {
+                  const isAvailable = settings?.availableBots?.includes(key);
+                  const requiredPlan = 
+                    key === 'anthropic' ? 'Professional' :
+                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    null;
+                  
+                  return (
+                    <Box key={key} 
+                      padding="200" 
+                      background={isAvailable ? "bg-surface" : "bg-surface-secondary"}
+                      borderRadius="200"
+                      borderWidth="025"
+                      borderColor="border"
+                    >
+                      <BlockStack gap="100">
+                        <Checkbox
+                          label={
+                            <InlineStack gap="200" align="center">
+                              <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                                {bot.name || key}
+                              </Text>
+                              {!isAvailable && requiredPlan && (
+                                <Badge tone="info" size="small">
+                                  {requiredPlan}+
+                                </Badge>
+                              )}
+                            </InlineStack>
+                          }
+                          checked={bot.enabled && isAvailable}
+                          onChange={() => isAvailable && toggleBot(key)}
+                          disabled={!isAvailable}
+                          helpText={
+                            !isAvailable ? 
+                              `Upgrade to ${requiredPlan} plan to enable this AI bot` :
+                              key === 'openai' ? 'Most popular AI assistant' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              ''
+                          }
+                        />
+                      </BlockStack>
+                    </Box>
+                  );
+                })}
               </div>
-              
-              {/* Show upgrade message for limited plans */}
-              {settings?.plan && ['starter', 'professional'].includes(settings.plan) && (
-                <Banner status="info">
-                  <p>
-                    {settings.plan === 'starter' ? 
-                      'Upgrade to Professional plan to enable Anthropic (Claude) bot access.' :
-                      'Upgrade to Growth plan to enable all AI bots including Google, Meta and others.'
-                    }
-                  </p>
-                </Banner>
-              )}
             </BlockStack>
           </BlockStack>
         </Box>

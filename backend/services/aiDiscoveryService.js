@@ -131,45 +131,28 @@ class AIDiscoveryService {
 
   // ... rest of the methods remain the same
   getDefaultSettings(plan = 'starter') {
-    // План-базирани ботове
-    const botsByPlan = {
-      starter: {
-        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-        perplexity: { name: 'Perplexity', enabled: true }
-      },
-      professional: {
-        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-        anthropic: { name: 'Anthropic (Claude)', enabled: true },
-        perplexity: { name: 'Perplexity', enabled: true }
-      },
-      growth: {
-        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-        anthropic: { name: 'Anthropic (Claude)', enabled: true },
-        google: { name: 'Google AI (Gemini)', enabled: true },
-        perplexity: { name: 'Perplexity', enabled: true },
-        meta: { name: 'Meta AI', enabled: false },
-        others: { name: 'Other AI Bots', enabled: true }
-      },
-      growth_extra: {
-        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-        anthropic: { name: 'Anthropic (Claude)', enabled: true },
-        google: { name: 'Google AI (Gemini)', enabled: true },
-        perplexity: { name: 'Perplexity', enabled: true },
-        meta: { name: 'Meta AI', enabled: false },
-        others: { name: 'Other AI Bots', enabled: true }
-      },
-      enterprise: {
-        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-        anthropic: { name: 'Anthropic (Claude)', enabled: true },
-        google: { name: 'Google AI (Gemini)', enabled: true },
-        perplexity: { name: 'Perplexity', enabled: true },
-        meta: { name: 'Meta AI', enabled: false },
-        others: { name: 'Other AI Bots', enabled: true }
-      }
+    // All available bots
+    const allBots = {
+      openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+      anthropic: { name: 'Anthropic (Claude)', enabled: true },
+      google: { name: 'Google AI (Gemini)', enabled: true },
+      perplexity: { name: 'Perplexity', enabled: true },
+      meta: { name: 'Meta AI', enabled: false },
+      others: { name: 'Other AI Bots', enabled: true }
+    };
+
+    // Which bots are available for each plan
+    const availableBotsByPlan = {
+      starter: ['openai', 'perplexity'],
+      professional: ['openai', 'anthropic', 'perplexity'],
+      growth: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
+      growth_extra: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
+      enterprise: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others']
     };
 
     const base = {
-      bots: botsByPlan[plan] || botsByPlan.starter,
+      bots: allBots,
+      availableBots: availableBotsByPlan[plan] || availableBotsByPlan.starter,
       features: {
         productsJson: true,
         aiSitemap: true,
