@@ -178,9 +178,9 @@ class AIDiscoveryService {
     content += `# Generated on ${new Date().toISOString()}\n`;
     content += `# Shop: ${shopDomain}\n\n`;
 
-    const { bots } = settings;
+    const { bots = {} } = settings;
 
-    // OpenAI bots
+    // OpenAI bots - check only if exists AND is enabled
     if (bots.openai?.enabled) {
       content += '# OpenAI\n';
       content += 'User-agent: GPTBot\n';

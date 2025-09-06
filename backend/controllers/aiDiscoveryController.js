@@ -277,4 +277,41 @@ router.delete('/ai-discovery/settings', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ai-discovery/test-assets - Test endpoint to check theme assets
+ */
+router.get('/ai-discovery/test-assets', async (req, res) => {
+  try {
+    const shop = req.query.shop;
+    const { session, accessToken } = await getShopSession(shop);
+    
+    // Get theme
+    const themesResponse = await fetch(
+      `https://${shop}/admin/api/2024-07/themes.json`,
+      { headers: { 'X-Shopify-Access-Token': accessToken } }
+    );
+    
+    const themesData = await themesResponse.json();
+    const activeTheme = themesData.themes?.find(t => t.role === 'main');
+    
+    // List all assets
+    const assetsResponse = await fetch(
+      `https://${shop}/admin/api/2024-07/themes/${activeTheme.id}/assets.json`,
+      { headers: { 'X-Shopify-Access-Token': accessToken } }
+    );
+    
+    const assetsData = await assetsResponse.json();
+    
+    res.json({
+      theme: activeTheme.name,
+      totalAssets: assetsData.assets?.length,
+      robotsFiles: assetsData.assets?.filter(a => a.key.includes('robots')),
+      liquidFiles: assetsData.assets?.filter(a => a.key.endsWith('.liquid')).slice(0, 10)
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
