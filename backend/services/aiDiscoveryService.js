@@ -10,17 +10,10 @@ class AIDiscoveryService {
    * Get AI Discovery settings for a shop
    */
   async getSettings(shop, session) {
-    // Check cache
-    const cacheKey = `settings:${shop}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && cached.expires > Date.now()) {
-      return cached.data;
-    }
-
     try {
-      // Use REST API to get shop metafield
+      // Вземаме settings от metafield
       const response = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=${this.namespace}&key=settings&owner_resource=shop`,
+        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
         {
           headers: {
             'X-Shopify-Access-Token': session.accessToken,
@@ -28,26 +21,56 @@ class AIDiscoveryService {
           }
         }
       );
-
+      
       if (!response.ok) {
-        console.log('No existing settings found, returning empty object');
-        return {}; // Return empty object instead of default settings
+        throw new Error('Failed to fetch settings');
       }
-
+      
       const data = await response.json();
       const metafield = data.metafields?.[0];
-      const settings = metafield ? JSON.parse(metafield.value) : {};
-
-      // Cache
-      this.cache.set(cacheKey, {
-        data: settings,
-        expires: Date.now() + this.cacheTTL
-      });
-
+      let settings = null;
+      
+      if (metafield?.value) {
+        try {
+          settings = JSON.parse(metafield.value);
+        } catch (e) {
+          console.error('Failed to parse settings:', e);
+          settings = this.getDefaultSettings();
+        }
+      }
+      
+      // Ако няма settings, връщаме defaults
+      if (!settings) {
+        settings = this.getDefaultSettings();
+      }
+      
+      // НОВО: Добавяме план и availableBots
+      try {
+        const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
+        if (planResponse.ok) {
+          const planData = await planResponse.json();
+          settings.plan = planData.plan;
+          settings.planKey = planData.planKey;
+          settings.availableBots = this.getAvailableBotsForPlan(planData.planKey);
+        } else {
+          // Fallback стойности
+          settings.plan = 'Starter';
+          settings.planKey = 'starter';
+          settings.availableBots = ['openai', 'perplexity'];
+        }
+      } catch (error) {
+        console.error('Failed to fetch plan in getSettings:', error);
+        settings.plan = 'Starter';
+        settings.planKey = 'starter';
+        settings.availableBots = ['openai', 'perplexity'];
+      }
+      
+      this.cache.set(shop, settings, 300000); // Cache за 5 минути
       return settings;
+      
     } catch (error) {
-      console.error('Failed to get settings:', error);
-      return {}; // Return empty object on error
+      console.error('Error in getSettings:', error);
+      return this.getDefaultSettings();
     }
   }
 
