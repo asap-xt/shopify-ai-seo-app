@@ -3,9 +3,9 @@ import express from 'express';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
-import { getActiveLanguage } from './seoController.js';
 
 const router = express.Router();
+
 
 /**
  * Helper to check if feature is available
@@ -199,9 +199,6 @@ router.get('/ai/welcome', async (req, res) => {
       });
     }
     
-    // Get active language
-    const language = await getActiveLanguage(shop);
-    
     // Get shop info for customization
     const shopInfoQuery = `
       query {
@@ -231,10 +228,10 @@ router.get('/ai/welcome', async (req, res) => {
     const shopData = await shopResponse.json();
     const shopInfo = shopData.data?.shop;
     
-    // Welcome page HTML with language support
+    // Welcome page HTML
     const html = `
 <!DOCTYPE html>
-<html lang="${language}">
+<html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -348,7 +345,7 @@ router.get('/ai/welcome', async (req, res) => {
     
     <div class="section">
       <h2>📊 Available Data Endpoints</h2>
-      <p>All endpoints return JSON data optimized for AI consumption. Language: <strong>${language.toUpperCase()}</strong></p>
+      <p>All endpoints return JSON data optimized for AI consumption.</p>
       
       ${settings?.features?.productsJson ? `
       <div class="endpoint">
@@ -412,7 +409,7 @@ router.get('/ai/welcome', async (req, res) => {
       <pre style="background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto;">
 {
   "shop": "${shop}",
-  "language": "${language}",
+  "language": "from_metafields",
   "generated_at": "ISO 8601 timestamp",
   "data": [...],
   "_links": {
@@ -518,9 +515,6 @@ router.get('/ai/schema-data.json', async (req, res) => {
       });
     }
 
-    // Get active language
-    const language = await getActiveLanguage(shop);
-    
     // Get schema data from metafields
     const metafieldsQuery = `
       query {
@@ -631,7 +625,6 @@ router.get('/ai/schema-data.json', async (req, res) => {
     if (schemas.length === 0) {
       return res.json({
         shop: shop,
-        language: language,
         generated_at: new Date().toISOString(),
         schemas: [],
         warning: 'No advanced schema data found',
@@ -646,7 +639,6 @@ router.get('/ai/schema-data.json', async (req, res) => {
     // Build response
     res.json({
       shop: shop,
-      language: language,
       generated_at: new Date().toISOString(),
       schemas_count: schemas.length,
       schemas: schemas,
