@@ -25,6 +25,11 @@ const qs = (k, d = '') => {
   catch { return d; }
 };
 
+// Helper function to normalize plan names
+const normalizePlan = (plan) => {
+  return (plan || 'starter').toLowerCase().replace(' ', '_');
+};
+
 export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -168,7 +173,7 @@ export default function Settings() {
   };
 
   const isFeatureAvailable = (featureKey) => {
-    const plan = settings?.plan || 'starter';
+    const plan = normalizePlan(settings?.plan);
     
     const availability = {
       productsJson: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
@@ -238,7 +243,19 @@ export default function Settings() {
                   const bot = settings?.bots?.[key];
                   if (!bot) return null;
                   
-                  const isAvailable = settings?.availableBots?.includes(key);
+                  // Use normalized plan for availableBots check
+                  const availableBotsByPlan = {
+                    starter: ['openai', 'perplexity'],
+                    professional: ['openai', 'anthropic', 'perplexity'],
+                    growth: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
+                    growth_extra: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
+                    enterprise: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others']
+                  };
+                  
+                  const normalizedPlan = normalizePlan(settings?.plan);
+                  const availableBots = availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter;
+                  const isAvailable = availableBots.includes(key);
+                  
                   const requiredPlan = 
                     key === 'anthropic' ? 'Professional' :
                     ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
@@ -268,7 +285,7 @@ export default function Settings() {
                           }
                           checked={!!settings?.bots?.[key]?.enabled}
                           onChange={() => toggleBot(key)}
-                          disabled={!settings?.availableBots?.includes(key)}
+                          disabled={!isAvailable}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
@@ -327,7 +344,7 @@ export default function Settings() {
                           }
                           checked={!!settings?.bots?.[key]?.enabled}
                           onChange={() => toggleBot(key)}
-                          disabled={!settings?.availableBots?.includes(key)}
+                          disabled={!isAvailable}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
@@ -386,7 +403,7 @@ export default function Settings() {
                           }
                           checked={!!settings?.bots?.[key]?.enabled}
                           onChange={() => toggleBot(key)}
-                          disabled={!settings?.availableBots?.includes(key)}
+                          disabled={!isAvailable}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
@@ -577,8 +594,35 @@ export default function Settings() {
         </Card>
       )}
 
-      {/* Save Button */}
-      <Box>
+      {/* Save and Reset Buttons */}
+      <InlineStack gap="200" align="end">
+        <Button
+          tone="critical"
+          onClick={async () => {
+            if (window.confirm('Are you sure you want to reset all AI Discovery settings to defaults?')) {
+              try {
+                const res = await fetch(`/api/ai-discovery/settings?shop=${shop}`, {
+                  method: 'DELETE'
+                });
+                
+                if (res.ok) {
+                  setToast('Settings reset successfully');
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 1000);
+                } else {
+                  throw new Error('Failed to reset');
+                }
+              } catch (error) {
+                console.error('Failed to reset:', error);
+                setToast('Failed to reset settings');
+              }
+            }
+          }}
+        >
+          Reset to Defaults
+        </Button>
+        
         <Button
           primary
           size="large"
@@ -588,7 +632,7 @@ export default function Settings() {
         >
           Save Settings
         </Button>
-      </Box>
+      </InlineStack>
 
       {/* Robots.txt Modal */}
       <Modal

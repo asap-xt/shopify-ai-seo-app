@@ -40,7 +40,7 @@ router.get('/ai-discovery/settings', async (req, res) => {
     // Get current plan
     const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
     const planData = await planResponse.json();
-    const plan = planData.plan || 'starter';
+    const plan = (planData.plan || 'starter').toLowerCase().replace(' ', '_');
     
     // Get saved settings
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
@@ -188,6 +188,56 @@ ${robotsTxt}
     });
   } catch (error) {
     console.error('Failed to apply robots.txt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/ai-discovery/settings - Reset settings to defaults
+ */
+router.delete('/ai-discovery/settings', async (req, res) => {
+  try {
+    const shop = req.query.shop;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    const { session } = await getShopSession(shop);
+    
+    // Delete metafield
+    const response = await fetch(
+      `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': session.accessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      const metafield = data.metafields?.[0];
+      
+      if (metafield) {
+        await fetch(
+          `https://${shop}/admin/api/2024-07/metafields/${metafield.id}.json`,
+          {
+            method: 'DELETE',
+            headers: {
+              'X-Shopify-Access-Token': session.accessToken
+            }
+          }
+        );
+      }
+    }
+    
+    // Clear cache
+    aiDiscoveryService.cache.clear();
+    
+    res.json({ success: true, message: 'Settings reset successfully' });
+  } catch (error) {
+    console.error('Failed to reset settings:', error);
     res.status(500).json({ error: error.message });
   }
 });
