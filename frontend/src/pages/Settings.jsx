@@ -49,6 +49,7 @@ export default function Settings() {
       if (!res.ok) throw new Error('Failed to load settings');
       
       const data = await res.json();
+      console.log('Loaded settings:', data); // Debug log
       setSettings(data);
       
       // Generate robots.txt preview
@@ -265,9 +266,9 @@ export default function Settings() {
                               )}
                             </InlineStack>
                           }
-                          checked={bot.enabled && isAvailable}
-                          onChange={() => isAvailable && toggleBot(key)}
-                          disabled={!isAvailable}
+                          checked={!!settings?.bots?.[key]?.enabled}
+                          onChange={() => toggleBot(key)}
+                          disabled={!settings?.availableBots?.includes(key)}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
@@ -324,9 +325,9 @@ export default function Settings() {
                               )}
                             </InlineStack>
                           }
-                          checked={bot.enabled && isAvailable}
-                          onChange={() => isAvailable && toggleBot(key)}
-                          disabled={!isAvailable}
+                          checked={!!settings?.bots?.[key]?.enabled}
+                          onChange={() => toggleBot(key)}
+                          disabled={!settings?.availableBots?.includes(key)}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
@@ -383,9 +384,9 @@ export default function Settings() {
                               )}
                             </InlineStack>
                           }
-                          checked={bot.enabled && isAvailable}
-                          onChange={() => isAvailable && toggleBot(key)}
-                          disabled={!isAvailable}
+                          checked={!!settings?.bots?.[key]?.enabled}
+                          onChange={() => toggleBot(key)}
+                          disabled={!settings?.availableBots?.includes(key)}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :

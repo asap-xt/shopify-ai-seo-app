@@ -20,7 +20,7 @@ class AIDiscoveryService {
     try {
       // Use REST API to get shop metafield
       const response = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=${this.namespace}&key=settings`,
+        `https://${shop}/admin/api/2024-07/metafields.json?namespace=${this.namespace}&key=settings&owner_resource=shop`,
         {
           headers: {
             'X-Shopify-Access-Token': session.accessToken,
@@ -30,12 +30,13 @@ class AIDiscoveryService {
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch metafield: ${response.status}`);
+        console.log('No existing settings found, returning empty object');
+        return {}; // Return empty object instead of default settings
       }
 
       const data = await response.json();
       const metafield = data.metafields?.[0];
-      const settings = metafield ? JSON.parse(metafield.value) : this.getDefaultSettings();
+      const settings = metafield ? JSON.parse(metafield.value) : {};
 
       // Cache
       this.cache.set(cacheKey, {
@@ -46,7 +47,7 @@ class AIDiscoveryService {
       return settings;
     } catch (error) {
       console.error('Failed to get settings:', error);
-      return this.getDefaultSettings();
+      return {}; // Return empty object on error
     }
   }
 
