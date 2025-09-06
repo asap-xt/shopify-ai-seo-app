@@ -208,14 +208,41 @@ export default function Settings() {
             <Divider />
             
             <BlockStack gap="300">
-              {Object.entries(settings?.bots || {}).map(([key, bot]) => (
-                <Checkbox
-                  key={key}
-                  label={bot.name}
-                  checked={bot.enabled}
-                  onChange={() => toggleBot(key)}
-                />
-              ))}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                gap: '1rem' 
+              }}>
+                {Object.entries(settings?.bots || {}).map(([key, bot]) => (
+                  <Checkbox
+                    key={key}
+                    label={bot.name || key}
+                    checked={bot.enabled}
+                    onChange={() => toggleBot(key)}
+                    helpText={
+                      key === 'openai' ? 'Most popular AI assistant' :
+                      key === 'anthropic' ? 'Claude AI assistant' :
+                      key === 'google' ? 'Google Gemini' :
+                      key === 'perplexity' ? 'AI-powered search' :
+                      key === 'meta' ? 'Meta AI platforms' :
+                      key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                      ''
+                    }
+                  />
+                ))}
+              </div>
+              
+              {/* Show upgrade message for limited plans */}
+              {settings?.plan && ['starter', 'professional'].includes(settings.plan) && (
+                <Banner status="info">
+                  <p>
+                    {settings.plan === 'starter' ? 
+                      'Upgrade to Professional plan to enable Anthropic (Claude) bot access.' :
+                      'Upgrade to Growth plan to enable all AI bots including Google, Meta and others.'
+                    }
+                  </p>
+                </Banner>
+              )}
             </BlockStack>
           </BlockStack>
         </Box>

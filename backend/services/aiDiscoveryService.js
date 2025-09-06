@@ -131,15 +131,45 @@ class AIDiscoveryService {
 
   // ... rest of the methods remain the same
   getDefaultSettings(plan = 'starter') {
-    const base = {
-      bots: {
-        openai: true,
-        anthropic: true,
-        google: true,
-        perplexity: true,
-        meta: false,
-        others: true
+    // План-базирани ботове
+    const botsByPlan = {
+      starter: {
+        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+        perplexity: { name: 'Perplexity', enabled: true }
       },
+      professional: {
+        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+        anthropic: { name: 'Anthropic (Claude)', enabled: true },
+        perplexity: { name: 'Perplexity', enabled: true }
+      },
+      growth: {
+        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+        anthropic: { name: 'Anthropic (Claude)', enabled: true },
+        google: { name: 'Google AI (Gemini)', enabled: true },
+        perplexity: { name: 'Perplexity', enabled: true },
+        meta: { name: 'Meta AI', enabled: false },
+        others: { name: 'Other AI Bots', enabled: true }
+      },
+      growth_extra: {
+        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+        anthropic: { name: 'Anthropic (Claude)', enabled: true },
+        google: { name: 'Google AI (Gemini)', enabled: true },
+        perplexity: { name: 'Perplexity', enabled: true },
+        meta: { name: 'Meta AI', enabled: false },
+        others: { name: 'Other AI Bots', enabled: true }
+      },
+      enterprise: {
+        openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
+        anthropic: { name: 'Anthropic (Claude)', enabled: true },
+        google: { name: 'Google AI (Gemini)', enabled: true },
+        perplexity: { name: 'Perplexity', enabled: true },
+        meta: { name: 'Meta AI', enabled: false },
+        others: { name: 'Other AI Bots', enabled: true }
+      }
+    };
+
+    const base = {
+      bots: botsByPlan[plan] || botsByPlan.starter,
       features: {
         productsJson: true,
         aiSitemap: true,
@@ -154,7 +184,73 @@ class AIDiscoveryService {
   }
 
   generateRobotsTxt(settings, shopDomain) {
-    // ... same as before
+    let content = '# AI Discovery by AI SEO 2.0\n';
+    content += `# Generated on ${new Date().toISOString()}\n`;
+    content += `# Shop: ${shopDomain}\n\n`;
+
+    const { bots } = settings;
+
+    // OpenAI bots
+    if (bots.openai?.enabled) {
+      content += '# OpenAI\n';
+      content += 'User-agent: GPTBot\n';
+      content += 'User-agent: ChatGPT-User\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // Anthropic bots
+    if (bots.anthropic?.enabled) {
+      content += '# Anthropic\n';
+      content += 'User-agent: Claude-Web\n';
+      content += 'User-agent: ClaudeBot\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // Google bots
+    if (bots.google?.enabled) {
+      content += '# Google AI\n';
+      content += 'User-agent: GoogleOther\n';
+      content += 'User-agent: Google-Extended\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // Perplexity
+    if (bots.perplexity?.enabled) {
+      content += '# Perplexity\n';
+      content += 'User-agent: PerplexityBot\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // Meta
+    if (bots.meta?.enabled) {
+      content += '# Meta AI\n';
+      content += 'User-agent: Meta-ExternalAgent\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // Others
+    if (bots.others?.enabled) {
+      content += '# Other AI Bots\n';
+      content += 'User-agent: Bytespider\n';
+      content += 'User-agent: DeepSeekBot\n';
+      content += 'Allow: /\n\n';
+    }
+
+    // AI-friendly paths
+    content += '# AI-Optimized Paths\n';
+    content += 'Sitemap: https://' + shopDomain + '/sitemap.xml\n';
+    
+    if (settings.features?.productsJson) {
+      content += 'Allow: /ai/products.json\n';
+    }
+    if (settings.features?.welcomePage) {
+      content += 'Allow: /ai/welcome\n';
+    }
+    
+    content += 'Allow: /products/*\n';
+    content += 'Allow: /collections/*\n';
+
+    return content;
   }
 
   isFeatureAvailable(plan, feature) {
