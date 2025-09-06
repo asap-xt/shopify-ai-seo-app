@@ -770,11 +770,11 @@ export default function Settings() {
               </Banner>
               
               <Text>To configure robots.txt:</Text>
-              <List type="number">
-                <List.Item>Select AI bots from the "AI Bot Access Control" section above</List.Item>
-                <List.Item>Click "Save Settings" to save your selections</List.Item>
-                <List.Item>Then click "Apply Automatically" to configure robots.txt</List.Item>
-              </List>
+              <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+                <li>Select AI bots from the "AI Bot Access Control" section above</li>
+                <li>Click "Save Settings" to save your selections</li>
+                <li>Then click "Apply Automatically" to configure robots.txt</li>
+              </ol>
             </BlockStack>
           </Modal.Section>
         </Modal>
@@ -802,14 +802,14 @@ export default function Settings() {
             <BlockStack gap="400">
               <Text variant="headingMd">How to add robots.txt manually:</Text>
               
-              <List type="number">
-                <List.Item>Click "Continue" to see your custom robots.txt content</List.Item>
-                <List.Item>Copy the generated content</List.Item>
-                <List.Item>Go to <strong>Online Store → Themes</strong></List.Item>
-                <List.Item>Click <strong>Actions → Edit code</strong> on your active theme</List.Item>
-                <List.Item>Find or create <strong>robots.txt.liquid</strong> file</List.Item>
-                <List.Item>Paste the content and save</List.Item>
-              </List>
+              <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+                <li>Click "Continue" to see your custom robots.txt content</li>
+                <li>Copy the generated content</li>
+                <li>Go to <strong>Online Store -> Themes</strong></li>
+                <li>Click <strong>Actions -> Edit code</strong> on your active theme</li>
+                <li>Find or create <strong>robots.txt.liquid</strong> file</li>
+                <li>Paste the content and save</li>
+              </ol>
               
               <Banner status="info">
                 <p>This allows AI bots to discover and properly index your products.</p>
