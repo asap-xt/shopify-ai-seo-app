@@ -150,11 +150,6 @@ export default function Settings() {
   };
 
   const applyRobotsTxt = async () => {
-    if (!['growth', 'growth_extra', 'enterprise'].includes(settings?.plan)) {
-      setToast('Automatic robots.txt requires Growth plan or higher');
-      return;
-    }
-
     try {
       const res = await fetch('/api/ai-discovery/apply-robots', {
         method: 'POST',
@@ -180,7 +175,6 @@ export default function Settings() {
       aiSitemap: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
       welcomePage: ['professional', 'growth', 'growth_extra', 'enterprise'],
       collectionsJson: ['growth', 'growth_extra', 'enterprise'],
-      autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'],
       storeMetadata: ['growth_extra', 'enterprise'],
       schemaData: ['enterprise']
     };

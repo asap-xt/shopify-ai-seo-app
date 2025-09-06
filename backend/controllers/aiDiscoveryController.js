@@ -125,11 +125,6 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
     const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
     const planData = await planResponse.json();
     
-    if (!['growth', 'growth_extra', 'enterprise'].includes(planData.plan)) {
-      return res.status(403).json({ 
-        error: 'Automatic robots.txt requires Growth plan or higher' 
-      });
-    }
     
     // Get settings and generate robots.txt
     const settings = await aiDiscoveryService.getSettings(shop, session);
