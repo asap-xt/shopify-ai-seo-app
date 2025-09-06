@@ -38,6 +38,8 @@ export default function Settings() {
   const [showRobotsModal, setShowRobotsModal] = useState(false);
   const [toast, setToast] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showNoBotsModal, setShowNoBotsModal] = useState(false);
+  const [showManualInstructions, setShowManualInstructions] = useState(false);
   
   const shop = qs('shop', '');
 
@@ -448,14 +450,31 @@ export default function Settings() {
             </Banner>
             
             <InlineStack gap="200">
-              <Button onClick={() => setShowRobotsModal(true)}>
-                View robots.txt
+              <Button 
+                onClick={() => {
+                  const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                  if (!hasSelectedBots) {
+                    setShowNoBotsModal(true);
+                  } else {
+                    setShowManualInstructions(true);
+                  }
+                }}
+              >
+                Add manually
               </Button>
               
               {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) && (
                 <Button 
                   primary 
                   onClick={async () => {
+                    // Check if any bots are selected
+                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                    
+                    if (!hasSelectedBots) {
+                      setShowNoBotsModal(true); // New state for modal
+                      return;
+                    }
+                    
                     try {
                       const res = await fetch('/api/ai-discovery/apply-robots', {
                         method: 'POST',
@@ -706,6 +725,73 @@ export default function Settings() {
                   {robotsTxt}
                 </pre>
               </Box>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* No Bots Selected Modal */}
+      {showNoBotsModal && (
+        <Modal
+          open={showNoBotsModal}
+          onClose={() => setShowNoBotsModal(false)}
+          title="No AI Bots Selected"
+          primaryAction={{
+            content: 'Got it',
+            onAction: () => setShowNoBotsModal(false)
+          }}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="warning">
+                <p>You haven't selected any AI bots yet.</p>
+              </Banner>
+              
+              <Text>To configure robots.txt:</Text>
+              <List type="number">
+                <List.Item>Select AI bots from the "AI Bot Access Control" section above</List.Item>
+                <List.Item>Click "Save Settings" to save your selections</List.Item>
+                <List.Item>Then click "Apply Automatically" to configure robots.txt</List.Item>
+              </List>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Manual Instructions Modal */}
+      {showManualInstructions && (
+        <Modal
+          open={showManualInstructions}
+          onClose={() => setShowManualInstructions(false)}
+          title="Manual robots.txt Configuration"
+          primaryAction={{
+            content: 'Continue',
+            onAction: () => {
+              setShowManualInstructions(false);
+              setShowRobotsModal(true);
+            }
+          }}
+          secondaryActions={[{
+            content: 'Cancel',
+            onAction: () => setShowManualInstructions(false)
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="headingMd">How to add robots.txt manually:</Text>
+              
+              <List type="number">
+                <List.Item>Click "Continue" to see your custom robots.txt content</List.Item>
+                <List.Item>Copy the generated content</List.Item>
+                <List.Item>Go to <strong>Online Store → Themes</strong></List.Item>
+                <List.Item>Click <strong>Actions → Edit code</strong> on your active theme</List.Item>
+                <List.Item>Find or create <strong>robots.txt.liquid</strong> file</List.Item>
+                <List.Item>Paste the content and save</List.Item>
+              </List>
+              
+              <Banner status="info">
+                <p>This allows AI bots to discover and properly index your products.</p>
+              </Banner>
             </BlockStack>
           </Modal.Section>
         </Modal>
