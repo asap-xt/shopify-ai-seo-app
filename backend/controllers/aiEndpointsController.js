@@ -88,6 +88,70 @@ router.get('/ai/products.json', async (req, res) => {
   }
 });
 
+// Collections JSON endpoint
+router.get('/ai/collections.json', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Check if feature is enabled
+    if (!settings?.features?.collectionsJson) {
+      return res.status(403).json({ 
+        error: 'Collections JSON feature is not enabled. Please enable it in settings.' 
+      });
+    }
+
+    // Get collections from Shopify
+    const response = await fetch(
+      `https://${shop}/admin/api/2024-07/collections.json?limit=250`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch collections');
+    }
+
+    const data = await response.json();
+    
+    // Transform collections for AI consumption
+    const aiCollections = data.collections.map(collection => ({
+      id: collection.id,
+      title: collection.title,
+      description: collection.body_html?.replace(/<[^>]*>?/gm, ''),
+      handle: collection.handle,
+      products_count: collection.products_count,
+      url: `https://${shop}/collections/${collection.handle}`,
+      image: collection.image?.src
+    }));
+
+    res.json({
+      shop: shop,
+      generated_at: new Date().toISOString(),
+      collections_count: aiCollections.length,
+      collections: aiCollections
+    });
+
+  } catch (error) {
+    console.error('Error in collections.json:', error);
+    res.status(500).json({ error: 'Failed to generate collections feed' });
+  }
+});
+
 // AI Welcome page
 router.get('/ai/welcome', async (req, res) => {
   const shop = req.query.shop;
