@@ -132,38 +132,41 @@ class AIDiscoveryService {
 
   // ... rest of the methods remain the same
   getDefaultSettings(plan = 'starter') {
+    // Normalize the plan
+    const normalizedPlan = plan.toLowerCase().replace(/\s+/g, '_');
+    
     // All available bots - all are false by default
     const allBots = {
       openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: false },
+      perplexity: { name: 'Perplexity', enabled: false },
       anthropic: { name: 'Anthropic (Claude)', enabled: false },
       google: { name: 'Google AI (Gemini)', enabled: false },
-      perplexity: { name: 'Perplexity', enabled: false },
       meta: { name: 'Meta AI', enabled: false },
       others: { name: 'Other AI Bots', enabled: false }
     };
 
-    // Which bots are available for each plan
+    // CORRECT bots according to your plans:
     const availableBotsByPlan = {
-      starter: ['openai', 'perplexity'],
-      professional: ['openai', 'anthropic', 'perplexity'],
-      growth: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
-      growth_extra: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
-      enterprise: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others']
+      starter: ['openai', 'perplexity'], // 2 bots
+      professional: ['openai', 'perplexity', 'anthropic'], // 3 bots  
+      growth: ['openai', 'perplexity', 'anthropic', 'google'], // 4 bots (WITHOUT Meta & Others)
+      growth_extra: ['openai', 'perplexity', 'anthropic', 'google', 'meta', 'others'], // all 6
+      enterprise: ['openai', 'perplexity', 'anthropic', 'google', 'meta', 'others'] // all 6
     };
 
     const base = {
       bots: allBots,
-      availableBots: availableBotsByPlan[plan] || availableBotsByPlan.starter,
+      availableBots: availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter,
       features: {
-        productsJson: false,      // Everything is false
-        aiSitemap: false,
-        welcomePage: false,
-        collectionsJson: false,
-        autoRobotsTxt: false,
-        storeMetadata: false,
-        schemaData: false
+        productsJson: true, // all plans
+        aiSitemap: true, // all plans
+        welcomePage: normalizedPlan !== 'starter', // Professional+
+        collectionsJson: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // Growth+
+        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // Growth+
+        storeMetadata: ['growth_extra', 'enterprise'].includes(normalizedPlan), // Growth Extra+
+        schemaData: normalizedPlan === 'enterprise' // only Enterprise
       },
-      plan: plan, // Important - add the plan here
+      plan: normalizedPlan, // Important - add the normalized plan here
       updatedAt: new Date().toISOString()
     };
 

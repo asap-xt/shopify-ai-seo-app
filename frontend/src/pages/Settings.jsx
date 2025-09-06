@@ -476,7 +476,7 @@ export default function Settings() {
                 {
                   key: 'productsJson',
                   name: 'Products JSON Feed',
-                  description: '/ai/products.json',
+                  description: 'Bulk product data for AI consumption',
                   requiredPlan: null
                 },
                 {
@@ -488,13 +488,13 @@ export default function Settings() {
                 {
                   key: 'welcomePage',
                   name: 'AI Welcome Page',
-                  description: '/ai/welcome',
+                  description: 'Landing page for AI bots',
                   requiredPlan: 'Professional'
                 },
                 {
                   key: 'collectionsJson',
                   name: 'Collections JSON Feed',
-                  description: '/ai/collections.json',
+                  description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
                 },
                 {
@@ -507,7 +507,7 @@ export default function Settings() {
                   key: 'schemaData',
                   name: 'Advanced Schema Data',
                   description: 'BreadcrumbList, FAQPage & more',
-                  requiredPlan: 'Enterprise' // Без + тук
+                  requiredPlan: 'Enterprise'
                 }
               ].map((feature) => {
 
