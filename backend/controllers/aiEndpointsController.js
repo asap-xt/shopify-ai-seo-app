@@ -21,167 +21,106 @@ async function checkFeatureAccess(shop, feature) {
   }
 }
 
-/**
- * GET /ai/products.json
- * Returns aggregated product data with AI SEO metadata
- */
+// Product list for AI consumption
 router.get('/ai/products.json', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
     }
 
-    // Check plan access
-    if (!await checkFeatureAccess(shop, 'productsJson')) {
-      return res.status(403).json({ error: 'This feature requires Starter plan or higher' });
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Check if feature is enabled
+    if (!settings?.features?.productsJson) {
+      return res.status(403).json({ 
+        error: 'Products JSON feature is not enabled. Please enable it in settings.' 
+      });
     }
 
-    const shopDoc = await Shop.findOne({ shop });
-    if (!shopDoc || !shopDoc.accessToken) {
-      return res.status(401).json({ error: 'Shop not authenticated' });
-    }
-
-    // Fetch all products with AI SEO metafields
-    const productsResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/products.json?limit=250&fields=id,title,handle,tags,vendor,updated_at`,
+    // Get products from Shopify
+    const response = await fetch(
+      `https://${shop}/admin/api/2024-07/products.json?limit=250`,
       {
         headers: {
-          'X-Shopify-Access-Token': shopDoc.accessToken,
+          'X-Shopify-Access-Token': shopRecord.accessToken,
           'Content-Type': 'application/json'
         }
       }
     );
 
-    if (!productsResponse.ok) {
+    if (!response.ok) {
       throw new Error('Failed to fetch products');
     }
 
-    const productsData = await productsResponse.json();
-    const products = productsData.products || [];
+    const data = await response.json();
+    
+    // Transform products for AI consumption
+    const aiProducts = data.products.map(product => ({
+      id: product.id,
+      title: product.title,
+      description: product.body_html?.replace(/<[^>]*>?/gm, ''),
+      vendor: product.vendor,
+      product_type: product.product_type,
+      tags: product.tags,
+      price: product.variants[0]?.price,
+      available: product.status === 'active',
+      images: product.images.map(img => img.src),
+      url: `https://${shop}/products/${product.handle}`
+    }));
 
-    // Fetch AI SEO metafields for each product
-    const productsWithAISEO = await Promise.all(
-      products.map(async (product) => {
-        try {
-          // Get AI SEO metafields
-          const metafieldsResponse = await fetch(
-            `https://${shop}/admin/api/2024-07/products/${product.id}/metafields.json?namespace=seo_ai`,
-            {
-              headers: {
-                'X-Shopify-Access-Token': shopDoc.accessToken,
-                'Content-Type': 'application/json'
-              }
-            }
-          );
-
-          const metafieldsData = await metafieldsResponse.json();
-          const metafields = metafieldsData.metafields || [];
-
-          // Parse AI SEO data
-          const seoData = {};
-          metafields.forEach(mf => {
-            if (mf.key === 'seo') {
-              try {
-                const parsed = JSON.parse(mf.value);
-                seoData.seo = parsed.seo;
-                seoData.jsonLd = parsed.seo?.jsonLd;
-              } catch (e) {}
-            }
-            if (mf.key === 'bullets') {
-              try {
-                seoData.bullets = JSON.parse(mf.value);
-              } catch (e) {}
-            }
-            if (mf.key === 'faq') {
-              try {
-                seoData.faq = JSON.parse(mf.value);
-              } catch (e) {}
-            }
-          });
-
-          return {
-            id: `gid://shopify/Product/${product.id}`,
-            url: `https://${shop}/products/${product.handle}`,
-            title: product.title,
-            handle: product.handle,
-            vendor: product.vendor,
-            tags: product.tags ? product.tags.split(', ') : [],
-            updatedAt: product.updated_at,
-            aiOptimized: !!seoData.seo,
-            structuredData: seoData.jsonLd ? 'json-ld' : null,
-            seoMetadata: seoData.seo ? {
-              title: seoData.seo.title,
-              description: seoData.seo.metaDescription,
-              bullets: seoData.bullets,
-              faq: seoData.faq
-            } : null
-          };
-        } catch (error) {
-          console.error(`Failed to fetch metafields for product ${product.id}:`, error);
-          return {
-            id: `gid://shopify/Product/${product.id}`,
-            url: `https://${shop}/products/${product.handle}`,
-            title: product.title,
-            handle: product.handle,
-            aiOptimized: false
-          };
-        }
-      })
-    );
-
-    // Build response
-    const response = {
-      '@context': 'https://schema.org',
-      '@type': 'DataCatalog',
-      name: `${shop} Product Catalog`,
-      description: 'AI-optimized product data for search and discovery',
-      publisher: {
-        '@type': 'Organization',
-        name: shop
-      },
-      dateModified: new Date().toISOString(),
-      numberOfItems: productsWithAISEO.length,
-      aiOptimizedCount: productsWithAISEO.filter(p => p.aiOptimized).length,
-      distribution: {
-        '@type': 'DataDownload',
-        encodingFormat: 'application/json',
-        contentUrl: `https://${shop}/ai/products.json`
-      },
-      products: productsWithAISEO
-    };
-
-    // Cache for 1 hour
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json(response);
+    res.json({
+      shop: shop,
+      generated_at: new Date().toISOString(),
+      products_count: aiProducts.length,
+      products: aiProducts
+    });
 
   } catch (error) {
-    console.error('Failed to generate products.json:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error in products.json:', error);
+    res.status(500).json({ error: 'Failed to generate products feed' });
   }
 });
 
-/**
- * GET /ai/welcome
- * AI Discovery welcome page
- */
+// AI Welcome page
 router.get('/ai/welcome', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).send('Missing shop parameter');
+  }
+
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).send('Shop not found');
     }
 
-    // Check plan access
-    if (!await checkFeatureAccess(shop, 'welcomePage')) {
-      return res.status(403).json({ error: 'This feature requires Professional plan or higher' });
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Check if feature is enabled
+    if (!settings?.features?.welcomePage) {
+      return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
+    }
+
+    // Check plan - Welcome page requires Professional+
+    const normalizedPlan = (settings?.plan || 'starter').toLowerCase().replace(' ', '_');
+    const allowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    
+    if (!allowedPlans.includes(normalizedPlan)) {
+      return res.status(403).json({ 
+        error: 'This feature requires Professional plan or higher' 
+      });
     }
 
     // Get shop info and stats
-    const shopDoc = await Shop.findOne({ shop });
-    if (!shopDoc) {
-      return res.status(401).json({ error: 'Shop not authenticated' });
-    }
+    const shopDoc = shopRecord;
 
     // Get product count
     const countResponse = await fetch(
