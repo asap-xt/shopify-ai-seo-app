@@ -91,203 +91,124 @@ router.get('/ai/products.json', async (req, res) => {
 // AI Welcome page
 router.get('/ai/welcome', async (req, res) => {
   const shop = req.query.shop;
+  console.log('[WELCOME DEBUG] ========== START ==========');
+  console.log('[WELCOME DEBUG] Shop:', shop);
+  
   if (!shop) {
     return res.status(400).send('Missing shop parameter');
   }
 
   try {
     const shopRecord = await Shop.findOne({ shop });
+    console.log('[WELCOME DEBUG] Shop record found:', !!shopRecord);
+    
     if (!shopRecord) {
       return res.status(404).send('Shop not found');
     }
 
     const session = { accessToken: shopRecord.accessToken };
+    console.log('[WELCOME DEBUG] Session created');
+    
     const settings = await aiDiscoveryService.getSettings(shop, session);
+    console.log('[WELCOME DEBUG] Full settings:', JSON.stringify(settings, null, 2));
+    console.log('[WELCOME DEBUG] Settings.plan:', settings?.plan);
+    console.log('[WELCOME DEBUG] Settings.features:', settings?.features);
+    console.log('[WELCOME DEBUG] welcomePage enabled?:', settings?.features?.welcomePage);
     
     // Check if feature is enabled
     if (!settings?.features?.welcomePage) {
+      console.log('[WELCOME DEBUG] Feature not enabled, returning 403');
       return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
     }
 
     // Check plan - Welcome page requires Professional+
+    console.log('[WELCOME DEBUG] Raw plan value:', settings?.plan);
+    console.log('[WELCOME DEBUG] Type of plan:', typeof settings?.plan);
+    
     const normalizedPlan = (settings?.plan || 'starter')
+      .toString()
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, '_'); // Replace all whitespace with _
-
-    console.log('[WELCOME] Original plan:', settings?.plan);
-    console.log('[WELCOME] Normalized plan:', normalizedPlan);
+      .replace(/\s+/g, '_');
+    
+    console.log('[WELCOME DEBUG] Normalized plan:', normalizedPlan);
     
     const allowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    console.log('[WELCOME DEBUG] Allowed plans:', allowedPlans);
+    console.log('[WELCOME DEBUG] Is plan allowed?:', allowedPlans.includes(normalizedPlan));
     
     if (!allowedPlans.includes(normalizedPlan)) {
+      console.log('[WELCOME DEBUG] Plan not in allowed list, returning error');
       return res.status(403).json({ 
-        error: 'This feature requires Professional plan or higher' 
+        error: 'This feature requires Professional plan or higher',
+        debug: {
+          currentPlan: settings?.plan,
+          normalizedPlan: normalizedPlan,
+          allowedPlans: allowedPlans
+        }
       });
     }
-
-    // Get shop info and stats
-    const shopDoc = shopRecord;
-
-    // Get product count
-    const countResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/products/count.json`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': shopDoc.accessToken
-        }
-      }
-    );
-    const countData = await countResponse.json();
-    const productCount = countData.count || 0;
-
-    // Generate HTML page
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Discovery Hub - ${shop}</title>
-    <meta name="description" content="Structured product data optimized for AI consumption">
-    <meta name="robots" content="index, follow">
-    <meta name="ai-content-type" content="ecommerce">
-    <meta name="ai-data-format" content="json-ld">
-    <meta name="ai-update-frequency" content="daily">
     
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-            background: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 { color: #333; }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin: 2rem 0;
-        }
-        .stat {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 4px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #007bff;
-        }
-        .endpoints {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-        .endpoints a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        .endpoints a:hover {
-            text-decoration: underline;
-        }
-        code {
-            background: #e9ecef;
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
-        }
-    </style>
+    console.log('[WELCOME DEBUG] All checks passed, rendering welcome page');
     
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "DataCatalog",
-        "name": "${shop} AI Discovery Hub",
-        "description": "Structured product data for AI models and search engines",
-        "url": "https://${shop}/ai/welcome",
-        "publisher": {
-            "@type": "Organization",
-            "name": "${shop}"
-        },
-        "dataset": [{
-            "@type": "Dataset",
-            "name": "Products",
-            "description": "Product catalog with AI-optimized metadata",
-            "distribution": {
-                "@type": "DataDownload",
-                "encodingFormat": "application/json",
-                "contentUrl": "https://${shop}/ai/products.json"
-            }
-        }],
-        "dateModified": "${new Date().toISOString()}"
-    }
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🤖 AI Discovery Hub</h1>
-        <p>Welcome AI agents! This store provides structured product data optimized for AI consumption.</p>
+    // Welcome page HTML
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Welcome - ${shopRecord.shopName || shop}</title>
+        <meta name="description" content="AI-optimized endpoint for ${shopRecord.shopName || shop}">
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Store",
+          "name": "${shopRecord.shopName || shop}",
+          "url": "https://${shop}"
+        }
+        </script>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 2rem; }
+          h1 { color: #333; }
+          .section { margin: 2rem 0; padding: 1.5rem; background: #f7f7f7; border-radius: 8px; }
+          a { color: #0066cc; text-decoration: none; }
+          a:hover { text-decoration: underline; }
+        </style>
+      </head>
+      <body>
+        <h1>Welcome, AI Agents!</h1>
+        <p>This is ${shopRecord.shopName || shop}, powered by Shopify.</p>
         
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-value">${productCount}</div>
-                <div>Total Products</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">✅</div>
-                <div>JSON-LD Enabled</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">4</div>
-                <div>Languages Supported</div>
-            </div>
+        <div class="section">
+          <h2>Available Data Endpoints</h2>
+          <ul>
+            ${settings?.features?.productsJson ? '<li><a href="/ai/products.json?shop=' + shop + '">Products Feed</a> - Complete product catalog in JSON format</li>' : ''}
+            ${settings?.features?.collectionsJson ? '<li><a href="/ai/collections.json?shop=' + shop + '">Collections Feed</a> - Product categories and collections</li>' : ''}
+            ${settings?.features?.storeMetadata ? '<li><a href="/ai/store-metadata.json?shop=' + shop + '">Store Metadata</a> - Business information and schema</li>' : ''}
+            <li><a href="/ai/robots-dynamic?shop=${shop}">robots.txt</a> - Crawling permissions</li>
+          </ul>
         </div>
         
-        <h2>📊 Available Data Endpoints</h2>
-        <div class="endpoints">
-            <p><strong>Products Feed:</strong> <a href="/ai/products.json?shop=${shop}">/ai/products.json</a></p>
-            <p><strong>Sitemap:</strong> <a href="/api/sitemap/generate?shop=${shop}">/api/sitemap/generate</a></p>
+        <div class="section">
+          <h2>Integration Guidelines</h2>
+          <p>All endpoints return structured data optimized for AI consumption. Please respect our robots.txt directives.</p>
         </div>
         
-        <h2>🔍 Data Structure</h2>
-        <p>All product pages include:</p>
-        <ul>
-            <li>✅ Schema.org JSON-LD structured data</li>
-            <li>✅ AI-optimized SEO metadata</li>
-            <li>✅ Product FAQs and bullet points</li>
-            <li>✅ Multi-language support (EN, DE, ES, FR)</li>
-        </ul>
-        
-        <h2>🤝 Integration Guide</h2>
-        <p>To consume our data:</p>
-        <ol>
-            <li>Fetch the products feed from <code>/ai/products.json</code></li>
-            <li>Each product URL contains embedded JSON-LD data</li>
-            <li>Use the <code>aiOptimized</code> flag to identify enhanced products</li>
-            <li>Respect our robots.txt guidelines</li>
-        </ol>
-        
-        <h2>📞 Contact</h2>
-        <p>This AI Discovery Hub is powered by <strong>AI SEO 2.0</strong> for Shopify.</p>
-    </div>
-</body>
-</html>`;
-
+        <footer>
+          <p>Generated by AI SEO 2.0 - Last updated: ${new Date().toISOString()}</p>
+        </footer>
+      </body>
+      </html>
+    `;
+    
     res.type('text/html').send(html);
-
+    
   } catch (error) {
-    console.error('Failed to generate welcome page:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[WELCOME DEBUG] ERROR:', error);
+    res.status(500).send('Internal server error');
+  } finally {
+    console.log('[WELCOME DEBUG] ========== END ==========');
   }
 });
 
