@@ -258,7 +258,8 @@ export default function Settings() {
                   
                   const requiredPlan = 
                     key === 'anthropic' ? 'Professional' :
-                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    key === 'google' ? 'Growth' :
+                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
                     null;
                   
                   return (
@@ -317,7 +318,8 @@ export default function Settings() {
                   const isAvailable = settings?.availableBots?.includes(key);
                   const requiredPlan = 
                     key === 'anthropic' ? 'Professional' :
-                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    key === 'google' ? 'Growth' :
+                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
                     null;
                   
                   return (
@@ -376,7 +378,8 @@ export default function Settings() {
                   const isAvailable = settings?.availableBots?.includes(key);
                   const requiredPlan = 
                     key === 'anthropic' ? 'Professional' :
-                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    key === 'google' ? 'Growth' :
+                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
                     null;
                   
                   return (

@@ -40,20 +40,21 @@ router.get('/ai-discovery/settings', async (req, res) => {
     // Get current plan
     const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
     const planData = await planResponse.json();
-    const plan = (planData.plan || 'starter').toLowerCase().replace(' ', '_');
+    const rawPlan = planData.plan || 'starter';
+    const normalizedPlan = rawPlan.toLowerCase().replace(/\s+/g, '_');
     
     // Get saved settings
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
     
     // Get default structure for the plan
-    const defaultSettings = aiDiscoveryService.getDefaultSettings(plan);
+    const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
     
-    // IMPORTANT: Merge correctly - preserve enabled values from saved settings
+    // IMPORTANT: Don't merge features from defaultSettings if there are no saved settings
     const mergedSettings = {
-      plan,
+      plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: savedSettings.features || defaultSettings.features,
+      features: savedSettings.features || defaultSettings.features, // Will be all false from default
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
     

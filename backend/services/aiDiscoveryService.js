@@ -158,13 +158,13 @@ class AIDiscoveryService {
       bots: allBots,
       availableBots: availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter,
       features: {
-        productsJson: true, // all plans
-        aiSitemap: true, // all plans
-        welcomePage: normalizedPlan !== 'starter', // Professional+
-        collectionsJson: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // Growth+
-        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // Growth+
-        storeMetadata: ['growth_extra', 'enterprise'].includes(normalizedPlan), // Growth Extra+
-        schemaData: normalizedPlan === 'enterprise' // only Enterprise
+        productsJson: false,      // All are false
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        autoRobotsTxt: false,
+        storeMetadata: false,
+        schemaData: false
       },
       plan: normalizedPlan, // Important - add the normalized plan here
       updatedAt: new Date().toISOString()
