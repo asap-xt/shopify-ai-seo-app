@@ -519,6 +519,12 @@ export default function Settings() {
                   requiredPlan: 'Growth'
                 },
                 {
+                  key: 'autoRobotsTxt',  // ADD THIS
+                  name: 'Automatic robots.txt',
+                  description: 'Apply robots.txt changes directly to theme',
+                  requiredPlan: 'Growth'
+                },
+                {
                   key: 'storeMetadata',
                   name: 'Store Metadata for AI Search',
                   description: 'Organization & LocalBusiness schema',
