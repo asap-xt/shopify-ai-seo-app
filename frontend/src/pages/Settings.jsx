@@ -19,7 +19,6 @@ import {
   Spinner
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon } from '@shopify/polaris-icons';
-import aiDiscoveryService from '../services/aiDiscoveryService.js';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } 
