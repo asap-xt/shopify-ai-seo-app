@@ -377,14 +377,20 @@ router.get('/ai/robots-dynamic', async (req, res) => {
       return res.status(400).send('Missing shop');
     }
     
+    console.log('[ROBOTS-DYNAMIC] Shop:', shop);
     const { session } = await getShopSession(shop);
+    console.log('[ROBOTS-DYNAMIC] Got session:', !!session);
+    
     const settings = await aiDiscoveryService.getSettings(shop, session);
+    console.log('[ROBOTS-DYNAMIC] Settings:', settings);
+    
     const robotsTxt = aiDiscoveryService.generateRobotsTxt(settings, shop);
+    console.log('[ROBOTS-DYNAMIC] Generated length:', robotsTxt.length);
     
     res.type('text/plain');
     res.send(robotsTxt);
   } catch (error) {
-    console.error('Error generating dynamic robots.txt:', error);
+    console.error('[ROBOTS-DYNAMIC] Error:', error);
     res.status(500).send('# Error generating robots.txt');
   }
 });

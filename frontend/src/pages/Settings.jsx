@@ -385,7 +385,7 @@ export default function Settings() {
                       borderColor="border"
                     >
                       <BlockStack gap="100">
-                        <Checkbox
+                <Checkbox
                           label={
                             <InlineStack gap="200" align="center">
                               <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
@@ -399,7 +399,7 @@ export default function Settings() {
                             </InlineStack>
                           }
                           checked={!!settings?.bots?.[key]?.enabled}
-                          onChange={() => toggleBot(key)}
+                  onChange={() => toggleBot(key)}
                           disabled={!isAvailable}
                           helpText={
                             !isAvailable ? 
@@ -537,8 +537,8 @@ export default function Settings() {
                     borderColor="border"
                   >
                     <BlockStack gap="100">
-                      <Checkbox
-                        label={
+              <Checkbox
+                label={
                           <InlineStack gap="200" align="center">
                             <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
                               {feature.name}
@@ -548,9 +548,9 @@ export default function Settings() {
                                 {feature.requiredPlan}
                                 {feature.requiredPlan !== 'Enterprise' && '+'} 
                               </Badge>
-                            )}
-                          </InlineStack>
-                        }
+                    )}
+                  </InlineStack>
+                }
                         checked={!!settings?.features?.[feature.key]}
                         onChange={() => toggleFeature(feature.key)}
                         disabled={!isAvailable}
@@ -559,8 +559,8 @@ export default function Settings() {
                             `Upgrade to ${feature.requiredPlan} plan to enable` :
                           isAvailable ? feature.description : ''
                         }
-                      />
-                    </BlockStack>
+              />
+            </BlockStack>
                   </Box>
                 );
               })}
