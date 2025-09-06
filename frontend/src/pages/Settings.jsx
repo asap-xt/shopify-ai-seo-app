@@ -452,11 +452,22 @@ export default function Settings() {
             <InlineStack gap="200">
               <Button 
                 onClick={() => {
-                  const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                  if (!hasSelectedBots) {
-                    setShowNoBotsModal(true);
-                  } else {
-                    setShowManualInstructions(true);
+                  console.log('[ADD MANUAL] Starting...');
+                  console.log('[ADD MANUAL] Settings:', settings);
+                  
+                  try {
+                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                    console.log('[ADD MANUAL] Has selected bots:', hasSelectedBots);
+                    
+                    if (!hasSelectedBots) {
+                      console.log('[ADD MANUAL] No bots, showing modal');
+                      setShowNoBotsModal(true);
+                    } else {
+                      console.log('[ADD MANUAL] Showing instructions');
+                      setShowManualInstructions(true);
+                    }
+                  } catch (error) {
+                    console.error('[ADD MANUAL] Error:', error);
                   }
                 }}
               >
@@ -467,26 +478,37 @@ export default function Settings() {
                 <Button 
                   primary 
                   onClick={async () => {
-                    // Check if any bots are selected
-                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    
-                    if (!hasSelectedBots) {
-                      setShowNoBotsModal(true); // New state for modal
-                      return;
-                    }
+                    console.log('[APPLY AUTO] Starting...');
+                    console.log('[APPLY AUTO] Settings:', settings);
+                    console.log('[APPLY AUTO] Bots:', settings?.bots);
                     
                     try {
+                      // Check if any bots are selected
+                      const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                      console.log('[APPLY AUTO] Has selected bots:', hasSelectedBots);
+                      
+                      if (!hasSelectedBots) {
+                        console.log('[APPLY AUTO] No bots selected, showing modal');
+                        setShowNoBotsModal(true);
+                        return;
+                      }
+                      
+                      console.log('[APPLY AUTO] Applying robots.txt...');
                       const res = await fetch('/api/ai-discovery/apply-robots', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ shop })
                       });
                       
+                      console.log('[APPLY AUTO] Response:', res.status);
                       const data = await res.json();
+                      console.log('[APPLY AUTO] Data:', data);
+                      
                       if (!res.ok) throw new Error(data.error);
                       
                       setToast(data.message || 'robots.txt applied successfully!');
                     } catch (error) {
+                      console.error('[APPLY AUTO] Error:', error);
                       setToast(error.message);
                     }
                   }}
