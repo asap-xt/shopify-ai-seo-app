@@ -13,6 +13,7 @@ import Collections from './pages/Collections.jsx';
 import Sitemap from './pages/Sitemap.jsx';
 import StoreMetadata from './pages/StoreMetadata.jsx';
 import SchemaData from './pages/SchemaData.jsx';
+import Settings from './pages/Settings.jsx';
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -520,7 +521,7 @@ export default function App() {
           ) : path.startsWith('/billing') ? (
             <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
           ) : path.startsWith('/settings') ? (
-            <Card><Box padding="400"><Text>Settings page</Text></Box></Card>
+            <Settings />
           ) : (
             <DashboardCard />
           )}

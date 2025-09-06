@@ -1,7 +1,6 @@
 // backend/controllers/seoController.js
 // Routes: /plans/me, /seo/generate, /seo/apply
 // Behavior: Do NOT generate if the product has no real translation for the requested language.
-// All comments are in English.
 
 import express from 'express';
 import Ajv from 'ajv';
@@ -32,7 +31,7 @@ const PLAN_PRESETS = {
     productLimit: 1000,
     providersAllowed: ['claude', 'openai', 'gemini'],
     modelsSuggested: [
-      'google/gemini-1.5-flash',  // Най-евтин
+      'google/gemini-1.5-flash',  // Cheapest
       'anthropic/claude-3-haiku',
       'openai/gpt-4o-mini',
       'openai/o3-mini',
@@ -167,7 +166,7 @@ async function openrouterChat(model, messages, response_format_json = true) {
   console.log('🔴 [AI CALL] Starting AI request with model:', model);
   console.log('🔴 [AI CALL] Messages being sent:', JSON.stringify(messages, null, 2));
   
-  // ВРЕМЕНЕН БЛОК НА CLAUDE - премахнете ако искате да използвате Claude
+  // TEMPORARY CLAUDE BLOCK - remove if you want to use Claude
   if (model.includes('claude')) {
     console.error('🚫 BLOCKED: Claude model calls are disabled');
     throw new Error('Claude models are temporarily disabled to save costs');
@@ -214,7 +213,7 @@ async function ensureMetafieldDefinition(shop, language) {
   const key = `seo__${language}`;
   console.log(`[METAFIELD DEF] Checking/creating definition for: ${key}`);
   
-  // По-прост подход - директно създаваме без проверка
+  // Simpler approach - create directly without checking
   const createMutation = `
     mutation {
       metafieldDefinitionCreate(definition: {
@@ -242,7 +241,7 @@ async function ensureMetafieldDefinition(shop, language) {
     
     if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
       const errors = result.metafieldDefinitionCreate.userErrors;
-      // Ако грешката е "already exists", това е ОК
+      // If error is "already exists", that's OK
       if (errors.some(e => e.message.includes('already exists'))) {
         console.log(`[METAFIELD DEF] Definition already exists for ${key} - OK`);
         return { exists: true };
@@ -257,21 +256,21 @@ async function ensureMetafieldDefinition(shop, language) {
     }
   } catch (e) {
     console.error(`[METAFIELD DEF] Exception:`, e.message);
-    // Продължаваме - метафийлдът пак ще работи
+    // Continue - metafield will still work
   }
   
   return { attempted: true };
 }
 
 /* --------------------------- Collection Metafield Definition Helper --------------------------- */
-// Създава metafield definitions за колекции
+// Creates metafield definitions for Collections
 async function ensureCollectionMetafieldDefinitions(shop, languages) {
   console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
   
   const results = [];
   
   for (const lang of languages) {
-    const key = `seo__${lang.toLowerCase()}`; // ВИНАГИ lowercase
+    const key = `seo__${lang.toLowerCase()}`; // ALWAYS lowercase
     
     const createMutation = `
       mutation {
@@ -345,17 +344,17 @@ function generateProductJsonLd(product, seoData, language) {
     }
   };
   
-  // Добавяме URL само ако има
+  // URL added if exists
   if (product.onlineStoreUrl) {
     jsonLd.url = product.onlineStoreUrl;
   }
   
-  // Добавяме SKU ако има
+  // SKU added if exists
   if (product.variants?.edges?.[0]?.node?.sku) {
     jsonLd.sku = product.variants.edges[0].node.sku;
   }
   
-  // За различни езици можем да добавим inLanguage
+  // For various languages we could add inLanguage
   if (language && language !== 'en') {
     jsonLd.inLanguage = language;
   }
@@ -379,7 +378,7 @@ const seoSchema = {
     language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
       type: 'object',
-      required: ['title', 'metaDescription', 'slug', 'bodyHtml'], // bullets & faq са optional (за по-високи планове)
+      required: ['title', 'metaDescription', 'slug', 'bodyHtml'], // bullets & faq are optional (for higher plans)
       additionalProperties: true,
       properties: {
         title: { type: 'string', minLength: 1, maxLength: 200 },
@@ -762,7 +761,7 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     seoDescription = loc.seoDescription || '';
   }
 
-  /* ЗАКОМЕНТИРАН AI КОД - може да се включи в бъдеще за enhanced SEO
+  /* COMMENTED AI CODE - can be enabled in the future for enhanced SEO
   const ctx = {
     id: p.id,
     title: localizedTitle,
@@ -790,13 +789,13 @@ async function generateSEOForLanguage(shop, productId, model, language) {
   catch { throw new Error('Model did not return valid JSON'); }
   */
 
-  // ЛОКАЛНО ГЕНЕРИРАНЕ НА SEO ДАННИ
+  // LOCAL SEO DATA GENERATION
   console.log('💰 [ZERO COST] Generating SEO data locally from product data');
   
-  // Генерираме метаописание от body или title
+  // Generate meta description from body or title
   let metaDescription = seoDescription;
   if (!metaDescription && localizedBody) {
-    // Вземаме първите 160 символа от body без HTML тагове
+    // Take first 160 characters from body without HTML tags
     metaDescription = localizedBody
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
@@ -812,15 +811,15 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     metaDescription: metaDescription,
     slug: kebab(localizedTitle || p.handle || 'product'),
     bodyHtml: localizedBody || `<p>${localizedTitle}</p>`,
-    bullets: [], // Вече не използваме bullets
-    faq: [],     // Вече не използваме FAQ
-    imageAlt: [] // Може да добавим от product.images ако има altText
+    bullets: [], // No longer using bullets
+    faq: [],     // No longer using FAQ
+    imageAlt: [] // Can add from product.images if altText exists
   };
 
   const fixed = {
     productId: p.id,
-    provider: 'local',  // Променено от 'openrouter'
-    model: 'none',      // Няма модел - локално генериране
+    provider: 'local',  // Changed from 'openrouter'
+    model: 'none',      // No model - local generation
     language: langNormalized,
     seo: {
       ...localSeoData,
@@ -829,8 +828,8 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     quality: {
       warnings: [],
       model: 'none',
-      tokens: 0,      // 0 токена!
-      costUsd: 0,     // $0.00 разходи!
+      tokens: 0,      // 0 tokens!
+      costUsd: 0,     // $0.00 cost!
     },
   };
 
@@ -903,11 +902,11 @@ router.post('/seo/apply', async (req, res) => {
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
 
-    // Validate/normalize - променяме provider на 'local'
+    // Validate/normalize - change provider to 'local'
     const fixed = fixupAndValidate({
       productId,
-      provider: 'local',    // Променено от 'openrouter'
-      model: 'none',        // Променено от 'apply'
+      provider: 'local',    // Changed from 'openrouter'
+      model: 'none',        // Changed from 'apply'
       language: canonLang(language),
       seo,
       quality: { warnings: [], model: 'none', tokens: 0, costUsd: 0 },
@@ -968,17 +967,17 @@ router.post('/seo/apply', async (req, res) => {
         }),
       }];
 
-      // Bullets и faq се записват в основния SEO metafield (ред 963-967)
-      // Не се записват като отделни metafields
+      // Bullets and faq are saved in the main SEO metafield (lines 963-967)
+      // Not saved as separate metafields
 
       const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
       if (mfErrs.length) {
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
       } else {
-        // Маркираме успешно записаните metafields
-        updated.seoMetafield = true; // Основният SEO metafield винаги се записва
-        // Bullets и faq са optional (за по-високи планове)
+        // Mark successfully saved metafields
+        updated.seoMetafield = true; // Main SEO metafield is always saved
+        // Bullets and faq are optional (for higher plans)
         if (v.bullets && Array.isArray(v.bullets) && v.bullets.length > 0) {
           updated.bullets = updateBullets;
         }
@@ -1077,7 +1076,16 @@ router.post('/seo/apply', async (req, res) => {
       }
     }
 
-
+    // Update AI products feed
+    try {
+      await fetch(`${process.env.APP_URL}/ai/update-product`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop, productId })
+      });
+    } catch (e) {
+      console.error('Failed to update AI feed:', e);
+    }
 
     res.json({ 
       ok: errors.length === 0, 
@@ -1095,7 +1103,7 @@ router.post('/seo/apply', async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list - Обновена версия с езици
+// GET /collections/list - Updated version, languages included
 router.get('/collections/list', async (req, res) => {
   try {
     const shop = requireShop(req);
@@ -1103,7 +1111,7 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
     
-    // Вземи custom collections
+    // Get custom collections
     const customUrl = `https://${shop}/admin/api/${API_VERSION}/custom_collections.json?limit=50`;
     const customResponse = await fetch(customUrl, {
       headers: {
@@ -1119,7 +1127,7 @@ router.get('/collections/list', async (req, res) => {
     const customData = await customResponse.json();
     const collections = customData.custom_collections || [];
     
-    // Вземи и smart collections
+    // Get smart collections
     const smartUrl = `https://${shop}/admin/api/${API_VERSION}/smart_collections.json?limit=50`;
     const smartResponse = await fetch(smartUrl, {
       headers: {
@@ -1135,7 +1143,7 @@ router.get('/collections/list', async (req, res) => {
     
     console.log('[COLLECTIONS] Found', collections.length, 'collections');
     
-    // За всяка колекция вземи брой продукти И проверяваме за SEO metafields
+    // Get number of products for each collection and check for SEO metafields
     const collectionsWithData = await Promise.all(
       collections.map(async (c) => {
         let productsCount = 0;
@@ -1143,7 +1151,7 @@ router.get('/collections/list', async (req, res) => {
         let optimizedLanguages = [];
         
         try {
-          // Вземи брой продукти
+          // Get product count
           const countUrl = `https://${shop}/admin/api/${API_VERSION}/products/count.json?collection_id=${c.id}`;
           const countResponse = await fetch(countUrl, {
             headers: {
@@ -1157,7 +1165,7 @@ router.get('/collections/list', async (req, res) => {
             productsCount = countData.count || 0;
           }
           
-          // Проверка за SEO metafields и езици
+          // Check for SEO metafields and languages
           try {
             const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${c.id}/metafields.json?namespace=seo_ai`;
             const mfResponse = await fetch(metafieldUrl, {
@@ -1173,7 +1181,7 @@ router.get('/collections/list', async (req, res) => {
               
               console.log(`[COLLECTIONS] Metafields for "${c.title}":`, metafields.map(m => m.key));
               
-              // Извличаме езиците от keys като seo__en, seo__bg и т.н.
+              // Languages extracted from keys like seo__en, seo__bg etc.
               metafields.forEach(mf => {
                 if (mf.key && mf.key.startsWith('seo__')) {
                   const lang = mf.key.replace('seo__', '');
@@ -1203,7 +1211,7 @@ router.get('/collections/list', async (req, res) => {
           productsCount: productsCount,
           seo: c.seo || null,
           hasSeoData: hasSeoData,
-          optimizedLanguages: optimizedLanguages, // Нов масив с оптимизирани езици
+          optimizedLanguages: optimizedLanguages,
           updatedAt: c.updated_at
         };
       })
@@ -1364,8 +1372,8 @@ router.post('/seo/apply-collection', async (req, res) => {
     if (options.updateMetafields !== false) {
       const metafields = [{
         ownerId: collectionId,
-        namespace: 'seo_ai',  // Същият namespace като продуктите!
-        key: `seo__${language}`,  // Същият формат като продуктите!
+        namespace: 'seo_ai',  // Same namespace like products!
+        key: `seo__${language}`,  // Same format like products!
         type: 'json',
         value: JSON.stringify({
           ...seo,
@@ -1406,7 +1414,7 @@ router.post('/seo/apply-collection', async (req, res) => {
   }
 });
 
-// Helper functions за collections (добави ги преди export default router)
+// Helper functions for collections
 function extractCategoryKeywords(collection) {
   const keywords = new Set();
   
@@ -1535,7 +1543,7 @@ router.post('/seo/generate-collection-multi', async (req, res) => {
     
     for (const language of languages) {
       try {
-        // Използваме съществуващия single-language endpoint вътрешно
+        // Use existing single-language endpoint internally
         const query = `
           query GetCollection($id: ID!) {
             collection(id: $id) {
@@ -1679,7 +1687,7 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
           }
         }
         
-        // Валидация за празни SEO данни ПРЕДИ metafields блока
+        // Validation for empty SEO data BEFORE metafields block
         if (!seo || !seo.title || !seo.metaDescription) {
           console.error(`[APPLY-MULTI] Empty SEO data for ${language}, skipping metafields`);
           errors.push(`${language}: Empty SEO data`);
@@ -1689,16 +1697,16 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
             // Ensure definition exists for this language
             await ensureCollectionMetafieldDefinitions(shop, [language]);
             
-            const key = `seo__${String(language || 'en').toLowerCase()}`; // ВИНАГИ lowercase!
+            const key = `seo__${String(language || 'en').toLowerCase()}`; // ALWAYS lowercase!
             
             const metafields = [{
               ownerId: collectionId,
-              namespace: 'seo_ai',  // Същият namespace като продуктите!
+              namespace: 'seo_ai',  // Same namespace as products!
               key,
               type: 'json',
               value: JSON.stringify({
                 ...seo,
-                language: key.replace('seo__', ''), // също lowercase
+                language: key.replace('seo__', ''), // also lowercase
                 updatedAt: new Date().toISOString()
               })
             }];
@@ -1791,12 +1799,12 @@ router.post('/collections/create-definitions', async (req, res) => {
   }
 });
 
-// POST /collections/init-metafields - Създава metafield definitions за колекции
+// POST /collections/init-metafields - Creates metafield definitions for collections
 router.post('/collections/init-metafields', async (req, res) => {
   try {
     const shop = requireShop(req);
     
-    // Вземи езиците на магазина
+    // Get shop languages
     const Q_SHOP_LOCALES = `
       query ShopLocales {
         shopLocales { locale primary published }
@@ -1822,12 +1830,12 @@ router.post('/collections/init-metafields', async (req, res) => {
   }
 });
 
-// POST /collections/init-metafield-definitions - Създава metafield definitions за колекции
+// POST /collections/init-metafield-definitions - Creates metafield definitions for collections
 router.post('/collections/init-metafield-definitions', async (req, res) => {
   try {
     const shop = requireShop(req);
     
-    // Вземи езиците на магазина
+    // Get shop languages
     const Q_SHOP_LOCALES = `
       query ShopLocales {
         shopLocales { locale primary published }
@@ -1841,7 +1849,7 @@ router.post('/collections/init-metafield-definitions', async (req, res) => {
     const uniqueLanguages = [...new Set(languages)];
     const results = [];
     
-    // Създаваме definition за всеки език
+    // Create definition for each language
     for (const lang of uniqueLanguages) {
       const mutation = `
         mutation CreateCollectionMetafield {
@@ -1902,14 +1910,14 @@ export {
   shopGraphQL,
 };
 
-// GET /collections/:id/seo-data - Връща SEO данни за preview
+// GET /collections/:id/seo-data - Returns SEO data for preview
 router.get('/collections/:id/seo-data', async (req, res) => {
   try {
     const shop = requireShop(req);
     const token = await resolveAdminTokenForShop(shop);
     const collectionId = req.params.id;
     
-    // Вземи metafields
+    // Get metafields
     const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${collectionId.split('/').pop()}/metafields.json?namespace=seo_ai`;
     const mfResponse = await fetch(metafieldUrl, {
       headers: {
@@ -1925,7 +1933,7 @@ router.get('/collections/:id/seo-data', async (req, res) => {
     const mfData = await mfResponse.json();
     const metafields = mfData.metafields || [];
     
-    // Групираме по език
+    // Group by language
     const results = [];
     metafields.forEach(mf => {
       if (mf.key && mf.key.startsWith('seo__')) {
@@ -1973,7 +1981,7 @@ router.delete('/seo/delete', async (req, res) => {
     
     console.log(`[DELETE-SEO] Attempting to delete metafield: ${metafieldKey} for product: ${productId}`);
     
-    // 1. Delete using metafieldsDelete - НЕ търсим ID, директно изтриваме
+    // 1. Delete using metafieldsDelete - DON'T search for ID, delete directly
     try {
       const deleteMutation = `
         mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
@@ -1991,7 +1999,7 @@ router.delete('/seo/delete', async (req, res) => {
         }
       `;
       
-      // ВАЖНО: Подаваме ownerId, namespace и key - НЕ id!
+      // IMPORTANT: Pass ownerId, namespace and key - NOT id!
       const variables = {
         metafields: [{
           ownerId: productId,     // gid://shopify/Product/...
@@ -2011,7 +2019,7 @@ router.delete('/seo/delete', async (req, res) => {
         console.error('[DELETE-SEO] Delete errors:', errorMessages);
         errors.push(...errorMessages);
       } else {
-        // Успешно изтриване или metafield не съществува
+        // Successful deletion or metafield doesn't exist
         deleted.metafield = true;
         console.log(`[DELETE-SEO] Metafield deletion completed`);
       }
