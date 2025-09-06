@@ -450,7 +450,25 @@ export default function Settings() {
               </Button>
               
               {settings?.features?.autoRobotsTxt && (
-                <Button primary onClick={applyRobotsTxt}>
+                <Button 
+                  primary 
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('/api/ai-discovery/apply-robots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ shop })
+                      });
+                      
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      
+                      setToast(data.message || 'robots.txt applied successfully!');
+                    } catch (error) {
+                      setToast(error.message);
+                    }
+                  }}
+                >
                   Apply Automatically
                 </Button>
               )}
