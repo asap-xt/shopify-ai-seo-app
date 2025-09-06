@@ -110,7 +110,14 @@ router.get('/ai/welcome', async (req, res) => {
     }
 
     // Check plan - Welcome page requires Professional+
-    const normalizedPlan = (settings?.plan || 'starter').toLowerCase().replace(' ', '_');
+    const normalizedPlan = (settings?.plan || 'starter')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '_'); // Replace all whitespace with _
+
+    console.log('[WELCOME] Original plan:', settings?.plan);
+    console.log('[WELCOME] Normalized plan:', normalizedPlan);
+    
     const allowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
     
     if (!allowedPlans.includes(normalizedPlan)) {
