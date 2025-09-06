@@ -2,7 +2,6 @@
 import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import Shop from '../db/Shop.js';
-import { shopifyAdmin } from '../config/shopify.js';
 
 const router = express.Router();
 
