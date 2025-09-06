@@ -141,11 +141,21 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
     if (existingRedirects.ok) {
       const data = await existingRedirects.json();
       if (data.redirects?.length > 0) {
-        // Already has redirect, just update settings
-        return res.json({ 
-          success: true, 
-          message: 'robots.txt already configured'
-        });
+        // Before returning success, get active bots:
+        const settings = await aiDiscoveryService.getSettings(shop, session);
+        const activeBots = [];
+        if (settings.bots?.openai?.enabled) activeBots.push('OpenAI');
+        if (settings.bots?.anthropic?.enabled) activeBots.push('Claude');
+        if (settings.bots?.google?.enabled) activeBots.push('Google');
+        if (settings.bots?.perplexity?.enabled) activeBots.push('Perplexity');
+        if (settings.bots?.meta?.enabled) activeBots.push('Meta');
+        if (settings.bots?.others?.enabled) activeBots.push('Others');
+
+        const message = activeBots.length > 0 
+          ? `robots.txt updated for: ${activeBots.join(', ')}`
+          : 'robots.txt updated with default settings';
+
+        return res.json({ success: true, message });
       }
     }
     
@@ -172,10 +182,20 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
     );
     
     if (redirectResponse.ok) {
-      res.json({ 
-        success: true, 
-        message: 'robots.txt configured via redirect'
-      });
+      // Before returning success, get active bots:
+      const activeBots = [];
+      if (settings.bots?.openai?.enabled) activeBots.push('OpenAI');
+      if (settings.bots?.anthropic?.enabled) activeBots.push('Claude');
+      if (settings.bots?.google?.enabled) activeBots.push('Google');
+      if (settings.bots?.perplexity?.enabled) activeBots.push('Perplexity');
+      if (settings.bots?.meta?.enabled) activeBots.push('Meta');
+      if (settings.bots?.others?.enabled) activeBots.push('Others');
+
+      const message = activeBots.length > 0 
+        ? `robots.txt configured for: ${activeBots.join(', ')}`
+        : 'robots.txt configured with default settings';
+
+      res.json({ success: true, message });
     } else {
       throw new Error('Could not create redirect');
     }
@@ -196,7 +216,12 @@ router.delete('/ai-discovery/settings', async (req, res) => {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    const { session } = await getShopSession(shop);
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    const session = { accessToken: shopRecord.accessToken };
     
     // Delete metafield
     const response = await fetch(
@@ -226,10 +251,35 @@ router.delete('/ai-discovery/settings', async (req, res) => {
       }
     }
     
+    // NEW: Delete robots.txt redirect
+    const redirectsResponse = await fetch(
+      `https://${shop}/admin/api/2024-07/redirects.json?path=/robots.txt`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': session.accessToken
+        }
+      }
+    );
+    
+    if (redirectsResponse.ok) {
+      const redirectsData = await redirectsResponse.json();
+      for (const redirect of redirectsData.redirects || []) {
+        await fetch(
+          `https://${shop}/admin/api/2024-07/redirects/${redirect.id}.json`,
+          {
+            method: 'DELETE',
+            headers: {
+              'X-Shopify-Access-Token': session.accessToken
+            }
+          }
+        );
+      }
+    }
+    
     // Clear cache
     aiDiscoveryService.cache.clear();
     
-    res.json({ success: true, message: 'Settings reset successfully' });
+    res.json({ success: true, message: 'All settings and configurations reset' });
   } catch (error) {
     console.error('Failed to reset settings:', error);
     res.status(500).json({ error: error.message });

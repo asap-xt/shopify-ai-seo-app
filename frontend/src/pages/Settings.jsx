@@ -37,6 +37,7 @@ export default function Settings() {
   const [robotsTxt, setRobotsTxt] = useState('');
   const [showRobotsModal, setShowRobotsModal] = useState(false);
   const [toast, setToast] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const shop = qs('shop', '');
 
@@ -78,9 +79,8 @@ export default function Settings() {
   };
 
   const toggleBot = (botKey) => {
-    // Check if bot is available for current plan
     if (!settings?.availableBots?.includes(botKey)) {
-      setToast(`Upgrade your plan to enable ${settings.bots[botKey].name}`);
+      setToast(`Upgrade to ${requiredPlan} plan to enable ${settings.bots[botKey].name}`);
       return;
     }
     
@@ -94,6 +94,8 @@ export default function Settings() {
         }
       }
     }));
+    
+    setHasUnsavedChanges(true); // Mark that there are changes
   };
 
   const toggleFeature = (featureKey) => {
@@ -135,6 +137,7 @@ export default function Settings() {
       if (!res.ok) throw new Error('Failed to save');
       
       setToast('Settings saved successfully');
+      setHasUnsavedChanges(false); // Clear unsaved changes flag
       generateRobotsTxt(); // Regenerate robots.txt
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -429,6 +432,12 @@ export default function Settings() {
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">robots.txt Configuration</Text>
             
+            {hasUnsavedChanges && (
+              <Banner status="warning" title="Unsaved changes">
+                <p>You have unsaved bot selections. Please click "Save Settings" before configuring robots.txt.</p>
+              </Banner>
+            )}
+            
             <Banner>
               <p>
                 {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) ? 
@@ -650,32 +659,57 @@ export default function Settings() {
       </InlineStack>
 
       {/* Robots.txt Modal */}
-      <Modal
-        open={showRobotsModal}
-        onClose={() => setShowRobotsModal(false)}
-        title="Generated robots.txt"
-        primaryAction={{
-          content: 'Copy to clipboard',
-          onAction: copyToClipboard,
-          icon: ClipboardIcon
-        }}
-        secondaryActions={[{
-          content: 'Close',
-          onAction: () => setShowRobotsModal(false)
-        }]}
-      >
-        <Modal.Section>
-          <Box padding="200" background="bg-surface-secondary" borderRadius="200">
-            <TextField
-              label=""
-              value={robotsTxt}
-              multiline={15}
-              readOnly
-              autoComplete="off"
-            />
-          </Box>
-        </Modal.Section>
-      </Modal>
+      {showRobotsModal && (
+        <Modal
+          open={showRobotsModal}
+          onClose={() => setShowRobotsModal(false)}
+          title="robots.txt Configuration"
+          primaryAction={{
+            content: 'Copy to clipboard',
+            onAction: () => {
+              navigator.clipboard.writeText(robotsTxt);
+              setToast('Copied to clipboard!');
+            }
+          }}
+          secondaryActions={[
+            {
+              content: 'Close',
+              onAction: () => setShowRobotsModal(false)
+            }
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              {!['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) && (
+                <Banner status="info" title="Manual Configuration Steps">
+                  <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+                    <li>Copy the robots.txt content below</li>
+                    <li>Go to <strong>Online Store → Themes</strong></li>
+                    <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
+                    <li>In the file browser, look for <strong>robots.txt.liquid</strong></li>
+                    <li>If it doesn't exist, click <strong>Add a new template</strong> → Select "robots" → Create</li>
+                    <li>Replace the content with what you copied</li>
+                    <li>Click <strong>Save</strong></li>
+                  </ol>
+                </Banner>
+              )}
+              
+              <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+                <pre style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  margin: 0,
+                  overflow: 'auto',
+                  maxHeight: '400px'
+                }}>
+                  {robotsTxt}
+                </pre>
+              </Box>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
 
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
