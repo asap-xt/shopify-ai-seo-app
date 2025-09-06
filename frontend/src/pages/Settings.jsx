@@ -523,9 +523,9 @@ export default function Settings() {
                         onChange={() => isAvailable && toggleFeature(feature.key)}
                         disabled={!isAvailable}
                         helpText={
-                          !isAvailable ? 
+                          !isAvailable && feature.requiredPlan ? 
                             `Upgrade to ${feature.requiredPlan} plan to enable` :
-                            feature.description
+                          isAvailable ? feature.description : ''
                         }
                       />
                     </BlockStack>

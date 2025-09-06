@@ -131,14 +131,14 @@ class AIDiscoveryService {
 
   // ... rest of the methods remain the same
   getDefaultSettings(plan = 'starter') {
-    // All available bots
+    // All available bots - all are false by default
     const allBots = {
-      openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: true },
-      anthropic: { name: 'Anthropic (Claude)', enabled: true },
-      google: { name: 'Google AI (Gemini)', enabled: true },
-      perplexity: { name: 'Perplexity', enabled: true },
+      openai: { name: 'OpenAI (GPTBot, ChatGPT)', enabled: false },
+      anthropic: { name: 'Anthropic (Claude)', enabled: false },
+      google: { name: 'Google AI (Gemini)', enabled: false },
+      perplexity: { name: 'Perplexity', enabled: false },
       meta: { name: 'Meta AI', enabled: false },
-      others: { name: 'Other AI Bots', enabled: true }
+      others: { name: 'Other AI Bots', enabled: false }
     };
 
     // Which bots are available for each plan
@@ -154,13 +154,13 @@ class AIDiscoveryService {
       bots: allBots,
       availableBots: availableBotsByPlan[plan] || availableBotsByPlan.starter,
       features: {
-        productsJson: true,
-        aiSitemap: true,
-        welcomePage: plan !== 'starter',
-        collectionsJson: ['growth', 'growth_extra', 'enterprise'].includes(plan),
-        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(plan),
-        storeMetadata: ['growth_extra', 'enterprise'].includes(plan), // NEW
-        schemaData: plan === 'enterprise' // NEW
+        productsJson: false,  // Everything is false by default
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        autoRobotsTxt: false,
+        storeMetadata: false,
+        schemaData: false
       },
       updatedAt: new Date().toISOString()
     };
