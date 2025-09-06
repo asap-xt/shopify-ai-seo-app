@@ -620,7 +620,7 @@ export default function Settings() {
       </Card>
 
       {/* Available Endpoints */}
-      {(settings?.features?.productsJson || settings?.features?.welcomePage) && (
+      {(settings?.features?.productsJson || settings?.features?.collectionsJson || settings?.features?.storeMetadata || settings?.features?.schemaData || settings?.features?.aiSitemap || settings?.features?.welcomePage) && (
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
@@ -636,11 +636,38 @@ export default function Settings() {
                   </InlineStack>
                 )}
                 
+                {settings?.features?.collectionsJson && (
+                  <InlineStack align="space-between">
+                    <Text>Collections Feed:</Text>
+                    <Link url={`/ai/collections.json?shop=${shop}`} external>
+                      /ai/collections.json
+                    </Link>
+                  </InlineStack>
+                )}
+                
+                {settings?.features?.storeMetadata && (
+                  <InlineStack align="space-between">
+                    <Text>Store Metadata:</Text>
+                    <Link url={`/ai/store-metadata.json?shop=${shop}`} external>
+                      /ai/store-metadata.json
+                    </Link>
+                  </InlineStack>
+                )}
+                
+                {settings?.features?.schemaData && (
+                  <InlineStack align="space-between">
+                    <Text>Advanced Schema Data:</Text>
+                    <Link url={`/ai/schema-data.json?shop=${shop}`} external>
+                      /ai/schema-data.json
+                    </Link>
+                  </InlineStack>
+                )}
+                
                 {settings?.features?.aiSitemap && (
                   <InlineStack align="space-between">
                     <Text>AI Sitemap:</Text>
-                    <Link url={`/api/sitemap/generate?shop=${shop}`} external>
-                      /api/sitemap/generate
+                    <Link url={`/ai/sitemap.xml?shop=${shop}`} external>
+                      /ai/sitemap.xml
                     </Link>
                   </InlineStack>
                 )}
