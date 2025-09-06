@@ -91,7 +91,18 @@ export default function Settings() {
   };
 
   const toggleFeature = (featureKey) => {
-    if (!isFeatureAvailable(featureKey)) return;
+    if (!isFeatureAvailable(featureKey)) {
+      const feature = {
+        productsJson: 'Products JSON Feed',
+        aiSitemap: 'AI-Optimized Sitemap',
+        welcomePage: 'AI Welcome Page',
+        collectionsJson: 'Collections JSON Feed',
+        storeMetadata: 'Store Metadata',
+        schemaData: 'Schema Data'
+      };
+      setToast(`Upgrade your plan to enable ${feature[featureKey] || featureKey}`);
+      return;
+    }
     
     setSettings(prev => ({
       ...prev,
@@ -214,12 +225,134 @@ export default function Settings() {
             <Divider />
             
             <BlockStack gap="300">
+              {/* Row 1: OpenAI, Perplexity */}
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                gridTemplateColumns: 'repeat(2, 1fr)', 
                 gap: '1rem' 
               }}>
-                {Object.entries(settings?.bots || {}).map(([key, bot]) => {
+                {['openai', 'perplexity'].map(key => {
+                  const bot = settings?.bots?.[key];
+                  if (!bot) return null;
+                  
+                  const isAvailable = settings?.availableBots?.includes(key);
+                  const requiredPlan = 
+                    key === 'anthropic' ? 'Professional' :
+                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    null;
+                  
+                  return (
+                    <Box key={key} 
+                      padding="200" 
+                      background={isAvailable ? "bg-surface" : "bg-surface-secondary"}
+                      borderRadius="200"
+                      borderWidth="025"
+                      borderColor="border"
+                    >
+                      <BlockStack gap="100">
+                        <Checkbox
+                          label={
+                            <InlineStack gap="200" align="center">
+                              <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                                {bot.name || key}
+                              </Text>
+                              {!isAvailable && requiredPlan && (
+                                <Badge tone="info" size="small">
+                                  {requiredPlan}+
+                                </Badge>
+                              )}
+                            </InlineStack>
+                          }
+                          checked={bot.enabled && isAvailable}
+                          onChange={() => isAvailable && toggleBot(key)}
+                          disabled={!isAvailable}
+                          helpText={
+                            !isAvailable ? 
+                              `Upgrade to ${requiredPlan} plan to enable this AI bot` :
+                              key === 'openai' ? 'Most popular AI assistant' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              ''
+                          }
+                        />
+                      </BlockStack>
+                    </Box>
+                  );
+                })}
+              </div>
+
+              {/* Row 2: Anthropic, Google */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(2, 1fr)', 
+                gap: '1rem' 
+              }}>
+                {['anthropic', 'google'].map(key => {
+                  const bot = settings?.bots?.[key];
+                  if (!bot) return null;
+                  
+                  const isAvailable = settings?.availableBots?.includes(key);
+                  const requiredPlan = 
+                    key === 'anthropic' ? 'Professional' :
+                    ['google', 'meta', 'others'].includes(key) ? 'Growth' : 
+                    null;
+                  
+                  return (
+                    <Box key={key} 
+                      padding="200" 
+                      background={isAvailable ? "bg-surface" : "bg-surface-secondary"}
+                      borderRadius="200"
+                      borderWidth="025"
+                      borderColor="border"
+                    >
+                      <BlockStack gap="100">
+                        <Checkbox
+                          label={
+                            <InlineStack gap="200" align="center">
+                              <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                                {bot.name || key}
+                              </Text>
+                              {!isAvailable && requiredPlan && (
+                                <Badge tone="info" size="small">
+                                  {requiredPlan}+
+                                </Badge>
+                              )}
+                            </InlineStack>
+                          }
+                          checked={bot.enabled && isAvailable}
+                          onChange={() => isAvailable && toggleBot(key)}
+                          disabled={!isAvailable}
+                          helpText={
+                            !isAvailable ? 
+                              `Upgrade to ${requiredPlan} plan to enable this AI bot` :
+                              key === 'openai' ? 'Most popular AI assistant' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              ''
+                          }
+                        />
+                      </BlockStack>
+                    </Box>
+                  );
+                })}
+              </div>
+
+              {/* Row 3: Meta, Others */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(2, 1fr)', 
+                gap: '1rem' 
+              }}>
+                {['meta', 'others'].map(key => {
+                  const bot = settings?.bots?.[key];
+                  if (!bot) return null;
+                  
                   const isAvailable = settings?.availableBots?.includes(key);
                   const requiredPlan = 
                     key === 'anthropic' ? 'Professional' :
@@ -314,63 +447,87 @@ export default function Settings() {
             
             <Divider />
             
-            <BlockStack gap="300">
-              <Checkbox
-                label={
-                  <InlineStack gap="200">
-                    <span>Products JSON Feed (/ai/products.json)</span>
-                    {!isFeatureAvailable('productsJson') && (
-                      <Badge tone="warning">Starter+</Badge>
-                    )}
-                  </InlineStack>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+              gap: '1rem' 
+            }}>
+              {[
+                {
+                  key: 'productsJson',
+                  name: 'Products JSON Feed',
+                  description: '/ai/products.json',
+                  requiredPlan: null
+                },
+                {
+                  key: 'aiSitemap',
+                  name: 'AI-Optimized Sitemap',
+                  description: 'Enhanced sitemap with AI hints',
+                  requiredPlan: null
+                },
+                {
+                  key: 'welcomePage',
+                  name: 'AI Welcome Page',
+                  description: '/ai/welcome',
+                  requiredPlan: 'Professional'
+                },
+                {
+                  key: 'collectionsJson',
+                  name: 'Collections JSON Feed',
+                  description: '/ai/collections.json',
+                  requiredPlan: 'Growth'
+                },
+                {
+                  key: 'storeMetadata',
+                  name: 'Store Metadata for AI Search',
+                  description: 'Organization & LocalBusiness schema',
+                  requiredPlan: 'Growth Extra'
+                },
+                {
+                  key: 'schemaData',
+                  name: 'Advanced Schema Data',
+                  description: 'BreadcrumbList, FAQPage & more',
+                  requiredPlan: 'Enterprise'
                 }
-                checked={settings?.features?.productsJson}
-                onChange={() => toggleFeature('productsJson')}
-                disabled={!isFeatureAvailable('productsJson')}
-              />
-              
-              <Checkbox
-                label={
-                  <InlineStack gap="200">
-                    <span>AI-Optimized Sitemap</span>
-                    {!isFeatureAvailable('aiSitemap') && (
-                      <Badge tone="warning">Starter+</Badge>
-                    )}
-                  </InlineStack>
-                }
-                checked={settings?.features?.aiSitemap}
-                onChange={() => toggleFeature('aiSitemap')}
-                disabled={!isFeatureAvailable('aiSitemap')}
-              />
-              
-              <Checkbox
-                label={
-                  <InlineStack gap="200">
-                    <span>AI Welcome Page (/ai/welcome)</span>
-                    {!isFeatureAvailable('welcomePage') && (
-                      <Badge tone="warning">Professional+</Badge>
-                    )}
-                  </InlineStack>
-                }
-                checked={settings?.features?.welcomePage}
-                onChange={() => toggleFeature('welcomePage')}
-                disabled={!isFeatureAvailable('welcomePage')}
-              />
-              
-              <Checkbox
-                label={
-                  <InlineStack gap="200">
-                    <span>Collections JSON Feed</span>
-                    {!isFeatureAvailable('collectionsJson') && (
-                      <Badge tone="warning">Growth+</Badge>
-                    )}
-                  </InlineStack>
-                }
-                checked={settings?.features?.collectionsJson}
-                onChange={() => toggleFeature('collectionsJson')}
-                disabled={!isFeatureAvailable('collectionsJson')}
-              />
-            </BlockStack>
+              ].map((feature) => {
+                const isAvailable = isFeatureAvailable(feature.key);
+                
+                return (
+                  <Box key={feature.key}
+                    padding="200" 
+                    background={isAvailable ? "bg-surface" : "bg-surface-secondary"}
+                    borderRadius="200"
+                    borderWidth="025"
+                    borderColor="border"
+                  >
+                    <BlockStack gap="100">
+                      <Checkbox
+                        label={
+                          <InlineStack gap="200" align="center">
+                            <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                              {feature.name}
+                            </Text>
+                            {!isAvailable && feature.requiredPlan && (
+                              <Badge tone="info" size="small">
+                                {feature.requiredPlan}+
+                              </Badge>
+                            )}
+                          </InlineStack>
+                        }
+                        checked={settings?.features?.[feature.key] && isAvailable}
+                        onChange={() => toggleFeature(feature.key)}
+                        disabled={!isAvailable}
+                        helpText={
+                          !isAvailable ? 
+                            `Upgrade to ${feature.requiredPlan} plan to enable` :
+                            feature.description
+                        }
+                      />
+                    </BlockStack>
+                  </Box>
+                );
+              })}
+            </div>
           </BlockStack>
         </Box>
       </Card>

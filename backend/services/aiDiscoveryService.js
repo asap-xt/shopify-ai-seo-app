@@ -158,7 +158,9 @@ class AIDiscoveryService {
         aiSitemap: true,
         welcomePage: plan !== 'starter',
         collectionsJson: ['growth', 'growth_extra', 'enterprise'].includes(plan),
-        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(plan)
+        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(plan),
+        storeMetadata: ['growth_extra', 'enterprise'].includes(plan), // NEW
+        schemaData: plan === 'enterprise' // NEW
       },
       updatedAt: new Date().toISOString()
     };
@@ -237,7 +239,15 @@ class AIDiscoveryService {
   }
 
   isFeatureAvailable(plan, feature) {
-    // ... same as before
+    const features = {
+      starter: ['productsJson', 'aiSitemap'],
+      professional: ['productsJson', 'aiSitemap', 'welcomePage'],
+      growth: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt'],
+      growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata'],
+      enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData']
+    };
+
+    return features[plan]?.includes(feature) || false;
   }
 }
 
