@@ -166,18 +166,20 @@ export default function Settings() {
     }
   };
 
-  const isFeatureAvailable = (feature) => {
-    if (!settings?.plan) return false;
+  const isFeatureAvailable = (featureKey) => {
+    const plan = settings?.plan || 'starter';
     
     const availability = {
       productsJson: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
       aiSitemap: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
       welcomePage: ['professional', 'growth', 'growth_extra', 'enterprise'],
       collectionsJson: ['growth', 'growth_extra', 'enterprise'],
-      autoRobotsTxt: ['growth', 'growth_extra', 'enterprise']
+      autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'],
+      storeMetadata: ['growth_extra', 'enterprise'],
+      schemaData: ['enterprise']
     };
     
-    return availability[feature]?.includes(settings.plan);
+    return availability[featureKey]?.includes(plan) || false;
   };
 
   if (!shop) {
@@ -487,10 +489,12 @@ export default function Settings() {
                   key: 'schemaData',
                   name: 'Advanced Schema Data',
                   description: 'BreadcrumbList, FAQPage & more',
-                  requiredPlan: 'Enterprise'
+                  requiredPlan: 'Enterprise' // Без + тук
                 }
               ].map((feature) => {
-                const isAvailable = isFeatureAvailable(feature.key);
+                // Използваме aiDiscoveryService.isFeatureAvailable с план
+                const isAvailable = settings?.plan && 
+                  isFeatureAvailable(feature.key);
                 
                 return (
                   <Box key={feature.key}
@@ -509,13 +513,14 @@ export default function Settings() {
                             </Text>
                             {!isAvailable && feature.requiredPlan && (
                               <Badge tone="info" size="small">
-                                {feature.requiredPlan}+
+                                {feature.requiredPlan}
+                                {feature.requiredPlan !== 'Enterprise' && '+'} 
                               </Badge>
                             )}
                           </InlineStack>
                         }
                         checked={settings?.features?.[feature.key] && isAvailable}
-                        onChange={() => toggleFeature(feature.key)}
+                        onChange={() => isAvailable && toggleFeature(feature.key)}
                         disabled={!isAvailable}
                         helpText={
                           !isAvailable ? 
