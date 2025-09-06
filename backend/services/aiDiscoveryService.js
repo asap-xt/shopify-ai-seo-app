@@ -158,11 +158,11 @@ class AIDiscoveryService {
       bots: allBots,
       availableBots: availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter,
       features: {
-        productsJson: false,      // All are false
+        productsJson: false,
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
-        autoRobotsTxt: false,
+        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // TRUE for Growth+
         storeMetadata: false,
         schemaData: false
       },

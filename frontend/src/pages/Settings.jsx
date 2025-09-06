@@ -437,8 +437,8 @@ export default function Settings() {
             
             <Banner>
               <p>
-                {settings?.features?.autoRobotsTxt ? 
-                  "You can automatically apply robots.txt rules with your Growth plan." :
+                {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) ? 
+                  "With your plan, you can apply robots.txt changes directly to your theme!" :
                   "Copy the generated rules and add them to your theme's robots.txt.liquid file."
                 }
               </p>
@@ -449,7 +449,7 @@ export default function Settings() {
                 View robots.txt
               </Button>
               
-              {settings?.features?.autoRobotsTxt && (
+              {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) && (
                 <Button 
                   primary 
                   onClick={async () => {
@@ -516,12 +516,6 @@ export default function Settings() {
                   key: 'collectionsJson',
                   name: 'Collections JSON Feed',
                   description: 'Category data for better AI understanding',
-                  requiredPlan: 'Growth'
-                },
-                {
-                  key: 'autoRobotsTxt',  // ADD THIS
-                  name: 'Automatic robots.txt',
-                  description: 'Apply robots.txt changes directly to theme',
                   requiredPlan: 'Growth'
                 },
                 {
