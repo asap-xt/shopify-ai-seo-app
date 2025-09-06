@@ -53,7 +53,9 @@ router.get('/ai-discovery/settings', async (req, res) => {
         ...defaultSettings.features,
         ...(settings.features || {})
       },
-      plan
+      bots: settings.bots || defaultSettings.bots, // Use saved or default
+      availableBots: defaultSettings.availableBots, // Always from default based on plan
+      plan // Important - include the plan
     };
     
     res.json(mergedSettings);

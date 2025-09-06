@@ -19,6 +19,7 @@ import {
   Spinner
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon } from '@shopify/polaris-icons';
+import aiDiscoveryService from '../services/aiDiscoveryService.js';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } 
@@ -492,9 +493,8 @@ export default function Settings() {
                   requiredPlan: 'Enterprise' // Без + тук
                 }
               ].map((feature) => {
-                // Използваме aiDiscoveryService.isFeatureAvailable с план
-                const isAvailable = settings?.plan && 
-                  isFeatureAvailable(feature.key);
+
+                const isAvailable = isFeatureAvailable(feature.key);
                 
                 return (
                   <Box key={feature.key}
@@ -519,8 +519,8 @@ export default function Settings() {
                             )}
                           </InlineStack>
                         }
-                        checked={settings?.features?.[feature.key] && isAvailable}
-                        onChange={() => isAvailable && toggleFeature(feature.key)}
+                        checked={!!settings?.features?.[feature.key]}
+                        onChange={() => toggleFeature(feature.key)}
                         disabled={!isAvailable}
                         helpText={
                           !isAvailable && feature.requiredPlan ? 

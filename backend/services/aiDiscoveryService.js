@@ -154,7 +154,7 @@ class AIDiscoveryService {
       bots: allBots,
       availableBots: availableBotsByPlan[plan] || availableBotsByPlan.starter,
       features: {
-        productsJson: false,  // Everything is false by default
+        productsJson: false,      // Everything is false
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
@@ -162,6 +162,7 @@ class AIDiscoveryService {
         storeMetadata: false,
         schemaData: false
       },
+      plan: plan, // Important - add the plan here
       updatedAt: new Date().toISOString()
     };
 
