@@ -574,7 +574,6 @@ function fixupAndValidate(payload) {
     .map((s) => String(s || '').trim())
     .filter((s) => s.length >= 2)
     .slice(0, 10);
-  while (bullets.length < 2) bullets.push('Great value');
   p.seo.bullets = bullets.map((s) => s.slice(0, 160));
 
   // faq
@@ -587,12 +586,6 @@ function fixupAndValidate(payload) {
     }))
     .filter((x) => x.q.length >= 3 && x.a.length >= 3)
     .slice(0, 10);
-  if (faq.length < 1) {
-    faq.push({
-      q: 'What makes this product special?',
-      a: 'It offers great quality and value for everyday use.',
-    });
-  }
   p.seo.faq = faq;
 
   // REMOVED jsonLd fixup/validation code
@@ -858,7 +851,6 @@ async function generateSEOForLanguage(shop, productId, model, language) {
   // Generate meta description from body or title
   let metaDescription = seoDescription;
   if (!metaDescription && localizedBody) {
-    // Take first 160 characters from body without HTML tags
     metaDescription = localizedBody
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
@@ -869,20 +861,41 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     metaDescription = localizedTitle || 'Quality product from our store';
   }
 
+  // Extract bullets from HTML content
+  const extractedBullets = [];
+  if (localizedBody) {
+    const liMatches = localizedBody.match(/<li>(.*?)<\/li>/gi) || [];
+    liMatches.slice(0, 5).forEach(li => {
+      const text = li.replace(/<[^>]+>/g, '').trim();
+      if (text && text.length > 10) {
+        extractedBullets.push(text.slice(0, 160));
+      }
+    });
+  }
+
+  // Create simple FAQ with localized data
+  const simpleFaq = [];
+  if (localizedTitle && metaDescription) {
+    simpleFaq.push({
+      q: localizedTitle,
+      a: metaDescription
+    });
+  }
+
   const localSeoData = {
     title: seoTitle || localizedTitle || 'Product',
     metaDescription: metaDescription,
     slug: kebab(localizedTitle || p.handle || 'product'),
     bodyHtml: localizedBody || `<p>${localizedTitle}</p>`,
-    bullets: [], // No longer using bullets
-    faq: [],     // No longer using FAQ
-    imageAlt: [] // Can add from product.images if altText exists
+    bullets: extractedBullets,
+    faq: simpleFaq,
+    imageAlt: []
   };
 
   const fixed = {
     productId: p.id,
-    provider: 'local',  // Changed from 'openrouter'
-    model: 'none',      // No model - local generation
+    provider: 'local',
+    model: 'none',
     language: langNormalized,
     seo: {
       ...localSeoData,
@@ -891,8 +904,8 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     quality: {
       warnings: [],
       model: 'none',
-      tokens: 0,      // 0 tokens!
-      costUsd: 0,     // $0.00 cost!
+      tokens: 0,
+      costUsd: 0,
     },
   };
 
