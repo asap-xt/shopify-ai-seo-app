@@ -5,6 +5,32 @@ import Subscription from '../db/Subscription.js';
 
 const router = express.Router();
 
+// POST /ai-enhance/check-eligibility
+router.post('/check-eligibility', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    
+    console.log('🔍 [CHECK-ELIGIBILITY] Shop:', shop, 'Plan:', planKey);
+    
+    // Normalize plan names for comparison
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const isEligible = ['growth_extra', 'enterprise'].includes(normalizedPlan) || 
+                      planKey === 'growth extra';
+    
+    res.json({ 
+      eligible: isEligible, 
+      plan: planKey,
+      normalizedPlan,
+      message: isEligible ? 'AI enhancement available' : 'Upgrade to Growth Extra or Enterprise for AI enhancement'
+    });
+  } catch (error) {
+    console.error('🔍 [CHECK-ELIGIBILITY] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Copy ONLY the OpenRouter connection from seoController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
@@ -63,7 +89,8 @@ router.post('/product', async (req, res) => {
     
     console.log('🔍 [DEBUG] Shop plan:', planKey);
     
-    if (!['growth_extra', 'enterprise'].includes(planKey)) {
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({ 
         error: 'AI enhancement requires Growth Extra or Enterprise plan',
         currentPlan: planKey 
@@ -175,10 +202,11 @@ router.post('/collection', async (req, res) => {
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    if (!['growth_extra', 'enterprise'].includes(planKey)) {
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({ 
         error: 'AI enhancement requires Growth Extra or Enterprise plan',
-        currentPlan: planKey 
+        currentPlan: planKey
       });
     }
     
