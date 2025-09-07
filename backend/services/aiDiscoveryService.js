@@ -269,6 +269,18 @@ class AIDiscoveryService {
     return content;
   }
 
+  getAvailableBotsForPlan(planKey) {
+    const planBots = {
+      'starter': ['openai', 'perplexity'],
+      'professional': ['openai', 'anthropic', 'perplexity', 'google'],
+      'growth': ['openai', 'anthropic', 'perplexity', 'google'],
+      'growth extra': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'other'],
+      'enterprise': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'other']
+    };
+    
+    return planBots[planKey] || ['openai', 'perplexity'];
+  }
+
   isFeatureAvailable(plan, feature) {
     const features = {
       starter: ['productsJson', 'aiSitemap'],
