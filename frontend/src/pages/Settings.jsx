@@ -44,6 +44,7 @@ export default function Settings() {
   const [jsonModalTitle, setJsonModalTitle] = useState('');
   const [jsonModalContent, setJsonModalContent] = useState(null);
   const [loadingJson, setLoadingJson] = useState(false);
+  const [originalSettings, setOriginalSettings] = useState(null);
   
   const shop = qs('shop', '');
 
@@ -63,6 +64,7 @@ export default function Settings() {
       const data = await res.json();
       console.log('Loaded settings:', data); // Debug log
       setSettings(data);
+      setOriginalSettings(data); // Save original settings
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
@@ -144,6 +146,7 @@ export default function Settings() {
       
       setToast('Settings saved successfully');
       setHasUnsavedChanges(false); // Clear unsaved changes flag
+      setOriginalSettings(settings); // Update original settings
       generateRobotsTxt(); // Regenerate robots.txt
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -647,55 +650,47 @@ export default function Settings() {
                     borderWidth="025"
                     borderColor="border"
                   >
-                    <BlockStack gap="100">
-                      {isAvailable ? (
-                        <BlockStack gap="100">
+                    {isAvailable ? (
+                      <InlineStack align="space-between" blockAlign="center">
+                        <Box flexGrow={1}>
                           <Checkbox
-                            label={
-                              <InlineStack gap="200" align="center">
-                                <Text variant="bodyMd">
-                                  {feature.name}
-                                </Text>
-                              </InlineStack>
-                            }
+                            label={feature.name}
                             checked={isEnabled}
                             onChange={() => toggleFeature(feature.key)}
                             helpText={feature.description}
                           />
-                          {/* Show View only if enabled AND no unsaved changes */}
-                          {settings?.features?.[feature.key] && !hasUnsavedChanges && (
-                            <Box paddingInlineStart="500">
-                              <Button
-                                size="slim"
-                                onClick={() => viewJson(feature.key, feature.name)}
-                              >
-                                View
-                              </Button>
-                            </Box>
-                          )}
-                        </BlockStack>
-                      ) : (
-                        <Checkbox
-                          label={
-                            <InlineStack gap="200" align="center">
-                              <Text variant="bodySm" tone="subdued">
-                                {feature.name}
-                              </Text>
-                              {feature.requiredPlan && (
-                                <Badge tone="info" size="small">
-                                  {feature.requiredPlan}
-                                  {feature.requiredPlan !== 'Enterprise' && '+'} 
-                                </Badge>
-                              )}
-                            </InlineStack>
-                          }
-                          checked={false}
-                          onChange={() => toggleFeature(feature.key)}
-                          disabled={true}
-                          helpText={`Upgrade to ${feature.requiredPlan} plan to enable`}
-                        />
-                      )}
-                    </BlockStack>
+                        </Box>
+                        {/* View button is outside checkbox and shows only for saved features */}
+                        {originalSettings?.features?.[feature.key] && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </InlineStack>
+                    ) : (
+                      <Checkbox
+                        label={
+                          <InlineStack gap="200" align="center">
+                            <Text variant="bodySm" tone="subdued">
+                              {feature.name}
+                            </Text>
+                            {feature.requiredPlan && (
+                              <Badge tone="info" size="small">
+                                {feature.requiredPlan}
+                                {feature.requiredPlan !== 'Enterprise' && '+'} 
+                              </Badge>
+                            )}
+                          </InlineStack>
+                        }
+                        checked={false}
+                        onChange={() => toggleFeature(feature.key)}
+                        disabled={true}
+                        helpText={`Upgrade to ${feature.requiredPlan} plan to enable`}
+                      />
+                    )}
                   </Box>
                 );
               })}
@@ -784,6 +779,7 @@ export default function Settings() {
                 
                 if (res.ok) {
                   setToast('Settings reset successfully');
+                  setOriginalSettings(null); // Clear original settings too
                   setTimeout(() => {
                     window.location.reload();
                   }, 1000);
