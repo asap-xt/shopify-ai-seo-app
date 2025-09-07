@@ -23,7 +23,7 @@ async function checkFeatureAccess(shop, feature) {
   }
 }
 
-// Product list for AI consumption
+// Products Feed endpoint - просто взима готовите JSON-и
 router.get('/ai/products.json', async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
@@ -39,53 +39,92 @@ router.get('/ai/products.json', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
-    // Check if feature is enabled
     if (!settings?.features?.productsJson) {
       return res.status(403).json({ 
         error: 'Products JSON feature is not enabled. Please enable it in settings.' 
       });
     }
 
-    // Get products from Shopify
+    // Просто вземаме ВСИЧКИ metafields от namespace seo_ai
+    const query = `
+      query {
+        products(first: 250) {
+          edges {
+            node {
+              id
+              handle
+              metafields(namespace: "seo_ai", first: 100) {
+                edges {
+                  node {
+                    key
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/products.json?limit=250`,
+      `https://${shop}/admin/api/2024-07/graphql.json`,
       {
+        method: 'POST',
         headers: {
           'X-Shopify-Access-Token': shopRecord.accessToken,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ query })
       }
     );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch products');
+    const data = await response.json();
+    const optimizedProducts = [];
+    
+    // Извличаме само продуктите с metafields
+    data.data.products.edges.forEach(({ node: product }) => {
+      if (product.metafields.edges.length > 0) {
+        const productData = {
+          id: product.id,
+          handle: product.handle,
+          metafields: {}
+        };
+        
+        // Просто парсваме всички metafields
+        product.metafields.edges.forEach(({ node: metafield }) => {
+          try {
+            productData.metafields[metafield.key] = JSON.parse(metafield.value);
+          } catch {
+            productData.metafields[metafield.key] = metafield.value;
+          }
+        });
+        
+        optimizedProducts.push(productData);
+      }
+    });
+
+    if (optimizedProducts.length === 0) {
+      return res.json({
+        shop,
+        products: [],
+        warning: 'No optimized products found',
+        action_required: {
+          message: 'Please optimize your products first',
+          link: `/ai-seo?shop=${shop}#products`
+        }
+      });
     }
 
-    const data = await response.json();
-    
-    // Transform products for AI consumption
-    const aiProducts = data.products.map(product => ({
-      id: product.id,
-      title: product.title,
-      description: product.body_html?.replace(/<[^>]*>?/gm, ''),
-      vendor: product.vendor,
-      product_type: product.product_type,
-      tags: product.tags,
-      price: product.variants[0]?.price,
-      available: product.status === 'active',
-      images: product.images.map(img => img.src),
-      url: `https://${shop}/products/${product.handle}`
-    }));
-
     res.json({
-      shop: shop,
+      shop,
       generated_at: new Date().toISOString(),
-      products_count: aiProducts.length,
-      products: aiProducts
+      products_count: optimizedProducts.length,
+      products: optimizedProducts
     });
 
   } catch (error) {
-    console.error('Error in products.json:', error);
+    console.error('Error:', error);
     res.status(500).json({ error: 'Failed to generate products feed' });
   }
 });

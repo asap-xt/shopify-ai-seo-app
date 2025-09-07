@@ -444,37 +444,6 @@ function AiSearchOptimisationPanel() {
   const shop = qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   
-  // Добавете това за hash routing
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.slice(1); // Remove #
-      switch(hash) {
-        case 'products':
-          setSelectedTab(0);
-          break;
-        case 'collections':
-          setSelectedTab(1);
-          break;
-        case 'sitemap':
-          setSelectedTab(2);
-          break;
-        case 'store-metadata':
-          setSelectedTab(3);
-          break;
-        case 'schema-data':
-          setSelectedTab(4);
-          break;
-      }
-    };
-    
-    // Initial check
-    handleHashChange();
-    
-    // Listen for hash changes
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-  
   const tabs = [
     // ЗАКОМЕНТИРАНО Single Product таб
     // {
