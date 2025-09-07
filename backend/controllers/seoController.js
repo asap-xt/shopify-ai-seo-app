@@ -590,6 +590,10 @@ function fixupAndValidate(payload) {
 
   // REMOVED jsonLd fixup/validation code
 
+  // Debug what's being validated
+  console.log('🔍 [FIXUP] Final bullets:', p.seo.bullets);
+  console.log('🔍 [FIXUP] Final FAQ:', p.seo.faq);
+
   const ok = validateSeo(p);
   return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
 }
@@ -881,6 +885,12 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       a: metaDescription
     });
   }
+
+  // Debug logs
+  console.log('🔍 [DEBUG] Extracted bullets:', extractedBullets);
+  console.log('🔍 [DEBUG] Simple FAQ:', simpleFaq);
+  console.log('🔍 [DEBUG] Localized title:', localizedTitle);
+  console.log('🔍 [DEBUG] Meta description:', metaDescription);
 
   const localSeoData = {
     title: seoTitle || localizedTitle || 'Product',
