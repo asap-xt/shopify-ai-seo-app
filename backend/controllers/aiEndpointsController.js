@@ -746,6 +746,168 @@ router.get('/ai/schema-data.json', async (req, res) => {
   }
 });
 
+// Store Metadata endpoint
+router.get('/ai/store-metadata.json', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Check if feature is enabled
+    if (!settings?.features?.storeMetadata) {
+      return res.status(403).json({ 
+        error: 'Store Metadata feature is not enabled. Please enable it in settings.' 
+      });
+    }
+
+    // Check plan
+    if (!['growth extra', 'enterprise'].includes(settings?.planKey)) {
+      return res.status(403).json({ 
+        error: 'Store Metadata requires Growth Extra plan or higher' 
+      });
+    }
+
+    // Get shop metafields
+    const metafieldsQuery = `
+      query {
+        shop {
+          name
+          email
+          url
+          metafields(namespace: "seo_ai", first: 10) {
+            edges {
+              node {
+                key
+                value
+                type
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(
+      `https://${shop}/admin/api/2024-07/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: metafieldsQuery })
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch shop data');
+    }
+
+    const data = await response.json();
+    const shopData = data.data.shop;
+    
+    // Parse metafields
+    const metafields = {};
+    shopData.metafields.edges.forEach(({ node }) => {
+      try {
+        metafields[node.key] = JSON.parse(node.value);
+      } catch (e) {
+        console.error(`Failed to parse ${node.key} metafield`);
+      }
+    });
+    
+    // Check if store metadata exists
+    if (!metafields.seo_metadata && !metafields.organization_schema) {
+      return res.json({
+        shop: shop,
+        generated_at: new Date().toISOString(),
+        metadata: null,
+        warning: 'No store metadata found',
+        action_required: {
+          message: 'Please configure your store metadata first',
+          link: `/ai-seo?shop=${shop}#store-metadata`,
+          link_text: 'Go to Store Metadata'
+        }
+      });
+    }
+    
+    // Build response
+    const storeMetadata = {
+      shop: shop,
+      generated_at: new Date().toISOString(),
+      store: {
+        name: shopData.name,
+        url: shopData.url,
+        email: shopData.email
+      }
+    };
+    
+    // Add SEO metadata
+    if (metafields.seo_metadata) {
+      storeMetadata.seo = {
+        title: metafields.seo_metadata.title,
+        description: metafields.seo_metadata.metaDescription,
+        keywords: metafields.seo_metadata.keywords
+      };
+    }
+    
+    // Add AI metadata
+    if (metafields.ai_metadata) {
+      storeMetadata.ai_context = {
+        business_type: metafields.ai_metadata.businessType,
+        target_audience: metafields.ai_metadata.targetAudience,
+        unique_selling_points: metafields.ai_metadata.uniqueSellingPoints,
+        brand_voice: metafields.ai_metadata.brandVoice,
+        categories: metafields.ai_metadata.primaryCategories,
+        shipping: metafields.ai_metadata.shippingInfo,
+        returns: metafields.ai_metadata.returnPolicy
+      };
+    }
+    
+    // Add Organization Schema
+    if (metafields.organization_schema?.enabled) {
+      storeMetadata.organization_schema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: metafields.organization_schema.name || shopData.name,
+        url: shopData.url,
+        email: metafields.organization_schema.email,
+        telephone: metafields.organization_schema.phone,
+        logo: metafields.organization_schema.logo,
+        sameAs: metafields.organization_schema.sameAs ? 
+          metafields.organization_schema.sameAs.split(',').map(s => s.trim()) : []
+      };
+    }
+    
+    // Add LocalBusiness Schema if enabled
+    if (metafields.local_business_schema?.enabled) {
+      storeMetadata.local_business_schema = {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        name: metafields.organization_schema?.name || shopData.name,
+        url: shopData.url,
+        priceRange: metafields.local_business_schema.priceRange,
+        openingHours: metafields.local_business_schema.openingHours
+      };
+    }
+    
+    res.json(storeMetadata);
+
+  } catch (error) {
+    console.error('Error in store-metadata.json:', error);
+    res.status(500).json({ error: 'Failed to generate store metadata feed' });
+  }
+});
+
 // AI Sitemap Feed endpoint - преименуван и опростен
 router.get('/ai/sitemap-feed.xml', async (req, res) => {
   const shop = req.query.shop;
