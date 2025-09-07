@@ -152,7 +152,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
     }
 
     // Check plan
-    if (!['growth', 'growth_extra', 'enterprise'].includes(settings?.planKey)) {
+    if (!['growth', 'growth extra', 'enterprise'].includes(settings?.planKey)) {
       return res.status(403).json({ 
         error: 'Collections JSON requires Growth plan or higher' 
       });
@@ -275,7 +275,7 @@ router.get('/ai/welcome', async (req, res) => {
     }
     
     // Check plan - Welcome page requires Professional+
-    const allowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const allowedPlans = ['professional', 'growth', 'growth extra', 'enterprise'];
     
     if (!allowedPlans.includes(effectivePlan)) {
       return res.status(403).json({ 

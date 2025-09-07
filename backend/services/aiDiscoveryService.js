@@ -49,6 +49,9 @@ class AIDiscoveryService {
         const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
         if (planResponse.ok) {
           const planData = await planResponse.json();
+          console.log('[PLAN DEBUG] Raw plan:', planData.plan);
+          console.log('[PLAN DEBUG] Plan config:', planData);
+          console.log('[PLAN DEBUG] Final planKey:', planData.planKey);
           settings.plan = planData.plan;
           settings.planKey = planData.planKey;
           settings.availableBots = this.getAvailableBotsForPlan(planData.planKey);

@@ -219,7 +219,7 @@ app.post('/test/set-plan', async (req, res) => {
       { shop },
       {
         shop,
-        plan: plan,
+        plan: plan === 'growth_extra' ? 'growth extra' : plan,
         startedAt: new Date(),
         queryLimit: 
           plan === 'enterprise' ? 10000 :
