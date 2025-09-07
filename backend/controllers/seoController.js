@@ -603,17 +603,77 @@ function fixupAndValidate(payload) {
 // Plans (used by Dashboard/AI SEO form)
 router.get('/plans/me', async (req, res) => {
   try {
-    const shop = requireShop(req);
-    const plan = resolvePlanForShop(shop);
+    const shop = req.query.shop;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+
+    // 1. First check Subscription (this is the truth)
+    let subscription = await Subscription.findOne({ shop });
+    
+    // 2. If no subscription, create trial
+    if (!subscription) {
+      const shopRecord = await Shop.findOne({ shop });
+      if (!shopRecord) {
+        return res.status(404).json({ error: 'Shop not found' });
+      }
+      
+      // Create trial subscription
+      subscription = await Subscription.create({
+        shop,
+        plan: 'growth', // trial plan
+        queryLimit: 1500,
+        productLimit: 1000,
+        trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+      });
+    }
+    
+    // 3. Get configuration
+    const planConfig = getPlanConfig(subscription.plan);
+    if (!planConfig) {
+      return res.status(500).json({ error: 'Invalid plan' });
+    }
+    
+    // 4. Prepare response
+    const modelsSuggested = [];
+    for (const provider of planConfig.providersAllowed) {
+      modelsSuggested.push(...(DEFAULT_MODELS[provider] || []));
+    }
+    
+    const now = new Date();
+    const trialEnd = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
+    const isInTrial = trialEnd && now < trialEnd;
+    
     res.json({
-      ...plan,
-      modelsSuggested: plan.modelsSuggested,
-      providersAllowed: plan.providersAllowed,
-      autosync: plan.autosync,
-      trial: { daysLeft: 7, status: 'active' },
+      // Shop info
+      shop,
+      
+      // Plan info - IMPORTANT: include planKey
+      plan: planConfig.name,
+      planKey: planConfig.key,  // <-- THIS WAS MISSING
+      priceUsd: planConfig.priceUsd,
+      
+      // Usage
+      ai_queries_used: subscription.queryCount || 0,
+      ai_queries_limit: subscription.queryLimit,
+      product_limit: subscription.productLimit,
+      
+      // Features
+      providersAllowed: planConfig.providersAllowed,
+      modelsSuggested,
+      autosyncCron: planConfig.autosyncCron,
+      
+      // Trial info
+      trial: isInTrial ? {
+        active: true,
+        ends_at: trialEnd,
+        days_left: Math.ceil((trialEnd - now) / (24 * 60 * 60 * 1000))
+      } : null
     });
-  } catch (e) {
-    res.status(e.status || 500).json({ error: e.message || String(e) });
+    
+  } catch (error) {
+    console.error('Error in /plans/me:', error);
+    res.status(500).json({ error: 'Failed to load plan' });
   }
 });
 
