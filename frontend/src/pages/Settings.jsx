@@ -649,30 +649,31 @@ export default function Settings() {
                   >
                     <BlockStack gap="100">
                       {isAvailable ? (
-                        <InlineStack align="space-between" blockAlign="center" gap="300">
-                          <Box minWidth="200">
-                            <Checkbox
-                              label={
-                                <InlineStack gap="200" align="center">
-                                  <Text variant="bodyMd">
-                                    {feature.name}
-                                  </Text>
-                                </InlineStack>
-                              }
-                              checked={isEnabled}
-                              onChange={() => toggleFeature(feature.key)}
-                              helpText={feature.description}
-                            />
-                          </Box>
-                          {isEnabled && (
-                            <Button
-                              size="slim"
-                              onClick={() => viewJson(feature.key, feature.name)}
-                            >
-                              View
-                            </Button>
+                        <BlockStack gap="100">
+                          <Checkbox
+                            label={
+                              <InlineStack gap="200" align="center">
+                                <Text variant="bodyMd">
+                                  {feature.name}
+                                </Text>
+                              </InlineStack>
+                            }
+                            checked={isEnabled}
+                            onChange={() => toggleFeature(feature.key)}
+                            helpText={feature.description}
+                          />
+                          {/* Show View only if enabled AND no unsaved changes */}
+                          {settings?.features?.[feature.key] && !hasUnsavedChanges && (
+                            <Box paddingInlineStart="500">
+                              <Button
+                                size="slim"
+                                onClick={() => viewJson(feature.key, feature.name)}
+                              >
+                                View
+                              </Button>
+                            </Box>
                           )}
-                        </InlineStack>
+                        </BlockStack>
                       ) : (
                         <Checkbox
                           label={
