@@ -43,6 +43,128 @@ const extractNumericId = (gid) => {
   return match ? match[1] : gid;
 };
 
+// AI Enhancement Button Component
+export function AIEnhanceButton({ product, shop, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  
+  const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+  
+  if (optimizedLanguages.length === 0) {
+    return null; // No basic SEO yet
+  }
+  
+  const handleEnhance = async () => {
+    setLoading(true);
+    
+    try {
+      // 1. Check eligibility
+      const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop })
+      });
+      
+      const { eligible, message } = await eligibilityRes.json();
+      
+      if (!eligible) {
+        toast.error(message);
+        return;
+      }
+      
+      // 2. Get enhanced content
+      const enhanceRes = await fetch('/ai-enhance/product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shop,
+          productId: product.gid || `gid://shopify/Product/${product.productId}`,
+          languages: optimizedLanguages
+        })
+      });
+      
+      if (!enhanceRes.ok) {
+        const error = await enhanceRes.json();
+        throw new Error(error.error);
+      }
+      
+      const { results } = await enhanceRes.json();
+      
+      // 3. Update only bullets and FAQ via existing apply endpoint
+      for (const result of results) {
+        if (result.error) continue;
+        
+        // Get current SEO data
+        const currentSeoRes = await fetch(`/seo/generate?shop=${shop}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shop,
+            productId: product.gid || `gid://shopify/Product/${product.productId}`,
+            model: 'none',
+            language: result.language
+          })
+        });
+        
+        const currentData = await currentSeoRes.json();
+        
+        // Merge enhanced bullets and FAQ
+        const enhancedSeo = {
+          ...currentData.seo,
+          bullets: result.bullets,
+          faq: result.faq
+        };
+        
+        // Apply updates
+        await fetch(`/seo/apply?shop=${shop}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shop,
+            productId: product.gid || `gid://shopify/Product/${product.productId}`,
+            language: result.language,
+            seo: enhancedSeo,
+            options: {
+              updateTitle: false,
+              updateBody: false,
+              updateSeo: false,
+              updateBullets: true,
+              updateFaq: true
+            }
+          })
+        });
+      }
+      
+      toast.success('AI enhancement complete!');
+      onSuccess && onSuccess();
+      
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <button
+      onClick={handleEnhance}
+      disabled={loading}
+      className="inline-flex items-center px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+    >
+      {loading ? (
+        <>
+          <span className="animate-spin mr-1">⚡</span>
+          Enhancing...
+        </>
+      ) : (
+        <>
+          <span className="mr-1">🤖</span>
+          AI Enhance
+        </>
+      )}
+    </button>
+  );
+}
+
 export default function BulkEdit({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   
@@ -1123,6 +1245,34 @@ export default function BulkEdit({ shop: shopProp }) {
                   >
                     Generate AI Search Optimisation
                   </Button>
+                  
+                  {/* AI Enhance Button - показва се само ако има избрани продукти с оптимизация */}
+                  {(() => {
+                    if (selectedItems.length === 0 && !selectAllPages) return null;
+                    
+                    const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                    const hasOptimizedProducts = selectedProducts.some(p => 
+                      p.optimizationSummary?.optimizedLanguages?.length > 0
+                    );
+                    
+                    if (!hasOptimizedProducts) return null;
+                    
+                    // Вземаме първия продукт с оптимизация за пример
+                    const optimizedProduct = selectedProducts.find(p => 
+                      p.optimizationSummary?.optimizedLanguages?.length > 0
+                    );
+                    
+                    return (
+                      <AIEnhanceButton
+                        product={optimizedProduct}
+                        shop={shop}
+                        onSuccess={() => {
+                          // Refresh the product list after enhancement
+                          fetchProducts();
+                        }}
+                      />
+                    );
+                  })()}
                   
                   <Button
                     onClick={openDeleteModal}
