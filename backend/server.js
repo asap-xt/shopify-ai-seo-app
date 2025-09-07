@@ -77,6 +77,7 @@ import schemaRouter from './controllers/schemaController.js';
 import aiDiscoveryRouter from './controllers/aiDiscoveryController.js';
 import aiEndpointsRouter from './controllers/aiEndpointsController.js';
 import aiEnhanceRouter from './controllers/aiEnhanceController.js';
+import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 
 // Mount core routers
 app.use(authRouter);
@@ -91,6 +92,7 @@ app.use(schemaRouter);
 app.use('/api', aiDiscoveryRouter);
 app.use(aiEndpointsRouter);
 app.use('/ai-enhance', aiEnhanceRouter);
+app.use('/api/schema', advancedSchemaRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);

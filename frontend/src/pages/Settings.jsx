@@ -46,6 +46,10 @@ export default function Settings() {
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
   
+  // Advanced Schema Data state
+  const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
+  const [processingSchema, setProcessingSchema] = useState(false);
+  
   const shop = qs('shop', '');
 
   useEffect(() => {
@@ -54,6 +58,17 @@ export default function Settings() {
       return;
     }
     loadSettings();
+  }, [shop]);
+
+  // Load Advanced Schema settings
+  useEffect(() => {
+    if (!shop) return;
+    fetch(`/api/store/settings?shop=${shop}`)
+      .then(res => res.json())
+      .then(data => {
+        setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
+      })
+      .catch(err => console.error('Failed to load advanced schema settings:', err));
   }, [shop]);
 
   const loadSettings = async () => {
@@ -580,6 +595,33 @@ export default function Settings() {
           </BlockStack>
         </Box>
       </Card>
+
+      {/* Advanced Schema Data - Enterprise only */}
+      {settings?.plan === 'enterprise' && (
+        <Card sectioned title="Advanced Schema Data">
+          <BlockStack gap="300">
+            <Checkbox
+              label="Enable AI-generated Advanced Schema Data"
+              checked={advancedSchemaEnabled}
+              onChange={async (checked) => {
+                setAdvancedSchemaEnabled(checked);
+                if (checked) {
+                  setProcessingSchema(true);
+                  // Стартираме background процеса
+                  await fetch('/api/schema/generate-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ shop, enabled: true })
+                  });
+                  setProcessingSchema(false);
+                }
+              }}
+              helpText="Generates BreadcrumbList, FAQPage, WebPage and more structured data for better AI discovery"
+            />
+            {processingSchema && <Spinner size="small" />}
+          </BlockStack>
+        </Card>
+      )}
 
       {/* AI Discovery Features */}
       <Card>

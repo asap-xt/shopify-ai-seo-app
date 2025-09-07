@@ -90,7 +90,7 @@ const Collections = ({ shop }) => {
     current: 0,
     total: 0,
     currentItem: '',
-    results: null
+    results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
   });
   
   // Load models on mount
@@ -239,16 +239,15 @@ const Collections = ({ shop }) => {
     setShowLanguageModal(true);
   };
   
-  // AI Enhancement Modal Component
+  // AI Enhancement Modal - използва Polaris компоненти като другите модали
   const AIEnhanceModal = () => {
-    if (!showAIEnhanceModal) return null;
-    
     const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
     const selectedWithSEO = selectedCollections.filter(c => 
       c.optimizedLanguages?.length > 0
     );
     
     const handleStartEnhancement = async () => {
+      setShowAIEnhanceModal(false); // Затваряме първия модал
       setAIEnhanceProgress({
         processing: true,
         current: 0,
@@ -257,7 +256,7 @@ const Collections = ({ shop }) => {
         results: null
       });
       
-      const results = { successful: 0, failed: 0, skipped: 0 };
+      const results = { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 };
       
       for (let i = 0; i < selectedWithSEO.length; i++) {
         const collection = selectedWithSEO[i];
@@ -269,7 +268,6 @@ const Collections = ({ shop }) => {
         }));
         
         try {
-          // Check plan
           const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -279,10 +277,10 @@ const Collections = ({ shop }) => {
           const { eligible } = await eligibilityRes.json();
           if (!eligible) {
             results.skipped++;
+            results.skippedDueToPlan++;
             continue;
           }
           
-          // Enhance
           const enhanceRes = await fetch('/ai-enhance/collection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -293,12 +291,32 @@ const Collections = ({ shop }) => {
             })
           });
           
-          if (enhanceRes.ok) {
+          const enhanceData = await enhanceRes.json();
+          
+          // Apply the enhanced SEO
+          if (enhanceData.results && enhanceData.results.length > 0) {
+            await fetch('/api/seo/apply-collection-multi', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                shop,
+                collectionId: collection.id,
+                results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
+                  language: r.language,
+                  seo: {
+                    bullets: r.bullets,
+                    faq: r.faq
+                  }
+                })),
+                options: { updateMetafields: true }
+              })
+            });
             results.successful++;
           } else {
             results.failed++;
           }
-        } catch {
+        } catch (error) {
+          console.error('Enhancement error:', error);
           results.failed++;
         }
         
@@ -314,106 +332,130 @@ const Collections = ({ shop }) => {
         results
       }));
       
-      // Show toast
-      if (results.successful > 0) {
-        setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
-      }
+      setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
     };
     
     const handleClose = () => {
-      if (!aiEnhanceProgress.processing) {
-        setShowAIEnhanceModal(false);
-        setAIEnhanceProgress({
-          processing: false,
-          current: 0,
-          total: 0,
-          currentItem: '',
-          results: null
-        });
-        // Refresh collections list
+      setShowAIEnhanceModal(false);
+      setAIEnhanceProgress({
+        processing: false,
+        current: 0,
+        total: 0,
+        currentItem: '',
+        results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
+      });
+      if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
         loadCollections();
       }
     };
     
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-          <div className="flex justify-between items-center p-6 border-b">
-            <h2 className="text-xl font-semibold">AI Enhanced Search Optimisation</h2>
-            <button
-              onClick={handleClose}
-              disabled={aiEnhanceProgress.processing}
-              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-            >
-              ×
-            </button>
-          </div>
-          
-          <div className="p-6">
-            {!aiEnhanceProgress.processing && !aiEnhanceProgress.results && (
-              <>
-                <p className="mb-4">
-                  AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} collections.
-                </p>
-                <p className="text-sm text-gray-600 mb-6">
-                  Note: AI enhancement is only available for Growth Extra and Enterprise plans.
-                </p>
-                <div className="flex justify-end gap-4">
-                  <button
-                    onClick={() => setShowAIEnhanceModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleStartEnhancement}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Start AI Enhancement
-                  </button>
-                </div>
-              </>
-            )}
-            
-            {aiEnhanceProgress.processing && (
-              <div className="space-y-4">
-                <p className="text-center text-lg">
-                  Processing: {aiEnhanceProgress.currentItem}
-                </p>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100}%` }}
-                  />
-                </div>
-                <p className="text-center text-sm text-gray-600">
-                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} collections
-                </p>
-              </div>
-            )}
-            
-            {aiEnhanceProgress.results && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">AI Enhancement Results</h3>
-                <div className="space-y-2">
-                  <p>Successful: <span className="font-semibold text-green-600">{aiEnhanceProgress.results.successful}</span></p>
-                  <p>Failed: <span className="font-semibold text-red-600">{aiEnhanceProgress.results.failed}</span></p>
-                  <p>Skipped: <span className="font-semibold text-yellow-600">{aiEnhanceProgress.results.skipped}</span></p>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleClose}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+    // Първи модал - за потвърждение
+    if (!aiEnhanceProgress.processing && !aiEnhanceProgress.results) {
+      return (
+        <Modal
+          open={showAIEnhanceModal}
+          title="AI Enhanced Search Optimisation"
+          onClose={handleClose}
+          primaryAction={{
+            content: 'Start AI Enhancement',
+            onAction: handleStartEnhancement,
+          }}
+          secondaryActions={[
+            {
+              content: 'Cancel',
+              onAction: handleClose,
+            },
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <Text variant="bodyMd">
+                AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} collections.
+              </Text>
+              <Text variant="bodySm" tone="subdued">
+                Note: AI enhancement is only available for Growth Extra and Enterprise plans.
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    // Втори модал - прогрес
+    if (aiEnhanceProgress.processing) {
+      return (
+        <Modal
+          open={true}
+          title="Processing AI Enhancement"
+          onClose={() => {}}
+          noScroll
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="bodyMd">
+                Processing: {aiEnhanceProgress.currentItem}
+              </Text>
+              <ProgressBar progress={(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100} />
+              <Text variant="bodySm" tone="subdued">
+                {aiEnhanceProgress.current} of {aiEnhanceProgress.total} collections 
+                ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    // Трети модал - резултати
+    if (aiEnhanceProgress.results) {
+      return (
+        <Modal
+          open={true}
+          title="AI Enhancement Results"
+          onClose={handleClose}
+          primaryAction={{
+            content: 'Done',
+            onAction: handleClose,
+          }}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <InlineStack gap="400">
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="success">
+                    {aiEnhanceProgress.results.successful}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="critical">
+                    {aiEnhanceProgress.results.failed}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="info">
+                    {aiEnhanceProgress.results.skipped}
+                  </Text>
+                </Box>
+              </InlineStack>
+              
+              {/* Показваме съобщението само ако има skip заради план */}
+              {aiEnhanceProgress.results.skippedDueToPlan > 0 && (
+                <Box paddingBlockStart="300">
+                  <Text variant="bodySm" tone="subdued">
+                    AI enhancement is only available for Growth Extra and Enterprise plans.
+                  </Text>
+                </Box>
+              )}
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    return null;
   };
   
   // Generate SEO for selected collections

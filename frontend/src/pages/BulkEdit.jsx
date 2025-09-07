@@ -100,7 +100,7 @@ export default function BulkEdit({ shop: shopProp }) {
     current: 0,
     total: 0,
     currentItem: '',
-    results: null
+    results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
   });
   
   // Load models on mount
@@ -275,7 +275,7 @@ export default function BulkEdit({ shop: shopProp }) {
         results: null
       });
       
-      const results = { successful: 0, failed: 0, skipped: 0 };
+      const results = { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 };
       
       for (let i = 0; i < selectedWithSEO.length; i++) {
         const product = selectedWithSEO[i];
@@ -296,6 +296,7 @@ export default function BulkEdit({ shop: shopProp }) {
           const { eligible } = await eligibilityRes.json();
           if (!eligible) {
             results.skipped++;
+            results.skippedDueToPlan++;
             continue;
           }
           
@@ -360,7 +361,7 @@ export default function BulkEdit({ shop: shopProp }) {
         current: 0,
         total: 0,
         currentItem: '',
-        results: null
+        results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
       });
       if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
         loadProducts(1);
@@ -458,6 +459,15 @@ export default function BulkEdit({ shop: shopProp }) {
                   </Text>
                 </Box>
               </InlineStack>
+              
+              {/* Показваме съобщението само ако има skip заради план */}
+              {aiEnhanceProgress.results.skippedDueToPlan > 0 && (
+                <Box paddingBlockStart="300">
+                  <Text variant="bodySm" tone="subdued">
+                    AI enhancement is only available for Growth Extra and Enterprise plans.
+                  </Text>
+                </Box>
+              )}
             </BlockStack>
           </Modal.Section>
         </Modal>

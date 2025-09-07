@@ -1,0 +1,812 @@
+// backend/controllers/advancedSchemaController.js
+import express from 'express';
+import { requireShop, shopGraphQL } from './seoController.js';
+import Subscription from '../db/Subscription.js';
+import Product from '../db/Product.js';
+
+const router = express.Router();
+
+// Constants
+const AI_MODEL = 'google/gemini-2.5-flash-lite'; // Важно: flash-lite, не flash
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+
+// FAQ Fallbacks за липсваща информация
+const FAQ_FALLBACKS = {
+  return_policy: "For detailed information about our return and refund policy, please visit our returns page or contact customer support.",
+  shipping: "Shipping times vary by location and product. Please check the shipping information at checkout or contact us for specific details.",
+  languages: "Our store supports multiple languages. Use the language selector to switch between available options.",
+  payment: "We accept various payment methods. The available options will be displayed at checkout.",
+  wholesale: "For wholesale or bulk pricing inquiries, please contact our sales team directly.",
+  support: "You can reach our customer support team through the contact form on our website or via email.",
+  authenticity: "We guarantee the authenticity of all our products. For specific certifications or details, please contact us.",
+  privacy: "Our privacy policy details how we collect, use, and protect your personal information. You can find it linked in our website footer."
+};
+
+// Helper за OpenRouter API calls
+async function generateWithAI(prompt, systemPrompt) {
+  try {
+    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        response_format: { type: 'json_object' }
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter error: ${error}`);
+    }
+    
+    const data = await response.json();
+    return JSON.parse(data.choices[0].message.content);
+  } catch (error) {
+    console.error('[SCHEMA] AI generation error:', error);
+    throw error;
+  }
+}
+
+// Валидация на AI отговори
+function validateAIResponse(response, knownFacts) {
+  // Проверяваме за често срещани "hallucinations"
+  const suspiciousPatterns = [
+    { pattern: /\d+\s*day[s]?\s*(money\s*back|return)/i, replacement: 'our return policy' },
+    { pattern: /free\s*shipping\s*(over|on orders above)\s*\$?\d+/i, replacement: 'shipping terms (see checkout for details)' },
+    { pattern: /24\/7\s*(customer\s*)?support/i, replacement: 'customer support during business hours' },
+    { pattern: /\d+\s*year[s]?\s*warranty/i, replacement: 'product warranty (terms vary by product)' },
+    { pattern: /\d+%\s*discount/i, replacement: 'special offers when available' }
+  ];
+  
+  let validated = response;
+  
+  for (const { pattern, replacement } of suspiciousPatterns) {
+    if (pattern.test(response)) {
+      console.log(`[SCHEMA] Replacing suspicious pattern: ${pattern}`);
+      validated = validated.replace(pattern, replacement);
+    }
+  }
+  
+  return validated;
+}
+
+// Load shop context
+async function loadShopContext(shop) {
+  const contextQuery = `
+    query {
+      shop {
+        id
+        name
+        description
+        contactEmail
+        currencyCode
+        primaryDomain {
+          url
+        }
+        privacyPolicy {
+          url
+        }
+        refundPolicy {
+          url  
+        }
+        shippingPolicy {
+          url
+        }
+        termsOfService {
+          url
+        }
+        paymentSettings {
+          supportedDigitalWallets
+          acceptedCardBrands
+        }
+      }
+      locales {
+        published
+        primary
+        locale
+      }
+    }
+  `;
+  
+  try {
+    const data = await shopGraphQL(shop, contextQuery);
+    return {
+      shop: data.shop,
+      locales: data.locales?.filter(l => l.published) || []
+    };
+  } catch (error) {
+    console.error('[SCHEMA] Failed to load shop context:', error);
+    return null;
+  }
+}
+
+// Generate site-wide FAQ
+async function generateSiteFAQ(shop, shopContext) {
+  const shopUrl = shopContext.shop.primaryDomain?.url || `https://${shop}`;
+  const languages = shopContext.locales.map(l => l.locale);
+  const primaryLanguage = shopContext.locales.find(l => l.primary)?.locale || 'en';
+  
+  const fixedQuestions = [
+    "What is your return and refund policy?",
+    "How long does shipping typically take?", 
+    "Do you offer international shipping?",
+    "What payment methods do you accept?",
+    "How can I track my order?",
+    "Do you offer bulk or wholesale pricing?",
+    "How do I contact customer support?",
+    "What languages is your store available in?",
+    "Are your products authentic/genuine?",
+    "What is your privacy policy?"
+  ];
+  
+  const systemPrompt = `You are generating FAQ answers for a real e-commerce store.
+CRITICAL RULES:
+- Base answers ONLY on provided information
+- If information is missing, use the provided fallback text
+- Do NOT make up specific policies, prices, timeframes, or percentages
+- Be helpful but truthful
+- Include the actual store URL when relevant
+- For languages question, use EXACTLY the provided language list
+Output JSON with structure: { "faqs": [{"q": "question", "a": "answer"}] }`;
+  
+  const prompt = `Generate FAQ answers for this REAL store:
+Store Name: ${shopContext.shop.name}
+Store URL: ${shopUrl}
+Available Languages: ${languages.join(', ')} (Primary: ${primaryLanguage})
+Currency: ${shopContext.shop.currencyCode}
+${shopContext.shop.description ? `Description: ${shopContext.shop.description}` : ''}
+${shopContext.shop.contactEmail ? `Contact Email: ${shopContext.shop.contactEmail}` : ''}
+${shopContext.shop.refundPolicy?.url ? `Refund Policy URL: ${shopUrl}/policies/refund-policy` : ''}
+${shopContext.shop.shippingPolicy?.url ? `Shipping Policy URL: ${shopUrl}/policies/shipping-policy` : ''}
+${shopContext.shop.privacyPolicy?.url ? `Privacy Policy URL: ${shopUrl}/policies/privacy-policy` : ''}
+
+Payment Methods: ${shopContext.shop.paymentSettings?.acceptedCardBrands?.join(', ') || 'Various payment methods'}
+Digital Wallets: ${shopContext.shop.paymentSettings?.supportedDigitalWallets?.join(', ') || 'Multiple options'}
+
+Questions: ${JSON.stringify(fixedQuestions)}
+
+IMPORTANT: For the languages question, respond with: "Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website."
+
+Use these fallbacks when specific information is missing:
+${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
+  
+  try {
+    const result = await generateWithAI(prompt, systemPrompt);
+    
+    // Validate and fix language answer
+    const validated = result.faqs.map(faq => {
+      if (faq.q.toLowerCase().includes('languages')) {
+        faq.a = `Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website.`;
+      } else {
+        faq.a = validateAIResponse(faq.a, { shopUrl, languages });
+      }
+      return faq;
+    });
+    
+    // Create FAQ schema
+    const faqSchema = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": validated.map(item => ({
+        "@type": "Question",
+        "name": item.q,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": item.a
+        }
+      }))
+    };
+    
+    // Save as shop metafield
+    const mutation = `
+      mutation SetFAQ($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: shopContext.shop.id,
+        namespace: "advanced_schema",
+        key: "site_faq",
+        type: "json",
+        value: JSON.stringify(faqSchema)
+      }]
+    };
+    
+    const saveResult = await shopGraphQL(shop, mutation, variables);
+    
+    if (saveResult.metafieldsSet?.userErrors?.length > 0) {
+      console.error('[SCHEMA] Failed to save FAQ:', saveResult.metafieldsSet.userErrors);
+    }
+    
+    return faqSchema;
+    
+  } catch (error) {
+    console.error('[SCHEMA] FAQ generation failed:', error);
+    throw error;
+  }
+}
+
+// Generate product schemas
+async function generateProductSchemas(shop, productDoc) {
+  const productGid = `gid://shopify/Product/${productDoc.productId}`;
+  
+  // Get full product data
+  const query = `
+    query GetProduct($id: ID!) {
+      product(id: $id) {
+        id
+        title
+        handle
+        vendor
+        productType
+        tags
+        collections(first: 5) {
+          edges {
+            node {
+              title
+              handle
+            }
+          }
+        }
+        images(first: 5) {
+          edges {
+            node {
+              url
+              altText
+            }
+          }
+        }
+        priceRangeV2 {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+          maxVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+      }
+    }
+  `;
+  
+  const productData = await shopGraphQL(shop, query, { id: productGid });
+  const product = productData.product;
+  
+  if (!product) {
+    console.error(`[SCHEMA] Product not found: ${productGid}`);
+    return;
+  }
+  
+  // Get SEO data for all languages
+  const languages = productDoc.seoStatus?.languages || [];
+  const schemas = [];
+  
+  for (const lang of languages) {
+    if (!lang.optimized) continue;
+    
+    // Get SEO metafield
+    const metafieldQuery = `
+      query GetMetafield($productId: ID!, $key: String!) {
+        product(id: $productId) {
+          metafield(namespace: "seo_ai", key: $key) {
+            value
+          }
+        }
+      }
+    `;
+    
+    const mfData = await shopGraphQL(shop, metafieldQuery, { 
+      productId: productGid, 
+      key: `seo__${lang.code}` 
+    });
+    
+    if (!mfData.product?.metafield?.value) continue;
+    
+    const seoData = JSON.parse(mfData.product.metafield.value);
+    
+    // Generate schemas for this language
+    const langSchemas = await generateLangSchemas(product, seoData, shop, lang.code);
+    schemas.push({ language: lang.code, schemas: langSchemas });
+  }
+  
+  // Save all schemas
+  for (const { language, schemas: langSchemas } of schemas) {
+    const saveMutation = `
+      mutation SetSchema($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: productGid,
+        namespace: "advanced_schema",
+        key: `schemas_${language}`,
+        type: "json",
+        value: JSON.stringify(langSchemas)
+      }]
+    };
+    
+    await shopGraphQL(shop, saveMutation, variables);
+  }
+}
+
+// Generate schemas for specific language
+async function generateLangSchemas(product, seoData, shop, language) {
+  const shopUrl = `https://${shop}`;
+  const productUrl = `${shopUrl}/products/${product.handle}`;
+  
+  const baseSchemas = [
+    // BreadcrumbList
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": shopUrl
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": product.collections?.edges?.[0]?.node?.title || product.productType || "Products",
+          "item": `${shopUrl}/collections/${product.collections?.edges?.[0]?.node?.handle || 'all'}`
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": seoData.title,
+          "item": productUrl
+        }
+      ]
+    },
+    
+    // WebPage
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "@id": `${productUrl}#webpage`,
+      "url": productUrl,
+      "name": seoData.title,
+      "description": seoData.metaDescription,
+      "inLanguage": language,
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": `${shopUrl}#website`,
+        "url": shopUrl,
+        "name": shop.split('.')[0]
+      }
+    }
+  ];
+  
+  // FAQPage if FAQ exists
+  if (seoData.faq && seoData.faq.length > 0) {
+    baseSchemas.push({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": seoData.faq.map(item => ({
+        "@type": "Question",
+        "name": item.q,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": item.a
+        }
+      }))
+    });
+  }
+  
+  // ItemList for features
+  if (seoData.bullets && seoData.bullets.length > 0) {
+    baseSchemas.push({
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": `Key Features - ${seoData.title}`,
+      "itemListElement": seoData.bullets.map((bullet, index) => ({
+        "@type": "ListItem",
+        "position": index + 1,
+        "name": bullet
+      }))
+    });
+  }
+  
+  // Enhanced Product schema
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "@id": `${productUrl}#product`,
+    "name": seoData.title,
+    "description": seoData.metaDescription,
+    "url": productUrl,
+    "image": product.images?.edges?.map(e => e.node.url) || [],
+    "brand": {
+      "@type": "Brand",
+      "name": product.vendor
+    },
+    "offers": {
+      "@type": "AggregateOffer",
+      "lowPrice": product.priceRangeV2?.minVariantPrice?.amount,
+      "highPrice": product.priceRangeV2?.maxVariantPrice?.amount,
+      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode,
+      "availability": "https://schema.org/InStock"
+    }
+  };
+  
+  if (seoData.bullets && seoData.bullets.length > 0) {
+    productSchema.additionalProperty = seoData.bullets.map((bullet, i) => ({
+      "@type": "PropertyValue",
+      "name": `Feature ${i + 1}`,
+      "value": bullet
+    }));
+  }
+  
+  baseSchemas.push(productSchema);
+  
+  return baseSchemas;
+}
+
+// Install Script Tag for auto-injection
+async function installScriptTag(shop) {
+  try {
+    // Първо проверяваме дали вече има script tag
+    const checkQuery = `
+      query {
+        scriptTags(first: 100) {
+          edges {
+            node {
+              id
+              src
+            }
+          }
+        }
+      }
+    `;
+    
+    const existing = await shopGraphQL(shop, checkQuery);
+    const ourScriptTag = existing.scriptTags?.edges?.find(edge => 
+      edge.node.src.includes('/api/schema/auto-inject.js')
+    );
+    
+    if (ourScriptTag) {
+      console.log('[SCHEMA] Script tag already installed');
+      return;
+    }
+    
+    // Инсталираме нов script tag
+    const mutation = `
+      mutation CreateScriptTag($input: ScriptTagInput!) {
+        scriptTagCreate(input: $input) {
+          scriptTag {
+            id
+            src
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      input: {
+        src: `${process.env.APP_URL}/api/schema/auto-inject.js?shop=${shop}`,
+        displayScope: "ONLINE_STORE"
+      }
+    };
+    
+    const result = await shopGraphQL(shop, mutation, variables);
+    
+    if (result.scriptTagCreate?.userErrors?.length > 0) {
+      throw new Error(result.scriptTagCreate.userErrors[0].message);
+    }
+    
+    console.log('[SCHEMA] Script tag installed successfully');
+    
+  } catch (error) {
+    console.error('[SCHEMA] Failed to install script tag:', error);
+    throw error;
+  }
+}
+
+// Main background process
+async function generateAllSchemas(shop) {
+  console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
+  
+  try {
+    // Инсталираме script tag
+    await installScriptTag(shop);
+    
+    // Load shop context
+    const shopContext = await loadShopContext(shop);
+    if (!shopContext) {
+      throw new Error('Failed to load shop context');
+    }
+    
+    // Generate site-wide FAQ
+    console.log('[SCHEMA] Generating site FAQ...');
+    await generateSiteFAQ(shop, shopContext);
+    
+    // Get all products with SEO
+    const products = await Product.find({
+      shop,
+      'seoStatus.optimized': true
+    }).limit(500);
+    
+    console.log(`[SCHEMA] Processing ${products.length} products...`);
+    
+    // Process in batches
+    const batchSize = 10;
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, Math.min(i + batchSize, products.length));
+      
+      await Promise.all(batch.map(async (product) => {
+        try {
+          await generateProductSchemas(shop, product);
+        } catch (err) {
+          console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
+        }
+      }));
+      
+      console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
+    }
+    
+    console.log(`[SCHEMA] Completed schema generation for ${shop}`);
+    
+  } catch (error) {
+    console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
+    throw error;
+  }
+}
+
+// Routes
+
+// POST /api/schema/generate-all - Start background generation
+router.post('/generate-all', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Check Enterprise plan
+    const subscription = await Subscription.findOne({ shop });
+    if (subscription?.plan !== 'enterprise') {
+      return res.status(403).json({ 
+        error: 'Advanced Schema Data requires Enterprise plan',
+        currentPlan: subscription?.plan || 'none'
+      });
+    }
+    
+    // Return immediately
+    res.json({ 
+      success: true, 
+      message: 'Advanced schema generation started in background' 
+    });
+    
+    // Start background process
+    generateAllSchemas(shop).catch(err => {
+      console.error('[SCHEMA] Background generation failed:', err);
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/schema/status - Check generation status
+router.get('/status', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Check if FAQ exists
+    const faqQuery = `
+      query {
+        shop {
+          metafield(namespace: "advanced_schema", key: "site_faq") {
+            value
+          }
+        }
+      }
+    `;
+    
+    const faqData = await shopGraphQL(shop, faqQuery);
+    const hasFAQ = !!faqData.shop?.metafield?.value;
+    
+    // Check product count
+    const productsWithSchema = await Product.countDocuments({
+      shop,
+      'advancedSchema.generated': true
+    });
+    
+    res.json({
+      enabled: true,
+      hasSiteFAQ: hasFAQ,
+      productsWithSchema
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/schema/site-faq - Get site FAQ
+router.get('/site-faq', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    const query = `
+      query {
+        shop {
+          metafield(namespace: "advanced_schema", key: "site_faq") {
+            value
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query);
+    
+    if (!data.shop?.metafield?.value) {
+      return res.status(404).json({ error: 'FAQ not found' });
+    }
+    
+    res.json(JSON.parse(data.shop.metafield.value));
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Public endpoint за автоматичното вмъкване
+router.get('/auto-inject.js', async (req, res) => {
+  const { shop } = req.query;
+  
+  if (!shop) {
+    return res.status(400).send('// Shop parameter required');
+  }
+  
+  // Връщаме JavaScript който проверява за продуктова страница и зарежда schemas
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+(function() {
+  // Проверяваме дали сме на продуктова страница
+  if (window.location.pathname.includes('/products/')) {
+    // Извличаме product handle от URL
+    const pathParts = window.location.pathname.split('/');
+    const productIndex = pathParts.indexOf('products');
+    const handle = pathParts[productIndex + 1];
+    
+    if (handle) {
+      // Зареждаме schemas за този продукт
+      const lang = document.documentElement.lang || 'en';
+      const script = document.createElement('script');
+      script.src = '${process.env.APP_URL}/api/schema/product-schemas?shop=${shop}&handle=' + handle + '&lang=' + lang;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }
+  
+  // Зареждаме site-wide FAQ на всички страници
+  const faqScript = document.createElement('script');
+  faqScript.src = '${process.env.APP_URL}/api/schema/site-faq-script?shop=${shop}';
+  faqScript.async = true;
+  document.head.appendChild(faqScript);
+})();
+  `);
+});
+
+// Endpoint за product schemas
+router.get('/product-schemas', async (req, res) => {
+  const { shop, handle, lang = 'en' } = req.query;
+  
+  if (!shop || !handle) {
+    return res.status(400).send('// Missing parameters');
+  }
+  
+  try {
+    // Get product by handle
+    const query = `
+      query GetProductByHandle($handle: String!) {
+        productByHandle(handle: $handle) {
+          id
+          metafield(namespace: "advanced_schema", key: "schemas_${lang}") {
+            value
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query, { handle });
+    
+    if (!data.productByHandle?.metafield?.value) {
+      return res.status(404).send('// Schema not found');
+    }
+    
+    const schemas = JSON.parse(data.productByHandle.metafield.value);
+    
+    // Връщаме script който добавя schemas
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(`
+(function() {
+  var script = document.createElement('script');
+  script.type = 'application/ld+json';
+  script.textContent = ${JSON.stringify(JSON.stringify(schemas))};
+  document.head.appendChild(script);
+})();
+    `);
+    
+  } catch (error) {
+    res.status(500).send(`// Error: ${error.message}`);
+  }
+});
+
+// Site FAQ script
+router.get('/site-faq-script', async (req, res) => {
+  const { shop } = req.query;
+  
+  if (!shop) {
+    return res.status(400).send('// Shop required');
+  }
+  
+  try {
+    const query = `
+      query {
+        shop {
+          metafield(namespace: "advanced_schema", key: "site_faq") {
+            value
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query);
+    
+    if (data.shop?.metafield?.value) {
+      const faq = data.shop.metafield.value;
+      
+      res.setHeader('Content-Type', 'application/javascript');
+      res.send(`
+(function() {
+  var script = document.createElement('script');
+  script.type = 'application/ld+json';
+  script.textContent = ${JSON.stringify(faq)};
+  document.head.appendChild(script);
+})();
+      `);
+    } else {
+      res.send('// No FAQ found');
+    }
+    
+  } catch (error) {
+    res.status(500).send(`// Error: ${error.message}`);
+  }
+});
+
+export default router;
