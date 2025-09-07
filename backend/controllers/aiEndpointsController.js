@@ -421,7 +421,7 @@ router.get('/ai/welcome', async (req, res) => {
       ${settings?.features?.aiSitemap ? `
       <div class="endpoint">
         <h3>AI-Optimized Sitemap <span class="badge">Active</span></h3>
-        <a href="/ai/sitemap.xml?shop=${shop}" target="_blank">/ai/sitemap.xml?shop=${shop}</a>
+        <a href="/ai/sitemap-feed.xml?shop=${shop}" target="_blank">/ai/sitemap-feed.xml?shop=${shop}</a>
         <p>XML sitemap with AI hints and priority scoring</p>
       </div>
       ` : ''}
@@ -693,6 +693,51 @@ router.get('/ai/schema-data.json', async (req, res) => {
   } catch (error) {
     console.error('Error in schema-data.json:', error);
     res.status(500).json({ error: 'Failed to generate schema data feed' });
+  }
+});
+
+// AI Sitemap Feed endpoint - преименуван и опростен
+router.get('/ai/sitemap-feed.xml', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).send('Missing shop parameter');
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).send('Shop not found');
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    if (!settings?.features?.aiSitemap) {
+      return res.status(403).send('AI Sitemap feature is not enabled');
+    }
+
+    // Извикваме същия endpoint който генерира sitemap
+    const sitemapResponse = await fetch(
+      `${process.env.APP_URL || 'http://localhost:8080'}/api/sitemap/generate?shop=${shop}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`
+        }
+      }
+    );
+
+    if (!sitemapResponse.ok) {
+      throw new Error('Failed to fetch sitemap');
+    }
+
+    const sitemapXML = await sitemapResponse.text();
+    
+    res.type('application/xml');
+    res.send(sitemapXML);
+
+  } catch (error) {
+    console.error('Error in sitemap-feed.xml:', error);
+    res.status(500).send('<?xml version="1.0" encoding="UTF-8"?><error>Failed to load sitemap</error>');
   }
 });
 

@@ -666,8 +666,8 @@ export default function Settings() {
                 {settings?.features?.aiSitemap && (
                   <InlineStack align="space-between">
                     <Text>AI Sitemap:</Text>
-                    <Link url={`/ai/sitemap.xml?shop=${shop}`} external>
-                      /ai/sitemap.xml
+                    <Link url={`/ai/sitemap-feed.xml?shop=${shop}`} external>
+                      /ai/sitemap-feed.xml
                     </Link>
                   </InlineStack>
                 )}
