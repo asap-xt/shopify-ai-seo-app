@@ -206,20 +206,24 @@ app.get('/debug/routes', (req, res) => {
 app.post('/test/set-plan', async (req, res) => {
   const { shop, plan } = req.body;
   
+  console.log('[TEST-PLAN] Request:', { shop, plan });
+  
   if (!shop || !plan) {
     return res.status(400).json({ error: 'Missing shop or plan' });
   }
   
   try {
-    // Import Subscription model
     const { default: Subscription } = await import('./db/Subscription.js');
     
-    // Създаваме или обновяваме subscription
-    await Subscription.findOneAndUpdate(
+    // Нормализираме плана
+    const normalizedPlan = plan === 'growth_extra' ? 'growth extra' : plan;
+    console.log('[TEST-PLAN] Normalized plan:', normalizedPlan);
+    
+    const result = await Subscription.findOneAndUpdate(
       { shop },
       {
         shop,
-        plan: plan === 'growth_extra' ? 'growth extra' : plan,
+        plan: normalizedPlan,
         startedAt: new Date(),
         queryLimit: 
           plan === 'enterprise' ? 10000 :
@@ -235,19 +239,27 @@ app.post('/test/set-plan', async (req, res) => {
       { upsert: true, new: true }
     );
     
+    console.log('[TEST-PLAN] Database result:', {
+      shop: result.shop,
+      plan: result.plan,
+      queryLimit: result.queryLimit,
+      productLimit: result.productLimit
+    });
+    
     // Изчистваме кеша
     try {
       const { default: aiDiscoveryService } = await import('./services/aiDiscoveryService.js');
       if (aiDiscoveryService?.cache) {
         aiDiscoveryService.cache.clear();
+        console.log('[TEST-PLAN] Cache cleared successfully');
       }
     } catch (e) {
-      console.log('Cache clear failed:', e.message);
+      console.log('[TEST-PLAN] Cache clear failed:', e.message);
     }
     
-    res.json({ success: true, message: `Plan set to ${plan}` });
+    res.json({ success: true, message: `Plan set to ${plan}`, debug: { normalizedPlan, result } });
   } catch (error) {
-    console.error('Error setting plan:', error);
+    console.error('[TEST-PLAN] Error setting plan:', error);
     res.status(500).json({ error: 'Failed to set plan' });
   }
 });
