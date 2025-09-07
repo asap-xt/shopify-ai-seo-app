@@ -24,127 +24,6 @@ import {
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 
-// AI Enhancement Button Component
-export function AIEnhanceButton({ product, shop, onSuccess }) {
-  const [loading, setLoading] = useState(false);
-  
-  const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
-  
-  if (optimizedLanguages.length === 0) {
-    return null; // No basic SEO yet
-  }
-  
-  const handleEnhance = async () => {
-    setLoading(true);
-    
-    try {
-      // 1. Check eligibility
-      const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop })
-      });
-      
-      const { eligible, message } = await eligibilityRes.json();
-      
-      if (!eligible) {
-        toast.error(message);
-        return;
-      }
-      
-      // 2. Get enhanced content
-      const enhanceRes = await fetch('/ai-enhance/product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shop,
-          productId: product.gid || `gid://shopify/Product/${product.productId}`,
-          languages: optimizedLanguages
-        })
-      });
-      
-      if (!enhanceRes.ok) {
-        const error = await enhanceRes.json();
-        throw new Error(error.error);
-      }
-      
-      const { results } = await enhanceRes.json();
-      
-      // 3. Update only bullets and FAQ via existing apply endpoint
-      for (const result of results) {
-        if (result.error) continue;
-        
-        // Get current SEO data
-        const currentSeoRes = await fetch(`/seo/generate?shop=${shop}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: product.gid || `gid://shopify/Product/${product.productId}`,
-            model: 'none',
-            language: result.language
-          })
-        });
-        
-        const currentData = await currentSeoRes.json();
-        
-        // Merge enhanced bullets and FAQ
-        const enhancedSeo = {
-          ...currentData.seo,
-          bullets: result.bullets,
-          faq: result.faq
-        };
-        
-        // Apply updates
-        await fetch(`/seo/apply?shop=${shop}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: product.gid || `gid://shopify/Product/${product.productId}`,
-            language: result.language,
-            seo: enhancedSeo,
-            options: {
-              updateTitle: false,
-              updateBody: false,
-              updateSeo: false,
-              updateBullets: true,
-              updateFaq: true
-            }
-          })
-        });
-      }
-      
-      toast.success('AI enhancement complete!');
-      onSuccess && onSuccess();
-      
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  return (
-    <button
-      onClick={handleEnhance}
-      disabled={loading}
-      className="inline-flex items-center px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-    >
-      {loading ? (
-        <>
-          <span className="animate-spin mr-1">⚡</span>
-          Enhancing...
-        </>
-      ) : (
-        <>
-          <span className="mr-1">🤖</span>
-          AI Enhance
-        </>
-      )}
-    </button>
-  );
-}
 
 const Collections = ({ shop }) => {
   // Collection list state
@@ -203,6 +82,16 @@ const Collections = ({ shop }) => {
   
   // Toast
   const [toast, setToast] = useState('');
+  
+  // AI Enhancement Modal state
+  const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
+  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
+    processing: false,
+    current: 0,
+    total: 0,
+    currentItem: '',
+    results: null
+  });
   
   // Load models on mount
   useEffect(() => {
@@ -348,6 +237,183 @@ const Collections = ({ shop }) => {
       return;
     }
     setShowLanguageModal(true);
+  };
+  
+  // AI Enhancement Modal Component
+  const AIEnhanceModal = () => {
+    if (!showAIEnhanceModal) return null;
+    
+    const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
+    const selectedWithSEO = selectedCollections.filter(c => 
+      c.optimizedLanguages?.length > 0
+    );
+    
+    const handleStartEnhancement = async () => {
+      setAIEnhanceProgress({
+        processing: true,
+        current: 0,
+        total: selectedWithSEO.length,
+        currentItem: '',
+        results: null
+      });
+      
+      const results = { successful: 0, failed: 0, skipped: 0 };
+      
+      for (let i = 0; i < selectedWithSEO.length; i++) {
+        const collection = selectedWithSEO[i];
+        
+        setAIEnhanceProgress(prev => ({
+          ...prev,
+          current: i,
+          currentItem: collection.title
+        }));
+        
+        try {
+          // Check plan
+          const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shop })
+          });
+          
+          const { eligible } = await eligibilityRes.json();
+          if (!eligible) {
+            results.skipped++;
+            continue;
+          }
+          
+          // Enhance
+          const enhanceRes = await fetch('/ai-enhance/collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shop,
+              collectionId: collection.id,
+              languages: collection.optimizedLanguages
+            })
+          });
+          
+          if (enhanceRes.ok) {
+            results.successful++;
+          } else {
+            results.failed++;
+          }
+        } catch {
+          results.failed++;
+        }
+        
+        setAIEnhanceProgress(prev => ({
+          ...prev,
+          current: i + 1
+        }));
+      }
+      
+      setAIEnhanceProgress(prev => ({
+        ...prev,
+        processing: false,
+        results
+      }));
+      
+      // Show toast
+      if (results.successful > 0) {
+        setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
+      }
+    };
+    
+    const handleClose = () => {
+      if (!aiEnhanceProgress.processing) {
+        setShowAIEnhanceModal(false);
+        setAIEnhanceProgress({
+          processing: false,
+          current: 0,
+          total: 0,
+          currentItem: '',
+          results: null
+        });
+        // Refresh collections list
+        loadCollections();
+      }
+    };
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          <div className="flex justify-between items-center p-6 border-b">
+            <h2 className="text-xl font-semibold">AI Enhanced Search Optimisation</h2>
+            <button
+              onClick={handleClose}
+              disabled={aiEnhanceProgress.processing}
+              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="p-6">
+            {!aiEnhanceProgress.processing && !aiEnhanceProgress.results && (
+              <>
+                <p className="mb-4">
+                  AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} collections.
+                </p>
+                <p className="text-sm text-gray-600 mb-6">
+                  Note: AI enhancement is only available for Growth Extra and Enterprise plans.
+                </p>
+                <div className="flex justify-end gap-4">
+                  <button
+                    onClick={() => setShowAIEnhanceModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleStartEnhancement}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Start AI Enhancement
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {aiEnhanceProgress.processing && (
+              <div className="space-y-4">
+                <p className="text-center text-lg">
+                  Processing: {aiEnhanceProgress.currentItem}
+                </p>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100}%` }}
+                  />
+                </div>
+                <p className="text-center text-sm text-gray-600">
+                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} collections
+                </p>
+              </div>
+            )}
+            
+            {aiEnhanceProgress.results && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">AI Enhancement Results</h3>
+                <div className="space-y-2">
+                  <p>Successful: <span className="font-semibold text-green-600">{aiEnhanceProgress.results.successful}</span></p>
+                  <p>Failed: <span className="font-semibold text-red-600">{aiEnhanceProgress.results.failed}</span></p>
+                  <p>Skipped: <span className="font-semibold text-yellow-600">{aiEnhanceProgress.results.skipped}</span></p>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleClose}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
   
   // Generate SEO for selected collections
@@ -1065,31 +1131,24 @@ const Collections = ({ shop }) => {
                 Generate AI Search Optimisation
               </Button>
               
-              {/* AI Enhance Button - показва се само ако има избрани колекции с оптимизация */}
+              {/* AI Enhanced Search Optimisation Button */}
               {(() => {
                 if (selectedItems.length === 0 && !selectAllPages) return null;
                 
-                const selectedCollections = collections.filter(c => selectedItems.includes(c._id));
+                const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
                 const hasOptimizedCollections = selectedCollections.some(c => 
-                  c.optimizationSummary?.optimizedLanguages?.length > 0
+                  c.optimizedLanguages?.length > 0
                 );
                 
                 if (!hasOptimizedCollections) return null;
                 
-                // Вземаме първата колекция с оптимизация за пример
-                const optimizedCollection = selectedCollections.find(c => 
-                  c.optimizationSummary?.optimizedLanguages?.length > 0
-                );
-                
                 return (
-                  <AIEnhanceButton
-                    product={optimizedCollection}
-                    shop={shop}
-                    onSuccess={() => {
-                      // Refresh the collection list after enhancement
-                      fetchCollections();
-                    }}
-                  />
+                  <Button
+                    onClick={() => setShowAIEnhanceModal(true)}
+                    disabled={selectedItems.length === 0 && !selectAllPages}
+                  >
+                    AI Enhanced Search Optimisation
+                  </Button>
                 );
               })()}
               
@@ -1199,6 +1258,7 @@ const Collections = ({ shop }) => {
       {bulkDeleteModal}
       {confirmDeleteModal}
       {deleteProgressModal}
+      {AIEnhanceModal()}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

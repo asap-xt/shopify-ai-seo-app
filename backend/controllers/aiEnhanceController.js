@@ -98,7 +98,7 @@ router.post('/product', async (req, res) => {
     }
     
     const results = [];
-    const model = 'google/gemini-2.5-flash'; // Правилният модел!
+    const model = 'google/gemini-2.5-flash-lite';
     
     for (const language of languages) {
       console.log(`🔍 [DEBUG] Processing language: ${language}`);
@@ -211,7 +211,7 @@ router.post('/collection', async (req, res) => {
     }
     
     const results = [];
-    const model = 'google/gemini-2.5-flash';
+    const model = 'google/gemini-2.5-flash-lite';
     
     for (const language of languages) {
       try {

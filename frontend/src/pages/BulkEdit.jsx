@@ -43,127 +43,6 @@ const extractNumericId = (gid) => {
   return match ? match[1] : gid;
 };
 
-// AI Enhancement Button Component
-export function AIEnhanceButton({ product, shop, onSuccess }) {
-  const [loading, setLoading] = useState(false);
-  
-  const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
-  
-  if (optimizedLanguages.length === 0) {
-    return null; // No basic SEO yet
-  }
-  
-  const handleEnhance = async () => {
-    setLoading(true);
-    
-    try {
-      // 1. Check eligibility
-      const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop })
-      });
-      
-      const { eligible, message } = await eligibilityRes.json();
-      
-      if (!eligible) {
-        toast.error(message);
-        return;
-      }
-      
-      // 2. Get enhanced content
-      const enhanceRes = await fetch('/ai-enhance/product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shop,
-          productId: product.gid || `gid://shopify/Product/${product.productId}`,
-          languages: optimizedLanguages
-        })
-      });
-      
-      if (!enhanceRes.ok) {
-        const error = await enhanceRes.json();
-        throw new Error(error.error);
-      }
-      
-      const { results } = await enhanceRes.json();
-      
-      // 3. Update only bullets and FAQ via existing apply endpoint
-      for (const result of results) {
-        if (result.error) continue;
-        
-        // Get current SEO data
-        const currentSeoRes = await fetch(`/seo/generate?shop=${shop}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: product.gid || `gid://shopify/Product/${product.productId}`,
-            model: 'none',
-            language: result.language
-          })
-        });
-        
-        const currentData = await currentSeoRes.json();
-        
-        // Merge enhanced bullets and FAQ
-        const enhancedSeo = {
-          ...currentData.seo,
-          bullets: result.bullets,
-          faq: result.faq
-        };
-        
-        // Apply updates
-        await fetch(`/seo/apply?shop=${shop}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shop,
-            productId: product.gid || `gid://shopify/Product/${product.productId}`,
-            language: result.language,
-            seo: enhancedSeo,
-            options: {
-              updateTitle: false,
-              updateBody: false,
-              updateSeo: false,
-              updateBullets: true,
-              updateFaq: true
-            }
-          })
-        });
-      }
-      
-      toast.success('AI enhancement complete!');
-      onSuccess && onSuccess();
-      
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  return (
-    <button
-      onClick={handleEnhance}
-      disabled={loading}
-      className="inline-flex items-center px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-    >
-      {loading ? (
-        <>
-          <span className="animate-spin mr-1">⚡</span>
-          Enhancing...
-        </>
-      ) : (
-        <>
-          <span className="mr-1">🤖</span>
-          AI Enhance
-        </>
-      )}
-    </button>
-  );
-}
 
 export default function BulkEdit({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
@@ -213,6 +92,16 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Toast
   const [toast, setToast] = useState('');
+  
+  // AI Enhancement Modal state
+  const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
+  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
+    processing: false,
+    current: 0,
+    total: 0,
+    currentItem: '',
+    results: null
+  });
   
   // Load models on mount
   useEffect(() => {
@@ -367,6 +256,183 @@ export default function BulkEdit({ shop: shopProp }) {
     }
     setSelectedDeleteLanguages([]);
     setShowDeleteModal(true);
+  };
+  
+  // AI Enhancement Modal Component
+  const AIEnhanceModal = () => {
+    if (!showAIEnhanceModal) return null;
+    
+    const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+    const selectedWithSEO = selectedProducts.filter(p => 
+      p.optimizationSummary?.optimizedLanguages?.length > 0
+    );
+    
+    const handleStartEnhancement = async () => {
+      setAIEnhanceProgress({
+        processing: true,
+        current: 0,
+        total: selectedWithSEO.length,
+        currentItem: '',
+        results: null
+      });
+      
+      const results = { successful: 0, failed: 0, skipped: 0 };
+      
+      for (let i = 0; i < selectedWithSEO.length; i++) {
+        const product = selectedWithSEO[i];
+        
+        setAIEnhanceProgress(prev => ({
+          ...prev,
+          current: i,
+          currentItem: product.title
+        }));
+        
+        try {
+          // Check plan
+          const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shop })
+          });
+          
+          const { eligible } = await eligibilityRes.json();
+          if (!eligible) {
+            results.skipped++;
+            continue;
+          }
+          
+          // Enhance
+          const enhanceRes = await fetch('/ai-enhance/product', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shop,
+              productId: product.gid || `gid://shopify/Product/${product.productId}`,
+              languages: product.optimizationSummary.optimizedLanguages
+            })
+          });
+          
+          if (enhanceRes.ok) {
+            results.successful++;
+          } else {
+            results.failed++;
+          }
+        } catch {
+          results.failed++;
+        }
+        
+        setAIEnhanceProgress(prev => ({
+          ...prev,
+          current: i + 1
+        }));
+      }
+      
+      setAIEnhanceProgress(prev => ({
+        ...prev,
+        processing: false,
+        results
+      }));
+      
+      // Show toast
+      if (results.successful > 0) {
+        setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
+      }
+    };
+    
+    const handleClose = () => {
+      if (!aiEnhanceProgress.processing) {
+        setShowAIEnhanceModal(false);
+        setAIEnhanceProgress({
+          processing: false,
+          current: 0,
+          total: 0,
+          currentItem: '',
+          results: null
+        });
+        // Refresh products list
+        loadProducts(1);
+      }
+    };
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          <div className="flex justify-between items-center p-6 border-b">
+            <h2 className="text-xl font-semibold">AI Enhanced Search Optimisation</h2>
+            <button
+              onClick={handleClose}
+              disabled={aiEnhanceProgress.processing}
+              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="p-6">
+            {!aiEnhanceProgress.processing && !aiEnhanceProgress.results && (
+              <>
+                <p className="mb-4">
+                  AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} products.
+                </p>
+                <p className="text-sm text-gray-600 mb-6">
+                  Note: AI enhancement is only available for Growth Extra and Enterprise plans.
+                </p>
+                <div className="flex justify-end gap-4">
+                  <button
+                    onClick={() => setShowAIEnhanceModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleStartEnhancement}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Start AI Enhancement
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {aiEnhanceProgress.processing && (
+              <div className="space-y-4">
+                <p className="text-center text-lg">
+                  Processing: {aiEnhanceProgress.currentItem}
+                </p>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100}%` }}
+                  />
+                </div>
+                <p className="text-center text-sm text-gray-600">
+                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products
+                </p>
+              </div>
+            )}
+            
+            {aiEnhanceProgress.results && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">AI Enhancement Results</h3>
+                <div className="space-y-2">
+                  <p>Successful: <span className="font-semibold text-green-600">{aiEnhanceProgress.results.successful}</span></p>
+                  <p>Failed: <span className="font-semibold text-red-600">{aiEnhanceProgress.results.failed}</span></p>
+                  <p>Skipped: <span className="font-semibold text-yellow-600">{aiEnhanceProgress.results.skipped}</span></p>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleClose}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
   
   // Generate SEO for selected products
@@ -1246,7 +1312,7 @@ export default function BulkEdit({ shop: shopProp }) {
                     Generate AI Search Optimisation
                   </Button>
                   
-                  {/* AI Enhance Button - показва се само ако има избрани продукти с оптимизация */}
+                  {/* AI Enhanced Search Optimisation Button */}
                   {(() => {
                     if (selectedItems.length === 0 && !selectAllPages) return null;
                     
@@ -1257,20 +1323,13 @@ export default function BulkEdit({ shop: shopProp }) {
                     
                     if (!hasOptimizedProducts) return null;
                     
-                    // Вземаме първия продукт с оптимизация за пример
-                    const optimizedProduct = selectedProducts.find(p => 
-                      p.optimizationSummary?.optimizedLanguages?.length > 0
-                    );
-                    
                     return (
-                      <AIEnhanceButton
-                        product={optimizedProduct}
-                        shop={shop}
-                        onSuccess={() => {
-                          // Refresh the product list after enhancement
-                          fetchProducts();
-                        }}
-                      />
+                      <Button
+                        onClick={() => setShowAIEnhanceModal(true)}
+                        disabled={selectedItems.length === 0 && !selectAllPages}
+                      >
+                        AI Enhanced Search Optimisation
+                      </Button>
                     );
                   })()}
                   
@@ -1504,6 +1563,7 @@ export default function BulkEdit({ shop: shopProp }) {
       {resultsModal}
       {deleteModal}
       {deleteConfirmModal}
+      {AIEnhanceModal()}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
