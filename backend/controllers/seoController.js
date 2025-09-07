@@ -6,6 +6,9 @@ import express from 'express';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import mongoose from 'mongoose';
+import Subscription from '../db/Subscription.js';
+import Shop from '../db/Shop.js';
+import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
 
 const router = express.Router();
 
