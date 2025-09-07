@@ -258,7 +258,7 @@ export default function BulkEdit({ shop: shopProp }) {
     setShowDeleteModal(true);
   };
   
-  // AI Enhancement Modal Component
+  // AI Enhancement Modal
   const AIEnhanceModal = () => {
     if (!showAIEnhanceModal) return null;
     
@@ -288,7 +288,6 @@ export default function BulkEdit({ shop: shopProp }) {
         }));
         
         try {
-          // Check plan
           const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -301,7 +300,6 @@ export default function BulkEdit({ shop: shopProp }) {
             continue;
           }
           
-          // Enhance
           const enhanceRes = await fetch('/ai-enhance/product', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -312,12 +310,32 @@ export default function BulkEdit({ shop: shopProp }) {
             })
           });
           
-          if (enhanceRes.ok) {
+          const enhanceData = await enhanceRes.json();
+          
+          // Apply the enhanced SEO
+          if (enhanceData.results && enhanceData.results.length > 0) {
+            await fetch('/api/seo/apply-multi', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                shop,
+                productId: product.gid || `gid://shopify/Product/${product.productId}`,
+                results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
+                  language: r.language,
+                  seo: {
+                    bullets: r.bullets,
+                    faq: r.faq
+                  }
+                })),
+                options: { updateBullets: true, updateFaq: true }
+              })
+            });
             results.successful++;
           } else {
             results.failed++;
           }
-        } catch {
+        } catch (error) {
+          console.error('Enhancement error:', error);
           results.failed++;
         }
         
@@ -332,11 +350,6 @@ export default function BulkEdit({ shop: shopProp }) {
         processing: false,
         results
       }));
-      
-      // Show toast
-      if (results.successful > 0) {
-        setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
-      }
     };
     
     const handleClose = () => {
@@ -349,23 +362,33 @@ export default function BulkEdit({ shop: shopProp }) {
           currentItem: '',
           results: null
         });
-        // Refresh products list
         loadProducts(1);
       }
     };
     
+    // Правилен модал overlay
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-          <div className="flex justify-between items-center p-6 border-b">
-            <h2 className="text-xl font-semibold">AI Enhanced Search Optimisation</h2>
-            <button
-              onClick={handleClose}
-              disabled={aiEnhanceProgress.processing}
-              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-            >
-              ×
-            </button>
+      <>
+        {/* Dark overlay */}
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={!aiEnhanceProgress.processing ? handleClose : undefined}
+        />
+        
+        {/* Modal content */}
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl w-full max-w-md z-50">
+          <div className="border-b px-6 py-4">
+            <h2 className="text-lg font-semibold">AI Enhanced Search Optimisation</h2>
+            {!aiEnhanceProgress.processing && (
+              <button
+                onClick={handleClose}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
           
           <div className="p-6">
@@ -377,16 +400,16 @@ export default function BulkEdit({ shop: shopProp }) {
                 <p className="text-sm text-gray-600 mb-6">
                   Note: AI enhancement is only available for Growth Extra and Enterprise plans.
                 </p>
-                <div className="flex justify-end gap-4">
+                <div className="flex gap-3 justify-end">
                   <button
-                    onClick={() => setShowAIEnhanceModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                    onClick={handleClose}
+                    className="px-4 py-2 border rounded hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleStartEnhancement}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
                     Start AI Enhancement
                   </button>
@@ -395,34 +418,32 @@ export default function BulkEdit({ shop: shopProp }) {
             )}
             
             {aiEnhanceProgress.processing && (
-              <div className="space-y-4">
-                <p className="text-center text-lg">
-                  Processing: {aiEnhanceProgress.currentItem}
-                </p>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="text-center py-4">
+                <p className="mb-4">Processing: {aiEnhanceProgress.currentItem}</p>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
                   <div 
-                    className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100}%` }}
                   />
                 </div>
-                <p className="text-center text-sm text-gray-600">
-                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products
+                <p className="text-sm text-gray-600">
+                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
                 </p>
               </div>
             )}
             
             {aiEnhanceProgress.results && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">AI Enhancement Results</h3>
-                <div className="space-y-2">
-                  <p>Successful: <span className="font-semibold text-green-600">{aiEnhanceProgress.results.successful}</span></p>
-                  <p>Failed: <span className="font-semibold text-red-600">{aiEnhanceProgress.results.failed}</span></p>
-                  <p>Skipped: <span className="font-semibold text-yellow-600">{aiEnhanceProgress.results.skipped}</span></p>
+              <div>
+                <h3 className="font-semibold mb-4">AI Enhancement Results</h3>
+                <div className="space-y-2 mb-6">
+                  <p>Successful: <span className="font-semibold">{aiEnhanceProgress.results.successful}</span></p>
+                  <p>Failed: <span className="font-semibold">{aiEnhanceProgress.results.failed}</span></p>
+                  <p>Skipped: <span className="font-semibold">{aiEnhanceProgress.results.skipped}</span></p>
                 </div>
                 <div className="flex justify-end">
                   <button
                     onClick={handleClose}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
                   >
                     Done
                   </button>
@@ -431,7 +452,7 @@ export default function BulkEdit({ shop: shopProp }) {
             )}
           </div>
         </div>
-      </div>
+      </>
     );
   };
   
@@ -1563,7 +1584,7 @@ export default function BulkEdit({ shop: shopProp }) {
       {resultsModal}
       {deleteModal}
       {deleteConfirmModal}
-      {AIEnhanceModal()}
+      {showAIEnhanceModal && <AIEnhanceModal />}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
