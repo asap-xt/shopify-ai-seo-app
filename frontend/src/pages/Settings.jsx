@@ -18,7 +18,7 @@ import {
   Toast,
   Spinner
 } from '@shopify/polaris';
-import { ClipboardIcon, ExternalIcon, ModalIcon } from '@shopify/polaris-icons';
+import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } 
@@ -667,7 +667,7 @@ export default function Settings() {
                         {isEnabled && !hasUnsavedChanges && (
                           <Button
                             size="slim"
-                            icon={ModalIcon}
+                            icon={ViewIcon}
                             onClick={() => viewJson(feature.key, feature.name)}
                           >
                             View
@@ -896,8 +896,8 @@ export default function Settings() {
               <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                 <li>Click "Continue" to see your custom robots.txt content</li>
                 <li>Copy the generated content</li>
-                <li>Go to <strong>Online Store -> Themes</strong></li>
-                <li>Click <strong>Actions -> Edit code</strong> on your active theme</li>
+                  <li>Go to <strong>Online Store → Themes</strong></li>
+                  <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
                 <li>Find or create <strong>robots.txt.liquid</strong> file</li>
                 <li>Paste the content and save</li>
               </ol>
