@@ -202,6 +202,56 @@ app.get('/debug/routes', (req, res) => {
   res.status(200).json({ routes });
 });
 
+// Тестови endpoint за промяна на план (само за development)
+app.post('/test/set-plan', async (req, res) => {
+  const { shop, plan } = req.body;
+  
+  if (!shop || !plan) {
+    return res.status(400).json({ error: 'Missing shop or plan' });
+  }
+  
+  try {
+    // Import Subscription model
+    const { default: Subscription } = await import('./db/Subscription.js');
+    
+    // Създаваме или обновяваме subscription
+    await Subscription.findOneAndUpdate(
+      { shop },
+      {
+        shop,
+        plan: plan,
+        startedAt: new Date(),
+        queryLimit: 
+          plan === 'enterprise' ? 10000 :
+          plan === 'growth_extra' || plan === 'growth extra' ? 4000 :
+          plan === 'growth' ? 1500 :
+          plan === 'professional' ? 600 : 50,
+        productLimit:
+          plan === 'enterprise' ? 10000 :
+          plan === 'growth_extra' || plan === 'growth extra' ? 2000 :
+          plan === 'growth' ? 1000 :
+          plan === 'professional' ? 300 : 150
+      },
+      { upsert: true, new: true }
+    );
+    
+    // Изчистваме кеша
+    try {
+      const { default: aiDiscoveryService } = await import('./services/aiDiscoveryService.js');
+      if (aiDiscoveryService?.cache) {
+        aiDiscoveryService.cache.clear();
+      }
+    } catch (e) {
+      console.log('Cache clear failed:', e.message);
+    }
+    
+    res.json({ success: true, message: `Plan set to ${plan}` });
+  } catch (error) {
+    console.error('Error setting plan:', error);
+    res.status(500).json({ error: 'Failed to set plan' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Global error handler
 // ---------------------------------------------------------------------------

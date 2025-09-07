@@ -187,6 +187,22 @@ export default function Settings() {
     return availability[featureKey]?.includes(plan) || false;
   };
 
+  const setTestPlan = async (plan) => {
+    try {
+      const res = await fetch('/test/set-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop, plan })
+      });
+      if (res.ok) {
+        setToast(`Test plan set to ${plan}`);
+        setTimeout(() => window.location.reload(), 1000);
+      }
+    } catch (error) {
+      setToast('Failed to set test plan');
+    }
+  };
+
   if (!shop) {
     return (
       <Card>
@@ -844,6 +860,27 @@ export default function Settings() {
             </BlockStack>
           </Modal.Section>
         </Modal>
+      )}
+
+      {/* Test Plan Switcher - само за development */}
+      {process.env.NODE_ENV === 'development' && (
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">Test Plan Switcher</Text>
+              <Text variant="bodyMd" tone="subdued">
+                Quick plan switching for development testing
+              </Text>
+              <InlineStack gap="200">
+                <Button onClick={() => setTestPlan('starter')}>Starter</Button>
+                <Button onClick={() => setTestPlan('professional')}>Professional</Button>
+                <Button onClick={() => setTestPlan('growth')}>Growth</Button>
+                <Button onClick={() => setTestPlan('growth_extra')}>Growth Extra</Button>
+                <Button onClick={() => setTestPlan('enterprise')}>Enterprise</Button>
+              </InlineStack>
+            </BlockStack>
+          </Box>
+        </Card>
       )}
 
       {/* Toast notifications */}
