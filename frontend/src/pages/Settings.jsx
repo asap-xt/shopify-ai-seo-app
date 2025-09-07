@@ -18,7 +18,7 @@ import {
   Toast,
   Spinner
 } from '@shopify/polaris';
-import { ClipboardIcon, ExternalIcon } from '@shopify/polaris-icons';
+import { ClipboardIcon, ExternalIcon, ModalIcon } from '@shopify/polaris-icons';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } 
@@ -40,6 +40,10 @@ export default function Settings() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showNoBotsModal, setShowNoBotsModal] = useState(false);
   const [showManualInstructions, setShowManualInstructions] = useState(false);
+  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  const [jsonModalTitle, setJsonModalTitle] = useState('');
+  const [jsonModalContent, setJsonModalContent] = useState(null);
+  const [loadingJson, setLoadingJson] = useState(false);
   
   const shop = qs('shop', '');
 
@@ -200,6 +204,39 @@ export default function Settings() {
       }
     } catch (error) {
       setToast('Failed to set test plan');
+    }
+  };
+
+  const viewJson = async (feature, title) => {
+    setJsonModalTitle(title);
+    setJsonModalOpen(true);
+    setLoadingJson(true);
+    setJsonModalContent(null);
+
+    try {
+      const endpoints = {
+        productsJson: `/ai/products.json?shop=${shop}`,
+        collectionsJson: `/ai/collections-feed.json?shop=${shop}`,
+        storeMetadata: `/ai/store-metadata.json?shop=${shop}`,
+        schemaData: `/ai/schema-data.json?shop=${shop}`,
+        aiSitemap: `/ai/sitemap-feed.xml?shop=${shop}`,
+        welcomePage: `/ai/welcome?shop=${shop}`
+      };
+
+      const res = await fetch(endpoints[feature]);
+      const contentType = res.headers.get('content-type');
+      
+      if (contentType?.includes('json')) {
+        const data = await res.json();
+        setJsonModalContent(JSON.stringify(data, null, 2));
+      } else {
+        const text = await res.text();
+        setJsonModalContent(text);
+      }
+    } catch (error) {
+      setJsonModalContent(`Error loading data: ${error.message}`);
+    } finally {
+      setLoadingJson(false);
     }
   };
 
@@ -543,7 +580,7 @@ export default function Settings() {
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">AI Discovery Features</Text>
             <Text variant="bodyMd" tone="subdued">
-              Available data endpoints for AI consumption
+              Select the features you want to enable for AI bots to consume your store data. Don't forget to click "Save Settings" after making changes.
             </Text>
             
             <Divider />
@@ -591,8 +628,8 @@ export default function Settings() {
                   requiredPlan: 'Enterprise'
                 }
               ].map((feature) => {
-
                 const isAvailable = isFeatureAvailable(feature.key);
+                const isEnabled = !!settings?.features?.[feature.key];
                 
                 return (
                   <Box key={feature.key}
@@ -603,30 +640,41 @@ export default function Settings() {
                     borderColor="border"
                   >
                     <BlockStack gap="100">
-              <Checkbox
-                label={
-                          <InlineStack gap="200" align="center">
-                            <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
-                              {feature.name}
-                            </Text>
-                            {!isAvailable && feature.requiredPlan && (
-                              <Badge tone="info" size="small">
-                                {feature.requiredPlan}
-                                {feature.requiredPlan !== 'Enterprise' && '+'} 
-                              </Badge>
-                    )}
-                  </InlineStack>
-                }
-                        checked={!!settings?.features?.[feature.key]}
-                        onChange={() => toggleFeature(feature.key)}
-                        disabled={!isAvailable}
-                        helpText={
-                          !isAvailable && feature.requiredPlan ? 
-                            `Upgrade to ${feature.requiredPlan} plan to enable` :
-                          isAvailable ? feature.description : ''
-                        }
-              />
-            </BlockStack>
+                      <InlineStack align="space-between">
+                        <Checkbox
+                          label={
+                            <InlineStack gap="200" align="center">
+                              <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                                {feature.name}
+                              </Text>
+                              {!isAvailable && feature.requiredPlan && (
+                                <Badge tone="info" size="small">
+                                  {feature.requiredPlan}
+                                  {feature.requiredPlan !== 'Enterprise' && '+'} 
+                                </Badge>
+                              )}
+                            </InlineStack>
+                          }
+                          checked={isEnabled}
+                          onChange={() => toggleFeature(feature.key)}
+                          disabled={!isAvailable}
+                          helpText={
+                            !isAvailable && feature.requiredPlan ? 
+                              `Upgrade to ${feature.requiredPlan} plan to enable` :
+                            isAvailable ? feature.description : ''
+                          }
+                        />
+                        {isEnabled && !hasUnsavedChanges && (
+                          <Button
+                            size="slim"
+                            icon={ModalIcon}
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </InlineStack>
+                    </BlockStack>
                   </Box>
                 );
               })}
@@ -635,8 +683,8 @@ export default function Settings() {
         </Box>
       </Card>
 
-      {/* Available Endpoints */}
-      {(settings?.features?.productsJson || settings?.features?.collectionsJson || settings?.features?.storeMetadata || settings?.features?.schemaData || settings?.features?.aiSitemap || settings?.features?.welcomePage) && (
+      {/* Available Endpoints - commented out, now using View buttons */}
+      {/* {(settings?.features?.productsJson || settings?.features?.collectionsJson || settings?.features?.storeMetadata || settings?.features?.schemaData || settings?.features?.aiSitemap || settings?.features?.welcomePage) && (
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
@@ -700,7 +748,7 @@ export default function Settings() {
             </BlockStack>
           </Box>
         </Card>
-      )}
+      )} */}
 
       {/* Save and Reset Buttons */}
       <InlineStack gap="200" align="end">
@@ -877,6 +925,55 @@ export default function Settings() {
           </BlockStack>
         </Box>
       </Card>
+
+      {/* JSON View Modal */}
+      {jsonModalOpen && (
+        <Modal
+          open={jsonModalOpen}
+          onClose={() => {
+            setJsonModalOpen(false);
+            setJsonModalContent(null);
+          }}
+          title={jsonModalTitle}
+          primaryAction={{
+            content: 'Copy',
+            onAction: () => {
+              navigator.clipboard.writeText(jsonModalContent);
+              setToast('Copied to clipboard!');
+            },
+            disabled: loadingJson
+          }}
+          secondaryActions={[{
+            content: 'Close',
+            onAction: () => {
+              setJsonModalOpen(false);
+              setJsonModalContent(null);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+              {loadingJson ? (
+                <InlineStack align="center">
+                  <Spinner size="small" />
+                  <Text>Loading...</Text>
+                </InlineStack>
+              ) : (
+                <pre style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  margin: 0,
+                  overflow: 'auto',
+                  maxHeight: '400px'
+                }}>
+                  {jsonModalContent}
+                </pre>
+              )}
+            </Box>
+          </Modal.Section>
+        </Modal>
+      )}
 
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
