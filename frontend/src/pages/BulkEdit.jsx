@@ -258,16 +258,15 @@ export default function BulkEdit({ shop: shopProp }) {
     setShowDeleteModal(true);
   };
   
-  // AI Enhancement Modal
+  // AI Enhancement Modal - използва Polaris компоненти като другите модали
   const AIEnhanceModal = () => {
-    if (!showAIEnhanceModal) return null;
-    
     const selectedProducts = products.filter(p => selectedItems.includes(p._id));
     const selectedWithSEO = selectedProducts.filter(p => 
       p.optimizationSummary?.optimizedLanguages?.length > 0
     );
     
     const handleStartEnhancement = async () => {
+      setShowAIEnhanceModal(false); // Затваряме първия модал
       setAIEnhanceProgress({
         processing: true,
         current: 0,
@@ -350,110 +349,122 @@ export default function BulkEdit({ shop: shopProp }) {
         processing: false,
         results
       }));
+      
+      setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
     };
     
     const handleClose = () => {
-      if (!aiEnhanceProgress.processing) {
-        setShowAIEnhanceModal(false);
-        setAIEnhanceProgress({
-          processing: false,
-          current: 0,
-          total: 0,
-          currentItem: '',
-          results: null
-        });
+      setShowAIEnhanceModal(false);
+      setAIEnhanceProgress({
+        processing: false,
+        current: 0,
+        total: 0,
+        currentItem: '',
+        results: null
+      });
+      if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
         loadProducts(1);
       }
     };
     
-    // Правилен модал overlay
-    return (
-      <>
-        {/* Dark overlay */}
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={!aiEnhanceProgress.processing ? handleClose : undefined}
-        />
-        
-        {/* Modal content */}
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl w-full max-w-md z-50">
-          <div className="border-b px-6 py-4">
-            <h2 className="text-lg font-semibold">AI Enhanced Search Optimisation</h2>
-            {!aiEnhanceProgress.processing && (
-              <button
-                onClick={handleClose}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-          
-          <div className="p-6">
-            {!aiEnhanceProgress.processing && !aiEnhanceProgress.results && (
-              <>
-                <p className="mb-4">
-                  AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} products.
-                </p>
-                <p className="text-sm text-gray-600 mb-6">
-                  Note: AI enhancement is only available for Growth Extra and Enterprise plans.
-                </p>
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={handleClose}
-                    className="px-4 py-2 border rounded hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleStartEnhancement}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Start AI Enhancement
-                  </button>
-                </div>
-              </>
-            )}
-            
-            {aiEnhanceProgress.processing && (
-              <div className="text-center py-4">
-                <p className="mb-4">Processing: {aiEnhanceProgress.currentItem}</p>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100}%` }}
-                  />
-                </div>
-                <p className="text-sm text-gray-600">
-                  {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
-                </p>
-              </div>
-            )}
-            
-            {aiEnhanceProgress.results && (
-              <div>
-                <h3 className="font-semibold mb-4">AI Enhancement Results</h3>
-                <div className="space-y-2 mb-6">
-                  <p>Successful: <span className="font-semibold">{aiEnhanceProgress.results.successful}</span></p>
-                  <p>Failed: <span className="font-semibold">{aiEnhanceProgress.results.failed}</span></p>
-                  <p>Skipped: <span className="font-semibold">{aiEnhanceProgress.results.skipped}</span></p>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleClose}
-                    className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    );
+    // Първи модал - за потвърждение
+    if (!aiEnhanceProgress.processing && !aiEnhanceProgress.results) {
+      return (
+        <Modal
+          open={showAIEnhanceModal}
+          title="AI Enhanced Search Optimisation"
+          onClose={handleClose}
+          primaryAction={{
+            content: 'Start AI Enhancement',
+            onAction: handleStartEnhancement,
+          }}
+          secondaryActions={[
+            {
+              content: 'Cancel',
+              onAction: handleClose,
+            },
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <Text variant="bodyMd">
+                AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} products.
+              </Text>
+              <Text variant="bodySm" tone="subdued">
+                Note: AI enhancement is only available for Growth Extra and Enterprise plans.
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    // Втори модал - прогрес
+    if (aiEnhanceProgress.processing) {
+      return (
+        <Modal
+          open={true}
+          title="Processing AI Enhancement"
+          onClose={() => {}}
+          noScroll
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="bodyMd">
+                Processing: {aiEnhanceProgress.currentItem}
+              </Text>
+              <ProgressBar progress={(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100} />
+              <Text variant="bodySm" tone="subdued">
+                {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products 
+                ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    // Трети модал - резултати
+    if (aiEnhanceProgress.results) {
+      return (
+        <Modal
+          open={true}
+          title="AI Enhancement Results"
+          onClose={handleClose}
+          primaryAction={{
+            content: 'Done',
+            onAction: handleClose,
+          }}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <InlineStack gap="400">
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="success">
+                    {aiEnhanceProgress.results.successful}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="critical">
+                    {aiEnhanceProgress.results.failed}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
+                  <Text variant="headingLg" fontWeight="bold" tone="info">
+                    {aiEnhanceProgress.results.skipped}
+                  </Text>
+                </Box>
+              </InlineStack>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      );
+    }
+    
+    return null;
   };
   
   // Generate SEO for selected products
@@ -1584,7 +1595,7 @@ export default function BulkEdit({ shop: shopProp }) {
       {resultsModal}
       {deleteModal}
       {deleteConfirmModal}
-      {showAIEnhanceModal && <AIEnhanceModal />}
+      {AIEnhanceModal()}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
