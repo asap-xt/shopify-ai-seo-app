@@ -282,6 +282,10 @@ export default function Settings() {
               Choose which AI bots can access your store's structured data
             </Text>
             
+            <Banner status="info">
+              Don't forget to click "Save Settings" after making changes.
+            </Banner>
+            
             <Divider />
             
             <BlockStack gap="300">
@@ -580,8 +584,12 @@ export default function Settings() {
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">AI Discovery Features</Text>
             <Text variant="bodyMd" tone="subdued">
-              Select the features you want to enable for AI bots to consume your store data. Don't forget to click "Save Settings" after making changes.
+              Select the features you want to enable for AI bots to consume your store data.
             </Text>
+            
+            <Banner status="info">
+              Don't forget to click "Save Settings" after making changes.
+            </Banner>
             
             <Divider />
             
@@ -640,14 +648,39 @@ export default function Settings() {
                     borderColor="border"
                   >
                     <BlockStack gap="100">
-                      <InlineStack align="space-between">
+                      {isAvailable ? (
+                        <InlineStack align="space-between" blockAlign="center" gap="300">
+                          <Box minWidth="200">
+                            <Checkbox
+                              label={
+                                <InlineStack gap="200" align="center">
+                                  <Text variant="bodyMd">
+                                    {feature.name}
+                                  </Text>
+                                </InlineStack>
+                              }
+                              checked={isEnabled}
+                              onChange={() => toggleFeature(feature.key)}
+                              helpText={feature.description}
+                            />
+                          </Box>
+                          {isEnabled && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </InlineStack>
+                      ) : (
                         <Checkbox
                           label={
                             <InlineStack gap="200" align="center">
-                              <Text variant={isAvailable ? "bodyMd" : "bodySm"} tone={isAvailable ? "base" : "subdued"}>
+                              <Text variant="bodySm" tone="subdued">
                                 {feature.name}
                               </Text>
-                              {!isAvailable && feature.requiredPlan && (
+                              {feature.requiredPlan && (
                                 <Badge tone="info" size="small">
                                   {feature.requiredPlan}
                                   {feature.requiredPlan !== 'Enterprise' && '+'} 
@@ -655,25 +688,12 @@ export default function Settings() {
                               )}
                             </InlineStack>
                           }
-                          checked={isEnabled}
+                          checked={false}
                           onChange={() => toggleFeature(feature.key)}
-                          disabled={!isAvailable}
-                          helpText={
-                            !isAvailable && feature.requiredPlan ? 
-                              `Upgrade to ${feature.requiredPlan} plan to enable` :
-                            isAvailable ? feature.description : ''
-                          }
+                          disabled={true}
+                          helpText={`Upgrade to ${feature.requiredPlan} plan to enable`}
                         />
-                        {isEnabled && !hasUnsavedChanges && (
-                          <Button
-                            size="slim"
-                            icon={ViewIcon}
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                      </InlineStack>
+                      )}
                     </BlockStack>
                   </Box>
                 );
