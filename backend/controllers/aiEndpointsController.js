@@ -129,8 +129,8 @@ router.get('/ai/products.json', async (req, res) => {
   }
 });
 
-// Collections JSON endpoint
-router.get('/ai/collections.json', async (req, res) => {
+// Collections Feed endpoint - опростен
+router.get('/ai/collections-feed.json', async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -145,50 +145,100 @@ router.get('/ai/collections.json', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
-    // Check if feature is enabled
     if (!settings?.features?.collectionsJson) {
       return res.status(403).json({ 
         error: 'Collections JSON feature is not enabled. Please enable it in settings.' 
       });
     }
 
-    // Get collections from Shopify
+    // Check plan
+    if (!['growth', 'growth_extra', 'enterprise'].includes(settings?.planKey)) {
+      return res.status(403).json({ 
+        error: 'Collections JSON requires Growth plan or higher' 
+      });
+    }
+
+    // Просто вземаме ВСИЧКИ metafields от namespace seo_ai за collections
+    const query = `
+      query {
+        collections(first: 250) {
+          edges {
+            node {
+              id
+              handle
+              metafields(namespace: "seo_ai", first: 100) {
+                edges {
+                  node {
+                    key
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/collections.json?limit=250`,
+      `https://${shop}/admin/api/2024-07/graphql.json`,
       {
+        method: 'POST',
         headers: {
           'X-Shopify-Access-Token': shopRecord.accessToken,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ query })
       }
     );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch collections');
+    const data = await response.json();
+    const optimizedCollections = [];
+    
+    // Извличаме само колекциите с metafields
+    data.data.collections.edges.forEach(({ node: collection }) => {
+      if (collection.metafields.edges.length > 0) {
+        const collectionData = {
+          id: collection.id,
+          handle: collection.handle,
+          metafields: {}
+        };
+        
+        // Просто парсваме всички metafields
+        collection.metafields.edges.forEach(({ node: metafield }) => {
+          try {
+            collectionData.metafields[metafield.key] = JSON.parse(metafield.value);
+          } catch {
+            collectionData.metafields[metafield.key] = metafield.value;
+          }
+        });
+        
+        optimizedCollections.push(collectionData);
+      }
+    });
+
+    if (optimizedCollections.length === 0) {
+      return res.json({
+        shop,
+        collections: [],
+        warning: 'No optimized collections found',
+        action_required: {
+          message: 'Please optimize your collections first',
+          link: `/ai-seo?shop=${shop}#collections`,
+          link_text: 'Go to AI SEO Collections'
+        }
+      });
     }
 
-    const data = await response.json();
-    
-    // Transform collections for AI consumption
-    const aiCollections = data.collections.map(collection => ({
-      id: collection.id,
-      title: collection.title,
-      description: collection.body_html?.replace(/<[^>]*>?/gm, ''),
-      handle: collection.handle,
-      products_count: collection.products_count,
-      url: `https://${shop}/collections/${collection.handle}`,
-      image: collection.image?.src
-    }));
-
     res.json({
-      shop: shop,
+      shop,
       generated_at: new Date().toISOString(),
-      collections_count: aiCollections.length,
-      collections: aiCollections
+      collections_count: optimizedCollections.length,
+      collections: optimizedCollections
     });
 
   } catch (error) {
-    console.error('Error in collections.json:', error);
+    console.error('Error:', error);
     res.status(500).json({ error: 'Failed to generate collections feed' });
   }
 });
@@ -397,7 +447,7 @@ router.get('/ai/welcome', async (req, res) => {
       ${settings?.features?.collectionsJson ? `
       <div class="endpoint">
         <h3>Collections Feed <span class="badge">Active</span></h3>
-        <a href="/ai/collections.json?shop=${shop}" target="_blank">/ai/collections.json?shop=${shop}</a>
+        <a href="/ai/collections-feed.json?shop=${shop}" target="_blank">/ai/collections-feed.json?shop=${shop}</a>
         <p>Product categories and collections with semantic groupings</p>
       </div>
       ` : ''}

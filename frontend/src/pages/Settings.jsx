@@ -639,8 +639,8 @@ export default function Settings() {
                 {settings?.features?.collectionsJson && (
                   <InlineStack align="space-between">
                     <Text>Collections Feed:</Text>
-                    <Link url={`/ai/collections.json?shop=${shop}`} external>
-                      /ai/collections.json
+                    <Link url={`/ai/collections-feed.json?shop=${shop}`} external>
+                      /ai/collections-feed.json
                     </Link>
                   </InlineStack>
                 )}
