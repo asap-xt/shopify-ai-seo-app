@@ -118,7 +118,7 @@ router.get('/ai/feed/catalog.json', async (req, res) => {
 });
 
 // GET /ai/schema-data.json?shop=...
-router.get('/ai/schema-data.json', async (req, res) => {
+router.get('/schema-data.json', async (req, res) => {
   console.log('🚀🚀🚀 SCHEMA ENDPOINT CALLED! 🚀🚀🚀');
   console.log('[SCHEMA-ENDPOINT] ============ REQUEST RECEIVED ============');
   console.log('[SCHEMA-ENDPOINT] URL:', req.url);
