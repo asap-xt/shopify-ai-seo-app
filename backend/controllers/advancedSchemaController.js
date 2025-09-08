@@ -1010,4 +1010,24 @@ router.delete('/delete', async (req, res) => {
   }
 });
 
+// Debug endpoint for shop data
+router.get('/debug-shop/:shop', async (req, res) => {
+  try {
+    const shop = req.params.shop;
+    const shopRecord = await Shop.findOne({ shop });
+    
+    res.json({
+      shop: shopRecord?.shop,
+      hasToken: !!shopRecord?.accessToken,
+      tokenLength: shopRecord?.accessToken?.length,
+      tokenPrefix: shopRecord?.accessToken?.substring(0, 10) + '...',
+      scopes: shopRecord?.scopes,
+      updatedAt: shopRecord?.updatedAt
+    });
+  } catch (error) {
+    console.error('[DEBUG] Shop debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
