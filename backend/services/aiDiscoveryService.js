@@ -68,6 +68,11 @@ class AIDiscoveryService {
         settings.availableBots = ['openai', 'perplexity'];
       }
       
+      // Ensure advancedSchemaEnabled is included
+      if (settings.advancedSchemaEnabled === undefined) {
+        settings.advancedSchemaEnabled = false;
+      }
+      
       this.cache.set(shop, settings, 300000); // Cache за 5 минути
       return settings;
       

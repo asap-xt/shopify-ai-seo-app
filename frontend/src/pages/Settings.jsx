@@ -68,16 +68,6 @@ export default function Settings() {
     loadSettings();
   }, [shop]);
 
-  // Load Advanced Schema settings
-  useEffect(() => {
-    if (!shop) return;
-    fetch(`/api/ai-discovery/settings?shop=${encodeURIComponent(shop)}`)
-      .then(res => res.json())
-      .then(data => {
-        setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
-      })
-      .catch(err => console.error('Failed to load advanced schema settings:', err));
-  }, [shop]);
 
   // Check schema status when enabled
   useEffect(() => {
@@ -108,8 +98,13 @@ export default function Settings() {
       
       const data = await res.json();
       console.log('Loaded settings:', data); // Debug log
+      console.log('Settings plan:', data?.plan);
+      console.log('Normalized plan:', normalizePlan(data?.plan));
       setSettings(data);
       setOriginalSettings(data); // Save original settings
+      
+      // Set Advanced Schema enabled state
+      setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
@@ -627,18 +622,25 @@ export default function Settings() {
       </Card>
 
       {/* Advanced Schema Data - Enterprise only */}
-      {settings?.plan === 'enterprise' && (
+      {(() => {
+        console.log('Settings plan:', settings?.plan);
+        console.log('Normalized plan:', normalizePlan(settings?.plan));
+        console.log('Is enterprise?', normalizePlan(settings?.plan) === 'enterprise');
+        return normalizePlan(settings?.plan) === 'enterprise';
+      })() && (
         <Card sectioned title="Advanced Schema Data">
           <BlockStack gap="300">
             <Checkbox
               label="Enable AI-generated Advanced Schema Data"
               checked={advancedSchemaEnabled}
               onChange={async (checked) => {
+                console.log('Advanced Schema checkbox clicked:', checked);
                 setAdvancedSchemaEnabled(checked);
                 setSchemaError('');
                 
                 // Save the setting in AI Discovery settings
                 try {
+                  console.log('Saving settings to AI Discovery...');
                   const saveRes = await fetch('/api/ai-discovery/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -649,7 +651,11 @@ export default function Settings() {
                     })
                   });
                   
+                  console.log('Save response status:', saveRes.status);
+                  
                   if (!saveRes.ok) {
+                    const error = await saveRes.json();
+                    console.error('Save error:', error);
                     throw new Error('Failed to save settings');
                   }
                   
@@ -664,15 +670,20 @@ export default function Settings() {
                 // Trigger schema generation if enabled
                 if (checked) {
                   console.log('Triggering schema generation...');
+                  console.log('Shop:', shop);
                   setSchemaGenerating(true);
                   
                   try {
-                    const schemaRes = await fetch('/api/schema/generate-all', {
+                    const url = '/api/schema/generate-all';
+                    console.log('Calling:', url);
+                    
+                    const schemaRes = await fetch(url, {
                       method: 'POST', 
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ shop })
                     });
                     
+                    console.log('Schema response status:', schemaRes.status);
                     const result = await schemaRes.json();
                     console.log('Schema generation result:', result);
                     

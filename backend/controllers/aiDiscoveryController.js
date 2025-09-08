@@ -55,6 +55,7 @@ router.get('/ai-discovery/settings', async (req, res) => {
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
       features: savedSettings.features || defaultSettings.features, // Will be all false from default
+      advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false, // ADD THIS
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
     
@@ -70,7 +71,7 @@ router.get('/ai-discovery/settings', async (req, res) => {
  */
 router.post('/ai-discovery/settings', async (req, res) => {
   try {
-    const { shop, bots, features } = req.body;
+    const { shop, bots, features, advancedSchemaEnabled } = req.body;
     
     if (!shop || !bots || !features) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -78,8 +79,33 @@ router.post('/ai-discovery/settings', async (req, res) => {
     
     const { session } = await getShopSession(shop);
     
-    const settings = { bots, features };
+    // Get existing settings to check if advancedSchemaEnabled is being turned on
+    const existingSettings = await aiDiscoveryService.getSettings(shop, session);
+    
+    const settings = { 
+      bots, 
+      features,
+      ...(advancedSchemaEnabled !== undefined && { advancedSchemaEnabled })
+    };
+    
     await aiDiscoveryService.updateSettings(shop, session, settings);
+    
+    // Trigger schema generation if advancedSchemaEnabled is being turned on
+    if (advancedSchemaEnabled && !existingSettings.advancedSchemaEnabled) {
+      console.log('[AI-DISCOVERY] Triggering schema generation...');
+      try {
+        const schemaRes = await fetch(`${process.env.APP_URL || 'http://localhost:8080'}/api/schema/generate-all`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop })
+        });
+        
+        const schemaResult = await schemaRes.json();
+        console.log('[AI-DISCOVERY] Schema generation response:', schemaResult);
+      } catch (err) {
+        console.error('[AI-DISCOVERY] Failed to trigger schema generation:', err);
+      }
+    }
     
     res.json({ success: true, settings });
   } catch (error) {
