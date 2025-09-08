@@ -633,76 +633,10 @@ export default function Settings() {
             <Checkbox
               label="Enable AI-generated Advanced Schema Data"
               checked={advancedSchemaEnabled}
-              onChange={async (checked) => {
-                console.log('Advanced Schema checkbox clicked:', checked);
-                setAdvancedSchemaEnabled(checked);
-                setSchemaError('');
-                
-                // Save the setting in AI Discovery settings
-                try {
-                  console.log('Saving settings to AI Discovery...');
-                  const saveRes = await fetch('/api/ai-discovery/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      shop,
-                      ...settings,
-                      advancedSchemaEnabled: checked
-                    })
-                  });
-                  
-                  console.log('Save response status:', saveRes.status);
-                  
-                  if (!saveRes.ok) {
-                    const error = await saveRes.json();
-                    console.error('Save error:', error);
-                    throw new Error('Failed to save settings');
-                  }
-                  
-                  console.log('Advanced Schema setting saved successfully');
-                } catch (err) {
-                  console.error('Failed to save Advanced Schema setting:', err);
-                  setSchemaError('Failed to save settings');
-                  setAdvancedSchemaEnabled(false);
-                  return;
-                }
-                
-                // Trigger schema generation if enabled
-                if (checked) {
-                  console.log('Triggering schema generation...');
-                  console.log('Shop:', shop);
-                  setSchemaGenerating(true);
-                  
-                  try {
-                    const url = '/api/schema/generate-all';
-                    console.log('Calling:', url);
-                    
-                    const schemaRes = await fetch(url, {
-                      method: 'POST', 
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ shop })
-                    });
-                    
-                    console.log('Schema response status:', schemaRes.status);
-                    const result = await schemaRes.json();
-                    console.log('Schema generation result:', result);
-                    
-                    if (!schemaRes.ok) {
-                      throw new Error(result.error || 'Failed to start generation');
-                    }
-                    
-                    // Show progress for 30 seconds
-                    setTimeout(() => {
-                      setSchemaGenerating(false);
-                    }, 30000);
-                    
-                  } catch (err) {
-                    console.error('Schema generation error:', err);
-                    setSchemaError(err.message);
-                    setSchemaGenerating(false);
-                    setAdvancedSchemaEnabled(false);
-                  }
-                }
+              onChange={(checked) => {
+                console.log('===== CHECKBOX CLICKED =====');
+                console.log('Checked:', checked);
+                alert(`Checkbox clicked: ${checked}`);
               }}
               helpText="Generates BreadcrumbList, FAQPage, WebPage and more structured data"
             />
@@ -1150,3 +1084,79 @@ export default function Settings() {
     </BlockStack>
   );
 }
+
+/* 
+ЗАКОМЕНТИРАН СТАР КОД ЗА ADVANCED SCHEMA CHECKBOX - ЗА ТЕСТВАНЕ
+
+onChange={async (checked) => {
+  console.log('Advanced Schema checkbox clicked:', checked);
+  setAdvancedSchemaEnabled(checked);
+  setSchemaError('');
+  
+  // Save the setting in AI Discovery settings
+  try {
+    console.log('Saving settings to AI Discovery...');
+    const saveRes = await fetch('/api/ai-discovery/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shop,
+        ...settings,
+        advancedSchemaEnabled: checked
+      })
+    });
+    
+    console.log('Save response status:', saveRes.status);
+    
+    if (!saveRes.ok) {
+      const error = await saveRes.json();
+      console.error('Save error:', error);
+      throw new Error('Failed to save settings');
+    }
+    
+    console.log('Advanced Schema setting saved successfully');
+  } catch (err) {
+    console.error('Failed to save Advanced Schema setting:', err);
+    setSchemaError('Failed to save settings');
+    setAdvancedSchemaEnabled(false);
+    return;
+  }
+  
+  // Trigger schema generation if enabled
+  if (checked) {
+    console.log('Triggering schema generation...');
+    console.log('Shop:', shop);
+    setSchemaGenerating(true);
+    
+    try {
+      const url = '/api/schema/generate-all';
+      console.log('Calling:', url);
+      
+      const schemaRes = await fetch(url, {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop })
+      });
+      
+      console.log('Schema response status:', schemaRes.status);
+      const result = await schemaRes.json();
+      console.log('Schema generation result:', result);
+      
+      if (!schemaRes.ok) {
+        throw new Error(result.error || 'Failed to start generation');
+      }
+      
+      // Show progress for 30 seconds
+      setTimeout(() => {
+        setSchemaGenerating(false);
+      }, 30000);
+      
+    } catch (err) {
+      console.error('Schema generation error:', err);
+      setSchemaError(err.message);
+      setSchemaGenerating(false);
+      setAdvancedSchemaEnabled(false);
+    }
+  }
+}}
+*/
