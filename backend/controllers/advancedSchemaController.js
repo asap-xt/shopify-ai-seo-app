@@ -732,15 +732,6 @@ async function generateAllSchemas(shop) {
     
     console.log(`[SCHEMA] Completed schema generation for ${shop}`);
     
-    // Инсталираме snippet в темата
-    try {
-      await installThemeSnippet(shop);
-      console.log('[SCHEMA] Theme integration completed!');
-    } catch (err) {
-      console.error('[SCHEMA] Theme integration failed:', err);
-      // Не спираме процеса - schema все още работи през metafields
-    }
-    
   } catch (error) {
     console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
     throw error;
