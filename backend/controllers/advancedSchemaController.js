@@ -92,27 +92,9 @@ async function loadShopContext(shop) {
         primaryDomain {
           url
         }
-        privacyPolicy {
-          url
-        }
-        refundPolicy {
-          url  
-        }
-        shippingPolicy {
-          url
-        }
-        termsOfService {
-          url
-        }
         paymentSettings {
           supportedDigitalWallets
-          acceptedCardBrands
         }
-      }
-      locales {
-        published
-        primary
-        locale
       }
     }
   `;
@@ -120,8 +102,7 @@ async function loadShopContext(shop) {
   try {
     const data = await shopGraphQL(shop, contextQuery);
     return {
-      shop: data.shop,
-      locales: data.locales?.filter(l => l.published) || []
+      shop: data.shop
     };
   } catch (error) {
     console.error('[SCHEMA] Failed to load shop context:', error);
