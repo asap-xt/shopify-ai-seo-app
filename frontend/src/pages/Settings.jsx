@@ -26,7 +26,7 @@ const qs = (k, d = '') => {
   catch { return d; }
 };
 
-// Helper function to normalise plans names
+// Helper function to normalize plan names
 const normalizePlan = (plan) => {
   return (plan || 'starter').toLowerCase().replace(' ', '_');
 };
@@ -863,7 +863,7 @@ export default function Settings() {
         </Card>
       )} */}
 
-      {/* Advanced Schema Data Management - показва се само ако е включено и запазено */}
+      {/* Advanced Schema Data Management - shows only if enabled and saved */}
       {settings?.features?.schemaData && originalSettings?.features?.schemaData && (
         <Card>
           <Box padding="400">
@@ -1119,7 +1119,7 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Test Plan Switcher - само за development */}
+      {/* Test Plan Switcher - for development only */}
       <Card>
         <Box padding="400">
           <BlockStack gap="400">
@@ -1280,7 +1280,7 @@ export default function Settings() {
 }
 
 /* 
-ЗАКОМЕНТИРАН СТАР КОД ЗА ADVANCED SCHEMA CHECKBOX - ЗА ТЕСТВАНЕ
+COMMENTED OLD CODE FOR ADVANCED SCHEMA CHECKBOX - FOR TESTING
 
 onChange={async (checked) => {
   console.log('Advanced Schema checkbox clicked:', checked);
