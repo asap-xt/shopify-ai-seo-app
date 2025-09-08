@@ -621,75 +621,6 @@ export default function Settings() {
         </Box>
       </Card>
 
-      {/* Advanced Schema Data - Enterprise only */}
-      {normalizePlan(settings?.plan) === 'enterprise' && (
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Advanced Schema Data</Text>
-              <Text variant="bodyMd" tone="subdued">
-                Generate BreadcrumbList, FAQPage, WebPage and more structured data for better AI discovery
-              </Text>
-              
-              <Button
-                primary
-                onClick={async () => {
-                  console.log('Generate Schema clicked!');
-                  try {
-                    const res = await fetch('/api/schema/generate-all', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ shop })
-                    });
-                    
-                    console.log('Response status:', res.status);
-                    const data = await res.json();
-                    console.log('Response data:', data);
-                    
-                    if (res.ok) {
-                      setToast('Schema generation started! This may take a few minutes.');
-                    } else {
-                      setToast(`Error: ${data.error || 'Failed to start generation'}`);
-                    }
-                  } catch (err) {
-                    console.error('Error:', err);
-                    setToast('Failed to generate schema');
-                  }
-                }}
-              >
-                Generate Advanced Schema Data
-              </Button>
-              
-              <Button
-                plain
-                onClick={async () => {
-                  console.log('View Schema clicked!');
-                  try {
-                    const res = await fetch(`/ai/schema-data.json?shop=${shop}`);
-                    console.log('Schema response status:', res.status);
-                    const data = await res.json();
-                    console.log('Schema response data:', data);
-                    
-                    if (res.ok) {
-                      // Open in new tab with the data
-                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      window.open(url, '_blank');
-                    } else {
-                      setToast(`Error: ${data.error || 'Failed to fetch schema data'}`);
-                    }
-                  } catch (err) {
-                    console.error('Error fetching schema:', err);
-                    setToast('Failed to fetch schema data');
-                  }
-                }}
-              >
-                View Generated Schema
-              </Button>
-            </BlockStack>
-          </Box>
-        </Card>
-      )}
 
       {/* AI Discovery Features */}
       <Card>
@@ -771,7 +702,7 @@ export default function Settings() {
                           />
                         </Box>
                         {/* View button is outside checkbox and shows only for saved features */}
-                        {originalSettings?.features?.[feature.key] && (
+                        {originalSettings?.features?.[feature.key] && feature.key !== 'schemaData' && (
                           <Button
                             size="slim"
                             onClick={() => viewJson(feature.key, feature.name)}
@@ -875,6 +806,63 @@ export default function Settings() {
           </Box>
         </Card>
       )} */}
+
+      {/* Advanced Schema Data Management - показва се само ако е включено и запазено */}
+      {settings?.features?.schemaData && originalSettings?.features?.schemaData && (
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">Advanced Schema Data Management</Text>
+              <Text variant="bodyMd" tone="subdued">
+                Generate and manage structured data for your products
+              </Text>
+              
+              <InlineStack gap="300">
+                <Button
+                  primary
+                  onClick={async () => {
+                    console.log('Generate Schema clicked!');
+                    setToast('Generating schemas...');
+                    try {
+                      const res = await fetch('/api/schema/generate-all', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ shop })
+                      });
+                      
+                      const data = await res.json();
+                      
+                      if (res.ok) {
+                        setToast('Schema generation started! This may take a few minutes.');
+                      } else {
+                        setToast(`Error: ${data.error || 'Failed to start generation'}`);
+                      }
+                    } catch (err) {
+                      console.error('Error:', err);
+                      setToast('Failed to generate schema');
+                    }
+                  }}
+                >
+                  Generate Advanced Schema Data
+                </Button>
+                
+                <Button
+                  onClick={() => {
+                    window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
+                  }}
+                >
+                  View Generated Schema
+                </Button>
+              </InlineStack>
+              
+              <Banner status="info" tone="subdued">
+                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. 
+                AI can access them at <code>/ai/product/[handle]/schemas.json</code></p>
+              </Banner>
+            </BlockStack>
+          </Box>
+        </Card>
+      )}
 
       {/* Save and Reset Buttons */}
       <InlineStack gap="200" align="end">
