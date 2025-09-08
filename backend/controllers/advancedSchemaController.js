@@ -113,8 +113,9 @@ async function loadShopContext(shop) {
 // Generate site-wide FAQ
 async function generateSiteFAQ(shop, shopContext) {
   const shopUrl = shopContext.shop.primaryDomain?.url || `https://${shop}`;
-  const languages = shopContext.locales.map(l => l.locale);
-  const primaryLanguage = shopContext.locales.find(l => l.primary)?.locale || 'en';
+  // ВРЕМЕННО - използваме fallback за languages
+  const languages = ['en']; // Default to English
+  const primaryLanguage = 'en';
   
   const fixedQuestions = [
     "What is your return and refund policy?",
@@ -146,11 +147,11 @@ Available Languages: ${languages.join(', ')} (Primary: ${primaryLanguage})
 Currency: ${shopContext.shop.currencyCode}
 ${shopContext.shop.description ? `Description: ${shopContext.shop.description}` : ''}
 ${shopContext.shop.contactEmail ? `Contact Email: ${shopContext.shop.contactEmail}` : ''}
-${shopContext.shop.refundPolicy?.url ? `Refund Policy URL: ${shopUrl}/policies/refund-policy` : ''}
-${shopContext.shop.shippingPolicy?.url ? `Shipping Policy URL: ${shopUrl}/policies/shipping-policy` : ''}
-${shopContext.shop.privacyPolicy?.url ? `Privacy Policy URL: ${shopUrl}/policies/privacy-policy` : ''}
+Refund Policy URL: ${shopUrl}/policies/refund-policy
+Shipping Policy URL: ${shopUrl}/policies/shipping-policy
+Privacy Policy URL: ${shopUrl}/policies/privacy-policy
 
-Payment Methods: ${shopContext.shop.paymentSettings?.acceptedCardBrands?.join(', ') || 'Various payment methods'}
+Payment Methods: Various payment methods
 Digital Wallets: ${shopContext.shop.paymentSettings?.supportedDigitalWallets?.join(', ') || 'Multiple options'}
 
 Questions: ${JSON.stringify(fixedQuestions)}
