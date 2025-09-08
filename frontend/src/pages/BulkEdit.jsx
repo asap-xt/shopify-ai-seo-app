@@ -266,7 +266,7 @@ export default function BulkEdit({ shop: shopProp }) {
     );
     
     const handleStartEnhancement = async () => {
-      setShowAIEnhanceModal(false); // Затваряме първия модал
+      // Не затваряме модала - ще покажем progress модала
       setAIEnhanceProgress({
         processing: true,
         current: 0,
