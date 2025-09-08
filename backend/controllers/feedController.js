@@ -6,8 +6,23 @@ import express from 'express';
 import crypto from 'crypto';
 import { FeedCache, syncProductsForShop } from './productSync.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
+import Subscription from '../db/Subscription.js';
 
 const router = express.Router();
+
+// Helper function to fetch plan
+async function fetchPlan(shop) {
+  try {
+    const subscription = await Subscription.findOne({ shop });
+    return {
+      plan: subscription?.plan || 'starter',
+      planKey: subscription?.plan?.toLowerCase().replace(' ', '_') || 'starter'
+    };
+  } catch (error) {
+    console.error('Error fetching plan:', error);
+    return { plan: 'starter', planKey: 'starter' };
+  }
+}
 
 function assertAccess(req) {
   const token = req.query.token || req.headers['x-feed-token'];
@@ -137,6 +152,16 @@ router.get('/schema-data.json', async (req, res) => {
     const shop = req.query.shop;
     if (!shop) return res.status(400).json({ error: 'Shop required' });
     
+    // Check plan
+    const plan = await fetchPlan(shop);
+    if (plan.planKey !== 'enterprise') {
+      return res.status(403).json({ 
+        error: 'Schema data requires Enterprise plan',
+        plan: plan.plan 
+      });
+    }
+    
+    // Get schema data from MongoDB
     const schemaData = await AdvancedSchema.findOne({ shop });
     
     if (!schemaData || !schemaData.schemas?.length) {
@@ -153,12 +178,15 @@ router.get('/schema-data.json', async (req, res) => {
       });
     }
     
+    // Return the schemas
     res.json({
       shop,
       generated_at: schemaData.generatedAt,
+      total_schemas: schemaData.schemas.length,
       schemas: schemaData.schemas,
-      siteFAQ: schemaData.siteFAQ
+      site_faq: schemaData.siteFAQ
     });
+    
   } catch (error) {
     console.error('Error fetching schema data:', error);
     res.status(500).json({ error: 'Failed to fetch schema data' });
