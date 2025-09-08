@@ -4,6 +4,8 @@ import { requireShop, shopGraphQL } from './seoController.js';
 import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
+import Shop from '../db/Shop.js'; // За access token
+import fetch from 'node-fetch';
 
 const router = express.Router();
 
@@ -11,6 +13,12 @@ const router = express.Router();
 const AI_MODEL = 'google/gemini-2.5-flash-lite'; // Важно: flash-lite, не flash
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+
+// Helper function to get access token
+async function getAccessToken(shop) {
+  const shopRecord = await Shop.findOne({ shop });
+  return shopRecord?.accessToken;
+}
 
 // FAQ Fallbacks за липсваща информация
 const FAQ_FALLBACKS = {
@@ -535,6 +543,114 @@ async function installScriptTag(shop) {
   }
 }
 
+// Install Theme Snippet for auto-injection
+async function installThemeSnippet(shop) {
+  console.log('[SCHEMA] Installing theme snippet...');
+  
+  try {
+    // Намираме активната тема
+    const themesQuery = `{
+      themes(first: 10) {
+        edges {
+          node {
+            id
+            name
+            role
+          }
+        }
+      }
+    }`;
+    
+    const themesData = await shopGraphQL(shop, themesQuery);
+    const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN')?.node;
+    
+    if (!mainTheme) {
+      throw new Error('No main theme found');
+    }
+    
+    // Създаваме snippet файла
+    const snippetContent = `{%- comment -%} AI Schema Data - Auto-generated {%- endcomment -%}
+{%- if product -%}
+  {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
+  {%- assign schemas = product.metafields.advanced_schema[schema_key].value -%}
+  {%- if schemas -%}
+    <script type="application/ld+json">
+      {{ schemas }}
+    </script>
+  {%- endif -%}
+{%- endif -%}
+
+{%- comment -%} Site-wide FAQ Schema {%- endcomment -%}
+{%- if shop.metafields.advanced_schema.site_faq -%}
+  <script type="application/ld+json">
+    {{ shop.metafields.advanced_schema.site_faq.value }}
+  </script>
+{%- endif -%}`;
+
+    // Създаваме файла чрез REST API
+    const themeId = mainTheme.id.split('/').pop();
+    const putUrl = `https://${shop}/admin/api/2024-01/themes/${themeId}/assets.json`;
+    const accessToken = await getAccessToken(shop);
+    
+    const response = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        asset: {
+          key: 'snippets/ai-schema.liquid',
+          value: snippetContent
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to create snippet: ${response.statusText}`);
+    }
+    
+    // Проверяваме theme.liquid
+    const themeFileResponse = await fetch(`${putUrl}?asset[key]=layout/theme.liquid`, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken
+      }
+    });
+    
+    const themeFile = await themeFileResponse.json();
+    let themeContent = themeFile.asset.value;
+    
+    // Добавяме snippet ако не съществува
+    if (!themeContent.includes("render 'ai-schema'")) {
+      themeContent = themeContent.replace(
+        '</head>',
+        `  {% render 'ai-schema' %}\n</head>`
+      );
+      
+      // Обновяваме theme.liquid
+      await fetch(putUrl, {
+        method: 'PUT',
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          asset: {
+            key: 'layout/theme.liquid',
+            value: themeContent
+          }
+        })
+      });
+    }
+    
+    console.log('[SCHEMA] Theme snippet installed successfully');
+    
+  } catch (error) {
+    console.error('[SCHEMA] Failed to install theme snippet:', error);
+    throw error;
+  }
+}
+
 // Main background process
 async function generateAllSchemas(shop) {
   console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
@@ -615,6 +731,15 @@ async function generateAllSchemas(shop) {
     }
     
     console.log(`[SCHEMA] Completed schema generation for ${shop}`);
+    
+    // Инсталираме snippet в темата
+    try {
+      await installThemeSnippet(shop);
+      console.log('[SCHEMA] Theme integration completed!');
+    } catch (err) {
+      console.error('[SCHEMA] Theme integration failed:', err);
+      // Не спираме процеса - schema все още работи през metafields
+    }
     
   } catch (error) {
     console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
