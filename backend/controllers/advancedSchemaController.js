@@ -230,6 +230,7 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
 
 // Generate product schemas
 async function generateProductSchemas(shop, productDoc) {
+  console.log(`[SCHEMA] generateProductSchemas called for product ${productDoc.productId}`);
   const productGid = `gid://shopify/Product/${productDoc.productId}`;
   
   // Get full product data
@@ -277,6 +278,7 @@ async function generateProductSchemas(shop, productDoc) {
   
   if (!product) {
     console.error(`[SCHEMA] Product not found: ${productGid}`);
+    console.log(`[SCHEMA] generateProductSchemas returning undefined for product ${productDoc.productId}`);
     return;
   }
   
@@ -454,6 +456,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   baseSchemas.push(productSchema);
   
+  console.log(`[SCHEMA] generateProductSchemas returning ${baseSchemas.length} schemas for product ${productDoc.productId}`);
   return baseSchemas;
 }
 
@@ -557,9 +560,14 @@ async function generateAllSchemas(shop) {
       
       await Promise.all(batch.map(async (product) => {
         try {
+          console.log(`[SCHEMA] Processing product ${product.productId}...`);
           const productSchemas = await generateProductSchemas(shop, product);
+          console.log(`[SCHEMA] Product ${product.productId} returned ${productSchemas ? productSchemas.length : 0} schemas`);
           if (productSchemas && productSchemas.length > 0) {
             allProductSchemas.push(...productSchemas);
+            console.log(`[SCHEMA] Added ${productSchemas.length} schemas to collection. Total: ${allProductSchemas.length}`);
+          } else {
+            console.log(`[SCHEMA] No schemas generated for product ${product.productId}`);
           }
         } catch (err) {
           console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
