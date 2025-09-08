@@ -268,6 +268,10 @@ class AIDiscoveryService {
       content += 'Allow: /ai/welcome\n';
     }
     
+    // Добавете секция за schema endpoints
+    content += '\n# Advanced Schema Data\n';
+    content += `Sitemap: ${process.env.APP_URL}/ai/schema-sitemap.xml?shop=${shopDomain}\n`;
+    
     content += 'Allow: /products/*\n';
     content += 'Allow: /collections/*\n';
 

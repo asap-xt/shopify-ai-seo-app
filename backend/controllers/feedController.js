@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { FeedCache, syncProductsForShop } from './productSync.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import Subscription from '../db/Subscription.js';
+import { shopGraphQL } from './seoController.js';
 
 console.log('[FEED] AdvancedSchema model loaded:', !!AdvancedSchema); // DEBUG
 
@@ -179,5 +180,63 @@ router.get('/schema-data.json', async (req, res) => {
   }
 });
 
+// Функция за извличане на advanced schemas
+async function getAdvancedProductSchemas(shop, handle) {
+  try {
+    // Намираме продукта по handle
+    const productQuery = `{
+      productByHandle(handle: "${handle}") {
+        id
+        metafield(namespace: "advanced_schema", key: "schemas_en") {
+          value
+        }
+      }
+    }`;
+    
+    const data = await shopGraphQL(shop, productQuery);
+    
+    if (!data.productByHandle?.metafield?.value) {
+      return [];
+    }
+    
+    return JSON.parse(data.productByHandle.metafield.value);
+  } catch (error) {
+    console.error('[SCHEMA] Error fetching advanced schemas:', error);
+    return [];
+  }
+}
+
+// Функция за базови schemas (ако искате да ги комбинирате)
+async function getBasicProductSchema(shop, handle) {
+  // Вашата съществуваща логика за базови schemas
+  // Или можете да я пропуснете ако искате само advanced
+  return null;
+}
+
+// Публичен endpoint за всички schemas на продукт
+router.get('/product/:handle/schemas.json', async (req, res) => {
+  const { handle } = req.params;
+  const { shop, type = 'all' } = req.query;
+  
+  const schemas = [];
+  
+  // 1. Базови schemas (ако type = all или basic)
+  if (type === 'all' || type === 'basic') {
+    const basicSchema = await getBasicProductSchema(shop, handle);
+    schemas.push(basicSchema);
+  }
+  
+  // 2. Advanced schemas (ако type = all или advanced)
+  if (type === 'all' || type === 'advanced') {
+    const advancedSchemas = await getAdvancedProductSchemas(shop, handle);
+    schemas.push(...advancedSchemas);
+  }
+  
+  res.setHeader('Content-Type', 'application/ld+json');
+  res.json({
+    "@context": "https://schema.org",
+    "@graph": schemas
+  });
+});
 
 export default router;

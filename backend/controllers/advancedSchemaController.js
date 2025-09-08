@@ -983,4 +983,25 @@ router.get('/site-faq-script', async (req, res) => {
   }
 });
 
+// Sitemap за schemas
+router.get('/schema-sitemap.xml', async (req, res) => {
+  const shop = req.query.shop;
+  const products = await Product.find({ shop, 'advancedSchema.generated': true });
+  
+  let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  
+  products.forEach(product => {
+    sitemap += `  <url>
+    <loc>https://${process.env.APP_URL}/ai/product/${product.handle}/schemas.json?shop=${shop}</loc>
+    <lastmod>${new Date().toISOString()}</lastmod>
+  </url>\n`;
+  });
+  
+  sitemap += '</urlset>';
+  
+  res.setHeader('Content-Type', 'application/xml');
+  res.send(sitemap);
+});
+
 export default router;
