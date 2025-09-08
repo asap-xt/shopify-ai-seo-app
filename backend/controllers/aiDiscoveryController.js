@@ -170,7 +170,11 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
   console.log('[APPLY ENDPOINT] Called with body:', req.body);
   
   try {
-    const shop = requireShop(req);
+    const shop = req.body.shop || req.query.shop;
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter is required' });
+    }
+    
     console.log('[APPLY ENDPOINT] Shop:', shop);
     
     // Generate fresh robots.txt
