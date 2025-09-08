@@ -662,7 +662,7 @@ export default function Settings() {
               
               <Button
                 plain
-                onClick={() => window.open(`/ai/schema-data.json?shop=${shop}`, '_blank')}
+                onClick={() => window.open(`/schema-data.json?shop=${shop}`, '_blank')}
               >
                 View Generated Schema
               </Button>
