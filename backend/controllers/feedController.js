@@ -5,6 +5,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { FeedCache, syncProductsForShop } from './productSync.js';
+import AdvancedSchema from '../db/AdvancedSchema.js';
 
 const router = express.Router();
 
@@ -94,6 +95,73 @@ router.get('/ai/feed/catalog.json', async (req, res) => {
   } catch (e) {
     const status = e.status || 500;
     res.status(status).json({ error: e.message });
+  }
+});
+
+// GET /ai/schema-data.json?shop=...
+router.get('/ai/schema-data.json', async (req, res) => {
+  try {
+    const shop = String(req.query.shop || '').trim();
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing ?shop parameter' });
+    }
+    
+    // Търси в AdvancedSchema модела
+    const schemaData = await AdvancedSchema.findOne({ shop });
+    
+    if (!schemaData || !schemaData.schemas?.length) {
+      return res.json({
+        shop,
+        generated_at: new Date(),
+        schemas: [],
+        warning: "No advanced schema data found"
+      });
+    }
+    
+    // Връща данните
+    res.json({
+      shop: schemaData.shop,
+      generated_at: schemaData.generatedAt,
+      schemas: schemaData.schemas
+    });
+    
+  } catch (error) {
+    console.error('Error fetching schema data:', error);
+    res.status(500).json({ error: 'Failed to fetch schema data' });
+  }
+});
+
+// GET /schema-data.json?shop=...
+router.get('/schema-data.json', async (req, res) => {
+  try {
+    const shop = req.query.shop;
+    if (!shop) return res.status(400).json({ error: 'Shop required' });
+    
+    const schemaData = await AdvancedSchema.findOne({ shop });
+    
+    if (!schemaData || !schemaData.schemas?.length) {
+      return res.json({
+        shop,
+        generated_at: new Date(),
+        schemas: [],
+        warning: "No advanced schema data found",
+        action_required: {
+          message: "Please generate schema data first",
+          link: `/ai-seo?shop=${shop}#schema-data`,
+          link_text: "Go to Schema Data"
+        }
+      });
+    }
+    
+    res.json({
+      shop,
+      generated_at: schemaData.generatedAt,
+      schemas: schemaData.schemas,
+      siteFAQ: schemaData.siteFAQ
+    });
+  } catch (error) {
+    console.error('Error fetching schema data:', error);
+    res.status(500).json({ error: 'Failed to fetch schema data' });
   }
 });
 

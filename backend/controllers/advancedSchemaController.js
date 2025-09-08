@@ -3,6 +3,7 @@ import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
 import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
+import AdvancedSchema from '../db/AdvancedSchema.js';
 
 const router = express.Router();
 
@@ -536,7 +537,7 @@ async function generateAllSchemas(shop) {
     
     // Generate site-wide FAQ
     console.log('[SCHEMA] Generating site FAQ...');
-    await generateSiteFAQ(shop, shopContext);
+    const siteFAQ = await generateSiteFAQ(shop, shopContext);
     
     // Get all products with SEO
     const products = await Product.find({
@@ -546,6 +547,9 @@ async function generateAllSchemas(shop) {
     
     console.log(`[SCHEMA] Processing ${products.length} products...`);
     
+    // Collect all generated schemas
+    const allProductSchemas = [];
+    
     // Process in batches
     const batchSize = 10;
     for (let i = 0; i < products.length; i += batchSize) {
@@ -553,13 +557,35 @@ async function generateAllSchemas(shop) {
       
       await Promise.all(batch.map(async (product) => {
         try {
-          await generateProductSchemas(shop, product);
+          const productSchemas = await generateProductSchemas(shop, product);
+          if (productSchemas && productSchemas.length > 0) {
+            allProductSchemas.push(...productSchemas);
+          }
         } catch (err) {
           console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
         }
       }));
       
       console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
+    }
+    
+    // Save to MongoDB
+    try {
+      await AdvancedSchema.findOneAndUpdate(
+        { shop },
+        {
+          shop,
+          schemas: allProductSchemas,
+          siteFAQ,
+          generatedAt: new Date(),
+          updatedAt: new Date()
+        },
+        { upsert: true }
+      );
+      console.log(`[SCHEMA] Saved ${allProductSchemas.length} schemas to MongoDB`);
+    } catch (err) {
+      console.error('[SCHEMA] Failed to save to MongoDB:', err);
+      throw err;
     }
     
     console.log(`[SCHEMA] Completed schema generation for ${shop}`);
