@@ -31,6 +31,11 @@ const normalizePlan = (plan) => {
 };
 
 export default function Settings() {
+  // Debug helper
+  const debugLog = (message, data = null) => {
+    console.log(`[SCHEMA DEBUG] ${message}`, data || '');
+  };
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState(null);
@@ -868,43 +873,65 @@ export default function Settings() {
               </Text>
               
               <InlineStack gap="300">
+                {/* Test button - REMOVE AFTER DEBUGGING */}
+                <Button onClick={() => {
+                  debugLog('Test button clicked');
+                  setSchemaGenerating(true);
+                  setSchemaComplete(false);
+                }}>
+                  Test Modal
+                </Button>
+                
                 <Button
                   primary
                   onClick={async () => {
-                    console.log('Generate Schema clicked!');
-                    setSchemaGenerating(true);
-                    setSchemaComplete(false);
-                    setSchemaProgress({
-                      current: 0,
-                      total: 0,
-                      percent: 0,
-                      currentProduct: 'Initializing...',
-                      stats: {
-                        siteFAQ: false,
-                        products: 0,
-                        totalSchemas: 0
-                      }
-                    });
+                    debugLog('Generate button clicked');
                     
                     try {
+                      // Set initial states
+                      debugLog('Setting initial states');
+                      setSchemaGenerating(true);
+                      setSchemaComplete(false);
+                      setSchemaProgress({
+                        current: 0,
+                        total: 0,
+                        percent: 0,
+                        currentProduct: 'Initializing...',
+                        stats: {
+                          siteFAQ: false,
+                          products: 0,
+                          totalSchemas: 0
+                        }
+                      });
+                      
+                      debugLog('States set, making API call');
+                      
                       const res = await fetch('/api/schema/generate-all', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ shop })
                       });
                       
+                      debugLog('API response received', { status: res.status });
+                      
                       const data = await res.json();
+                      debugLog('API response data', data);
                       
                       if (res.ok) {
-                        // Start checking progress
-                        setTimeout(checkGenerationProgress, 1000);
+                        debugLog('Starting progress check');
+                        setTimeout(() => {
+                          debugLog('Calling checkGenerationProgress');
+                          checkGenerationProgress();
+                        }, 1000);
                       } else {
+                        debugLog('API error', data);
                         setToast(`Error: ${data.error || 'Failed to start generation'}`);
                         setSchemaGenerating(false);
                       }
                     } catch (err) {
-                      console.error('Error:', err);
-                      setToast('Failed to generate schema');
+                      debugLog('Catch block error', err);
+                      console.error('Full error:', err);
+                      setToast('Failed to generate schema: ' + err.message);
                       setSchemaGenerating(false);
                     }
                   }}
@@ -1156,12 +1183,21 @@ export default function Settings() {
         </Modal>
       )}
 
+      {/* Debug log for modal state */}
+      {debugLog('Modal states', { 
+        schemaGenerating, 
+        schemaComplete,
+        modalShouldShow: schemaGenerating && !schemaComplete 
+      })}
+
       {/* Schema Generation Progress Modal */}
       {schemaGenerating && !schemaComplete && (
         <Modal
           open={true}
           title="Generating Advanced Schema Data"
-          onClose={() => {}}
+          onClose={() => {
+            debugLog('Modal close attempted');
+          }}
           noScroll
         >
           <Modal.Section>
@@ -1169,7 +1205,7 @@ export default function Settings() {
               <Text variant="bodyMd">
                 {schemaProgress.currentProduct || 'Preparing...'}
               </Text>
-              <ProgressBar progress={schemaProgress.percent} />
+              <ProgressBar progress={schemaProgress.percent || 0} />
               <Text variant="bodySm" tone="subdued">
                 {schemaProgress.current > 0 
                   ? `Processing product ${schemaProgress.current} of ${schemaProgress.total} (${schemaProgress.percent}%)`
