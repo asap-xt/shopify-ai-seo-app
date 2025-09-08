@@ -564,7 +564,7 @@ router.get('/ai/robots-dynamic', async (req, res) => {
     };
     
     const settings = await aiDiscoveryService.getSettings(shop, session);
-    const robotsTxt = aiDiscoveryService.generateRobotsTxt(settings, shop);
+    const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
     
     res.type('text/plain');
     res.send(robotsTxt);

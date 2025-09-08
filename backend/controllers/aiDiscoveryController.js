@@ -3,6 +3,11 @@ import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import Shop from '../db/Shop.js';
 
+// Helper function to normalize plan names
+const normalizePlan = (plan) => {
+  return (plan || 'starter').toLowerCase().replace(' ', '_');
+};
+
 const router = express.Router();
 
 /**
@@ -126,7 +131,7 @@ router.get('/ai-discovery/robots-txt', async (req, res) => {
     
     const { session } = await getShopSession(shop);
     const settings = await aiDiscoveryService.getSettings(shop, session);
-    const robotsTxt = aiDiscoveryService.generateRobotsTxt(settings, shop);
+    const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
     
     res.type('text/plain').send(robotsTxt);
   } catch (error) {
@@ -187,7 +192,7 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
     
     // Get settings and generate robots.txt
     const settings = await aiDiscoveryService.getSettings(shop, session);
-    const robotsTxtContent = aiDiscoveryService.generateRobotsTxt(settings, shop);
+    const robotsTxtContent = await aiDiscoveryService.generateRobotsTxt(shop);
     
     // Create redirect from /robots.txt to our endpoint
     const redirectResponse = await fetch(
