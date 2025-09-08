@@ -602,6 +602,12 @@ async function generateAllSchemas(shop) {
         { upsert: true }
       );
       console.log(`[SCHEMA] Saved ${allProductSchemas.length} schemas to MongoDB`);
+      
+      // Verification - check if data was actually saved
+      const saved = await AdvancedSchema.findOne({ shop });
+      console.log('[SCHEMA] Verification - saved document exists:', !!saved);
+      console.log('[SCHEMA] Verification - schemas count:', saved?.schemas?.length);
+      console.log('[SCHEMA] Verification - first schema:', saved?.schemas?.[0]);
     } catch (err) {
       console.error('[SCHEMA] Failed to save to MongoDB:', err);
       throw err;

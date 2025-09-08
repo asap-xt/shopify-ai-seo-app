@@ -8,6 +8,8 @@ import { FeedCache, syncProductsForShop } from './productSync.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import Subscription from '../db/Subscription.js';
 
+console.log('[FEED] AdvancedSchema model loaded:', !!AdvancedSchema); // DEBUG
+
 const router = express.Router();
 
 // Helper function to fetch plan
@@ -148,13 +150,20 @@ router.get('/ai/schema-data.json', async (req, res) => {
 
 // GET /schema-data.json?shop=...
 router.get('/schema-data.json', async (req, res) => {
+  console.log('[SCHEMA-ENDPOINT] Request received:', req.query); // DEBUG
+  
   try {
     const shop = req.query.shop;
     if (!shop) return res.status(400).json({ error: 'Shop required' });
     
+    console.log('[SCHEMA-ENDPOINT] Shop:', shop); // DEBUG
+    
     // Check plan
     const plan = await fetchPlan(shop);
+    console.log('[SCHEMA-ENDPOINT] Plan:', plan); // DEBUG
+    
     if (plan.planKey !== 'enterprise') {
+      console.log('[SCHEMA-ENDPOINT] Not enterprise, rejecting'); // DEBUG
       return res.status(403).json({ 
         error: 'Schema data requires Enterprise plan',
         plan: plan.plan 
@@ -162,9 +171,14 @@ router.get('/schema-data.json', async (req, res) => {
     }
     
     // Get schema data from MongoDB
+    console.log('[SCHEMA-ENDPOINT] Querying AdvancedSchema for shop:', shop); // DEBUG
     const schemaData = await AdvancedSchema.findOne({ shop });
+    console.log('[SCHEMA-ENDPOINT] Found data:', !!schemaData); // DEBUG
+    console.log('[SCHEMA-ENDPOINT] Schemas count:', schemaData?.schemas?.length || 0); // DEBUG
+    console.log('[SCHEMA-ENDPOINT] Generated at:', schemaData?.generatedAt); // DEBUG
     
     if (!schemaData || !schemaData.schemas?.length) {
+      console.log('[SCHEMA-ENDPOINT] No data found, returning empty'); // DEBUG
       return res.json({
         shop,
         generated_at: new Date(),
@@ -178,7 +192,7 @@ router.get('/schema-data.json', async (req, res) => {
       });
     }
     
-    // Return the schemas
+    console.log('[SCHEMA-ENDPOINT] Returning schemas'); // DEBUG
     res.json({
       shop,
       generated_at: schemaData.generatedAt,
@@ -188,7 +202,7 @@ router.get('/schema-data.json', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching schema data:', error);
+    console.error('[SCHEMA-ENDPOINT] Error:', error);
     res.status(500).json({ error: 'Failed to fetch schema data' });
   }
 });
