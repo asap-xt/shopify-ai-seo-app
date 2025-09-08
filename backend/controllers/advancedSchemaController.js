@@ -592,11 +592,16 @@ async function generateAllSchemas(shop) {
 
 // POST /api/schema/generate-all - Start background generation
 router.post('/generate-all', async (req, res) => {
+  console.log('[SCHEMA] Generate-all endpoint called'); // ADD THIS
+  
   try {
     const shop = requireShop(req);
+    console.log('[SCHEMA] Shop:', shop); // ADD THIS
     
     // Check Enterprise plan
     const subscription = await Subscription.findOne({ shop });
+    console.log('[SCHEMA] Subscription plan:', subscription?.plan); // ADD THIS
+    
     if (subscription?.plan !== 'enterprise') {
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Enterprise plan',
@@ -611,11 +616,13 @@ router.post('/generate-all', async (req, res) => {
     });
     
     // Start background process
+    console.log('[SCHEMA] Starting background generation...'); // ADD THIS
     generateAllSchemas(shop).catch(err => {
       console.error('[SCHEMA] Background generation failed:', err);
     });
     
   } catch (error) {
+    console.error('[SCHEMA] Endpoint error:', error); // ADD THIS
     res.status(500).json({ error: error.message });
   }
 });

@@ -16,7 +16,8 @@ import {
   Link,
   Badge,
   Toast,
-  Spinner
+  Spinner,
+  Stack
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
 
@@ -49,6 +50,14 @@ export default function Settings() {
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
   const [processingSchema, setProcessingSchema] = useState(false);
+  const [schemaGenerating, setSchemaGenerating] = useState(false);
+  const [schemaError, setSchemaError] = useState('');
+  const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
+    enabled: false,
+    generating: false,
+    generated: false,
+    progress: ''
+  });
   
   const shop = qs('shop', '');
 
@@ -70,6 +79,28 @@ export default function Settings() {
       })
       .catch(err => console.error('Failed to load advanced schema settings:', err));
   }, [shop]);
+
+  // Check schema status when enabled
+  useEffect(() => {
+    if (advancedSchemaEnabled) {
+      checkSchemaStatus();
+    }
+  }, [advancedSchemaEnabled]);
+
+  const checkSchemaStatus = async () => {
+    try {
+      const res = await fetch(`/api/schema/status?shop=${shop}`);
+      const data = await res.json();
+      setAdvancedSchemaStatus({
+        enabled: data.enabled,
+        generating: data.generating,
+        generated: data.hasSiteFAQ || data.productsWithSchema > 0,
+        progress: data.progress || ''
+      });
+    } catch (error) {
+      console.error('Failed to check schema status:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -605,20 +636,63 @@ export default function Settings() {
               checked={advancedSchemaEnabled}
               onChange={async (checked) => {
                 setAdvancedSchemaEnabled(checked);
+                setSchemaError('');
+                
                 if (checked) {
-                  setProcessingSchema(true);
-                  // Стартираме background процеса
-                  await fetch('/api/schema/generate-all', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ shop, enabled: true })
-                  });
-                  setProcessingSchema(false);
+                  setSchemaGenerating(true);
+                  try {
+                    const res = await fetch('/api/schema/generate-all', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ shop })
+                    });
+                    
+                    const data = await res.json();
+                    console.log('Schema generation response:', data);
+                    
+                    if (!res.ok) {
+                      throw new Error(data.error || 'Failed to start generation');
+                    }
+                    
+                    // Show progress for 30 seconds
+                    setTimeout(() => {
+                      setSchemaGenerating(false);
+                    }, 30000);
+                    
+                  } catch (err) {
+                    console.error('Schema generation error:', err);
+                    setSchemaError(err.message);
+                    setSchemaGenerating(false);
+                    setAdvancedSchemaEnabled(false);
+                  }
                 }
               }}
-              helpText="Generates BreadcrumbList, FAQPage, WebPage and more structured data for better AI discovery"
+              helpText="Generates BreadcrumbList, FAQPage, WebPage and more structured data"
             />
-            {processingSchema && <Spinner size="small" />}
+            
+            {schemaGenerating && (
+              <Banner status="info" title="Generating Schema Data">
+                <p>This process may take a few minutes. You can leave this page - generation continues in background.</p>
+                <Spinner size="small" />
+              </Banner>
+            )}
+
+            {schemaError && (
+              <Banner status="critical">
+                <p>Error: {schemaError}</p>
+              </Banner>
+            )}
+
+            {advancedSchemaEnabled && !schemaGenerating && (
+              <Stack vertical spacing="tight">
+                <Button onClick={() => window.location.href = `/api/schema/view?shop=${shop}`}>
+                  View Schema Data
+                </Button>
+                <Text variant="bodySm" color="subdued">
+                  Schema data is generated automatically when you enable this feature.
+                </Text>
+              </Stack>
+            )}
           </BlockStack>
         </Card>
       )}
