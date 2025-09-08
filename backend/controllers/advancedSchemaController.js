@@ -656,9 +656,9 @@ async function generateAllSchemas(shop) {
   console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
   
   try {
-    // Step 1: Install script tag (if not already installed)
-    await installScriptTag(shop);
-    console.log('[SCHEMA] Script tag installed/verified');
+    // ПРЕМАХВАМЕ script tag частта напълно
+    // await installScriptTag(shop); // ПРЕМАХВАМЕ ТОВА
+    console.log('[SCHEMA] Using theme snippet approach (no script tags needed)');
     
     // Load shop context
     const shopContext = await loadShopContext(shop);
