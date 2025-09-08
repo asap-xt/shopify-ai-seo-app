@@ -49,7 +49,6 @@ export default function Settings() {
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
   const [processingSchema, setProcessingSchema] = useState(false);
-  const [schemaGenerating, setSchemaGenerating] = useState(false);
   const [schemaError, setSchemaError] = useState('');
   const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
     enabled: false,
@@ -57,6 +56,21 @@ export default function Settings() {
     generated: false,
     progress: ''
   });
+  
+  // Advanced Schema generation progress state
+  const [schemaGenerating, setSchemaGenerating] = useState(false);
+  const [schemaProgress, setSchemaProgress] = useState({
+    current: 0,
+    total: 0,
+    percent: 0,
+    currentProduct: '',
+    stats: {
+      siteFAQ: false,
+      products: 0,
+      totalSchemas: 0
+    }
+  });
+  const [schemaComplete, setSchemaComplete] = useState(false);
   
   const shop = qs('shop', '');
 
@@ -88,6 +102,42 @@ export default function Settings() {
       });
     } catch (error) {
       console.error('Failed to check schema status:', error);
+    }
+  };
+
+  // Check generation progress
+  const checkGenerationProgress = async () => {
+    try {
+      const res = await fetch(`/api/schema/status?shop=${shop}`);
+      const data = await res.json();
+      
+      // Update progress based on response
+      if (data.inProgress) {
+        setSchemaProgress(prev => ({
+          ...prev,
+          current: data.current || prev.current,
+          total: data.total || prev.total,
+          percent: data.percent || Math.round((prev.current / prev.total) * 100),
+          currentProduct: data.currentProduct || 'Processing...'
+        }));
+        
+        // Check again in 2 seconds
+        setTimeout(checkGenerationProgress, 2000);
+      } else {
+        // Generation complete
+        setSchemaComplete(true);
+        setSchemaProgress(prev => ({
+          ...prev,
+          percent: 100,
+          stats: {
+            siteFAQ: data.hasSiteFAQ || false,
+            products: data.productsWithSchema || 0,
+            totalSchemas: data.totalSchemas || 0
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Progress check error:', err);
     }
   };
 
@@ -822,7 +872,20 @@ export default function Settings() {
                   primary
                   onClick={async () => {
                     console.log('Generate Schema clicked!');
-                    setToast('Generating schemas...');
+                    setSchemaGenerating(true);
+                    setSchemaComplete(false);
+                    setSchemaProgress({
+                      current: 0,
+                      total: 0,
+                      percent: 0,
+                      currentProduct: 'Initializing...',
+                      stats: {
+                        siteFAQ: false,
+                        products: 0,
+                        totalSchemas: 0
+                      }
+                    });
+                    
                     try {
                       const res = await fetch('/api/schema/generate-all', {
                         method: 'POST',
@@ -833,13 +896,16 @@ export default function Settings() {
                       const data = await res.json();
                       
                       if (res.ok) {
-                        setToast('Schema generation started! This may take a few minutes.');
+                        // Start checking progress
+                        setTimeout(checkGenerationProgress, 1000);
                       } else {
                         setToast(`Error: ${data.error || 'Failed to start generation'}`);
+                        setSchemaGenerating(false);
                       }
                     } catch (err) {
                       console.error('Error:', err);
                       setToast('Failed to generate schema');
+                      setSchemaGenerating(false);
                     }
                   }}
                 >
@@ -1086,6 +1152,96 @@ export default function Settings() {
                 </pre>
               )}
             </Box>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Generation Progress Modal */}
+      {schemaGenerating && !schemaComplete && (
+        <Modal
+          open={true}
+          title="Generating Advanced Schema Data"
+          onClose={() => {}}
+          noScroll
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="bodyMd">
+                {schemaProgress.currentProduct || 'Preparing...'}
+              </Text>
+              <ProgressBar progress={schemaProgress.percent} />
+              <Text variant="bodySm" tone="subdued">
+                {schemaProgress.current > 0 
+                  ? `Processing product ${schemaProgress.current} of ${schemaProgress.total} (${schemaProgress.percent}%)`
+                  : 'Starting generation process...'}
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Generation Complete Modal */}
+      {schemaComplete && (
+        <Modal
+          open={true}
+          title="Schema Generation Complete"
+          onClose={() => {
+            setSchemaGenerating(false);
+            setSchemaComplete(false);
+          }}
+          primaryAction={{
+            content: 'View Generated Schemas',
+            onAction: () => {
+              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
+              setSchemaGenerating(false);
+              setSchemaComplete(false);
+            }
+          }}
+          secondaryActions={[{
+            content: 'Close',
+            onAction: () => {
+              setSchemaGenerating(false);
+              setSchemaComplete(false);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="success" title="Generation successful!">
+                <p>Advanced schema data has been generated for your products.</p>
+              </Banner>
+              
+              <Text variant="headingMd">Generation Statistics</Text>
+              
+              <InlineStack gap="600" wrap>
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
+                  </Text>
+                </Box>
+                
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.products}
+                  </Text>
+                </Box>
+                
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.totalSchemas}
+                  </Text>
+                </Box>
+              </InlineStack>
+              
+              <Box paddingBlockStart="200">
+                <Text variant="bodySm" tone="subdued">
+                  Schemas are now available at /ai/product/[handle]/schemas.json
+                </Text>
+              </Box>
+            </BlockStack>
           </Modal.Section>
         </Modal>
       )}
