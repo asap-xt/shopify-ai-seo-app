@@ -3,6 +3,7 @@ import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
+import { shopGraphQL } from './seoController.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -375,5 +376,75 @@ router.get('/ai-discovery/test-assets', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * Apply robots.txt to theme
+ */
+async function applyRobotsTxt(shop, robotsTxt) {
+  try {
+    // Първо намираме активната тема
+    const themesQuery = `{
+      themes(first: 10) {
+        edges {
+          node {
+            id
+            name
+            role
+          }
+        }
+      }
+    }`;
+    
+    const themesData = await shopGraphQL(shop, themesQuery);
+    const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN');
+    
+    if (!mainTheme) {
+      throw new Error('Main theme not found');
+    }
+    
+    const themeId = mainTheme.node.id;
+    
+    // Създаваме/обновяваме robots.txt.liquid файла
+    const mutation = `
+      mutation createOrUpdateFile($themeId: ID!, $files: [OnlineStoreThemeFileInput!]!) {
+        themeFilesUpsert(themeId: $themeId, files: $files) {
+          upsertedThemeFiles {
+            filename
+          }
+          userErrors {
+            field
+            message
+            code
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      themeId: themeId,
+      files: [{
+        filename: "templates/robots.txt.liquid",
+        body: {
+          type: "TEXT",
+          value: robotsTxt
+        }
+      }]
+    };
+    
+    const result = await shopGraphQL(shop, mutation, variables);
+    
+    if (result.themeFilesUpsert?.userErrors?.length > 0) {
+      const error = result.themeFilesUpsert.userErrors[0];
+      throw new Error(`Failed to update robots.txt: ${error.message} (${error.code})`);
+    }
+    
+    console.log('[AI Discovery] robots.txt applied successfully');
+    return { success: true, message: 'robots.txt applied successfully' };
+    
+  } catch (error) {
+    console.error('[AI Discovery] Error applying robots.txt:', error);
+    throw error;
+  }
+}
 
 export default router;
