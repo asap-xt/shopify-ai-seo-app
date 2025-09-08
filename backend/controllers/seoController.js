@@ -129,8 +129,16 @@ async function resolveAdminTokenForShop(shop) {
 }
 
 async function shopGraphQL(shop, query, variables = {}) {
+  console.log('[GRAPHQL] Shop:', shop);
+  console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
+  console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
+  
   const token = await resolveAdminTokenForShop(shop);
+  console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
+  
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
+  console.log('[GRAPHQL] URL:', url);
+  
   const rsp = await fetch(url, {
     method: 'POST',
     headers: {
@@ -139,12 +147,20 @@ async function shopGraphQL(shop, query, variables = {}) {
     },
     body: JSON.stringify({ query, variables }),
   });
+  
+  console.log('[GRAPHQL] Response status:', rsp.status);
+  console.log('[GRAPHQL] Response headers:', Object.fromEntries(rsp.headers.entries()));
+  
   const json = await rsp.json().catch(() => ({}));
+  console.log('[GRAPHQL] Response data:', JSON.stringify(json, null, 2));
+  
   if (!rsp.ok || json.errors) {
+    console.error('[GRAPHQL] Error response:', json.errors || json);
     const e = new Error(`Admin GraphQL error: ${JSON.stringify(json.errors || json)}`);
     e.status = rsp.status || 500;
     throw e;
   }
+  
   // Collect nested userErrors
   const userErrors = [];
   (function collect(node) {
@@ -153,11 +169,15 @@ async function shopGraphQL(shop, query, variables = {}) {
     if (node.userErrors && node.userErrors.length) userErrors.push(...node.userErrors);
     Object.values(node).forEach(collect);
   })(json.data);
+  
   if (userErrors.length) {
+    console.error('[GRAPHQL] User errors found:', userErrors);
     const e = new Error(`Admin GraphQL userErrors: ${JSON.stringify(userErrors)}`);
     e.status = 400;
     throw e;
   }
+  
+  console.log('[GRAPHQL] Success, returning data');
   return json.data;
 }
 
