@@ -244,12 +244,23 @@ class AIDiscoveryService {
   async generateRobotsTxt(shop) {
     try {
       const settings = await AIDiscoverySettings.findOne({ shop });
+      console.log('[ROBOTS] Settings found:', JSON.stringify(settings, null, 2));
       
-      // Проверяваме само дали има избрани features, не дали е "enabled"
-      const hasEnabledFeatures = settings?.features && 
+      // Проверяваме дали има настройки
+      if (!settings) {
+        console.log('[ROBOTS] No settings found for shop:', shop);
+        return 'User-agent: *\nDisallow: /';
+      }
+      
+      // Проверяваме enabled полето И дали има избрани features
+      const hasEnabledFeatures = settings.features && 
         Object.values(settings.features).some(f => f === true);
-        
-      if (!settings || !hasEnabledFeatures) {
+      
+      console.log('[ROBOTS] Has enabled features:', hasEnabledFeatures);
+      console.log('[ROBOTS] Settings enabled:', settings.enabled);
+      
+      if (!settings.enabled || !hasEnabledFeatures) {
+        console.log('[ROBOTS] AI Discovery not enabled or no features selected');
         return 'User-agent: *\nDisallow: /';
       }
       

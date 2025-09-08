@@ -1,6 +1,7 @@
 // backend/controllers/aiDiscoveryController.js
 import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
+import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 
 // Helper function to normalize plan names
@@ -82,18 +83,39 @@ router.post('/ai-discovery/settings', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    // Автоматично enabled = true ако има избрани features
+    const enabled = Object.values(features || {}).some(f => f === true);
+    
+    console.log('[SAVE] Shop:', shop);
+    console.log('[SAVE] Features:', features);
+    console.log('[SAVE] Enabled:', enabled);
+    
+    const settings = await AIDiscoverySettings.findOneAndUpdate(
+      { shop },
+      { 
+        shop,
+        bots: bots || {},
+        features: features || {},
+        enabled,  // <-- Добавяме enabled тук
+        updatedAt: Date.now()
+      },
+      { upsert: true, new: true }
+    );
+    
+    console.log('[SAVE] Saved settings:', JSON.stringify(settings, null, 2));
+    
     const { session } = await getShopSession(shop);
     
     // Get existing settings to check if advancedSchemaEnabled is being turned on
     const existingSettings = await aiDiscoveryService.getSettings(shop, session);
     
-    const settings = { 
+    const settingsData = { 
       bots, 
       features,
       ...(advancedSchemaEnabled !== undefined && { advancedSchemaEnabled })
     };
     
-    await aiDiscoveryService.updateSettings(shop, session, settings);
+    await aiDiscoveryService.updateSettings(shop, session, settingsData);
     
     // Trigger schema generation if advancedSchemaEnabled is being turned on
     if (advancedSchemaEnabled && !existingSettings.advancedSchemaEnabled) {
