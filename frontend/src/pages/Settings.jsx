@@ -114,36 +114,42 @@ export default function Settings() {
   // Check generation progress
   const checkGenerationProgress = async () => {
     try {
-      const res = await fetch(`/api/schema/status?shop=${shop}`);
+      // Check directly in MongoDB for data
+      const res = await fetch(`/ai/schema-data.json?shop=${shop}`);
       const data = await res.json();
       
-      // Update progress based on response
-      if (data.inProgress) {
-        setSchemaProgress(prev => ({
-          ...prev,
-          current: data.current || prev.current,
-          total: data.total || prev.total,
-          percent: data.percent || Math.round((prev.current / prev.total) * 100),
-          currentProduct: data.currentProduct || 'Processing...'
-        }));
-        
-        // Check again in 2 seconds
-        setTimeout(checkGenerationProgress, 2000);
-      } else {
+      if (data.schemas && data.schemas.length > 0) {
         // Generation complete
         setSchemaComplete(true);
+        setSchemaGenerating(false);
+        
+        // Calculate statistics
+        const products = [...new Set(data.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
+        
         setSchemaProgress(prev => ({
           ...prev,
           percent: 100,
           stats: {
-            siteFAQ: data.hasSiteFAQ || false,
-            products: data.productsWithSchema || 0,
-            totalSchemas: data.totalSchemas || 0
+            siteFAQ: data.site_faq ? true : false,
+            products: products.length,
+            totalSchemas: data.schemas.length
           }
         }));
+      } else {
+        // Still generating, check again
+        setSchemaProgress(prev => ({
+          ...prev,
+          percent: Math.min(prev.percent + 10, 90), // Simulate progress
+          currentProduct: 'Processing products...'
+        }));
+        
+        // Check again in 3 seconds
+        setTimeout(checkGenerationProgress, 3000);
       }
     } catch (err) {
       console.error('Progress check error:', err);
+      // Try again in 3 seconds
+      setTimeout(checkGenerationProgress, 3000);
     }
   };
 
@@ -874,70 +880,59 @@ export default function Settings() {
               </Text>
               
               <InlineStack gap="300">
-                {/* Test button - REMOVE AFTER DEBUGGING */}
-                <Button onClick={() => {
-                  debugLog('Test button clicked');
-                  setSchemaGenerating(true);
-                  setSchemaComplete(false);
-                }}>
-                  Test Modal
-                </Button>
-                
                 <Button
                   primary
                   onClick={async () => {
-                    debugLog('Generate button clicked');
+                    // First check if there's existing data
+                    const checkRes = await fetch(`/ai/schema-data.json?shop=${shop}`);
+                    const existingData = await checkRes.json();
+                    
+                    if (existingData.schemas && existingData.schemas.length > 0) {
+                      // Has data - ask if to regenerate
+                      if (!confirm('This will replace existing schema data. Continue?')) {
+                        return;
+                      }
+                    }
+                    
+                    // Continue with generation
+                    setSchemaGenerating(true);
+                    setSchemaComplete(false);
+                    setSchemaProgress({
+                      current: 0,
+                      total: 0,
+                      percent: 0,
+                      currentProduct: 'Initializing...',
+                      stats: {
+                        siteFAQ: false,
+                        products: 0,
+                        totalSchemas: 0
+                      }
+                    });
                     
                     try {
-                      // Set initial states
-                      debugLog('Setting initial states');
-                      setSchemaGenerating(true);
-                      setSchemaComplete(false);
-                      setSchemaProgress({
-                        current: 0,
-                        total: 0,
-                        percent: 0,
-                        currentProduct: 'Initializing...',
-                        stats: {
-                          siteFAQ: false,
-                          products: 0,
-                          totalSchemas: 0
-                        }
-                      });
-                      
-                      debugLog('States set, making API call');
-                      
                       const res = await fetch('/api/schema/generate-all', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ shop })
                       });
                       
-                      debugLog('API response received', { status: res.status });
-                      
                       const data = await res.json();
-                      debugLog('API response data', data);
                       
                       if (res.ok) {
-                        debugLog('Starting progress check');
-                        setTimeout(() => {
-                          debugLog('Calling checkGenerationProgress');
-                          checkGenerationProgress();
-                        }, 1000);
+                        // Start checking progress after 2 seconds
+                        setTimeout(checkGenerationProgress, 2000);
                       } else {
-                        debugLog('API error', data);
                         setToast(`Error: ${data.error || 'Failed to start generation'}`);
                         setSchemaGenerating(false);
                       }
                     } catch (err) {
-                      debugLog('Catch block error', err);
-                      console.error('Full error:', err);
-                      setToast('Failed to generate schema: ' + err.message);
+                      console.error('Error:', err);
+                      setToast('Failed to generate schema');
                       setSchemaGenerating(false);
                     }
                   }}
                 >
-                  Generate Advanced Schema Data
+                  Generate/Update Schema Data
                 </Button>
                 
                 <Button
@@ -946,6 +941,29 @@ export default function Settings() {
                   }}
                 >
                   View Generated Schema
+                </Button>
+                
+                <Button
+                  destructive
+                  onClick={async () => {
+                    if (confirm('This will delete all advanced schema data. Are you sure?')) {
+                      try {
+                        const res = await fetch('/api/schema/delete', {
+                          method: 'DELETE',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ shop })
+                        });
+                        
+                        if (res.ok) {
+                          setToast('Schema data deleted successfully');
+                        }
+                      } catch (err) {
+                        setToast('Failed to delete schema data');
+                      }
+                    }
+                  }}
+                >
+                  Delete Schema Data
                 </Button>
               </InlineStack>
               
@@ -1203,6 +1221,94 @@ export default function Settings() {
         >
           <Modal.Section>
             <Text>Modal is showing! Progress: {schemaProgress.percent}%</Text>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Generation Complete Modal */}
+      {schemaComplete && (
+        <Modal
+          open={true}
+          title="Schema Generation Complete"
+          onClose={() => {
+            setSchemaGenerating(false);
+            setSchemaComplete(false);
+          }}
+          primaryAction={{
+            content: 'View Generated Schemas',
+            onAction: () => {
+              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
+              setSchemaGenerating(false);
+              setSchemaComplete(false);
+            }
+          }}
+          secondaryActions={[{
+            content: 'Close',
+            onAction: () => {
+              setSchemaGenerating(false);
+              setSchemaComplete(false);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="success" title="Generation successful!">
+                <p>Advanced schema data has been generated for your products.</p>
+              </Banner>
+              
+              <Text variant="headingMd">Generation Statistics</Text>
+              
+              <InlineStack gap="600" wrap>
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
+                  </Text>
+                </Box>
+                
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.products}
+                  </Text>
+                </Box>
+                
+                <Box>
+                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
+                  <Text variant="headingLg" fontWeight="bold">
+                    {schemaProgress.stats.totalSchemas}
+                  </Text>
+                </Box>
+              </InlineStack>
+              
+              <Box paddingBlockStart="200">
+                <Text variant="bodySm" tone="subdued">
+                  Schemas are now available at /ai/product/[handle]/schemas.json
+                </Text>
+              </Box>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Generation Progress Modal */}
+      {schemaGenerating && !schemaComplete && (
+        <Modal
+          open={true}
+          title="Generating Advanced Schema Data"
+          onClose={() => {}}
+          noScroll
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="bodyMd">
+                Generating schemas for your products...
+              </Text>
+              <ProgressBar progress={schemaProgress.percent} size="small" />
+              <Text variant="bodySm" tone="subdued">
+                This process may take 1-2 minutes depending on the number of products.
+              </Text>
+            </BlockStack>
           </Modal.Section>
         </Modal>
       )}

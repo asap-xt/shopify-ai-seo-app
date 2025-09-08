@@ -995,4 +995,19 @@ router.get('/schema-sitemap.xml', async (req, res) => {
   res.send(sitemap);
 });
 
+// DELETE /api/schema/delete - Delete all schemas for a shop
+router.delete('/delete', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Delete only from MongoDB (don't touch Shopify metafields)
+    await AdvancedSchema.findOneAndDelete({ shop });
+    
+    res.json({ success: true, message: 'Advanced schema data deleted' });
+  } catch (error) {
+    console.error('[SCHEMA] Delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
