@@ -662,7 +662,27 @@ export default function Settings() {
               
               <Button
                 plain
-                onClick={() => window.open(`/ai/schema-data.json?shop=${shop}`, '_blank')}
+                onClick={async () => {
+                  console.log('View Schema clicked!');
+                  try {
+                    const res = await fetch(`/ai/schema-data.json?shop=${shop}`);
+                    console.log('Schema response status:', res.status);
+                    const data = await res.json();
+                    console.log('Schema response data:', data);
+                    
+                    if (res.ok) {
+                      // Open in new tab with the data
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, '_blank');
+                    } else {
+                      setToast(`Error: ${data.error || 'Failed to fetch schema data'}`);
+                    }
+                  } catch (err) {
+                    console.error('Error fetching schema:', err);
+                    setToast('Failed to fetch schema data');
+                  }
+                }}
               >
                 View Generated Schema
               </Button>
