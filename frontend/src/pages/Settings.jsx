@@ -16,8 +16,7 @@ import {
   Link,
   Badge,
   Toast,
-  Spinner,
-  Stack
+  Spinner
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
 
@@ -684,14 +683,14 @@ export default function Settings() {
             )}
 
             {advancedSchemaEnabled && !schemaGenerating && (
-              <Stack vertical spacing="tight">
+              <BlockStack gap="200">
                 <Button onClick={() => window.location.href = `/api/schema/view?shop=${shop}`}>
                   View Schema Data
                 </Button>
                 <Text variant="bodySm" color="subdued">
                   Schema data is generated automatically when you enable this feature.
                 </Text>
-              </Stack>
+              </BlockStack>
             )}
           </BlockStack>
         </Card>
