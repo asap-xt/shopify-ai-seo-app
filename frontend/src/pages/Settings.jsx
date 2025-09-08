@@ -16,7 +16,8 @@ import {
   Link,
   Badge,
   Toast,
-  Spinner
+  Spinner,
+  ProgressBar
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
 
@@ -1190,28 +1191,18 @@ export default function Settings() {
         modalShouldShow: schemaGenerating && !schemaComplete 
       })}
 
-      {/* Schema Generation Progress Modal */}
+      {/* Simple test modal */}
       {schemaGenerating && !schemaComplete && (
         <Modal
-          open={true}
+          open={schemaGenerating}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            debugLog('Modal close attempted');
+            debugLog('Modal close clicked');
+            setSchemaGenerating(false);
           }}
-          noScroll
         >
           <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd">
-                {schemaProgress.currentProduct || 'Preparing...'}
-              </Text>
-              <ProgressBar progress={schemaProgress.percent || 0} />
-              <Text variant="bodySm" tone="subdued">
-                {schemaProgress.current > 0 
-                  ? `Processing product ${schemaProgress.current} of ${schemaProgress.total} (${schemaProgress.percent}%)`
-                  : 'Starting generation process...'}
-              </Text>
-            </BlockStack>
+            <Text>Modal is showing! Progress: {schemaProgress.percent}%</Text>
           </Modal.Section>
         </Modal>
       )}
