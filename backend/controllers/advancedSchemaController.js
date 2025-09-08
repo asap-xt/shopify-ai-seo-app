@@ -314,6 +314,9 @@ async function generateProductSchemas(shop, productDoc) {
     schemas.push({ language: lang.code, schemas: langSchemas });
   }
   
+  // Collect all schemas from all languages
+  const allSchemas = [];
+  
   // Save all schemas
   for (const { language, schemas: langSchemas } of schemas) {
     const saveMutation = `
@@ -340,8 +343,16 @@ async function generateProductSchemas(shop, productDoc) {
       }]
     };
     
+    // Save to Shopify metafields
     await shopGraphQL(shop, saveMutation, variables);
+    
+    // Also collect for MongoDB
+    allSchemas.push(...langSchemas);
   }
+  
+  // Return schemas for MongoDB storage
+  console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
+  return allSchemas;
 }
 
 // Generate schemas for specific language
@@ -456,7 +467,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   baseSchemas.push(productSchema);
   
-  console.log(`[SCHEMA] generateProductSchemas returning ${baseSchemas.length} schemas for product ${productDoc.productId}`);
+  console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
   return baseSchemas;
 }
 
