@@ -1,5 +1,5 @@
 // backend/services/aiDiscoveryService.js
-import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
+import AIDiscoverySettings from '../models/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 
