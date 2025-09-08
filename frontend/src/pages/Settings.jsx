@@ -622,49 +622,52 @@ export default function Settings() {
       </Card>
 
       {/* Advanced Schema Data - Enterprise only */}
-      {(() => {
-        console.log('Settings plan:', settings?.plan);
-        console.log('Normalized plan:', normalizePlan(settings?.plan));
-        console.log('Is enterprise?', normalizePlan(settings?.plan) === 'enterprise');
-        return normalizePlan(settings?.plan) === 'enterprise';
-      })() && (
-        <Card sectioned title="Advanced Schema Data">
-          <BlockStack gap="300">
-            <Checkbox
-              label="Enable AI-generated Advanced Schema Data"
-              checked={advancedSchemaEnabled}
-              onChange={(checked) => {
-                console.log('===== CHECKBOX CLICKED =====');
-                console.log('Checked:', checked);
-                alert(`Checkbox clicked: ${checked}`);
-              }}
-              helpText="Generates BreadcrumbList, FAQPage, WebPage and more structured data"
-            />
-            
-            {schemaGenerating && (
-              <Banner status="info" title="Generating Schema Data">
-                <p>This process may take a few minutes. You can leave this page - generation continues in background.</p>
-                <Spinner size="small" />
-              </Banner>
-            )}
-
-            {schemaError && (
-              <Banner status="critical">
-                <p>Error: {schemaError}</p>
-              </Banner>
-            )}
-
-            {advancedSchemaEnabled && !schemaGenerating && (
-              <BlockStack gap="200">
-                <Button onClick={() => window.location.href = `/api/schema/view?shop=${shop}`}>
-                  View Schema Data
-                </Button>
-                <Text variant="bodySm" color="subdued">
-                  Schema data is generated automatically when you enable this feature.
-                </Text>
-              </BlockStack>
-            )}
-          </BlockStack>
+      {normalizePlan(settings?.plan) === 'enterprise' && (
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">Advanced Schema Data</Text>
+              <Text variant="bodyMd" tone="subdued">
+                Generate BreadcrumbList, FAQPage, WebPage and more structured data for better AI discovery
+              </Text>
+              
+              <Button
+                primary
+                onClick={async () => {
+                  console.log('Generate Schema clicked!');
+                  try {
+                    const res = await fetch('/api/schema/generate-all', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ shop })
+                    });
+                    
+                    console.log('Response status:', res.status);
+                    const data = await res.json();
+                    console.log('Response data:', data);
+                    
+                    if (res.ok) {
+                      setToast('Schema generation started! This may take a few minutes.');
+                    } else {
+                      setToast(`Error: ${data.error || 'Failed to start generation'}`);
+                    }
+                  } catch (err) {
+                    console.error('Error:', err);
+                    setToast('Failed to generate schema');
+                  }
+                }}
+              >
+                Generate Advanced Schema Data
+              </Button>
+              
+              <Button
+                plain
+                onClick={() => window.open(`/ai/schema-data.json?shop=${shop}`, '_blank')}
+              >
+                View Generated Schema
+              </Button>
+            </BlockStack>
+          </Box>
         </Card>
       )}
 
