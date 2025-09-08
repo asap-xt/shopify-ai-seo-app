@@ -320,6 +320,16 @@ router.get('/ai-discovery/test-assets', async (req, res) => {
  */
 async function applyRobotsTxt(shop, robotsTxt) {
   console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
+  
+  // Проверяваме какви scopes има токена
+  const shopRecord = await Shop.findOne({ shop });
+  console.log('[ROBOTS DEBUG] Shop scopes:', shopRecord?.scopes);
+  
+  // Проверяваме дали има read_themes
+  if (!shopRecord?.scopes?.includes('read_themes')) {
+    throw new Error('App needs to be reinstalled to get theme access. Current scopes: ' + shopRecord?.scopes);
+  }
+  
   console.log('[ROBOTS DEBUG] Content length:', robotsTxt.length);
   
   try {
