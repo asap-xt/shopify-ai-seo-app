@@ -90,7 +90,7 @@ const Collections = ({ shop }) => {
     current: 0,
     total: 0,
     currentItem: '',
-    results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
+    results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
   });
   
   // Load models on mount
@@ -342,7 +342,7 @@ const Collections = ({ shop }) => {
         current: 0,
         total: 0,
         currentItem: '',
-        results: { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 }
+        results: null
       });
       if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
         loadCollections();
@@ -385,7 +385,7 @@ const Collections = ({ shop }) => {
     if (aiEnhanceProgress.processing) {
       return (
         <Modal
-          open={true}
+          open={showAIEnhanceModal}
           title="Processing AI Enhancement"
           onClose={() => {}}
           noScroll
@@ -407,10 +407,10 @@ const Collections = ({ shop }) => {
     }
     
     // Трети модал - резултати
-    if (aiEnhanceProgress.results) {
+    if (aiEnhanceProgress.results !== null) {
       return (
         <Modal
-          open={true}
+          open={showAIEnhanceModal}
           title="AI Enhancement Results"
           onClose={handleClose}
           primaryAction={{

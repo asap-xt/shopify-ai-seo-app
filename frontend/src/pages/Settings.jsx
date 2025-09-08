@@ -71,7 +71,7 @@ export default function Settings() {
   // Load Advanced Schema settings
   useEffect(() => {
     if (!shop) return;
-    fetch(`/api/store/settings?shop=${shop}`)
+    fetch(`/api/ai-discovery/settings?shop=${encodeURIComponent(shop)}`)
       .then(res => res.json())
       .then(data => {
         setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
@@ -637,20 +637,47 @@ export default function Settings() {
                 setAdvancedSchemaEnabled(checked);
                 setSchemaError('');
                 
+                // Save the setting in AI Discovery settings
+                try {
+                  const saveRes = await fetch('/api/ai-discovery/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      shop,
+                      ...settings,
+                      advancedSchemaEnabled: checked
+                    })
+                  });
+                  
+                  if (!saveRes.ok) {
+                    throw new Error('Failed to save settings');
+                  }
+                  
+                  console.log('Advanced Schema setting saved successfully');
+                } catch (err) {
+                  console.error('Failed to save Advanced Schema setting:', err);
+                  setSchemaError('Failed to save settings');
+                  setAdvancedSchemaEnabled(false);
+                  return;
+                }
+                
+                // Trigger schema generation if enabled
                 if (checked) {
+                  console.log('Triggering schema generation...');
                   setSchemaGenerating(true);
+                  
                   try {
-                    const res = await fetch('/api/schema/generate-all', {
-                      method: 'POST',
+                    const schemaRes = await fetch('/api/schema/generate-all', {
+                      method: 'POST', 
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ shop })
                     });
                     
-                    const data = await res.json();
-                    console.log('Schema generation response:', data);
+                    const result = await schemaRes.json();
+                    console.log('Schema generation result:', result);
                     
-                    if (!res.ok) {
-                      throw new Error(data.error || 'Failed to start generation');
+                    if (!schemaRes.ok) {
+                      throw new Error(result.error || 'Failed to start generation');
                     }
                     
                     // Show progress for 30 seconds
