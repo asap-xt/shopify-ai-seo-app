@@ -165,7 +165,10 @@ router.get(CALLBACK_PATH, async (req, res) => {
     }
 
     // 2) Exchange code for token
+    console.log('[AUTH] Requested scopes:', process.env.SHOPIFY_API_SCOPES);
     const tokenResp = await exchangeToken(shop, code);
+    console.log('[AUTH] Token response:', tokenResp);
+    console.log('[AUTH] Granted scopes:', tokenResp.associated_user_scope || tokenResp.scope);
     const accessToken = tokenResp.access_token;
     const scopes = tokenResp.scope || '';
 
