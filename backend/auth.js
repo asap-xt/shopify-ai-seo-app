@@ -87,6 +87,13 @@ async function exchangeToken(shop, code) {
     
     const tokenData = JSON.parse(responseText);
     console.log(`[AUTH] Token exchange successful, scopes: ${tokenData.scope}`);
+    
+    // След token exchange request:
+    console.log('[AUTH] Full token response:', JSON.stringify(tokenData, null, 2));
+    console.log('[AUTH] Requested scopes:', process.env.SHOPIFY_API_SCOPES);
+    console.log('[AUTH] Received scope:', tokenData.scope);
+    console.log('[AUTH] Associated user scope:', tokenData.associated_user_scope);
+    
     return tokenData; // { access_token, scope, ... }
   } catch (error) {
     console.error('[AUTH] Token exchange error:', error);
