@@ -244,7 +244,12 @@ class AIDiscoveryService {
   async generateRobotsTxt(shop) {
     try {
       const settings = await AIDiscoverySettings.findOne({ shop });
-      if (!settings || !settings.enabled) {
+      
+      // Проверяваме само дали има избрани features, не дали е "enabled"
+      const hasEnabledFeatures = settings?.features && 
+        Object.values(settings.features).some(f => f === true);
+        
+      if (!settings || !hasEnabledFeatures) {
         return 'User-agent: *\nDisallow: /';
       }
       

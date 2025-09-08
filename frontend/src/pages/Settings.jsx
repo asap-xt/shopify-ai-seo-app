@@ -96,6 +96,18 @@ export default function Settings() {
     }
   }, [advancedSchemaEnabled]);
 
+  // Auto-enable AI Discovery when features are selected
+  useEffect(() => {
+    if (settings && Object.values(settings.features || {}).some(f => f)) {
+      // Автоматично включваме AI Discovery ако има избрани features
+      setSettings(prev => ({
+        ...prev,
+        enabled: true,
+        discoveryEnabled: true
+      }));
+    }
+  }, [settings?.features]);
+
   const checkSchemaStatus = async () => {
     try {
       const res = await fetch(`/api/schema/status?shop=${shop}`);
@@ -869,8 +881,10 @@ export default function Settings() {
         </Card>
       )} */}
 
-      {/* Advanced Schema Data Management - shows only if enabled and saved */}
-      {settings?.features?.schemaData && originalSettings?.features?.schemaData && (
+      {/* Advanced Schema Data Management - shows only for Enterprise plan AND if enabled */}
+      {normalizePlan(settings?.plan) === 'enterprise' && 
+       settings?.features?.schemaData && 
+       originalSettings?.features?.schemaData && (
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
