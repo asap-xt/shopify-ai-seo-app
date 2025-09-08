@@ -553,4 +553,137 @@ router.get('/public/:shop', async (req, res) => {
   }
 });
 
+// Settings endpoints за Advanced Schema
+router.get('/settings', async (req, res) => {
+  console.log('[STORE-SETTINGS] GET /settings called'); // DEBUG
+  try {
+    const shop = getShopFromReq(req);
+    console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
+    
+    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    
+    // Get settings from shop metafield
+    const query = `{
+      shop {
+        metafield(namespace: "ai_seo_store", key: "app_settings") {
+          value
+        }
+      }
+    }`;
+    
+    console.log('[STORE-SETTINGS] Fetching metafield...'); // DEBUG
+    const data = await shopGraphQL(shop, query);
+    
+    const settings = data?.shop?.metafield?.value 
+      ? JSON.parse(data.shop.metafield.value)
+      : { advancedSchemaEnabled: false };
+    
+    console.log('[STORE-SETTINGS] Retrieved settings:', settings); // DEBUG
+    res.json(settings);
+  } catch (error) {
+    console.error('[STORE-SETTINGS] Error loading settings:', error);
+    res.json({ advancedSchemaEnabled: false }); // Default settings
+  }
+});
+
+router.post('/settings', async (req, res) => {
+  console.log('[STORE-SETTINGS] POST /settings called'); // DEBUG
+  console.log('[STORE-SETTINGS] Request body:', req.body); // DEBUG
+  
+  try {
+    const shop = getShopFromReq(req);
+    console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
+    
+    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    
+    // Get shop ID
+    const shopQuery = `{ shop { id } }`;
+    const shopData = await shopGraphQL(shop, shopQuery);
+    const shopId = shopData?.shop?.id;
+    
+    console.log('[STORE-SETTINGS] Shop ID:', shopId); // DEBUG
+    
+    if (!shopId) return res.status(404).json({ error: 'Shop not found' });
+    
+    // Get current settings to check if advancedSchemaEnabled is being turned on
+    const currentSettingsQuery = `{
+      shop {
+        metafield(namespace: "ai_seo_store", key: "app_settings") {
+          value
+        }
+      }
+    }`;
+    
+    const currentSettingsData = await shopGraphQL(shop, currentSettingsQuery);
+    const currentSettings = currentSettingsData?.shop?.metafield?.value 
+      ? JSON.parse(currentSettingsData.shop.metafield.value)
+      : { advancedSchemaEnabled: false };
+    
+    // Check if advancedSchemaEnabled is being turned on
+    if (req.body.advancedSchemaEnabled && !currentSettings.advancedSchemaEnabled) {
+      console.log('[STORE-SETTINGS] Advanced Schema being ENABLED!'); // DEBUG
+      
+      // Trigger schema generation
+      setTimeout(async () => {
+        try {
+          console.log('[STORE-SETTINGS] Triggering schema generation...'); // DEBUG
+          const schemaRes = await fetch(`${process.env.APP_URL || 'http://localhost:8080'}/api/schema/generate-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shop })
+          });
+          
+          const schemaResult = await schemaRes.json();
+          console.log('[STORE-SETTINGS] Schema generation response:', schemaResult); // DEBUG
+        } catch (err) {
+          console.error('[STORE-SETTINGS] Failed to trigger schema generation:', err);
+        }
+      }, 100);
+    }
+    
+    // Save settings
+    const mutation = `
+      mutation SaveSettings($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: shopId,
+        namespace: 'ai_seo_store',
+        key: 'app_settings',
+        type: 'json',
+        value: JSON.stringify(req.body)
+      }]
+    };
+    
+    console.log('[STORE-SETTINGS] Saving metafield...'); // DEBUG
+    const result = await shopGraphQL(shop, mutation, variables);
+    
+    if (result?.metafieldsSet?.userErrors?.length > 0) {
+      console.error('[STORE-SETTINGS] Metafield errors:', result.metafieldsSet.userErrors); // DEBUG
+      return res.status(400).json({ 
+        error: 'Failed to save settings', 
+        errors: result.metafieldsSet.userErrors 
+      });
+    }
+    
+    console.log('[STORE-SETTINGS] Settings saved successfully!'); // DEBUG
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[STORE-SETTINGS] Error saving settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

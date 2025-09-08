@@ -592,22 +592,30 @@ async function generateAllSchemas(shop) {
 
 // POST /api/schema/generate-all - Start background generation
 router.post('/generate-all', async (req, res) => {
-  console.log('[SCHEMA] Generate-all endpoint called'); // ADD THIS
+  console.log('[SCHEMA] ============================================'); // DEBUG
+  console.log('[SCHEMA] Generate-all endpoint called at:', new Date().toISOString()); // DEBUG
+  console.log('[SCHEMA] Request headers:', req.headers); // DEBUG
+  console.log('[SCHEMA] Request body:', req.body); // DEBUG
   
   try {
     const shop = requireShop(req);
-    console.log('[SCHEMA] Shop:', shop); // ADD THIS
+    console.log('[SCHEMA] Shop extracted:', shop); // DEBUG
     
     // Check Enterprise plan
+    console.log('[SCHEMA] Checking subscription...'); // DEBUG
     const subscription = await Subscription.findOne({ shop });
-    console.log('[SCHEMA] Subscription plan:', subscription?.plan); // ADD THIS
+    console.log('[SCHEMA] Subscription found:', subscription); // DEBUG
+    console.log('[SCHEMA] Plan:', subscription?.plan); // DEBUG
     
     if (subscription?.plan !== 'enterprise') {
+      console.log('[SCHEMA] NOT ENTERPRISE - rejecting'); // DEBUG
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Enterprise plan',
         currentPlan: subscription?.plan || 'none'
       });
     }
+    
+    console.log('[SCHEMA] Enterprise plan confirmed!'); // DEBUG
     
     // Return immediately
     res.json({ 
@@ -616,13 +624,13 @@ router.post('/generate-all', async (req, res) => {
     });
     
     // Start background process
-    console.log('[SCHEMA] Starting background generation...'); // ADD THIS
+    console.log('[SCHEMA] Starting background generation NOW...'); // DEBUG
     generateAllSchemas(shop).catch(err => {
-      console.error('[SCHEMA] Background generation failed:', err);
+      console.error('[SCHEMA] ❌ Background generation failed:', err);
     });
     
   } catch (error) {
-    console.error('[SCHEMA] Endpoint error:', error); // ADD THIS
+    console.error('[SCHEMA] ❌ Endpoint error:', error);
     res.status(500).json({ error: error.message });
   }
 });
