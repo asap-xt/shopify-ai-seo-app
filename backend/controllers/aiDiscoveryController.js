@@ -167,96 +167,30 @@ router.get('/ai-discovery/robots-txt', async (req, res) => {
  * POST /api/ai-discovery/apply-robots
  */
 router.post('/ai-discovery/apply-robots', async (req, res) => {
+  console.log('[APPLY ENDPOINT] Called with body:', req.body);
+  
   try {
-    const { shop } = req.body;
-    const { session, accessToken } = await getShopSession(shop);
+    const shop = requireShop(req);
+    console.log('[APPLY ENDPOINT] Shop:', shop);
     
-    // Check plan
-    const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
-    const planData = await planResponse.json();
-    const normalizedPlan = (planData.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+    // Generate fresh robots.txt
+    const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
+    console.log('[APPLY ENDPOINT] Generated robots.txt length:', robotsTxt.length);
+    console.log('[APPLY ENDPOINT] First 200 chars:', robotsTxt.substring(0, 200));
     
-    if (!['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan)) {
-      return res.status(403).json({ 
-        error: 'Automatic robots.txt requires Growth plan or higher' 
-      });
-    }
+    // Apply to theme
+    console.log('[APPLY ENDPOINT] Calling applyRobotsTxt...');
+    const result = await applyRobotsTxt(shop, robotsTxt);
+    console.log('[APPLY ENDPOINT] Result:', result);
     
-    // Check for existing redirect
-    const existingRedirects = await fetch(
-      `https://${shop}/admin/api/2024-07/redirects.json?path=/robots.txt`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': accessToken
-        }
-      }
-    );
-
-    if (existingRedirects.ok) {
-      const data = await existingRedirects.json();
-      if (data.redirects?.length > 0) {
-        // Before returning success, get active bots:
-        const settings = await aiDiscoveryService.getSettings(shop, session);
-        const activeBots = [];
-        if (settings.bots?.openai?.enabled) activeBots.push('OpenAI');
-        if (settings.bots?.anthropic?.enabled) activeBots.push('Claude');
-        if (settings.bots?.google?.enabled) activeBots.push('Google');
-        if (settings.bots?.perplexity?.enabled) activeBots.push('Perplexity');
-        if (settings.bots?.meta?.enabled) activeBots.push('Meta');
-        if (settings.bots?.others?.enabled) activeBots.push('Others');
-
-        const message = activeBots.length > 0 
-          ? `robots.txt updated for: ${activeBots.join(', ')}`
-          : 'robots.txt updated with default settings';
-
-        return res.json({ success: true, message });
-      }
-    }
-    
-    // Get settings and generate robots.txt
-    const settings = await aiDiscoveryService.getSettings(shop, session);
-    const robotsTxtContent = await aiDiscoveryService.generateRobotsTxt(shop);
-    
-    // Create redirect from /robots.txt to our endpoint
-    const redirectResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/redirects.json`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          redirect: {
-            path: "/robots.txt",
-            target: `${process.env.APP_URL}/ai/robots-dynamic?shop=${shop}`
-          }
-        })
-      }
-    );
-    
-    if (redirectResponse.ok) {
-      // Before returning success, get active bots:
-      const activeBots = [];
-      if (settings.bots?.openai?.enabled) activeBots.push('OpenAI');
-      if (settings.bots?.anthropic?.enabled) activeBots.push('Claude');
-      if (settings.bots?.google?.enabled) activeBots.push('Google');
-      if (settings.bots?.perplexity?.enabled) activeBots.push('Perplexity');
-      if (settings.bots?.meta?.enabled) activeBots.push('Meta');
-      if (settings.bots?.others?.enabled) activeBots.push('Others');
-
-      const message = activeBots.length > 0 
-        ? `robots.txt configured for: ${activeBots.join(', ')}`
-        : 'robots.txt configured with default settings';
-
-      res.json({ success: true, message });
-    } else {
-      throw new Error('Could not create redirect');
-    }
-    
+    res.json(result);
   } catch (error) {
-    console.error('[ROBOTS] Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[APPLY ENDPOINT] Error:', error.message);
+    console.error('[APPLY ENDPOINT] Stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
   }
 });
 
