@@ -2,6 +2,8 @@
 // Serves AI-ready catalog feed from Mongo cache.
 // Secured with ?shop=...&token=... (FEED_TOKEN). If cache is missing, attempts on-demand build.
 
+console.log('📁 FEED CONTROLLER LOADING...');
+
 import express from 'express';
 import crypto from 'crypto';
 import { FeedCache, syncProductsForShop } from './productSync.js';
@@ -117,6 +119,7 @@ router.get('/ai/feed/catalog.json', async (req, res) => {
 
 // GET /ai/schema-data.json?shop=...
 router.get('/ai/schema-data.json', async (req, res) => {
+  console.log('🚀🚀🚀 SCHEMA ENDPOINT CALLED! 🚀🚀🚀');
   console.log('[SCHEMA-ENDPOINT] ============ REQUEST RECEIVED ============');
   console.log('[SCHEMA-ENDPOINT] URL:', req.url);
   console.log('[SCHEMA-ENDPOINT] Query:', req.query);
