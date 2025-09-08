@@ -543,8 +543,8 @@ async function generateAllSchemas(shop) {
   console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
   
   try {
-    // Инсталираме script tag
-    await installScriptTag(shop);
+    // ВРЕМЕННО - skip script tag installation
+    console.log('[SCHEMA] Skipping script tag installation for now...');
     
     // Load shop context
     const shopContext = await loadShopContext(shop);
