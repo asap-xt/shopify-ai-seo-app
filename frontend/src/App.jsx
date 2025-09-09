@@ -510,58 +510,58 @@ export default function App() {
   console.log('URL:', window.location.href);
   console.log('Search params:', window.location.search);
   
-  try {
-    const { path } = useRoute();
-    const { lang, setLang, t } = useI18n();
-    const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
-
-    const [isLoading, setIsLoading] = useState(true);
-    
-    // Добавете тук debug
-    const shop = qs('shop', '');
-    const host = qs('host', '');
-    console.log('Parsed params:', { shop, host, isEmbedded });
-    
-    useEffect(() => {
-      console.log('App useEffect running...');
-      const shop = qs('shop', '');
-      const host = qs('host', '');
-      
-      if (!shop || !host) {
-        console.warn('Missing params:', { shop, host });
-        setIsLoading(false);
-        return;
-      }
-      
-      console.log('Checking auth...');
-      fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop, host })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.success) {
-          window.location.href = data.redirectUrl;
-        } else {
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        setIsLoading(false);
-      });
-    }, []);
+  // Hooks must be called at the top level, outside try-catch
+  const { path } = useRoute();
+  const { lang, setLang, t } = useI18n();
+  const [isLoading, setIsLoading] = useState(true);
   
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+  // Parse params outside try-catch
+  const shop = qs('shop', '');
+  const host = qs('host', '');
+  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+  
+  console.log('Parsed params:', { shop, host, isEmbedded });
+  
+  useEffect(() => {
+    console.log('App useEffect running...');
+    
+    if (!shop || !host) {
+      console.warn('Missing params:', { shop, host });
+      setIsLoading(false);
+      return;
+    }
+    
+    console.log('Checking auth...');
+    fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shop, host })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        window.location.href = data.redirectUrl;
+      } else {
+        setIsLoading(false);
+      }
+    })
+    .catch(() => {
+      setIsLoading(false);
+    });
+  }, [shop, host]);
+  
+  // Error boundary for render logic only
+  try {
+    if (isLoading) {
+      return <div>Loading...</div>;
+    }
 
-  const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
-    if (path.startsWith('/billing')) return 'Billing';
-    if (path.startsWith('/settings')) return 'Settings';
-    return 'Dashboard';
-  }, [path]);
+    const sectionTitle = useMemo(() => {
+      if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
+      if (path.startsWith('/billing')) return 'Billing';
+      if (path.startsWith('/settings')) return 'Settings';
+      return 'Dashboard';
+    }, [path]);
 
     return (
       <AppProvider i18n={I18N}>
