@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!-- Deploy v2 --Ж<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -10,10 +10,9 @@
       html, body { margin: 0; padding: 0; }
       #root { height: 100vh; }
     </style>
+    <script type="module" crossorigin src="/assets/index-BTIPLQoh.js"></script>
   </head>
   <body>
-    test app
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
   </body>
-</html>
+</html><!-- Force deploy: Tue Sep 9 15:34:20 EEST 2025 -->
