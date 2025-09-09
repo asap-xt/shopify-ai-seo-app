@@ -62,6 +62,10 @@ export function makeSessionFetch() {
     const app = await getAppBridge();
     const token = app ? (await getTokenFromAppBridge(app)) : null;
 
+    console.log('App Bridge instance:', _app);
+    console.log('Session token:', token);
+    console.log('Request headers:', init.headers);
+
     const baseInit = {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
