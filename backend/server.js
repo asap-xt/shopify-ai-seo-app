@@ -147,6 +147,23 @@ async function mountOptionalRouters(app) {
   }
 }
 
+// Handle Shopify's app handle routing for embedded apps
+app.get('/apps/new-ai-seo', (req, res) => {
+  // Serve the same index.html for embedded app
+  const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+app.get('/apps/new-ai-seo/*', (req, res) => {
+  // Handle any sub-paths
+  const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
 // ---------------------------------------------------------------------------
 // Static frontend (Vite build). We never cache index.html.
 // We DO NOT use a catch-all regex to avoid shadowing /auth and other APIs.
@@ -191,35 +208,6 @@ otherSpaRoutes.forEach((route) => {
     res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(distPath, 'index.html'));
   });
-});
-
-// Handle Shopify's app handle routing
-app.get('/apps/new-ai-seo', (req, res) => {
-  const { shop, host } = req.query;
-  
-  // Redirect to root with all necessary params
-  const params = new URLSearchParams({
-    embedded: '1',
-    shop: shop || '',
-    host: host || '',
-    ...req.query // preserve any other params
-  });
-  
-  res.redirect(`/?${params.toString()}`);
-});
-
-// Also handle any sub-paths under the app handle
-app.get('/apps/new-ai-seo/*', (req, res) => {
-  const { shop, host } = req.query;
-  
-  const params = new URLSearchParams({
-    embedded: '1',
-    shop: shop || '',
-    host: host || '',
-    ...req.query
-  });
-  
-  res.redirect(`/?${params.toString()}`);
 });
 
 // Debug: list all mounted routes
