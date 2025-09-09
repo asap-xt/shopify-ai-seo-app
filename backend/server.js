@@ -201,6 +201,15 @@ const distPath = path.join(__dirname, '..', 'frontend', 'dist');
 console.log('[STATIC] Serving from:', distPath);
 console.log('[STATIC] Files in dist:', fs.readdirSync(distPath));
 
+// Блокирайте достъп до root index.html
+app.use((req, res, next) => {
+  // Блокирайте достъп до root index.html
+  if (req.path === '/index.html' && !req.path.includes('/dist/')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
 // Serve assets (no index by default; SPA routes return it explicitly)
 app.use(
   express.static(distPath, {
