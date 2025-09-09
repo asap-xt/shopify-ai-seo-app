@@ -506,32 +506,27 @@ const translations = {
 
 export default function App() {
   console.log('App component loaded!');
-  console.log('=== App.jsx Debug ===');
-  console.log('URL:', window.location.href);
-  console.log('Search params:', window.location.search);
   
-  // Hooks must be called at the top level, outside try-catch
+  // Всички hooks трябва да са в началото, БЕЗ условия
+  const [isLoading, setIsLoading] = useState(true);
   const { path } = useRoute();
   const { lang, setLang, t } = useI18n();
-  const [isLoading, setIsLoading] = useState(true);
   
-  // Parse params outside try-catch
+  // След hooks можете да имате променливи
   const shop = qs('shop', '');
   const host = qs('host', '');
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   
-  console.log('Parsed params:', { shop, host, isEmbedded });
-  
+  console.log('App params:', { shop, host, isEmbedded });
+
   useEffect(() => {
     console.log('App useEffect running...');
     
     if (!shop || !host) {
-      console.warn('Missing params:', { shop, host });
       setIsLoading(false);
       return;
     }
     
-    console.log('Checking auth...');
     fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -549,41 +544,36 @@ export default function App() {
       setIsLoading(false);
     });
   }, [shop, host]);
-  
-  // Error boundary for render logic only
-  try {
-    if (isLoading) {
-      return <div>Loading...</div>;
-    }
 
-    const sectionTitle = useMemo(() => {
-      if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
-      if (path.startsWith('/billing')) return 'Billing';
-      if (path.startsWith('/settings')) return 'Settings';
-      return 'Dashboard';
-    }, [path]);
-
-    return (
-      <AppProvider i18n={I18N}>
-        {isEmbedded && <AdminNavMenu active={path} />}
-        <Frame navigation={isEmbedded ? undefined : <SideNav />}>
-          <Page>
-            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
-            {path.startsWith('/ai-seo') ? (
-              <AiSearchOptimisationPanel />
-            ) : path.startsWith('/billing') ? (
-              <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
-            ) : path.startsWith('/settings') ? (
-              <Settings />
-            ) : (
-              <DashboardCard />
-            )}
-          </Page>
-        </Frame>
-      </AppProvider>
-    );
-  } catch (error) {
-    console.error('App render error:', error);
-    return <div>Error: {error.message}</div>;
+  // Рендиране
+  if (isLoading) {
+    return <div>Loading...</div>;
   }
+
+  const sectionTitle = useMemo(() => {
+    if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
+    if (path.startsWith('/billing')) return 'Billing';
+    if (path.startsWith('/settings')) return 'Settings';
+    return 'Dashboard';
+  }, [path]);
+
+  return (
+    <AppProvider i18n={I18N}>
+      {isEmbedded && <AdminNavMenu active={path} />}
+      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
+        <Page>
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+          {path.startsWith('/ai-seo') ? (
+            <AiSearchOptimisationPanel />
+          ) : path.startsWith('/billing') ? (
+            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
+          ) : path.startsWith('/settings') ? (
+            <Settings />
+          ) : (
+            <DashboardCard />
+          )}
+        </Page>
+      </Frame>
+    </AppProvider>
+  );
 }
