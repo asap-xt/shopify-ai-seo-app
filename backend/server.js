@@ -164,6 +164,19 @@ app.get('/apps/new-ai-seo/*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
+// Handle Shopify's app handle routing for embedded apps
+app.get('/apps/new-ai-seo', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+});
+
+app.get('/apps/new-ai-seo/*', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+});
+
 // ---------------------------------------------------------------------------
 // Static frontend (Vite build). We never cache index.html.
 // We DO NOT use a catch-all regex to avoid shadowing /auth and other APIs.
