@@ -94,6 +94,12 @@ async function exchangeToken(shop, code) {
     console.log('[AUTH] Received scope:', tokenData.scope);
     console.log('[AUTH] Associated user scope:', tokenData.associated_user_scope);
     
+    // Проверете какво връща Shopify
+    if (!tokenData.access_token) {
+      console.error('[AUTH] No access token in response!', tokenData);
+      throw new Error('No access token received from Shopify');
+    }
+    
     return tokenData; // { access_token, scope, ... }
   } catch (error) {
     console.error('[AUTH] Token exchange error:', error);
@@ -180,9 +186,22 @@ router.get(CALLBACK_PATH, async (req, res) => {
     const scopes = tokenResp.scope || '';
 
     // 3) Upsert shop record
+    const shopToSave = {
+      shop: shop,
+      accessToken: accessToken,
+      scopes: scopes,
+      isActive: true,
+      installedAt: new Date()
+    };
+
+    console.log('[AUTH] Saving shop data:', {
+      ...shopToSave,
+      accessToken: shopToSave.accessToken ? 'exists' : 'missing'
+    });
+
     await Shop.findOneAndUpdate(
       { shop }, 
-      { shop, accessToken, scopes, installedAt: new Date() }, 
+      shopToSave, 
       { upsert: true, new: true }
     );
     console.log('[AUTH] Shop record updated');

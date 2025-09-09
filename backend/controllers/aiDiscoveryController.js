@@ -3,12 +3,29 @@ import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
-import { shopGraphQL } from './seoController.js';
+import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
   return (plan || 'starter').toLowerCase().replace(' ', '_');
 };
+
+// Debug version of shopGraphQL
+async function shopGraphQL(shop, query, variables = {}) {
+  const shopRecord = await Shop.findOne({ shop });
+  
+  console.log('[GRAPHQL DEBUG] Shop:', shop);
+  console.log('[GRAPHQL DEBUG] Has token:', !!shopRecord?.accessToken);
+  console.log('[GRAPHQL DEBUG] Token prefix:', shopRecord?.accessToken?.substring(0, 10));
+  console.log('[GRAPHQL DEBUG] Scopes:', shopRecord?.scopes);
+  
+  if (!shopRecord?.accessToken) {
+    throw new Error('Shop not found or no access token');
+  }
+  
+  // Use the original function with debug info
+  return await originalShopGraphQL(shop, query, variables);
+}
 
 const router = express.Router();
 
