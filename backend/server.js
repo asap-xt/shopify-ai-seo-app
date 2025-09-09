@@ -153,31 +153,16 @@ async function mountOptionalRouters(app) {
   }
 }
 
-// Handle Shopify's app handle routing for embedded apps
-app.get('/apps/new-ai-seo', (req, res) => {
-  // Serve the same index.html for embedded app
-  const distPath = path.join(__dirname, '..', 'frontend', 'dist');
-  res.set('Cache-Control', 'no-store');
-  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-app.get('/apps/new-ai-seo/*', (req, res) => {
-  // Handle any sub-paths
-  const distPath = path.join(__dirname, '..', 'frontend', 'dist');
-  res.set('Cache-Control', 'no-store');
-  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-  res.sendFile(path.join(distPath, 'index.html'));
-});
-
-// Handle Shopify's app handle routing for embedded apps
-app.get('/apps/new-ai-seo', (req, res) => {
+// Handle Shopify's app routes - both by handle and by API key
+app.get('/apps/:app_identifier', (req, res) => {
+  console.log('[APP] Request for app:', req.params.app_identifier);
   res.set('Cache-Control', 'no-store');
   res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
-app.get('/apps/new-ai-seo/*', (req, res) => {
+app.get('/apps/:app_identifier/*', (req, res) => {
+  console.log('[APP] Request for app route:', req.url);
   res.set('Cache-Control', 'no-store');
   res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
@@ -188,6 +173,9 @@ app.get('/apps/new-ai-seo/*', (req, res) => {
 // We DO NOT use a catch-all regex to avoid shadowing /auth and other APIs.
 // ---------------------------------------------------------------------------
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+
+console.log('[STATIC] Serving from:', distPath);
+console.log('[STATIC] Files in dist:', fs.readdirSync(distPath));
 
 // Serve assets (no index by default; SPA routes return it explicitly)
 app.use(
@@ -214,10 +202,18 @@ app.get('/sitemap.xml', (req, res) => {
   res.redirect(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`);
 });
 
-// Serve index.html for SPA routes (including root with query params)
-app.get('/', (_req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(distPath, 'index.html'));
+// Root route - serve the app
+app.get('/', (req, res) => {
+  console.log('[ROOT] Request with params:', req.query);
+  if (req.query.shop && req.query.host) {
+    // Embedded app request
+    res.set('Cache-Control', 'no-store');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  } else {
+    // Non-embedded
+    res.send('Please install this app from Shopify Admin');
+  }
 });
 
 // Other SPA routes
@@ -357,6 +353,19 @@ async function start() {
     process.exit(1);
   }
 }
+
+// Catch-all for any unmatched routes - should be last
+app.get('*', (req, res) => {
+  console.log('[CATCH-ALL] Unmatched route:', req.url);
+  // Check if it's an app request
+  if (req.url.includes('/apps/')) {
+    res.set('Cache-Control', 'no-store');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  } else {
+    res.status(404).send('Not found');
+  }
+});
 
 start();
 
