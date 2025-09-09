@@ -2,9 +2,9 @@ import React from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import { 
   AppProvider, Frame, Page, Card, Text, Box, 
-  Button, Layout, BlockStack 
+  Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { sessionFetch } from './lib/sessionFetch.js';
 
 import AppHeader from './components/AppHeader.jsx';
@@ -503,8 +503,11 @@ const translations = {
 };
 
 export default function App() {
+  const { path } = useRoute();
+  const { lang, setLang, t } = useI18n();
+  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+
   const [isLoading, setIsLoading] = useState(true);
-  const [needsAuth, setNeedsAuth] = useState(false);
   
   useEffect(() => {
     const shop = qs('shop', '');
@@ -515,7 +518,6 @@ export default function App() {
       return;
     }
     
-    // Check if authenticated
     fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -530,7 +532,6 @@ export default function App() {
       }
     })
     .catch(() => {
-      setNeedsAuth(true);
       setIsLoading(false);
     });
   }, []);
@@ -538,43 +539,29 @@ export default function App() {
   if (isLoading) {
     return <div>Loading...</div>;
   }
-  
-  if (needsAuth) {
-    return <div>Redirecting to authentication...</div>;
-  }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const shop = urlParams.get('shop');
-  const host = urlParams.get('host');
-  
-  // Debug log
-  console.log('App loaded with params:', { shop, host, url: window.location.href });
+  const sectionTitle = useMemo(() => {
+    if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
+    if (path.startsWith('/billing')) return 'Billing';
+    if (path.startsWith('/settings')) return 'Settings';
+    return 'Dashboard';
+  }, [path]);
 
   return (
-    <AppProvider i18n={translations}>
-      <Frame>
-        <Page title="Dashboard">
-          <Layout>
-            <Layout.Section>
-              <Card>
-                <Box padding="400">
-                  <BlockStack gap="300">
-                    <Text variant="headingMd" as="h2">
-                      Welcome to NEW AI SEO
-                    </Text>
-                    <Text>Shop: {shop || 'No shop parameter'}</Text>
-                    <Text>Host: {host ? 'Present' : 'Missing'}</Text>
-                    <Text variant="bodySm" color="subdued">
-                      URL: {window.location.href}
-                    </Text>
-                    <Button variant="primary">
-                      Get Started
-                    </Button>
-                  </BlockStack>
-                </Box>
-              </Card>
-            </Layout.Section>
-          </Layout>
+    <AppProvider i18n={I18N}>
+      {isEmbedded && <AdminNavMenu active={path} />}
+      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
+        <Page>
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+          {path.startsWith('/ai-seo') ? (
+            <AiSearchOptimisationPanel />
+          ) : path.startsWith('/billing') ? (
+            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
+          ) : path.startsWith('/settings') ? (
+            <Settings />
+          ) : (
+            <DashboardCard />
+          )}
         </Page>
       </Frame>
     </AppProvider>
