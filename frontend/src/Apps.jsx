@@ -15,16 +15,9 @@ export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const shop = urlParams.get('shop');
   const host = urlParams.get('host');
-
-  if (!shop || !host) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <h2>Loading...</h2>
-        <p>Shop: {shop || 'missing'}</p>
-        <p>Host: {host || 'missing'}</p>
-      </div>
-    );
-  }
+  
+  // Debug log
+  console.log('App loaded with params:', { shop, host, url: window.location.href });
 
   return (
     <AppProvider i18n={translations}>
@@ -38,7 +31,11 @@ export default function App() {
                     <Text variant="headingMd" as="h2">
                       Welcome to NEW AI SEO
                     </Text>
-                    <Text>Shop: {shop}</Text>
+                    <Text>Shop: {shop || 'No shop parameter'}</Text>
+                    <Text>Host: {host ? 'Present' : 'Missing'}</Text>
+                    <Text variant="bodySm" color="subdued">
+                      URL: {window.location.href}
+                    </Text>
                     <Button variant="primary">
                       Get Started
                     </Button>
@@ -52,4 +49,3 @@ export default function App() {
     </AppProvider>
   );
 }
-
