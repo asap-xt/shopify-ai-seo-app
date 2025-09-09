@@ -238,8 +238,8 @@ app.get('/sitemap.xml', (req, res) => {
 // Root route - serve the app
 app.get('/', (req, res) => {
   console.log('[ROOT] Request with params:', req.query);
-  // Променете условието да проверява и за embedded
-  if (req.query.shop && req.query.host || req.query.embedded) {
+  // Променете условието - махнете проверката за embedded
+  if (req.query.shop && req.query.host) {
     // Embedded app request
     res.set('Cache-Control', 'no-store');
     res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
