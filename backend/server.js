@@ -1,6 +1,7 @@
 // backend/server.js
 // Express server for the Shopify AI SEO app (ESM).
 // All comments are in English.
+// Force rebuild - temp comment
 
 import 'dotenv/config';
 import express from 'express';
