@@ -193,6 +193,35 @@ otherSpaRoutes.forEach((route) => {
   });
 });
 
+// Handle Shopify's app handle routing
+app.get('/apps/new-ai-seo', (req, res) => {
+  const { shop, host } = req.query;
+  
+  // Redirect to root with all necessary params
+  const params = new URLSearchParams({
+    embedded: '1',
+    shop: shop || '',
+    host: host || '',
+    ...req.query // preserve any other params
+  });
+  
+  res.redirect(`/?${params.toString()}`);
+});
+
+// Also handle any sub-paths under the app handle
+app.get('/apps/new-ai-seo/*', (req, res) => {
+  const { shop, host } = req.query;
+  
+  const params = new URLSearchParams({
+    embedded: '1',
+    shop: shop || '',
+    host: host || '',
+    ...req.query
+  });
+  
+  res.redirect(`/?${params.toString()}`);
+});
+
 // Debug: list all mounted routes
 app.get('/debug/routes', (req, res) => {
   const routes = [];
