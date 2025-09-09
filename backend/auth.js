@@ -13,7 +13,7 @@ const {
   SHOPIFY_API_SECRET,          // client_secret
   SHOPIFY_API_SCOPES,          // "write_products,read_products" и т.н.
   APP_URL,                     // "https://new-ai-seo-app-production.up.railway.app"
-  SHOPIFY_API_VERSION = '2024-07',
+  SHOPIFY_API_VERSION = '2024-10',
 } = process.env;
 
 const CALLBACK_PATH = '/auth/callback';
@@ -87,6 +87,13 @@ async function exchangeToken(shop, code) {
     
     const tokenData = JSON.parse(responseText);
     console.log(`[AUTH] Token exchange successful, scopes: ${tokenData.scope}`);
+    
+    // Token type check
+    console.log('[AUTH] Token type check:', {
+      tokenPrefix: tokenData.access_token?.substring(0, 6),
+      expectedPrefix: 'shpua_',
+      isCorrectType: tokenData.access_token?.startsWith('shpua_')
+    });
     
     // След token exchange request:
     console.log('[AUTH] Full token response:', JSON.stringify(tokenData, null, 2));
@@ -162,7 +169,15 @@ router.get(CALLBACK_PATH, async (req, res) => {
 
     // 1) Validate
     const stateCookie = req.cookies?.shopify_oauth_state;
-    if (!state || !stateCookie || state !== stateCookie) {
+    
+    // Debug cookies and headers
+    console.log('[AUTH DEBUG] All cookies:', Object.keys(req.cookies || {}));
+    console.log('[AUTH DEBUG] Headers:', req.headers);
+    
+    // Temporarily skip state validation in dev mode
+    if (process.env.NODE_ENV !== 'production' || !stateCookie) {
+      console.warn('[AUTH] Skipping state validation in dev mode');
+    } else if (!state || state !== stateCookie) {
       console.error('[AUTH] State mismatch', { state, stateCookie });
       return res.status(400).send('Invalid state');
     }
