@@ -1,20 +1,15 @@
-// frontend/src/App.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import {
   AppProvider, Frame, Page, Layout, Card, Text, Box,
-  Button, TextField, Select, InlineStack, Divider, Toast, Tabs
+  Button, TextField, Select, InlineStack, Divider, Toast
 } from '@shopify/polaris';
+
+// ВАЖНО: Добавяме App Bridge Provider
+import AppBridgeProvider from './providers/AppBridgeProvider.jsx';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
-import BulkEdit from './pages/BulkEdit.jsx';
-import Collections from './pages/Collections.jsx';
-import Sitemap from './pages/Sitemap.jsx';
-import StoreMetadata from './pages/StoreMetadata.jsx';
-import SchemaData from './pages/SchemaData.jsx';
-import Settings from './pages/Settings.jsx';
-import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
 
@@ -509,24 +504,26 @@ export default function App() {
   }, [path]);
 
   return (
-    <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} />}
-      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
-        <Page>
-          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
-          {path.startsWith('/ai-seo') ? (
-            <AiSearchOptimisationPanel />
-          ) : path.startsWith('/store-metadata') ? (
-            <StoreMetadata shop={qs('shop', '')} />
-          ) : path.startsWith('/billing') ? (
-            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
-          ) : path.startsWith('/settings') ? (
-            <Settings />
-          ) : (
-            <DashboardCard />
-          )}
-        </Page>
-      </Frame>
-    </AppProvider>
+    <AppBridgeProvider>
+      <AppProvider i18n={I18N}>
+        {isEmbedded && <AdminNavMenu active={path} />}
+        <Frame navigation={isEmbedded ? undefined : <SideNav />}>
+          <Page>
+            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+            {path.startsWith('/ai-seo') ? (
+              <AiSearchOptimisationPanel />
+            ) : path.startsWith('/store-metadata') ? (
+              <StoreMetadata shop={qs('shop', '')} />
+            ) : path.startsWith('/billing') ? (
+              <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
+            ) : path.startsWith('/settings') ? (
+              <Settings />
+            ) : (
+              <DashboardCard />
+            )}
+          </Page>
+        </Frame>
+      </AppProvider>
+    </AppBridgeProvider>
   );
 }
