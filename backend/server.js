@@ -178,9 +178,15 @@ app.get('/sitemap.xml', (req, res) => {
   res.redirect(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`);
 });
 
-// Explicit SPA routes → serve fresh index.html
-const spaRoutes = ['/', '/dashboard', '/ai-seo', '/billing', '/settings', '/store-metadata'];
-spaRoutes.forEach((route) => {
+// Serve index.html for SPA routes (including root with query params)
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Other SPA routes
+const otherSpaRoutes = ['/dashboard', '/ai-seo', '/billing', '/settings', '/store-metadata'];
+otherSpaRoutes.forEach((route) => {
   app.get(route, (_req, res) => {
     res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(distPath, 'index.html'));
