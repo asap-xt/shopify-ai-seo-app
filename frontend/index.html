@@ -2,19 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- App Bridge v4 bootstrapping (must be first in <head>) -->
-    <meta name="shopify-api-key" content="%VITE_SHOPIFY_API_KEY%" />
-    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
-
-    <!-- The real CSP comes from server headers; keep meta for local preview parity -->
-    <meta http-equiv="Content-Security-Policy"
-          content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shopify AI SEO</title>
-
+    <meta http-equiv="Content-Security-Policy" 
+          content="frame-ancestors https://admin.shopify.com https://*.myshopify.com;">
+    <title>NEW AI SEO</title>
     <style>
-      /* Keep styles minimal; Polaris handles the rest */
       html, body { margin: 0; padding: 0; }
+      #root { height: 100vh; }
     </style>
   </head>
   <body>
