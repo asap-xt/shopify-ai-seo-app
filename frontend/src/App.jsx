@@ -1,5 +1,5 @@
 // Force rebuild: $(date +%s)
-// ненужен коментар, за да стартира билда
+
 import React from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import { 
@@ -82,7 +82,7 @@ function DashboardCard() {
       .catch((e) => console.error('Failed to load plan:', e));
   }, [shop]);
 
-  // Еднократна инициализация на collection metafield definitions
+  // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
   useEffect(() => {
     if (!shop) return;
     
@@ -92,7 +92,7 @@ function DashboardCard() {
       .then(r => r.json())
       .then(data => {
 
-        // Създай само липсващите definitions
+        // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
         const existingKeys = (data.definitions || []).map(d => d.key);
         const requiredLangs = ['en', 'bg', 'fr'];
         const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
@@ -131,7 +131,7 @@ function DashboardCard() {
           </Box>
           <Box>
             <Text variant="headingMd" as="h3">Shop</Text>
-            <Text>{plan.shop || '—'}</Text>
+            <Text>{plan.shop || 'â€”'}</Text>
           </Box>
           <Box>
             <Text variant="headingMd" as="h3">AI queries</Text>
@@ -157,14 +157,14 @@ function DashboardCard() {
   );
 }
 
-// -------- Single Product Panel (original AiSeoPanel content) - ЗАКОМЕНТИРАНО
+// -------- Single Product Panel (original AiSeoPanel content) - Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž
 /*
 function SingleProductPanel({ shop }) {
   // Form states
   const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('none'); // ПРОМЕНЕНО: Хардкоднато за локално генериране
+  const [model, setModel] = useState('none'); // ÐŸÐ ÐžÐœÐ•ÐÐ•ÐÐž: Ð¥Ð°Ñ€Ð´ÐºÐ¾Ð´Ð½Ð°Ñ‚Ð¾ Ð·Ð° Ð»Ð¾ÐºÐ°Ð»Ð½Ð¾ Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð°Ð½Ðµ
   const [language, setLanguage] = useState('en');
-  const [models, setModels] = useState([]); // Вече не се използва, но запазваме за бъдеще
+  const [models, setModels] = useState([]); // Ð’ÐµÑ‡Ðµ Ð½Ðµ ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°, Ð½Ð¾ Ð·Ð°Ð¿Ð°Ð·Ð²Ð°Ð¼Ðµ Ð·Ð° Ð±ÑŠÐ´ÐµÑ‰Ðµ
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [result, setResult] = useState(null);
@@ -176,8 +176,8 @@ function SingleProductPanel({ shop }) {
   const [productLanguages, setProductLanguages] = useState([]);
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
 
-  // ЗАКОМЕНТИРАНО - вече не използваме AI модели
-  // Load models from /plans/me - коментар запазен за история
+  // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž - Ð²ÐµÑ‡Ðµ Ð½Ðµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°Ð¼Ðµ AI Ð¼Ð¾Ð´ÐµÐ»Ð¸
+  // Load models from /plans/me - ÐºÐ¾Ð¼ÐµÐ½Ñ‚Ð°Ñ€ Ð·Ð°Ð¿Ð°Ð·ÐµÐ½ Ð·Ð° Ð¸ÑÑ‚Ð¾Ñ€Ð¸Ñ
 
   // Load languages for shop/product (hides selector when single)
   useEffect(() => {
@@ -220,12 +220,12 @@ function SingleProductPanel({ shop }) {
     return () => { cancelled = true; };
   }, [shop, productId]);
 
-  // Инициализирай metafield definitions за колекции при първо зареждане
+  // Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€Ð°Ð¹ metafield definitions Ð·Ð° ÐºÐ¾Ð»ÐµÐºÑ†Ð¸Ð¸ Ð¿Ñ€Ð¸ Ð¿ÑŠÑ€Ð²Ð¾ Ð·Ð°Ñ€ÐµÐ¶Ð´Ð°Ð½Ðµ
   useEffect(() => {
     const s = shop || qs('shop', '');
     if (!s) return;
     
-    // Инициализирай metafield definitions за колекции
+    // Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€Ð°Ð¹ metafield definitions Ð·Ð° ÐºÐ¾Ð»ÐµÐºÑ†Ð¸Ð¸
     fetch('/collections/init-metafields', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,7 +238,7 @@ function SingleProductPanel({ shop }) {
   }, [shop]);
 
   const handleGenerate = async () => {
-    if (!shop || !productId) { // ПРОМЕНЕНО: Премахнахме проверката за model
+    if (!shop || !productId) { // ÐŸÐ ÐžÐœÐ•ÐÐ•ÐÐž: ÐŸÑ€ÐµÐ¼Ð°Ñ…Ð½Ð°Ñ…Ð¼Ðµ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ°Ñ‚Ð° Ð·Ð° model
       setToast('Please fill in all fields');
       return;
     }
@@ -430,7 +430,7 @@ function SingleProductPanel({ shop }) {
         <Card title="Result">
           <Box padding="400">
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {result ? pretty(result) : '—'}
+              {result ? pretty(result) : 'â€”'}
             </pre>
           </Box>
         </Card>
@@ -448,7 +448,7 @@ function AiSearchOptimisationPanel() {
   const [selectedTab, setSelectedTab] = useState(0);
   
   const tabs = [
-    // ЗАКОМЕНТИРАНО Single Product таб
+    // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž Single Product Ñ‚Ð°Ð±
     // {
     //   id: 'single-product',
     //   content: 'Single Product',
@@ -506,38 +506,51 @@ const translations = {
 
 export default function App() {
   console.log('App component loaded!');
-  const { path } = useRoute();
-  const { lang, setLang, t } = useI18n();
-  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
-
-  const [isLoading, setIsLoading] = useState(true);
+  console.log('=== App.jsx Debug ===');
+  console.log('URL:', window.location.href);
+  console.log('Search params:', window.location.search);
   
-  useEffect(() => {
+  try {
+    const { path } = useRoute();
+    const { lang, setLang, t } = useI18n();
+    const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+
+    const [isLoading, setIsLoading] = useState(true);
+    
+    // Добавете тук debug
     const shop = qs('shop', '');
     const host = qs('host', '');
+    console.log('Parsed params:', { shop, host, isEmbedded });
     
-    if (!shop || !host) {
-      setIsLoading(false);
-      return;
-    }
-    
-    fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shop, host })
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) {
-        window.location.href = data.redirectUrl;
-      } else {
+    useEffect(() => {
+      console.log('App useEffect running...');
+      const shop = qs('shop', '');
+      const host = qs('host', '');
+      
+      if (!shop || !host) {
+        console.warn('Missing params:', { shop, host });
         setIsLoading(false);
+        return;
       }
-    })
-    .catch(() => {
-      setIsLoading(false);
-    });
-  }, []);
+      
+      console.log('Checking auth...');
+      fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop, host })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) {
+          window.location.href = data.redirectUrl;
+        } else {
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        setIsLoading(false);
+      });
+    }, []);
   
   if (isLoading) {
     return <div>Loading...</div>;
@@ -550,23 +563,27 @@ export default function App() {
     return 'Dashboard';
   }, [path]);
 
-  return (
-    <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} />}
-      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
-        <Page>
-          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
-          {path.startsWith('/ai-seo') ? (
-            <AiSearchOptimisationPanel />
-          ) : path.startsWith('/billing') ? (
-            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
-          ) : path.startsWith('/settings') ? (
-            <Settings />
-          ) : (
-            <DashboardCard />
-          )}
-        </Page>
-      </Frame>
-    </AppProvider>
-  );
+    return (
+      <AppProvider i18n={I18N}>
+        {isEmbedded && <AdminNavMenu active={path} />}
+        <Frame navigation={isEmbedded ? undefined : <SideNav />}>
+          <Page>
+            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+            {path.startsWith('/ai-seo') ? (
+              <AiSearchOptimisationPanel />
+            ) : path.startsWith('/billing') ? (
+              <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
+            ) : path.startsWith('/settings') ? (
+              <Settings />
+            ) : (
+              <DashboardCard />
+            )}
+          </Page>
+        </Frame>
+      </AppProvider>
+    );
+  } catch (error) {
+    console.error('App render error:', error);
+    return <div>Error: {error.message}</div>;
+  }
 }
