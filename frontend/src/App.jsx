@@ -1,3 +1,5 @@
+// Force rebuild: $(date +%s)
+// ненужен коментар, за да стартира билда
 import React from 'react';
 import '@shopify/polaris/build/esm/styles.css';
 import { 
@@ -503,6 +505,7 @@ const translations = {
 };
 
 export default function App() {
+  console.log('App component loaded!');
   const { path } = useRoute();
   const { lang, setLang, t } = useI18n();
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));

@@ -8,8 +8,6 @@ console.log('URL params:', window.location.search);
 
 // Check if we're in embedded context
 const url = new URL(window.location.href);
-const host = url.searchParams.get('host');
-const shop = url.searchParams.get('shop');
 const embedded = url.searchParams.get('embedded');
 
 // Провери дали embedded параметрите са налице
@@ -17,8 +15,12 @@ console.log('host:', url.searchParams.get('host'));
 console.log('shop:', url.searchParams.get('shop'));
 console.log('session:', url.searchParams.get('session'));
 
-// If we're opening the app directly without required params
+const host = url.searchParams.get("host");
+const shop = url.searchParams.get("shop");
+
 if (!host && !shop) {
+  console.log('No host/shop params, showing install message');
+  // Показва install message
   createRoot(document.getElementById('root')).render(
     <div style={{ 
       padding: '40px', 
@@ -33,6 +35,6 @@ if (!host && !shop) {
     </div>
   );
 } else {
-  // Normal render for embedded app
+  console.log('Rendering App with params:', { host, shop });
   createRoot(document.getElementById('root')).render(<App />);
 }
