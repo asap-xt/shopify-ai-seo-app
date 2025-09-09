@@ -1,7 +1,6 @@
 // backend/server.js
 // Express server for the Shopify AI SEO app (ESM).
 // All comments are in English.
-// Force rebuild - temp comment
 
 import 'dotenv/config';
 import express from 'express';
@@ -359,4 +358,4 @@ start();
 // Process safety logs
 // ---------------------------------------------------------------------------
 process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:', reason));
-process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));// Force rebuild 1757432718
