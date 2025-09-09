@@ -434,4 +434,22 @@ async function applyRobotsTxt(shop, robotsTxt) {
   }
 }
 
+// Debug endpoint for shop data
+router.get('/debug-shop/:shop', async (req, res) => {
+  try {
+    const shop = req.params.shop;
+    const shopRecord = await Shop.findOne({ shop });
+    
+    res.json({
+      shop: shopRecord?.shop,
+      hasToken: !!shopRecord?.accessToken,
+      tokenType: shopRecord?.accessToken?.substring(0, 6),
+      scopes: shopRecord?.scopes,
+      error: !shopRecord ? 'Shop not found' : null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
