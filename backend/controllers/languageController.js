@@ -1,4 +1,5 @@
 import express from 'express';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 // ===== Config
 const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';
@@ -185,11 +186,9 @@ async function resolveLanguages({ shop, productId, token, authUsed }) {
 const router = express.Router();
 
 /** GET /api/languages/shop/:shop */
-router.get('/shop/:shop', async (req, res) => {
-  const shop = String(req.params.shop || '').trim();
+router.get('/shop/:shop', verifyRequest, async (req, res) => {
+  const shop = req.shopDomain;
   const { token, authUsed } = resolveAdminToken(req);
-  if (!shop) return res.status(400).json({ error: 'Missing :shop' });
-  if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {
     const out = await resolveLanguages({ shop, productId: null, token, authUsed });
@@ -212,12 +211,11 @@ router.get('/shop/:shop', async (req, res) => {
 });
 
 /** GET /api/languages/product/:shop/:productId */
-router.get('/product/:shop/:productId', async (req, res) => {
-  const shop = String(req.params.shop || '').trim();
+router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
+  const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
   const { token, authUsed } = resolveAdminToken(req);
 
-  if (!shop) return res.status(400).json({ error: 'Missing :shop' });
   if (!productId) return res.status(400).json({ error: 'Missing :productId' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
@@ -242,10 +240,9 @@ router.get('/product/:shop/:productId', async (req, res) => {
 });
 
 /** Optional: quick sanity ping to expose the real GQL error quickly */
-router.get('/ping/:shop', async (req, res) => {
-  const shop = String(req.params.shop || '').trim();
+router.get('/ping/:shop', verifyRequest, async (req, res) => {
+  const shop = req.shopDomain;
   const { token, authUsed } = resolveAdminToken(req);
-  if (!shop) return res.status(400).json({ error: 'Missing :shop' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {

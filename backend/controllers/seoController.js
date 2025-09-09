@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 
@@ -621,12 +622,9 @@ function fixupAndValidate(payload) {
 /* --------------------------- Routes --------------------------- */
 
 // Plans (used by Dashboard/AI SEO form)
-router.get('/plans/me', async (req, res) => {
+router.get('/plans/me', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
 
     // 1. First check Subscription (this is the truth)
     let subscription = await Subscription.findOne({ shop });
@@ -697,9 +695,9 @@ router.get('/plans/me', async (req, res) => {
   }
 });
 
-router.post('/seo/generate', async (req, res) => {
+router.post('/seo/generate', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { productId, model, language = 'en' } = req.body || {};
     if (!productId || !model) {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
@@ -973,10 +971,9 @@ function strictPrompt(ctx, language) {
   ];
 }
 
-router.post('/seo/apply', async (req, res) => {
+router.post('/seo/apply', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop || req.body?.shop;
-    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    const shop = req.shopDomain;
 
     const { productId, seo, options = {}, language } = req.body;
     if (!productId) return res.status(400).json({ error: 'Missing productId' });

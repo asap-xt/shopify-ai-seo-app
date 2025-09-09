@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = Router();
 
@@ -23,11 +24,12 @@ function toGID(productId) {
 
 // POST /api/seo/generate-multi
 // Body: { shop, productId, model, languages: ['en','it','el', ...] }
-router.post('/generate-multi', async (req, res) => {
+router.post('/generate-multi', verifyRequest, async (req, res) => {
   try {
-    const { shop, productId: pid, model, languages } = req.body || {};
-    if (!shop || !pid || !model || !Array.isArray(languages) || languages.length === 0) {
-      return res.status(400).json({ error: 'Missing shop, productId, model or languages[]' });
+    const shop = req.shopDomain;
+    const { productId: pid, model, languages } = req.body || {};
+    if (!pid || !model || !Array.isArray(languages) || languages.length === 0) {
+      return res.status(400).json({ error: 'Missing productId, model or languages[]' });
     }
     const productId = toGID(String(pid));
 
@@ -75,11 +77,12 @@ router.post('/generate-multi', async (req, res) => {
 
 // POST /api/seo/apply-multi
 // Body: { shop, productId, results: [{ language, seo }...], options }
-router.post('/apply-multi', async (req, res) => {
+router.post('/apply-multi', verifyRequest, async (req, res) => {
   try {
-    const { shop, productId: pid, results, options = {} } = req.body || {};
-    if (!shop || !pid || !Array.isArray(results) || results.length === 0) {
-      return res.status(400).json({ error: 'Missing shop, productId or results[]' });
+    const shop = req.shopDomain;
+    const { productId: pid, results, options = {} } = req.body || {};
+    if (!pid || !Array.isArray(results) || results.length === 0) {
+      return res.status(400).json({ error: 'Missing productId or results[]' });
     }
     const productId = toGID(String(pid));
 

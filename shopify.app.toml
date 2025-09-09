@@ -9,14 +9,18 @@ embedded = true
 api_version = "2025-07"
 
 [auth]
-redirect_urls = ["https://new-ai-seo-app-production.up.railway.app/auth/callback"]
+redirect_urls = [
+  "https://new-ai-seo-app-production.up.railway.app/auth/callback",
+  "https://new-ai-seo-app-production.up.railway.app/api/auth/callback",
+  "https://new-ai-seo-app-production.up.railway.app/api/auth"
+]
 
 [access_scopes]
-scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,write_metafields,read_metafields,read_metaobjects,write_metaobjects,write_script_tags"
+scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects"
 
 [pos]
 embedded = false
 
 [build]
-include_config_on_deploy = true
-
+automatically_update_urls_on_dev = true
+dev_store_url = "asapxt-teststore.myshopify.com"

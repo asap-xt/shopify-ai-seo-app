@@ -1,91 +1,56 @@
 // frontend/src/lib/sessionFetch.js
-// Safe authenticated fetch for embedded Shopify apps.
-// - Tries to attach a session token from App Bridge (if available).
-// - Falls back to plain fetch with credentials:'include' (so we don't break existing flows).
-//
-// This keeps changes minimal and prevents "Unauthorized: missing Shopify session" in most cases
-// without forcing backend refactors.
+import { getSessionToken } from '@shopify/app-bridge-utils';
+import { createApp } from '@shopify/app-bridge';
 
-let _app = null;
+let appBridgeInstance = null;
 
-// Try to lazily create an App Bridge instance if @shopify/app-bridge is available.
-// We DO NOT require a Provider; this is best-effort and safe to run even if AB isn't present.
-async function getAppBridge() {
-  if (_app) return _app;
-  try {
-    const mod = await import(/* @vite-ignore */ '@shopify/app-bridge');
-    const createApp = mod && (mod.default || mod);
-    if (!createApp) return null;
-
-    const host = new URLSearchParams(window.location.search).get('host');
-    // We try a few standard places for the API key so we don't break builds:
-    const apiKey =
-      (window.__SHOPIFY_API_KEY) ||
-      (import.meta && import.meta.env && import.meta.env.VITE_SHOPIFY_API_KEY) ||
-      (document.querySelector('meta[name="shopify-api-key"]')?.getAttribute('content')) ||
-      null;
-
-    if (!host || !apiKey) return null;
-
-    _app = createApp({ apiKey, host, forceRedirect: true });
-    return _app;
-  } catch {
+function getAppBridge() {
+  if (appBridgeInstance) return appBridgeInstance;
+  
+  const host = new URLSearchParams(window.location.search).get('host');
+  const apiKey = document.querySelector('meta[name="shopify-api-key"]')?.getAttribute('content');
+  
+  if (!host || !apiKey) {
+    console.error('Missing host or API key for App Bridge');
     return null;
   }
+  
+  appBridgeInstance = createApp({
+    apiKey,
+    host,
+    forceRedirect: true
+  });
+  
+  return appBridgeInstance;
 }
 
-async function getTokenFromAppBridge(app) {
-  try {
-    const mod = await import(/* @vite-ignore */ '@shopify/app-bridge/utilities');
-    const getSessionToken = mod && mod.getSessionToken;
-    if (!getSessionToken || !app) return null;
-    const token = await getSessionToken(app); // must be fetched per request
-    return token || null;
-  } catch {
-    return null;
+export async function sessionFetch(url, options = {}) {
+  const app = getAppBridge();
+  if (!app) {
+    throw new Error('App Bridge not initialized');
   }
-}
-
-/**
- * makeSessionFetch()
- * Returns a function that:
- *  - Appends ?shop=... when `shop` is provided
- *  - Adds Authorization: Bearer <token> if we can get an AB token
- *  - Falls back to credentials:'include'
- *  - Always attempts to return parsed JSON (with graceful fallback)
- */
-export function makeSessionFetch() {
-  return async function sessionFetch(path, { method='GET', headers={}, body, shop } = {}) {
-    const url = shop ? `${path}${path.includes('?') ? '&' : '?'}shop=${encodeURIComponent(shop)}` : path;
-
-    // Best-effort: try AB token first
-    const app = await getAppBridge();
-    const token = app ? (await getTokenFromAppBridge(app)) : null;
-
-    console.log('App Bridge instance:', _app);
-    console.log('Session token:', token);
-    console.log('Request headers:', init.headers);
-
-    const baseInit = {
-      method,
-      headers: { 'Content-Type': 'application/json', ...headers },
-      credentials: 'include',             // keep legacy cookie flow working
-      body: body ? JSON.stringify(body) : undefined,
-    };
-
-    const init = token
-      ? { ...baseInit, headers: { ...baseInit.headers, Authorization: `Bearer ${token}` } }
-      : baseInit;
-
-    const rsp = await fetch(url, init);
-    const text = await rsp.text();
-    let data;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { error: text?.slice(0, 500) || 'Non-JSON response' }; }
-
-    if (!rsp.ok) {
-      const msg = data?.error || data?.message || `HTTP ${rsp.status}`;
-      throw new Error(msg);
+  
+  try {
+    const sessionToken = await getSessionToken(app);
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionToken}`,
+        ...options.headers,
+      },
+    });
+    
+    if (response.status === 401) {
+      // Token might be expired, redirect to auth
+      const shop = new URLSearchParams(window.location.search).get('shop');
+      window.location.href = `/auth?shop=${shop}`;
     }
-    return data;
-  };
+    
+    return response;
+  } catch (error) {
+    console.error('Session fetch error:', error);
+    throw error;
+  }
 }

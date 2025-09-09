@@ -11,3 +11,4 @@
 
 .shopify
 frontend/node_modules/.vite/
+frontend/dist/index.html

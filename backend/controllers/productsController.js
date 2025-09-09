@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import Product from '../db/Product.js';
 import { requireShop, shopGraphQL } from './seoController.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import fetch from 'node-fetch';
 
 // Import resolveAdminTokenForShop function
@@ -60,9 +61,9 @@ function getValidProductsQuery(baseQuery) {
 }
 
 // GET /api/products/list - List products with pagination and filters
-router.get('/list', async (req, res) => {
+router.get('/list', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const {
       page = 1,
       limit = 50,
@@ -186,9 +187,9 @@ if (req.query.languageFilter) {
 });
 
 // GET /api/products/sync-status - Check sync status
-router.get('/sync-status', async (req, res) => {
+router.get('/sync-status', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     const safeQuery = getValidProductsQuery({ shop });
     
@@ -219,9 +220,9 @@ router.get('/sync-status', async (req, res) => {
 });
 
 // POST /api/products/sync - Sync products from Shopify
-router.post('/sync', async (req, res) => {
+router.post('/sync', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     // Import dynamically to avoid circular dependencies
     const { syncProductsForShop } = await import('./productSync.js');
@@ -246,9 +247,9 @@ router.post('/sync', async (req, res) => {
 });
 
 // GET /api/products/tags/list - Get all unique tags for filtering
-router.get('/tags/list', async (req, res) => {
+router.get('/tags/list', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     const safeQuery = getValidProductsQuery({ shop });
     
@@ -266,12 +267,9 @@ router.get('/tags/list', async (req, res) => {
 });
 
 // GET /api/products/seo-status - Get SEO optimization statistics
-router.get('/seo-status', async (req, res) => {
+router.get('/seo-status', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
 
     console.log(`Getting SEO status for shop: ${shop}`);
 
@@ -376,12 +374,9 @@ router.get('/seo-status', async (req, res) => {
 });
 
 // DELETE /api/products/clear - Clear all products for a shop
-router.delete('/clear', async (req, res) => {
+router.delete('/clear', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
     
     const result = await Product.deleteMany({ shop });
     res.json({ 
@@ -397,12 +392,9 @@ router.delete('/clear', async (req, res) => {
 });
 
 // POST /api/products/cleanup - Clean up invalid products
-router.post('/cleanup', async (req, res) => {
+router.post('/cleanup', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
 
     console.log(`Starting cleanup for shop: ${shop}`);
 
@@ -476,9 +468,9 @@ router.post('/cleanup', async (req, res) => {
 });
 
 // GET /api/products/bulk-select - Get products for bulk operations
-router.get('/bulk-select', async (req, res) => {
+router.get('/bulk-select', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { 
       ids, // comma-separated product IDs
       optimized = 'all' // all, true, false
@@ -531,9 +523,9 @@ router.get('/bulk-select', async (req, res) => {
 
 // GET /api/products/:productId - Get single product with full details
 // ВАЖНО: Този route е последен, защото съдържа динамичен параметър
-router.get('/:productId', async (req, res) => {
+router.get('/:productId', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { productId } = req.params;
     const gid = toGID(productId);
     
@@ -602,9 +594,9 @@ router.get('/:productId', async (req, res) => {
 });
 
 // DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB
-router.delete('/:id/metafields', async (req, res) => {
+router.delete('/:id/metafields', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const productId = req.params.id;
     
     // Конвертираме в GID ако е необходимо
@@ -681,9 +673,9 @@ router.delete('/:id/metafields', async (req, res) => {
 });
 
 // GET /api/products/verify-seo/:productId - Verify real SEO status from Shopify
-router.get('/verify-seo/:productId', async (req, res) => {
+router.get('/verify-seo/:productId', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { productId } = req.params;
     const gid = toGID(productId);
     
@@ -778,9 +770,9 @@ router.get('/verify-seo/:productId', async (req, res) => {
 });
 
 // POST /api/products/resync-all - Force resync all products with Shopify
-router.post('/resync-all', async (req, res) => {
+router.post('/resync-all', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { limit = 50 } = req.body;
     
     console.log('[RESYNC-ALL] Starting full resync for shop:', shop);
@@ -880,9 +872,10 @@ router.post('/resync-all', async (req, res) => {
 });
 
 // POST /api/products/verify-after-delete
-router.post('/verify-after-delete', async (req, res) => {
+router.post('/verify-after-delete', verifyRequest, async (req, res) => {
   try {
-    const { shop, productIds, deletedLanguages } = req.body;
+    const shop = req.shopDomain;
+    const { productIds, deletedLanguages } = req.body;
     
     console.log('[VERIFY-AFTER-DELETE] Checking products:', productIds);
     

@@ -1,5 +1,6 @@
 // backend/controllers/schemaController.js
 import express from 'express';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import fetch from 'node-fetch';
 
 const router = express.Router();
@@ -88,12 +89,9 @@ async function getShopLocale(shop) {
 }
 
 // GET /api/schema/preview - Get all active schemas
-router.get('/api/schema/preview', async (req, res) => {
+router.get('/api/schema/preview', verifyRequest, async (req, res) => {
   try {
-    const shop = normalizeShop(req.query.shop);
-    if (!shop) {
-      return res.status(400).json({ ok: false, error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
 
     // Check if we have access token
     const hasToken = await resolveAccessToken(shop);
@@ -225,12 +223,9 @@ router.get('/api/schema/preview', async (req, res) => {
 });
 
 // POST /api/schema/generate - Regenerate schemas from latest data
-router.post('/api/schema/generate', async (req, res) => {
+router.post('/api/schema/generate', verifyRequest, async (req, res) => {
   try {
-    const shop = normalizeShop(req.body.shop);
-    if (!shop) {
-      return res.status(400).json({ ok: false, error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
 
     // This endpoint would trigger a refresh of all schema data
     // For now, it just returns success since schemas are generated dynamically
@@ -243,10 +238,9 @@ router.post('/api/schema/generate', async (req, res) => {
 });
 
 // GET /api/schema/status
-router.get('/status', async (req, res) => {
+router.get('/status', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    const shop = req.shopDomain;
 
     // Get existing metafields to check what's configured
     const metafieldsQuery = `{
@@ -315,12 +309,9 @@ router.get('/status', async (req, res) => {
 });
 
 // GET /api/schema/validate - Check schema installation
-router.get('/api/schema/validate', async (req, res) => {
+router.get('/api/schema/validate', verifyRequest, async (req, res) => {
   try {
-    const shop = normalizeShop(req.query.shop);
-    if (!shop) {
-      return res.status(400).json({ ok: false, error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
     
     // Check various aspects of the installation
     const checks = {

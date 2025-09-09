@@ -4,6 +4,7 @@ import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -52,12 +53,9 @@ async function getShopSession(shopParam) {
 /**
  * GET /api/ai-discovery/settings
  */
-router.get('/ai-discovery/settings', async (req, res) => {
+router.get('/ai-discovery/settings', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
     
     const { session } = await getShopSession(shop);
     
@@ -93,11 +91,12 @@ router.get('/ai-discovery/settings', async (req, res) => {
 /**
  * POST /api/ai-discovery/settings
  */
-router.post('/ai-discovery/settings', async (req, res) => {
+router.post('/ai-discovery/settings', verifyRequest, async (req, res) => {
   try {
-    const { shop, bots, features, advancedSchemaEnabled } = req.body;
+    const shop = req.shopDomain;
+    const { bots, features, advancedSchemaEnabled } = req.body;
     
-    if (!shop || !bots || !features) {
+    if (!bots || !features) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -162,12 +161,9 @@ router.post('/ai-discovery/settings', async (req, res) => {
 /**
  * GET /api/ai-discovery/robots-txt
  */
-router.get('/ai-discovery/robots-txt', async (req, res) => {
+router.get('/ai-discovery/robots-txt', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
     
     const { session } = await getShopSession(shop);
     const settings = await aiDiscoveryService.getSettings(shop, session);
@@ -183,14 +179,11 @@ router.get('/ai-discovery/robots-txt', async (req, res) => {
 /**
  * POST /api/ai-discovery/apply-robots
  */
-router.post('/ai-discovery/apply-robots', async (req, res) => {
+router.post('/ai-discovery/apply-robots', verifyRequest, async (req, res) => {
   console.log('[APPLY ENDPOINT] Called with body:', req.body);
   
   try {
-    const shop = req.body.shop || req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter is required' });
-    }
+    const shop = req.shopDomain;
     
     console.log('[APPLY ENDPOINT] Shop:', shop);
     
@@ -218,12 +211,9 @@ router.post('/ai-discovery/apply-robots', async (req, res) => {
 /**
  * DELETE /api/ai-discovery/settings - Reset settings to defaults
  */
-router.delete('/ai-discovery/settings', async (req, res) => {
+router.delete('/ai-discovery/settings', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
+    const shop = req.shopDomain;
     
     const shopRecord = await Shop.findOne({ shop });
     if (!shopRecord) {
@@ -298,9 +288,9 @@ router.delete('/ai-discovery/settings', async (req, res) => {
 /**
  * GET /api/ai-discovery/test-assets - Test endpoint to check theme assets
  */
-router.get('/ai-discovery/test-assets', async (req, res) => {
+router.get('/ai-discovery/test-assets', verifyRequest, async (req, res) => {
   try {
-    const shop = req.query.shop;
+    const shop = req.shopDomain;
     const { session, accessToken } = await getShopSession(shop);
     
     // Get theme
@@ -435,9 +425,9 @@ async function applyRobotsTxt(shop, robotsTxt) {
 }
 
 // Debug endpoint for shop data
-router.get('/debug-shop/:shop', async (req, res) => {
+router.get('/debug-shop/:shop', verifyRequest, async (req, res) => {
   try {
-    const shop = req.params.shop;
+    const shop = req.shopDomain;
     const shopRecord = await Shop.findOne({ shop });
     
     res.json({

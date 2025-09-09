@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 
 const router = express.Router();
@@ -130,10 +131,9 @@ async function fetchPlan(shop) {
 // ---- Routes ----
 
 // Get current store metadata
-router.get('/generate', async (req, res) => {
+router.get('/generate', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    const shop = req.shopDomain;
 
     // Check plan access
     const plan = await fetchPlan(shop);
@@ -232,10 +232,9 @@ router.get('/generate', async (req, res) => {
 });
 
 // Generate AI metadata (mock for now)
-router.post('/ai-generate', async (req, res) => {
+router.post('/ai-generate', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    const shop = req.shopDomain;
 
     const { shopInfo, businessType, targetAudience } = req.body;
 
@@ -295,10 +294,9 @@ router.post('/ai-generate', async (req, res) => {
 });
 
 // Apply metadata to shop
-router.post('/apply', async (req, res) => {
+router.post('/apply', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+    const shop = req.shopDomain;
 
     const { metadata, options = {} } = req.body;
     if (!metadata) return res.status(400).json({ error: 'No metadata provided' });
@@ -454,10 +452,9 @@ router.get('/public/:shop', async (req, res) => {
     }
 
     // Create metafield definitions for shop
-    router.post('/create-definitions', async (req, res) => {
+    router.post('/create-definitions', verifyRequest, async (req, res) => {
       try {
-        const shop = getShopFromReq(req);
-        if (!shop) return res.status(400).json({ error: 'Shop not specified' });
+        const shop = req.shopDomain;
 
         const mutation = `
           mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
@@ -554,13 +551,11 @@ router.get('/public/:shop', async (req, res) => {
 });
 
 // Settings endpoints за Advanced Schema
-router.get('/settings', async (req, res) => {
+router.get('/settings', verifyRequest, async (req, res) => {
   console.log('[STORE-SETTINGS] GET /settings called'); // DEBUG
   try {
-    const shop = getShopFromReq(req);
+    const shop = req.shopDomain;
     console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
-    
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
     
     // Get settings from shop metafield
     const query = `{
@@ -586,15 +581,13 @@ router.get('/settings', async (req, res) => {
   }
 });
 
-router.post('/settings', async (req, res) => {
+router.post('/settings', verifyRequest, async (req, res) => {
   console.log('[STORE-SETTINGS] POST /settings called'); // DEBUG
   console.log('[STORE-SETTINGS] Request body:', req.body); // DEBUG
   
   try {
-    const shop = getShopFromReq(req);
+    const shop = req.shopDomain;
     console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
-    
-    if (!shop) return res.status(400).json({ error: 'Shop not specified' });
     
     // Get shop ID
     const shopQuery = `{ shop { id } }`;

@@ -2,6 +2,7 @@
 import express from 'express';
 import Subscription from './db/Subscription.js';
 import Shop from './db/Shop.js';
+import { verifyRequest } from './middleware/verifyRequest.js';
 
 // ---- Plan Config (free trial: 5 days) ----
 const TRIAL_DAYS = 5;
@@ -68,12 +69,11 @@ function getShopFromReq(req) {
  * POST /billing/subscribe?shop={shop}
  * Body: { plan: 'starter' | 'professional' | 'growth' | 'growth-extra' | 'enterprise' }
  */
-router.post('/subscribe', async (req, res) => {
+router.post('/subscribe', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
+    const shop = req.shopDomain;
     const { plan } = req.body;
 
-    if (!shop) return res.status(400).json({ error: 'Missing shop' });
     if (!plan || !PLANS[plan])
       return res.status(400).json({ error: 'Invalid plan' });
 
@@ -128,10 +128,9 @@ router.post('/subscribe', async (req, res) => {
  * Get current plan
  * GET /billing/plan?shop={shop}
  */
-router.get('/plan', async (req, res) => {
+router.get('/plan', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    const shop = req.shopDomain;
 
     const sub = await Subscription.findOne({ shop });
     if (!sub) return res.status(404).json({ error: 'Subscription not found' });
@@ -159,10 +158,9 @@ router.get('/plan', async (req, res) => {
  * (Optional) reset counters – за тест/разработка
  * POST /billing/reset?shop={shop}
  */
-router.post('/reset', async (req, res) => {
+router.post('/reset', verifyRequest, async (req, res) => {
   try {
-    const shop = getShopFromReq(req);
-    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    const shop = req.shopDomain;
 
     const sub = await Subscription.findOneAndUpdate(
       { shop },

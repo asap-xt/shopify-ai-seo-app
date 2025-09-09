@@ -85,6 +85,29 @@ import aiEndpointsRouter from './controllers/aiEndpointsController.js';
 import aiEnhanceRouter from './controllers/aiEnhanceController.js';
 import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 
+// Session token endpoint for initial app load
+app.post('/api/auth', async (req, res) => {
+  const { shop, host } = req.body;
+  
+  if (!shop || !host) {
+    return res.status(400).json({ error: 'Missing shop or host' });
+  }
+  
+  // Check if shop is installed
+  const shopRecord = await Shop.findOne({ shop });
+  
+  if (!shopRecord || !shopRecord.accessToken) {
+    // Need to install
+    return res.json({ 
+      success: false, 
+      redirectUrl: `/auth?shop=${shop}&host=${host}` 
+    });
+  }
+  
+  // Shop is installed
+  return res.json({ success: true });
+});
+
 // Mount core routers
 app.use(authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
