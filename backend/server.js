@@ -15,6 +15,7 @@ import fs from 'fs';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
+import Shop from './db/Shop.js';
 
 // ---------------------------------------------------------------------------
 // ESM __dirname
