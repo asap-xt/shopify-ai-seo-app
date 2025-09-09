@@ -110,7 +110,7 @@ async function resolveAdminTokenForShop(shop) {
     const mod = await import('../db/Shop.js');
     const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
     if (Shop && typeof Shop.findOne === 'function') {
-      const doc = await Shop.findOne({ shopDomain: shop }).lean().exec();
+      const doc = await Shop.findOne({ shop: shop }).lean().exec();
       const tok = doc?.accessToken || doc?.token || doc?.access_token;
       if (tok && String(tok).trim()) return String(tok).trim();
     }
