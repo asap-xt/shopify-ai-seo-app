@@ -66,9 +66,14 @@ async function getAppBridge(debug = false) {
 
 async function getTokenFromAppBridge(app, debug = false) {
   try {
+    if (debug) console.log('[SFETCH] Getting token from App Bridge...', { app: !!app });
     const mod = await import(/* @vite-ignore */ '@shopify/app-bridge/utilities');
     const getSessionToken = mod && mod.getSessionToken;
-    if (!getSessionToken || !app) return null;
+    if (!getSessionToken || !app) {
+      if (debug) console.log('[SFETCH] No getSessionToken or app:', { getSessionToken: !!getSessionToken, app: !!app });
+      return null;
+    }
+    if (debug) console.log('[SFETCH] Calling getSessionToken...');
     const token = await getSessionToken(app); // must be fetched per request
     if (debug) console.log('[SFETCH] Got session token?', !!token, token ? `(len=${token.length}, head=${token.slice(0,10)}...)` : '');
     return token || null;
@@ -101,6 +106,7 @@ export function makeSessionFetch({ debug } = {}) {
     const token = app ? (await getTokenFromAppBridge(app, dbg)) : null;
     
     if (dbg) console.log('[SFETCH] Public App →', { url, method, shopParam: shop, hasToken: !!token, tokenHead: token ? token.slice(0,10) : null });
+    if (dbg) console.log('[SFETCH] App Bridge details:', { app: !!app, token: !!token, tokenLength: token ? token.length : 0 });
 
     const baseInit = {
       method,
