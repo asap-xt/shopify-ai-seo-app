@@ -1,7 +1,19 @@
 // frontend/src/providers/AppBridgeProvider.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, createContext, useContext } from 'react';
+
+// Създаваме Context за App Bridge
+const AppBridgeContext = createContext(null);
+
+export function useAppBridge() {
+  const app = useContext(AppBridgeContext);
+  if (!app) {
+    console.warn('[useAppBridge] No App Bridge instance in context');
+  }
+  return app;
+}
 
 export default function ShopifyAppBridgeProvider({ children }) {
+  const [app, setApp] = useState(null);
   const params = new URLSearchParams(window.location.search);
   const host = params.get('host');
   const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
@@ -11,29 +23,32 @@ export default function ShopifyAppBridgeProvider({ children }) {
     apiKey: apiKey ? 'Present' : 'Missing'
   });
 
-  if (!host || !apiKey) {
-    console.error('[APP-BRIDGE-PROVIDER] Missing host or apiKey');
-    return <>{children}</>;
-  }
-
   useEffect(() => {
-    // Initialize App Bridge manually
+    if (!host || !apiKey) {
+      console.error('[APP-BRIDGE-PROVIDER] Missing host or apiKey');
+      return;
+    }
+
     import('@shopify/app-bridge').then(({ createApp }) => {
-      try {
-        const app = createApp({
-          apiKey,
-          host,
-          forceRedirect: false
-        });
-        
-        // Store app instance globally
-        window.__SHOPIFY_APP_BRIDGE__ = app;
-        console.log('[APP-BRIDGE-PROVIDER] App Bridge initialized');
-      } catch (error) {
-        console.error('[APP-BRIDGE-PROVIDER] App Bridge init error:', error);
-      }
+      const appInstance = createApp({
+        apiKey,
+        host,
+        forceRedirect: false
+      });
+      
+      console.log('[APP-BRIDGE-PROVIDER] App instance created');
+      setApp(appInstance);
+      window.__SHOPIFY_APP_BRIDGE__ = appInstance; // за backward compatibility
+    }).catch(err => {
+      console.error('[APP-BRIDGE-PROVIDER] Failed to create app:', err);
     });
   }, [apiKey, host]);
 
-  return <>{children}</>;
+  if (!host || !apiKey) return null;
+
+  return (
+    <AppBridgeContext.Provider value={app}>
+      {children}
+    </AppBridgeContext.Provider>
+  );
 }

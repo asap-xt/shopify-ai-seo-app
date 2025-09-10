@@ -8,7 +8,7 @@ import {
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
 import { sessionFetch } from './lib/sessionFetch.js';
-import ShopifyAppBridgeProvider from './providers/AppBridgeProvider.jsx';
+import ShopifyAppBridgeProvider, { useAppBridge } from './providers/AppBridgeProvider.jsx';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';

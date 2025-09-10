@@ -1,6 +1,6 @@
 // frontend/src/hooks/useShopApi.js
 import { useMemo } from 'react';
-import { useAppBridge } from '@shopify/app-bridge-react';
+import { useAppBridge } from '../providers/AppBridgeProvider.jsx'; // Променете импорта!
 import { makeApiFetch } from '../lib/apiFetch.js';
 
 /**
