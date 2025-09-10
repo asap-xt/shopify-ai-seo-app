@@ -568,10 +568,19 @@ export default function App() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>App is rendering!</h1>
-      <p>Shop: {shop}</p>
-      <p>Host: {host}</p>
-      <p>If you see this, React works but Polaris/components have issues.</p>
+      <h1>Testing Polaris</h1>
+      <AppProvider i18n={I18N}>
+        <div>AppProvider works!</div>
+        <Frame>
+          <div>Frame works!</div>
+          <Page>
+            <div>Page works!</div>
+            <Card>
+              <Text>If you see this, Polaris is OK!</Text>
+            </Card>
+          </Page>
+        </Frame>
+      </AppProvider>
     </div>
   );
 
