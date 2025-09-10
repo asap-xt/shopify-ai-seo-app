@@ -19,6 +19,7 @@ import Shop from './db/Shop.js';
 
 // Shopify SDK for Public App
 import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
+import shopify from './utils/shopifyApi.js';
 
 // ---------------------------------------------------------------------------
 // ESM __dirname
@@ -58,6 +59,72 @@ app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// ---- Debug helper: виж какви сесии имаш за shop
+app.get('/debug/sessions', async (req, res) => {
+  const shop = req.query?.shop;
+  if (!shop) return res.status(400).json({ error: 'Missing shop' });
+  try {
+    const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
+    return res.json({
+      count: sessions?.length || 0,
+      sessions: (sessions || []).map(s => ({
+        id: s.id, shop: s.shop, isOnline: s.isOnline,
+        updatedAt: s.updatedAt, hasToken: !!s.accessToken, scope: s.scope,
+      })),
+    });
+  } catch (e) {
+    console.error('[DEBUG/SESSIONS] error', e);
+    return res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
+app.use('/api', async (req, res, next) => {
+  try {
+    // 1) resolve shop от различни места
+    const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'] || null;
+    const sessionShop = res.locals?.shopify?.session?.shop || null; // ако си ползвал validateAuthenticatedSession() по-нагоре
+    const shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || null;
+    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    if (!req.query) req.query = {};
+    if (!req.query.shop) req.query.shop = shop;
+
+    // 2) намери най-подходящата OAuth сесия за този shop
+    const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
+    if (!sessions || sessions.length === 0) {
+      return res.status(401).json({
+        error: 'No OAuth session for this shop. Please install the app.',
+        hint: `Visit /auth?shop=${encodeURIComponent(shop)}`,
+      });
+    }
+    let best = sessions.find(s => s.isOnline === false) || null;
+    if (!best) best = sessions.sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0))[0];
+    if (!best?.accessToken) {
+      return res.status(401).json({ error: 'Stored session has no access token. Reinstall app.' });
+    }
+
+    // 3) modern client за новите контролери
+    res.locals.adminSession = best;
+    res.locals.adminGraphql = new shopify.clients.Graphql({ session: best });
+    res.locals.shop = shop;
+
+    // 4) COMPAT: подай токена и на "legacy custom" код, който чете от env
+    req.__origAdminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+    process.env.SHOPIFY_ADMIN_API_TOKEN = best.accessToken;
+    const _end = res.end;
+    res.end = function(...args) {
+      process.env.SHOPIFY_ADMIN_API_TOKEN = req.__origAdminToken;
+      return _end.apply(this, args);
+    };
+
+    // console.log('[API RESOLVER]', shop, best.accessToken.slice(0,12), 'isOnline=', best.isOnline);
+    return next();
+  } catch (e) {
+    console.error('[API RESOLVER] error', e);
+    return res.status(500).json({ error: 'Token resolver failed' });
+  }
+});
 
 // ========= DEBUG + SHOP RESOLVER за /api/store =========
 app.use('/api/store', (req, res, next) => {
