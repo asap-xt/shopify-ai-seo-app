@@ -8,7 +8,7 @@ import {
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
 import { makeSessionFetch } from './lib/sessionFetch.js';
-import ShopifyAppBridgeProvider, { useAppBridge } from './providers/AppBridgeProvider.jsx';
+import { useAppBridge } from './providers/AppBridgeProvider.jsx';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
@@ -593,34 +593,32 @@ export default function App() {
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
   return (
-    <ShopifyAppBridgeProvider>
-      <AppProvider i18n={I18N}>
-        {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
-        <Frame>
-          <Page>
-            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
-            {path === '/' || path.startsWith('/dashboard') ? (
-              <DashboardCard shop={shop} />
-            ) : path.startsWith('/ai-seo') ? (
-              <AiSearchOptimisationPanel shop={shop} />
-            ) : path.startsWith('/billing') ? (
-              <Card>
-                <Box padding="400">
-                  <Text>Billing page</Text>
-                </Box>
-              </Card>
-            ) : path.startsWith('/settings') ? (
-              <Settings shop={shop} />
-            ) : (
-              <Card>
-                <Box padding="400">
-                  <Text>Page not found: {path}</Text>
-                </Box>
-              </Card>
-            )}
-          </Page>
-        </Frame>
-      </AppProvider>
-    </ShopifyAppBridgeProvider>
+    <AppProvider i18n={I18N}>
+      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
+      <Frame>
+        <Page>
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
+          {path === '/' || path.startsWith('/dashboard') ? (
+            <DashboardCard shop={shop} />
+          ) : path.startsWith('/ai-seo') ? (
+            <AiSearchOptimisationPanel shop={shop} />
+          ) : path.startsWith('/billing') ? (
+            <Card>
+              <Box padding="400">
+                <Text>Billing page</Text>
+              </Box>
+            </Card>
+          ) : path.startsWith('/settings') ? (
+            <Settings shop={shop} />
+          ) : (
+            <Card>
+              <Box padding="400">
+                <Text>Page not found: {path}</Text>
+              </Box>
+            </Card>
+          )}
+        </Page>
+      </Frame>
+    </AppProvider>
   );
 }
