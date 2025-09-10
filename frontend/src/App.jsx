@@ -545,10 +545,14 @@ export default function App() {
     });
   }, [shop, host]);
 
-  // Рендиране
+  console.log('About to render, isLoading:', isLoading);
+
   if (isLoading) {
+    console.log('Showing loading state');
     return <div>Loading...</div>;
   }
+
+  console.log('Past loading check, rendering main app');
 
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
