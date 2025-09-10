@@ -1,5 +1,5 @@
 // frontend/src/pages/Collections.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   ResourceList,
@@ -23,9 +23,17 @@ import {
   Checkbox,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
+const qs = (k, d = '') => {
+  try { return new URLSearchParams(window.location.search).get(k) || d; }
+  catch { return d; }
+};
 
-const Collections = ({ shop }) => {
+export default function CollectionsPage({ shop: shopProp }) {
+  const shop = shopProp || qs('shop', '');
+  // Единен session-aware fetch за компонента
+  const api = useMemo(() => makeSessionFetch(), []);
   // Collection list state
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,6 +64,7 @@ const Collections = ({ shop }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   
   // Bulk delete state
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -96,30 +105,29 @@ const Collections = ({ shop }) => {
   // Load models on mount
   useEffect(() => {
     if (!shop) return;
-    fetch(`/plans/me?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => {
+    api(`/plans/me`, { shop })
+      .then((data) => {
         const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
-        setModelOptions(models.map(m => ({ label: m, value: m })));
+        setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
       })
-      .catch(err => setToast(`Error loading models: ${err.message}`));
-  }, [shop]);
+      .catch((err) => setToast(`Error loading models: ${err.message}`));
+  }, [shop, api]);
   
   // Load shop languages
   useEffect(() => {
     if (!shop) return;
-    fetch(`/api/languages/shop/${shop}`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => {
+    api(`/api/languages/shop/${shop}`)
+      .then((data) => {
         const langs = data?.shopLanguages || ['en'];
         setAvailableLanguages(langs);
         setSelectedLanguages([]);
       })
       .catch(() => {
         setAvailableLanguages(['en']);
+        setSelectedLanguages([]);
       });
-  }, [shop]);
+  }, [shop, api]);
   
   // Load collections
   const loadCollections = useCallback(async () => {
@@ -130,11 +138,8 @@ const Collections = ({ shop }) => {
         ...(searchValue && { search: searchValue }),
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
       });
-      
-      const response = await fetch(`/collections/list?${params}`, { credentials: 'include' });
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data?.error || 'Failed to load collections');
+      // URL вече съдържа shop → не подаваме {shop}, за да не дублираме
+      const data = await api(`/collections/list?${params}`);
       
       // Apply client-side filtering for search
       let filteredCollections = data.collections || [];
@@ -160,7 +165,7 @@ const Collections = ({ shop }) => {
     } finally {
       setLoading(false);
     }
-  }, [shop, searchValue, optimizedFilter]);
+  }, [shop, searchValue, optimizedFilter, api]);
   
   // Initial load and filter changes
   useEffect(() => {
@@ -212,19 +217,13 @@ const Collections = ({ shop }) => {
   const loadSeoDataForPreview = async (collectionId) => {
     setLoadingPreview(true);
     try {
-      const response = await fetch(`/collections/${collectionId.split('/').pop()}/seo-data?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setPreviewData(data);
-        setShowPreviewModal(true);
-      } else {
-        setToast('No SEO data found for this collection');
-      }
+      const url = `/collections/${collectionId.split('/').pop()}/seo-data?shop=${encodeURIComponent(shop)}`;
+      const data = await api(url);
+      setPreviewData(data);
+      setShowPreviewModal(true);
     } catch (err) {
-      setToast('Failed to load SEO data');
+      // Ако бекендът връща 404 за липсващи данни, api ще хвърли грешка със status
+      setToast(err?.status === 404 ? 'No SEO data found for this collection' : 'Failed to load SEO data');
     } finally {
       setLoadingPreview(false);
     }
@@ -268,53 +267,51 @@ const Collections = ({ shop }) => {
         }));
         
         try {
-          const eligibilityRes = await fetch('/ai-enhance/check-eligibility', {
+          const eligibility = await api('/ai-enhance/check-eligibility', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ shop })
+            shop,
+            body: { shop },
           });
           
-          const { eligible } = await eligibilityRes.json();
-          if (!eligible) {
-            results.skipped++;
-            results.skippedDueToPlan++;
-            continue;
+          if (!eligibility?.ok) {
+            setToast('Your plan does not allow AI enhancement for collections');
+            break;
           }
-          
-          const enhanceRes = await fetch('/ai-enhance/collection', {
+          const enhanceData = await api('/ai-enhance/collection', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            shop,
+            body: {
               shop,
               collectionId: collection.id,
-              languages: collection.optimizedLanguages
-            })
+              languages: selectedLanguages,
+            },
           });
           
-          const enhanceData = await enhanceRes.json();
-          
-          // Apply the enhanced SEO
-          if (enhanceData.results && enhanceData.results.length > 0) {
-            await fetch('/api/seo/apply-collection-multi', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                shop,
-                collectionId: collection.id,
-                results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
-                  language: r.language,
-                  seo: {
-                    bullets: r.bullets,
-                    faq: r.faq
-                  }
-                })),
-                options: { updateMetafields: true }
-              })
-            });
-            results.successful++;
-          } else {
-            results.failed++;
+          if (!enhanceData?.ok) {
+            throw new Error(enhanceData?.error || 'AI enhancement failed');
           }
+          
+          await api('/api/seo/apply-collection-multi', {
+            method: 'POST',
+            shop,
+            body: {
+              shop,
+              collectionId: collection.id,
+              results: enhanceData.data.results.filter(r => r?.seo).map(r => ({
+                language: r.language,
+                seo: r.seo,
+              })),
+              options: {
+                updateTitle: true,
+                updateDescription: true,
+                updateSeo: true,
+                updateMetafields: true,
+              },
+            },
+          });
+          
+          setProgress(prev => ({ ...prev, current: prev.current + 1, percent: Math.round(((prev.current + 1) / prev.total) * 100) }));
+          results[collection.id] = { success: true, data: enhanceData.data };
         } catch (error) {
           console.error('Enhancement error:', error);
           results.failed++;
@@ -486,25 +483,21 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          // Use multi-language endpoint like in BulkEdit
-          const response = await fetch('/seo/generate-collection-multi', {
+          // Използваме session token
+          const data = await api('/seo/generate-collection-multi', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
+            shop,
+            body: {
               shop,
               collectionId: collection.id,
               model,
               languages: selectedLanguages,
-            }),
+            },
           });
-          
-          const data = await response.json();
-          if (!response.ok) throw new Error(data?.error || 'Generation failed');
           
           results[collection.id] = {
             success: true,
-            data,
+            data
           };
         } catch (err) {
           results[collection.id] = {
@@ -552,12 +545,11 @@ const Collections = ({ shop }) => {
         setCurrentCollection(collection.title);
         
         try {
-          // Use multi endpoint like in BulkEdit
-          const response = await fetch('/seo/apply-collection-multi', {
+          // Multi endpoint с токен
+          const data = await api('/seo/apply-collection-multi', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
+            shop,
+            body: {
               shop,
               collectionId,
               results: result.data.results.filter(r => r?.seo).map(r => ({
@@ -570,14 +562,16 @@ const Collections = ({ shop }) => {
                 updateSeo: true,
                 updateMetafields: true,
               },
-            }),
+            },
           });
           
-          const data = await response.json();
-          if (!response.ok) throw new Error(data?.error || 'Apply failed');
+          if (!data?.ok) {
+            throw new Error(data?.error || 'Apply failed');
+          }
           
+          setProgress(prev => ({ ...prev, current: prev.current + 1, percent: Math.round(((prev.current + 1) / prev.total) * 100) }));
         } catch (err) {
-          setErrors(prev => [...prev, { collection: collection.title, error: `Apply failed: ${err.message}` }]);
+          errors.push({ id: collection.id, title: collection.title, message: err.message });
         }
         
         const current = i + 1;
@@ -608,26 +602,16 @@ const Collections = ({ shop }) => {
     }
   };
   
-  // Delete SEO for a collection and language
-  const deleteSEO = async (collectionId, language) => {
+  // Delete SEO for a single language
+  const deleteSeoForLanguage = async (collectionId, language) => {
     setIsDeleting(true);
+    setDeleteError('');
     try {
-      const response = await fetch('/collections/delete-seo', {
+      await api('/collections/delete-seo', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          shop,
-          collectionId,
-          language
-        })
+        shop,
+        body: { shop, collectionId, language },
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data?.error || 'Delete failed');
-      }
       
       setToast(`Deleted ${language.toUpperCase()} SEO successfully`);
       setShowDeleteModal(false);
@@ -644,15 +628,9 @@ const Collections = ({ shop }) => {
   };
   
   // Bulk delete SEO for selected collections and languages
-  const deleteSEOBulk = async () => {
-    if (!deleteLanguages.length) {
-      setToast('Please select at least one language');
-      return;
-    }
-    
+  const deleteSeoBulk = async (deleteLanguages = []) => {
     setIsDeletingBulk(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    
+    setDeleteError('');
     try {
       const collectionsToProcess = selectAllPages 
         ? collections 
@@ -660,35 +638,23 @@ const Collections = ({ shop }) => {
         
       const total = collectionsToProcess.length * deleteLanguages.length;
       let current = 0;
+      const errors = [];
       
       for (const collection of collectionsToProcess) {
         for (const language of deleteLanguages) {
           try {
-            const response = await fetch('/collections/delete-seo', {
+            await api('/collections/delete-seo', {
               method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                shop,
-                collectionId: collection.id,
-                language
-              })
+              shop,
+              body: { shop, collectionId: collection.id, language },
             });
-            
-            if (!response.ok) {
-              const data = await response.json();
-              throw new Error(data?.error || 'Delete failed');
-            }
           } catch (err) {
             console.error(`Failed to delete ${language} for ${collection.title}:`, err);
+            errors.push({ id: collection.id, title: collection.title, message: err.message });
+          } finally {
+            current++;
+            setProgress({ current, total, percent: Math.round((current / total) * 100) });
           }
-          
-          current++;
-          setProgress({ 
-            current, 
-            total, 
-            percent: Math.round((current / total) * 100) 
-          });
         }
       }
       
@@ -1062,7 +1028,7 @@ const Collections = ({ shop }) => {
           setShowConfirmModal(false);
           // Small delay to close the modal
           setTimeout(() => {
-            deleteSEOBulk();
+            deleteSeoBulk(pendingDeleteLanguages);
           }, 100);
         }
       }}
