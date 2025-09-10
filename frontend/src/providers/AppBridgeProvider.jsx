@@ -1,5 +1,4 @@
-import React, {useMemo} from 'react'
-import {Provider as AppBridgeProvider} from '@shopify/app-bridge-react'
+import React, {useEffect} from 'react'
 
 export default function ShopifyAppBridgeProvider({children}) {
   const params = new URLSearchParams(window.location.search)
@@ -7,17 +6,26 @@ export default function ShopifyAppBridgeProvider({children}) {
   const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY
 
   // If no host (opened standalone), don't initialize
-  if (!host || !apiKey) return null
+  if (!host || !apiKey) return children
 
-  const config = useMemo(() => ({
-    apiKey,
-    host,
-    forceRedirect: false  // IMPORTANT: Changed from true to false
-  }), [apiKey, host])
+  useEffect(() => {
+    // Initialize App Bridge manually
+    import('@shopify/app-bridge').then(({ createApp }) => {
+      try {
+        const app = createApp({
+          apiKey,
+          host,
+          forceRedirect: false
+        });
+        
+        // Store app instance globally
+        window.__SHOPIFY_APP_BRIDGE__ = app;
+        console.log('[AppBridgeProvider] App Bridge initialized');
+      } catch (error) {
+        console.error('[AppBridgeProvider] App Bridge init error:', error);
+      }
+    });
+  }, [apiKey, host]);
 
-  return (
-    <AppBridgeProvider config={config}>
-      {children}
-    </AppBridgeProvider>
-  )
+  return children
 }

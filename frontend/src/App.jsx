@@ -8,6 +8,7 @@ import {
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
 import { sessionFetch } from './lib/sessionFetch.js';
+import ShopifyAppBridgeProvider from './providers/AppBridgeProvider.jsx';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
@@ -563,20 +564,22 @@ export default function App() {
 
   // ВРЕМЕНЕН RETURN ЗА ТЕСТ
   return (
-    <AppProvider i18n={I18N}>
-      <Frame>
-        <Page>
-          <Card>
-            <Box padding="400">
-              <Text as="h1" variant="headingLg">App is working!</Text>
-              <Text>Path: {path}</Text>
-              <Text>Lang: {lang}</Text>
-              <Text>Embedded: {isEmbedded ? 'Yes' : 'No'}</Text>
-              <Text>Section: {sectionTitle}</Text>
-            </Box>
-          </Card>
-        </Page>
-      </Frame>
-    </AppProvider>
+    <ShopifyAppBridgeProvider>
+      <AppProvider i18n={I18N}>
+        <Frame>
+          <Page>
+            <Card>
+              <Box padding="400">
+                <Text as="h1" variant="headingLg">App is working!</Text>
+                <Text>Path: {path}</Text>
+                <Text>Lang: {lang}</Text>
+                <Text>Embedded: {isEmbedded ? 'Yes' : 'No'}</Text>
+                <Text>Section: {sectionTitle}</Text>
+              </Box>
+            </Card>
+          </Page>
+        </Frame>
+      </AppProvider>
+    </ShopifyAppBridgeProvider>
   );
 }

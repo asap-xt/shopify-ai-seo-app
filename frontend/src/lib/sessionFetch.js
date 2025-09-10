@@ -27,7 +27,7 @@ async function getAppBridge() {
 
     if (!host || !apiKey) return null;
 
-    _app = createApp({ apiKey, host, forceRedirect: false }); // IMPORTANT: Changed from true to false
+    _app = createApp({ apiKey, host, forceRedirect: false });
     return _app;
   } catch {
     return null;
