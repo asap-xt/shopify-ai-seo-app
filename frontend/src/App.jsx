@@ -566,6 +566,16 @@ export default function App() {
 
   console.log('Rendering main app UI');
 
+  return (
+    <div style={{ padding: '20px' }}>
+      <h1>App is rendering!</h1>
+      <p>Shop: {shop}</p>
+      <p>Host: {host}</p>
+      <p>If you see this, React works but Polaris/components have issues.</p>
+    </div>
+  );
+
+  /* ЗАКОМЕНТИРАНО - оригинален return блок
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
     if (path.startsWith('/billing')) return 'Billing';
@@ -592,4 +602,5 @@ export default function App() {
       </Frame>
     </AppProvider>
   );
+  */
 }
