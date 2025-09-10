@@ -560,24 +560,21 @@ export default function App() {
   }
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
-  
-  // ===== КРАЙ НА DEBUG КОДА =====
-  
-  // ===== ВАШИЯТ ОРИГИНАЛЕН RETURN (не го променяйте) =====
+
+  // ВРЕМЕНЕН RETURN ЗА ТЕСТ
   return (
     <AppProvider i18n={I18N}>
-      <Frame navigation={isEmbedded ? undefined : <SideNav />}>
+      <Frame>
         <Page>
-          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k, d) => d} />
-          {path.startsWith('/ai-seo') ? (
-            <AiSearchOptimisationPanel />
-          ) : path.startsWith('/billing') ? (
-            <Card><Box padding="400"><Text>Billing page</Text></Box></Card>
-          ) : path.startsWith('/settings') ? (
-            <Settings />
-          ) : (
-            <DashboardCard />
-          )}
+          <Card>
+            <Box padding="400">
+              <Text as="h1" variant="headingLg">App is working!</Text>
+              <Text>Path: {path}</Text>
+              <Text>Lang: {lang}</Text>
+              <Text>Embedded: {isEmbedded ? 'Yes' : 'No'}</Text>
+              <Text>Section: {sectionTitle}</Text>
+            </Box>
+          </Card>
         </Page>
       </Frame>
     </AppProvider>
