@@ -145,9 +145,10 @@ router.post('/apply-multi', verifyRequest, async (req, res) => {
 
 // POST /api/seo/delete-multi
 // Body: { shop, productId, languages: ['en','bg',...] }
-router.post('/delete-multi', async (req, res) => {
+router.post('/delete-multi', verifyRequest, async (req, res) => {
   try {
-    const { shop, productId: pid, languages } = req.body || {};
+    const shop = req.shopDomain;
+    const { productId: pid, languages } = req.body || {};
     console.log('[DELETE-MULTI] Request:', { shop, productId: pid, languages });
     
     if (!shop || !pid || !Array.isArray(languages) || languages.length === 0) {

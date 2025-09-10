@@ -1,14 +1,15 @@
 // backend/controllers/aiEnhanceController.js
 import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 
 const router = express.Router();
 
 // POST /ai-enhance/check-eligibility
-router.post('/check-eligibility', async (req, res) => {
+router.post('/check-eligibility', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
@@ -75,9 +76,9 @@ async function openrouterChat(model, messages, response_format_json = true) {
 }
 
 // POST /ai-enhance/product
-router.post('/product', async (req, res) => {
+router.post('/product', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
     
     console.log('🔍 [DEBUG] Starting AI enhance for product:', productId);
@@ -191,9 +192,9 @@ Output JSON with:
 });
 
 // POST /ai-enhance/collection
-router.post('/collection', async (req, res) => {
+router.post('/collection', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { collectionId, languages = [] } = req.body;
     
     console.log('🔍 [DEBUG] Starting AI enhance for collection:', collectionId);

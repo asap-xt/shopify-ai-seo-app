@@ -1,21 +1,22 @@
 // frontend/src/hooks/useShopApi.js
-import { useMemo } from 'react';
-import { useAppBridge } from '../providers/AppBridgeProvider.jsx'; // Променете импорта!
-import { makeApiFetch } from '../lib/apiFetch.js';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 /**
  * Custom hook за лесна работа с Shopify API
  * Връща готов api клиент и shop параметъра
  */
-export function useShopApi() {
-  const app = useAppBridge();
-  const api = useMemo(() => makeApiFetch(app), [app]);
-  
-  const shop = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('shop') || '';
-  }, []);
+const qs = (k, d = '') => {
+  try { return new URLSearchParams(window.location.search).get(k) || d; }
+  catch { return d; }
+};
 
+export function useShopApi() {
+  // Нов вариант: винаги използвай собствен session-token fetch,
+  // който създава App Bridge вътрешно чрез host от URL (няма race).
+  const api = useMemo(() => makeSessionFetch(), []);
+
+  const shop = qs('shop', '');
   return { api, shop };
 }
 

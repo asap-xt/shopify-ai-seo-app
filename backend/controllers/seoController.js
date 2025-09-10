@@ -1207,9 +1207,9 @@ router.post('/seo/apply', verifyRequest, async (req, res) => {
 // ==================== COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/list - Updated version, languages included
-router.get('/collections/list', async (req, res) => {
+router.get('/collections/list', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const token = await resolveAdminTokenForShop(shop);
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
@@ -1328,9 +1328,9 @@ router.get('/collections/list', async (req, res) => {
 });
 
 // POST /seo/generate-collection
-router.post('/seo/generate-collection', async (req, res) => {
+router.post('/seo/generate-collection', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { collectionId, model, language = 'en' } = req.body;
     
     if (!collectionId) {
@@ -1406,11 +1406,11 @@ router.post('/seo/generate-collection', async (req, res) => {
 });
 
 // POST /seo/apply-collection
-router.post('/seo/apply-collection', async (req, res) => {
+router.post('/seo/apply-collection', verifyRequest, async (req, res) => {
   console.log('[APPLY-COLLECTION] Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     console.log('[APPLY-COLLECTION] Shop:', shop);
     
     const { collectionId, seo, language = 'en', options = {} } = req.body;
@@ -1633,9 +1633,9 @@ function getUniqueBrands(productEdges) {
 }
 
 // POST /api/seo/generate-collection-multi
-router.post('/seo/generate-collection-multi', async (req, res) => {
+router.post('/seo/generate-collection-multi', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { collectionId, model, languages = [] } = req.body;
     
     if (!collectionId || !languages.length) {
@@ -1721,9 +1721,9 @@ router.post('/seo/generate-collection-multi', async (req, res) => {
 });
 
 // POST /api/seo/apply-collection-multi
-router.post('/seo/apply-collection-multi', async (req, res) => {
+router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { collectionId, results = [], options = {} } = req.body;
     
     console.log('[APPLY-MULTI] Request languages:', results.map(r => r.language));
@@ -1852,9 +1852,9 @@ router.post('/seo/apply-collection-multi', async (req, res) => {
 // ==================== END COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/check-definitions
-router.get('/collections/check-definitions', async (req, res) => {
+router.get('/collections/check-definitions', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     const query = `
       query {
@@ -1883,9 +1883,9 @@ router.get('/collections/check-definitions', async (req, res) => {
 });
 
 // POST /collections/create-definitions
-router.post('/collections/create-definitions', async (req, res) => {
+router.post('/collections/create-definitions', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { languages = ['en'] } = req.body;
     
     console.log('[CREATE-DEFINITIONS] Creating definitions for languages:', languages);
@@ -1903,9 +1903,9 @@ router.post('/collections/create-definitions', async (req, res) => {
 });
 
 // POST /collections/init-metafields - Creates metafield definitions for collections
-router.post('/collections/init-metafields', async (req, res) => {
+router.post('/collections/init-metafields', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     // Get shop languages
     const Q_SHOP_LOCALES = `
@@ -1934,9 +1934,9 @@ router.post('/collections/init-metafields', async (req, res) => {
 });
 
 // POST /collections/init-metafield-definitions - Creates metafield definitions for collections
-router.post('/collections/init-metafield-definitions', async (req, res) => {
+router.post('/collections/init-metafield-definitions', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     
     // Get shop languages
     const Q_SHOP_LOCALES = `
@@ -2014,9 +2014,9 @@ export {
 };
 
 // GET /collections/:id/seo-data - Returns SEO data for preview
-router.get('/collections/:id/seo-data', async (req, res) => {
+router.get('/collections/:id/seo-data', verifyRequest, async (req, res) => {
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const token = await resolveAdminTokenForShop(shop);
     const collectionId = req.params.id;
     
@@ -2067,11 +2067,11 @@ router.get('/collections/:id/seo-data', async (req, res) => {
 });
 
 // DELETE /seo/delete - Delete SEO for specific language
-router.delete('/seo/delete', async (req, res) => {
+router.delete('/seo/delete', verifyRequest, async (req, res) => {
   console.log('[DELETE-SEO] Request received:', req.body);
   
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { productId, language } = req.body;
     
     if (!productId || !language) {
@@ -2205,11 +2205,11 @@ router.delete('/seo/delete', async (req, res) => {
 });
 
 // DELETE /seo/bulk-delete - Delete SEO for multiple products
-router.delete('/seo/bulk-delete', async (req, res) => {
+router.delete('/seo/bulk-delete', verifyRequest, async (req, res) => {
   console.log('[BULK-DELETE-SEO] Request received');
   
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { items } = req.body; // Array of { productId, language }
     
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -2339,11 +2339,11 @@ router.delete('/seo/bulk-delete', async (req, res) => {
 });
 
 // DELETE /collections/delete-seo - Delete collection SEO for specific language
-router.delete('/collections/delete-seo', async (req, res) => {
+router.delete('/collections/delete-seo', verifyRequest, async (req, res) => {
   console.log('[DELETE-COLLECTION-SEO] Request received:', req.body);
   
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain;
     const { collectionId, language } = req.body;
     
     if (!collectionId || !language) {
