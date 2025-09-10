@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Card, Text, TextField, InlineStack, Select, Button, Divider, Toast, Tabs,
 } from '@shopify/polaris';
-import { makeSessionFetch } from '../lib/sessionFetch.js';
+import { useShopApi } from '../hooks/useShopApi.js';
 import BulkEdit from '../pages/BulkEdit.jsx';
 
 const qs = (k, d = '') => {
@@ -17,6 +17,7 @@ const toGID = (v) => {
 const pretty = (x) => JSON.stringify(x, null, 2);
 
 export default function AiSeoPanel() {
+  const { api, shop } = useShopApi(); // Това заменя много редове!
   const [selectedTab, setSelectedTab] = useState(0);
   
   const tabs = [
@@ -33,8 +34,6 @@ export default function AiSeoPanel() {
   ];
 
   // All existing state and logic for single product
-  const api = useMemo(() => makeSessionFetch(), []);
-  const [shop, setShop] = useState(() => qs('shop', ''));
   const [productId, setProductId] = useState('');
   const [model, setModel] = useState('');
   const [modelOptions, setModelOptions] = useState([{ label: 'Loading…', value: '' }]);
@@ -49,11 +48,10 @@ export default function AiSeoPanel() {
   const [toast, setToast] = useState('');
 
   useEffect(() => {
-    const s = shop || qs('shop', '');
-    if (!s) return;
+    if (!shop) return;
     (async () => {
       try {
-        const j = await api(`/plans/me`, { shop: s });
+        const j = await api(`/plans/me`, { shop });
         const suggested = j?.modelsSuggested || [];
         const opts = suggested.length ? suggested : ['anthropic/claude-3.5-sonnet'];
         setModelOptions(opts.map(m => ({ label: m, value: m })));
@@ -65,9 +63,8 @@ export default function AiSeoPanel() {
   }, [shop, api]);
 
   useEffect(() => {
-    const s = shop || qs('shop', '');
     const pid = (productId || '').trim();
-    if (!s || !pid) {
+    if (!shop || !pid) {
       setShopLanguages([]); setProductLanguages([]); setPrimaryLanguage('en');
       setShouldShowLanguageSelector(false); setAllLanguagesOption(null); setLanguage('en');
       return;
@@ -76,7 +73,7 @@ export default function AiSeoPanel() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await api(`/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`, { shop: s });
+        const data = await api(`/api/languages/product/${encodeURIComponent(shop)}/${encodeURIComponent(pid)}`, { shop });
         if (cancelled) return;
 
         const shopLangs = (data.shopLanguages || []).map(x => x.toLowerCase());
