@@ -9,7 +9,7 @@ import mongoose from 'mongoose';
 import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 
 const router = express.Router();
 
@@ -622,7 +622,7 @@ function fixupAndValidate(payload) {
 /* --------------------------- Routes --------------------------- */
 
 // Plans (used by Dashboard/AI SEO form)
-router.get('/plans/me', verifyRequest, async (req, res) => {
+router.get('/plans/me', validateRequest(), async (req, res) => {
   console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -715,7 +715,7 @@ router.get('/plans/me', verifyRequest, async (req, res) => {
   }
 });
 
-router.post('/seo/generate', verifyRequest, async (req, res) => {
+router.post('/seo/generate', validateRequest(), async (req, res) => {
   console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -1011,7 +1011,7 @@ function strictPrompt(ctx, language) {
   ];
 }
 
-router.post('/seo/apply', verifyRequest, async (req, res) => {
+router.post('/seo/apply', validateRequest(), async (req, res) => {
   console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,

@@ -11,7 +11,7 @@ async function check() {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB');
 
-    const shop = 'asapxt-teststore.myshopify.com';
+    const shop = process.env.TEST_SHOP || 'example.myshopify.com';
     
     // 1. Check current state
     console.log('\n1. Checking current sitemap for', shop);

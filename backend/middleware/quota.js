@@ -58,7 +58,7 @@ function parseJwtPayload(token) {
 function shopFromDest(dest) {
   try {
     const u = new URL(dest);
-    return u.host; // e.g. asapxt-teststore.myshopify.com
+    return u.host; // e.g. example.myshopify.com
   } catch {
     return null;
   }

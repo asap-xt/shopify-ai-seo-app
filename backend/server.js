@@ -17,6 +17,9 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import Shop from './db/Shop.js';
 
+// Shopify SDK for Public App
+import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
+
 // ---------------------------------------------------------------------------
 // ESM __dirname
 // ---------------------------------------------------------------------------
@@ -113,6 +116,13 @@ app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now
 app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 
 // ---------------------------------------------------------------------------
+// Shopify OAuth Routes for Public App
+// ---------------------------------------------------------------------------
+app.use('/api/auth', authBegin());
+app.use('/api/auth/callback', authCallback());
+app.use('/api/auth', ensureInstalledOnShop());
+
+// ---------------------------------------------------------------------------
 // Routers (mounted before static). These imports must exist in the project.
 // ---------------------------------------------------------------------------
 import authRouter from './auth.js';                      // mounts /auth
@@ -131,27 +141,20 @@ import aiEndpointsRouter from './controllers/aiEndpointsController.js';
 import aiEnhanceRouter from './controllers/aiEnhanceController.js';
 import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 
-// Session token endpoint for initial app load
-app.post('/api/auth', async (req, res) => {
+// Session validation endpoint (replaces old /api/auth)
+app.post('/api/auth/session', validateRequest(), async (req, res) => {
   const { shop, host } = req.body;
   
   if (!shop || !host) {
     return res.status(400).json({ error: 'Missing shop or host' });
   }
   
-  // Check if shop is installed
-  const shopRecord = await Shop.findOne({ shop });
-  
-  if (!shopRecord || !shopRecord.accessToken) {
-    // Need to install
-    return res.json({ 
-      success: false, 
-      redirectUrl: `/auth?shop=${shop}&host=${host}` 
-    });
-  }
-  
-  // Shop is installed
-  return res.json({ success: true });
+  // Session is already validated by middleware
+  res.json({ 
+    success: true,
+    shop: req.shopDomain,
+    hasAccessToken: !!req.shopAccessToken
+  });
 });
 
 // Mount core routers

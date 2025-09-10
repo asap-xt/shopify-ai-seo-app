@@ -1,6 +1,6 @@
 // backend/controllers/schemaController.js
 import express from 'express';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 import fetch from 'node-fetch';
 
 const router = express.Router();

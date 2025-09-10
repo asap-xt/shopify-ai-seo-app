@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import mongoose from 'mongoose';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ function toGID(productId) {
 
 // POST /api/seo/generate-multi
 // Body: { shop, productId, model, languages: ['en','it','el', ...] }
-router.post('/generate-multi', verifyRequest, async (req, res) => {
+router.post('/generate-multi', validateRequest(), async (req, res) => {
   console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -97,7 +97,7 @@ router.post('/generate-multi', verifyRequest, async (req, res) => {
 
 // POST /api/seo/apply-multi
 // Body: { shop, productId, results: [{ language, seo }...], options }
-router.post('/apply-multi', verifyRequest, async (req, res) => {
+router.post('/apply-multi', validateRequest(), async (req, res) => {
   console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -185,7 +185,7 @@ router.post('/apply-multi', verifyRequest, async (req, res) => {
 
 // POST /api/seo/delete-multi
 // Body: { shop, productId, languages: ['en','bg',...] }
-router.post('/delete-multi', verifyRequest, async (req, res) => {
+router.post('/delete-multi', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { productId: pid, languages } = req.body || {};

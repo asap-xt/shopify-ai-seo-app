@@ -1,4 +1,8 @@
 # shopify.app.toml
+# Public App Configuration for Shopify App Store Distribution
+
+[application]
+type = "public"
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
 name = "NEW AI SEO"
 handle = "new-ai-seo"
@@ -23,4 +27,4 @@ embedded = false
 
 [build]
 automatically_update_urls_on_dev = true
-dev_store_url = "asapxt-teststore.myshopify.com"
+# REMOVED: dev_store_url - not needed for public apps

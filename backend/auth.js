@@ -134,7 +134,7 @@ async function registerWebhooks(shop, accessToken) {
   }
 }
 
-// GET /auth?shop=asapxt-teststore.myshopify.com
+// GET /auth?shop=example.myshopify.com
 router.get('/auth', async (req, res) => {
   console.log('[AUTH] Starting OAuth flow', { query: req.query });
   

@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 
 
 const router = express.Router();

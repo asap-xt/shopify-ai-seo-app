@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 
 // ===== Config
 const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';

@@ -1,13 +1,13 @@
 // backend/controllers/aiEnhanceController.js
 import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
+import { validateRequest } from '../middleware/shopifyAuth.js';
 import Subscription from '../db/Subscription.js';
 
 const router = express.Router();
 
 // POST /ai-enhance/check-eligibility
-router.post('/check-eligibility', verifyRequest, async (req, res) => {
+router.post('/check-eligibility', validateRequest(), async (req, res) => {
   console.log('[AI-ENHANCE/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
