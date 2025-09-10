@@ -1,5 +1,5 @@
 // frontend/src/pages/Settings.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Box,
@@ -20,6 +20,7 @@ import {
   ProgressBar
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } 
@@ -51,6 +52,7 @@ export default function Settings() {
   const [jsonModalContent, setJsonModalContent] = useState(null);
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
+  const api = useMemo(() => makeSessionFetch(), []);
   
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
@@ -86,7 +88,7 @@ export default function Settings() {
       return;
     }
     loadSettings();
-  }, [shop]);
+  }, [shop, api]);
 
 
   // Check schema status when enabled
@@ -110,8 +112,7 @@ export default function Settings() {
 
   const checkSchemaStatus = async () => {
     try {
-      const res = await fetch(`/api/schema/status?shop=${shop}`);
-      const data = await res.json();
+      const data = await api(`/api/schema/status`, { shop });
       setAdvancedSchemaStatus({
         enabled: data.enabled,
         generating: data.generating,
@@ -127,8 +128,7 @@ export default function Settings() {
   const checkGenerationProgress = async () => {
     try {
       // Check directly in MongoDB for data
-      const res = await fetch(`/ai/schema-data.json?shop=${shop}`);
-      const data = await res.json();
+      const data = await api(`/ai/schema-data.json`, { shop });
       
       if (data.schemas && data.schemas.length > 0) {
         // Generation complete
@@ -167,10 +167,7 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`/api/ai-discovery/settings?shop=${encodeURIComponent(shop)}`);
-      if (!res.ok) throw new Error('Failed to load settings');
-      
-      const data = await res.json();
+      const data = await api(`/api/ai-discovery/settings`, { shop });
       console.log('Loaded settings:', data); // Debug log
       console.log('Settings plan:', data?.plan);
       console.log('Normalized plan:', normalizePlan(data?.plan));
@@ -192,8 +189,7 @@ export default function Settings() {
 
   const generateRobotsTxt = async (currentSettings = settings) => {
     try {
-      const res = await fetch(`/api/ai-discovery/robots-txt?shop=${encodeURIComponent(shop)}`);
-      const txt = await res.text();
+      const txt = await api(`/api/ai-discovery/robots-txt`, { shop });
       setRobotsTxt(txt);
     } catch (error) {
       console.error('Failed to generate robots.txt:', error);
@@ -246,17 +242,15 @@ export default function Settings() {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/ai-discovery/settings', {
+      await api('/api/ai-discovery/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        shop,
+        body: {
           shop,
           bots: settings.bots,
           features: settings.features
-        })
+        }
       });
-      
-      if (!res.ok) throw new Error('Failed to save');
       
       setToast('Settings saved successfully');
       setHasUnsavedChanges(false); // Clear unsaved changes flag
@@ -277,14 +271,11 @@ export default function Settings() {
 
   const applyRobotsTxt = async () => {
     try {
-      const res = await fetch('/api/ai-discovery/apply-robots', {
+      const data = await api('/api/ai-discovery/apply-robots', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop })
+        shop,
+        body: { shop }
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to apply');
       
       setToast('robots.txt applied successfully!');
     } catch (error) {
@@ -310,15 +301,13 @@ export default function Settings() {
 
   const setTestPlan = async (plan) => {
     try {
-      const res = await fetch('/test/set-plan', {
+      await api('/test/set-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop, plan })
+        shop,
+        body: { shop, plan }
       });
-      if (res.ok) {
-        setToast(`Test plan set to ${plan}`);
-        setTimeout(() => window.location.reload(), 1000);
-      }
+      setToast(`Test plan set to ${plan}`);
+      setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       setToast('Failed to set test plan');
     }
@@ -340,16 +329,10 @@ export default function Settings() {
         welcomePage: `/ai/welcome?shop=${shop}`
       };
 
-      const res = await fetch(endpoints[feature]);
-      const contentType = res.headers.get('content-type');
+      const data = await api(endpoints[feature]);
+      const contentType = 'application/json'; // sessionFetch always returns JSON
       
-      if (contentType?.includes('json')) {
-        const data = await res.json();
-        setJsonModalContent(JSON.stringify(data, null, 2));
-      } else {
-        const text = await res.text();
-        setJsonModalContent(text);
-      }
+      setJsonModalContent(JSON.stringify(data, null, 2));
     } catch (error) {
       setJsonModalContent(`Error loading data: ${error.message}`);
     } finally {
@@ -668,17 +651,13 @@ export default function Settings() {
                       }
                       
                       console.log('[APPLY AUTO] Applying robots.txt...');
-                      const res = await fetch('/api/ai-discovery/apply-robots', {
+                      const data = await api('/api/ai-discovery/apply-robots', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ shop })
+                        shop,
+                        body: { shop }
                       });
                       
-                      console.log('[APPLY AUTO] Response:', res.status);
-                      const data = await res.json();
                       console.log('[APPLY AUTO] Data:', data);
-                      
-                      if (!res.ok) throw new Error(data.error);
                       
                       setToast(data.message || 'robots.txt applied successfully!');
                     } catch (error) {
@@ -898,8 +877,7 @@ export default function Settings() {
                   primary
                   onClick={async () => {
                     // First check if there's existing data
-                    const checkRes = await fetch(`/ai/schema-data.json?shop=${shop}`);
-                    const existingData = await checkRes.json();
+                    const existingData = await api(`/ai/schema-data.json`, { shop });
                     
                     if (existingData.schemas && existingData.schemas.length > 0) {
                       // Has data - ask if to regenerate
@@ -924,21 +902,14 @@ export default function Settings() {
                     });
                     
                     try {
-                      const res = await fetch('/api/schema/generate-all', {
+                      const data = await api('/api/schema/generate-all', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ shop })
+                        shop,
+                        body: { shop }
                       });
                       
-                      const data = await res.json();
-                      
-                      if (res.ok) {
-                        // Start checking progress after 2 seconds
-                        setTimeout(checkGenerationProgress, 2000);
-                      } else {
-                        setToast(`Error: ${data.error || 'Failed to start generation'}`);
-                        setSchemaGenerating(false);
-                      }
+                      // Start checking progress after 2 seconds
+                      setTimeout(checkGenerationProgress, 2000);
                     } catch (err) {
                       console.error('Error:', err);
                       setToast('Failed to generate schema');
@@ -962,15 +933,13 @@ export default function Settings() {
                   onClick={async () => {
                     if (confirm('This will delete all advanced schema data. Are you sure?')) {
                       try {
-                        const res = await fetch('/api/schema/delete', {
+                        await api('/api/schema/delete', {
                           method: 'DELETE',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ shop })
+                          shop,
+                          body: { shop }
                         });
                         
-                        if (res.ok) {
-                          setToast('Schema data deleted successfully');
-                        }
+                        setToast('Schema data deleted successfully');
                       } catch (err) {
                         setToast('Failed to delete schema data');
                       }
@@ -997,19 +966,16 @@ export default function Settings() {
           onClick={async () => {
             if (window.confirm('Are you sure you want to reset all AI Discovery settings to defaults?')) {
               try {
-                const res = await fetch(`/api/ai-discovery/settings?shop=${shop}`, {
-                  method: 'DELETE'
+                await api(`/api/ai-discovery/settings`, {
+                  method: 'DELETE',
+                  shop
                 });
                 
-                if (res.ok) {
-                  setToast('Settings reset successfully');
-                  setOriginalSettings(null); // Clear original settings too
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 1000);
-                } else {
-                  throw new Error('Failed to reset');
-                }
+                setToast('Settings reset successfully');
+                setOriginalSettings(null); // Clear original settings too
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1000);
               } catch (error) {
                 console.error('Failed to reset:', error);
                 setToast('Failed to reset settings');
@@ -1410,23 +1376,15 @@ onChange={async (checked) => {
   // Save the setting in AI Discovery settings
   try {
     console.log('Saving settings to AI Discovery...');
-    const saveRes = await fetch('/api/ai-discovery/settings', {
+    await api('/api/ai-discovery/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      shop,
+      body: {
         shop,
         ...settings,
         advancedSchemaEnabled: checked
-      })
+      }
     });
-    
-    console.log('Save response status:', saveRes.status);
-    
-    if (!saveRes.ok) {
-      const error = await saveRes.json();
-      console.error('Save error:', error);
-      throw new Error('Failed to save settings');
-    }
     
     console.log('Advanced Schema setting saved successfully');
   } catch (err) {
@@ -1446,19 +1404,13 @@ onChange={async (checked) => {
       const url = '/api/schema/generate-all';
       console.log('Calling:', url);
       
-      const schemaRes = await fetch(url, {
+      const result = await api(url, {
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop })
+        shop,
+        body: { shop }
       });
       
-      console.log('Schema response status:', schemaRes.status);
-      const result = await schemaRes.json();
       console.log('Schema generation result:', result);
-      
-      if (!schemaRes.ok) {
-        throw new Error(result.error || 'Failed to start generation');
-      }
       
       // Show progress for 30 seconds
       setTimeout(() => {

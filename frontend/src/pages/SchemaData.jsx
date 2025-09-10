@@ -1,5 +1,5 @@
 // frontend/src/pages/SchemaData.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Box,
@@ -17,8 +17,12 @@ import {
   List,
   Divider
 } from '@shopify/polaris';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
-export default function SchemaData({ shop }) {
+const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
+
+export default function SchemaData({ shop: shopProp }) {
+  const shop = shopProp || qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [schemas, setSchemas] = useState({
@@ -28,21 +32,19 @@ export default function SchemaData({ shop }) {
   });
   const [validationResults, setValidationResults] = useState(null);
   const [toastContent, setToastContent] = useState('');
+  const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
 
   useEffect(() => {
     if (shop) {
       loadSchemas();
     }
-  }, [shop]);
+  }, [shop, api]);
 
   const loadSchemas = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/schema/preview?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await api(`/api/schema/preview`, { shop });
       if (data.ok) {
         setSchemas(data.schemas);
         generateSchemaScript(data.schemas);
@@ -78,10 +80,7 @@ ${JSON.stringify(allSchemas, null, 2)}
   const handleValidate = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/schema/validate?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await api(`/api/schema/validate`, { shop });
       setValidationResults(data);
       setToastContent(data.ok ? 'Validation complete!' : 'Validation found issues');
     } catch (err) {
@@ -94,13 +93,11 @@ ${JSON.stringify(allSchemas, null, 2)}
   const handleRegenerate = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/schema/generate', {
+      const data = await api('/api/schema/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ shop })
+        shop,
+        body: { shop }
       });
-      const data = await response.json();
       if (data.ok) {
         setToastContent('Schemas regenerated successfully!');
         loadSchemas();

@@ -1274,5 +1274,3 @@ export default function CollectionsPage({ shop: shopProp }) {
     </>
   );
 };
-
-export default Collections;

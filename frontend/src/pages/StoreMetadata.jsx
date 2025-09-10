@@ -1,15 +1,20 @@
 // frontend/src/pages/StoreMetadata.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card, Box, Text, Button, TextField, Checkbox, Toast, Form, FormLayout,
   InlineStack, Select, Divider, Banner, Link, Badge, Layout
 } from '@shopify/polaris';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
-export default function StoreMetadata({ shop }) {
+const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
+
+export default function StoreMetadata({ shop: shopProp }) {
+  const shop = shopProp || qs('shop', '');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [storeData, setStoreData] = useState(null);
+  const api = useMemo(() => makeSessionFetch(), []);
   const [formData, setFormData] = useState({
     seo: {
       title: '',
@@ -42,17 +47,12 @@ export default function StoreMetadata({ shop }) {
 
   useEffect(() => {
     if (shop) loadStoreData();
-  }, [shop]);
+  }, [shop, api]);
 
   async function loadStoreData() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/store/generate?shop=${encodeURIComponent(shop)}`, {
-        credentials: 'include'
-      });
-      const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Failed to load store data');
+      const data = await api(`/api/store/generate`, { shop });
       
       setStoreData(data);
       
@@ -103,19 +103,15 @@ export default function StoreMetadata({ shop }) {
   async function handleGenerate() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/store/ai-generate?shop=${encodeURIComponent(shop)}`, {
+      const data = await api(`/api/store/ai-generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        shop,
+        body: {
           shopInfo: storeData?.shopInfo,
           businessType: formData.aiMetadata.businessType,
           targetAudience: formData.aiMetadata.targetAudience
-        })
+        }
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate metadata');
       
       // Update form with generated data
       if (data.metadata) {
@@ -137,11 +133,10 @@ export default function StoreMetadata({ shop }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await fetch(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
+      const data = await api(`/api/store/apply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        shop,
+        body: {
           metadata: formData,
           options: {
             updateSeo: true,
@@ -149,11 +144,8 @@ export default function StoreMetadata({ shop }) {
             updateOrganization: formData.organizationSchema.enabled,
             updateLocalBusiness: formData.localBusinessSchema.enabled
           }
-        })
+        }
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save metadata');
       
       setToast('Metadata saved successfully!');
     } catch (error) {
