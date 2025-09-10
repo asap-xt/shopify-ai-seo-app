@@ -56,44 +56,46 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// ===== DEBUG middleware for /api/store =====
-app.use('/api/store', async (req, res, next) => {
+// ========= DEBUG + SHOP RESOLVER за /api/store =========
+app.use('/api/store', (req, res, next) => {
   const started = Date.now();
   const auth = req.headers['authorization'] || '';
   const tokenHead = auth.startsWith('Bearer ') ? auth.slice(7, 19) : null;
-  const shopByQuery = req.query?.shop;
-  const shopByBody = req.body?.shop;
-  let shopBySession = null;
-  try {
-    // If using @shopify/shopify-api middleware, session may be attached
-    shopBySession = res.locals?.shopify?.session?.shop || res.locals?.shop || null;
-  } catch {}
+  const queryShop = req.query?.shop;
+  const bodyShop = req.body?.shop;
+  const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'];
+  const sessionShop = (res.locals?.shopify?.session?.shop) || res.locals?.shop || null;
+  // Нормализирай приоритет: query > header > body > session
+  const resolved = queryShop || headerShop || bodyShop || sessionShop || null;
+  // Ако хендлърите очакват винаги req.query.shop — попълни го ако липсва
+  if (!req.query) req.query = {};
+  if (!req.query.shop && resolved) req.query.shop = resolved;
+  // Лог на входа
   console.log('[API/STORE] →', {
     method: req.method,
     path: req.originalUrl,
     hasAuth: !!auth,
     tokenHead,
-    queryShop: shopByQuery,
-    bodyShop: shopByBody,
-    sessionShop: shopBySession,
+    queryShop,
+    headerShop,
+    bodyShop,
+    sessionShop,
+    resolvedShop: req.query.shop,
   });
+  // wrap res.send за изходен лог
   const send = res.send.bind(res);
   res.send = function (body) {
     try {
       const elapsed = Date.now() - started;
       let payload = body;
-      if (typeof body === 'string') {
-        try { payload = JSON.parse(body); } catch {}
-      }
+      if (typeof body === 'string') { try { payload = JSON.parse(body); } catch {} }
       console.log('[API/STORE] ←', {
         status: res.statusCode,
         elapsedMs: elapsed,
-        error: payload?.error,
         ok: payload?.ok,
+        error: payload?.error,
       });
-    } catch (e) {
-      console.log('[API/STORE] ←', { status: res.statusCode, note: 'failed to log response' });
-    }
+    } catch (e) { /* ignore logging errors */ }
     return send(body);
   };
   next();

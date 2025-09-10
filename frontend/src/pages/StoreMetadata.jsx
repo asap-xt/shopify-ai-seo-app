@@ -54,7 +54,7 @@ export default function StoreMetadata({ shop: shopProp }) {
     try {
       const url = `/api/store/generate?shop=${encodeURIComponent(shop)}`;
       console.log('[StoreMeta] GET', url);
-      const data = await api(url);
+      const data = await api(url, { headers: { 'X-Shop': shop } });
       console.log('[StoreMeta] GET ok', { url, keys: Object.keys(data || {}) });
       
       setStoreData(data);
@@ -111,6 +111,7 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] POST', url);
       const data = await api(url, {
         method: 'POST',
+        headers: { 'X-Shop': shop },
         body: {
           shopInfo: storeData?.shopInfo,
           businessType: formData.aiMetadata.businessType,
@@ -144,6 +145,7 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] SAVE', url);
       const data = await api(url, {
         method: 'POST',
+        headers: { 'X-Shop': shop },
         body: {
           metadata: formData,
           options: {
