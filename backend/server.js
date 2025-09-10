@@ -56,6 +56,49 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+// ===== DEBUG middleware for /api/store =====
+app.use('/api/store', async (req, res, next) => {
+  const started = Date.now();
+  const auth = req.headers['authorization'] || '';
+  const tokenHead = auth.startsWith('Bearer ') ? auth.slice(7, 19) : null;
+  const shopByQuery = req.query?.shop;
+  const shopByBody = req.body?.shop;
+  let shopBySession = null;
+  try {
+    // If using @shopify/shopify-api middleware, session may be attached
+    shopBySession = res.locals?.shopify?.session?.shop || res.locals?.shop || null;
+  } catch {}
+  console.log('[API/STORE] →', {
+    method: req.method,
+    path: req.originalUrl,
+    hasAuth: !!auth,
+    tokenHead,
+    queryShop: shopByQuery,
+    bodyShop: shopByBody,
+    sessionShop: shopBySession,
+  });
+  const send = res.send.bind(res);
+  res.send = function (body) {
+    try {
+      const elapsed = Date.now() - started;
+      let payload = body;
+      if (typeof body === 'string') {
+        try { payload = JSON.parse(body); } catch {}
+      }
+      console.log('[API/STORE] ←', {
+        status: res.statusCode,
+        elapsedMs: elapsed,
+        error: payload?.error,
+        ok: payload?.ok,
+      });
+    } catch (e) {
+      console.log('[API/STORE] ←', { status: res.statusCode, note: 'failed to log response' });
+    }
+    return send(body);
+  };
+  next();
+});
+
 // Debug middleware
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.url}`);

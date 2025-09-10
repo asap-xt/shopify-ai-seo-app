@@ -623,6 +623,26 @@ function fixupAndValidate(payload) {
 
 // Plans (used by Dashboard/AI SEO form)
 router.get('/plans/me', verifyRequest, async (req, res) => {
+  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
 
@@ -696,6 +716,26 @@ router.get('/plans/me', verifyRequest, async (req, res) => {
 });
 
 router.post('/seo/generate', verifyRequest, async (req, res) => {
+  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
     const { productId, model, language = 'en' } = req.body || {};
@@ -972,6 +1012,26 @@ function strictPrompt(ctx, language) {
 }
 
 router.post('/seo/apply', verifyRequest, async (req, res) => {
+  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
 

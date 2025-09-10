@@ -8,6 +8,26 @@ const router = express.Router();
 
 // POST /ai-enhance/check-eligibility
 router.post('/check-eligibility', verifyRequest, async (req, res) => {
+  console.log('[AI-ENHANCE/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[AI-ENHANCE/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[AI-ENHANCE/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
     const subscription = await Subscription.findOne({ shop });

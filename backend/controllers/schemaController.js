@@ -90,6 +90,26 @@ async function getShopLocale(shop) {
 
 // GET /api/schema/preview - Get all active schemas
 router.get('/api/schema/preview', verifyRequest, async (req, res) => {
+  console.log('[SCHEMA/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SCHEMA/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SCHEMA/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
 
@@ -224,6 +244,26 @@ router.get('/api/schema/preview', verifyRequest, async (req, res) => {
 
 // POST /api/schema/generate - Regenerate schemas from latest data
 router.post('/api/schema/generate', verifyRequest, async (req, res) => {
+  console.log('[SCHEMA/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SCHEMA/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SCHEMA/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
 

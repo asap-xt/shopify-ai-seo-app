@@ -4,6 +4,49 @@
 import { Router } from 'express';
 const router = Router();
 
+// ===== DEBUG middleware for /debug =====
+router.use(async (req, res, next) => {
+  const started = Date.now();
+  const auth = req.headers['authorization'] || '';
+  const tokenHead = auth.startsWith('Bearer ') ? auth.slice(7, 19) : null;
+  const shopByQuery = req.query?.shop;
+  const shopByBody = req.body?.shop;
+  let shopBySession = null;
+  try {
+    // If using @shopify/shopify-api middleware, session may be attached
+    shopBySession = res.locals?.shopify?.session?.shop || res.locals?.shop || null;
+  } catch {}
+  console.log('[DEBUG] →', {
+    method: req.method,
+    path: req.originalUrl,
+    hasAuth: !!auth,
+    tokenHead,
+    queryShop: shopByQuery,
+    bodyShop: shopByBody,
+    sessionShop: shopBySession,
+  });
+  const send = res.send.bind(res);
+  res.send = function (body) {
+    try {
+      const elapsed = Date.now() - started;
+      let payload = body;
+      if (typeof body === 'string') {
+        try { payload = JSON.parse(body); } catch {}
+      }
+      console.log('[DEBUG] ←', {
+        status: res.statusCode,
+        elapsedMs: elapsed,
+        error: payload?.error,
+        ok: payload?.ok,
+      });
+    } catch (e) {
+      console.log('[DEBUG] ←', { status: res.statusCode, note: 'failed to log response' });
+    }
+    return send(body);
+  };
+  next();
+});
+
 const uniq = (arr) => Array.from(new Set(arr));
 const baseLang = (loc) => (loc || '').toLowerCase().split('-')[0];
 const toGID = (id) => (/^\d+$/.test(String(id)) ? `gid://shopify/Product/${id}` : String(id));

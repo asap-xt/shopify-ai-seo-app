@@ -14,7 +14,7 @@ export default function StoreMetadata({ shop: shopProp }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [storeData, setStoreData] = useState(null);
-  const api = useMemo(() => makeSessionFetch(), []);
+  const api = useMemo(() => makeSessionFetch({ debug: true }), []);
   const [formData, setFormData] = useState({
     seo: {
       title: '',
@@ -52,8 +52,10 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function loadStoreData() {
     setLoading(true);
     try {
-      // ВАЖНО: бекендът очаква shop в query string
-      const data = await api(`/api/store/generate?shop=${encodeURIComponent(shop)}`);
+      const url = `/api/store/generate?shop=${encodeURIComponent(shop)}`;
+      console.log('[StoreMeta] GET', url);
+      const data = await api(url);
+      console.log('[StoreMeta] GET ok', { url, keys: Object.keys(data || {}) });
       
       setStoreData(data);
       
@@ -95,7 +97,8 @@ export default function StoreMetadata({ shop: shopProp }) {
         }));
       }
     } catch (error) {
-      setToast(error.message);
+      console.error('[StoreMeta] GET error', error?.debug || error, error);
+      setToast(`Load failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -104,8 +107,9 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function handleGenerate() {
     setLoading(true);
     try {
-      // ВАЖНО: shop и тук се подава в query string
-      const data = await api(`/api/store/ai-generate?shop=${encodeURIComponent(shop)}`, {
+      const url = `/api/store/ai-generate?shop=${encodeURIComponent(shop)}`;
+      console.log('[StoreMeta] POST', url);
+      const data = await api(url, {
         method: 'POST',
         body: {
           shopInfo: storeData?.shopInfo,
@@ -113,6 +117,7 @@ export default function StoreMetadata({ shop: shopProp }) {
           targetAudience: formData.aiMetadata.targetAudience
         }
       });
+      console.log('[StoreMeta] POST ok', { url, keys: Object.keys(data || {}) });
       
       // Update form with generated data
       if (data.metadata) {
@@ -125,7 +130,8 @@ export default function StoreMetadata({ shop: shopProp }) {
         setToast('Metadata generated successfully!');
       }
     } catch (error) {
-      setToast(error.message);
+      console.error('[StoreMeta] POST error', error?.debug || error, error);
+      setToast(`AI generation failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -134,8 +140,9 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function handleSave() {
     setSaving(true);
     try {
-      // ВАЖНО: shop в query string за /apply
-      const data = await api(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
+      const url = `/api/store/apply?shop=${encodeURIComponent(shop)}`;
+      console.log('[StoreMeta] SAVE', url);
+      const data = await api(url, {
         method: 'POST',
         body: {
           metadata: formData,
@@ -147,10 +154,12 @@ export default function StoreMetadata({ shop: shopProp }) {
           }
         }
       });
+      console.log('[StoreMeta] SAVE ok', { url, ok: data?.ok });
       
       setToast('Metadata saved successfully!');
     } catch (error) {
-      setToast(error.message);
+      console.error('[StoreMeta] SAVE error', error?.debug || error, error);
+      setToast(`Save failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }

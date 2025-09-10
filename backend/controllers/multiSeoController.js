@@ -25,6 +25,26 @@ function toGID(productId) {
 // POST /api/seo/generate-multi
 // Body: { shop, productId, model, languages: ['en','it','el', ...] }
 router.post('/generate-multi', verifyRequest, async (req, res) => {
+  console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[MULTI-SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[MULTI-SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
     const { productId: pid, model, languages } = req.body || {};
@@ -78,6 +98,26 @@ router.post('/generate-multi', verifyRequest, async (req, res) => {
 // POST /api/seo/apply-multi
 // Body: { shop, productId, results: [{ language, seo }...], options }
 router.post('/apply-multi', verifyRequest, async (req, res) => {
+  console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[MULTI-SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[MULTI-SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
   try {
     const shop = req.shopDomain;
     const { productId: pid, results, options = {} } = req.body || {};
