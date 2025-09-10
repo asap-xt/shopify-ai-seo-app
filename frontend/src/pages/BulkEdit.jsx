@@ -177,7 +177,6 @@ export default function BulkEdit({ shop: shopProp }) {
         });
       }
       
-      if (!response.ok) throw new Error(data?.error || 'Failed to load products');
       
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
@@ -688,7 +687,6 @@ export default function BulkEdit({ shop: shopProp }) {
         }
       });
       
-      if (!response.ok) throw new Error(data?.error || 'Failed to load products');
       
       console.log('[BULK-EDIT] Products reloaded, first product:', data.products[0]?.title);
       console.log('[BULK-EDIT] First product optimization summary:', data.products[0]?.optimizationSummary);
@@ -873,7 +871,6 @@ export default function BulkEdit({ shop: shopProp }) {
         }
       });
 
-      if (!response.ok) throw new Error(data?.error || 'Failed to load products');
 
       console.log('[BULK-EDIT] Products reloaded after delete');
       setProducts(data.products || []);
