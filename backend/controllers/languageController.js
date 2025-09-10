@@ -16,10 +16,14 @@ const toGID = (id) => {
 };
 
 /** Pick best available Admin token for THIS shop */
-function resolveAdminToken(req) {
+function resolveAdminToken(req, res) {
+  console.log('[LANGUAGE-TOKEN] Resolving token for shop:', req.shopDomain);
+  console.log('[LANGUAGE-TOKEN] res.locals:', res?.locals);
+  
   // Use the new per-shop token resolver from server.js
-  const adminSession = req?.res?.locals?.adminSession;
+  const adminSession = res?.locals?.adminSession;
   if (adminSession?.accessToken) {
+    console.log('[LANGUAGE-TOKEN] Using per-shop-resolver token');
     return { token: adminSession.accessToken, authUsed: 'per-shop-resolver' };
   }
 
@@ -37,7 +41,14 @@ function resolveAdminToken(req) {
 }
 
 async function shopifyGQL({ shop, token, query, variables }) {
+  console.log('[LANGUAGE-GRAPHQL] Shop:', shop);
+  console.log('[LANGUAGE-GRAPHQL] Query:', query.substring(0, 100) + '...');
+  console.log('[LANGUAGE-GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
+  console.log('[LANGUAGE-GRAPHQL] Token:', token ? `${token.substring(0, 10)}...` : 'null');
+  
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
+  console.log('[LANGUAGE-GRAPHQL] URL:', url);
+  
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -46,9 +57,15 @@ async function shopifyGQL({ shop, token, query, variables }) {
     },
     body: JSON.stringify({ query, variables }),
   });
+  
+  console.log('[LANGUAGE-GRAPHQL] Response status:', res.status);
+  console.log('[LANGUAGE-GRAPHQL] Response headers:', Object.fromEntries(res.headers.entries()));
 
   const raw = await res.text().catch(() => '');
+  console.log('[LANGUAGE-GRAPHQL] Response raw:', raw.substring(0, 200) + (raw.length > 200 ? '...' : ''));
+  
   if (!res.ok) {
+    console.error('[LANGUAGE-GRAPHQL] Error response:', raw);
     const err = new Error(`GraphQL HTTP ${res.status} ${res.statusText} @ ${url} :: ${raw}`);
     err.status = res.status;
     err.body = raw;
@@ -57,7 +74,11 @@ async function shopifyGQL({ shop, token, query, variables }) {
   }
 
   let json;
-  try { json = JSON.parse(raw); } catch {
+  try { 
+    json = JSON.parse(raw); 
+    console.log('[LANGUAGE-GRAPHQL] Response data:', JSON.stringify(json, null, 2));
+  } catch {
+    console.error('[LANGUAGE-GRAPHQL] Invalid JSON response:', raw);
     const err = new Error(`GraphQL invalid JSON @ ${url} :: ${raw}`);
     err.status = res.status;
     err.body = raw;
@@ -66,11 +87,14 @@ async function shopifyGQL({ shop, token, query, variables }) {
   }
 
   if (json?.errors?.length) {
+    console.error('[LANGUAGE-GRAPHQL] GraphQL errors:', json.errors);
     const msg = json.errors.map(e => e.message).join('; ');
     const err = new Error(`GraphQL errors @ ${url}: ${msg}`);
     err.graphQLErrors = json.errors;
     throw err;
   }
+  
+  console.log('[LANGUAGE-GRAPHQL] Success, returning data');
   return json.data;
 }
 
@@ -141,6 +165,7 @@ function shapeOutput({ shop, productId, shopLocalesRaw, productLocalesRaw, authU
 
 // ---- logic
 async function resolveLanguages({ shop, productId, token, authUsed }) {
+  console.log('[RESOLVE-LANGUAGES] Starting with:', { shop, productId, token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
   const t0 = Date.now();
   const errors = [];
   let sourceStart = 'gql';
@@ -193,7 +218,10 @@ const router = express.Router();
 /** GET /api/languages/shop/:shop */
 router.get('/shop/:shop', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
-  const { token, authUsed } = resolveAdminToken(req);
+  console.log('[LANGUAGE-ENDPOINT] Starting with shop:', shop);
+  
+  const { token, authUsed } = resolveAdminToken(req, res);
+  console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
     const out = await resolveLanguages({ shop, productId: null, token, authUsed });
@@ -219,7 +247,7 @@ router.get('/shop/:shop', verifyRequest, async (req, res) => {
 router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
-  const { token, authUsed } = resolveAdminToken(req);
+  const { token, authUsed } = resolveAdminToken(req, res);
 
   if (!productId) return res.status(400).json({ error: 'Missing :productId' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
@@ -247,7 +275,7 @@ router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
 /** Optional: quick sanity ping to expose the real GQL error quickly */
 router.get('/ping/:shop', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
-  const { token, authUsed } = resolveAdminToken(req);
+  const { token, authUsed } = resolveAdminToken(req, res);
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {

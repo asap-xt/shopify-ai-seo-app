@@ -63,8 +63,15 @@ function resolveAdminTokenForShop(req) {
 
 // GraphQL query function
 async function shopGraphQL(req, shop, query, variables = {}) {
+  console.log('[STORE-GRAPHQL] Shop:', shop);
+  console.log('[STORE-GRAPHQL] Query:', query.substring(0, 100) + '...');
+  console.log('[STORE-GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
+  
   const token = resolveAdminTokenForShop(req);
+  console.log('[STORE-GRAPHQL] Token:', token ? `${token.substring(0, 10)}...` : 'null');
+  
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
+  console.log('[STORE-GRAPHQL] URL:', url);
   
   const response = await fetch(url, {
     method: 'POST',
@@ -75,9 +82,14 @@ async function shopGraphQL(req, shop, query, variables = {}) {
     body: JSON.stringify({ query, variables }),
   });
 
+  console.log('[STORE-GRAPHQL] Response status:', response.status);
+  console.log('[STORE-GRAPHQL] Response headers:', Object.fromEntries(response.headers.entries()));
+
   const json = await response.json();
+  console.log('[STORE-GRAPHQL] Response data:', JSON.stringify(json, null, 2));
   
   if (!response.ok || json.errors) {
+    console.error('[STORE-GRAPHQL] Error response:', json.errors || json);
     const error = new Error(`GraphQL error: ${JSON.stringify(json.errors || json)}`);
     error.status = response.status || 500;
     throw error;
@@ -195,6 +207,7 @@ router.get('/generate', verifyRequest, async (req, res) => {
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
 
     // Get existing metafields
+    console.log('[STORE-METAFIELDS] Fetching metafields for shop:', shop);
     const metafieldsQuery = `{
       shop {
         metafields(namespace: "ai_seo_store", first: 10) {
@@ -211,6 +224,7 @@ router.get('/generate', verifyRequest, async (req, res) => {
     }`;
 
     const metafieldsData = await shopGraphQL(req, shop, metafieldsQuery);
+    console.log('[STORE-METAFIELDS] Metafields data:', JSON.stringify(metafieldsData, null, 2));
     const metafields = {};
     
     metafieldsData?.shop?.metafields?.edges?.forEach(edge => {
