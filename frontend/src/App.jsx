@@ -51,64 +51,23 @@ function useRoute() {
 }
 
 // -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
+/*
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
-  const isSeo = active.startsWith('/ai-seo');
+  const isSeo  = active.startsWith('/ai-seo');
   const isBill = active.startsWith('/billing');
   const isSett = active.startsWith('/settings');
 
-  // Check if we're in embedded context
-  const isEmbedded = !!new URLSearchParams(window.location.search).get('embedded');
-  
-  // For non-embedded context (local dev), use regular navigation
-  if (!isEmbedded) {
-    return (
-      <nav style={{ padding: '1rem', borderBottom: '1px solid #e5e5e5' }}>
-        <a href="/dashboard" style={{ marginRight: '1rem' }}>Dashboard</a>
-        <a href="/ai-seo" style={{ marginRight: '1rem' }}>AI SEO</a>
-        <a href="/billing" style={{ marginRight: '1rem' }}>Billing</a>
-        <a href="/settings">Settings</a>
-      </nav>
-    );
-  }
-
-  // For embedded context, use Shopify's ui-nav-menu
-  // React can't render custom elements directly, so we use a ref
-  const navRef = React.useRef(null);
-  
-  React.useEffect(() => {
-    if (navRef.current && isEmbedded) {
-      // Create the ui-nav-menu element
-      const navMenu = document.createElement('ui-nav-menu');
-      
-      // Create navigation items
-      const items = [
-        { href: '/dashboard', text: 'Dashboard', active: isDash },
-        { href: '/ai-seo', text: 'AI SEO', active: isSeo },
-        { href: '/billing', text: 'Billing', active: isBill },
-        { href: '/settings', text: 'Settings', active: isSett }
-      ];
-      
-      items.forEach(item => {
-        const link = document.createElement('a');
-        link.href = item.href;
-        link.textContent = item.text;
-        if (item.active) {
-          link.setAttribute('aria-current', 'page');
-        }
-        navMenu.appendChild(link);
-      });
-      
-      // Clear and append
-      navRef.current.innerHTML = '';
-      navRef.current.appendChild(navMenu);
-    }
-  }, [active, isEmbedded, isDash, isSeo, isBill, isSett]);
-
-  if (!isEmbedded) return null;
-  
-  return <div ref={navRef} />;
+  return (
+    <ui-nav-menu>
+      <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
+      <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
+    </ui-nav-menu>
+  );
 }
+*/
 
 // -------- Dashboard
 function DashboardCard() {
@@ -616,7 +575,7 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} />}
+      {/* КОМЕНТИРАЙ ТОЗИ РЕД: {isEmbedded && <AdminNavMenu active={path} />} */}
       <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
