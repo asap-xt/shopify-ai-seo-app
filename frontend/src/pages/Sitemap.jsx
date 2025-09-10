@@ -52,20 +52,28 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     setBusy(true);
     try {
-      // ✅ backend route is /api/sitemap/generate
-      const j = await api(`/api/sitemap/generate`, {
+      // ✅ backend route is /api/sitemap/generate - returns XML, not JSON
+      const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`, {
         method: 'POST',
-        shop,
-        body: { shop },
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+        }
       });
-      if (j?.ok) setToast('Sitemap generated'); else setToast(j?.error || 'Sitemap failed');
-      await loadInfo();
+      
+      if (response.ok) {
+        setToast('Sitemap generated successfully!');
+        await loadInfo(); // Reload info to get updated status
+      } else {
+        const errorText = await response.text();
+        setToast(`Sitemap generation failed: ${errorText}`);
+      }
     } catch (e) {
-      setToast(e.message || 'Sitemap failed');
+      setToast(e.message || 'Sitemap generation failed');
     } finally {
       setBusy(false);
     }
-  }, [shop, loadInfo, api]);
+  }, [shop, loadInfo]);
 
   useEffect(() => {
     loadInfo();
