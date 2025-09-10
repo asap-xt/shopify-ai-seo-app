@@ -509,7 +509,8 @@ export default function App() {
   
   // Всички hooks трябва да са в началото, БЕЗ условия
   const [isLoading, setIsLoading] = useState(true);
-  const { path } = useRoute();
+  // const { path } = useRoute();
+  const path = '/dashboard'; // временно хардкоднато
   const { lang, setLang, t } = useI18n();
   
   // След hooks можете да имате променливи
@@ -566,25 +567,6 @@ export default function App() {
 
   console.log('Rendering main app UI');
 
-  return (
-    <div style={{ padding: '20px' }}>
-      <h1>Testing Polaris</h1>
-      <AppProvider i18n={I18N}>
-        <div>AppProvider works!</div>
-        <Frame>
-          <div>Frame works!</div>
-          <Page>
-            <div>Page works!</div>
-            <Card>
-              <Text>If you see this, Polaris is OK!</Text>
-            </Card>
-          </Page>
-        </Frame>
-      </AppProvider>
-    </div>
-  );
-
-  /* ЗАКОМЕНТИРАНО - оригинален return блок
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
     if (path.startsWith('/billing')) return 'Billing';
@@ -594,7 +576,7 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} />}
+      {/* {isEmbedded && <AdminNavMenu active={path} />} */}
       <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
@@ -611,5 +593,4 @@ export default function App() {
       </Frame>
     </AppProvider>
   );
-  */
 }
