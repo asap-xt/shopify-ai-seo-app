@@ -126,15 +126,24 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Load shop languages
   useEffect(() => {
-    if (!shop) return;
+    console.log('[BULK-EDIT] Languages useEffect triggered', { shop, api: !!api });
+    if (!shop) {
+      console.log('[BULK-EDIT] No shop, skipping languages load');
+      return;
+    }
+    console.log('[BULK-EDIT] Making languages API call to:', `/api/languages/shop/${shop}`);
     // оставяме :shop в path (бекендът може да го очаква), но пращаме и session token
     api(`/api/languages/shop/${shop}`)
       .then((data) => {
         console.log('[BULK-EDIT] Languages API response:', data);
         const langs = Array.isArray(data?.shopLanguages) && data.shopLanguages.length ? data.shopLanguages : ['en'];
+        console.log('[BULK-EDIT] Setting available languages to:', langs.includes('en') ? langs : ['en', ...langs]);
         setAvailableLanguages(langs.includes('en') ? langs : ['en', ...langs]);
       })
-      .catch(() => setAvailableLanguages(['en']));
+      .catch((error) => {
+        console.error('[BULK-EDIT] Languages API error:', error);
+        setAvailableLanguages(['en']);
+      });
   }, [shop, api]);
 
   // Load available tags
