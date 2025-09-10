@@ -64,20 +64,23 @@ async function adminGraphQL({ shop, accessToken, query, variables }) {
 
 /**
  * Resolve an Admin API access token.
- * For production, replace with your own DB lookup of the shop's offline access token.
- * As a fallback, uses env SHOPIFY_ADMIN_API_ACCESS_TOKEN (single-shop setups).
+ * Use the new per-shop token resolver from server.js
  */
-async function resolveAccessToken(shop) {
-  // Debug logs
-  console.log('=== RESOLVING TOKEN ===');
-  console.log('Shop:', shop);
-  console.log('ENV TOKEN:', process.env.SHOPIFY_ADMIN_API_TOKEN);
-  console.log('TOKEN exists?', !!process.env.SHOPIFY_ADMIN_API_TOKEN);
-  console.log('TOKEN length:', process.env.SHOPIFY_ADMIN_API_TOKEN?.length);
-  
-  // Временно решение - директно връщаме env токена
+function resolveAccessToken(req) {
+  // Use the new per-shop token resolver from server.js
+  const adminSession = req?.res?.locals?.adminSession;
+  if (adminSession?.accessToken) {
+    return adminSession.accessToken;
+  }
+
+  // Fallback to old methods for backward compatibility
+  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  if (sessionToken) return sessionToken;
+
+  const headerToken = req.headers['x-shopify-access-token'];
+  if (headerToken) return String(headerToken);
+
   const token = process.env.SHOPIFY_ADMIN_API_TOKEN || null;
-  console.log('Returning token:', token ? 'TOKEN FOUND' : 'NO TOKEN');
   return token;
 }
 
@@ -364,9 +367,9 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
  * Sync products from Shopify and save to MongoDB + FeedCache
  * @returns {Promise<{shop:string, count:number, bytes:number, updatedAt:Date}>}
  */
-export async function syncProductsForShop(shop, opts = {}) {
+export async function syncProductsForShop(req, shop, opts = {}) {
   if (!shop) throw new Error('Missing shop');
-  const accessToken = opts.accessToken || (await resolveAccessToken(shop));
+  const accessToken = opts.accessToken || resolveAccessToken(req);
   if (!accessToken) throw new Error(`No Admin API token available for shop ${shop}`);
 
   console.log(`Starting product sync for ${shop}...`);

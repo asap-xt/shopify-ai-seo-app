@@ -37,11 +37,20 @@ function getShopFromReq(req) {
 }
 
 // Resolve admin token for shop (similar to other controllers)
-async function resolveAdminTokenForShop(shop) {
-  // 1) Check session (OAuth per-shop)
-  // This would typically come from your session storage
-  // For now, we'll use environment variable as fallback
-  
+function resolveAdminTokenForShop(req) {
+  // Use the new per-shop token resolver from server.js
+  const adminSession = req?.res?.locals?.adminSession;
+  if (adminSession?.accessToken) {
+    return adminSession.accessToken;
+  }
+
+  // Fallback to old methods for backward compatibility
+  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  if (sessionToken) return sessionToken;
+
+  const headerToken = req.headers['x-shopify-access-token'];
+  if (headerToken) return String(headerToken);
+
   const envToken =
     process.env.SHOPIFY_ADMIN_API_TOKEN ||
     process.env.SHOPIFY_ACCESS_TOKEN ||
@@ -53,8 +62,8 @@ async function resolveAdminTokenForShop(shop) {
 }
 
 // GraphQL query function
-async function shopGraphQL(shop, query, variables = {}) {
-  const token = await resolveAdminTokenForShop(shop);
+async function shopGraphQL(req, shop, query, variables = {}) {
+  const token = resolveAdminTokenForShop(req);
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
   
   const response = await fetch(url, {
@@ -180,7 +189,7 @@ router.get('/generate', verifyRequest, async (req, res) => {
       }
     }`;
     
-    const shopData = await shopGraphQL(shop, shopQuery);
+    const shopData = await shopGraphQL(req, shop, shopQuery);
     const shopInfo = shopData?.shop;
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
@@ -201,7 +210,7 @@ router.get('/generate', verifyRequest, async (req, res) => {
       }
     }`;
 
-    const metafieldsData = await shopGraphQL(shop, metafieldsQuery);
+    const metafieldsData = await shopGraphQL(req, shop, metafieldsQuery);
     const metafields = {};
     
     metafieldsData?.shop?.metafields?.edges?.forEach(edge => {
@@ -369,7 +378,7 @@ router.post('/apply', verifyRequest, async (req, res) => {
       }
     }`;
     
-    const shopData = await shopGraphQL(shop, shopQuery);
+    const shopData = await shopGraphQL(req, shop, shopQuery);
     const shopId = shopData?.shop?.id;
     
     if (!shopId) return res.status(404).json({ error: 'Shop not found' });
@@ -458,7 +467,7 @@ router.post('/apply', verifyRequest, async (req, res) => {
     `;
 
     const variables = { metafields: metafieldsToSet };
-    const result = await shopGraphQL(shop, mutation, variables);
+    const result = await shopGraphQL(req, shop, mutation, variables);
 
     if (result?.metafieldsSet?.userErrors?.length > 0) {
       return res.status(400).json({ 
@@ -505,7 +514,7 @@ router.get('/public/:shop', async (req, res) => {
       }
     }`;
 
-    const data = await shopGraphQL(shop, query);
+    const data = await shopGraphQL(req, shop, query);
     const shopData = data?.shop;
     
     if (!shopData) {
@@ -553,7 +562,7 @@ router.get('/public/:shop', async (req, res) => {
 
         const results = [];
         for (const def of definitions) {
-          const result = await shopGraphQL(shop, mutation, { definition: def });
+          const result = await shopGraphQL(req, shop, mutation, { definition: def });
           results.push(result);
         }
 
@@ -628,7 +637,7 @@ router.get('/settings', verifyRequest, async (req, res) => {
     }`;
     
     console.log('[STORE-SETTINGS] Fetching metafield...'); // DEBUG
-    const data = await shopGraphQL(shop, query);
+    const data = await shopGraphQL(req, shop, query);
     
     const settings = data?.shop?.metafield?.value 
       ? JSON.parse(data.shop.metafield.value)
@@ -652,7 +661,7 @@ router.post('/settings', verifyRequest, async (req, res) => {
     
     // Get shop ID
     const shopQuery = `{ shop { id } }`;
-    const shopData = await shopGraphQL(shop, shopQuery);
+    const shopData = await shopGraphQL(req, shop, shopQuery);
     const shopId = shopData?.shop?.id;
     
     console.log('[STORE-SETTINGS] Shop ID:', shopId); // DEBUG
@@ -668,7 +677,7 @@ router.post('/settings', verifyRequest, async (req, res) => {
       }
     }`;
     
-    const currentSettingsData = await shopGraphQL(shop, currentSettingsQuery);
+    const currentSettingsData = await shopGraphQL(req, shop, currentSettingsQuery);
     const currentSettings = currentSettingsData?.shop?.metafield?.value 
       ? JSON.parse(currentSettingsData.shop.metafield.value)
       : { advancedSchemaEnabled: false };
@@ -722,7 +731,7 @@ router.post('/settings', verifyRequest, async (req, res) => {
     };
     
     console.log('[STORE-SETTINGS] Saving metafield...'); // DEBUG
-    const result = await shopGraphQL(shop, mutation, variables);
+    const result = await shopGraphQL(req, shop, mutation, variables);
     
     if (result?.metafieldsSet?.userErrors?.length > 0) {
       console.error('[STORE-SETTINGS] Metafield errors:', result.metafieldsSet.userErrors); // DEBUG

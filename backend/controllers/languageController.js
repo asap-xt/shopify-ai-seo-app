@@ -17,15 +17,19 @@ const toGID = (id) => {
 
 /** Pick best available Admin token for THIS shop */
 function resolveAdminToken(req) {
-  // 1) OAuth per-shop (shopify-app-express usually sets this)
+  // Use the new per-shop token resolver from server.js
+  const adminSession = req?.res?.locals?.adminSession;
+  if (adminSession?.accessToken) {
+    return { token: adminSession.accessToken, authUsed: 'per-shop-resolver' };
+  }
+
+  // Fallback to old methods for backward compatibility
   const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
   if (sessionToken) return { token: sessionToken, authUsed: 'session' };
 
-  // 2) Proxy/header (optional)
   const headerToken = req.headers['x-shopify-access-token'];
   if (headerToken) return { token: String(headerToken), authUsed: 'header' };
 
-  // 3) Single-tenant env (must be created IN THE SAME SHOP you're calling)
   const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
   if (envToken) return { token: envToken, authUsed: 'single' };
 

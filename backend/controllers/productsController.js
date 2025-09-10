@@ -6,21 +6,21 @@ import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import fetch from 'node-fetch';
 
-// Import resolveAdminTokenForShop function
-async function resolveAdminTokenForShop(shop) {
-  try {
-    const mod = await import('../db/Shop.js');
-    const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
-    if (Shop && typeof Shop.findOne === 'function') {
-      const doc = await Shop.findOne({ shopDomain: shop }).lean().exec();
-      const tok = doc?.accessToken || doc?.token || doc?.access_token;
-      if (tok && String(tok).trim()) return String(tok).trim();
-    }
-  } catch (e) {
-    console.warn('[TOKEN] DB lookup failed:', e.message);
+// Use the new per-shop token resolver from server.js
+function resolveAdminTokenForShop(req) {
+  // Use the new per-shop token resolver from server.js
+  const adminSession = req?.res?.locals?.adminSession;
+  if (adminSession?.accessToken) {
+    return adminSession.accessToken;
   }
-  
-  // Fallback to env
+
+  // Fallback to old methods for backward compatibility
+  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  if (sessionToken) return sessionToken;
+
+  const headerToken = req.headers['x-shopify-access-token'];
+  if (headerToken) return String(headerToken);
+
   const envToken =
     (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
     (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN.trim()) ||
@@ -229,7 +229,7 @@ router.post('/sync', verifyRequest, async (req, res) => {
     const { syncProductsForShop } = await import('./productSync.js');
     
     // Start sync (this is the simple version, later we'll make it a background job)
-    const result = await syncProductsForShop(shop);
+    const result = await syncProductsForShop(req, shop);
     
     res.json({
       success: true,
@@ -606,7 +606,7 @@ router.delete('/:id/metafields', verifyRequest, async (req, res) => {
     console.log('[DELETE-METAFIELDS] Deleting metafields for product:', productGid);
     
     // 1. Изтриваме metafields от Shopify
-    const token = await resolveAdminTokenForShop(shop);
+    const token = resolveAdminTokenForShop(req);
     
     // Първо вземаме metafields за да видим какви има
     const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${productId}/metafields.json?namespace=seo_ai`;

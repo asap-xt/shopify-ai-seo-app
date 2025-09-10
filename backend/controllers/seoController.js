@@ -107,16 +107,19 @@ function requireShop(req) {
 }
 
 // Resolve Admin token: DB (OAuth) → env fallback
-async function resolveAdminTokenForShop(shop) {
-  try {
-    const mod = await import('../db/Shop.js');
-    const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
-    if (Shop && typeof Shop.findOne === 'function') {
-      const doc = await Shop.findOne({ shop: shop }).lean().exec();
-      const tok = doc?.accessToken || doc?.token || doc?.access_token;
-      if (tok && String(tok).trim()) return String(tok).trim();
-    }
-  } catch { /* ignore */ }
+function resolveAdminTokenForShop(req) {
+  // Use the new per-shop token resolver from server.js
+  const adminSession = req?.res?.locals?.adminSession;
+  if (adminSession?.accessToken) {
+    return adminSession.accessToken;
+  }
+
+  // Fallback to old methods for backward compatibility
+  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  if (sessionToken) return sessionToken;
+
+  const headerToken = req.headers['x-shopify-access-token'];
+  if (headerToken) return String(headerToken);
 
   const envToken =
     (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
@@ -130,12 +133,12 @@ async function resolveAdminTokenForShop(shop) {
   throw err;
 }
 
-async function shopGraphQL(shop, query, variables = {}) {
+async function shopGraphQL(req, shop, query, variables = {}) {
   console.log('[GRAPHQL] Shop:', shop);
   console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
   console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
   
-  const token = await resolveAdminTokenForShop(shop);
+  const token = resolveAdminTokenForShop(req);
   console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
   
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
@@ -262,7 +265,7 @@ async function ensureMetafieldDefinition(shop, language) {
   `;
   
   try {
-    const result = await shopGraphQL(shop, createMutation, {});
+    const result = await shopGraphQL(req, shop, createMutation, {});
     
     if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
       const errors = result.metafieldDefinitionCreate.userErrors;
@@ -322,7 +325,7 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
     `;
     
     try {
-      const result = await shopGraphQL(shop, createMutation, {});
+      const result = await shopGraphQL(req, shop, createMutation, {});
       
       if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
         const errors = result.metafieldDefinitionCreate.userErrors;
@@ -497,7 +500,7 @@ function canonLang(locale) {
 // 1) Published shop locales (e.g. ["en-US","bg-BG"]), filtered to published only.
 async function getShopPublishedLocales(shop) {
   const Q = `query { shopLocales { locale published } }`;
-  const d = await shopGraphQL(shop, Q);
+  const d = await shopGraphQL(req, shop, Q);
   const list = (d?.shopLocales || [])
     .filter(l => l && l.published)
     .map(l => String(l.locale));
@@ -517,7 +520,7 @@ async function hasProductTranslation(shop, productId, locale) {
       }
     }
   `;
-  const d = await shopGraphQL(shop, Q, { id: productId, locale });
+  const d = await shopGraphQL(req, shop, Q, { id: productId, locale });
   const arr = d?.product?.translations || [];
   const keys = new Set(['title','body_html','seo_title','seo_description']);
   return arr.some(t => keys.has(t.key) && typeof t.value === 'string' && t.value.trim().length > 0);
@@ -537,7 +540,7 @@ async function getProductLocalizedContent(shop, productId, localeInput) {
       }
     }
   `;
-  const data = await shopGraphQL(shop, Q, { id: productId, locale });
+  const data = await shopGraphQL(req, shop, Q, { id: productId, locale });
   const map = {};
   for (const t of (data?.product?.translations || [])) {
     if (t?.key) map[t.key] = t.value || '';
@@ -787,7 +790,7 @@ const Q_SHOP_LOCALES = `
     shopLocales { locale primary published }
   }
 `;
-const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
 const primaryLang = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
 const isPrimary = langNorm.toLowerCase() === primaryLang.toLowerCase();
 
@@ -824,7 +827,7 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       shopLocales { locale primary published }
     }
   `;
-  const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+  const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
   const primaryLang = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
   const isPrimary = langNormalized.toLowerCase() === primaryLang.toLowerCase();
 
@@ -848,7 +851,7 @@ async function generateSEOForLanguage(shop, productId, model, language) {
       }
     }
   `;
-  const pd = await shopGraphQL(shop, Q, { id: productId });
+  const pd = await shopGraphQL(req, shop, Q, { id: productId });
   const p = pd?.product;
   if (!p) {
     const e = new Error('Product not found');
@@ -1050,7 +1053,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
         shopLocales { locale primary published }
       }
     `;
-    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
     const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
     const isPrimary = language.toLowerCase() === primary.toLowerCase();
 
@@ -1096,7 +1099,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
             }
           }
         `;
-        const upd = await shopGraphQL(shop, mut, { input });
+        const upd = await shopGraphQL(req, shop, mut, { input });
         const userErrors = upd?.productUpdate?.userErrors || [];
         if (userErrors.length) errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
         else {
@@ -1134,7 +1137,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
       // Bullets and faq are saved in the main SEO metafield (lines 963-967)
       // Not saved as separate metafields
 
-      const mfRes = await shopGraphQL(shop, metaMutation, { metafields });
+      const mfRes = await shopGraphQL(req, shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
       if (mfErrs.length) {
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
@@ -1162,7 +1165,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
                 }
               }
             `;
-            const r = await shopGraphQL(shop, mu, { productId, id: it.imageId, altText: String(it.alt || '').slice(0, 125) });
+            const r = await shopGraphQL(req, shop, mu, { productId, id: it.imageId, altText: String(it.alt || '').slice(0, 125) });
             const ue = r?.productImageUpdate?.userErrors || [];
             if (ue.length) errors.push(...ue.map((e) => e.message || JSON.stringify(e)));
             else updated.imageAlt = true;
@@ -1271,7 +1274,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 router.get('/collections/list', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const token = await resolveAdminTokenForShop(shop);
+    const token = resolveAdminTokenForShop(req);
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
     
@@ -1423,7 +1426,7 @@ router.post('/seo/generate-collection', verifyRequest, async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(shop, query, { id: collectionId });
+    const data = await shopGraphQL(req, shop, query, { id: collectionId });
     const collection = data?.collection;
     
     if (!collection) {
@@ -1497,7 +1500,7 @@ router.post('/seo/apply-collection', verifyRequest, async (req, res) => {
         shopLocales { locale primary published }
       }
     `;
-    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
     const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
     const isPrimary = language.toLowerCase() === primary.toLowerCase();
     
@@ -1520,7 +1523,7 @@ router.post('/seo/apply-collection', verifyRequest, async (req, res) => {
         }
       `;
       
-      const result = await shopGraphQL(shop, mutation, { input });
+      const result = await shopGraphQL(req, shop, mutation, { input });
       const userErrors = result?.collectionUpdate?.userErrors || [];
       
       if (userErrors.length) {
@@ -1555,7 +1558,7 @@ router.post('/seo/apply-collection', verifyRequest, async (req, res) => {
         }
       `;
       
-      const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
+      const mfResult = await shopGraphQL(req, shop, metaMutation, { metafields });
       const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
       
       if (mfErrors.length) {
@@ -1732,7 +1735,7 @@ router.post('/seo/generate-collection-multi', verifyRequest, async (req, res) =>
           }
         `;
         
-        const data = await shopGraphQL(shop, query, { id: collectionId });
+        const data = await shopGraphQL(req, shop, query, { id: collectionId });
         const collection = data?.collection;
         
         if (!collection) {
@@ -1802,7 +1805,7 @@ router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
         shopLocales { locale primary published }
       }
     `;
-    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
     const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
     
     // Ensure EN definition always exists
@@ -1837,7 +1840,7 @@ router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
           `;
           
           try {
-            const updateResult = await shopGraphQL(shop, mutation, { input });
+            const updateResult = await shopGraphQL(req, shop, mutation, { input });
             const userErrors = updateResult?.collectionUpdate?.userErrors || [];
             
             if (userErrors.length) {
@@ -1884,7 +1887,7 @@ router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
               }
             `;
             
-            const mfResult = await shopGraphQL(shop, metaMutation, { metafields });
+            const mfResult = await shopGraphQL(req, shop, metaMutation, { metafields });
             const mfErrors = mfResult?.metafieldsSet?.userErrors || [];
             
             if (mfErrors.length) {
@@ -1930,7 +1933,7 @@ router.get('/collections/check-definitions', verifyRequest, async (req, res) => 
       }
     `;
     
-    const data = await shopGraphQL(shop, query);
+    const data = await shopGraphQL(req, shop, query);
     const definitions = data?.metafieldDefinitions?.edges || [];
     
     res.json({ 
@@ -1974,7 +1977,7 @@ router.post('/collections/init-metafields', verifyRequest, async (req, res) => {
         shopLocales { locale primary published }
       }
     `;
-    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
     const languages = (shopData?.shopLocales || [])
       .filter(l => l.published)
       .map(l => canonLang(l.locale));
@@ -2005,7 +2008,7 @@ router.post('/collections/init-metafield-definitions', verifyRequest, async (req
         shopLocales { locale primary published }
       }
     `;
-    const shopData = await shopGraphQL(shop, Q_SHOP_LOCALES, {});
+    const shopData = await shopGraphQL(req, shop, Q_SHOP_LOCALES, {});
     const languages = (shopData?.shopLocales || [])
       .filter(l => l.published)
       .map(l => canonLang(l.locale));
@@ -2041,7 +2044,7 @@ router.post('/collections/init-metafield-definitions', verifyRequest, async (req
       `;
       
       try {
-        const result = await shopGraphQL(shop, mutation, {});
+        const result = await shopGraphQL(req, shop, mutation, {});
         
         if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
           const errors = result.metafieldDefinitionCreate.userErrors;
@@ -2078,7 +2081,7 @@ export {
 router.get('/collections/:id/seo-data', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const token = await resolveAdminTokenForShop(shop);
+    const token = resolveAdminTokenForShop(req);
     const collectionId = req.params.id;
     
     // Get metafields
@@ -2174,7 +2177,7 @@ router.delete('/seo/delete', verifyRequest, async (req, res) => {
       
       console.log('[DELETE-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
       
-      const deleteResult = await shopGraphQL(shop, deleteMutation, variables);
+      const deleteResult = await shopGraphQL(req, shop, deleteMutation, variables);
       
       console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
       
@@ -2314,7 +2317,7 @@ router.delete('/seo/bulk-delete', verifyRequest, async (req, res) => {
           }
         `;
         
-        const deleteResult = await shopGraphQL(shop, deleteMutation, {
+        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
           metafields: metafieldsToDelete
         });
         
@@ -2445,7 +2448,7 @@ router.delete('/collections/delete-seo', verifyRequest, async (req, res) => {
       
       console.log('[DELETE-COLLECTION-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
       
-      const deleteResult = await shopGraphQL(shop, deleteMutation, variables);
+      const deleteResult = await shopGraphQL(req, shop, deleteMutation, variables);
       
       console.log('[DELETE-COLLECTION-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
       

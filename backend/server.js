@@ -277,7 +277,7 @@ async function mountOptionalRouters(app) {
       try {
         const { shop } = req.body || {};
         if (!shop) return res.status(400).json({ error: 'Missing shop' });
-        const result = await syncProductsForShop(shop);
+        const result = await syncProductsForShop(req, shop);
         res.status(200).json({ ok: true, result });
       } catch (err) {
         res.status(500).json({ error: err.message });

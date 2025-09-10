@@ -23,7 +23,7 @@ export default async function productsWebhook(req, res) {
     // Пусни синк на заден план (цял каталог – стабилно за MVP).
     if (shop) {
       try {
-        const count = await syncProductsForShop(shop);
+        const count = await syncProductsForShop(req, shop);
         console.log(`[Webhook] Resynced ${count} products for ${shop}`);
       } catch (err) {
         console.error('[Webhook] syncProductsForShop error:', err?.message || err);

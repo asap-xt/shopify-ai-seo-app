@@ -63,7 +63,7 @@ router.get('/ai/feed/catalog.ndjson', async (req, res) => {
     let cache = await FeedCache.findOne({ shop }).lean();
     if (!cache || !cache.data) {
       try {
-        await syncProductsForShop(shop);
+        await syncProductsForShop(req, shop);
         cache = await FeedCache.findOne({ shop }).lean();
       } catch (e) {
         return res.status(503).json({ error: 'Feed not ready', details: e.message });
@@ -93,7 +93,7 @@ router.get('/ai/feed/catalog.json', async (req, res) => {
     let cache = await FeedCache.findOne({ shop }).lean();
     if (!cache || !cache.data) {
       try {
-        await syncProductsForShop(shop);
+        await syncProductsForShop(req, shop);
         cache = await FeedCache.findOne({ shop }).lean();
       } catch (e) {
         return res.status(503).json({ error: 'Feed not ready', details: e.message });
