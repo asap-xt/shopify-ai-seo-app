@@ -509,8 +509,7 @@ export default function App() {
   
   // Всички hooks трябва да са в началото, БЕЗ условия
   const [isLoading, setIsLoading] = useState(true);
-  // const { path } = useRoute();
-  const path = '/dashboard'; // временно хардкоднато
+  const { path } = useRoute();
   const { lang, setLang, t } = useI18n();
   
   // След hooks можете да имате променливи
@@ -576,7 +575,7 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {/* {isEmbedded && <AdminNavMenu active={path} />} */}
+      {isEmbedded && <AdminNavMenu active={path} />}
       <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
