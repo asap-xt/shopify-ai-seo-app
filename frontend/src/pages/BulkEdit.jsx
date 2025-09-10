@@ -131,7 +131,7 @@ export default function BulkEdit({ shop: shopProp }) {
     api(`/api/languages/shop/${shop}`)
       .then((data) => {
         console.log('[BULK-EDIT] Languages API response:', data);
-        const langs = Array.isArray(data?.languages) && data.languages.length ? data.languages : ['en'];
+        const langs = Array.isArray(data?.shopLanguages) && data.shopLanguages.length ? data.shopLanguages : ['en'];
         setAvailableLanguages(langs.includes('en') ? langs : ['en', ...langs]);
       })
       .catch(() => setAvailableLanguages(['en']));
