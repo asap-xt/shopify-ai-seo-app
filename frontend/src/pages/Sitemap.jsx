@@ -7,10 +7,7 @@ import {
   Button,
   InlineStack,
   BlockStack,
-  Badge,
   Toast,
-  ProgressBar,
-  Link,
   Banner,
   Icon,
 } from '@shopify/polaris';
@@ -24,15 +21,30 @@ export default function SitemapPage({ shop: shopProp }) {
   const [info, setInfo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
+  // plan banner state (restored)
+  const [plan, setPlan] = useState(null);
   const api = useMemo(() => makeSessionFetch(), []);
 
   const loadInfo = useCallback(async () => {
     if (!shop) return;
     try {
-      const j = await api(`/sitemap/info`, { shop });
+      // ✅ backend routes live under /api
+      const j = await api(`/api/sitemap/info`, { shop });
       setInfo(j);
     } catch (e) {
       setToast(e.message || 'Failed to load sitemap info');
+    }
+  }, [shop, api]);
+
+  // restore plan fetch for banner (from working version)
+  const loadPlan = useCallback(async () => {
+    if (!shop) return;
+    try {
+      const j = await api(`/plans/me`, { shop });
+      setPlan(j || null);
+    } catch (e) {
+      // non-blocking; just log toast optionally
+      // setToast(e.message || 'Failed to load plan');
     }
   }, [shop, api]);
 
@@ -40,7 +52,8 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     setBusy(true);
     try {
-      const j = await api(`/sitemap/generate`, {
+      // ✅ backend route is /api/sitemap/generate
+      const j = await api(`/api/sitemap/generate`, {
         method: 'POST',
         shop,
         body: { shop },
@@ -54,12 +67,44 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [shop, loadInfo, api]);
 
-  useEffect(() => { loadInfo(); }, [loadInfo]);
+  useEffect(() => {
+    loadInfo();
+    loadPlan();
+  }, [loadInfo, loadPlan]);
 
   return (
     <Card>
       <Box padding="400">
         <BlockStack gap="400">
+          {/* Plan Info Banner (restored) */}
+          <Banner tone="info">
+            <p>
+              Your {plan?.plan || 'Starter'} plan includes up to{' '}
+              <strong>
+                {plan?.plan === 'Growth' ? 650
+                  : plan?.plan === 'Professional' ? 300
+                  : plan?.plan === 'Growth Extra' ? 2000
+                  : plan?.plan === 'Enterprise' ? 5000
+                  : 50}
+              </strong>{' '}
+              URLs in the sitemap.
+              {info?.productCount &&
+                (info.productCount >
+                  (plan?.plan === 'Growth' ? 650
+                    : plan?.plan === 'Professional' ? 300
+                    : plan?.plan === 'Growth Extra' ? 2000
+                    : plan?.plan === 'Enterprise' ? 5000
+                    : 50)) && (
+                  <> You have {info.productCount} products, so only the first{' '}
+                    {plan?.plan === 'Growth' ? 650
+                      : plan?.plan === 'Professional' ? 300
+                      : plan?.plan === 'Growth Extra' ? 2000
+                      : plan?.plan === 'Enterprise' ? 5000
+                      : 50} will be included.</>
+                )}
+            </p>
+          </Banner>
+
           <InlineStack align="space-between" blockAlign="center">
             <Box>
               <Text variant="headingMd" as="h3">Sitemap Generator</Text>
