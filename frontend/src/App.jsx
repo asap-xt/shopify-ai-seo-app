@@ -57,13 +57,23 @@ function AdminNavMenu({ active, shop }) {
   const isSeo  = active.startsWith('/ai-seo');
   const isBill = active.startsWith('/billing');
   const isSett = active.startsWith('/settings');
+  
+  // ВАЖНО: Вземете host от текущия URL
+  const currentParams = new URLSearchParams(window.location.search);
+  const host = currentParams.get('host');
+  
+  // Създайте параметри които включват shop И host
+  const navParams = new URLSearchParams();
+  if (shop) navParams.set('shop', shop);
+  if (host) navParams.set('host', host);
+  const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
 
   return (
     <ui-nav-menu>
-      <a href={`/dashboard?shop=${shop}`} {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
-      <a href={`/ai-seo?shop=${shop}`}    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
-      <a href={`/billing?shop=${shop}`}   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
-      <a href={`/settings?shop=${shop}`}  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
+      <a href={`/dashboard${paramString}`} {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
+      <a href={`/ai-seo${paramString}`}    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href={`/billing${paramString}`}   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href={`/settings${paramString}`}  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
   );
 }
