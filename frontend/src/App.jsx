@@ -201,10 +201,8 @@ function SingleProductPanel({ shop }) {
       try {
         // product-level languages; backend uses session, shop in path is only informative
         const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
-        const r = await fetch(url, { credentials: 'include' });
-        const j = await readJson(r);
+        const j = await api(url, { shop: s });
         if (cancelled) return;
-        if (!r.ok) throw new Error(j?.error || 'Failed to fetch languages');
 
         const shopLangs = j.shopLanguages || [];
         const prodLangs = j.productLanguages || [];
@@ -234,14 +232,11 @@ function SingleProductPanel({ shop }) {
     if (!s) return;
     
     // Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€Ð°Ð¹ metafield definitions Ð·Ð° ÐºÐ¾Ð»ÐµÐºÑ†Ð¸Ð¸
-    fetch('/collections/init-metafields', {
+    api('/collections/init-metafields', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ shop: s })
+      shop: s,
+      body: { shop: s }
     })
-    .then(r => r.json())
-
     .catch(err => console.error('Failed to init collection metafields:', err));
   }, [shop]);
 
@@ -260,30 +255,26 @@ function SingleProductPanel({ shop }) {
 
       if (language === 'all') {
         // Multi-language generation
-        response = await fetch('/api/seo/generate-multi', {
+        response = await api('/api/seo/generate-multi', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ 
+          shop,
+          body: { 
             shop, 
             productId: gid, 
             model, 
             languages: availableLanguages 
-          }),
+          }
         });
       } else {
         // Single language generation
-        response = await fetch('/seo/generate', {
+        response = await api('/seo/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ shop, productId: gid, model, language }),
+          shop,
+          body: { shop, productId: gid, model, language }
         });
       }
 
-      data = await readJson(response);
-      if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
-      setResult(data);
+      setResult(response);
       
       setToast('SEO generated successfully');
     } catch (e) {
@@ -323,11 +314,10 @@ function SingleProductPanel({ shop }) {
           throw new Error('No valid SEO results to apply');
         }
 
-        response = await fetch('/api/seo/apply-multi', {
+        response = await api('/api/seo/apply-multi', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
+          shop,
+          body: {
             shop,
             productId: gid,
             results: validResults,
@@ -338,8 +328,8 @@ function SingleProductPanel({ shop }) {
               updateSeo: true,
               updateBullets: true,
               updateFaq: true,
-            },
-          }),
+            }
+          }
         });
       } else {
         // IMPORTANT FIX: Always use the language from dropdown since result doesn't have it
@@ -361,17 +351,13 @@ function SingleProductPanel({ shop }) {
           },
         };
         
-        response = await fetch('/seo/apply', {
+        response = await api('/seo/apply', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(requestBody),
+          shop,
+          body: requestBody
         });
       }
 
-      data = await readJson(response);
-      if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
-      
       // Show success with language info
       const appliedLangs = result.results 
         ? result.results.filter(r => r.seo).map(r => r.language).join(', ')
