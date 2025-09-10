@@ -7,7 +7,7 @@ import {
   Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
-import { sessionFetch } from './lib/sessionFetch.js';
+import { makeSessionFetch } from './lib/sessionFetch.js';
 import ShopifyAppBridgeProvider, { useAppBridge } from './providers/AppBridgeProvider.jsx';
 
 import AppHeader from './components/AppHeader.jsx';
@@ -82,23 +82,23 @@ function AdminNavMenu({ active, shop }) {
 function DashboardCard() {
   const [plan, setPlan] = useState(null);
   const shop = qs('shop', '');
+  // ВАЖНО: единен session-aware fetch за целия компонент
+  const api = useMemo(() => makeSessionFetch(), []);
 
   useEffect(() => {
     if (!shop) return;
-    fetch(`/plans/me?shop=${encodeURIComponent(shop)}`, { credentials: 'include' })
-      .then(readJson)
+    // Използвай session token при всяко повикване
+    api(`/plans/me`, { shop })
       .then((data) => { if (data && !data.error) setPlan(data); })
       .catch((e) => console.error('Failed to load plan:', e));
-  }, [shop]);
+  }, [shop, api]);
 
   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
   useEffect(() => {
     if (!shop) return;
-    
-    fetch(`/collections/check-definitions?shop=${encodeURIComponent(shop)}`, {
-      credentials: 'include'
-    })
-      .then(r => r.json())
+
+    // 1) Проверка на definitions със session token
+    api(`/collections/check-definitions`, { shop })
       .then(data => {
 
         // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
@@ -107,18 +107,17 @@ function DashboardCard() {
         const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
         
         if (missingLangs.length > 0) {
-          return fetch('/collections/create-definitions', {
+          // 2) Създай липсващите definitions със session token
+          return api('/collections/create-definitions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ shop, languages: missingLangs })
+            shop,
+            body: { shop, languages: missingLangs },
           });
         }
       })
-      .then(r => r && r.json())
 
       .catch(err => console.error('Definitions error:', err));
-  }, [shop]);
+  }, [shop, api]);
 
   if (!plan) {
     return (
