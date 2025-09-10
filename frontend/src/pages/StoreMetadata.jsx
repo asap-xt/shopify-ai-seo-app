@@ -52,7 +52,8 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function loadStoreData() {
     setLoading(true);
     try {
-      const data = await api(`/api/store/generate`, { shop });
+      // ВАЖНО: бекендът очаква shop в query string
+      const data = await api(`/api/store/generate?shop=${encodeURIComponent(shop)}`);
       
       setStoreData(data);
       
@@ -103,9 +104,9 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function handleGenerate() {
     setLoading(true);
     try {
-      const data = await api(`/api/store/ai-generate`, {
+      // ВАЖНО: shop и тук се подава в query string
+      const data = await api(`/api/store/ai-generate?shop=${encodeURIComponent(shop)}`, {
         method: 'POST',
-        shop,
         body: {
           shopInfo: storeData?.shopInfo,
           businessType: formData.aiMetadata.businessType,
@@ -133,9 +134,9 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function handleSave() {
     setSaving(true);
     try {
-      const data = await api(`/api/store/apply`, {
+      // ВАЖНО: shop в query string за /apply
+      const data = await api(`/api/store/apply?shop=${encodeURIComponent(shop)}`, {
         method: 'POST',
-        shop,
         body: {
           metadata: formData,
           options: {
