@@ -6,13 +6,13 @@ export default function ShopifyAppBridgeProvider({children}) {
   const host = params.get('host')
   const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY
 
-  // Ако няма host (отворено е standalone) – main.jsx вече опита redirect към Admin.
+  // If no host (opened standalone), don't initialize
   if (!host || !apiKey) return null
 
   const config = useMemo(() => ({
     apiKey,
     host,
-    forceRedirect: true
+    forceRedirect: false  // IMPORTANT: Changed from true to false
   }), [apiKey, host])
 
   return (
