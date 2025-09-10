@@ -14,48 +14,12 @@ function normalizeShop(shop) {
   return s;
 }
 
-// Resolve access token - same pattern as seoController.js
-async function resolveAccessToken(shop) {
-  // First try to get from database (if you have MongoDB)
-  try {
-    const Shop = (await import('../models/Shop.js')).default;
-    const shopDoc = await Shop.findOne({ shop });
-    if (shopDoc?.accessToken) return shopDoc.accessToken;
-  } catch (err) {
-    // No DB available, continue to env fallback
-    console.log('Shop model not available, using env token');
-  }
-  
-  // Check both possible env variable names (like in seoController.js)
-  const token = 
-    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
-    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
-    
-  return token || null;
-}
+// Legacy access token resolver - DEPRECATED, use res.locals.adminGraphql instead
 
-// Admin GraphQL helper
-async function shopGraphQL(shop, query, variables = {}) {
-  const accessToken = await resolveAccessToken(shop);
-  if (!accessToken) throw new Error('No access token available');
-  
-  const url = `https://${shop}/admin/api/2025-07/graphql.json`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'X-Shopify-Access-Token': accessToken,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  
-  const data = await response.json();
-  if (data.errors) throw new Error(data.errors[0]?.message || 'GraphQL error');
-  return data.data;
-}
+// Legacy Admin GraphQL helper - DEPRECATED, use res.locals.adminGraphql instead
 
 // Helper to get shop's primary locale
-async function getShopLocale(shop) {
+async function getShopLocale(adminGraphql, shop) {
   try {
     const query = `
       query {
@@ -71,7 +35,8 @@ async function getShopLocale(shop) {
       }
     `;
     
-    const data = await shopGraphQL(shop, query);
+    const resp = await adminGraphql.request(query);
+    const data = resp?.body?.data;
     return {
       url: data?.shop?.primaryDomain?.url || `https://${shop}`,
       currency: data?.shop?.currencyCode || 'USD',
@@ -91,37 +56,10 @@ async function getShopLocale(shop) {
 
 // GET /api/schema/preview - Get all active schemas
 router.get('/api/schema/preview', verifyRequest, async (req, res) => {
-  console.log('[SCHEMA/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
-
-  if (!shop) {
-    console.error('[SCHEMA/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
-  }
-
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SCHEMA/HANDLER] Resolving Admin token', { shop, tokenSource });
-
+  const { adminGraphql, shop } = res.locals;
+  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  
   try {
-    const shop = req.shopDomain;
-
-    // Check if we have access token
-    const hasToken = await resolveAccessToken(shop);
-    if (!hasToken) {
-      return res.status(401).json({ 
-        ok: false, 
-        error: 'Access token not configured. Please ensure SHOPIFY_ADMIN_API_TOKEN is set in your environment or shop is authenticated.' 
-      });
-    }
 
     // Fetch store metadata - UPDATED to use correct namespace and key
     const storeMetaQuery = `
@@ -138,8 +76,9 @@ router.get('/api/schema/preview', verifyRequest, async (req, res) => {
       }
     `;
 
-    const shopInfo = await shopGraphQL(shop, storeMetaQuery);
-    const localeInfo = await getShopLocale(shop);
+    const resp = await adminGraphql.request(storeMetaQuery);
+    const shopInfo = resp?.body?.data;
+    const localeInfo = await getShopLocale(adminGraphql, shop);
 
     // Parse organization metadata if exists
     let organizationData = {};
@@ -225,7 +164,8 @@ router.get('/api/schema/preview', verifyRequest, async (req, res) => {
       }
     `;
 
-    const productData = await shopGraphQL(shop, productCountQuery);
+    const productResp = await adminGraphql.request(productCountQuery);
+    const productData = productResp?.body?.data;
     const products = productData?.products?.edges || [];
 
     res.json({
@@ -245,44 +185,29 @@ router.get('/api/schema/preview', verifyRequest, async (req, res) => {
 
 // POST /api/schema/generate - Regenerate schemas from latest data
 router.post('/api/schema/generate', verifyRequest, async (req, res) => {
-  console.log('[SCHEMA/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
-
-  if (!shop) {
-    console.error('[SCHEMA/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
-  }
-
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SCHEMA/HANDLER] Resolving Admin token', { shop, tokenSource });
-
+  const { adminGraphql, shop } = res.locals;
+  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  
   try {
-    const shop = req.shopDomain;
-
+    // тук извърши реалните действия за generate (GraphQL mutations / metafieldsSet и т.н.)
+    // пример:
+    // const result = await adminGraphql.request(MY_MUTATION, { variables });
+    
     // This endpoint would trigger a refresh of all schema data
     // For now, it just returns success since schemas are generated dynamically
-    res.json({ ok: true, message: 'Schemas will be regenerated on next page load' });
-
+    res.json({ ok: true, shop, message: 'Schemas will be regenerated on next page load' });
   } catch (error) {
-    console.error('Schema generate error:', error);
-    res.status(500).json({ ok: false, error: error.message });
+    console.error('[schema/generate] adminGraphql error', error);
+    res.status(500).json({ error: 'Schema generation failed' });
   }
 });
 
 // GET /api/schema/status
 router.get('/status', verifyRequest, async (req, res) => {
+  const { adminGraphql, shop } = res.locals;
+  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  
   try {
-    const shop = req.shopDomain;
-
     // Get existing metafields to check what's configured
     const metafieldsQuery = `{
       shop {
@@ -307,7 +232,8 @@ router.get('/status', verifyRequest, async (req, res) => {
       }
     }`;
 
-    const data = await shopGraphQL(shop, metafieldsQuery);
+    const resp = await adminGraphql.request(metafieldsQuery);
+    const data = resp?.body?.data;
     
     // Check which schemas are configured
     const schemas = {
@@ -335,6 +261,8 @@ router.get('/status', verifyRequest, async (req, res) => {
     const productsWithSchema = data?.products?.edges?.length || 0;
     
     res.json({
+      ok: true,
+      shop,
       schemas,
       stats: {
         productsWithSchema,
@@ -344,15 +272,17 @@ router.get('/status', verifyRequest, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error getting schema status:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[schema/status] adminGraphql error', error);
+    res.status(500).json({ error: 'Failed to load schema status' });
   }
 });
 
 // GET /api/schema/validate - Check schema installation
 router.get('/api/schema/validate', verifyRequest, async (req, res) => {
+  const { adminGraphql, shop } = res.locals;
+  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  
   try {
-    const shop = req.shopDomain;
     
     // Check various aspects of the installation
     const checks = {
@@ -375,7 +305,8 @@ router.get('/api/schema/validate', verifyRequest, async (req, res) => {
       }
     `;
 
-    const data = await shopGraphQL(shop, metaQuery);
+    const resp = await adminGraphql.request(metaQuery);
+    const data = resp?.body?.data;
     
     // Check if organization schema exists and is enabled
     let hasOrgSchema = false;
