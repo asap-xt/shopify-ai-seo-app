@@ -14,7 +14,8 @@ import { validateRequest } from '../middleware/shopifyAuth.js';
 
 const router = Router();
 
-const APP_URL = (process.env.SHOPIFY_APP_URL || '').replace(/\/+$/, '');
+const PORT = process.env.PORT || 3000;
+const APP_URL = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
 
 // Normalize either numeric id -> GID, or pass-through a GID
 function toGID(productId) {
