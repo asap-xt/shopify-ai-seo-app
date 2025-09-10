@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAppBridge } from '@shopify/app-bridge-react';
 import { Card, Page, RadioButton, Button, BlockStack, Text } from '@shopify/polaris';
-import { useApi } from '../hooks/useApi.js';
+import { makeApiFetch } from '../lib/apiFetch.js';
 
 const plans = [
   { key: 'starter',   label: 'Starter ($10/mo)' },
@@ -13,20 +13,20 @@ const plans = [
 
 export default function Billing({ i18n, shop }) {
   const app = useAppBridge();
-  const api = useApi(app, shop);
+  const api = useMemo(() => makeApiFetch(app), [app]);
   const [current, setCurrent] = useState('starter');
   const [loading, setLoading] = useState(false);
   const [resp, setResp] = useState(null);
 
   useEffect(() => {
-    api.get('/billing/plan').then(p => setCurrent(p.plan || 'starter')).catch(()=>{});
-  }, []);
+    api('/billing/plan', { shop }).then(p => setCurrent(p.plan || 'starter')).catch(()=>{});
+  }, [api, shop]);
 
   async function changePlan() {
     setLoading(true);
     setResp(null);
     try {
-      const res = await api.post('/billing/subscribe', { plan: current });
+      const res = await api('/billing/subscribe', { method: 'POST', body: { plan: current }, shop });
       setResp(res);
     } catch (e) {
       setResp({ error: e.message || String(e) });

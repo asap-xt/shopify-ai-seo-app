@@ -52,7 +52,7 @@ function useRoute() {
 }
 
 // -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
-function AdminNavMenu({ active }) {
+function AdminNavMenu({ active, shop }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
   const isBill = active.startsWith('/billing');
@@ -60,10 +60,10 @@ function AdminNavMenu({ active }) {
 
   return (
     <ui-nav-menu>
-      <a href="/dashboard" {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
-      <a href="/ai-seo"    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
-      <a href="/billing"   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
-      <a href="/settings"  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
+      <a href={`/dashboard?shop=${shop}`} {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
+      <a href={`/ai-seo?shop=${shop}`}    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href={`/billing?shop=${shop}`}   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href={`/settings?shop=${shop}`}  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
     </ui-nav-menu>
   );
 }
@@ -577,14 +577,14 @@ export default function App() {
   return (
     <ShopifyAppBridgeProvider>
       <AppProvider i18n={I18N}>
-        {isEmbedded && <AdminNavMenu active={path} />}
+        {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
         <Frame>
           <Page>
-            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
             {path === '/' || path.startsWith('/dashboard') ? (
-              <DashboardCard />
+              <DashboardCard shop={shop} />
             ) : path.startsWith('/ai-seo') ? (
-              <AiSearchOptimisationPanel />
+              <AiSearchOptimisationPanel shop={shop} />
             ) : path.startsWith('/billing') ? (
               <Card>
                 <Box padding="400">
