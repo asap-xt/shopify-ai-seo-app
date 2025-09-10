@@ -521,8 +521,13 @@ export default function App() {
 
   useEffect(() => {
     console.log('App useEffect running...');
+    const shop = qs('shop', '');
+    const host = qs('host', '');
+    
+    console.log('About to call /api/auth with:', { shop, host });
     
     if (!shop || !host) {
+      console.log('Missing shop or host, stopping auth check');
       setIsLoading(false);
       return;
     }
@@ -532,30 +537,34 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shop, host })
     })
-    .then(r => r.json())
+    .then(r => {
+      console.log('Auth response received, status:', r.status);
+      return r.json();
+    })
     .then(data => {
-      console.log('Auth response:', data);
+      console.log('Auth response data:', data);
       if (!data.success) {
-        console.log('Redirecting to:', data.redirectUrl);
+        console.log('Auth failed, redirecting to:', data.redirectUrl);
         window.location.href = data.redirectUrl;
       } else {
-        console.log('Auth success, setting isLoading to false');
+        console.log('Auth successful, setting isLoading to false');
         setIsLoading(false);
       }
     })
-    .catch(() => {
+    .catch((err) => {
+      console.error('Auth request failed:', err);
       setIsLoading(false);
     });
-  }, [shop, host]);
+  }, []);
 
-  console.log('App render state:', { isLoading, shop, host });
+  console.log('Before render check - isLoading:', isLoading);
 
   if (isLoading) {
-    console.log('Returning loading state');
+    console.log('Returning Loading UI');
     return <div>Loading...</div>;
   }
 
-  console.log('Returning full app UI');
+  console.log('Rendering main app UI');
 
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
