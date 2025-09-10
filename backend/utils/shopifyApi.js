@@ -90,11 +90,12 @@ const shopify = shopifyApi({
         id: shopRecord.shop,
         shop: shopRecord.shop,
         state: shopRecord.state,
-        isOnline: shopRecord.isOnline,
+        isOnline: shopRecord.isOnline || false,
         accessToken: shopRecord.accessToken,
         scope: shopRecord.scope,
         expires: shopRecord.expires,
-        onlineAccessInfo: shopRecord.onlineAccessInfo
+        onlineAccessInfo: shopRecord.onlineAccessInfo,
+        updatedAt: shopRecord.updatedAt || new Date()
       })];
     }
   }
