@@ -3,35 +3,67 @@
 
 import shopify from '../utils/shopifyApi.js';
 
+// Debug: Check if shopify is properly initialized
+console.log('[SHOPIFY-AUTH] shopify object:', typeof shopify);
+console.log('[SHOPIFY-AUTH] shopify.auth:', typeof shopify?.auth);
+
 // Middleware for OAuth authentication
 export function authBegin() {
-  return shopify.auth.begin({
-    authPath: '/api/auth',
-    callbackPath: '/api/auth/callback',
-    afterAuth: async (ctx) => {
-      const { session } = ctx;
-      console.log('[SHOPIFY-AUTH] OAuth completed for shop:', session.shop);
-      
-      // Redirect to app after successful authentication
-      const redirectUrl = `${process.env.APP_URL}/?shop=${session.shop}&host=${ctx.query.host}`;
-      ctx.redirect(redirectUrl);
+  console.log('[SHOPIFY-AUTH] authBegin called, shopify.auth.begin type:', typeof shopify.auth.begin);
+  return async (req, res, next) => {
+    try {
+      const middleware = await shopify.auth.begin({
+        authPath: '/api/auth',
+        callbackPath: '/api/auth/callback',
+        afterAuth: async (ctx) => {
+          const { session } = ctx;
+          console.log('[SHOPIFY-AUTH] OAuth completed for shop:', session.shop);
+          
+          // Redirect to app after successful authentication
+          const redirectUrl = `${process.env.APP_URL}/?shop=${session.shop}&host=${ctx.query.host}`;
+          ctx.redirect(redirectUrl);
+        }
+      });
+      console.log('[SHOPIFY-AUTH] authBegin middleware type:', typeof middleware);
+      console.log('[SHOPIFY-AUTH] authBegin middleware constructor:', middleware?.constructor?.name);
+      console.log('[SHOPIFY-AUTH] authBegin middleware is Promise:', middleware instanceof Promise);
+      return middleware(req, res, next);
+    } catch (error) {
+      console.error('[SHOPIFY-AUTH] Error in authBegin:', error);
+      next(error);
     }
-  });
+  };
 }
 
 // Middleware for OAuth callback
 export function authCallback() {
-  return shopify.auth.callback({
-    afterAuth: async (ctx) => {
-      const { session } = ctx;
-      console.log('[SHOPIFY-AUTH] Session stored for shop:', session.shop);
+  return async (req, res, next) => {
+    try {
+      const middleware = await shopify.auth.callback({
+        afterAuth: async (ctx) => {
+          const { session } = ctx;
+          console.log('[SHOPIFY-AUTH] Session stored for shop:', session.shop);
+        }
+      });
+      return middleware(req, res, next);
+    } catch (error) {
+      console.error('[SHOPIFY-AUTH] Error in authCallback:', error);
+      next(error);
     }
-  });
+  };
 }
 
 // Middleware to ensure app is installed on shop
 export function ensureInstalledOnShop() {
-  return shopify.ensureInstalledOnShop();
+  return async (req, res, next) => {
+    try {
+      const middleware = await shopify.ensureInstalledOnShop();
+      return middleware(req, res, next);
+    } catch (error) {
+      console.error('[SHOPIFY-AUTH] Error in ensureInstalledOnShop:', error);
+      next(error);
+    }
+  };
 }
 
 // Middleware for session validation (replaces verifyRequest.js)

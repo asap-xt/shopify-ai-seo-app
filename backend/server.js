@@ -116,11 +116,8 @@ app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now
 app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 
 // ---------------------------------------------------------------------------
-// Shopify OAuth Routes for Public App
+// Shopify OAuth Routes for Public App (moved to start function)
 // ---------------------------------------------------------------------------
-app.use('/api/auth', authBegin());
-app.use('/api/auth/callback', authCallback());
-app.use('/api/auth', ensureInstalledOnShop());
 
 // ---------------------------------------------------------------------------
 // Routers (mounted before static). These imports must exist in the project.
@@ -415,6 +412,11 @@ async function start() {
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
+
+    // Mount Shopify OAuth Routes
+    app.use('/api/auth', authBegin());
+    app.use('/api/auth/callback', authCallback());
+    app.use('/api/auth', ensureInstalledOnShop());
 
     // Mount optional routers before listening
     await mountOptionalRouters(app);

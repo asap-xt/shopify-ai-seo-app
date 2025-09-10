@@ -10,6 +10,7 @@ import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 

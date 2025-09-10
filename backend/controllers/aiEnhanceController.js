@@ -2,6 +2,7 @@
 import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 
 const router = express.Router();

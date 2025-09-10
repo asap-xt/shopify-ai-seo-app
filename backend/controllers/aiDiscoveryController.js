@@ -5,6 +5,7 @@ import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {

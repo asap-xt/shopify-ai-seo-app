@@ -3,6 +3,7 @@ import { Router } from 'express';
 import Product from '../db/Product.js';
 import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import fetch from 'node-fetch';
 
 // Import resolveAdminTokenForShop function

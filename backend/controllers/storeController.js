@@ -3,6 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 
 
 const router = express.Router();
