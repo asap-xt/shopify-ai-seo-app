@@ -1,5 +1,6 @@
 // frontend/src/pages/BulkEdit.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useShopApi } from '../hooks/useShopApi.js';
 import {
   Page,
   Card,
@@ -45,7 +46,15 @@ const extractNumericId = (gid) => {
 
 
 export default function BulkEdit({ shop: shopProp }) {
-  const shop = shopProp || qs('shop', '');
+  const { api, shop: hookShop } = useShopApi();
+  const shop = shopProp || hookShop || qs('shop', '');
+  
+  // Добавете този debug useEffect
+  useEffect(() => {
+    console.log('[BULK-EDIT] Component mounted');
+    console.log('[BULK-EDIT] Shop:', shop);
+    console.log('[BULK-EDIT] API function available:', typeof api === 'function');
+  }, [shop, api]);
   
   // Product list state
   const [products, setProducts] = useState([]);

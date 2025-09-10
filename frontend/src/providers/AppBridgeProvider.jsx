@@ -1,12 +1,20 @@
-import React, {useEffect} from 'react'
+// frontend/src/providers/AppBridgeProvider.jsx
+import React, { useEffect } from 'react';
 
-export default function ShopifyAppBridgeProvider({children}) {
-  const params = new URLSearchParams(window.location.search)
-  const host = params.get('host')
-  const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY
+export default function ShopifyAppBridgeProvider({ children }) {
+  const params = new URLSearchParams(window.location.search);
+  const host = params.get('host');
+  const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
 
-  // If no host (opened standalone), don't initialize
-  if (!host || !apiKey) return <>{children}</>
+  console.log('[APP-BRIDGE-PROVIDER] Initializing with:', {
+    host: host ? 'Present' : 'Missing',
+    apiKey: apiKey ? 'Present' : 'Missing'
+  });
+
+  if (!host || !apiKey) {
+    console.error('[APP-BRIDGE-PROVIDER] Missing host or apiKey');
+    return <>{children}</>;
+  }
 
   useEffect(() => {
     // Initialize App Bridge manually
@@ -20,12 +28,12 @@ export default function ShopifyAppBridgeProvider({children}) {
         
         // Store app instance globally
         window.__SHOPIFY_APP_BRIDGE__ = app;
-        console.log('[AppBridgeProvider] App Bridge initialized');
+        console.log('[APP-BRIDGE-PROVIDER] App Bridge initialized');
       } catch (error) {
-        console.error('[AppBridgeProvider] App Bridge init error:', error);
+        console.error('[APP-BRIDGE-PROVIDER] App Bridge init error:', error);
       }
     });
   }, [apiKey, host]);
 
-  return children
+  return <>{children}</>;
 }

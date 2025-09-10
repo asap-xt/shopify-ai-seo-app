@@ -507,6 +507,15 @@ export default function App() {
   // ===== ЗАПОЧНЕТЕ DEBUG КОДА ТУК =====
   console.log('[DEBUG] App render START');
   
+  // Опитайте да вземете app instance
+  let app = null;
+  try {
+    app = useAppBridge();
+    console.log('[APP] App Bridge instance:', app ? 'Available' : 'Not available');
+  } catch (err) {
+    console.log('[APP] App Bridge not available:', err.message);
+  }
+  
   // Вместо: const { path } = useRoute();
   let path, setPath;
   try {
