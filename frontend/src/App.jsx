@@ -7,8 +7,8 @@ import {
   Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
-import { makeSessionFetch } from './lib/sessionFetch.js';
 import { useAppBridge } from './providers/AppBridgeProvider.jsx';
+import { useShopApi } from './hooks/useShopApi.js';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
@@ -81,9 +81,8 @@ function AdminNavMenu({ active, shop }) {
 // -------- Dashboard
 function DashboardCard() {
   const [plan, setPlan] = useState(null);
-  const shop = qs('shop', '');
-  // ВАЖНО: единен session-aware fetch за целия компонент
-  const api = useMemo(() => makeSessionFetch(), []);
+  const { api, shop: hookShop } = useShopApi();
+  const shop = hookShop || qs('shop', '');
 
   useEffect(() => {
     if (!shop) return;

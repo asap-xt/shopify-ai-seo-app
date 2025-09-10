@@ -48,8 +48,6 @@ const extractNumericId = (gid) => {
 export default function BulkEdit({ shop: shopProp }) {
   const { api, shop: hookShop } = useShopApi();
   const shop = shopProp || hookShop || qs('shop', '');
-  // Session-token aware fetch (App Bridge v4)
-  const apiAuth = useMemo(() => makeSessionFetch(), []);
   
   // Добавете този debug useEffect
   useEffect(() => {
@@ -117,36 +115,36 @@ export default function BulkEdit({ shop: shopProp }) {
   // Load models on mount
   useEffect(() => {
     if (!shop) return;
-    apiAuth(`/plans/me`, { shop })
+    api(`/plans/me`, { shop })
       .then((data) => {
         const models = data?.modelsSuggested || ['anthropic/claude-3.5-sonnet'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
       })
       .catch((e) => console.error('[BULK-EDIT] /plans/me failed:', e));
-  }, [shop, apiAuth]);
+  }, [shop, api]);
   
   // Load shop languages
   useEffect(() => {
     if (!shop) return;
     // оставяме :shop в path (бекендът може да го очаква), но пращаме и session token
-    apiAuth(`/api/languages/shop/${shop}`)
+    api(`/api/languages/shop/${shop}`)
       .then((data) => {
         console.log('[BULK-EDIT] Languages API response:', data);
         const langs = Array.isArray(data?.languages) && data.languages.length ? data.languages : ['en'];
         setAvailableLanguages(langs.includes('en') ? langs : ['en', ...langs]);
       })
       .catch(() => setAvailableLanguages(['en']));
-  }, [shop, apiAuth]);
+  }, [shop, api]);
 
   // Load available tags
   useEffect(() => {
     if (!shop) return;
     // стандартен GET: подаваме shop през опции (по-чист URL)
-    apiAuth(`/api/products/tags/list`, { shop })
+    api(`/api/products/tags/list`, { shop })
       .then((data) => setAvailableTags(data?.tags || []))
       .catch((err) => console.error('Failed to load tags:', err));
-  }, [shop, apiAuth]);
+  }, [shop, api]);
   
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false) => {
@@ -167,7 +165,7 @@ export default function BulkEdit({ shop: shopProp }) {
       });
       
       // URL вече съдържа shop + params → не подаваме {shop}, за да не дублираме
-      const data = await apiAuth(`/api/products/list?${params}&_t=${Date.now()}`);
+      const data = await api(`/api/products/list?${params}&_t=${Date.now()}`);
       console.log(`[BULK-EDIT-LOAD] API returned ${data.products?.length || 0} products`);
       
       // Log първия продукт за проверка
@@ -287,7 +285,7 @@ export default function BulkEdit({ shop: shopProp }) {
         }));
         
         try {
-          const eligibility = await apiAuth('/ai-enhance/check-eligibility', {
+          const eligibility = await api('/ai-enhance/check-eligibility', {
             method: 'POST',
             shop,
             body: { shop },
@@ -298,7 +296,7 @@ export default function BulkEdit({ shop: shopProp }) {
             continue;
           }
           
-          const enhanceData = await apiAuth('/ai-enhance/product', {
+          const enhanceData = await api('/ai-enhance/product', {
             method: 'POST',
             shop,
             body: {
@@ -310,7 +308,7 @@ export default function BulkEdit({ shop: shopProp }) {
           
           // Apply the enhanced SEO
           if (enhanceData.results && enhanceData.results.length > 0) {
-            await apiAuth('/api/seo/apply-multi', {
+            await api('/api/seo/apply-multi', {
               method: 'POST',
               shop,
               body: {
@@ -491,7 +489,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       if (selectAllPages) {
         // тук URL вече има shop → не подаваме {shop}
-        const data = await apiAuth(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
+        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p._id));
@@ -524,7 +522,7 @@ export default function BulkEdit({ shop: shopProp }) {
               return;
             }
             
-            const data = await apiAuth('/api/seo/generate-multi', {
+            const data = await api('/api/seo/generate-multi', {
               method: 'POST',
               shop,
               body: {
@@ -597,7 +595,7 @@ export default function BulkEdit({ shop: shopProp }) {
         try {
           const productGid = product.gid || toProductGID(product.productId || product.id);
           
-          const data = await apiAuth('/api/seo/apply-multi', {
+          const data = await api('/api/seo/apply-multi', {
             method: 'POST',
             shop,
             body: {
@@ -682,7 +680,7 @@ export default function BulkEdit({ shop: shopProp }) {
         _t: Date.now() // Cache buster
       });
       
-      const data = await apiAuth(`/api/products/list?${params}`, { 
+      const data = await api(`/api/products/list?${params}`, { 
         shop,
         headers: {
           'Cache-Control': 'no-cache',
@@ -726,7 +724,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       if (selectAllPages) {
         // тук URL вече има shop → не подаваме {shop}
-        const data = await apiAuth(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
+        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p._id));
@@ -756,7 +754,7 @@ export default function BulkEdit({ shop: shopProp }) {
             continue;
           }
           
-          const data = await apiAuth('/api/seo/delete-multi', {
+          const data = await api('/api/seo/delete-multi', {
             method: 'POST',
             shop,
             body: {
@@ -806,7 +804,7 @@ export default function BulkEdit({ shop: shopProp }) {
           
           if (data.deletedLanguages && data.deletedLanguages.length > 0) {
             // Verify deletion in backend
-            await apiAuth('/api/products/verify-after-delete', {
+            await api('/api/products/verify-after-delete', {
               method: 'POST',
               shop,
               body: {
@@ -867,7 +865,7 @@ export default function BulkEdit({ shop: shopProp }) {
         _t: Date.now() // Cache buster
       });
 
-      const data = await apiAuth(`/api/products/list?${params}`, { 
+      const data = await api(`/api/products/list?${params}`, { 
         shop,
         headers: {
           'Cache-Control': 'no-cache',
