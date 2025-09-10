@@ -534,9 +534,12 @@ export default function App() {
     })
     .then(r => r.json())
     .then(data => {
+      console.log('Auth response:', data);
       if (!data.success) {
+        console.log('Redirecting to:', data.redirectUrl);
         window.location.href = data.redirectUrl;
       } else {
+        console.log('Auth success, setting isLoading to false');
         setIsLoading(false);
       }
     })
@@ -545,14 +548,14 @@ export default function App() {
     });
   }, [shop, host]);
 
-  console.log('About to render, isLoading:', isLoading);
+  console.log('App render state:', { isLoading, shop, host });
 
   if (isLoading) {
-    console.log('Showing loading state');
+    console.log('Returning loading state');
     return <div>Loading...</div>;
   }
 
-  console.log('Past loading check, rendering main app');
+  console.log('Returning full app UI');
 
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
