@@ -505,80 +505,70 @@ const translations = {
 };
 
 export default function App() {
-  console.log('App component loaded!');
+  // ===== ЗАПОЧНЕТЕ DEBUG КОДА ТУК =====
+  console.log('[DEBUG] App render START');
   
-  // Всички hooks трябва да са в началото, БЕЗ условия
-  const [isLoading, setIsLoading] = useState(true);
-  const { path } = useRoute();
-  const { lang, setLang, t } = useI18n();
-  
-  // След hooks можете да имате променливи
-  const shop = qs('shop', '');
-  const host = qs('host', '');
-  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
-  
-  console.log('App params:', { shop, host, isEmbedded });
-
-  useEffect(() => {
-    console.log('App useEffect running...');
-    const shop = qs('shop', '');
-    const host = qs('host', '');
-    
-    console.log('About to call /api/auth with:', { shop, host });
-    
-    if (!shop || !host) {
-      console.log('Missing shop or host, stopping auth check');
-      setIsLoading(false);
-      return;
-    }
-    
-    fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shop, host })
-    })
-    .then(r => {
-      console.log('Auth response received, status:', r.status);
-      return r.json();
-    })
-    .then(data => {
-      console.log('Auth response data:', data);
-      if (!data.success) {
-        console.log('Auth failed, redirecting to:', data.redirectUrl);
-        window.location.href = data.redirectUrl;
-      } else {
-        console.log('Auth successful, setting isLoading to false');
-        setIsLoading(false);
-      }
-    })
-    .catch((err) => {
-      console.error('Auth request failed:', err);
-      setIsLoading(false);
-    });
-  }, []);
-
-  console.log('Before render check - isLoading:', isLoading);
-
-  if (isLoading) {
-    console.log('Returning Loading UI');
-    return <div>Loading...</div>;
+  // Вместо: const { path } = useRoute();
+  let path, setPath;
+  try {
+    console.log('[DEBUG] Calling useRoute...');
+    const routeResult = useRoute();
+    path = routeResult.path;
+    setPath = routeResult.setPath;
+    console.log('[DEBUG] useRoute SUCCESS, path:', path);
+  } catch (e) {
+    console.error('[DEBUG] useRoute FAILED:', e);
+    return <div>Error in useRoute: {e.message}</div>;
   }
 
-  console.log('Rendering main app UI');
+  // Вместо: const [lang, setLang] = useState('en');
+  let lang, setLang;
+  try {
+    console.log('[DEBUG] Calling useState for lang...');
+    [lang, setLang] = useState('en');
+    console.log('[DEBUG] useState lang SUCCESS:', lang);
+  } catch (e) {
+    console.error('[DEBUG] useState lang FAILED:', e);
+    return <div>Error in useState: {e.message}</div>;
+  }
 
-  const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'AI Search Optimisation';
-    if (path.startsWith('/billing')) return 'Billing';
-    if (path.startsWith('/settings')) return 'Settings';
-    return 'Dashboard';
-  }, [path]);
+  // Вместо: const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+  let isEmbedded;
+  try {
+    console.log('[DEBUG] Calculating isEmbedded...');
+    isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+    console.log('[DEBUG] isEmbedded SUCCESS:', isEmbedded);
+  } catch (e) {
+    console.error('[DEBUG] isEmbedded FAILED:', e);
+    return <div>Error in isEmbedded: {e.message}</div>;
+  }
 
+  // Вместо: const sectionTitle = useMemo(() => {...}, [path]);
+  let sectionTitle;
+  try {
+    console.log('[DEBUG] Calling useMemo for sectionTitle...');
+    sectionTitle = useMemo(() => {
+      if (path.startsWith('/ai-seo')) return 'AI SEO';
+      if (path.startsWith('/billing')) return 'Billing';
+      if (path.startsWith('/settings')) return 'Settings';
+      return 'Dashboard';
+    }, [path]);
+    console.log('[DEBUG] useMemo SUCCESS, sectionTitle:', sectionTitle);
+  } catch (e) {
+    console.error('[DEBUG] useMemo FAILED:', e);
+    return <div>Error in useMemo: {e.message}</div>;
+  }
+
+  console.log('[DEBUG] All hooks completed, about to render JSX');
+  
+  // ===== КРАЙ НА DEBUG КОДА =====
+  
+  // ===== ВАШИЯТ ОРИГИНАЛЕН RETURN (не го променяйте) =====
   return (
     <AppProvider i18n={I18N}>
-      {/* КОМЕНТИРАЙ ТОЗИ РЕД: {isEmbedded && <AdminNavMenu active={path} />} */}
       <Frame navigation={isEmbedded ? undefined : <SideNav />}>
         <Page>
-          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+          <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={(k, d) => d} />
           {path.startsWith('/ai-seo') ? (
             <AiSearchOptimisationPanel />
           ) : path.startsWith('/billing') ? (
