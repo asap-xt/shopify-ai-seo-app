@@ -6,7 +6,7 @@ export default function ShopifyAppBridgeProvider({children}) {
   const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY
 
   // If no host (opened standalone), don't initialize
-  if (!host || !apiKey) return children
+  if (!host || !apiKey) return <>{children}</>
 
   useEffect(() => {
     // Initialize App Bridge manually

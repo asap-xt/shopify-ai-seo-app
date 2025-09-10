@@ -52,7 +52,6 @@ function useRoute() {
 }
 
 // -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
-/*
 function AdminNavMenu({ active }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo  = active.startsWith('/ai-seo');
@@ -68,7 +67,6 @@ function AdminNavMenu({ active }) {
     </ui-nav-menu>
   );
 }
-*/
 
 // -------- Dashboard
 function DashboardCard() {
@@ -522,15 +520,18 @@ export default function App() {
     return <div>Error in useRoute: {e.message}</div>;
   }
 
-  // Вместо: const [lang, setLang] = useState('en');
-  let lang, setLang;
+  // Вместо: const { lang, setLang, t } = useI18n();
+  let lang, setLang, t;
   try {
-    console.log('[DEBUG] Calling useState for lang...');
-    [lang, setLang] = useState('en');
-    console.log('[DEBUG] useState lang SUCCESS:', lang);
+    console.log('[DEBUG] Calling useI18n...');
+    const i18nResult = useI18n();
+    lang = i18nResult.lang;
+    setLang = i18nResult.setLang;
+    t = i18nResult.t;
+    console.log('[DEBUG] useI18n SUCCESS:', { lang, setLang, t });
   } catch (e) {
-    console.error('[DEBUG] useState lang FAILED:', e);
-    return <div>Error in useState: {e.message}</div>;
+    console.error('[DEBUG] useI18n FAILED:', e);
+    return <div>Error in useI18n: {e.message}</div>;
   }
 
   // Вместо: const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
@@ -542,6 +543,17 @@ export default function App() {
   } catch (e) {
     console.error('[DEBUG] isEmbedded FAILED:', e);
     return <div>Error in isEmbedded: {e.message}</div>;
+  }
+
+  // ТУК ТРЯБВА ДА Е:
+  let shop;
+  try {
+    console.log('[DEBUG] Getting shop parameter...');
+    shop = qs('shop', '');
+    console.log('[DEBUG] shop SUCCESS:', shop);
+  } catch (e) {
+    console.error('[DEBUG] shop FAILED:', e);
+    return <div>Error in shop: {e.message}</div>;
   }
 
   // Вместо: const sectionTitle = useMemo(() => {...}, [path]);
@@ -562,21 +574,32 @@ export default function App() {
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
-  // ВРЕМЕНЕН RETURN ЗА ТЕСТ
   return (
     <ShopifyAppBridgeProvider>
       <AppProvider i18n={I18N}>
+        {isEmbedded && <AdminNavMenu active={path} />}
         <Frame>
           <Page>
-            <Card>
-              <Box padding="400">
-                <Text as="h1" variant="headingLg">App is working!</Text>
-                <Text>Path: {path}</Text>
-                <Text>Lang: {lang}</Text>
-                <Text>Embedded: {isEmbedded ? 'Yes' : 'No'}</Text>
-                <Text>Section: {sectionTitle}</Text>
-              </Box>
-            </Card>
+            <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} />
+            {path === '/' || path.startsWith('/dashboard') ? (
+              <DashboardCard />
+            ) : path.startsWith('/ai-seo') ? (
+              <AiSearchOptimisationPanel />
+            ) : path.startsWith('/billing') ? (
+              <Card>
+                <Box padding="400">
+                  <Text>Billing page</Text>
+                </Box>
+              </Card>
+            ) : path.startsWith('/settings') ? (
+              <Settings shop={shop} />
+            ) : (
+              <Card>
+                <Box padding="400">
+                  <Text>Page not found: {path}</Text>
+                </Box>
+              </Card>
+            )}
           </Page>
         </Frame>
       </AppProvider>
