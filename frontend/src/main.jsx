@@ -25,17 +25,17 @@ if (!host && !shop) {
 } else {
   console.log('Initializing App Bridge...');
   
-  // ВАЖНО: Инициализирайте App Bridge ПРЕДИ React
+  /* ВРЕМЕННО КОМЕНТИРАНО
   const app = createApp({
-    apiKey: '2749a2f6d38ff5796ed256b5c9dc70a1', // Вашият API key
+    apiKey: '2749a2f6d38ff5796ed256b5c9dc70a1',
     host: host,
     forceRedirect: true
   });
   
-  // Сложете app instance в window за достъп от компонентите
   window.__SHOPIFY_APP_BRIDGE__ = app;
+  */
   
-  console.log('App Bridge initialized, rendering React app...');
+  console.log('Rendering React app...');
   
   createRoot(document.getElementById('root')).render(<App />);
 }
