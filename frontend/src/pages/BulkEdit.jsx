@@ -133,7 +133,17 @@ export default function BulkEdit({ shop: shopProp }) {
     }
     console.log('[BULK-EDIT] Making languages API call to:', `/api/languages/shop/${shop}`);
     // оставяме :shop в path (бекендът може да го очаква), но пращаме и session token
-    api(`/api/languages/shop/${shop}`)
+    console.log('[BULK-EDIT] About to call api() function');
+    
+    // Add timeout to detect hanging requests
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('API request timeout after 10 seconds')), 10000);
+    });
+    
+    Promise.race([
+      api(`/api/languages/shop/${shop}`),
+      timeoutPromise
+    ])
       .then((data) => {
         console.log('[BULK-EDIT] Languages API response:', data);
         const langs = Array.isArray(data?.shopLanguages) && data.shopLanguages.length ? data.shopLanguages : ['en'];
@@ -142,6 +152,7 @@ export default function BulkEdit({ shop: shopProp }) {
       })
       .catch((error) => {
         console.error('[BULK-EDIT] Languages API error:', error);
+        console.error('[BULK-EDIT] Error details:', error.message, error.stack);
         setAvailableLanguages(['en']);
       });
   }, [shop, api]);
