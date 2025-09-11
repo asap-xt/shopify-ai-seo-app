@@ -822,6 +822,9 @@ export default function BulkEdit({ shop: shopProp }) {
                 return prod;
               })
             );
+            
+            // Debug log after optimistic update
+            console.log('[BULK-DELETE] State updated, checking first product:', products[0]);
           }
           
           successCount++;
@@ -863,6 +866,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       // Force refetch with delay and cache busting
       setTimeout(() => {
+        console.log('[BULK-DELETE] Triggering reload with timestamp');
         const timestamp = Date.now();
         loadProducts(1, false, timestamp); // Pass timestamp to bypass cache
       }, 500); // Small delay to ensure backend has completed
