@@ -1284,6 +1284,34 @@ export default function BulkEdit({ shop: shopProp }) {
     </Modal>
   );
   
+  // Sync products from Shopify
+  const handleSyncProducts = async () => {
+    try {
+      setLoading(true);
+      setToast('Syncing products from Shopify...');
+      
+      const response = await api('/api/products/sync', {
+        method: 'POST',
+        shop
+      });
+      
+      if (response.success) {
+        setToast(`✅ Synced ${response.synced} products successfully!`);
+        // Reload products after sync
+        setTimeout(() => {
+          loadProducts(1, false, Date.now());
+        }, 1000);
+      } else {
+        throw new Error(response.error || 'Sync failed');
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      setToast(`❌ Sync failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const emptyState = (
     <EmptyState
       heading="No products found"
@@ -1294,9 +1322,10 @@ export default function BulkEdit({ shop: shopProp }) {
         setSelectedTags([]);
         loadProducts(1, false, null);
       }}}
+      secondaryAction={{ content: 'Sync from Shopify', onAction: handleSyncProducts }}
       image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
     >
-      <p>Try adjusting your filters or search terms</p>
+      <p>Try adjusting your filters or search terms, or sync products from Shopify</p>
     </EmptyState>
   );
   
@@ -1346,13 +1375,22 @@ export default function BulkEdit({ shop: shopProp }) {
                 />
                 
                 <BlockStack gap="200">
-                  <Button
-                    primary
-                    onClick={openLanguageModal}
-                    disabled={selectedItems.length === 0 && !selectAllPages}
-                  >
-                    Generate AI Search Optimisation
-                  </Button>
+                  <InlineStack gap="200">
+                    <Button
+                      onClick={handleSyncProducts}
+                      disabled={loading}
+                      size="slim"
+                    >
+                      Sync from Shopify
+                    </Button>
+                    <Button
+                      primary
+                      onClick={openLanguageModal}
+                      disabled={selectedItems.length === 0 && !selectAllPages}
+                    >
+                      Generate AI Search Optimisation
+                    </Button>
+                  </InlineStack>
                   
                   {/* AI Enhanced Search Optimisation Button */}
                   {(() => {
