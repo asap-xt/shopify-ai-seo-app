@@ -1053,6 +1053,8 @@ function strictPrompt(ctx, language) {
 
 async function applySEOForLanguage(req, shop, productId, seo, language, options = {}) {
   console.log('[APPLY-SEO] Starting apply for language:', language, 'productId:', productId);
+  console.log('🔍 [APPLY-SEO] Received SEO data:', JSON.stringify(seo, null, 2));
+  console.log('🔍 [APPLY-SEO] Options:', JSON.stringify(options, null, 2));
 
   // Get language from body (required now)
   if (!language) {
@@ -1160,17 +1162,24 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
 
       const mfRes = await shopGraphQL(req, shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
+      
+      console.log(`🔍 [SEO-APPLY] Metafield response for ${mfKey}:`, JSON.stringify(mfRes, null, 2));
+      
       if (mfErrs.length) {
+        console.error(`🔍 [SEO-APPLY] Metafield errors for ${mfKey}:`, mfErrs);
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
       } else {
+        console.log(`🔍 [SEO-APPLY] Metafield ${mfKey} saved successfully!`);
         // Mark successfully saved metafields
         updated.seoMetafield = true; // Main SEO metafield is always saved
         // Bullets and faq are optional (for higher plans)
         if (v.bullets && Array.isArray(v.bullets) && v.bullets.length > 0) {
           updated.bullets = updateBullets;
+          console.log(`🔍 [SEO-APPLY] Bullets updated: ${v.bullets.length} items`);
         }
         if (v.faq && Array.isArray(v.faq) && v.faq.length > 0) {
           updated.faq = updateFaq;
+          console.log(`🔍 [SEO-APPLY] FAQ updated: ${v.faq.length} items`);
         }
       }
 
