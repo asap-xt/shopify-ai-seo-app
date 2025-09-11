@@ -317,12 +317,16 @@ app.use(
     maxAge: 0, // Disable caching for development
     setHeaders(res, filePath) {
       // Disable caching for all files during development
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
       res.setHeader('Surrogate-Control', 'no-store');
       res.setHeader('Last-Modified', new Date().toUTCString());
-      res.setHeader('ETag', `"${Date.now()}"`);
+      res.setHeader('ETag', `"${Date.now()}-${Math.random()}"`);
+      res.setHeader('Vary', '*');
+      res.setHeader('X-Cache-Bust', Date.now().toString());
+      res.setHeader('X-Timestamp', Date.now().toString());
+      res.setHeader('X-Random', Math.random().toString());
     },
   })
 );
