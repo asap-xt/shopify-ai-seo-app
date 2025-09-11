@@ -620,6 +620,10 @@ function fixupAndValidate(payload) {
   console.log('🔍 [FIXUP] Final FAQ:', p.seo.faq);
 
   const ok = validateSeo(p);
+  if (!ok) {
+    console.log('🔍 [VALIDATION] Schema validation failed:', validateSeo.errors);
+    console.log('🔍 [VALIDATION] Payload being validated:', JSON.stringify(p, null, 2));
+  }
   return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
 }
 
