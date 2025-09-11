@@ -1371,6 +1371,7 @@ export default function BulkEdit({ shop: shopProp }) {
                 onClick={openLanguageModal}
                 disabled={selectedItems.length === 0 && !selectAllPages}
                 size="medium"
+                fullWidth
               >
                 Generate AI Search Optimisation
               </Button>
@@ -1403,6 +1404,7 @@ export default function BulkEdit({ shop: shopProp }) {
                       onClick={() => setShowAIEnhanceModal(true)}
                       disabled={selectedItems.length === 0 && !selectAllPages}
                       size="medium"
+                      fullWidth
                     >
                       AI Enhanced Search Optimisation
                     </Button>
@@ -1420,6 +1422,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   })()}
                   destructive
                   size="medium"
+                  fullWidth
                 >
                   Delete AI Search Optimisation
                 </Button>
