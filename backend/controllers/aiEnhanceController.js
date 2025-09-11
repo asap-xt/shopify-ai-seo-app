@@ -139,7 +139,7 @@ router.post('/product', verifyRequest, async (req, res) => {
           }
         `;
         
-        const data = await shopGraphQL(shop, query, { productId });
+        const data = await shopGraphQL(req, shop, query, { productId });
         console.log(`🔍 [DEBUG] Current SEO found:`, !!data?.product?.metafield?.value);
         
         if (!data?.product?.metafield?.value) {
@@ -249,7 +249,7 @@ router.post('/collection', verifyRequest, async (req, res) => {
           }
         `;
         
-        const data = await shopGraphQL(shop, query, { collectionId });
+        const data = await shopGraphQL(req, shop, query, { collectionId });
         
         if (!data?.collection?.metafield?.value) {
           results.push({ language, error: 'No basic SEO found' });
