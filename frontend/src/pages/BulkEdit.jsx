@@ -1378,15 +1378,6 @@ export default function BulkEdit({ shop: shopProp }) {
             
             <Box>
               <InlineStack gap="300" align="center">
-                <Select
-                  label=""
-                  options={sortOptions}
-                  value={sortOrder === 'desc' ? 'newest' : 'oldest'}
-                  onChange={(value) => {
-                    setSortOrder(value === 'newest' ? 'desc' : 'asc');
-                  }}
-                />
-                
                 <BlockStack gap="200">
                   <Button
                     primary
@@ -1455,8 +1446,9 @@ export default function BulkEdit({ shop: shopProp }) {
         <Card>
           {/* Filter buttons */}
           <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-            <InlineStack gap="200" wrap>
-              {/* AI Search Status filter */}
+            <InlineStack gap="200" wrap align="space-between">
+              <InlineStack gap="200" wrap>
+                {/* AI Search Status filter */}
               <Popover
                 active={showOptimizedPopover}
                 activator={
@@ -1592,6 +1584,19 @@ export default function BulkEdit({ shop: shopProp }) {
                   </Box>
                 </Box>
               </Popover>
+              </InlineStack>
+              
+              {/* Sort dropdown - moved from top */}
+              <Box>
+                <Select
+                  label=""
+                  options={sortOptions}
+                  value={sortOrder === 'desc' ? 'newest' : 'oldest'}
+                  onChange={(value) => {
+                    setSortOrder(value === 'newest' ? 'desc' : 'asc');
+                  }}
+                />
+              </Box>
             </InlineStack>
             
             {/* Applied filters */}
