@@ -78,6 +78,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
   const [showLanguagePopover, setShowLanguagePopover] = useState(false);
   const [showTagsPopover, setShowTagsPopover] = useState(false);
+  const [showSortPopover, setShowSortPopover] = useState(false);
   
   // SEO generation state
   const [model, setModel] = useState('');
@@ -1350,9 +1351,32 @@ export default function BulkEdit({ shop: shopProp }) {
     <>
       <Card>
         <Box padding="400">
-          {/* Sync button above search */}
-          <Box paddingBlockEnd="300">
-            <InlineStack gap="200" align="start">
+          <BlockStack gap="300">
+            {/* First row: Search bar + Generate AI button */}
+            <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+              <Box minWidth="400px">
+                <TextField
+                  label=""
+                  placeholder="Search by product ID, name, or details..."
+                  value={searchValue}
+                  onChange={handleSearch}
+                  prefix={<SearchIcon />}
+                  clearButton
+                  onClearButtonClick={() => handleSearch('')}
+                />
+              </Box>
+              
+              <Button
+                primary
+                onClick={openLanguageModal}
+                disabled={selectedItems.length === 0 && !selectAllPages}
+              >
+                Generate AI Search Optimisation
+              </Button>
+            </InlineStack>
+            
+            {/* Second row: Sync Products + Delete AI button */}
+            <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
               <Button
                 onClick={handleSyncProducts}
                 disabled={loading}
@@ -1360,75 +1384,45 @@ export default function BulkEdit({ shop: shopProp }) {
               >
                 Sync Products
               </Button>
-            </InlineStack>
-          </Box>
-          
-          <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-            <Box minWidth="400px">
-              <TextField
-                label=""
-                placeholder="Search by product ID, name, or details..."
-                value={searchValue}
-                onChange={handleSearch}
-                prefix={<SearchIcon />}
-                clearButton
-                onClearButtonClick={() => handleSearch('')}
-              />
-            </Box>
-            
-            <Box>
-              <InlineStack gap="300" align="center">
-                <BlockStack gap="200">
-                  <Button
-                    primary
-                    onClick={openLanguageModal}
-                    disabled={selectedItems.length === 0 && !selectAllPages}
-                  >
-                    Generate AI Search Optimisation
-                  </Button>
+              
+              <InlineStack gap="200">
+                {/* AI Enhanced Search Optimisation Button */}
+                {(() => {
+                  if (selectedItems.length === 0 && !selectAllPages) return null;
                   
-                  {/* AI Enhanced Search Optimisation Button */}
-                  {(() => {
-                    if (selectedItems.length === 0 && !selectAllPages) return null;
-                    
+                  const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                  const hasOptimizedProducts = selectedProducts.some(p => 
+                    p.optimizationSummary?.optimizedLanguages?.length > 0
+                  );
+                  
+                  if (!hasOptimizedProducts) return null;
+                  
+                  return (
+                    <Button
+                      onClick={() => setShowAIEnhanceModal(true)}
+                      disabled={selectedItems.length === 0 && !selectAllPages}
+                    >
+                      AI Enhanced Search Optimisation
+                    </Button>
+                  );
+                })()}
+                
+                <Button
+                  onClick={openDeleteModal}
+                  disabled={(selectedItems.length === 0 && !selectAllPages) || (() => {
                     const selectedProducts = products.filter(p => selectedItems.includes(p._id));
                     const hasOptimizedProducts = selectedProducts.some(p => 
                       p.optimizationSummary?.optimizedLanguages?.length > 0
                     );
-                    
-                    if (!hasOptimizedProducts) return null;
-                    
-                    return (
-                      <Button
-                        onClick={() => setShowAIEnhanceModal(true)}
-                        disabled={selectedItems.length === 0 && !selectAllPages}
-                      >
-                        AI Enhanced Search Optimisation
-                      </Button>
-                    );
+                    return !hasOptimizedProducts;
                   })()}
-                  
-                  <Button
-                    onClick={openDeleteModal}
-                    disabled={(() => {
-                      if (selectedItems.length === 0 && !selectAllPages) return true;
-                      
-                      // Check if any selected product has optimization
-                      const selectedProducts = products.filter(p => selectedItems.includes(p._id));
-                      const hasOptimizedProducts = selectedProducts.some(p => 
-                        p.optimizationSummary?.optimizedLanguages?.length > 0
-                      );
-                      
-                      return !hasOptimizedProducts;
-                    })()}
-                    destructive
-                  >
-                    Delete AI Search Optimisation
-                  </Button>
-                </BlockStack>
+                  destructive
+                >
+                  Delete AI Search Optimisation
+                </Button>
               </InlineStack>
-            </Box>
-          </InlineStack>
+            </InlineStack>
+          </BlockStack>
           
           {totalCount > 0 && (
             <Box paddingBlockStart="300">
@@ -1586,17 +1580,38 @@ export default function BulkEdit({ shop: shopProp }) {
               </Popover>
               </InlineStack>
               
-              {/* Sort dropdown - moved from top */}
-              <Box>
-                <Select
-                  label=""
-                  options={sortOptions}
-                  value={sortOrder === 'desc' ? 'newest' : 'oldest'}
-                  onChange={(value) => {
-                    setSortOrder(value === 'newest' ? 'desc' : 'asc');
-                  }}
-                />
-              </Box>
+              {/* Sort dropdown - same style as other filters */}
+              <Popover
+                active={showSortPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowSortPopover(!showSortPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>{sortOrder === 'desc' ? 'Newest first' : 'Oldest first'}</span>
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowSortPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="Sort Order"
+                    titleHidden
+                    choices={[
+                      { label: 'Newest first', value: 'desc' },
+                      { label: 'Oldest first', value: 'asc' },
+                    ]}
+                    selected={[sortOrder]}
+                    onChange={(value) => {
+                      setSortOrder(value[0]);
+                      setShowSortPopover(false);
+                    }}
+                  />
+                </Box>
+              </Popover>
             </InlineStack>
             
             {/* Applied filters */}
