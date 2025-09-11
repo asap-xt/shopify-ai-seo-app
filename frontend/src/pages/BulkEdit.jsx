@@ -350,11 +350,11 @@ export default function BulkEdit({ shop: shopProp }) {
                 return {
                   language: r.language,
                   seo: {
-                    // Ensure all required fields are present with defensive checks
-                    title: existingSeo.title || existingSeo.jsonLd?.name || product.title || 'Product',
-                    metaDescription: existingSeo.metaDescription || existingSeo.jsonLd?.description || product.description || '',
-                    slug: existingSeo.slug || product.handle || `product-${product.productId}`,
-                    bodyHtml: existingSeo.bodyHtml || product.descriptionHtml || `<p>${product.description || 'Product description'}</p>`,
+                    // Use ONLY existing localized data - NO fallback to English product data
+                    title: existingSeo.title || existingSeo.jsonLd?.name || `Product ${product.productId}`,
+                    metaDescription: existingSeo.metaDescription || existingSeo.jsonLd?.description || 'Product description',
+                    slug: existingSeo.slug || `product-${product.productId}`,
+                    bodyHtml: existingSeo.bodyHtml || `<p>Product description</p>`,
                     bullets: r.bullets || [],  // AI-generated bullets (ensure array)
                     faq: r.faq || [],         // AI-generated FAQ (ensure array)
                     imageAlt: existingSeo.imageAlt || [],
