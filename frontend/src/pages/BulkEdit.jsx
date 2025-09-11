@@ -356,6 +356,7 @@ export default function BulkEdit({ shop: shopProp }) {
             };
             
             console.log(`🔍 [AI-ENHANCE] Applying data for product ${product.productId}:`, applyData);
+            console.log(`🔍 [AI-ENHANCE] First result SEO object:`, JSON.stringify(applyData.results[0]?.seo, null, 2));
             
             const applyResult = await api('/api/seo/apply-multi', {
               method: 'POST',
