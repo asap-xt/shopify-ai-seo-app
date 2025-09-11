@@ -3,16 +3,34 @@ import jwt from 'jsonwebtoken';
 import Shop from '../db/Shop.js';
 
 export async function verifyRequest(req, res, next) {
+  console.log('[VERIFY-REQUEST] ===== MIDDLEWARE CALLED =====');
   console.log('[VERIFY-REQUEST] Starting verification for:', req.originalUrl);
+  console.log('[VERIFY-REQUEST] Method:', req.method);
+  console.log('[VERIFY-REQUEST] Params:', req.params);
   const sessionToken = req.headers.authorization?.replace('Bearer ', '');
   console.log('[VERIFY-REQUEST] Session token:', sessionToken ? 'present' : 'missing');
   console.log('[VERIFY-REQUEST] Query shop:', req.query?.shop);
   
-  // Development bypass - if no session token but we have shop in query, allow it
-  console.log('[VERIFY-REQUEST] Checking conditions:', { sessionToken: !!sessionToken, shop: req.query?.shop });
-  if (!sessionToken && req.query?.shop) {
-    console.log('[VERIFY-REQUEST] Development bypass for shop:', req.query.shop);
-    req.shopDomain = req.query.shop;
+  // Extract shop from URL path if present (e.g., /api/languages/shop/shopname.myshopify.com)
+  let shopFromPath = null;
+  const pathMatch = req.originalUrl.match(/\/shop\/([^\/\?]+)/);
+  if (pathMatch) {
+    shopFromPath = pathMatch[1];
+    console.log('[VERIFY-REQUEST] Shop from path:', shopFromPath);
+  }
+  
+  // Also check req.params for shop parameter
+  if (req.params?.shop) {
+    shopFromPath = req.params.shop;
+    console.log('[VERIFY-REQUEST] Shop from params:', shopFromPath);
+  }
+  
+  // Development bypass - if no session token but we have shop in query or path, allow it
+  const shop = req.query?.shop || shopFromPath;
+  console.log('[VERIFY-REQUEST] Checking conditions:', { sessionToken: !!sessionToken, shop });
+  if (!sessionToken && shop) {
+    console.log('[VERIFY-REQUEST] Development bypass for shop:', shop);
+    req.shopDomain = shop;
     req.shopAccessToken = 'mock-token-for-development';
     console.log('[VERIFY-REQUEST] About to call next()');
     try {

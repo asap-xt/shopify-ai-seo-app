@@ -217,6 +217,9 @@ const router = express.Router();
 
 /** GET /api/languages/shop/:shop */
 router.get('/shop/:shop', verifyRequest, async (req, res) => {
+  console.log('[LANGUAGE-ENDPOINT] ===== HANDLER CALLED =====');
+  console.log('[LANGUAGE-ENDPOINT] req.shopDomain:', req.shopDomain);
+  console.log('[LANGUAGE-ENDPOINT] req.params:', req.params);
   const shop = req.shopDomain;
   console.log('[LANGUAGE-ENDPOINT] Starting with shop:', shop);
   

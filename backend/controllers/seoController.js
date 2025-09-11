@@ -498,7 +498,7 @@ function canonLang(locale) {
 /* --------------------------- Locales & translations --------------------------- */
 
 // 1) Published shop locales (e.g. ["en-US","bg-BG"]), filtered to published only.
-async function getShopPublishedLocales(shop) {
+async function getShopPublishedLocales(req, shop) {
   const Q = `query { shopLocales { locale published } }`;
   const d = await shopGraphQL(req, shop, Q);
   const list = (d?.shopLocales || [])
@@ -508,7 +508,7 @@ async function getShopPublishedLocales(shop) {
 }
 
 // 2) Does the product have real translated content for given locale?
-async function hasProductTranslation(shop, productId, locale) {
+async function hasProductTranslation(req, shop, productId, locale) {
   const Q = `
     query($id: ID!, $locale: String!) {
       product(id: $id) {
@@ -527,7 +527,7 @@ async function hasProductTranslation(shop, productId, locale) {
 }
 
 // 3) Fetch localized product fields (title/body/seo_*) for a locale
-async function getProductLocalizedContent(shop, productId, localeInput) {
+async function getProductLocalizedContent(req, shop, productId, localeInput) {
   const locale = String(localeInput || 'en');
   const Q = `
     query($id: ID!, $locale: String!) {
@@ -750,11 +750,11 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     const isAll = String(language || '').toLowerCase() === 'all';
     if (isAll) {
       // 1) Get published shop locales
-      const shopLocales = await getShopPublishedLocales(shop);
+      const shopLocales = await getShopPublishedLocales(req, shop);
       // 2) Keep only those with real product translations
       const langs = [];
       for (const loc of shopLocales) {
-        if (await hasProductTranslation(shop, productId, loc)) {
+        if (await hasProductTranslation(req, shop, productId, loc)) {
           const short = canonLang(loc);
           if (!langs.includes(short)) langs.push(short); // dedupe
         }
@@ -763,7 +763,7 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
       const results = [];
       for (const lang of langs) {
         try {
-          const result = await generateSEOForLanguage(shop, productId, model, lang);
+          const result = await generateSEOForLanguage(req, shop, productId, model, lang);
           results.push(result);
         } catch (error) {
           results.push({
@@ -796,7 +796,7 @@ const isPrimary = langNorm.toLowerCase() === primaryLang.toLowerCase();
 
 // Only check for translations if NOT primary language
 if (!isPrimary) {
-  const hasLoc = await hasProductTranslation(shop, productId, language);
+  const hasLoc = await hasProductTranslation(req, shop, productId, language);
   if (!hasLoc) {
     return res.status(400).json({
       error: 'Product is not translated to the requested language',
@@ -805,7 +805,7 @@ if (!isPrimary) {
   }
 }
 
-const result = await generateSEOForLanguage(shop, productId, model, language);
+const result = await generateSEOForLanguage(req, shop, productId, model, language);
 return res.json(result);
 
   } catch (e) {
@@ -815,7 +815,7 @@ return res.json(result);
   }
 });
 
-async function generateSEOForLanguage(shop, productId, model, language) {
+async function generateSEOForLanguage(req, shop, productId, model, language) {
   console.log('🟡 [GENERATE] Starting generation for language:', language, 'model:', model);
   console.log('🚀 [LOCAL MODE] Using product data directly - NO AI costs!');
   
@@ -871,7 +871,7 @@ async function generateSEOForLanguage(shop, productId, model, language) {
     seoDescription = p.seo?.description || '';
   } else {
     // For other languages, require translations
-    const loc = await getProductLocalizedContent(shop, productId, language);
+    const loc = await getProductLocalizedContent(req, shop, productId, language);
     if (!loc?.hasAny) {
       const e = new Error('No translated content for requested language');
       e.status = 400;
@@ -1015,38 +1015,15 @@ function strictPrompt(ctx, language) {
   ];
 }
 
-router.post('/seo/apply', validateRequest(), async (req, res) => {
-  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
+async function applySEOForLanguage(req, shop, productId, seo, language, options = {}) {
+  console.log('[APPLY-SEO] Starting apply for language:', language, 'productId:', productId);
 
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
-
-  if (!shop) {
-    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
+  // Get language from body (required now)
+  if (!language) {
+    throw new Error("Missing 'language' for apply");
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
-    const shop = req.shopDomain;
-
-    const { productId, seo, options = {}, language } = req.body;
-    if (!productId) return res.status(400).json({ error: 'Missing productId' });
-
-    // Get language from body (required now)
-    if (!language) {
-      return res.status(400).json({ error: "Missing 'language' for /seo/apply" });
-    }
-
     // Validate and get shop locales
     const Q_SHOP_LOCALES = `
       query ShopLocales {
@@ -1254,7 +1231,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
       console.error('Failed to update AI feed:', e);
     }
 
-    res.json({ 
+    return { 
       ok: errors.length === 0, 
       shop, 
       productId, 
@@ -1262,7 +1239,40 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
       errors,
       language,
       isPrimary 
-    });
+    };
+  } catch (e) {
+    throw e;
+  }
+}
+
+router.post('/seo/apply', validateRequest(), async (req, res) => {
+  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
+    queryShop: req.query?.shop,
+    bodyShop: req.body?.shop,
+    sessionShop: res.locals?.shopify?.session?.shop,
+  });
+
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  // Тук логни и от къде четеш Admin API токена:
+  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
+  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
+
+  try {
+    const shop = req.shopDomain;
+    const { productId, seo, options = {}, language } = req.body;
+    if (!productId) return res.status(400).json({ error: 'Missing productId' });
+
+    const result = await applySEOForLanguage(req, shop, productId, seo, language, options);
+    res.json(result);
   } catch (e) {
     res.status(e.status || 500).json({ ok: false, error: e.message || String(e) });
   }
@@ -2495,4 +2505,5 @@ router.delete('/collections/delete-seo', verifyRequest, async (req, res) => {
   }
 });
 
+export { applySEOForLanguage };
 export default router;

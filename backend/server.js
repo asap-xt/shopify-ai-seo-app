@@ -82,10 +82,24 @@ app.get('/debug/sessions', async (req, res) => {
 // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
 app.use('/api', async (req, res, next) => {
   try {
+    console.log('[API-RESOLVER] ===== API MIDDLEWARE CALLED =====');
+    console.log('[API-RESOLVER] URL:', req.originalUrl);
+    console.log('[API-RESOLVER] Method:', req.method);
+    
     // 1) resolve shop от различни места
     const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'] || null;
     const sessionShop = res.locals?.shopify?.session?.shop || null; // ако си ползвал validateAuthenticatedSession() по-нагоре
-    const shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || null;
+    
+    // Extract shop from URL path if present (e.g., /api/languages/shop/shopname.myshopify.com)
+    let shopFromPath = null;
+    const pathMatch = req.originalUrl.match(/\/shop\/([^\/\?]+)/);
+    if (pathMatch) {
+      shopFromPath = pathMatch[1];
+      console.log('[API-RESOLVER] Shop from path:', shopFromPath);
+    }
+    
+    const shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || shopFromPath || null;
+    console.log('[API-RESOLVER] Resolved shop:', shop);
     if (!shop) return res.status(400).json({ error: 'Missing shop' });
     if (!req.query) req.query = {};
     if (!req.query.shop) req.query.shop = shop;
@@ -511,7 +525,9 @@ async function start() {
 
 // Catch-all for any unmatched routes - should be last
 app.get('*', (req, res) => {
+  console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
   console.log('[CATCH-ALL] Unmatched route:', req.url);
+  console.log('[CATCH-ALL] Method:', req.method);
   // Check if it's an app request
   if (req.url.includes('/apps/')) {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');

@@ -138,27 +138,12 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         continue;
       }
       try {
-        const url = `${APP_URL}/seo/apply?shop=${encodeURIComponent(shop)}`;
-        const rsp = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Cookie: req.headers.cookie || '',
-          },
-          body: JSON.stringify({ 
-            shop, 
-            productId, 
-            language: r.language,
-            seo: r.seo, 
-            options 
-          })
-        });
-        const text = await rsp.text();
-        let json;
-        try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
-        console.log(`[MULTI-SEO] Apply result for ${r.language}:`, json?.ok ? 'SUCCESS' : 'FAILED', json);
-        if (!rsp.ok || json?.ok === false) {
-          const err = json?.errors?.join('; ') || json?.error || `Apply failed (${rsp.status})`;
+        // Import the apply function directly instead of making HTTP request
+        const { applySEOForLanguage } = await import('./seoController.js');
+        const result = await applySEOForLanguage(req, shop, productId, r.seo, r.language, options);
+        console.log(`[MULTI-SEO] Apply result for ${r.language}:`, result?.ok ? 'SUCCESS' : 'FAILED', result);
+        if (!result?.ok) {
+          const err = result?.errors?.join('; ') || result?.error || 'Apply failed';
           errors.push(`[${r.language}] ${err}`);
         } else {
           // Добавяме успешно приложените езици
