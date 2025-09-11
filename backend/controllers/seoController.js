@@ -2241,43 +2241,48 @@ router.delete('/seo/delete', verifyRequest, async (req, res) => {
       errors.push(`Metafield deletion failed: ${e.message}`);
     }
     
-    // 2. Update MongoDB
+    // 2. Update MongoDB using Mongoose model
     try {
       console.log('[DELETE-SEO] Updating MongoDB for product ID:', productId);
       
       // Extract numeric ID
       const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
       
-      // Direct MongoDB update using mongoose
-      const db = mongoose.connection.db;
-      const collection = db.collection('shopify_products');
+      // Import Product model
+      const Product = (await import('../db/Product.js')).default;
       
-      // Remove the language from languages array
-      await collection.updateOne(
-        { shop, productId: numericId },
-        { 
-          $pull: { 
-            'seoStatus.languages': { code: language } 
-          } 
+      // Find the product first
+      const product = await Product.findOne({ shop, productId: numericId });
+      
+      if (product && product.seoStatus?.languages) {
+        const langCode = language.toLowerCase();
+        
+        // Filter out the language to delete
+        const updatedLanguages = product.seoStatus.languages.filter(l => l.code !== langCode);
+        
+        // Update the product
+        const updateResult = await Product.findOneAndUpdate(
+          { shop, productId: numericId },
+          { 
+            $set: { 
+              'seoStatus.languages': updatedLanguages,
+              'seoStatus.optimized': updatedLanguages.some(l => l.optimized)
+            }
+          },
+          { new: true }
+        );
+        
+        if (updateResult) {
+          deleted.mongodb = true;
+          console.log('[DELETE-SEO] MongoDB updated successfully');
+          console.log('[DELETE-SEO] Remaining languages:', updatedLanguages.map(l => l.code));
+        } else {
+          console.log('[DELETE-SEO] MongoDB update failed - document not found');
+          errors.push('Failed to update optimization status in database');
         }
-      );
-      
-      // Get updated document to check remaining languages
-      const updatedDoc = await collection.findOne({ shop, productId: numericId });
-      const remainingOptimized = updatedDoc?.seoStatus?.languages?.filter(l => l.optimized) || [];
-      
-      // Update optimized flag
-      await collection.updateOne(
-        { shop, productId: numericId },
-        { 
-          $set: { 
-            'seoStatus.optimized': remainingOptimized.length > 0 
-          } 
-        }
-      );
-      
-      deleted.mongodb = true;
-      console.log('[DELETE-SEO] MongoDB updated successfully');
+      } else {
+        console.log('[DELETE-SEO] Product not found in MongoDB or no seoStatus');
+      }
       
     } catch (e) {
       console.error('[DELETE-SEO] MongoDB error:', e);
