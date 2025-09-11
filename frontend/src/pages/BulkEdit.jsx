@@ -350,13 +350,13 @@ export default function BulkEdit({ shop: shopProp }) {
                 return {
                   language: r.language,
                   seo: {
-                    // Use existing data from jsonLd/SEO, only replace bullets & FAQ with AI-generated
+                    // Ensure all required fields are present with defensive checks
                     title: existingSeo.title || existingSeo.jsonLd?.name || product.title || 'Product',
-                    metaDescription: existingSeo.metaDescription || existingSeo.jsonLd?.description || product.description || 'Product description',
+                    metaDescription: existingSeo.metaDescription || existingSeo.jsonLd?.description || product.description || '',
                     slug: existingSeo.slug || product.handle || `product-${product.productId}`,
                     bodyHtml: existingSeo.bodyHtml || product.descriptionHtml || `<p>${product.description || 'Product description'}</p>`,
-                    bullets: r.bullets,  // AI-generated bullets
-                    faq: r.faq,         // AI-generated FAQ
+                    bullets: r.bullets || [],  // AI-generated bullets (ensure array)
+                    faq: r.faq || [],         // AI-generated FAQ (ensure array)
                     imageAlt: existingSeo.imageAlt || [],
                     jsonLd: existingSeo.jsonLd || {} // Preserve existing jsonLd
                   }

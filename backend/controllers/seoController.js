@@ -593,31 +593,31 @@ function fixupAndValidate(payload) {
     p.seo.slug = `${base}-${gidTail(p.productId)}`.replace(/-+$/, '');
   }
 
-  // bullets
-  let bullets = Array.isArray(p.seo.bullets) ? p.seo.bullets : [];
-  bullets = bullets
-    .map((s) => String(s || '').trim())
-    .filter((s) => s.length >= 2)
-    .slice(0, 10);
-  
-  // Add default bullets if not enough
-  while (bullets.length < 2) {
-    bullets.push('Great value');
+  // bullets - preserve AI-generated bullets if they exist
+  if (Array.isArray(p.seo.bullets) && p.seo.bullets.length > 0) {
+    // Just clean them, don't replace with defaults
+    p.seo.bullets = p.seo.bullets
+      .map((s) => String(s || '').trim())
+      .filter((s) => s.length >= 2)
+      .slice(0, 10)
+      .map((s) => s.slice(0, 160));
+  } else {
+    // Only add defaults if no bullets provided
+    p.seo.bullets = ['Great value', 'Quality product'];
   }
-  
-  p.seo.bullets = bullets.map((s) => s.slice(0, 160));
 
-  // faq
-  let faq = Array.isArray(p.seo.faq) ? p.seo.faq : [];
-  faq = faq
-    .filter((x) => x && typeof x === 'object')
-    .map((x) => ({
-      q: clamp(String(x.q || '').trim(), 160),
-      a: clamp(String(x.a || '').trim(), 400),
-    }))
-    .filter((x) => x.q.length >= 3 && x.a.length >= 3)
-    .slice(0, 10);
-  p.seo.faq = faq;
+  // faq - preserve AI-generated FAQ
+  if (Array.isArray(p.seo.faq) && p.seo.faq.length > 0) {
+    p.seo.faq = p.seo.faq
+      .filter((x) => x && typeof x === 'object')
+      .map((x) => ({
+        q: clamp(String(x.q || '').trim(), 160),
+        a: clamp(String(x.a || '').trim(), 400),
+      }))
+      .filter((x) => x.q.length >= 3 && x.a.length >= 3)
+      .slice(0, 10);
+  }
+  // Don't add default FAQ if none provided
 
   // REMOVED jsonLd fixup/validation code
 
@@ -1054,6 +1054,8 @@ function strictPrompt(ctx, language) {
 async function applySEOForLanguage(req, shop, productId, seo, language, options = {}) {
   console.log('[APPLY-SEO] Starting apply for language:', language, 'productId:', productId);
   console.log('🔍 [APPLY-SEO] Received SEO data:', JSON.stringify(seo, null, 2));
+  console.log('🔍 [APPLY-SEO] SEO bullets:', seo?.bullets);
+  console.log('🔍 [APPLY-SEO] SEO FAQ:', seo?.faq);
   console.log('🔍 [APPLY-SEO] Options:', JSON.stringify(options, null, 2));
 
   // Get language from body (required now)

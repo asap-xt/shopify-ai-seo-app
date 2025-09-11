@@ -147,9 +147,23 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
       try {
         console.log(`🔍 [APPLY-MULTI] Processing language ${r.language} with SEO data:`, JSON.stringify(r.seo, null, 2));
         
+        // Create a complete SEO object with all required fields
+        const completeSeo = {
+          title: r.seo.title || 'Product',
+          metaDescription: r.seo.metaDescription || '',
+          slug: r.seo.slug || 'product',
+          bodyHtml: r.seo.bodyHtml || '<p>Product</p>',
+          bullets: r.seo.bullets || [],  // Keep the AI-generated bullets
+          faq: r.seo.faq || [],          // Keep the AI-generated FAQ
+          imageAlt: r.seo.imageAlt || [],
+          jsonLd: r.seo.jsonLd || {}
+        };
+        
+        console.log(`🔍 [APPLY-MULTI] Complete SEO object for ${r.language}:`, JSON.stringify(completeSeo, null, 2));
+        
         // Import the apply function directly instead of making HTTP request
         const { applySEOForLanguage } = await import('./seoController.js');
-        const result = await applySEOForLanguage(req, shop, productId, r.seo, r.language, options);
+        const result = await applySEOForLanguage(req, shop, productId, completeSeo, r.language, options);
         console.log(`[MULTI-SEO] Apply result for ${r.language}:`, result?.ok ? 'SUCCESS' : 'FAILED', result);
         if (!result?.ok) {
           const err = result?.errors?.join('; ') || result?.error || 'Apply failed';
