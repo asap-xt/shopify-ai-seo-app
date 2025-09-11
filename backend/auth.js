@@ -116,7 +116,7 @@ async function exchangeToken(shop, code) {
 
 async function registerWebhooks(shop, accessToken) {
   const topics = [
-    { topic: 'products/update',  address: `${APP_URL}/webhooks/products/update`,  format: 'json' },
+    { topic: 'products/update',  address: `${APP_URL}/webhooks/products`,  format: 'json' },
     { topic: 'app/uninstalled',  address: `${APP_URL}/webhooks/app/uninstalled`, format: 'json' },
   ];
 

@@ -1350,6 +1350,19 @@ export default function BulkEdit({ shop: shopProp }) {
     <>
       <Card>
         <Box padding="400">
+          {/* Sync button above search */}
+          <Box paddingBlockEnd="300">
+            <InlineStack gap="200" align="start">
+              <Button
+                onClick={handleSyncProducts}
+                disabled={loading}
+                size="medium"
+              >
+                Sync Products
+              </Button>
+            </InlineStack>
+          </Box>
+          
           <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
             <Box minWidth="400px">
               <TextField
@@ -1375,22 +1388,13 @@ export default function BulkEdit({ shop: shopProp }) {
                 />
                 
                 <BlockStack gap="200">
-                  <InlineStack gap="200">
-                    <Button
-                      onClick={handleSyncProducts}
-                      disabled={loading}
-                      size="slim"
-                    >
-                      Sync from Shopify
-                    </Button>
-                    <Button
-                      primary
-                      onClick={openLanguageModal}
-                      disabled={selectedItems.length === 0 && !selectAllPages}
-                    >
-                      Generate AI Search Optimisation
-                    </Button>
-                  </InlineStack>
+                  <Button
+                    primary
+                    onClick={openLanguageModal}
+                    disabled={selectedItems.length === 0 && !selectAllPages}
+                  >
+                    Generate AI Search Optimisation
+                  </Button>
                   
                   {/* AI Enhanced Search Optimisation Button */}
                   {(() => {
