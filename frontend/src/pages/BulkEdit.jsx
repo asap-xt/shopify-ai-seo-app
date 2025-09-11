@@ -338,20 +338,28 @@ export default function BulkEdit({ shop: shopProp }) {
             const applyData = {
               shop,
               productId: product.gid || `gid://shopify/Product/${product.productId}`,
-              results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
-                language: r.language,
-                seo: {
-                  // Keep existing SEO data and only update bullets & FAQ
-                  title: product.title || 'Product',
-                  metaDescription: product.description || 'Product description',
-                  slug: product.handle || `product-${product.productId}`,
-                  bodyHtml: product.descriptionHtml || `<p>${product.description || 'Product description'}</p>`,
-                  bullets: r.bullets,
-                  faq: r.faq,
-                  imageAlt: [],
-                  jsonLd: {}
-                }
-              })),
+              results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
+                // Get existing SEO data from the language-specific seoStatus
+                const existingLanguageData = product.seoStatus?.languages?.find(l => l.code === r.language);
+                const existingSeo = existingLanguageData?.seo || {};
+                
+                console.log(`🔍 [AI-ENHANCE] Language ${r.language} - existing SEO:`, JSON.stringify(existingSeo, null, 2));
+                
+                return {
+                  language: r.language,
+                  seo: {
+                    // Use existing data from jsonLd/SEO, only replace bullets & FAQ with AI-generated
+                    title: existingSeo.title || existingSeo.jsonLd?.name || product.title || 'Product',
+                    metaDescription: existingSeo.metaDescription || existingSeo.jsonLd?.description || product.description || 'Product description',
+                    slug: existingSeo.slug || product.handle || `product-${product.productId}`,
+                    bodyHtml: existingSeo.bodyHtml || product.descriptionHtml || `<p>${product.description || 'Product description'}</p>`,
+                    bullets: r.bullets,  // AI-generated bullets
+                    faq: r.faq,         // AI-generated FAQ
+                    imageAlt: existingSeo.imageAlt || [],
+                    jsonLd: existingSeo.jsonLd || {} // Preserve existing jsonLd
+                  }
+                };
+              }),
               options: { updateBullets: true, updateFaq: true }
             };
             
