@@ -1366,15 +1366,17 @@ export default function BulkEdit({ shop: shopProp }) {
                 />
               </Box>
               
-              <Button
-                primary
-                onClick={openLanguageModal}
-                disabled={selectedItems.length === 0 && !selectAllPages}
-                size="medium"
-                fullWidth
-              >
-                Generate AI Search Optimisation
-              </Button>
+              <Box width="320px">
+                <Button
+                  primary
+                  onClick={openLanguageModal}
+                  disabled={selectedItems.length === 0 && !selectAllPages}
+                  size="medium"
+                  fullWidth
+                >
+                  Generate AI Search Optimisation
+                </Button>
+              </Box>
             </InlineStack>
             
             {/* Second row: Sync Products + Dynamic right side */}
@@ -1387,46 +1389,48 @@ export default function BulkEdit({ shop: shopProp }) {
                 Sync Products
               </Button>
               
-              <BlockStack gap="200" align="end">
-                {/* AI Enhanced Search Optimisation Button - between Generate and Delete */}
-                {(() => {
-                  if (selectedItems.length === 0 && !selectAllPages) return null;
-                  
-                  const selectedProducts = products.filter(p => selectedItems.includes(p._id));
-                  const hasOptimizedProducts = selectedProducts.some(p => 
-                    p.optimizationSummary?.optimizedLanguages?.length > 0
-                  );
-                  
-                  if (!hasOptimizedProducts) return null;
-                  
-                  return (
-                    <Button
-                      onClick={() => setShowAIEnhanceModal(true)}
-                      disabled={selectedItems.length === 0 && !selectAllPages}
-                      size="medium"
-                      fullWidth
-                    >
-                      AI Enhanced Search Optimisation
-                    </Button>
-                  );
-                })()}
-                
-                <Button
-                  onClick={openDeleteModal}
-                  disabled={(selectedItems.length === 0 && !selectAllPages) || (() => {
+              <Box width="320px">
+                <BlockStack gap="200" align="end">
+                  {/* AI Enhanced Search Optimisation Button - between Generate and Delete */}
+                  {(() => {
+                    if (selectedItems.length === 0 && !selectAllPages) return null;
+                    
                     const selectedProducts = products.filter(p => selectedItems.includes(p._id));
                     const hasOptimizedProducts = selectedProducts.some(p => 
                       p.optimizationSummary?.optimizedLanguages?.length > 0
                     );
-                    return !hasOptimizedProducts;
+                    
+                    if (!hasOptimizedProducts) return null;
+                    
+                    return (
+                      <Button
+                        onClick={() => setShowAIEnhanceModal(true)}
+                        disabled={selectedItems.length === 0 && !selectAllPages}
+                        size="medium"
+                        fullWidth
+                      >
+                        AI Enhanced Search Optimisation
+                      </Button>
+                    );
                   })()}
-                  destructive
-                  size="medium"
-                  fullWidth
-                >
-                  Delete AI Search Optimisation
-                </Button>
-              </BlockStack>
+                  
+                  <Button
+                    onClick={openDeleteModal}
+                    disabled={(selectedItems.length === 0 && !selectAllPages) || (() => {
+                      const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                      const hasOptimizedProducts = selectedProducts.some(p => 
+                        p.optimizationSummary?.optimizedLanguages?.length > 0
+                      );
+                      return !hasOptimizedProducts;
+                    })()}
+                    destructive
+                    size="medium"
+                    fullWidth
+                  >
+                    Delete AI Search Optimisation
+                  </Button>
+                </BlockStack>
+              </Box>
             </InlineStack>
           </BlockStack>
           
