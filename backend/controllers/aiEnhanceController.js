@@ -97,7 +97,7 @@ async function openrouterChat(model, messages, response_format_json = true) {
 }
 
 // POST /ai-enhance/product
-router.post('/product', verifyRequest, async (req, res) => {
+router.post('/product', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
@@ -222,7 +222,7 @@ Output JSON with:
 });
 
 // POST /ai-enhance/collection
-router.post('/collection', verifyRequest, async (req, res) => {
+router.post('/collection', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { collectionId, languages = [] } = req.body;
