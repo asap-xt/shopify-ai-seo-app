@@ -121,8 +121,14 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
 
   try {
     const shop = req.shopDomain;
+    console.log('[MULTI-SEO/APPLY] req.shopDomain:', shop);
+    console.log('[MULTI-SEO/APPLY] req.body:', req.body);
+    
     const { productId: pid, results, options = {} } = req.body || {};
+    console.log('[MULTI-SEO/APPLY] Extracted:', { pid, results: results?.length, options });
+    
     if (!pid || !Array.isArray(results) || results.length === 0) {
+      console.log('[MULTI-SEO/APPLY] Validation failed:', { pid: !!pid, results: Array.isArray(results), length: results?.length });
       return res.status(400).json({ error: 'Missing productId or results[]' });
     }
     const productId = toGID(String(pid));
