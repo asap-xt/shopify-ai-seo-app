@@ -1,8 +1,7 @@
 // backend/utils/shopifyApi.js
-// Public App Configuration with @shopify/shopify-api 11.14.1
 
 import '@shopify/shopify-api/adapters/node'; // Required adapter for Node
-import { shopifyApi, LATEST_API_VERSION, Session } from '@shopify/shopify-api';
+import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -23,150 +22,210 @@ if (!hostName) {
   console.warn('⚠️ APP_URL / SHOPIFY_APP_URL / BASE_URL / HOST is not set. Please set your public app URL in Railway.');
 }
 
-// Initialize Shopify SDK for Public App
+// Initialize Shopify SDK
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
   apiVersion: LATEST_API_VERSION,
   isEmbeddedApp: true,
   hostName, // hostname only, no protocol or trailing slash
-  scopes: (process.env.SHOPIFY_API_SCOPES || '').split(',').map(s => s.trim()).filter(Boolean),
-  // Session storage for public app
-  sessionStorage: {
-    async storeSession(session) {
-      // Store session in database
-      const Shop = (await import('../db/Shop.js')).default;
-      await Shop.findOneAndUpdate(
-        { shop: session.shop },
-        { 
-          shop: session.shop,
-          accessToken: session.accessToken,
-          scope: session.scope,
-          expires: session.expires,
-          isOnline: session.isOnline,
-          state: session.state,
-          onlineAccessInfo: session.onlineAccessInfo
-        },
-        { upsert: true, new: true }
-      );
-      return true;
-    },
-    async loadSession(id) {
-      // Load session from database
-      const Shop = (await import('../db/Shop.js')).default;
-      const shopRecord = await Shop.findOne({ shop: id });
-      if (!shopRecord) return undefined;
-      
-      return new Session({
-        id: shopRecord.shop,
-        shop: shopRecord.shop,
-        state: shopRecord.state,
-        isOnline: shopRecord.isOnline,
-        accessToken: shopRecord.accessToken,
-        scope: shopRecord.scope,
-        expires: shopRecord.expires,
-        onlineAccessInfo: shopRecord.onlineAccessInfo
-      });
-    },
-    async deleteSession(id) {
-      // Delete session from database
-      const Shop = (await import('../db/Shop.js')).default;
-      await Shop.deleteOne({ shop: id });
-      return true;
-    },
-    async deleteSessions(ids) {
-      // Delete multiple sessions
-      const Shop = (await import('../db/Shop.js')).default;
-      await Shop.deleteMany({ shop: { $in: ids } });
-      return true;
-    },
-    async findSessionsByShop(shop) {
-      // Find sessions by shop
-      const Shop = (await import('../db/Shop.js')).default;
-      const shopRecord = await Shop.findOne({ shop });
-      if (!shopRecord) return [];
-      
-      return [new Session({
-        id: shopRecord.shop,
-        shop: shopRecord.shop,
-        state: shopRecord.state,
-        isOnline: shopRecord.isOnline || false,
-        accessToken: shopRecord.accessToken,
-        scope: shopRecord.scope,
-        expires: shopRecord.expires,
-        onlineAccessInfo: shopRecord.onlineAccessInfo,
-        updatedAt: shopRecord.updatedAt || new Date()
-      })];
-    }
-  }
 });
 
-// Fetch up to 250 products from Admin REST
+// Fetch up to 250 products from Admin GraphQL
 export async function fetchProducts(shop, accessToken) {
-  const client = new shopify.clients.Rest({ shop, accessToken });
-  const response = await client.get({
-    path: 'products',
-    query: { limit: 250 },
-  });
-  return response.body.products;
-}
-
-// Get shop from session (for controllers that use res.locals)
-export function getShopFromSession(req) {
-  return req.res?.locals?.shopify?.session?.shop || 
-         req.query?.shop || 
-         req.body?.shop || 
-         null;
-}
-
-// Get access token from session (public app approach)
-export function getAccessTokenFromSession(req) {
-  return req.res?.locals?.shopify?.session?.accessToken || null;
-}
-
-// GraphQL helper function for shop-level queries (public app)
-export async function shopGraphQL(shop, query, variables = {}, accessToken = null) {
-  // For public app, accessToken should come from session
-  if (!accessToken) {
-    throw new Error('Access token required for GraphQL queries in public app');
-  }
-
   const client = new shopify.clients.Graphql({ shop, accessToken });
   
-  try {
-    const response = await client.query({
-      data: {
-        query,
-        variables
+  // GraphQL query that matches the REST API response structure
+  const query = `
+    query GetProducts($first: Int!, $after: String) {
+      products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true) {
+        edges {
+          cursor
+          node {
+            id
+            title
+            handle
+            body_html: descriptionHtml
+            vendor
+            product_type: productType
+            created_at: createdAt
+            updated_at: updatedAt
+            published_at: publishedAt
+            published_scope: publishedScope
+            tags
+            status
+            admin_graphql_api_id: id
+            
+            variants(first: 100) {
+              edges {
+                node {
+                  id
+                  product_id: productId
+                  title
+                  price
+                  sku
+                  position
+                  inventory_policy: inventoryPolicy
+                  inventory_quantity: inventoryQuantity
+                  inventory_management: inventoryManagement
+                  fulfillment_service: fulfillmentService
+                  taxable
+                  barcode
+                  grams
+                  weight
+                  weight_unit: weightUnit
+                  created_at: createdAt
+                  updated_at: updatedAt
+                  requires_shipping: requiresShipping
+                  admin_graphql_api_id: id
+                  
+                  inventory_item: inventoryItem {
+                    id
+                    tracked
+                  }
+                  
+                  selected_options: selectedOptions {
+                    name
+                    value
+                  }
+                }
+              }
+            }
+            
+            images(first: 50) {
+              edges {
+                node {
+                  id
+                  product_id: productId
+                  position
+                  created_at: createdAt
+                  updated_at: updatedAt
+                  alt: altText
+                  width
+                  height
+                  src: url
+                  admin_graphql_api_id: id
+                }
+              }
+            }
+            
+            options {
+              id
+              product_id: productId
+              name
+              position
+              values
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  `;
+
+  const allProducts = [];
+  let hasNextPage = true;
+  let cursor = null;
+  const pageSize = 50; // GraphQL typically handles 50-100 items well per page
+
+  // Paginate through all products
+  while (hasNextPage && allProducts.length < 250) {
+    const response = await client.request(query, {
+      variables: {
+        first: Math.min(pageSize, 250 - allProducts.length),
+        after: cursor
       }
     });
+
+    const products = response?.data?.products || { edges: [], pageInfo: {} };
     
-    if (response.body.errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify(response.body.errors)}`);
+    // Transform GraphQL response to REST format
+    for (const edge of products.edges) {
+      const node = edge.node;
+      
+      // Transform variants from edges to array
+      const variants = (node.variants?.edges || []).map(v => {
+        const variant = v.node;
+        // Convert selected_options to option1, option2, option3
+        const options = variant.selected_options || [];
+        const variantRest = {
+          ...variant,
+          option1: options[0]?.value || null,
+          option2: options[1]?.value || null,
+          option3: options[2]?.value || null,
+        };
+        delete variantRest.selected_options;
+        delete variantRest.productId; // Remove the GraphQL field
+        
+        // Convert inventory_item object to inventory_item_id
+        if (variant.inventory_item) {
+          variantRest.inventory_item_id = extractNumericId(variant.inventory_item.id);
+          delete variantRest.inventory_item;
+        }
+        
+        // Convert GraphQL ID to numeric ID
+        variantRest.id = extractNumericId(variant.id);
+        variantRest.product_id = extractNumericId(node.id);
+        
+        return variantRest;
+      });
+      
+      // Transform images from edges to array
+      const images = (node.images?.edges || []).map(i => {
+        const image = i.node;
+        return {
+          ...image,
+          id: extractNumericId(image.id),
+          product_id: extractNumericId(node.id),
+        };
+      });
+      
+      // Transform options
+      const options = (node.options || []).map(opt => ({
+        ...opt,
+        id: extractNumericId(opt.id),
+        product_id: extractNumericId(node.id),
+      }));
+      
+      // Build the REST-formatted product
+      const restProduct = {
+        id: extractNumericId(node.id),
+        title: node.title,
+        handle: node.handle,
+        body_html: node.body_html,
+        vendor: node.vendor,
+        product_type: node.product_type,
+        created_at: node.created_at,
+        updated_at: node.updated_at,
+        published_at: node.published_at,
+        published_scope: node.published_scope || 'web',
+        tags: node.tags.join(', '), // REST returns comma-separated string
+        status: node.status,
+        admin_graphql_api_id: node.admin_graphql_api_id,
+        variants,
+        images,
+        options,
+        image: images[0] || null, // REST includes the first image as 'image'
+      };
+      
+      allProducts.push(restProduct);
     }
     
-    return response.body.data;
-  } catch (error) {
-    console.error('GraphQL query error:', error);
-    throw error;
+    hasNextPage = products.pageInfo.hasNextPage;
+    cursor = products.pageInfo.endCursor;
   }
+
+  return allProducts;
 }
 
-// REST API helper function (public app)
-export async function shopRestAPI(shop, path, options = {}, accessToken = null) {
-  if (!accessToken) {
-    throw new Error('Access token required for REST API calls in public app');
-  }
-
-  const client = new shopify.clients.Rest({ shop, accessToken });
-  
-  try {
-    const response = await client.get({ path, ...options });
-    return response.body;
-  } catch (error) {
-    console.error('REST API error:', error);
-    throw error;
-  }
+// Helper function to extract numeric ID from GraphQL GID
+function extractNumericId(gid) {
+  if (!gid) return null;
+  const match = String(gid).match(/\/(\d+)$/);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 export default shopify;
