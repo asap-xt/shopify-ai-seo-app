@@ -1375,7 +1375,7 @@ export default function BulkEdit({ shop: shopProp }) {
               </Button>
             </InlineStack>
             
-            {/* Second row: Sync Products + Action buttons - horizontal alignment */}
+            {/* Second row: Sync Products + Dynamic right side */}
             <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
               <Button
                 onClick={handleSyncProducts}
@@ -1385,7 +1385,7 @@ export default function BulkEdit({ shop: shopProp }) {
                 Sync Products
               </Button>
               
-              <InlineStack gap="200" align="end">
+              <BlockStack gap="200" align="end">
                 {/* AI Enhanced Search Optimisation Button - between Generate and Delete */}
                 {(() => {
                   if (selectedItems.length === 0 && !selectAllPages) return null;
@@ -1420,7 +1420,7 @@ export default function BulkEdit({ shop: shopProp }) {
                 >
                   Delete AI Search Optimisation
                 </Button>
-              </InlineStack>
+              </BlockStack>
             </InlineStack>
           </BlockStack>
           
