@@ -599,6 +599,12 @@ function fixupAndValidate(payload) {
     .map((s) => String(s || '').trim())
     .filter((s) => s.length >= 2)
     .slice(0, 10);
+  
+  // Add default bullets if not enough
+  while (bullets.length < 2) {
+    bullets.push('Great value');
+  }
+  
   p.seo.bullets = bullets.map((s) => s.slice(0, 160));
 
   // faq
@@ -821,6 +827,32 @@ return res.json(result);
   }
 });
 
+function extractBulletsFromHtml(html) {
+  const bullets = [];
+  // Извлечи от <li> елементи
+  const liRegex = /<li[^>]*>(.*?)<\/li>/gi;
+  let match;
+  while ((match = liRegex.exec(html)) !== null) {
+    const text = match[1].replace(/<[^>]+>/g, '').trim();
+    if (text && text.length > 10) {
+      bullets.push(text.slice(0, 160));
+    }
+  }
+  
+  // Ако няма достатъчно, извлечи от параграфи
+  if (bullets.length < 2) {
+    const pRegex = /<p[^>]*>(.*?)<\/p>/gi;
+    while ((match = pRegex.exec(html)) !== null && bullets.length < 5) {
+      const text = match[1].replace(/<[^>]+>/g, '').trim();
+      if (text && text.length > 20 && !bullets.includes(text)) {
+        bullets.push(text.slice(0, 160));
+      }
+    }
+  }
+  
+  return bullets;
+}
+
 async function generateSEOForLanguage(req, shop, productId, model, language) {
   console.log('🟡 [GENERATE] Starting generation for language:', language, 'model:', model);
   console.log('🚀 [LOCAL MODE] Using product data directly - NO AI costs!');
@@ -933,17 +965,14 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     metaDescription = localizedTitle || 'Quality product from our store';
   }
 
-  // Extract bullets from HTML content
-  const extractedBullets = [];
-  if (localizedBody) {
-    const liMatches = localizedBody.match(/<li>(.*?)<\/li>/gi) || [];
-    liMatches.slice(0, 5).forEach(li => {
-      const text = li.replace(/<[^>]+>/g, '').trim();
-      if (text && text.length > 10) {
-        extractedBullets.push(text.slice(0, 160));
-      }
-    });
-  }
+  // Extract bullets from HTML content using improved function
+  const extractedBullets = extractBulletsFromHtml(localizedBody);
+  const bullets = extractedBullets.length >= 2 
+    ? extractedBullets.slice(0, 5)
+    : [
+        `${localizedTitle} - висококачествен продукт`,
+        `Перфектен избор за вашите нужди`
+      ];
 
   // Create simple FAQ with localized data
   const simpleFaq = [];
@@ -956,6 +985,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
 
   // Debug logs
   console.log('🔍 [DEBUG] Extracted bullets:', extractedBullets);
+  console.log('🔍 [DEBUG] Final bullets:', bullets);
   console.log('🔍 [DEBUG] Simple FAQ:', simpleFaq);
   console.log('🔍 [DEBUG] Localized title:', localizedTitle);
   console.log('🔍 [DEBUG] Meta description:', metaDescription);
@@ -965,7 +995,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     metaDescription: metaDescription,
     slug: kebab(localizedTitle || p.handle || 'product'),
     bodyHtml: localizedBody || `<p>${localizedTitle}</p>`,
-    bullets: extractedBullets,
+    bullets: bullets,
     faq: simpleFaq,
     imageAlt: []
   };

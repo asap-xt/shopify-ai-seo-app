@@ -265,6 +265,14 @@ function SingleProductPanel({ shop }) {
             languages: availableLanguages 
           }
         });
+        
+        // Проверка за валидни резултати
+        if (response?.results && Array.isArray(response.results)) {
+          const validResults = response.results.filter(r => r && r.seo && !r.error);
+          if (validResults.length === 0) {
+            throw new Error('No valid SEO data generated for any language');
+          }
+        }
       } else {
         // Single language generation
         response = await api('/seo/generate', {
