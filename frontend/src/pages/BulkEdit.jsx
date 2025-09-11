@@ -331,26 +331,35 @@ export default function BulkEdit({ shop: shopProp }) {
             },
           });
           
+          console.log(`🔍 [AI-ENHANCE] Product ${product.productId} enhance data:`, enhanceData);
+          
           // Apply the enhanced SEO
           if (enhanceData.results && enhanceData.results.length > 0) {
-            await api('/api/seo/apply-multi', {
+            const applyData = {
+              shop,
+              productId: product.gid || `gid://shopify/Product/${product.productId}`,
+              results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
+                language: r.language,
+                seo: {
+                  bullets: r.bullets,
+                  faq: r.faq
+                }
+              })),
+              options: { updateBullets: true, updateFaq: true }
+            };
+            
+            console.log(`🔍 [AI-ENHANCE] Applying data for product ${product.productId}:`, applyData);
+            
+            const applyResult = await api('/api/seo/apply-multi', {
               method: 'POST',
               shop,
-              body: {
-                shop,
-                productId: product.gid || `gid://shopify/Product/${product.productId}`,
-                results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
-                  language: r.language,
-                  seo: {
-                    bullets: r.bullets,
-                    faq: r.faq
-                  }
-                })),
-                options: { updateBullets: true, updateFaq: true }
-              }
+              body: applyData
             });
+            
+            console.log(`🔍 [AI-ENHANCE] Apply result for product ${product.productId}:`, applyResult);
             results.successful++;
           } else {
+            console.log(`🔍 [AI-ENHANCE] No valid results for product ${product.productId}:`, enhanceData);
             results.failed++;
           }
         } catch (error) {

@@ -175,12 +175,17 @@ Output JSON with:
         
         const { content, usage } = await openrouterChat(model, messages, true);
         
+        console.log(`🔍 [DEBUG] AI raw response for ${language}:`, content);
+        
         let enhanced;
         try {
           enhanced = JSON.parse(content);
+          console.log(`🔍 [DEBUG] AI parsed JSON for ${language}:`, JSON.stringify(enhanced, null, 2));
           console.log(`🔍 [DEBUG] AI generated bullets:`, enhanced.bullets?.length);
           console.log(`🔍 [DEBUG] AI generated FAQ:`, enhanced.faq?.length);
-        } catch {
+        } catch (parseError) {
+          console.error(`🔍 [DEBUG] JSON parse error for ${language}:`, parseError);
+          console.error(`🔍 [DEBUG] Raw content that failed to parse:`, content);
           throw new Error('Invalid JSON from AI');
         }
         
