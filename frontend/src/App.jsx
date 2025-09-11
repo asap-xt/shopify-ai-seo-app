@@ -9,6 +9,7 @@ import {
 import { useEffect, useState, useMemo } from 'react';
 import { useAppBridge } from './providers/AppBridgeProvider.jsx';
 import { useShopApi } from './hooks/useShopApi.js';
+import { makeSessionFetch } from './lib/sessionFetch.js';
 
 import AppHeader from './components/AppHeader.jsx';
 import SideNav from './components/SideNav.jsx';
