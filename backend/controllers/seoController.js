@@ -741,6 +741,8 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
   console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
 
   try {
+    console.log('[SEO/GENERATE] req.shopDomain:', req.shopDomain);
+    console.log('[SEO/GENERATE] req.body:', req.body);
     const shop = req.shopDomain;
     const { productId, model, language = 'en' } = req.body || {};
     if (!productId || !model) {
