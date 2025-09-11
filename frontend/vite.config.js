@@ -16,7 +16,8 @@ export default defineConfig({
   },
   define: {
     'process.env': process.env,
-    '__BUILD_TIME__': JSON.stringify(new Date().toISOString())
+    '__BUILD_TIME__': JSON.stringify(new Date().toISOString()),
+    '__CACHE_BUST__': JSON.stringify(Date.now().toString())
   },
   server: {
     proxy: {
