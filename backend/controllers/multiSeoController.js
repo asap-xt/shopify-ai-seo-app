@@ -208,6 +208,8 @@ router.post('/delete-multi', async (req, res) => {
           errors.push(`[${lang}] ${json.error || `Delete failed (${rsp.status})`}`);
         } else {
           deleted.push(lang);
+          console.log('[DELETE-MULTI] Languages actually deleted:', deleted);
+          console.log('[DELETE-MULTI] Delete response from backend:', json);
         }
       } catch (e) {
         errors.push(`[${lang}] ${e.message}`);

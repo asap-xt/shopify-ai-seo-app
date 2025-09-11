@@ -770,8 +770,11 @@ export default function BulkEdit({ shop: shopProp }) {
           
           // Only delete languages that are actually optimized
           const languagesToDelete = selectedDeleteLanguages.filter(lang => 
-            optimizedLanguages.includes(lang)
+            optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
           );
+
+          console.log('[BULK-DELETE] Product optimized languages:', optimizedLanguages);
+          console.log('[BULK-DELETE] Languages to delete:', languagesToDelete);
           
           if (languagesToDelete.length === 0) {
             skippedCount++;
