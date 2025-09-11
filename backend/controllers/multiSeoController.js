@@ -146,6 +146,9 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
       }
       try {
         console.log(`🔍 [APPLY-MULTI] Processing language ${r.language} with SEO data:`, JSON.stringify(r.seo, null, 2));
+        console.log(`🔍 [APPLY-MULTI] Raw r.seo.title for ${r.language}:`, r.seo.title);
+        console.log(`🔍 [APPLY-MULTI] Raw r.seo.metaDescription for ${r.language}:`, r.seo.metaDescription);
+        console.log(`🔍 [APPLY-MULTI] Raw r.seo.bodyHtml for ${r.language}:`, r.seo.bodyHtml);
         
         // Create a complete SEO object with all required fields
         const completeSeo = {

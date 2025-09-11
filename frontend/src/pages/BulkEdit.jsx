@@ -346,8 +346,10 @@ export default function BulkEdit({ shop: shopProp }) {
                 const existingSeo = existingLanguageData?.seo || {};
                 
                 console.log(`🔍 [AI-ENHANCE] Language ${r.language} - existing SEO:`, JSON.stringify(existingSeo, null, 2));
+                console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI bullets:`, r.bullets);
+                console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI FAQ:`, r.faq);
                 
-                return {
+                const seoResult = {
                   language: r.language,
                   seo: {
                     // Use ONLY existing localized data - NO fallback to English product data
@@ -361,6 +363,10 @@ export default function BulkEdit({ shop: shopProp }) {
                     jsonLd: existingSeo.jsonLd || {} // Preserve existing jsonLd
                   }
                 };
+                
+                console.log(`🔍 [AI-ENHANCE] Language ${r.language} - final seo result:`, JSON.stringify(seoResult.seo, null, 2));
+                
+                return seoResult;
               }),
               options: { updateBullets: true, updateFaq: true }
             };
