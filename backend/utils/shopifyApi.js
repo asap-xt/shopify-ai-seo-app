@@ -2,6 +2,7 @@
 
 import '@shopify/shopify-api/adapters/node'; // Required adapter for Node
 import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
+import { MongoDBSessionStorage } from '@shopify/shopify-app-session-storage-mongodb';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -22,6 +23,54 @@ if (!hostName) {
   console.warn('⚠️ APP_URL / SHOPIFY_APP_URL / BASE_URL / HOST is not set. Please set your public app URL in Railway.');
 }
 
+// Create session storage
+let sessionStorage;
+if (process.env.MONGODB_URI) {
+  // Use MongoDB for session storage in production
+  sessionStorage = new MongoDBSessionStorage(
+    process.env.MONGODB_URI,
+    'shopify_sessions' // database name
+  );
+  console.log('✅ Using MongoDB session storage');
+} else {
+  // Fallback to memory storage (not recommended for production)
+  console.warn('⚠️ Using memory session storage - sessions will be lost on restart!');
+  
+  // Simple memory storage implementation
+  const sessions = new Map();
+  sessionStorage = {
+    async loadSession(id) {
+      console.log('[SESSION] Loading session:', id);
+      const session = sessions.get(id);
+      return session || null;
+    },
+    async storeSession(session) {
+      console.log('[SESSION] Storing session:', session.id);
+      sessions.set(session.id, session);
+      return true;
+    },
+    async deleteSession(id) {
+      console.log('[SESSION] Deleting session:', id);
+      return sessions.delete(id);
+    },
+    async deleteSessions(ids) {
+      console.log('[SESSION] Deleting sessions:', ids);
+      ids.forEach(id => sessions.delete(id));
+      return true;
+    },
+    async findSessionsByShop(shop) {
+      console.log('[SESSION] Finding sessions for shop:', shop);
+      const shopSessions = [];
+      sessions.forEach((session, id) => {
+        if (session.shop === shop) {
+          shopSessions.push(session);
+        }
+      });
+      return shopSessions;
+    }
+  };
+}
+
 // Initialize Shopify SDK
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -29,6 +78,7 @@ const shopify = shopifyApi({
   apiVersion: LATEST_API_VERSION,
   isEmbeddedApp: true,
   hostName, // hostname only, no protocol or trailing slash
+  sessionStorage, // Add session storage
 });
 
 // Fetch up to 250 products from Admin GraphQL
