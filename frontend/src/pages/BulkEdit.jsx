@@ -289,6 +289,8 @@ export default function BulkEdit({ shop: shopProp }) {
     );
     
     const handleStartEnhancement = async () => {
+      console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
+      
       // Не затваряме модала - ще покажем progress модала
       setAIEnhanceProgress({
         processing: true,
