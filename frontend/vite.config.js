@@ -8,16 +8,11 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        entryFileNames: `assets/[name]-[hash]-1757571000000.js`,
-        chunkFileNames: `assets/[name]-[hash]-1757571000000.js`,
-        assetFileNames: `assets/[name]-[hash]-1757571000000.[ext]`
+        entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+        chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`
       }
     }
-  },
-  define: {
-    'process.env': process.env,
-    '__BUILD_TIME__': JSON.stringify('2025-01-11T12:30:00.000Z'),
-    '__CACHE_BUST__': JSON.stringify('1757571000000')
   },
   server: {
     proxy: {

@@ -346,8 +346,13 @@ app.get('/', (req, res) => {
   console.log('[ROOT] Request with params:', req.query);
   // Променете условието - махнете проверката за embedded
   if (req.query.shop && req.query.host) {
-    // Embedded app request
-    res.set('Cache-Control', 'no-store');
+    // Embedded app request - Cache busting for index.html
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
     res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
     res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
   } else {
@@ -360,7 +365,12 @@ app.get('/', (req, res) => {
 const otherSpaRoutes = ['/dashboard', '/ai-seo', '/billing', '/settings', '/store-metadata'];
 otherSpaRoutes.forEach((route) => {
   app.get(route, (_req, res) => {
-    res.set('Cache-Control', 'no-store');
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
     res.sendFile(path.join(distPath, 'index.html'));
   });
 });
