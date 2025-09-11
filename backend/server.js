@@ -314,11 +314,13 @@ app.use(
     index: false,
     etag: false,
     lastModified: false,
-    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0, // long-cache hashed assets
+    maxAge: 0, // Disable caching for development
     setHeaders(res, filePath) {
-      if (filePath.endsWith('index.html')) {
-        res.setHeader('Cache-Control', 'no-store'); // HTML must always be fresh
-      }
+      // Disable caching for all files during development
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
     },
   })
 );

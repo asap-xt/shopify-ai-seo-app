@@ -14,6 +14,10 @@ export default defineConfig({
       }
     }
   },
+  define: {
+    'process.env': process.env,
+    '__BUILD_TIME__': JSON.stringify(new Date().toISOString())
+  },
   server: {
     proxy: {
       '/api': {
