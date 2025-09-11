@@ -1041,9 +1041,9 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const isPrimary = language.toLowerCase() === primary.toLowerCase();
 
     // Decide what to update based on primary/secondary language
-    const updateTitle = isPrimary && (options?.updateTitle !== false);
-    const updateBody = isPrimary && (options?.updateBody !== false);
-    const updateSeo = isPrimary && (options?.updateSeo !== false);
+    const updateTitle = options?.updateTitle !== false;
+    const updateBody = options?.updateBody !== false;
+    const updateSeo = options?.updateSeo !== false;
     const updateBullets = options?.updateBullets !== false;
     const updateFaq = options?.updateFaq !== false;
     const updateAlt = options?.updateAlt === true;
@@ -1067,8 +1067,8 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const v = fixed.value.seo;
 
     if (!dryRun) {
-      // 1. Update product base fields ONLY for primary language
-      if (isPrimary && (updateTitle || updateBody || updateSeo)) {
+      // 1. Update product base fields based on options
+      if (updateTitle || updateBody || updateSeo) {
         const input = { id: productId };
         if (updateTitle) input.title = v.title;
         if (updateBody) input.descriptionHtml = v.bodyHtml;
