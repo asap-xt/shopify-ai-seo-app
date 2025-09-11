@@ -156,21 +156,58 @@ if (req.query.languageFilter) {
       Product.countDocuments(safeQuery).read('primary')  // Force count from primary too
     ]);
 
-    // Add optimization summary to each product (MongoDB only - no API calls)
-    const productsWithSummary = products.map(product => ({
-      ...product,
-      optimizationSummary: {
-        isOptimized: product.seoStatus?.optimized || false,
-        optimizedLanguages: product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [],
-        lastOptimized: product.seoStatus?.languages
-          ?.filter(l => l.optimized && l.lastOptimizedAt)
-          ?.map(l => l.lastOptimizedAt)
-          ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
+    // CRITICAL FIX: Fetch metafields from Shopify for AI enhance functionality
+    const productsWithMetafields = await Promise.all(products.map(async (product) => {
+      // Get metafields from Shopify for this product
+      const productGid = toGID(product.productId);
+      let metafields = [];
+      
+      try {
+        const metafieldsQuery = `
+          query GetProductMetafields($productId: ID!) {
+            product(id: $productId) {
+              metafields(first: 20, namespace: "seo_ai") {
+                edges {
+                  node {
+                    key
+                    value
+                    namespace
+                  }
+                }
+              }
+            }
+          }
+        `;
+        
+        const result = await shopGraphQL(req, shop, metafieldsQuery, { productId: productGid });
+        
+        if (result?.product?.metafields?.edges) {
+          metafields = result.product.metafields.edges.map(edge => ({
+            key: `${edge.node.namespace}.${edge.node.key}`,
+            value: edge.node.value,
+            namespace: edge.node.namespace
+          }));
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch metafields for product ${product.productId}:`, error.message);
       }
+
+      return {
+        ...product,
+        metafields, // Add metafields for frontend AI enhance
+        optimizationSummary: {
+          isOptimized: product.seoStatus?.optimized || false,
+          optimizedLanguages: product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [],
+          lastOptimized: product.seoStatus?.languages
+            ?.filter(l => l.optimized && l.lastOptimizedAt)
+            ?.map(l => l.lastOptimizedAt)
+            ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
+        }
+      };
     }));
 
     res.json({
-      products: productsWithSummary,
+      products: productsWithMetafields,
       pagination: {
         page: Number(page),
         limit: Number(limit),
