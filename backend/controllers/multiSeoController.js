@@ -104,6 +104,7 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
     bodyShop: req.body?.shop,
     sessionShop: res.locals?.shopify?.session?.shop,
   });
+  console.log('[MULTI-SEO/APPLY] Full req.body:', JSON.stringify(req.body, null, 2));
 
   const shop =
     req.query?.shop ||
