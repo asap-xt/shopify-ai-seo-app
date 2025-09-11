@@ -341,8 +341,15 @@ export default function BulkEdit({ shop: shopProp }) {
               results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => ({
                 language: r.language,
                 seo: {
+                  // Keep existing SEO data and only update bullets & FAQ
+                  title: product.title || 'Product',
+                  metaDescription: product.description || 'Product description',
+                  slug: product.handle || `product-${product.productId}`,
+                  bodyHtml: product.descriptionHtml || `<p>${product.description || 'Product description'}</p>`,
                   bullets: r.bullets,
-                  faq: r.faq
+                  faq: r.faq,
+                  imageAlt: [],
+                  jsonLd: {}
                 }
               })),
               options: { updateBullets: true, updateFaq: true }
