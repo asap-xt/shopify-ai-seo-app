@@ -1352,8 +1352,8 @@ export default function BulkEdit({ shop: shopProp }) {
       <Card>
         <Box padding="400">
           <BlockStack gap="300">
-            {/* First row: Search bar + Action buttons */}
-            <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
+            {/* First row: Search bar + Generate AI button */}
+            <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
               <Box minWidth="400px">
                 <TextField
                   label=""
@@ -1366,15 +1366,26 @@ export default function BulkEdit({ shop: shopProp }) {
                 />
               </Box>
               
-              <BlockStack gap="200" align="end">
-                <Button
-                  primary
-                  onClick={openLanguageModal}
-                  disabled={selectedItems.length === 0 && !selectAllPages}
-                >
-                  Generate AI Search Optimisation
-                </Button>
-                
+              <Button
+                primary
+                onClick={openLanguageModal}
+                disabled={selectedItems.length === 0 && !selectAllPages}
+              >
+                Generate AI Search Optimisation
+              </Button>
+            </InlineStack>
+            
+            {/* Second row: Sync Products + Action buttons - horizontal alignment */}
+            <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
+              <Button
+                onClick={handleSyncProducts}
+                disabled={loading}
+                size="medium"
+              >
+                Sync Products
+              </Button>
+              
+              <InlineStack gap="200" align="end">
                 {/* AI Enhanced Search Optimisation Button - between Generate and Delete */}
                 {(() => {
                   if (selectedItems.length === 0 && !selectAllPages) return null;
@@ -1409,18 +1420,7 @@ export default function BulkEdit({ shop: shopProp }) {
                 >
                   Delete AI Search Optimisation
                 </Button>
-              </BlockStack>
-            </InlineStack>
-            
-            {/* Second row: Sync Products - fixed position */}
-            <InlineStack gap="400" align="start" blockAlign="center" wrap={false}>
-              <Button
-                onClick={handleSyncProducts}
-                disabled={loading}
-                size="medium"
-              >
-                Sync Products
-              </Button>
+              </InlineStack>
             </InlineStack>
           </BlockStack>
           
