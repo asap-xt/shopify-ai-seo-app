@@ -504,7 +504,7 @@ app.get('*', (req, res) => {
   console.log('[CATCH-ALL] Unmatched route:', req.url);
   // Check if it's an app request
   if (req.url.includes('/apps/')) {
-    res.set('Cache-Control', 'no-store');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
     res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
     res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
   } else {
