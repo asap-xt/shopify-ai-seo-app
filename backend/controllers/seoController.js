@@ -1071,13 +1071,17 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const isPrimary = language.toLowerCase() === primary.toLowerCase();
 
     // Decide what to update based on primary/secondary language
-    const updateTitle = options?.updateTitle !== false;
-    const updateBody = options?.updateBody !== false;
-    const updateSeo = options?.updateSeo !== false;
+    // For non-primary languages, we should ONLY work with metafields, not product base fields
+    const updateTitle = isPrimary && options?.updateTitle !== false;
+    const updateBody = isPrimary && options?.updateBody !== false;
+    const updateSeo = isPrimary && options?.updateSeo !== false;
     const updateBullets = options?.updateBullets !== false;
     const updateFaq = options?.updateFaq !== false;
     const updateAlt = options?.updateAlt === true;
     const dryRun = options?.dryRun === true;
+
+    console.log(`[SEO-APPLY] Language: ${language}, isPrimary: ${isPrimary}`);
+    console.log(`[SEO-APPLY] Update flags - title: ${updateTitle}, body: ${updateBody}, seo: ${updateSeo}, bullets: ${updateBullets}, faq: ${updateFaq}`);
 
     const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
     const errors = [];
