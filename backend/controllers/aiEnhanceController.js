@@ -189,12 +189,16 @@ Output JSON with:
           throw new Error('Invalid JSON from AI');
         }
         
-        results.push({
+        const result = {
           language,
           bullets: enhanced.bullets || [],
           faq: enhanced.faq || [],
           usage
-        });
+        };
+        
+        console.log(`🔍 [AI-ENHANCE] Final result for ${language}:`, JSON.stringify(result, null, 2));
+        
+        results.push(result);
         
       } catch (error) {
         console.error(`🔍 [DEBUG] Error for ${language}:`, error.message);

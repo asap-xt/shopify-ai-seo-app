@@ -1139,16 +1139,20 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         }
       `;
       const mfKey = `seo__${language.toLowerCase()}`;
+      const metafieldData = {
+        ...v,
+        language: language.toLowerCase(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      console.log(`🔍 [SEO-APPLY] Writing metafield ${mfKey} with data:`, JSON.stringify(metafieldData, null, 2));
+      
       const metafields = [{
         ownerId: productId,
         namespace: 'seo_ai',
         key: mfKey,
         type: 'json',
-        value: JSON.stringify({
-          ...v,
-          language: language.toLowerCase(),
-          updatedAt: new Date().toISOString()
-        }),
+        value: JSON.stringify(metafieldData),
       }];
 
       // Bullets and faq are saved in the main SEO metafield (lines 963-967)

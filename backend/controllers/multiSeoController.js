@@ -145,6 +145,8 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         continue;
       }
       try {
+        console.log(`🔍 [APPLY-MULTI] Processing language ${r.language} with SEO data:`, JSON.stringify(r.seo, null, 2));
+        
         // Import the apply function directly instead of making HTTP request
         const { applySEOForLanguage } = await import('./seoController.js');
         const result = await applySEOForLanguage(req, shop, productId, r.seo, r.language, options);
