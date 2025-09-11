@@ -167,8 +167,8 @@ export default function BulkEdit({ shop: shopProp }) {
   }, [shop, api]);
   
   // Load products
-  const loadProducts = useCallback(async (pageNum = 1, append = false) => {
-    console.log(`[BULK-EDIT-LOAD] loadProducts called with pageNum: ${pageNum}, append: ${append}`);
+  const loadProducts = useCallback(async (pageNum = 1, append = false, timestamp = null) => {
+    console.log(`[BULK-EDIT-LOAD] loadProducts called with pageNum: ${pageNum}, append: ${append}, timestamp: ${timestamp}`);
     console.log('[BULK-EDIT-LOAD] Current products state:', products.length);
     setLoading(true);
     try {
@@ -182,10 +182,16 @@ export default function BulkEdit({ shop: shopProp }) {
         ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
         sortBy,
         sortOrder,
+        ...(timestamp && { _t: timestamp }) // Cache-busting parameter
       });
       
       // URL вече съдържа shop + params → не подаваме {shop}, за да не дублираме
-      const data = await api(`/api/products/list?${params}&_t=${Date.now()}`);
+      const data = await api(`/api/products/list?${params}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       console.log(`[BULK-EDIT-LOAD] API returned ${data.products?.length || 0} products`);
       
       // Log първия продукт за проверка
@@ -220,7 +226,7 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Initial load
   useEffect(() => {
-    if (shop) loadProducts(1);
+    if (shop) loadProducts(1, false, null);
   }, [shop, loadProducts, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
   // Unified search function
@@ -232,7 +238,7 @@ export default function BulkEdit({ shop: shopProp }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (shop) {
-        loadProducts(1);
+        loadProducts(1, false, null);
       }
     }, 500);
     
@@ -377,7 +383,7 @@ export default function BulkEdit({ shop: shopProp }) {
         results: null
       });
       if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
-        loadProducts(1);
+        loadProducts(1, false, null);
       }
     };
     
@@ -852,61 +858,14 @@ export default function BulkEdit({ shop: shopProp }) {
         setToast(`Deleted AI Search Optimisation from ${successCount} products`);
       }
       
-      // Add delay to ensure MongoDB writes are propagated
-      console.log('[BULK-EDIT] Waiting for database propagation...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // След await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('[BULK-DELETE] Before reload, checking state...');
-      console.log('[BULK-DELETE] Products in state:', products.map(p => ({
-        id: p._id,
-        title: p.title,
-        optimizedLanguages: p.optimizationSummary?.optimizedLanguages
-      })));
-
-      // Force a complete refresh of the products list
-      console.log('[BULK-EDIT] Clearing products state before reload...');
-      setProducts([]); // Clear current products to force re-render
-
-      // Load products with cache bypass
-      console.log('[BULK-EDIT] Reloading products with cache bypass...');
-      const params = new URLSearchParams({
-        shop,
-        page: 1,
-        limit: 50,
-        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(searchValue && { search: searchValue }),
-        ...(languageFilter && { languageFilter }),
-        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
-        sortBy,
-        sortOrder,
-        _t: Date.now() // Cache buster
-      });
-
-      const data = await api(`/api/products/list?${params}`, { 
-        shop,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-
-
-      console.log('[BULK-EDIT] Products reloaded after delete');
-      setProducts(data.products || []);
-      setPage(1);
-      setHasMore(data.pagination?.hasNext || false);
-      setTotalCount(data.pagination?.total || 0);
-
-      // Force reload
-      console.log('[BULK-DELETE] Calling loadProducts(1)...');
-      await loadProducts(1);
-
-      console.log('[BULK-DELETE] After reload, new products:', products.map(p => ({
-        id: p._id,
-        title: p.title,
-        optimizedLanguages: p.optimizationSummary?.optimizedLanguages
-      })));
+      // Apply the same fix pattern as apply function
+      console.log('[BULK-DELETE] Operation successful!');
+      
+      // Force refetch with delay and cache busting
+      setTimeout(() => {
+        const timestamp = Date.now();
+        loadProducts(1, false, timestamp); // Pass timestamp to bypass cache
+      }, 500); // Small delay to ensure backend has completed
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
@@ -1282,7 +1241,7 @@ export default function BulkEdit({ shop: shopProp }) {
         setOptimizedFilter('all');
         setLanguageFilter('');
         setSelectedTags([]);
-        loadProducts(1);
+        loadProducts(1, false, null);
       }}}
       image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
     >
@@ -1582,7 +1541,7 @@ export default function BulkEdit({ shop: shopProp }) {
           
           {hasMore && !loading && (
             <Box padding="400" textAlign="center">
-              <Button onClick={() => loadProducts(page + 1, true)}>
+              <Button onClick={() => loadProducts(page + 1, true, null)}>
                 Load more
               </Button>
             </Box>
