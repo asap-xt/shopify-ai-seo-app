@@ -285,4 +285,53 @@ router.post('/delete-multi', validateRequest(), async (req, res) => {
   }
 });
 
+// POST /api/seo/delete-multi
+router.post('/delete-multi', async (req, res) => {
+  try {
+    const { shop, productId: pid, languages } = req.body || {};
+    if (!shop || !pid || !Array.isArray(languages) || languages.length === 0) {
+      return res.status(400).json({ error: 'Missing shop, productId or languages[]' });
+    }
+    const productId = toGID(String(pid));
+
+    const errors = [];
+    const deleted = [];
+
+    for (const lang of languages) {
+      try {
+        // Извикваме съществуващия DELETE endpoint
+        const url = `${APP_URL}/seo/delete?shop=${encodeURIComponent(shop)}`;
+        const rsp = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: req.headers.cookie || '', // Важно за автентикация!
+          },
+          body: JSON.stringify({ shop, productId, language: lang }),
+        });
+        
+        const text = await rsp.text();
+        const json = JSON.parse(text);
+        
+        if (!rsp.ok || !json.ok) {
+          errors.push(`[${lang}] ${json.error || `Delete failed (${rsp.status})`}`);
+        } else {
+          deleted.push(lang);
+        }
+      } catch (e) {
+        errors.push(`[${lang}] ${e.message}`);
+      }
+    }
+    
+    return res.json({
+      ok: errors.length === 0,
+      deleted,
+      errors,
+    });
+  } catch (err) {
+    console.error('[DELETE-MULTI] Error:', err);
+    return res.status(500).json({ error: 'Failed to delete SEO' });
+  }
+});
+
 export default router;
