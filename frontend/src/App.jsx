@@ -70,7 +70,7 @@ function AdminNavMenu({ active, shop }) {
     <ui-nav-menu>
       <a href={`/${paramString}`} rel="home">Home</a>
       <a href={`/dashboard${paramString}`}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`}>AI SEO</a>
+      <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
       <a href={`/billing${paramString}`}>Billing</a>
       <a href={`/settings${paramString}`}>Settings</a>
     </ui-nav-menu>
@@ -609,7 +609,7 @@ export default function App() {
   const shop = qs('shop', '');
   
   const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'AI SEO';
+    if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
     return 'Dashboard';
@@ -621,7 +621,7 @@ export default function App() {
     if (path === '/' || path === '/dashboard') {
       return <DashboardCard shop={shop} />;
     } 
-    // AI SEO и под-страници
+    // Search Optimization for AI и под-страници
     else if (path.startsWith('/ai-seo')) {
       return <AiSearchOptimisationPanel shop={shop} />;
     } 
