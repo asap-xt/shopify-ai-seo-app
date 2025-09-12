@@ -12,12 +12,12 @@ import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 
 import AppHeader from './components/AppHeader.jsx';
-import BulkEdit from './pages/BulkEdit.jsx';
-import Collections from './pages/Collections.jsx';
-import Sitemap from './pages/Sitemap.jsx';
-import StoreMetadata from './pages/StoreMetadata.jsx';
-import SchemaData from './pages/SchemaData.jsx';
-import Settings from './pages/Settings.jsx';
+const BulkEdit = React.lazy(() => import('./pages/BulkEdit.jsx'));
+const Collections = React.lazy(() => import('./pages/Collections.jsx'));
+const Sitemap = React.lazy(() => import('./pages/Sitemap.jsx'));
+const StoreMetadata = React.lazy(() => import('./pages/StoreMetadata.jsx'));
+const SchemaData = React.lazy(() => import('./pages/SchemaData.jsx'));
+const Settings = React.lazy(() => import('./pages/Settings.jsx'));
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -80,25 +80,24 @@ function AdminNavMenu({ active, shop }) {
 
 
 // -------- Dashboard
-function DashboardCard() {
+const DashboardCard = React.memo(({ shop }) => {
   const [plan, setPlan] = useState(null);
-  const { api, shop: hookShop } = useShopApi();
-  const shop = hookShop || qs('shop', '');
+  const { api } = useShopApi();
+  const currentShop = shop || qs('shop', '');
 
   useEffect(() => {
-    if (!shop) return;
-    // Използвай session token при всяко повикване
-    api(`/plans/me`, { shop })
+    if (!currentShop) return;
+    api(`/plans/me`, { shop: currentShop })
       .then((data) => { if (data && !data.error) setPlan(data); })
       .catch((e) => console.error('Failed to load plan:', e));
-  }, [shop, api]);
+  }, [currentShop, api]);
 
   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
   useEffect(() => {
-    if (!shop) return;
+    if (!currentShop) return;
 
     // 1) Проверка на definitions със session token
-    api(`/collections/check-definitions`, { shop })
+    api(`/collections/check-definitions`, { shop: currentShop })
       .then(data => {
 
         // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
@@ -110,14 +109,14 @@ function DashboardCard() {
           // 2) Създай липсващите definitions със session token
           return api('/collections/create-definitions', {
             method: 'POST',
-            shop,
-            body: { shop, languages: missingLangs },
+            shop: currentShop,
+            body: { shop: currentShop, languages: missingLangs },
           });
         }
       })
 
       .catch(err => console.error('Definitions error:', err));
-  }, [shop, api]);
+  }, [currentShop, api]);
 
   if (!plan) {
     return (
@@ -163,7 +162,7 @@ function DashboardCard() {
       </Box>
     </Card>
   );
-}
+});
 
 // -------- Single Product Panel (original AiSeoPanel content) - Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž
 /*
@@ -445,7 +444,7 @@ function SingleProductPanel({ shop }) {
 */
 
 // -------- AI Search Optimisation Panel with Tabs
-function AiSearchOptimisationPanel() {
+const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   
@@ -496,9 +495,9 @@ function AiSearchOptimisationPanel() {
     ) : (
       <SchemaData shop={shop} />
     )}
-    </Tabs>
-  );
-}
+  </Tabs>
+);
+});
 
 const translations = {
   Polaris: {
@@ -507,84 +506,18 @@ const translations = {
 };
 
 export default function App() {
-  // ===== ЗАПОЧНЕТЕ DEBUG КОДА ТУК =====
-  console.log('[DEBUG] App render START');
+  const app = useAppBridge();
+  const { path } = useRoute();
+  const { lang, setLang, t } = useI18n();
+  const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
+  const shop = qs('shop', '');
   
-  // Опитайте да вземете app instance
-  let app = null;
-  try {
-    app = useAppBridge();
-    console.log('[APP] App Bridge instance:', app ? 'Available' : 'Not available');
-  } catch (err) {
-    console.log('[APP] App Bridge not available:', err.message);
-  }
-  
-  // Вместо: const { path } = useRoute();
-  let path, setPath;
-  try {
-    console.log('[DEBUG] Calling useRoute...');
-    const routeResult = useRoute();
-    path = routeResult.path;
-    setPath = routeResult.setPath;
-    console.log('[DEBUG] useRoute SUCCESS, path:', path);
-  } catch (e) {
-    console.error('[DEBUG] useRoute FAILED:', e);
-    return <div>Error in useRoute: {e.message}</div>;
-  }
-
-  // Вместо: const { lang, setLang, t } = useI18n();
-  let lang, setLang, t;
-  try {
-    console.log('[DEBUG] Calling useI18n...');
-    const i18nResult = useI18n();
-    lang = i18nResult.lang;
-    setLang = i18nResult.setLang;
-    t = i18nResult.t;
-    console.log('[DEBUG] useI18n SUCCESS:', { lang, setLang, t });
-  } catch (e) {
-    console.error('[DEBUG] useI18n FAILED:', e);
-    return <div>Error in useI18n: {e.message}</div>;
-  }
-
-  // Вместо: const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
-  let isEmbedded;
-  try {
-    console.log('[DEBUG] Calculating isEmbedded...');
-    isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
-    console.log('[DEBUG] isEmbedded SUCCESS:', isEmbedded);
-  } catch (e) {
-    console.error('[DEBUG] isEmbedded FAILED:', e);
-    return <div>Error in isEmbedded: {e.message}</div>;
-  }
-
-  // ТУК ТРЯБВА ДА Е:
-  let shop;
-  try {
-    console.log('[DEBUG] Getting shop parameter...');
-    shop = qs('shop', '');
-    console.log('[DEBUG] shop SUCCESS:', shop);
-  } catch (e) {
-    console.error('[DEBUG] shop FAILED:', e);
-    return <div>Error in shop: {e.message}</div>;
-  }
-
-  // Вместо: const sectionTitle = useMemo(() => {...}, [path]);
-  let sectionTitle;
-  try {
-    console.log('[DEBUG] Calling useMemo for sectionTitle...');
-    sectionTitle = useMemo(() => {
-      if (path.startsWith('/ai-seo')) return 'AI SEO';
-      if (path.startsWith('/billing')) return 'Billing';
-      if (path.startsWith('/settings')) return 'Settings';
-      return 'Dashboard';
-    }, [path]);
-    console.log('[DEBUG] useMemo SUCCESS, sectionTitle:', sectionTitle);
-  } catch (e) {
-    console.error('[DEBUG] useMemo FAILED:', e);
-    return <div>Error in useMemo: {e.message}</div>;
-  }
-
-  console.log('[DEBUG] All hooks completed, about to render JSX');
+  const sectionTitle = useMemo(() => {
+    if (path.startsWith('/ai-seo')) return 'AI SEO';
+    if (path.startsWith('/billing')) return 'Billing';
+    if (path.startsWith('/settings')) return 'Settings';
+    return 'Dashboard';
+  }, [path]);
 
 
   return (

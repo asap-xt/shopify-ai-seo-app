@@ -10,7 +10,12 @@ export default defineConfig({
       output: {
         entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
         chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`
+        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'polaris': ['@shopify/polaris'],
+          'app-bridge': ['@shopify/app-bridge-react']
+        }
       }
     }
   },

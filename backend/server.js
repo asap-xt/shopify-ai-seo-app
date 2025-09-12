@@ -9,6 +9,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
+import compression from 'compression';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -55,6 +56,7 @@ app.use((_, res, next) => {
 // Core middleware
 // ---------------------------------------------------------------------------
 app.use(cors({ origin: true, credentials: true }));
+app.use(compression()); // Enable gzip compression
 app.use(cookieParser());
 app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
@@ -302,25 +304,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve assets (no index by default; SPA routes return it explicitly)
+// Serve assets with aggressive caching for production
 app.use(
   express.static(distPath, {
     index: false,
     etag: false,
     lastModified: false,
-    maxAge: 0, // Disable caching for development
+    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0, // 1 year cache in production
     setHeaders(res, filePath) {
-      // Disable caching for all files during development
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
-      res.setHeader('Last-Modified', new Date().toUTCString());
-      res.setHeader('ETag', `"${Date.now()}-${Math.random()}"`);
-      res.setHeader('Vary', '*');
-      res.setHeader('X-Cache-Bust', Date.now().toString());
-      res.setHeader('X-Timestamp', Date.now().toString());
-      res.setHeader('X-Random', Math.random().toString());
+      if (process.env.NODE_ENV === 'production') {
+        // Cache JS/CSS files for 1 year in production
+        if (filePath.match(/\.(js|css)$/)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        // Cache images for 1 year in production
+        if (filePath.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        // Cache fonts for 1 year in production
+        if (filePath.match(/\.(woff|woff2|ttf|eot)$/)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      } else {
+        // Development: disable caching for all files
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+        res.setHeader('Last-Modified', new Date().toUTCString());
+        res.setHeader('ETag', `"${Date.now()}-${Math.random()}"`);
+        res.setHeader('Vary', '*');
+        res.setHeader('X-Cache-Bust', Date.now().toString());
+        res.setHeader('X-Timestamp', Date.now().toString());
+        res.setHeader('X-Random', Math.random().toString());
+      }
     },
   })
 );
