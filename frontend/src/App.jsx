@@ -51,54 +51,6 @@ function useRoute() {
   return { path };
 }
 
-// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
-function AdminNavMenu({ active, shop }) {
-  const isDash = active === '/' || active.startsWith('/dashboard');
-  const isSeo  = active.startsWith('/ai-seo');
-  const isBill = active.startsWith('/billing');
-  const isSett = active.startsWith('/settings');
-  
-  // ВАЖНО: Вземете host от текущия URL
-  const currentParams = new URLSearchParams(window.location.search);
-  const host = currentParams.get('host');
-  
-  // Създайте параметри които включват shop И host
-  const navParams = new URLSearchParams();
-  if (shop) navParams.set('shop', shop);
-  if (host) navParams.set('host', host);
-  const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
-
-  useEffect(() => {
-    // Регистрирай ui-nav-menu само когато сме embedded
-    const isEmbedded = window.top !== window.self;
-    if (!isEmbedded) return;
-
-    // Custom element за Shopify навигация
-    if (!customElements.get('ui-nav-menu')) {
-      class UINavMenu extends HTMLElement {
-        constructor() {
-          super();
-          this.attachShadow({ mode: 'open' });
-        }
-
-        connectedCallback() {
-          const slot = document.createElement('slot');
-          this.shadowRoot.appendChild(slot);
-        }
-      }
-      customElements.define('ui-nav-menu', UINavMenu);
-    }
-  }, []);
-
-  return (
-    <ui-nav-menu>
-      <a href={`/dashboard${paramString}`} {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`}    {...(isSeo  ? {'aria-current':'page'} : {})}>AI SEO</a>
-      <a href={`/billing${paramString}`}   {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
-      <a href={`/settings${paramString}`}  {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
-    </ui-nav-menu>
-  );
-}
 
 // -------- Dashboard
 function DashboardCard() {
@@ -607,9 +559,73 @@ export default function App() {
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
+  // ДОБАВИ ТОВА: Конфигурирай Shopify navigation menu
+  useEffect(() => {
+    // Само ако сме embedded в Shopify admin
+    if (window.top !== window.self) {
+      const configureNavigation = () => {
+        if (!window.shopify?.app) {
+          console.log('[NAV] Waiting for App Bridge...');
+          return;
+        }
+        
+        try {
+          const currentParams = new URLSearchParams(window.location.search);
+          const shop = currentParams.get('shop');
+          const host = currentParams.get('host');
+          
+          // Създай параметри за URL-ите
+          const params = new URLSearchParams();
+          if (shop) params.set('shop', shop);
+          if (host) params.set('host', host);
+          const queryString = params.toString() ? `?${params.toString()}` : '';
+          
+          // Метод 1: Използвай dispatch
+          window.shopify.app.dispatch({
+            type: 'APP::NAVIGATION::MENU::SET',
+            payload: {
+              active: {
+                items: [
+                  {
+                    label: 'Dashboard',
+                    destination: `/dashboard${queryString}`,
+                  },
+                  {
+                    label: 'AI SEO',
+                    destination: `/ai-seo${queryString}`,
+                  },
+                  {
+                    label: 'Billing',
+                    destination: `/billing${queryString}`,
+                  },
+                  {
+                    label: 'Settings',
+                    destination: `/settings${queryString}`,
+                  },
+                ],
+              },
+            },
+          });
+          
+          console.log('[NAV] Navigation configured successfully');
+        } catch (error) {
+          console.error('[NAV] Failed to configure navigation:', error);
+        }
+      };
+      
+      // Опитай веднага
+      configureNavigation();
+      
+      // Ако не работи, опитай отново след малко
+      const timeout = setTimeout(configureNavigation, 1000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, []); // Изпълни само при първоначално зареждане
+
   return (
     <AppProvider i18n={I18N}>
-      <Frame navigation={isEmbedded ? <AdminNavMenu active={path} shop={shop} /> : null}>
+      <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
           {path === '/' || path.startsWith('/dashboard') ? (
