@@ -66,14 +66,13 @@ function AdminNavMenu({ active, shop }) {
   if (host) navParams.set('host', host);
   const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
 
-  // Използвай data-active вместо aria-current
   return (
     <ui-nav-menu>
       <a href={`/${paramString}`} rel="home">Home</a>
-      <a href={`/dashboard${paramString}`} data-active={isDash ? "true" : undefined}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`} data-active={isSeo ? "true" : undefined}>AI SEO</a>
-      <a href={`/billing${paramString}`} data-active={isBill ? "true" : undefined}>Billing</a>
-      <a href={`/settings${paramString}`} data-active={isSett ? "true" : undefined}>Settings</a>
+      <a href={`/dashboard${paramString}`}>Dashboard</a>
+      <a href={`/ai-seo${paramString}`}>AI SEO</a>
+      <a href={`/billing${paramString}`}>Billing</a>
+      <a href={`/settings${paramString}`}>Settings</a>
     </ui-nav-menu>
   );
 }
@@ -446,18 +445,23 @@ function SingleProductPanel({ shop }) {
 // -------- AI Search Optimisation Panel with Tabs
 const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
-  const [selectedTab, setSelectedTab] = useState(0);
+  const path = window.location.pathname;
   
-  // Рендерирай съдържанието без Polaris Tabs компонент
-  const renderContent = () => {
-    switch(selectedTab) {
-      case 0: return <BulkEdit shop={shop} />;
-      case 1: return <Collections shop={shop} />;
-      case 2: return <Sitemap shop={shop} />;
-      case 3: return <StoreMetadata shop={shop} />;
-      case 4: return <SchemaData shop={shop} />;
-      default: return <BulkEdit shop={shop} />;
-    }
+  // Определи активния таб от URL
+  const getActiveTab = () => {
+    if (path.includes('/ai-seo/collections')) return 'collections';
+    if (path.includes('/ai-seo/sitemap')) return 'sitemap';
+    if (path.includes('/ai-seo/store-metadata')) return 'store-metadata';
+    if (path.includes('/ai-seo/schema-data')) return 'schema-data';
+    return 'products'; // default
+  };
+  
+  const activeTab = getActiveTab();
+  
+  // Помощна функция за линкове с параметри
+  const createTabLink = (tabPath) => {
+    const params = new URLSearchParams(window.location.search);
+    return `/ai-seo/${tabPath}${params.toString() ? `?${params.toString()}` : ''}`;
   };
   
   // const tabs = [
@@ -497,44 +501,48 @@ const AiSearchOptimisationPanel = React.memo(() => {
   return (
     <div>
       {/* Custom tab navigation */}
-      <div style={{ borderBottom: '1px solid #e1e3e5', marginBottom: '16px' }}>
-        <InlineStack gap="0">
-          <Button 
-            primary={selectedTab === 0}
-            onClick={() => setSelectedTab(0)}
+      <Box paddingBlockEnd="400">
+        <InlineStack gap="200">
+          <Button
+            url={createTabLink('products')}
+            primary={activeTab === 'products'}
           >
             Products
           </Button>
-          <Button 
-            primary={selectedTab === 1}
-            onClick={() => setSelectedTab(1)}
+          <Button
+            url={createTabLink('collections')}
+            primary={activeTab === 'collections'}
           >
             Collections
           </Button>
-          <Button 
-            primary={selectedTab === 2}
-            onClick={() => setSelectedTab(2)}
+          <Button
+            url={createTabLink('sitemap')}
+            primary={activeTab === 'sitemap'}
           >
             Sitemap
           </Button>
-          <Button 
-            primary={selectedTab === 3}
-            onClick={() => setSelectedTab(3)}
+          <Button
+            url={createTabLink('store-metadata')}
+            primary={activeTab === 'store-metadata'}
           >
             Store metadata
           </Button>
-          <Button 
-            primary={selectedTab === 4}
-            onClick={() => setSelectedTab(4)}
+          <Button
+            url={createTabLink('schema-data')}
+            primary={activeTab === 'schema-data'}
           >
             Schema Data
           </Button>
         </InlineStack>
-      </div>
+      </Box>
       
       {/* Tab content */}
       <div>
-        {renderContent()}
+        {activeTab === 'products' && <BulkEdit shop={shop} />}
+        {activeTab === 'collections' && <Collections shop={shop} />}
+        {activeTab === 'sitemap' && <Sitemap shop={shop} />}
+        {activeTab === 'store-metadata' && <StoreMetadata shop={shop} />}
+        {activeTab === 'schema-data' && <SchemaData shop={shop} />}
       </div>
     </div>
   );
@@ -560,6 +568,32 @@ export default function App() {
     return 'Dashboard';
   }, [path]);
 
+  // Обнови routing логиката да поддържа под-страници:
+  const getPageComponent = () => {
+    if (path === '/' || path.startsWith('/dashboard')) {
+      return <DashboardCard shop={shop} />;
+    } else if (path.startsWith('/ai-seo')) {
+      return <AiSearchOptimisationPanel shop={shop} />;
+    } else if (path.startsWith('/billing')) {
+      return (
+        <Card>
+          <Box padding="400">
+            <Text>Billing page</Text>
+          </Box>
+        </Card>
+      );
+    } else if (path.startsWith('/settings')) {
+      return <Settings shop={shop} />;
+    } else {
+      return (
+        <Card>
+          <Box padding="400">
+            <Text>Page not found: {path}</Text>
+          </Box>
+        </Card>
+      );
+    }
+  };
 
   return (
     <AppProvider i18n={I18N}>
@@ -567,25 +601,7 @@ export default function App() {
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
-          {path === '/' || path.startsWith('/dashboard') ? (
-            <DashboardCard shop={shop} />
-          ) : path.startsWith('/ai-seo') ? (
-            <AiSearchOptimisationPanel shop={shop} />
-          ) : path.startsWith('/billing') ? (
-            <Card>
-              <Box padding="400">
-                <Text>Billing page</Text>
-              </Box>
-            </Card>
-          ) : path.startsWith('/settings') ? (
-            <Settings shop={shop} />
-          ) : (
-            <Card>
-              <Box padding="400">
-                <Text>Page not found: {path}</Text>
-              </Box>
-            </Card>
-          )}
+          {getPageComponent()}
         </Page>
       </Frame>
     </AppProvider>
