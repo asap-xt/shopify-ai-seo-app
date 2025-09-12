@@ -561,67 +561,73 @@ export default function App() {
 
   // ДОБАВИ ТОВА: Конфигурирай Shopify navigation menu
   useEffect(() => {
-    // Само ако сме embedded в Shopify admin
-    if (window.top !== window.self) {
-      const configureNavigation = () => {
-        if (!window.shopify?.app) {
-          console.log('[NAV] Waiting for App Bridge...');
-          return;
-        }
-        
+    // Проверка дали сме embedded
+    if (window.top === window.self) {
+      console.log('[NAV] Not embedded, skipping navigation setup');
+      return;
+    }
+    
+    let checkCount = 0;
+    const maxChecks = 50; // 5 секунди максимум
+    
+    const checkAndSetupNav = () => {
+      checkCount++;
+      
+      // Logging за debug
+      console.log(`[NAV] Check #${checkCount}:`, {
+        hasShopify: !!window.shopify,
+        hasNavigationMenu: !!window.shopify?.navigationMenu,
+        hasApp: !!window.shopify?.app,
+      });
+      
+      // Опитай различни API варианти
+      if (window.shopify?.navigationMenu) {
+        // Модерен API
+        console.log('[NAV] Found navigationMenu API');
+        window.shopify.navigationMenu.set({
+          items: [
+            { label: 'Dashboard', destination: '/' },
+            { label: 'AI SEO', destination: '/ai-seo' },
+            { label: 'Billing', destination: '/billing' },
+            { label: 'Settings', destination: '/settings' },
+          ],
+        }).then(() => {
+          console.log('[NAV] ✓ Navigation configured via navigationMenu');
+        }).catch(err => {
+          console.error('[NAV] navigationMenu error:', err);
+        });
+      } 
+      else if (window.shopify?.app) {
+        // Стар API
+        console.log('[NAV] Found app API, trying dispatch');
         try {
-          const currentParams = new URLSearchParams(window.location.search);
-          const shop = currentParams.get('shop');
-          const host = currentParams.get('host');
-          
-          // Създай параметри за URL-ите
-          const params = new URLSearchParams();
-          if (shop) params.set('shop', shop);
-          if (host) params.set('host', host);
-          const queryString = params.toString() ? `?${params.toString()}` : '';
-          
-          // Метод 1: Използвай dispatch
           window.shopify.app.dispatch({
-            type: 'APP::NAVIGATION::MENU::SET',
+            type: 'APP::NAV::MENU::SET',
             payload: {
-              active: {
-                items: [
-                  {
-                    label: 'Dashboard',
-                    destination: `/dashboard${queryString}`,
-                  },
-                  {
-                    label: 'AI SEO',
-                    destination: `/ai-seo${queryString}`,
-                  },
-                  {
-                    label: 'Billing',
-                    destination: `/billing${queryString}`,
-                  },
-                  {
-                    label: 'Settings',
-                    destination: `/settings${queryString}`,
-                  },
-                ],
-              },
+              items: [
+                { label: 'Dashboard', destination: '/' },
+                { label: 'AI SEO', destination: '/ai-seo' },
+                { label: 'Billing', destination: '/billing' },
+                { label: 'Settings', destination: '/settings' },
+              ],
             },
           });
-          
-          console.log('[NAV] Navigation configured successfully');
-        } catch (error) {
-          console.error('[NAV] Failed to configure navigation:', error);
+          console.log('[NAV] ✓ Navigation configured via dispatch');
+        } catch (err) {
+          console.error('[NAV] dispatch error:', err);
         }
-      };
-      
-      // Опитай веднага
-      configureNavigation();
-      
-      // Ако не работи, опитай отново след малко
-      const timeout = setTimeout(configureNavigation, 1000);
-      
-      return () => clearTimeout(timeout);
-    }
-  }, []); // Изпълни само при първоначално зареждане
+      }
+      else if (checkCount < maxChecks) {
+        // Продължи да проверяваш
+        setTimeout(checkAndSetupNav, 100);
+      } else {
+        console.error('[NAV] ✗ Could not find navigation API after 5 seconds');
+      }
+    };
+    
+    // Започни проверките
+    checkAndSetupNav();
+  }, []); // Само веднъж при mount
 
   return (
     <AppProvider i18n={I18N}>
