@@ -448,6 +448,15 @@ const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   
+  // ВАЖНО: Предотврати default поведението на табовете
+  const handleTabSelect = (index) => {
+    setSelectedTab(index);
+    // Спри event propagation
+    if (event) {
+      event.stopPropagation();
+    }
+  };
+  
   const tabs = [
     // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž Single Product Ñ‚Ð°Ð±
     // {
@@ -483,20 +492,22 @@ const AiSearchOptimisationPanel = React.memo(() => {
   ];
   
   return (
-    <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
-     {selectedTab === 0 ? (
-      <BulkEdit shop={shop} />
-    ) : selectedTab === 1 ? (
-      <Collections shop={shop} />
-    ) : selectedTab === 2 ? (
-      <Sitemap shop={shop} />
-    ) : selectedTab === 3 ? (
-      <StoreMetadata shop={shop} />
-    ) : (
-      <SchemaData shop={shop} />
-    )}
-  </Tabs>
-);
+    <div onClick={(e) => e.stopPropagation()}>
+      <Tabs tabs={tabs} selected={selectedTab} onSelect={handleTabSelect}>
+        {selectedTab === 0 ? (
+          <BulkEdit shop={shop} />
+        ) : selectedTab === 1 ? (
+          <Collections shop={shop} />
+        ) : selectedTab === 2 ? (
+          <Sitemap shop={shop} />
+        ) : selectedTab === 3 ? (
+          <StoreMetadata shop={shop} />
+        ) : (
+          <SchemaData shop={shop} />
+        )}
+      </Tabs>
+    </div>
+  );
 });
 
 const translations = {
