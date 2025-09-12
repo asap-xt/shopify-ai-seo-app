@@ -16,27 +16,27 @@ const toGID = (id) => {
 };
 
 /** Pick best available Admin token for THIS shop */
-function resolveAdminToken(req, res) {
-  console.log('[LANGUAGE-TOKEN] Resolving token for shop:', req.shopDomain);
-  console.log('[LANGUAGE-TOKEN] res.locals:', res?.locals);
+function resolveAdminToken(req) {
+  console.log('=== LANGUAGE CONTROLLER TOKEN RESOLVE ===');
   
-  // Use the new per-shop token resolver from server.js
-  const adminSession = res?.locals?.adminSession;
-  if (adminSession?.accessToken) {
-    console.log('[LANGUAGE-TOKEN] Using per-shop-resolver token');
-    return { token: adminSession.accessToken, authUsed: 'per-shop-resolver' };
-  }
-
-  // Fallback to old methods for backward compatibility
+  // 1) OAuth per-shop (shopify-app-express usually sets this)
   const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
+  console.log('1. Session token from res.locals:', sessionToken);
+  console.log('2. res.locals structure:', JSON.stringify(req?.res?.locals, null, 2));
+  
   if (sessionToken) return { token: sessionToken, authUsed: 'session' };
 
+  // 2) Proxy/header (optional)
   const headerToken = req.headers['x-shopify-access-token'];
+  console.log('3. Header token:', headerToken);
   if (headerToken) return { token: String(headerToken), authUsed: 'header' };
 
+  // 3) Single-tenant env
   const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+  console.log('4. Env token:', envToken ? 'EXISTS' : 'NOT SET');
   if (envToken) return { token: envToken, authUsed: 'single' };
 
+  console.log('5. No token found!');
   return { token: null, authUsed: 'none' };
 }
 
@@ -223,7 +223,7 @@ router.get('/shop/:shop', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
   console.log('[LANGUAGE-ENDPOINT] Starting with shop:', shop);
   
-  const { token, authUsed } = resolveAdminToken(req, res);
+  const { token, authUsed } = resolveAdminToken(req);
   console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
@@ -250,7 +250,7 @@ router.get('/shop/:shop', verifyRequest, async (req, res) => {
 router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
-  const { token, authUsed } = resolveAdminToken(req, res);
+  const { token, authUsed } = resolveAdminToken(req);
 
   if (!productId) return res.status(400).json({ error: 'Missing :productId' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
@@ -278,7 +278,7 @@ router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
 /** Optional: quick sanity ping to expose the real GQL error quickly */
 router.get('/ping/:shop', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
-  const { token, authUsed } = resolveAdminToken(req, res);
+  const { token, authUsed } = resolveAdminToken(req);
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {

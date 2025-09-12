@@ -142,62 +142,42 @@ export function validateEmbeddedSession() {
 // Combined middleware that tries both approaches
 export function validateRequest() {
   return async (req, res, next) => {
-    // First try embedded session token (for embedded app requests)
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (sessionToken) {
-      try {
-        const session = await shopify.auth.validateSessionToken(sessionToken);
-        if (session) {
-          req.shopifySession = session;
-          req.shopDomain = session.shop;
-          req.shopAccessToken = session.accessToken;
-          res.locals.shopify = { session };
-          console.log('[SHOPIFY-AUTH] Valid embedded session for shop:', session.shop);
-          return next();
-        }
-      } catch (error) {
-        console.log('[SHOPIFY-AUTH] Embedded session validation failed, trying shop session');
-      }
-    }
-
-    // Fallback to shop-based session validation
-    const shop = req.query.shop || req.body.shop;
+    const shop = req.query.shop || req.body?.shop;
     if (!shop) {
       return res.status(400).json({ error: 'Shop parameter required' });
     }
 
     try {
-      const session = await shopify.config.sessionStorage.loadSession(shop);
-      if (!session || !session.accessToken) {
-        // Development bypass - if no session but we have shop, allow it
-        console.log('[SHOPIFY-AUTH] Development bypass for shop:', shop);
-        req.shopifySession = {
-          shop: shop,
-          accessToken: 'mock-token-for-development',
-          isOnline: false
-        };
-        req.shopDomain = shop;
-        req.shopAccessToken = 'mock-token-for-development';
-        res.locals.shopify = { 
-          session: {
-            shop: shop,
-            accessToken: 'mock-token-for-development',
-            isOnline: false
-          }
-        };
-        return next();
+      // Вземи истинския токен от базата
+      const Shop = await import('../db/Shop.js');
+      const shopDoc = await Shop.default.findOne({ shop }).lean();
+      
+      if (!shopDoc || !shopDoc.accessToken) {
+        return res.status(401).json({ error: 'Shop not found or not authenticated' });
       }
 
-      req.shopifySession = session;
-      req.shopDomain = session.shop;
-      req.shopAccessToken = session.accessToken;
-      res.locals.shopify = { session };
+      // Сетни истинския токен
+      req.shopifySession = {
+        shop: shop,
+        accessToken: shopDoc.accessToken,
+        isOnline: false
+      };
+      req.shopDomain = shop;
+      req.shopAccessToken = shopDoc.accessToken;
+      
+      res.locals.shopify = { 
+        session: {
+          shop: shop,
+          accessToken: shopDoc.accessToken, // <-- Истинският токен!
+          isOnline: false,
+          scope: shopDoc.scopes || ''
+        }
+      };
 
-      console.log('[SHOPIFY-AUTH] Valid shop session for shop:', shop);
+      console.log('[SHOPIFY-AUTH] Set real token for shop:', shop);
       next();
     } catch (error) {
-      console.error('[SHOPIFY-AUTH] Shop session validation error:', error);
+      console.error('[SHOPIFY-AUTH] Error loading shop token:', error);
       return res.status(500).json({ error: 'Authentication error' });
     }
   };
