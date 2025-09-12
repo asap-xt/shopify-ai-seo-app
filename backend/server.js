@@ -99,7 +99,15 @@ app.use('/api', async (req, res, next) => {
       console.log('[API-RESOLVER] Shop from path:', shopFromPath);
     }
     
-    const shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || shopFromPath || null;
+    // Handle shop parameter - could be string or array if duplicated
+    let shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || shopFromPath || null;
+    
+    // If shop is an array (duplicated parameter), take the first valid one
+    if (Array.isArray(shop)) {
+      shop = shop.find(s => s && typeof s === 'string' && s.trim()) || shop[0];
+      console.log('[API-RESOLVER] Shop was array, using first valid:', shop);
+    }
+    
     console.log('[API-RESOLVER] Resolved shop:', shop);
     if (!shop) return res.status(400).json({ error: 'Missing shop' });
     if (!req.query) req.query = {};
