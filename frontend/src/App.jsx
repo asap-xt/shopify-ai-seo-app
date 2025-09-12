@@ -12,7 +12,6 @@ import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 
 import AppHeader from './components/AppHeader.jsx';
-import SideNav from './components/SideNav.jsx';
 import BulkEdit from './pages/BulkEdit.jsx';
 import Collections from './pages/Collections.jsx';
 import Sitemap from './pages/Sitemap.jsx';
@@ -68,6 +67,28 @@ function AdminNavMenu({ active, shop }) {
   if (shop) navParams.set('shop', shop);
   if (host) navParams.set('host', host);
   const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
+
+  useEffect(() => {
+    // Регистрирай ui-nav-menu само когато сме embedded
+    const isEmbedded = window.top !== window.self;
+    if (!isEmbedded) return;
+
+    // Custom element за Shopify навигация
+    if (!customElements.get('ui-nav-menu')) {
+      class UINavMenu extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+
+        connectedCallback() {
+          const slot = document.createElement('slot');
+          this.shadowRoot.appendChild(slot);
+        }
+      }
+      customElements.define('ui-nav-menu', UINavMenu);
+    }
+  }, []);
 
   return (
     <ui-nav-menu>
@@ -588,8 +609,7 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
-      <Frame>
+      <Frame navigation={isEmbedded ? <AdminNavMenu active={path} shop={shop} /> : null}>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
           {path === '/' || path.startsWith('/dashboard') ? (
