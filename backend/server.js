@@ -304,13 +304,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Handle root request without shop parameter (from Partners Dashboard)
+// Handle root request - това е App URL endpoint-а
 app.get('/', (req, res) => {
-  const { shop, hmac, timestamp, host } = req.query;
+  const { shop, hmac, timestamp, host, embedded } = req.query;
   
-  console.log('[ROOT] Request with params:', req.query);
+  console.log('[APP URL] Request with params:', req.query);
   
-  // If no shop parameter, show install page
+  // Ако няма shop параметър, покажи install форма
   if (!shop) {
     return res.send(`
       <!DOCTYPE html>
@@ -380,9 +380,31 @@ app.get('/', (req, res) => {
     `);
   }
   
-  // If shop parameter exists, serve the embedded app
-  res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(distPath, 'index.html'));
+  // Ако има shop параметър и приложението НЕ е инсталирано, 
+  // пренасочи към OAuth flow
+  (async () => {
+    try {
+      const ShopModel = (await import('./db/Shop.js')).default;
+      const existingShop = await ShopModel.findOne({ shop }).lean();
+      
+      if (!existingShop || !existingShop.accessToken) {
+        // Приложението не е инсталирано - започни OAuth
+        console.log('[APP URL] App not installed, redirecting to /auth');
+        return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
+      }
+      
+      // Приложението е инсталирано - сервирай embedded app
+      console.log('[APP URL] App installed, serving embedded app');
+      res.set('Cache-Control', 'no-store');
+      res.sendFile(path.join(distPath, 'index.html'));
+      
+    } catch (err) {
+      console.error('[APP URL] Error checking installation:', err);
+      // При грешка, пробвай да сервираш приложението
+      res.set('Cache-Control', 'no-store');
+      res.sendFile(path.join(distPath, 'index.html'));
+    }
+  })();
 });
 
 // Serve assets with aggressive caching for production
