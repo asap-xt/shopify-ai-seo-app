@@ -52,7 +52,12 @@ function useRoute() {
 }
 
 // -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
-function AdminNavMenu({ shop }) {
+function AdminNavMenu({ active, shop }) {
+  const isDash = active === '/' || active.startsWith('/dashboard');
+  const isSeo = active.startsWith('/ai-seo');
+  const isBill = active.startsWith('/billing');
+  const isSett = active.startsWith('/settings');
+  
   const currentParams = new URLSearchParams(window.location.search);
   const host = currentParams.get('host');
   
@@ -61,15 +66,14 @@ function AdminNavMenu({ shop }) {
   if (host) navParams.set('host', host);
   const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
 
-  // ВАЖНО: Първият елемент трябва да има rel="home" и да сочи към "/"
-  // Той НЕ се рендерира като линк според документацията
+  // Използвай data-active вместо aria-current
   return (
     <ui-nav-menu>
       <a href={`/${paramString}`} rel="home">Home</a>
-      <a href={`/dashboard${paramString}`}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`}>AI SEO</a>
-      <a href={`/billing${paramString}`}>Billing</a>
-      <a href={`/settings${paramString}`}>Settings</a>
+      <a href={`/dashboard${paramString}`} data-active={isDash ? "true" : undefined}>Dashboard</a>
+      <a href={`/ai-seo${paramString}`} data-active={isSeo ? "true" : undefined}>AI SEO</a>
+      <a href={`/billing${paramString}`} data-active={isBill ? "true" : undefined}>Billing</a>
+      <a href={`/settings${paramString}`} data-active={isSett ? "true" : undefined}>Settings</a>
     </ui-nav-menu>
   );
 }
@@ -582,35 +586,10 @@ export default function App() {
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
-  // Client-side routing handler за ui-nav-menu
-  useEffect(() => {
-    if (!window.shopify) return;
-    
-    // Слушай за навигационни събития
-    const handleNavigation = (event) => {
-      // Предотврати full page reload
-      if (event.target.tagName === 'A' && event.target.closest('ui-nav-menu')) {
-        event.preventDefault();
-        
-        const href = event.target.getAttribute('href');
-        const url = new URL(href, window.location.origin);
-        
-        // Използвай React Router или твоята routing логика
-        window.history.pushState({}, '', url.pathname + url.search);
-        setPath(url.pathname); // или каквото използваш за routing
-      }
-    };
-    
-    document.addEventListener('click', handleNavigation);
-    
-    return () => {
-      document.removeEventListener('click', handleNavigation);
-    };
-  }, []);
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu shop={shop} />}
+      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
