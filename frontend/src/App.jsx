@@ -448,64 +448,94 @@ const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
   const [selectedTab, setSelectedTab] = useState(0);
   
-  // ВАЖНО: Предотврати default поведението на табовете
-  const handleTabSelect = (index) => {
-    setSelectedTab(index);
-    // Спри event propagation
-    if (event) {
-      event.stopPropagation();
+  // Рендерирай съдържанието без Polaris Tabs компонент
+  const renderContent = () => {
+    switch(selectedTab) {
+      case 0: return <BulkEdit shop={shop} />;
+      case 1: return <Collections shop={shop} />;
+      case 2: return <Sitemap shop={shop} />;
+      case 3: return <StoreMetadata shop={shop} />;
+      case 4: return <SchemaData shop={shop} />;
+      default: return <BulkEdit shop={shop} />;
     }
   };
   
-  const tabs = [
+  // const tabs = [
     // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž Single Product Ñ‚Ð°Ð±
     // {
     //   id: 'single-product',
     //   content: 'Single Product',
     //   panelID: 'single-product-panel',
     // },
-    {
-      id: 'products',
-      content: 'Products',
-      panelID: 'products-panel',
-    },
-    {
-      id: 'collections',
-      content: 'Collections',
-      panelID: 'collections-panel',
-    },
-    {
-      id: 'sitemap',
-      content: 'Sitemap',
-      panelID: 'sitemap-panel',
-    },
-    {
-      id: 'store-metadata',
-      content: 'Store metadata for AI search',
-      panelID: 'store-metadata-panel',
-    },
-    {
-      id: 'schema-data',
-      content: 'Schema Data',
-      panelID: 'schema-data-panel',
-    },
-  ];
+    // {
+    //   id: 'products',
+    //   content: 'Products',
+    //   panelID: 'products-panel',
+    // },
+    // {
+    //   id: 'collections',
+    //   content: 'Collections',
+    //   panelID: 'collections-panel',
+    // },
+    // {
+    //   id: 'sitemap',
+    //   content: 'Sitemap',
+    //   panelID: 'sitemap-panel',
+    // },
+    // {
+    //   id: 'store-metadata',
+    //   content: 'Store metadata for AI search',
+    //   panelID: 'store-metadata-panel',
+    // },
+    // {
+    //   id: 'schema-data',
+    //   content: 'Schema Data',
+    //   panelID: 'schema-data-panel',
+    // },
+  // ];
   
   return (
-    <div onClick={(e) => e.stopPropagation()}>
-      <Tabs tabs={tabs} selected={selectedTab} onSelect={handleTabSelect}>
-        {selectedTab === 0 ? (
-          <BulkEdit shop={shop} />
-        ) : selectedTab === 1 ? (
-          <Collections shop={shop} />
-        ) : selectedTab === 2 ? (
-          <Sitemap shop={shop} />
-        ) : selectedTab === 3 ? (
-          <StoreMetadata shop={shop} />
-        ) : (
-          <SchemaData shop={shop} />
-        )}
-      </Tabs>
+    <div>
+      {/* Custom tab navigation */}
+      <div style={{ borderBottom: '1px solid #e1e3e5', marginBottom: '16px' }}>
+        <InlineStack gap="0">
+          <Button 
+            primary={selectedTab === 0}
+            onClick={() => setSelectedTab(0)}
+          >
+            Products
+          </Button>
+          <Button 
+            primary={selectedTab === 1}
+            onClick={() => setSelectedTab(1)}
+          >
+            Collections
+          </Button>
+          <Button 
+            primary={selectedTab === 2}
+            onClick={() => setSelectedTab(2)}
+          >
+            Sitemap
+          </Button>
+          <Button 
+            primary={selectedTab === 3}
+            onClick={() => setSelectedTab(3)}
+          >
+            Store metadata
+          </Button>
+          <Button 
+            primary={selectedTab === 4}
+            onClick={() => setSelectedTab(4)}
+          >
+            Schema Data
+          </Button>
+        </InlineStack>
+      </div>
+      
+      {/* Tab content */}
+      <div>
+        {renderContent()}
+      </div>
     </div>
   );
 });
