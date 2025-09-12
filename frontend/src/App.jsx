@@ -6,7 +6,6 @@ import {
   AppProvider, Frame, Page, Card, Text, Box, 
   Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
-import { NavMenu } from '@shopify/app-bridge-react';
 import { useEffect, useState, useMemo } from 'react';
 import { useAppBridge } from './providers/AppBridgeProvider.jsx';
 import { useShopApi } from './hooks/useShopApi.js';
@@ -50,6 +49,32 @@ function useRoute() {
   }, []);
   
   return { path };
+}
+
+// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
+function AdminNavMenu({ active, shop }) {
+  const isDash = active === '/' || active.startsWith('/dashboard');
+  const isSeo = active.startsWith('/ai-seo');
+  const isBill = active.startsWith('/billing');
+  const isSett = active.startsWith('/settings');
+  
+  const currentParams = new URLSearchParams(window.location.search);
+  const host = currentParams.get('host');
+  
+  const navParams = new URLSearchParams();
+  if (shop) navParams.set('shop', shop);
+  if (host) navParams.set('host', host);
+  const paramString = navParams.toString() ? `?${navParams.toString()}` : '';
+
+  // ui-nav-menu приема САМО <a> tags като деца, БЕЗ атрибути
+  return (
+    <ui-nav-menu>
+      <a href={`/dashboard${paramString}`} {...(isDash ? {'aria-current':'page'} : {})}>Dashboard</a>
+      <a href={`/ai-seo${paramString}`} {...(isSeo ? {'aria-current':'page'} : {})}>AI SEO</a>
+      <a href={`/billing${paramString}`} {...(isBill ? {'aria-current':'page'} : {})}>Billing</a>
+      <a href={`/settings${paramString}`} {...(isSett ? {'aria-current':'page'} : {})}>Settings</a>
+    </ui-nav-menu>
+  );
 }
 
 
@@ -560,31 +585,9 @@ export default function App() {
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
-  // Създай навигационните елементи
-  const navigationItems = [
-    {
-      label: 'Dashboard',
-      destination: '/',
-    },
-    {
-      label: 'AI SEO', 
-      destination: '/ai-seo',
-    },
-    {
-      label: 'Billing',
-      destination: '/billing',
-    },
-    {
-      label: 'Settings',
-      destination: '/settings',
-    },
-  ];
-
   return (
     <AppProvider i18n={I18N}>
-      {/* Добави NavMenu тук */}
-      <NavMenu navigationItems={navigationItems} />
-      
+      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
