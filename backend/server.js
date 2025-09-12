@@ -309,6 +309,7 @@ app.get('/', (req, res) => {
   const { shop, hmac, timestamp, host, embedded } = req.query;
   
   console.log('[APP URL] Request with params:', req.query);
+  console.log('[APP URL] Headers:', req.headers);
   
   // Ако няма shop параметър, покажи install форма
   if (!shop) {
@@ -380,8 +381,15 @@ app.get('/', (req, res) => {
     `);
   }
   
-  // Ако има shop параметър и приложението НЕ е инсталирано, 
-  // пренасочи към OAuth flow
+  // За embedded apps, трябва специални headers
+  res.set({
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Frame-Options': 'ALLOWALL', // Позволява iframe
+    'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://partners.shopify.com",
+    'Cache-Control': 'no-store, no-cache, must-revalidate'
+  });
+  
+  // Проверка дали приложението е инсталирано
   (async () => {
     try {
       const ShopModel = (await import('./db/Shop.js')).default;
@@ -390,21 +398,102 @@ app.get('/', (req, res) => {
       if (!existingShop || !existingShop.accessToken) {
         // Приложението не е инсталирано - започни OAuth
         console.log('[APP URL] App not installed, redirecting to /auth');
+        
+        // За Partners Dashboard, използвай специален redirect
+        if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
+          // Генерирай пълен OAuth URL директно
+          const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
+          return res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Installing...</title>
+              <script>
+                // Redirect в top frame, не в iframe
+                if (window.top !== window.self) {
+                  window.top.location.href = '${authUrl}';
+                } else {
+                  window.location.href = '${authUrl}';
+                }
+              </script>
+            </head>
+            <body>
+              <p>Redirecting to installation...</p>
+            </body>
+            </html>
+          `);
+        }
+        
         return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
       }
       
       // Приложението е инсталирано - сервирай embedded app
       console.log('[APP URL] App installed, serving embedded app');
-      res.set('Cache-Control', 'no-store');
-      res.sendFile(path.join(distPath, 'index.html'));
+      
+      // Прочети index.html и го върни
+      const indexPath = path.join(distPath, 'index.html');
+      const html = fs.readFileSync(indexPath, 'utf8');
+      
+      res.send(html);
       
     } catch (err) {
-      console.error('[APP URL] Error checking installation:', err);
-      // При грешка, пробвай да сервираш приложението
-      res.set('Cache-Control', 'no-store');
-      res.sendFile(path.join(distPath, 'index.html'));
+      console.error('[APP URL] Error:', err);
+      
+      // При грешка покажи съобщение
+      res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Error</title>
+        </head>
+        <body>
+          <h1>Error loading app</h1>
+          <p>${err.message}</p>
+          <p>Please try again or contact support.</p>
+        </body>
+        </html>
+      `);
     }
   })();
+});
+
+// Partners може да очаква /api endpoint
+app.get('/api', (req, res) => {
+  console.log('[API] Partners check:', req.query);
+  res.json({ 
+    status: 'ok',
+    app: 'NEW AI SEO',
+    version: '1.0.0'
+  });
+});
+
+// Или може да търси health endpoint
+app.get('/health', (req, res) => {
+  console.log('[HEALTH] Check from:', req.headers.referer);
+  res.json({ 
+    status: 'healthy',
+    timestamp: Date.now()
+  });
+});
+
+// Debug route за да видим всички заявки
+app.use((req, res, next) => {
+  if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
+    console.log('[PARTNERS REQUEST]', {
+      method: req.method,
+      url: req.url,
+      path: req.path,
+      query: req.query,
+      headers: {
+        'user-agent': req.headers['user-agent'],
+        'referer': req.headers.referer,
+        'x-frame-options': req.headers['x-frame-options']
+      }
+    });
+  }
+  next();
 });
 
 // Serve assets with aggressive caching for production
