@@ -63,25 +63,28 @@ async function adminGraphQL({ shop, accessToken, query, variables }) {
 }
 
 /**
- * Resolve an Admin API access token.
- * Use the new per-shop token resolver from server.js
+ * Resolve an Admin API access token from database or environment.
  */
-function resolveAccessToken(req) {
-  // Use the new per-shop token resolver from server.js
-  const adminSession = req?.res?.locals?.adminSession;
-  if (adminSession?.accessToken) {
-    return adminSession.accessToken;
+async function resolveAccessToken(shop) {
+  try {
+    // Първо провери в базата данни
+    const Shop = await import('../db/Shop.js');
+    const shopDoc = await Shop.default.findOne({ shop }).lean();
+    
+    if (shopDoc && shopDoc.accessToken) {
+      return shopDoc.accessToken;
+    }
+  } catch (err) {
+    console.error('Error loading shop from DB:', err);
   }
-
-  // Fallback to old methods for backward compatibility
-  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
-  if (sessionToken) return sessionToken;
-
-  const headerToken = req.headers['x-shopify-access-token'];
-  if (headerToken) return String(headerToken);
-
-  const token = process.env.SHOPIFY_ADMIN_API_TOKEN || null;
-  return token;
+  
+  // Fallback към env (само за development)
+  const envToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  if (envToken) {
+    return envToken;
+  }
+  
+  return null;
 }
 
 // Updated pickPrices to accept currency
@@ -369,7 +372,7 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
  */
 export async function syncProductsForShop(req, shop, opts = {}) {
   if (!shop) throw new Error('Missing shop');
-  const accessToken = opts.accessToken || resolveAccessToken(req);
+  const accessToken = opts.accessToken || await resolveAccessToken(shop);
   if (!accessToken) throw new Error(`No Admin API token available for shop ${shop}`);
 
   console.log(`Starting product sync for ${shop}...`);
