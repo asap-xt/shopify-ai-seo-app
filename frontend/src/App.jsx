@@ -447,21 +447,28 @@ const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
   const path = window.location.pathname;
   
-  // Определи активния таб от URL
+  // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
   const getActiveTab = () => {
-    if (path.includes('/ai-seo/collections')) return 'collections';
-    if (path.includes('/ai-seo/sitemap')) return 'sitemap';
-    if (path.includes('/ai-seo/store-metadata')) return 'store-metadata';
-    if (path.includes('/ai-seo/schema-data')) return 'schema-data';
+    if (path === '/ai-seo' || path === '/ai-seo/products') return 'products';
+    if (path === '/ai-seo/collections') return 'collections';
+    if (path === '/ai-seo/sitemap') return 'sitemap';
+    if (path === '/ai-seo/store-metadata') return 'store-metadata';
+    if (path === '/ai-seo/schema-data') return 'schema-data';
     return 'products'; // default
   };
   
   const activeTab = getActiveTab();
   
-  // Помощна функция за линкове с параметри
+  // Функция за създаване на линкове с параметри
   const createTabLink = (tabPath) => {
     const params = new URLSearchParams(window.location.search);
-    return `/ai-seo/${tabPath}${params.toString() ? `?${params.toString()}` : ''}`;
+    const paramString = params.toString() ? `?${params.toString()}` : '';
+    
+    // За products таба използвай само /ai-seo
+    if (tabPath === 'products') {
+      return `/ai-seo${paramString}`;
+    }
+    return `/ai-seo/${tabPath}${paramString}`;
   };
   
   // const tabs = [
@@ -498,42 +505,82 @@ const AiSearchOptimisationPanel = React.memo(() => {
     // },
   // ];
   
+  // Използвай обикновени <a> тагове вместо Button url
   return (
     <div>
-      {/* Custom tab navigation */}
+      {/* Tab navigation */}
       <Box paddingBlockEnd="400">
-        <InlineStack gap="200">
-          <Button
-            url={createTabLink('products')}
-            primary={activeTab === 'products'}
-          >
-            Products
-          </Button>
-          <Button
-            url={createTabLink('collections')}
-            primary={activeTab === 'collections'}
-          >
-            Collections
-          </Button>
-          <Button
-            url={createTabLink('sitemap')}
-            primary={activeTab === 'sitemap'}
-          >
-            Sitemap
-          </Button>
-          <Button
-            url={createTabLink('store-metadata')}
-            primary={activeTab === 'store-metadata'}
-          >
-            Store metadata
-          </Button>
-          <Button
-            url={createTabLink('schema-data')}
-            primary={activeTab === 'schema-data'}
-          >
-            Schema Data
-          </Button>
-        </InlineStack>
+        <Card>
+          <Box padding="200">
+            <InlineStack gap="100">
+              <a 
+                href={createTabLink('products')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === 'products' ? '#008060' : '#f6f6f7',
+                  color: activeTab === 'products' ? 'white' : '#202223',
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                Products
+              </a>
+              <a 
+                href={createTabLink('collections')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === 'collections' ? '#008060' : '#f6f6f7',
+                  color: activeTab === 'collections' ? 'white' : '#202223',
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                Collections
+              </a>
+              <a 
+                href={createTabLink('sitemap')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === 'sitemap' ? '#008060' : '#f6f6f7',
+                  color: activeTab === 'sitemap' ? 'white' : '#202223',
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                Sitemap
+              </a>
+              <a 
+                href={createTabLink('store-metadata')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === 'store-metadata' ? '#008060' : '#f6f6f7',
+                  color: activeTab === 'store-metadata' ? 'white' : '#202223',
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                Store metadata
+              </a>
+              <a 
+                href={createTabLink('schema-data')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === 'schema-data' ? '#008060' : '#f6f6f7',
+                  color: activeTab === 'schema-data' ? 'white' : '#202223',
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                Schema Data
+              </a>
+            </InlineStack>
+          </Box>
+        </Card>
       </Box>
       
       {/* Tab content */}
@@ -570,11 +617,16 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
-    if (path === '/' || path.startsWith('/dashboard')) {
+    // Dashboard
+    if (path === '/' || path === '/dashboard') {
       return <DashboardCard shop={shop} />;
-    } else if (path.startsWith('/ai-seo')) {
+    } 
+    // AI SEO и под-страници
+    else if (path.startsWith('/ai-seo')) {
       return <AiSearchOptimisationPanel shop={shop} />;
-    } else if (path.startsWith('/billing')) {
+    } 
+    // Billing
+    else if (path === '/billing') {
       return (
         <Card>
           <Box padding="400">
@@ -582,13 +634,20 @@ export default function App() {
           </Box>
         </Card>
       );
-    } else if (path.startsWith('/settings')) {
+    } 
+    // Settings
+    else if (path === '/settings') {
       return <Settings shop={shop} />;
-    } else {
+    } 
+    // 404
+    else {
       return (
         <Card>
           <Box padding="400">
-            <Text>Page not found: {path}</Text>
+            <Text variant="headingMd">Page not found</Text>
+            <Box paddingBlockStart="200">
+              <Text>The page "{path}" does not exist.</Text>
+            </Box>
           </Box>
         </Card>
       );
