@@ -40,16 +40,30 @@ const shopify = shopifyApi({
  * Body: { shop: string, sessionToken: string }
  */
 router.post('/', async (req, res) => {
+  console.log('=== TOKEN EXCHANGE DEBUG ===');
+  console.log('1. Request body:', req.body);
+  console.log('2. Session token type:', typeof req.body.sessionToken);
+  
   try {
     const { shop, sessionToken } = req.body || {};
     if (!shop) return res.status(400).json({ error: 'Missing "shop"' });
     if (!sessionToken) return res.status(400).json({ error: 'Missing "sessionToken"' });
 
-    const accessToken = await shopify.auth.tokenExchange({
+    console.log('3. Calling shopify.auth.tokenExchange...');
+    const tokenResult = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
       requestedTokenType: RequestedTokenType.OfflineAccessToken,
     });
+    
+    console.log('4. Token exchange result:', tokenResult);
+    console.log('5. Result type:', typeof tokenResult);
+    console.log('6. Result keys:', Object.keys(tokenResult || {}));
+    
+    // Извличане на токена от резултата
+    const accessToken = tokenResult.accessToken || tokenResult;
+    console.log('7. Extracted token:', accessToken);
+    console.log('8. Token type:', typeof accessToken);
 
     await Shop.findOneAndUpdate(
       { shop },
@@ -57,10 +71,11 @@ router.post('/', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`✅ Token exchange successful for shop: ${shop}`);
+    console.log('9. Token saved successfully');
     return res.status(200).json({ status: 'ok' });
   } catch (error) {
-    console.error('❌ Token exchange error:', error);
+    console.error('=== TOKEN EXCHANGE ERROR ===');
+    console.error('Error details:', error);
     return res.status(500).json({ error: 'Token exchange failed' });
   }
 });
