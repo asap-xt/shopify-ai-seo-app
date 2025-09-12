@@ -562,47 +562,71 @@ export default function App() {
   // ДОБАВИ ТОВА: Конфигурирай Shopify navigation menu
   useEffect(() => {
     // Проверка дали сме embedded
-    if (window.top === window.self) {
-      console.log('[NAV] Not embedded, skipping navigation setup');
+    if (window.top === window.self || !window.shopify) {
+      console.log('[NAV] Not embedded or shopify not loaded');
       return;
     }
     
-    let checkCount = 0;
-    const maxChecks = 50; // 5 секунди максимум
-    
-    const checkAndSetupNav = () => {
-      checkCount++;
-      
-      // Logging за debug
-      console.log(`[NAV] Check #${checkCount}:`, {
-        hasShopify: !!window.shopify,
-        hasNavigationMenu: !!window.shopify?.navigationMenu,
-        hasApp: !!window.shopify?.app,
-      });
-      
-      // Опитай различни API варианти
-      if (window.shopify?.navigationMenu) {
-        // Модерен API
-        console.log('[NAV] Found navigationMenu API');
-        window.shopify.navigationMenu.set({
-          items: [
-            { label: 'Dashboard', destination: '/' },
-            { label: 'AI SEO', destination: '/ai-seo' },
-            { label: 'Billing', destination: '/billing' },
-            { label: 'Settings', destination: '/settings' },
-          ],
-        }).then(() => {
-          console.log('[NAV] ✓ Navigation configured via navigationMenu');
-        }).catch(err => {
-          console.error('[NAV] navigationMenu error:', err);
+    // App Bridge v4 използва intents за навигация
+    const setupNavigation = async () => {
+      try {
+        console.log('[NAV] Setting up navigation via intents');
+        
+        // Регистрирай навигационно меню
+        const result = await window.shopify.intents.register({
+          action: 'ADMIN::NAVIGATION::SET',
+          data: {
+            items: [
+              {
+                label: 'Dashboard',
+                destination: '/',
+                id: 'dashboard',
+              },
+              {
+                label: 'AI SEO',
+                destination: '/ai-seo',
+                id: 'ai-seo',
+              },
+              {
+                label: 'Billing',
+                destination: '/billing',
+                id: 'billing',
+              },
+              {
+                label: 'Settings',
+                destination: '/settings',
+                id: 'settings',
+              },
+            ],
+          },
         });
-      } 
-      else if (window.shopify?.app) {
-        // Стар API
-        console.log('[NAV] Found app API, trying dispatch');
+        
+        console.log('[NAV] Navigation registered:', result);
+        
+        // Алтернативен подход - опитай с invoke
+        if (!result || result.error) {
+          const invokeResult = await window.shopify.intents.invoke({
+            action: 'NAVIGATION_UPDATE',
+            data: {
+              active: path,
+              items: [
+                { label: 'Dashboard', destination: '/' },
+                { label: 'AI SEO', destination: '/ai-seo' },
+                { label: 'Billing', destination: '/billing' },
+                { label: 'Settings', destination: '/settings' },
+              ],
+            },
+          });
+          console.log('[NAV] Navigation invoked:', invokeResult);
+        }
+        
+      } catch (error) {
+        console.error('[NAV] Intent error:', error);
+        
+        // Последен опит - използвай протокола директно
         try {
-          window.shopify.app.dispatch({
-            type: 'APP::NAV::MENU::SET',
+          window.shopify.protocol.send({
+            type: 'navigation',
             payload: {
               items: [
                 { label: 'Dashboard', destination: '/' },
@@ -612,22 +636,17 @@ export default function App() {
               ],
             },
           });
-          console.log('[NAV] ✓ Navigation configured via dispatch');
-        } catch (err) {
-          console.error('[NAV] dispatch error:', err);
+          console.log('[NAV] Navigation sent via protocol');
+        } catch (protoError) {
+          console.error('[NAV] Protocol error:', protoError);
         }
-      }
-      else if (checkCount < maxChecks) {
-        // Продължи да проверяваш
-        setTimeout(checkAndSetupNav, 100);
-      } else {
-        console.error('[NAV] ✗ Could not find navigation API after 5 seconds');
       }
     };
     
-    // Започни проверките
-    checkAndSetupNav();
-  }, []); // Само веднъж при mount
+    // Изчакай Shopify да е готов
+    window.shopify.ready.then(setupNavigation);
+    
+  }, [path]); // Update when path changes
 
   return (
     <AppProvider i18n={I18N}>
