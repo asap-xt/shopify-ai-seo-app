@@ -62,7 +62,7 @@ function getValidProductsQuery(baseQuery) {
 }
 
 // GET /api/products/list - List products with pagination and filters
-router.get('/list', verifyRequest, async (req, res) => {
+router.get('/list', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const {
@@ -258,7 +258,7 @@ router.get('/sync-status', verifyRequest, async (req, res) => {
 });
 
 // POST /api/products/sync - Sync products from Shopify
-router.post('/sync', verifyRequest, async (req, res) => {
+router.post('/sync', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -561,7 +561,7 @@ router.get('/bulk-select', verifyRequest, async (req, res) => {
 
 // GET /api/products/:productId - Get single product with full details
 // ВАЖНО: Този route е последен, защото съдържа динамичен параметър
-router.get('/:productId', verifyRequest, async (req, res) => {
+router.get('/:productId', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { productId } = req.params;
@@ -711,7 +711,7 @@ router.delete('/:id/metafields', verifyRequest, async (req, res) => {
 });
 
 // GET /api/products/verify-seo/:productId - Verify real SEO status from Shopify
-router.get('/verify-seo/:productId', verifyRequest, async (req, res) => {
+router.get('/verify-seo/:productId', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { productId } = req.params;
@@ -808,7 +808,7 @@ router.get('/verify-seo/:productId', verifyRequest, async (req, res) => {
 });
 
 // POST /api/products/resync-all - Force resync all products with Shopify
-router.post('/resync-all', verifyRequest, async (req, res) => {
+router.post('/resync-all', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { limit = 50 } = req.body;

@@ -107,30 +107,46 @@ function requireShop(req) {
 }
 
 // Resolve Admin token: DB (OAuth) → env fallback
-function resolveAdminTokenForShop(req) {
-  // Use the new per-shop token resolver from server.js
-  const adminSession = req?.res?.locals?.adminSession;
-  if (adminSession?.accessToken) {
-    return adminSession.accessToken;
+async function resolveAdminTokenForShop(shop) {
+  console.log('=== TOKEN RESOLVER DEBUG ===');
+  console.log('1. Looking for shop:', shop);
+  
+  try {
+    const mod = await import('../db/Shop.js');
+    const Shop = (mod && (mod.default || mod.Shop || mod.shop)) || null;
+    
+    if (Shop && typeof Shop.findOne === 'function') {
+      const doc = await Shop.findOne({ shop }).lean().exec();
+      console.log('2. Found shop doc:', doc ? 'YES' : 'NO');
+      
+      if (doc) {
+        console.log('3. Doc fields:', Object.keys(doc));
+        console.log('4. accessToken value:', doc.accessToken);
+        console.log('5. accessToken type:', typeof doc.accessToken);
+        console.log('6. Is "undefined" string?:', doc.accessToken === 'undefined');
+        
+        // Проверка за валиден токен
+        if (doc.accessToken && 
+            doc.accessToken !== 'undefined' && 
+            doc.accessToken.startsWith('shpat_')) {
+          console.log('7. Valid token found!');
+          return doc.accessToken;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('8. DB error:', err);
   }
 
-  // Fallback to old methods for backward compatibility
-  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
-  if (sessionToken) return sessionToken;
+  console.log('9. No valid token in DB, checking env...');
+  const envToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  if (envToken) {
+    console.log('10. Using env token');
+    return envToken;
+  }
 
-  const headerToken = req.headers['x-shopify-access-token'];
-  if (headerToken) return String(headerToken);
-
-  const envToken =
-    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
-    (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN.trim()) ||
-    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
-
-  if (envToken) return envToken;
-
-  const err = new Error('No Admin API token available for this shop');
-  err.status = 400;
-  throw err;
+  console.log('11. No token found anywhere!');
+  throw new Error('No Admin API token available for this shop');
 }
 
 async function shopGraphQL(req, shop, query, variables = {}) {
@@ -138,7 +154,7 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
   console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
   
-  const token = resolveAdminTokenForShop(req);
+  const token = await resolveAdminTokenForShop(shop);
   console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
   
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
@@ -1339,7 +1355,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 router.get('/collections/list', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const token = resolveAdminTokenForShop(req);
+    const token = await resolveAdminTokenForShop(shop);
     
     console.log('[COLLECTIONS] Fetching collections via REST API for shop:', shop);
     
@@ -2146,7 +2162,7 @@ export {
 router.get('/collections/:id/seo-data', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const token = resolveAdminTokenForShop(req);
+    const token = await resolveAdminTokenForShop(shop);
     const collectionId = req.params.id;
     
     // Get metafields
@@ -2562,6 +2578,35 @@ router.delete('/collections/delete-seo', verifyRequest, async (req, res) => {
       ok: false,
       error: error.message
     });
+  }
+});
+
+// DEBUG ROUTE - временен за диагностика на токени
+router.get('/debug-token', async (req, res) => {
+  const shop = req.query.shop;
+  console.log('=== DEBUG TOKEN CHECK ===');
+  
+  try {
+    // Провери DB
+    const Shop = await import('../db/Shop.js');
+    const doc = await Shop.default.findOne({ shop }).lean();
+    
+    // Провери token exchange
+    console.log('Shop doc:', doc);
+    
+    res.json({
+      shop,
+      hasDoc: !!doc,
+      accessToken: doc?.accessToken,
+      tokenType: typeof doc?.accessToken,
+      isUndefinedString: doc?.accessToken === 'undefined',
+      tokenLength: doc?.accessToken?.length,
+      startsWithShpat: doc?.accessToken?.startsWith('shpat_'),
+      installedAt: doc?.installedAt,
+      updatedAt: doc?.updatedAt
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

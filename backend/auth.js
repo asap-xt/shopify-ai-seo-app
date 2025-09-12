@@ -159,10 +159,8 @@ router.get('/auth', async (req, res) => {
 
 // GET /auth/callback?code=...&hmac=...&shop=...&state=...&host=...
 router.get(CALLBACK_PATH, async (req, res) => {
-  console.log('[AUTH] OAuth callback received', { 
-    query: req.query,
-    cookies: req.cookies 
-  });
+  console.log('=== OAUTH CALLBACK DEBUG ===');
+  console.log('1. Query params:', req.query);
   
   try {
     const { code, hmac, shop, state, host } = req.query;
@@ -193,33 +191,22 @@ router.get(CALLBACK_PATH, async (req, res) => {
     }
 
     // 2) Exchange code for token
-    console.log('[AUTH] Requested scopes:', process.env.SHOPIFY_API_SCOPES);
+    console.log('2. Exchanging code for token...');
     const tokenResp = await exchangeToken(shop, code);
-    console.log('[AUTH] Token response:', tokenResp);
-    console.log('[AUTH] Granted scopes:', tokenResp.associated_user_scope || tokenResp.scope);
+    console.log('3. Token response:', tokenResp);
+    console.log('4. Access token:', tokenResp.access_token);
+    console.log('5. Token type:', typeof tokenResp.access_token);
+    
     const accessToken = tokenResp.access_token;
     const scopes = tokenResp.scope || '';
 
-    // 3) Upsert shop record
-    const shopToSave = {
-      shop: shop,
-      accessToken: accessToken,
-      scopes: scopes,
-      isActive: true,
-      installedAt: new Date()
-    };
-
-    console.log('[AUTH] Saving shop data:', {
-      ...shopToSave,
-      accessToken: shopToSave.accessToken ? 'exists' : 'missing'
-    });
-
-    await Shop.findOneAndUpdate(
+    console.log('6. Saving to DB...');
+    const savedShop = await Shop.findOneAndUpdate(
       { shop }, 
-      shopToSave, 
+      { shop, accessToken, scopes, installedAt: new Date() }, 
       { upsert: true, new: true }
     );
-    console.log('[AUTH] Shop record updated');
+    console.log('7. Saved shop doc:', savedShop);
 
     // 4) Register webhooks
     await registerWebhooks(shop, accessToken);
@@ -237,8 +224,8 @@ router.get(CALLBACK_PATH, async (req, res) => {
     return res.redirect(302, embeddedUrl);
     
   } catch (e) {
-    console.error('[AUTH] OAuth callback error:', e);
-    // Return more specific error for debugging
+    console.error('=== OAUTH CALLBACK ERROR ===');
+    console.error('Error details:', e);
     return res.status(500).json({ 
       error: 'OAuth failed', 
       message: e.message,
