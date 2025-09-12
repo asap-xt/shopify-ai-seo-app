@@ -6,6 +6,7 @@ import {
   AppProvider, Frame, Page, Card, Text, Box, 
   Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
+import { NavMenu } from '@shopify/app-bridge-react';
 import { useEffect, useState, useMemo } from 'react';
 import { useAppBridge } from './providers/AppBridgeProvider.jsx';
 import { useShopApi } from './hooks/useShopApi.js';
@@ -559,97 +560,31 @@ export default function App() {
 
   console.log('[DEBUG] All hooks completed, about to render JSX');
 
-  // ДОБАВИ ТОВА: Конфигурирай Shopify navigation menu
-  useEffect(() => {
-    // Проверка дали сме embedded
-    if (window.top === window.self || !window.shopify) {
-      console.log('[NAV] Not embedded or shopify not loaded');
-      return;
-    }
-    
-    // App Bridge v4 използва intents за навигация
-    const setupNavigation = async () => {
-      try {
-        console.log('[NAV] Setting up navigation via intents');
-        
-        // Регистрирай навигационно меню
-        const result = await window.shopify.intents.register({
-          action: 'ADMIN::NAVIGATION::SET',
-          data: {
-            items: [
-              {
-                label: 'Dashboard',
-                destination: '/',
-                id: 'dashboard',
-              },
-              {
-                label: 'AI SEO',
-                destination: '/ai-seo',
-                id: 'ai-seo',
-              },
-              {
-                label: 'Billing',
-                destination: '/billing',
-                id: 'billing',
-              },
-              {
-                label: 'Settings',
-                destination: '/settings',
-                id: 'settings',
-              },
-            ],
-          },
-        });
-        
-        console.log('[NAV] Navigation registered:', result);
-        
-        // Алтернативен подход - опитай с invoke
-        if (!result || result.error) {
-          const invokeResult = await window.shopify.intents.invoke({
-            action: 'NAVIGATION_UPDATE',
-            data: {
-              active: path,
-              items: [
-                { label: 'Dashboard', destination: '/' },
-                { label: 'AI SEO', destination: '/ai-seo' },
-                { label: 'Billing', destination: '/billing' },
-                { label: 'Settings', destination: '/settings' },
-              ],
-            },
-          });
-          console.log('[NAV] Navigation invoked:', invokeResult);
-        }
-        
-      } catch (error) {
-        console.error('[NAV] Intent error:', error);
-        
-        // Последен опит - използвай протокола директно
-        try {
-          window.shopify.protocol.send({
-            type: 'navigation',
-            payload: {
-              items: [
-                { label: 'Dashboard', destination: '/' },
-                { label: 'AI SEO', destination: '/ai-seo' },
-                { label: 'Billing', destination: '/billing' },
-                { label: 'Settings', destination: '/settings' },
-              ],
-            },
-          });
-          console.log('[NAV] Navigation sent via protocol');
-        } catch (protoError) {
-          console.error('[NAV] Protocol error:', protoError);
-        }
-      }
-    };
-    
-    // Изчакай Shopify да е готов
-    window.shopify.ready.then(setupNavigation);
-    
-  }, [path]); // Update when path changes
+  // Създай навигационните елементи
+  const navigationItems = [
+    {
+      label: 'Dashboard',
+      destination: '/',
+    },
+    {
+      label: 'AI SEO', 
+      destination: '/ai-seo',
+    },
+    {
+      label: 'Billing',
+      destination: '/billing',
+    },
+    {
+      label: 'Settings',
+      destination: '/settings',
+    },
+  ];
 
   return (
     <AppProvider i18n={I18N}>
+      {/* Добави NavMenu тук */}
+      <NavMenu navigationItems={navigationItems} />
+      
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
