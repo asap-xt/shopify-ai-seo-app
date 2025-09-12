@@ -4,30 +4,18 @@ import Product from '../db/Product.js';
 import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
+import { resolveShopToken } from '../utils/tokenResolver.js';
 import fetch from 'node-fetch';
 
 // Use the new per-shop token resolver from server.js
-function resolveAdminTokenForShop(req) {
-  // Use the new per-shop token resolver from server.js
-  const adminSession = req?.res?.locals?.adminSession;
-  if (adminSession?.accessToken) {
-    return adminSession.accessToken;
+async function resolveAdminTokenForShop(shop) {
+  try {
+    return await resolveShopToken(shop);
+  } catch (err) {
+    const error = new Error(`No Admin API token available for shop ${shop}: ${err.message}`);
+    error.status = 400;
+    throw error;
   }
-
-  // Fallback to old methods for backward compatibility
-  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
-  if (sessionToken) return sessionToken;
-
-  const headerToken = req.headers['x-shopify-access-token'];
-  if (headerToken) return String(headerToken);
-
-  const envToken =
-    (process.env.SHOPIFY_ADMIN_API_TOKEN && process.env.SHOPIFY_ADMIN_API_TOKEN.trim()) ||
-    (process.env.SHOPIFY_ACCESS_TOKEN && process.env.SHOPIFY_ACCESS_TOKEN.trim()) ||
-    (process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN && process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN.trim());
-  
-  if (!envToken) throw new Error('No admin token available');
-  return envToken;
 }
 
 
@@ -643,7 +631,7 @@ router.delete('/:id/metafields', verifyRequest, async (req, res) => {
     console.log('[DELETE-METAFIELDS] Deleting metafields for product:', productGid);
     
     // 1. Изтриваме metafields от Shopify
-    const token = resolveAdminTokenForShop(req);
+    const token = await resolveAdminTokenForShop(req.shopDomain);
     
     // Първо вземаме metafields за да видим какви има
     const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${productId}/metafields.json?namespace=seo_ai`;

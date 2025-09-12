@@ -62,29 +62,19 @@ async function adminGraphQL({ shop, accessToken, query, variables }) {
   return json;
 }
 
+// Import centralized token resolver
+import { resolveShopToken } from '../utils/tokenResolver.js';
+
 /**
- * Resolve an Admin API access token from database or environment.
+ * Resolve an Admin API access token using centralized function.
  */
 async function resolveAccessToken(shop) {
   try {
-    // Първо провери в базата данни
-    const Shop = await import('../db/Shop.js');
-    const shopDoc = await Shop.default.findOne({ shop }).lean();
-    
-    if (shopDoc && shopDoc.accessToken) {
-      return shopDoc.accessToken;
-    }
+    return await resolveShopToken(shop);
   } catch (err) {
-    console.error('Error loading shop from DB:', err);
+    console.error('Error resolving access token:', err.message);
+    return null;
   }
-  
-  // Fallback към env (само за development)
-  const envToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-  if (envToken) {
-    return envToken;
-  }
-  
-  return null;
 }
 
 // Updated pickPrices to accept currency

@@ -2,6 +2,7 @@
 // Public App Authentication Middleware using @shopify/shopify-api 11.14.1
 
 import shopify from '../utils/shopifyApi.js';
+import { resolveShopToken } from '../utils/tokenResolver.js';
 
 // Debug: Check if shopify is properly initialized
 console.log('[SHOPIFY-AUTH] shopify object:', typeof shopify);
@@ -139,7 +140,7 @@ export function validateEmbeddedSession() {
   };
 }
 
-// Combined middleware that tries both approaches
+// Combined middleware using centralized token resolver
 export function validateRequest() {
   return async (req, res, next) => {
     const shop = req.query.shop || req.body?.shop;
@@ -148,29 +149,24 @@ export function validateRequest() {
     }
 
     try {
-      // Вземи истинския токен от базата
-      const Shop = await import('../db/Shop.js');
-      const shopDoc = await Shop.default.findOne({ shop }).lean();
+      // Use centralized token resolver
+      const accessToken = await resolveShopToken(shop);
       
-      if (!shopDoc || !shopDoc.accessToken) {
-        return res.status(401).json({ error: 'Shop not found or not authenticated' });
-      }
-
-      // Сетни истинския токен
+      // Set session data
       req.shopifySession = {
         shop: shop,
-        accessToken: shopDoc.accessToken,
+        accessToken: accessToken,
         isOnline: false
       };
       req.shopDomain = shop;
-      req.shopAccessToken = shopDoc.accessToken;
+      req.shopAccessToken = accessToken;
       
       res.locals.shopify = { 
         session: {
           shop: shop,
-          accessToken: shopDoc.accessToken, // <-- Истинският токен!
+          accessToken: accessToken,
           isOnline: false,
-          scope: shopDoc.scopes || ''
+          scope: '' // Could be enhanced to get from DB if needed
         }
       };
 
@@ -178,7 +174,7 @@ export function validateRequest() {
       next();
     } catch (error) {
       console.error('[SHOPIFY-AUTH] Error loading shop token:', error);
-      return res.status(500).json({ error: 'Authentication error' });
+      return res.status(401).json({ error: `Authentication error: ${error.message}` });
     }
   };
 }
