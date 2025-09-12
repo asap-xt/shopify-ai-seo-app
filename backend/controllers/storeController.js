@@ -4,6 +4,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
+import { resolveShopToken } from '../utils/tokenResolver.js';
 
 
 const router = express.Router();
@@ -36,29 +37,13 @@ function getShopFromReq(req) {
   return shop ? normalizeShop(shop) : null;
 }
 
-// Resolve admin token for shop (similar to other controllers)
-function resolveAdminTokenForShop(req) {
-  // Use the new per-shop token resolver from server.js
-  const adminSession = req?.res?.locals?.adminSession;
-  if (adminSession?.accessToken) {
-    return adminSession.accessToken;
+// Resolve admin token using centralized resolver
+async function resolveAdminTokenForShop(shop) {
+  try {
+    return await resolveShopToken(shop);
+  } catch (err) {
+    throw new Error(`No Admin API token available for shop ${shop}: ${err.message}`);
   }
-
-  // Fallback to old methods for backward compatibility
-  const sessionToken = req?.res?.locals?.shopify?.session?.accessToken;
-  if (sessionToken) return sessionToken;
-
-  const headerToken = req.headers['x-shopify-access-token'];
-  if (headerToken) return String(headerToken);
-
-  const envToken =
-    process.env.SHOPIFY_ADMIN_API_TOKEN ||
-    process.env.SHOPIFY_ACCESS_TOKEN ||
-    process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-
-  if (envToken) return envToken;
-
-  throw new Error('No Admin API token available for this shop');
 }
 
 // GraphQL query function
@@ -67,7 +52,7 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   console.log('[STORE-GRAPHQL] Query:', query.substring(0, 100) + '...');
   console.log('[STORE-GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
   
-  const token = resolveAdminTokenForShop(req);
+  const token = await resolveAdminTokenForShop(shop);
   console.log('[STORE-GRAPHQL] Token:', token ? `${token.substring(0, 10)}...` : 'null');
   
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;

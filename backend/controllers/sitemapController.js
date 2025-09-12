@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import Sitemap from '../db/Sitemap.js';
+import { resolveShopToken } from '../utils/tokenResolver.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
@@ -22,31 +23,19 @@ function normalizeShop(s) {
   return s.toLowerCase();
 }
 
-// Helper: get access token
+// Helper: get access token using centralized resolver
 async function resolveAdminTokenForShop(shop) {
   console.log('[SITEMAP] Resolving token for shop:', shop);
   try {
-    const doc = await Shop.findOne({ shop }).lean().exec();
-    console.log('[SITEMAP] Shop doc found:', !!doc);
-    const tok = doc?.accessToken || doc?.token || doc?.access_token;
-    if (tok && String(tok).trim()) {
-      console.log('[SITEMAP] Token found in database');
-      return String(tok).trim();
-    }
-  } catch (e) { 
-    console.error('[SITEMAP] Error finding shop token:', e.message);
+    const token = await resolveShopToken(shop);
+    console.log('[SITEMAP] Token resolved successfully');
+    return token;
+  } catch (err) {
+    console.error('[SITEMAP] Token resolution failed:', err.message);
+    const error = new Error(`No access token found for shop: ${shop} - ${err.message}`);
+    error.status = 400;
+    throw error;
   }
-
-  // Try env fallback
-  const envToken = process.env.SHOPIFY_ACCESS_TOKEN;
-  if (envToken) {
-    console.log('[SITEMAP] Using env fallback token');
-    return envToken;
-  }
-
-  const err = new Error('No Admin API token available for this shop');
-  err.status = 400;
-  throw err;
 }
 
 // Helper: GraphQL request
