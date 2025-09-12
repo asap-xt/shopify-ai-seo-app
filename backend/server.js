@@ -372,18 +372,31 @@ app.get('/', (req, res) => {
   }
 });
 
-// Other SPA routes
-const otherSpaRoutes = ['/dashboard', '/ai-seo', '/billing', '/settings', '/store-metadata'];
-otherSpaRoutes.forEach((route) => {
+// Explicit SPA routes → serve fresh index.html
+const spaRoutes = [
+  '/', 
+  '/dashboard', 
+  '/ai-seo',
+  '/ai-seo/products',
+  '/ai-seo/collections',
+  '/ai-seo/sitemap',
+  '/ai-seo/store-metadata',
+  '/ai-seo/schema-data',
+  '/billing', 
+  '/settings'
+];
+
+spaRoutes.forEach((route) => {
   app.get(route, (_req, res) => {
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store'
-    });
+    res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(distPath, 'index.html'));
   });
+});
+
+// Wildcard for all /ai-seo/* routes
+app.get('/ai-seo*', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Debug: list all mounted routes
