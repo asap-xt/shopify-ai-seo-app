@@ -437,7 +437,7 @@ export default function BulkEdit({ shop: shopProp }) {
       return (
         <Modal
           open={showAIEnhanceModal}
-          title="AI Enhanced Search Optimisation"
+          title="AI Enhanced add-ons for AI Search"
           onClose={handleClose}
           primaryAction={{
             content: 'Start AI Enhancement',
@@ -631,9 +631,9 @@ export default function BulkEdit({ shop: shopProp }) {
       const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
       
       if (skippedCount > 0) {
-        setToast(`Generated AI Search Optimisation for ${successCount} products (${skippedCount} already optimised)`);
+        setToast(`Generated Optimization for AI Search for ${successCount} products (${skippedCount} already optimised)`);
       } else {
-        setToast(`Generated AI Search Optimisation for ${successCount} products`);
+        setToast(`Generated Optimization for AI Search for ${successCount} products`);
       }
       
     } catch (err) {
@@ -904,9 +904,9 @@ export default function BulkEdit({ shop: shopProp }) {
       
       // Show result toast
       if (skippedCount > 0) {
-        setToast(`Deleted AI Search Optimisation from ${successCount} products (${skippedCount} had no optimisation to delete)`);
+        setToast(`Deleted Optimization for AI Search from ${successCount} products (${skippedCount} had no optimisation to delete)`);
       } else {
-        setToast(`Deleted AI Search Optimisation from ${successCount} products`);
+        setToast(`Deleted Optimization for AI Search from ${successCount} products`);
       }
       
       // Apply the same fix pattern as apply function
@@ -1048,7 +1048,7 @@ export default function BulkEdit({ shop: shopProp }) {
         setSelectedLanguages([]); // Reset selection
       }}
       primaryAction={{
-        content: 'Generate AI Search Optimisation',
+        content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
         disabled: selectedLanguages.length === 0,
       }}
@@ -1172,7 +1172,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const deleteModal = (
     <Modal
       open={showDeleteModal}
-      title="Delete AI Search Optimisation"
+      title="Delete Optimization for AI Search"
       onClose={() => {
         setShowDeleteModal(false);
         setSelectedDeleteLanguages([]); // Reset selection
@@ -1374,7 +1374,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   size="medium"
                   fullWidth
                 >
-                  Generate AI Search Optimisation
+                  Generate Optimization for AI Search
                 </Button>
               </Box>
             </InlineStack>
@@ -1409,7 +1409,7 @@ export default function BulkEdit({ shop: shopProp }) {
                         size="medium"
                         fullWidth
                       >
-                        AI Enhanced Search Optimisation
+                        AI Enhanced add-ons for AI Search
                       </Button>
                     );
                   })()}
@@ -1427,7 +1427,7 @@ export default function BulkEdit({ shop: shopProp }) {
                     size="medium"
                     fullWidth
                   >
-                    Delete AI Search Optimisation
+                    Delete Optimization for AI Search
                   </Button>
                 </BlockStack>
               </Box>

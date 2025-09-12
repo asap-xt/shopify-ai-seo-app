@@ -351,7 +351,7 @@ export default function CollectionsPage({ shop: shopProp }) {
       return (
         <Modal
           open={showAIEnhanceModal}
-          title="AI Enhanced Search Optimisation"
+          title="AI Enhanced add-ons for AI Search"
           onClose={handleClose}
           primaryAction={{
             content: 'Start AI Enhancement',
@@ -778,7 +778,7 @@ export default function CollectionsPage({ shop: shopProp }) {
       open={showLanguageModal}
       title="Select Languages"
       primaryAction={{
-        content: 'Generate AI Search Optimisation',
+        content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
         disabled: selectedLanguages.length === 0,
       }}
@@ -924,7 +924,7 @@ export default function CollectionsPage({ shop: shopProp }) {
   const bulkDeleteModal = (
     <Modal
       open={showBulkDeleteModal}
-      title="Delete AI Search Optimisation"
+      title="Delete Optimization for AI Search"
       onClose={() => {
         setShowBulkDeleteModal(false);
         setDeleteLanguages([]);
@@ -1136,7 +1136,7 @@ export default function CollectionsPage({ shop: shopProp }) {
                 onClick={openLanguageModal}
                 disabled={selectedItems.length === 0 && !selectAllPages}
               >
-                Generate AI Search Optimisation
+                Generate Optimization for AI Search
               </Button>
               
               {/* AI Enhanced Search Optimisation Button */}
@@ -1155,7 +1155,7 @@ export default function CollectionsPage({ shop: shopProp }) {
                     onClick={() => setShowAIEnhanceModal(true)}
                     disabled={selectedItems.length === 0 && !selectAllPages}
                   >
-                    AI Enhanced Search Optimisation
+                    AI Enhanced add-ons for AI Search
                   </Button>
                 );
               })()}
@@ -1166,7 +1166,7 @@ export default function CollectionsPage({ shop: shopProp }) {
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={selectedItems.length === 0 || !selectedHaveSEO}
               >
-                Delete AI Search Optimisation
+                Delete Optimization for AI Search
               </Button>
             </BlockStack>
           </InlineStack>
