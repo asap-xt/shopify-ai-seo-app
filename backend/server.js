@@ -304,6 +304,87 @@ app.use((req, res, next) => {
   next();
 });
 
+// Handle root request without shop parameter (from Partners Dashboard)
+app.get('/', (req, res) => {
+  const { shop, hmac, timestamp, host } = req.query;
+  
+  console.log('[ROOT] Request with params:', req.query);
+  
+  // If no shop parameter, show install page
+  if (!shop) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Install NEW AI SEO</title>
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f4f6f8;
+          }
+          .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+          }
+          h1 { color: #202223; margin-bottom: 20px; }
+          input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+          }
+          button {
+            background: #008060;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+          }
+          button:hover { background: #006e52; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Install NEW AI SEO</h1>
+          <p>Enter your shop domain to install the app:</p>
+          <form action="/auth" method="GET">
+            <input 
+              type="text" 
+              name="shop" 
+              placeholder="your-shop.myshopify.com" 
+              required
+              pattern=".*\\.myshopify\\.com$"
+              title="Please enter a valid .myshopify.com domain"
+            />
+            <button type="submit">Install App</button>
+          </form>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  
+  // If shop parameter exists, serve the embedded app
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
 // Serve assets with aggressive caching for production
 app.use(
   express.static(distPath, {
