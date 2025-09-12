@@ -16,6 +16,7 @@ import fs from 'fs';
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
 import Shop from './db/Shop.js';
+import { resolveShopToken } from './utils/tokenResolver.js';
 
 // Shopify SDK for Public App
 import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
@@ -104,56 +105,27 @@ app.use('/api', async (req, res, next) => {
     if (!req.query) req.query = {};
     if (!req.query.shop) req.query.shop = shop;
 
-    // 2) намери най-подходящата OAuth сесия за този shop
-    const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
-    let best = null;
+    // 2) Use centralized token resolver
+    console.log('[API RESOLVER] Using centralized token resolver for shop:', shop);
+    const accessToken = await resolveShopToken(shop);
+    console.log('[API RESOLVER] Token resolved successfully');
     
-    if (sessions && sessions.length > 0) {
-      best = sessions.find(s => s.isOnline === false) || null;
-      if (!best) best = sessions.sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0))[0];
-    }
-    
-    // Fallback to environment token for development
-    if (!best?.accessToken) {
-      const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN || 
-                     process.env.SHOPIFY_ACCESS_TOKEN || 
-                     process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-      
-      if (envToken) {
-        console.log('[API RESOLVER] Using fallback env token for development');
-        best = {
-          accessToken: envToken,
-          shop: shop,
-          isOnline: false,
-          scope: process.env.SHOPIFY_API_SCOPES
-        };
-      } else {
-        // For development without env token, create a mock session
-        console.log('[API RESOLVER] No env token found, creating mock session for development');
-        best = {
-          accessToken: 'mock-token-for-development',
-          shop: shop,
-          isOnline: false,
-          scope: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
-        };
-      }
-    }
-    
-    if (!best?.accessToken) {
-      return res.status(401).json({
-        error: 'No OAuth session for this shop. Please install the app.',
-        hint: `Visit /auth?shop=${encodeURIComponent(shop)}`,
-      });
-    }
+    // Create session object with real token
+    const session = {
+      accessToken: accessToken,
+      shop: shop,
+      isOnline: false,
+      scope: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
+    };
 
     // 3) modern client за новите контролери
-    res.locals.adminSession = best;
-    res.locals.adminGraphql = new shopify.clients.Graphql({ session: best });
+    res.locals.adminSession = session;
+    res.locals.adminGraphql = new shopify.clients.Graphql({ session });
     res.locals.shop = shop;
 
     // 4) COMPAT: подай токена и на "legacy custom" код, който чете от env
     req.__origAdminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
-    process.env.SHOPIFY_ADMIN_API_TOKEN = best.accessToken;
+    process.env.SHOPIFY_ADMIN_API_TOKEN = accessToken;
     const _end = res.end;
     res.end = function(...args) {
       process.env.SHOPIFY_ADMIN_API_TOKEN = req.__origAdminToken;
