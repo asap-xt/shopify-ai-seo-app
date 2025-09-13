@@ -615,6 +615,20 @@ export default function App() {
     return 'Dashboard';
   }, [path]);
 
+  // ДОБАВИ ТОЗИ DEBUG БЛОК:
+  console.log('[NAV DEBUG] ========= NAVIGATION DEBUG =========');
+  console.log('[NAV DEBUG] isEmbedded:', isEmbedded);
+  console.log('[NAV DEBUG] window.top !== window.self:', window.top !== window.self);
+  console.log('[NAV DEBUG] host param:', new URLSearchParams(window.location.search).get('host'));
+  console.log('[NAV DEBUG] shop:', shop);
+  console.log('[NAV DEBUG] path:', path);
+  console.log('[NAV DEBUG] Full URL:', window.location.href);
+  console.log('[NAV DEBUG] window.shopify exists:', !!window.shopify);
+  console.log('[NAV DEBUG] =====================================');
+
+  // ВРЕМЕННА ПРОМЯНА - принуди навигацията да се покаже:
+  const forceShowNav = true; // <-- ДОБАВИ ТОВА
+
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
     // Dashboard
@@ -656,7 +670,9 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
+      {/* ПРОМЕНИ този ред */}
+      {forceShowNav && <AdminNavMenu active={path} shop={shop} />}
+      
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />

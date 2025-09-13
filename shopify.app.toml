@@ -16,7 +16,8 @@ api_version = "2025-07"
 redirect_urls = [
   "https://new-ai-seo-app-production.up.railway.app/auth/callback",
   "https://new-ai-seo-app-production.up.railway.app/api/auth/callback",
-  "https://new-ai-seo-app-production.up.railway.app/api/auth"
+  "https://new-ai-seo-app-production.up.railway.app/api/auth",
+  "https://new-ai-seo-app-production.up.railway.app/"
 ]
 
 [access_scopes]
