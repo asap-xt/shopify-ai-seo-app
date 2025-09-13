@@ -243,16 +243,51 @@ class AIDiscoveryService {
 
   async generateRobotsTxt(shop) {
     try {
-      const settings = await AIDiscoverySettings.findOne({ shop });
-      console.log('[ROBOTS] Settings found:', JSON.stringify(settings, null, 2));
-      
-      // Проверяваме дали има настройки
-      if (!settings) {
-        console.log('[ROBOTS] No settings found for shop:', shop);
+      // Get shop record for access token
+      const shopRecord = await Shop.findOne({ shop });
+      if (!shopRecord || !shopRecord.accessToken) {
+        console.log('[ROBOTS] No shop record or access token found for:', shop);
         return 'User-agent: *\nDisallow: /';
       }
       
-      // Проверяваме enabled полето И дали има избрани features
+      // Use the same method as getSettings - fetch from Shopify metafields
+      const response = await fetch(
+        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        console.log('[ROBOTS] Failed to fetch settings from metafields:', response.status);
+        return 'User-agent: *\nDisallow: /';
+      }
+      
+      const data = await response.json();
+      const metafield = data.metafields?.[0];
+      let settings = null;
+      
+      if (metafield?.value) {
+        try {
+          settings = JSON.parse(metafield.value);
+        } catch (e) {
+          console.error('[ROBOTS] Failed to parse settings:', e);
+          settings = this.getDefaultSettings();
+        }
+      }
+      
+      // If no settings, use defaults
+      if (!settings) {
+        console.log('[ROBOTS] No settings found for shop:', shop);
+        settings = this.getDefaultSettings();
+      }
+      
+      console.log('[ROBOTS] Settings found:', JSON.stringify(settings, null, 2));
+      
+      // Check if AI Discovery is enabled and has features
       const hasEnabledFeatures = settings.features && 
         Object.values(settings.features).some(f => f === true);
       
