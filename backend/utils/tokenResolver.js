@@ -19,5 +19,6 @@ export async function resolveShopToken(shop) {
     return envToken;
   }
   
+  
   throw new Error(`No valid access token found for shop: ${shop}`);
 }

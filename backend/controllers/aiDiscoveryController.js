@@ -2,53 +2,20 @@
 import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
-import Shop from '../db/Shop.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { resolveShopToken } from '../utils/tokenResolver.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
   return (plan || 'starter').toLowerCase().replace(' ', '_');
 };
 
-// Debug version of shopGraphQL
-async function shopGraphQL(shop, query, variables = {}) {
-  const shopRecord = await Shop.findOne({ shop });
-  
-  console.log('[GRAPHQL DEBUG] Shop:', shop);
-  console.log('[GRAPHQL DEBUG] Has token:', !!shopRecord?.accessToken);
-  console.log('[GRAPHQL DEBUG] Token prefix:', shopRecord?.accessToken?.substring(0, 10));
-  console.log('[GRAPHQL DEBUG] Scopes:', shopRecord?.scopes);
-  
-  if (!shopRecord?.accessToken) {
-    throw new Error('Shop not found or no access token');
-  }
-  
-  // Use the original function with debug info
-  return await originalShopGraphQL(shop, query, variables);
-}
+// Use originalShopGraphQL directly - token resolution is handled by /api middleware
 
 const router = express.Router();
 
-/**
- * Helper to get shop session
- */
-async function getShopSession(shopParam) {
-  const shopDoc = await Shop.findOne({ shop: shopParam });
-  if (!shopDoc || !shopDoc.accessToken) {
-    throw new Error('Shop not found or not authenticated');
-  }
-  
-  return {
-    shop: shopDoc.shop,
-    accessToken: shopDoc.accessToken,
-    // Create session object for shopifyAdmin
-    session: {
-      shop: shopDoc.shop,
-      accessToken: shopDoc.accessToken
-    }
-  };
-}
+// Token resolution is now handled by the /api middleware
 
 /**
  * GET /api/ai-discovery/settings
@@ -57,7 +24,17 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    const { session } = await getShopSession(shop);
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
+    
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+    
+    const session = {
+      shop: shop,
+      accessToken: accessToken
+    };
     
     // Get current plan
     const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
@@ -93,19 +70,29 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
  */
 router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
-    const shop = req.shopDomain;
+    const shop = req.shopDomain || req.query.shop;
     const { bots, features, advancedSchemaEnabled } = req.body;
+    
+    console.log('[AI-DISCOVERY] Saving settings for shop:', shop);
     
     if (!bots || !features) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Автоматично enabled = true ако има избрани features
-    const enabled = Object.values(features || {}).some(f => f === true);
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
     
-    console.log('[SAVE] Shop:', shop);
-    console.log('[SAVE] Features:', features);
-    console.log('[SAVE] Enabled:', enabled);
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+    
+    const session = {
+      shop: shop,
+      accessToken: accessToken
+    };
+    
+    // Save to MongoDB
+    const enabled = Object.values(features || {}).some(f => f === true);
     
     const settings = await AIDiscoverySettings.findOneAndUpdate(
       { shop },
@@ -113,47 +100,23 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
         shop,
         bots: bots || {},
         features: features || {},
-        enabled,  // <-- Добавяме enabled тук
+        enabled,
+        advancedSchemaEnabled: advancedSchemaEnabled || false,
         updatedAt: Date.now()
       },
       { upsert: true, new: true }
     );
     
-    console.log('[SAVE] Saved settings:', JSON.stringify(settings, null, 2));
-    
-    const { session } = await getShopSession(shop);
-    
-    // Get existing settings to check if advancedSchemaEnabled is being turned on
-    const existingSettings = await aiDiscoveryService.getSettings(shop, session);
-    
-    const settingsData = { 
-      bots, 
+    // Update in Shopify metafields
+    await aiDiscoveryService.updateSettings(shop, session, {
+      bots,
       features,
-      ...(advancedSchemaEnabled !== undefined && { advancedSchemaEnabled })
-    };
-    
-    await aiDiscoveryService.updateSettings(shop, session, settingsData);
-    
-    // Trigger schema generation if advancedSchemaEnabled is being turned on
-    if (advancedSchemaEnabled && !existingSettings.advancedSchemaEnabled) {
-      console.log('[AI-DISCOVERY] Triggering schema generation...');
-      try {
-        const schemaRes = await fetch(`${process.env.APP_URL || 'http://localhost:8080'}/api/schema/generate-all`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shop })
-        });
-        
-        const schemaResult = await schemaRes.json();
-        console.log('[AI-DISCOVERY] Schema generation response:', schemaResult);
-      } catch (err) {
-        console.error('[AI-DISCOVERY] Failed to trigger schema generation:', err);
-      }
-    }
+      advancedSchemaEnabled
+    });
     
     res.json({ success: true, settings });
   } catch (error) {
-    console.error('Failed to update AI Discovery settings:', error);
+    console.error('[AI-DISCOVERY] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -165,7 +128,18 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    const { session } = await getShopSession(shop);
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
+    
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+    
+    const session = {
+      shop: shop,
+      accessToken: accessToken
+    };
+    
     const settings = await aiDiscoveryService.getSettings(shop, session);
     const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
     
@@ -215,12 +189,14 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    const shopRecord = await Shop.findOne({ shop });
-    if (!shopRecord) {
-      return res.status(404).json({ error: 'Shop not found' });
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
+    
+    if (!accessToken) {
+      throw new Error('No access token available');
     }
     
-    const session = { accessToken: shopRecord.accessToken };
+    const session = { accessToken: accessToken };
     
     // Delete metafield
     const response = await fetch(
@@ -291,7 +267,18 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
 router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { session, accessToken } = await getShopSession(shop);
+    
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
+    
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+    
+    const session = {
+      shop: shop,
+      accessToken: accessToken
+    };
     
     // Get theme
     const themesResponse = await fetch(
@@ -326,16 +313,17 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
  * Apply robots.txt to theme
  */
 async function applyRobotsTxt(shop, robotsTxt) {
-  console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
+  console.log('[ROBOTS] Starting applyRobotsTxt for shop:', shop);
   
-  // Проверяваме какви scopes има токена
-  const shopRecord = await Shop.findOne({ shop });
-  console.log('[ROBOTS DEBUG] Shop scopes:', shopRecord?.scopes);
+  // Use the centralized token resolver
+  const accessToken = await resolveShopToken(shop);
   
-  // Проверяваме дали има read_themes
-  if (!shopRecord?.scopes?.includes('read_themes')) {
-    throw new Error('App needs to be reinstalled to get theme access. Current scopes: ' + shopRecord?.scopes);
+  if (!accessToken) {
+    throw new Error('No access token available for shop');
   }
+  
+  // Now use originalShopGraphQL with the shop parameter
+  // The token will be resolved by the seoController's shopGraphQL function
   
   // Проверяваме дали планът поддържа autoRobotsTxt
   try {
@@ -450,14 +438,47 @@ async function applyRobotsTxt(shop, robotsTxt) {
 router.get('/debug-shop/:shop', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const shopRecord = await Shop.findOne({ shop });
+    
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.adminSession?.accessToken;
     
     res.json({
-      shop: shopRecord?.shop,
-      hasToken: !!shopRecord?.accessToken,
-      tokenType: shopRecord?.accessToken?.substring(0, 6),
-      scopes: shopRecord?.scopes,
-      error: !shopRecord ? 'Shop not found' : null
+      shop: shop,
+      hasToken: !!accessToken,
+      tokenType: accessToken?.substring(0, 6),
+      note: 'Using new auth system - scopes not available'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint for authentication testing
+router.get('/ai-discovery/test-auth', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain || req.query.shop;
+    
+    // Check what's available in res.locals
+    const hasAdminSession = !!res.locals.adminSession;
+    const hasAccessToken = !!res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.adminSession?.accessToken;
+    
+    // Try the centralized resolver
+    let resolvedToken = null;
+    try {
+      resolvedToken = await resolveShopToken(shop);
+    } catch (e) {
+      console.error('Token resolver error:', e);
+    }
+    
+    res.json({
+      shop,
+      hasAdminSession,
+      hasAccessToken,
+      hasResolvedToken: !!resolvedToken,
+      tokenPrefix: accessToken ? accessToken.substring(0, 10) + '...' : null,
+      resolvedTokenPrefix: resolvedToken ? resolvedToken.substring(0, 10) + '...' : null,
+      tokensMatch: accessToken === resolvedToken
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
