@@ -313,44 +313,26 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
  * Apply robots.txt to theme
  */
 async function applyRobotsTxt(shop, robotsTxt) {
-  console.log('[ROBOTS] Starting applyRobotsTxt for shop:', shop);
+  console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
   
-  // Use the centralized token resolver
-  const accessToken = await resolveShopToken(shop);
-  
-  if (!accessToken) {
-    throw new Error('No access token available for shop');
-  }
-  
-  // Now use originalShopGraphQL with the shop parameter
-  // The token will be resolved by the seoController's shopGraphQL function
-  
-  // Проверяваме дали планът поддържа autoRobotsTxt
+  // Просто проверете дали плана поддържа auto robots
   try {
     const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
     if (planResponse.ok) {
       const planData = await planResponse.json();
       const normalizedPlan = normalizePlan(planData.plan);
       
-      // Проверяваме дали планът поддържа autoRobotsTxt
       const supportedPlans = ['growth', 'growth_extra', 'enterprise'];
       if (!supportedPlans.includes(normalizedPlan)) {
         throw new Error(`Auto robots.txt is only available for Growth+ plans. Current plan: ${planData.plan}`);
       }
-      
-      console.log('[ROBOTS DEBUG] Plan check passed:', normalizedPlan);
-    } else {
-      console.warn('[ROBOTS DEBUG] Could not fetch plan, proceeding anyway');
     }
   } catch (error) {
-    console.error('[ROBOTS DEBUG] Plan check failed:', error.message);
     throw new Error(`Plan verification failed: ${error.message}`);
   }
   
-  console.log('[ROBOTS DEBUG] Content length:', robotsTxt.length);
-  
   try {
-    // Първо намираме активната тема
+    // Директно използвайте originalShopGraphQL - тя вече има логика за токен
     const themesQuery = `{
       themes(first: 10) {
         edges {
@@ -363,22 +345,13 @@ async function applyRobotsTxt(shop, robotsTxt) {
       }
     }`;
     
-    console.log('[ROBOTS DEBUG] Fetching themes...');
     const themesData = await originalShopGraphQL(shop, themesQuery);
-    console.log('[ROBOTS DEBUG] Themes data:', JSON.stringify(themesData, null, 2));
-    
     const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN');
     
     if (!mainTheme) {
-      console.error('[ROBOTS DEBUG] No main theme found!');
       throw new Error('Main theme not found');
     }
     
-    const themeId = mainTheme.node.id;
-    console.log('[ROBOTS DEBUG] Main theme ID:', themeId);
-    console.log('[ROBOTS DEBUG] Main theme name:', mainTheme.node.name);
-    
-    // Създаваме/обновяваме robots.txt.liquid файла
     const mutation = `
       mutation createOrUpdateFile($themeId: ID!, $files: [OnlineStoreThemeFileInput!]!) {
         themeFilesUpsert(themeId: $themeId, files: $files) {
@@ -396,7 +369,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
     `;
     
     const variables = {
-      themeId: themeId,
+      themeId: mainTheme.node.id,
       files: [{
         filename: "templates/robots.txt.liquid",
         body: {
@@ -406,30 +379,17 @@ async function applyRobotsTxt(shop, robotsTxt) {
       }]
     };
     
-    console.log('[ROBOTS DEBUG] Mutation variables:', JSON.stringify(variables, null, 2));
-    
     const result = await originalShopGraphQL(shop, mutation, variables);
-    console.log('[ROBOTS DEBUG] Mutation result:', JSON.stringify(result, null, 2));
     
     if (result.themeFilesUpsert?.userErrors?.length > 0) {
       const error = result.themeFilesUpsert.userErrors[0];
-      console.error('[ROBOTS DEBUG] User errors:', result.themeFilesUpsert.userErrors);
-      throw new Error(`Failed to update robots.txt: ${error.message} (${error.code})`);
+      throw new Error(`Failed to update robots.txt: ${error.message}`);
     }
     
-    // Проверяваме дали файлът наистина е създаден
-    if (result.themeFilesUpsert?.upsertedThemeFiles?.length > 0) {
-      console.log('[ROBOTS DEBUG] File created successfully:', result.themeFilesUpsert.upsertedThemeFiles[0]);
-    } else {
-      console.warn('[ROBOTS DEBUG] No files were created!');
-    }
-    
-    console.log('[AI Discovery] robots.txt applied successfully');
     return { success: true, message: 'robots.txt applied successfully' };
     
   } catch (error) {
-    console.error('[ROBOTS DEBUG] Error applying robots.txt:', error);
-    console.error('[ROBOTS DEBUG] Error stack:', error.stack);
+    console.error('[ROBOTS DEBUG] Error:', error);
     throw error;
   }
 }
