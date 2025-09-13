@@ -54,9 +54,6 @@ export default function Settings() {
   const [originalSettings, setOriginalSettings] = useState(null);
   const api = useMemo(() => makeSessionFetch(), []);
   
-  // Test log to check if generateRobotsTxt function exists
-  console.log('[SETTINGS DEBUG] generateRobotsTxt function exists:', typeof generateRobotsTxt);
-  
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
   const [processingSchema, setProcessingSchema] = useState(false);
@@ -209,6 +206,9 @@ export default function Settings() {
       setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
     }
   };
+
+  // Test log to check if generateRobotsTxt function exists (after definition)
+  console.log('[SETTINGS DEBUG] generateRobotsTxt function exists:', typeof generateRobotsTxt);
 
   const toggleBot = (botKey) => {
     if (!settings?.availableBots?.includes(botKey)) {
