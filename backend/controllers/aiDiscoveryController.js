@@ -126,7 +126,16 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
  */
 router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
   try {
-    const shop = req.shopDomain;
+    const shop = req.shopDomain || req.query.shop;
+    
+    console.log('[ROBOTS-TXT] Request received');
+    console.log('[ROBOTS-TXT] Shop:', shop);
+    console.log('[ROBOTS-TXT] Headers:', req.headers);
+    
+    if (!shop) {
+      console.log('[ROBOTS-TXT] ERROR: Missing shop');
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
     
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.adminSession?.accessToken;
@@ -143,9 +152,14 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
     const settings = await aiDiscoveryService.getSettings(shop, session);
     const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
     
+    console.log('[ROBOTS-TXT] Generated length:', robotsTxt?.length);
+    console.log('[ROBOTS-TXT] First 100 chars:', robotsTxt?.substring(0, 100));
+    
+    // ВАЖНО: Върнете като plain text, не JSON!
     res.type('text/plain').send(robotsTxt);
+    
   } catch (error) {
-    console.error('Failed to generate robots.txt:', error);
+    console.error('[ROBOTS-TXT] ERROR:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -35,7 +35,7 @@ const normalizePlan = (plan) => {
 export default function Settings() {
   // Debug helper
   const debugLog = (message, data = null) => {
-    console.log(`[SCHEMA DEBUG] ${message}`, data || '');
+    console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
 
   const [loading, setLoading] = useState(true);
@@ -188,11 +188,18 @@ export default function Settings() {
   };
 
   const generateRobotsTxt = async (currentSettings = settings) => {
+    debugLog('generateRobotsTxt called', { shop, currentSettings });
+    
     try {
-      const txt = await api(`/api/ai-discovery/robots-txt`, { shop });
+      debugLog('Calling API for robots.txt with responseType: text');
+      const txt = await api(`/api/ai-discovery/robots-txt`, { shop, responseType: 'text' });
+      debugLog('Robots.txt response:', txt);
+      debugLog('Response type:', typeof txt);
+      debugLog('Response length:', txt?.length);
+      
       setRobotsTxt(txt);
     } catch (error) {
-      console.error('Failed to generate robots.txt:', error);
+      debugLog('Failed to generate robots.txt', error);
       setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
     }
   };
@@ -610,22 +617,19 @@ export default function Settings() {
             <InlineStack gap="200">
               <Button 
                 onClick={() => {
-                  console.log('[ADD MANUAL] Starting...');
-                  console.log('[ADD MANUAL] Settings:', settings);
+                  debugLog('Add manually clicked');
+                  debugLog('Current settings:', settings);
+                  debugLog('Has selected bots:', Object.values(settings?.bots || {}).some(bot => bot.enabled));
                   
-                  try {
-                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    console.log('[ADD MANUAL] Has selected bots:', hasSelectedBots);
-                    
-                    if (!hasSelectedBots) {
-                      console.log('[ADD MANUAL] No bots, showing modal');
-                      setShowNoBotsModal(true);
-                    } else {
-                      console.log('[ADD MANUAL] Showing instructions');
-                      setShowManualInstructions(true);
-                    }
-                  } catch (error) {
-                    console.error('[ADD MANUAL] Error:', error);
+                  const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                  
+                  if (!hasSelectedBots) {
+                    debugLog('No bots selected, showing modal');
+                    setShowNoBotsModal(true);
+                  } else {
+                    debugLog('Has bots, generating robots.txt');
+                    generateRobotsTxt(); // Добавете това!
+                    setShowManualInstructions(true);
                   }
                 }}
               >

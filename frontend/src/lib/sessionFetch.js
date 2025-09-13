@@ -98,14 +98,14 @@ export function makeSessionFetch({ debug } = {}) {
     : (process.env.NODE_ENV !== 'production');
   const dbg = debug ?? isDev;
 
-  return async function sessionFetch(path, { method='GET', headers={}, body, shop } = {}) {
+  return async function sessionFetch(path, { method='GET', headers={}, body, shop, responseType='json' } = {}) {
     const url = shop ? `${path}${path.includes('?') ? '&' : '?'}shop=${encodeURIComponent(shop)}` : path;
 
     // Best-effort: try AB token first
     const app = await getAppBridge(dbg);
     const token = app ? (await getTokenFromAppBridge(app, dbg)) : null;
     
-    if (dbg) console.log('[SFETCH] Public App →', { url, method, shopParam: shop, hasToken: !!token, tokenHead: token ? token.slice(0,10) : null });
+    if (dbg) console.log('[SFETCH] Public App →', { url, method, shopParam: shop, hasToken: !!token, tokenHead: token ? token.slice(0,10) : null, responseType });
     if (dbg) console.log('[SFETCH] App Bridge details:', { app: !!app, token: !!token, tokenLength: token ? token.length : 0 });
 
     const baseInit = {
@@ -123,14 +123,14 @@ export function makeSessionFetch({ debug } = {}) {
     if (dbg) console.log('[SFETCH] Public App ← response', rsp.status, rsp.statusText, 'for', url);
     
     const text = await rsp.text();
-    let data;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { error: text?.slice(0, 500) || 'Non-JSON response' }; }
-
+    
     if (!rsp.ok) {
-      const msg = data?.error || data?.message || `HTTP ${rsp.status}`;
+      let errorData;
+      try { errorData = JSON.parse(text); } catch { errorData = { error: text || `HTTP ${rsp.status}` }; }
+      const msg = errorData?.error || errorData?.message || `HTTP ${rsp.status}`;
       const err = new Error(msg);
       err.status = rsp.status;
-      err.body = data;
+      err.body = errorData;
       err.debug = {
         url,
         method,
@@ -141,6 +141,18 @@ export function makeSessionFetch({ debug } = {}) {
       if (dbg) console.error('[SFETCH] ! error', err);
       throw err;
     }
+    
+    // Ако искаме raw text, върни го директно
+    if (responseType === 'text') {
+      if (dbg) console.log('[SFETCH] Returning raw text response');
+      return text;
+    }
+    
+    // Иначе парсни като JSON
+    let data;
+    try { data = text ? JSON.parse(text) : null; } 
+    catch { data = { error: text?.slice(0, 500) || 'Non-JSON response' }; }
+    
     return data;
   };
 }
