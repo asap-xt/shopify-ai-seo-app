@@ -615,16 +615,6 @@ export default function App() {
     return 'Dashboard';
   }, [path]);
 
-  // ДОБАВИ ТОЗИ DEBUG БЛОК:
-  console.log('[NAV DEBUG] ========= NAVIGATION DEBUG =========');
-  console.log('[NAV DEBUG] isEmbedded:', isEmbedded);
-  console.log('[NAV DEBUG] window.top !== window.self:', window.top !== window.self);
-  console.log('[NAV DEBUG] host param:', new URLSearchParams(window.location.search).get('host'));
-  console.log('[NAV DEBUG] shop:', shop);
-  console.log('[NAV DEBUG] path:', path);
-  console.log('[NAV DEBUG] Full URL:', window.location.href);
-  console.log('[NAV DEBUG] window.shopify exists:', !!window.shopify);
-  console.log('[NAV DEBUG] =====================================');
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
