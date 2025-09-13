@@ -92,26 +92,17 @@ async function getTokenFromAppBridge(app, debug = false) {
  *  - Falls back gracefully for non-embedded scenarios
  *  - Always attempts to return parsed JSON (with graceful fallback)
  */
-export function makeSessionFetch({ debug } = {}) {
-  const isDev = typeof import.meta !== 'undefined'
-    ? (import.meta.env?.MODE !== 'production')
-    : (process.env.NODE_ENV !== 'production');
-  const dbg = debug ?? isDev;
-
+export function makeSessionFetch() {
   return async function sessionFetch(path, { method='GET', headers={}, body, shop, responseType='json' } = {}) {
     const url = shop ? `${path}${path.includes('?') ? '&' : '?'}shop=${encodeURIComponent(shop)}` : path;
 
-    // Best-effort: try AB token first
-    const app = await getAppBridge(dbg);
-    const token = app ? (await getTokenFromAppBridge(app, dbg)) : null;
-    
-    if (dbg) console.log('[SFETCH] Public App →', { url, method, shopParam: shop, hasToken: !!token, tokenHead: token ? token.slice(0,10) : null, responseType });
-    if (dbg) console.log('[SFETCH] App Bridge details:', { app: !!app, token: !!token, tokenLength: token ? token.length : 0 });
+    const app = await getAppBridge();
+    const token = app ? (await getTokenFromAppBridge(app)) : null;
 
     const baseInit = {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
-      credentials: 'include',             // keep legacy cookie flow working
+      credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     };
 
@@ -120,7 +111,12 @@ export function makeSessionFetch({ debug } = {}) {
       : baseInit;
 
     const rsp = await fetch(url, init);
-    if (dbg) console.log('[SFETCH] Public App ← response', rsp.status, rsp.statusText, 'for', url);
+    
+    // Handle 304 Not Modified
+    if (rsp.status === 304) {
+      // Return cached content or empty string for text
+      return responseType === 'text' ? '' : {};
+    }
     
     const text = await rsp.text();
     
@@ -128,27 +124,15 @@ export function makeSessionFetch({ debug } = {}) {
       let errorData;
       try { errorData = JSON.parse(text); } catch { errorData = { error: text || `HTTP ${rsp.status}` }; }
       const msg = errorData?.error || errorData?.message || `HTTP ${rsp.status}`;
-      const err = new Error(msg);
-      err.status = rsp.status;
-      err.body = errorData;
-      err.debug = {
-        url,
-        method,
-        shopParam: shop,
-        hasAuthHeader: !!init.headers.Authorization,
-        tokenHead: token ? token.slice(0,10) : null,
-      };
-      if (dbg) console.error('[SFETCH] ! error', err);
-      throw err;
+      throw new Error(msg);
     }
     
-    // Ако искаме raw text, върни го директно
+    // If expecting text, return it directly
     if (responseType === 'text') {
-      if (dbg) console.log('[SFETCH] Returning raw text response');
       return text;
     }
     
-    // Иначе парсни като JSON
+    // Otherwise parse as JSON
     let data;
     try { data = text ? JSON.parse(text) : null; } 
     catch { data = { error: text?.slice(0, 500) || 'Non-JSON response' }; }

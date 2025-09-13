@@ -188,19 +188,23 @@ export default function Settings() {
   };
 
   const generateRobotsTxt = async (currentSettings = settings) => {
-    console.log('[GENERATE ROBOTS] Called with:', { shop, currentSettings });
+    console.log('[GENERATE ROBOTS] Called with shop:', shop);
     
     try {
-      console.log('[GENERATE ROBOTS] Calling API...');
       const txt = await api(`/api/ai-discovery/robots-txt`, { 
         shop,
-        responseType: 'text' // <-- Добавете това!
+        responseType: 'text'  // <-- Важно!
       });
-      console.log('[GENERATE ROBOTS] Response type:', typeof txt);
-      console.log('[GENERATE ROBOTS] Response length:', txt?.length);
-      console.log('[GENERATE ROBOTS] First 100 chars:', txt?.substring(0, 100));
       
-      setRobotsTxt(txt || '# Empty response');
+      console.log('[GENERATE ROBOTS] Received:', txt);
+      
+      // Ако е празен отговор (304), генерирай базов robots.txt
+      if (!txt) {
+        const defaultTxt = 'User-agent: *\nDisallow: /';
+        setRobotsTxt(defaultTxt);
+      } else {
+        setRobotsTxt(txt);
+      }
     } catch (error) {
       console.error('[GENERATE ROBOTS] Error:', error);
       setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
