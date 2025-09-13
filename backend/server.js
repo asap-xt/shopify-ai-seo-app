@@ -547,7 +547,6 @@ app.get('/sitemap.xml', (req, res) => {
 
 // Explicit SPA routes → serve fresh index.html
 const spaRoutes = [
-  '/', 
   '/dashboard', 
   '/ai-seo',
   '/ai-seo/products',
