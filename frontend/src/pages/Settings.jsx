@@ -613,19 +613,24 @@ export default function Settings() {
             <InlineStack gap="200">
               <Button 
                 onClick={() => {
-                  debugLog('Add manually clicked');
-                  debugLog('Current settings:', settings);
-                  debugLog('Has selected bots:', Object.values(settings?.bots || {}).some(bot => bot.enabled));
+                  console.log('[ADD MANUAL] Starting...');
+                  console.log('[ADD MANUAL] Settings:', settings);
                   
-                  const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                  
-                  if (!hasSelectedBots) {
-                    debugLog('No bots selected, showing modal');
-                    setShowNoBotsModal(true);
-                  } else {
-                    debugLog('Has bots, generating robots.txt');
-                    generateRobotsTxt(); // Добавете това!
-                    setShowManualInstructions(true);
+                  try {
+                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                    console.log('[ADD MANUAL] Has selected bots:', hasSelectedBots);
+                    
+                    if (!hasSelectedBots) {
+                      console.log('[ADD MANUAL] No bots, showing modal');
+                      setShowNoBotsModal(true);
+                    } else {
+                      console.log('[ADD MANUAL] Generating robots.txt...');
+                      generateRobotsTxt(); // <-- ДОБАВЕТЕ ТОВА!
+                      console.log('[ADD MANUAL] Showing instructions');
+                      setShowManualInstructions(true);
+                    }
+                  } catch (error) {
+                    console.error('[ADD MANUAL] Error:', error);
                   }
                 }}
               >
