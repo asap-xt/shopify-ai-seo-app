@@ -188,18 +188,14 @@ export default function Settings() {
   };
 
   const generateRobotsTxt = async (currentSettings = settings) => {
-    debugLog('generateRobotsTxt called', { shop, currentSettings });
-    
     try {
-      debugLog('Calling API for robots.txt with responseType: text');
-      const txt = await api(`/api/ai-discovery/robots-txt`, { shop, responseType: 'text' });
-      debugLog('Robots.txt response:', txt);
-      debugLog('Response type:', typeof txt);
-      debugLog('Response length:', txt?.length);
-      
+      const txt = await api(`/api/ai-discovery/robots-txt`, { 
+        shop,
+        responseType: 'text' // <-- Добавете това!
+      });
       setRobotsTxt(txt);
     } catch (error) {
-      debugLog('Failed to generate robots.txt', error);
+      console.error('Failed to generate robots.txt:', error);
       setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
     }
   };
