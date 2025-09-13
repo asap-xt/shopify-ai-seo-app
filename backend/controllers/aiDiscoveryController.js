@@ -337,6 +337,28 @@ async function applyRobotsTxt(shop, robotsTxt) {
     throw new Error('App needs to be reinstalled to get theme access. Current scopes: ' + shopRecord?.scopes);
   }
   
+  // Проверяваме дали планът поддържа autoRobotsTxt
+  try {
+    const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
+    if (planResponse.ok) {
+      const planData = await planResponse.json();
+      const normalizedPlan = normalizePlan(planData.plan);
+      
+      // Проверяваме дали планът поддържа autoRobotsTxt
+      const supportedPlans = ['growth', 'growth_extra', 'enterprise'];
+      if (!supportedPlans.includes(normalizedPlan)) {
+        throw new Error(`Auto robots.txt is only available for Growth+ plans. Current plan: ${planData.plan}`);
+      }
+      
+      console.log('[ROBOTS DEBUG] Plan check passed:', normalizedPlan);
+    } else {
+      console.warn('[ROBOTS DEBUG] Could not fetch plan, proceeding anyway');
+    }
+  } catch (error) {
+    console.error('[ROBOTS DEBUG] Plan check failed:', error.message);
+    throw new Error(`Plan verification failed: ${error.message}`);
+  }
+  
   console.log('[ROBOTS DEBUG] Content length:', robotsTxt.length);
   
   try {
@@ -354,7 +376,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
     }`;
     
     console.log('[ROBOTS DEBUG] Fetching themes...');
-    const themesData = await shopGraphQL(shop, themesQuery);
+    const themesData = await originalShopGraphQL(shop, themesQuery);
     console.log('[ROBOTS DEBUG] Themes data:', JSON.stringify(themesData, null, 2));
     
     const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN');
@@ -398,7 +420,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
     
     console.log('[ROBOTS DEBUG] Mutation variables:', JSON.stringify(variables, null, 2));
     
-    const result = await shopGraphQL(shop, mutation, variables);
+    const result = await originalShopGraphQL(shop, mutation, variables);
     console.log('[ROBOTS DEBUG] Mutation result:', JSON.stringify(result, null, 2));
     
     if (result.themeFilesUpsert?.userErrors?.length > 0) {
