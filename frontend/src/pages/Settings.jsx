@@ -54,6 +54,9 @@ export default function Settings() {
   const [originalSettings, setOriginalSettings] = useState(null);
   const api = useMemo(() => makeSessionFetch(), []);
   
+  // Test log to check if generateRobotsTxt function exists
+  console.log('[SETTINGS DEBUG] generateRobotsTxt function exists:', typeof generateRobotsTxt);
+  
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
   const [processingSchema, setProcessingSchema] = useState(false);
@@ -188,14 +191,21 @@ export default function Settings() {
   };
 
   const generateRobotsTxt = async (currentSettings = settings) => {
+    console.log('[GENERATE ROBOTS] Called with:', { shop, currentSettings });
+    
     try {
+      console.log('[GENERATE ROBOTS] Calling API...');
       const txt = await api(`/api/ai-discovery/robots-txt`, { 
         shop,
         responseType: 'text' // <-- Добавете това!
       });
-      setRobotsTxt(txt);
+      console.log('[GENERATE ROBOTS] Response type:', typeof txt);
+      console.log('[GENERATE ROBOTS] Response length:', txt?.length);
+      console.log('[GENERATE ROBOTS] First 100 chars:', txt?.substring(0, 100));
+      
+      setRobotsTxt(txt || '# Empty response');
     } catch (error) {
-      console.error('Failed to generate robots.txt:', error);
+      console.error('[GENERATE ROBOTS] Error:', error);
       setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
     }
   };
@@ -612,7 +622,7 @@ export default function Settings() {
             
             <InlineStack gap="200">
               <Button 
-                onClick={() => {
+                onClick={async () => { // <-- Добавете async
                   console.log('[ADD MANUAL] Starting...');
                   console.log('[ADD MANUAL] Settings:', settings);
                   
@@ -624,13 +634,14 @@ export default function Settings() {
                       console.log('[ADD MANUAL] No bots, showing modal');
                       setShowNoBotsModal(true);
                     } else {
-                      console.log('[ADD MANUAL] Generating robots.txt...');
-                      generateRobotsTxt(); // <-- ДОБАВЕТЕ ТОВА!
-                      console.log('[ADD MANUAL] Showing instructions');
+                      console.log('[ADD MANUAL] Calling generateRobotsTxt...');
+                      await generateRobotsTxt(); // <-- Добавете await
+                      console.log('[ADD MANUAL] Robots.txt generated, showing instructions');
                       setShowManualInstructions(true);
                     }
                   } catch (error) {
                     console.error('[ADD MANUAL] Error:', error);
+                    setToast('Error generating robots.txt: ' + error.message);
                   }
                 }}
               >
