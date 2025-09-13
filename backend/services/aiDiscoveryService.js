@@ -299,8 +299,7 @@ class AIDiscoveryService {
         return 'User-agent: *\nDisallow: /';
       }
       
-      // Get user's plan
-      const shopRecord = await Shop.findOne({ shop });
+      // Get user's plan (reuse existing shopRecord)
       const subscription = await Subscription.findOne({ shop });
       const normalizedPlan = normalizePlan(subscription?.plan || shopRecord?.plan || 'starter');
       
