@@ -626,9 +626,6 @@ export default function App() {
   console.log('[NAV DEBUG] window.shopify exists:', !!window.shopify);
   console.log('[NAV DEBUG] =====================================');
 
-  // ВРЕМЕННА ПРОМЯНА - принуди навигацията да се покаже:
-  const forceShowNav = true; // <-- ДОБАВИ ТОВА
-
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
     // Dashboard
@@ -670,9 +667,7 @@ export default function App() {
 
   return (
     <AppProvider i18n={I18N}>
-      {/* ПРОМЕНИ този ред */}
-      {forceShowNav && <AdminNavMenu active={path} shop={shop} />}
-      
+      {isEmbedded && <AdminNavMenu active={path} shop={shop} />}
       <Frame>
         <Page>
           <AppHeader sectionTitle={sectionTitle} lang={lang} setLang={setLang} t={t} shop={shop} />
