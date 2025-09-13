@@ -1,7 +1,6 @@
 // backend/controllers/schemaController.js
 import express from 'express';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 import fetch from 'node-fetch';
 
 const router = express.Router();
@@ -55,7 +54,7 @@ async function getShopLocale(adminGraphql, shop) {
 }
 
 // GET /api/schema/preview - Get all active schemas
-router.get('/api/schema/preview', verifyRequest, async (req, res) => {
+router.get('/api/schema/preview', validateRequest(), async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
@@ -184,7 +183,7 @@ router.get('/api/schema/preview', verifyRequest, async (req, res) => {
 });
 
 // POST /api/schema/generate - Regenerate schemas from latest data
-router.post('/api/schema/generate', verifyRequest, async (req, res) => {
+router.post('/api/schema/generate', validateRequest(), async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
@@ -203,7 +202,7 @@ router.post('/api/schema/generate', verifyRequest, async (req, res) => {
 });
 
 // GET /api/schema/status
-router.get('/status', verifyRequest, async (req, res) => {
+router.get('/status', validateRequest(), async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
@@ -278,7 +277,7 @@ router.get('/status', verifyRequest, async (req, res) => {
 });
 
 // GET /api/schema/validate - Check schema installation
-router.get('/api/schema/validate', verifyRequest, async (req, res) => {
+router.get('/api/schema/validate', validateRequest(), async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   

@@ -10,7 +10,6 @@ import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 
@@ -1329,7 +1328,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 // ==================== COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/list - Updated version, languages included
-router.get('/collections/list', verifyRequest, async (req, res) => {
+router.get('/collections/list', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const token = await resolveAdminTokenForShop(shop);
@@ -1450,7 +1449,7 @@ router.get('/collections/list', verifyRequest, async (req, res) => {
 });
 
 // POST /seo/generate-collection
-router.post('/seo/generate-collection', verifyRequest, async (req, res) => {
+router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { collectionId, model, language = 'en' } = req.body;
@@ -1528,7 +1527,7 @@ router.post('/seo/generate-collection', verifyRequest, async (req, res) => {
 });
 
 // POST /seo/apply-collection
-router.post('/seo/apply-collection', verifyRequest, async (req, res) => {
+router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
   console.log('[APPLY-COLLECTION] Request body:', JSON.stringify(req.body, null, 2));
   
   try {
@@ -1755,7 +1754,7 @@ function getUniqueBrands(productEdges) {
 }
 
 // POST /api/seo/generate-collection-multi
-router.post('/seo/generate-collection-multi', verifyRequest, async (req, res) => {
+router.post('/seo/generate-collection-multi', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { collectionId, model, languages = [] } = req.body;
@@ -1843,7 +1842,7 @@ router.post('/seo/generate-collection-multi', verifyRequest, async (req, res) =>
 });
 
 // POST /api/seo/apply-collection-multi
-router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
+router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { collectionId, results = [], options = {} } = req.body;
@@ -1974,7 +1973,7 @@ router.post('/seo/apply-collection-multi', verifyRequest, async (req, res) => {
 // ==================== END COLLECTIONS ENDPOINTS ====================
 
 // GET /collections/check-definitions
-router.get('/collections/check-definitions', verifyRequest, async (req, res) => {
+router.get('/collections/check-definitions', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -2005,7 +2004,7 @@ router.get('/collections/check-definitions', verifyRequest, async (req, res) => 
 });
 
 // POST /collections/create-definitions
-router.post('/collections/create-definitions', verifyRequest, async (req, res) => {
+router.post('/collections/create-definitions', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { languages = ['en'] } = req.body;
@@ -2025,7 +2024,7 @@ router.post('/collections/create-definitions', verifyRequest, async (req, res) =
 });
 
 // POST /collections/init-metafields - Creates metafield definitions for collections
-router.post('/collections/init-metafields', verifyRequest, async (req, res) => {
+router.post('/collections/init-metafields', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -2056,7 +2055,7 @@ router.post('/collections/init-metafields', verifyRequest, async (req, res) => {
 });
 
 // POST /collections/init-metafield-definitions - Creates metafield definitions for collections
-router.post('/collections/init-metafield-definitions', verifyRequest, async (req, res) => {
+router.post('/collections/init-metafield-definitions', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -2136,7 +2135,7 @@ export {
 };
 
 // GET /collections/:id/seo-data - Returns SEO data for preview
-router.get('/collections/:id/seo-data', verifyRequest, async (req, res) => {
+router.get('/collections/:id/seo-data', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const token = await resolveAdminTokenForShop(shop);
@@ -2189,7 +2188,7 @@ router.get('/collections/:id/seo-data', verifyRequest, async (req, res) => {
 });
 
 // DELETE /seo/delete - Delete SEO for specific language
-router.delete('/seo/delete', verifyRequest, async (req, res) => {
+router.delete('/seo/delete', validateRequest(), async (req, res) => {
   console.log('[DELETE-SEO] Request received:', req.body);
   
   try {
@@ -2332,7 +2331,7 @@ router.delete('/seo/delete', verifyRequest, async (req, res) => {
 });
 
 // DELETE /seo/bulk-delete - Delete SEO for multiple products
-router.delete('/seo/bulk-delete', verifyRequest, async (req, res) => {
+router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
   console.log('[BULK-DELETE-SEO] Request received');
   
   try {
@@ -2466,7 +2465,7 @@ router.delete('/seo/bulk-delete', verifyRequest, async (req, res) => {
 });
 
 // DELETE /collections/delete-seo - Delete collection SEO for specific language
-router.delete('/collections/delete-seo', verifyRequest, async (req, res) => {
+router.delete('/collections/delete-seo', validateRequest(), async (req, res) => {
   console.log('[DELETE-COLLECTION-SEO] Request received:', req.body);
   
   try {

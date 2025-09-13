@@ -5,7 +5,6 @@ import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -54,7 +53,7 @@ async function getShopSession(shopParam) {
 /**
  * GET /api/ai-discovery/settings
  */
-router.get('/ai-discovery/settings', verifyRequest, async (req, res) => {
+router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -92,7 +91,7 @@ router.get('/ai-discovery/settings', verifyRequest, async (req, res) => {
 /**
  * POST /api/ai-discovery/settings
  */
-router.post('/ai-discovery/settings', verifyRequest, async (req, res) => {
+router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { bots, features, advancedSchemaEnabled } = req.body;
@@ -162,7 +161,7 @@ router.post('/ai-discovery/settings', verifyRequest, async (req, res) => {
 /**
  * GET /api/ai-discovery/robots-txt
  */
-router.get('/ai-discovery/robots-txt', verifyRequest, async (req, res) => {
+router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -180,7 +179,7 @@ router.get('/ai-discovery/robots-txt', verifyRequest, async (req, res) => {
 /**
  * POST /api/ai-discovery/apply-robots
  */
-router.post('/ai-discovery/apply-robots', verifyRequest, async (req, res) => {
+router.post('/ai-discovery/apply-robots', validateRequest(), async (req, res) => {
   console.log('[APPLY ENDPOINT] Called with body:', req.body);
   
   try {
@@ -212,7 +211,7 @@ router.post('/ai-discovery/apply-robots', verifyRequest, async (req, res) => {
 /**
  * DELETE /api/ai-discovery/settings - Reset settings to defaults
  */
-router.delete('/ai-discovery/settings', verifyRequest, async (req, res) => {
+router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -289,7 +288,7 @@ router.delete('/ai-discovery/settings', verifyRequest, async (req, res) => {
 /**
  * GET /api/ai-discovery/test-assets - Test endpoint to check theme assets
  */
-router.get('/ai-discovery/test-assets', verifyRequest, async (req, res) => {
+router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { session, accessToken } = await getShopSession(shop);
@@ -426,7 +425,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
 }
 
 // Debug endpoint for shop data
-router.get('/debug-shop/:shop', verifyRequest, async (req, res) => {
+router.get('/debug-shop/:shop', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const shopRecord = await Shop.findOne({ shop });

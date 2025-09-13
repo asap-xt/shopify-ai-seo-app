@@ -1,6 +1,5 @@
 import express from 'express';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 
 // ===== Config
@@ -207,7 +206,7 @@ async function resolveLanguages({ shop, productId, token, authUsed }) {
 const router = express.Router();
 
 /** GET /api/languages/shop/:shop */
-router.get('/shop/:shop', verifyRequest, async (req, res) => {
+router.get('/shop/:shop', validateRequest(), async (req, res) => {
   console.log('[LANGUAGE-ENDPOINT] ===== HANDLER CALLED =====');
   console.log('[LANGUAGE-ENDPOINT] req.shopDomain:', req.shopDomain);
   console.log('[LANGUAGE-ENDPOINT] req.params:', req.params);
@@ -238,7 +237,7 @@ router.get('/shop/:shop', verifyRequest, async (req, res) => {
 });
 
 /** GET /api/languages/product/:shop/:productId */
-router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
+router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
   const { token, authUsed } = await resolveAdminToken(req.shopDomain);
@@ -267,7 +266,7 @@ router.get('/product/:shop/:productId', verifyRequest, async (req, res) => {
 });
 
 /** Optional: quick sanity ping to expose the real GQL error quickly */
-router.get('/ping/:shop', verifyRequest, async (req, res) => {
+router.get('/ping/:shop', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   const { token, authUsed } = await resolveAdminToken(req.shopDomain);
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });

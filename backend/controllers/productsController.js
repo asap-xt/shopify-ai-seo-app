@@ -3,7 +3,6 @@ import { Router } from 'express';
 import Product from '../db/Product.js';
 import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import fetch from 'node-fetch';
 
@@ -213,7 +212,7 @@ if (req.query.languageFilter) {
 });
 
 // GET /api/products/sync-status - Check sync status
-router.get('/sync-status', verifyRequest, async (req, res) => {
+router.get('/sync-status', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -273,7 +272,7 @@ router.post('/sync', validateRequest(), async (req, res) => {
 });
 
 // GET /api/products/tags/list - Get all unique tags for filtering
-router.get('/tags/list', verifyRequest, async (req, res) => {
+router.get('/tags/list', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -293,7 +292,7 @@ router.get('/tags/list', verifyRequest, async (req, res) => {
 });
 
 // GET /api/products/seo-status - Get SEO optimization statistics
-router.get('/seo-status', verifyRequest, async (req, res) => {
+router.get('/seo-status', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
 
@@ -400,7 +399,7 @@ router.get('/seo-status', verifyRequest, async (req, res) => {
 });
 
 // DELETE /api/products/clear - Clear all products for a shop
-router.delete('/clear', verifyRequest, async (req, res) => {
+router.delete('/clear', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
@@ -418,7 +417,7 @@ router.delete('/clear', verifyRequest, async (req, res) => {
 });
 
 // POST /api/products/cleanup - Clean up invalid products
-router.post('/cleanup', verifyRequest, async (req, res) => {
+router.post('/cleanup', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
 
@@ -494,7 +493,7 @@ router.post('/cleanup', verifyRequest, async (req, res) => {
 });
 
 // GET /api/products/bulk-select - Get products for bulk operations
-router.get('/bulk-select', verifyRequest, async (req, res) => {
+router.get('/bulk-select', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { 
@@ -620,7 +619,7 @@ router.get('/:productId', validateRequest(), async (req, res) => {
 });
 
 // DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB
-router.delete('/:id/metafields', verifyRequest, async (req, res) => {
+router.delete('/:id/metafields', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const productId = req.params.id;
@@ -898,7 +897,7 @@ router.post('/resync-all', validateRequest(), async (req, res) => {
 });
 
 // POST /api/products/verify-after-delete
-router.post('/verify-after-delete', verifyRequest, async (req, res) => {
+router.post('/verify-after-delete', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { productIds, deletedLanguages } = req.body;

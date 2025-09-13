@@ -3,7 +3,6 @@ import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 
 
@@ -138,7 +137,7 @@ async function fetchPlan(shop) {
 // ---- Routes ----
 
 // Get current store metadata
-router.get('/generate', verifyRequest, async (req, res) => {
+router.get('/generate', validateRequest(), async (req, res) => {
   console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -261,7 +260,7 @@ router.get('/generate', verifyRequest, async (req, res) => {
 });
 
 // Generate AI metadata (mock for now)
-router.post('/ai-generate', verifyRequest, async (req, res) => {
+router.post('/ai-generate', validateRequest(), async (req, res) => {
   console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -343,7 +342,7 @@ router.post('/ai-generate', verifyRequest, async (req, res) => {
 });
 
 // Apply metadata to shop
-router.post('/apply', verifyRequest, async (req, res) => {
+router.post('/apply', validateRequest(), async (req, res) => {
   console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -521,7 +520,7 @@ router.get('/public/:shop', async (req, res) => {
     }
 
     // Create metafield definitions for shop
-    router.post('/create-definitions', verifyRequest, async (req, res) => {
+    router.post('/create-definitions', validateRequest(), async (req, res) => {
       try {
         const shop = req.shopDomain;
 
@@ -620,7 +619,7 @@ router.get('/public/:shop', async (req, res) => {
 });
 
 // Settings endpoints за Advanced Schema
-router.get('/settings', verifyRequest, async (req, res) => {
+router.get('/settings', validateRequest(), async (req, res) => {
   console.log('[STORE-SETTINGS] GET /settings called'); // DEBUG
   try {
     const shop = req.shopDomain;
@@ -650,7 +649,7 @@ router.get('/settings', verifyRequest, async (req, res) => {
   }
 });
 
-router.post('/settings', verifyRequest, async (req, res) => {
+router.post('/settings', validateRequest(), async (req, res) => {
   console.log('[STORE-SETTINGS] POST /settings called'); // DEBUG
   console.log('[STORE-SETTINGS] Request body:', req.body); // DEBUG
   

@@ -30,14 +30,22 @@ export async function verifyRequest(req, res, next) {
   console.log('[VERIFY-REQUEST] Checking conditions:', { sessionToken: !!sessionToken, shop });
   if (!sessionToken && shop) {
     console.log('[VERIFY-REQUEST] Development bypass for shop:', shop);
-    req.shopDomain = shop;
-    req.shopAccessToken = 'mock-token-for-development';
-    console.log('[VERIFY-REQUEST] About to call next()');
+    
+    // Get real access token from database
     try {
+      const shopRecord = await Shop.findOne({ shop });
+      if (!shopRecord || !shopRecord.accessToken) {
+        return res.status(401).json({ error: 'Shop not found or not authenticated' });
+      }
+      
+      req.shopDomain = shop;
+      req.shopAccessToken = shopRecord.accessToken; // Use real token!
+      console.log('[VERIFY-REQUEST] Using real access token for shop:', shop);
+      
       next();
-      console.log('[VERIFY-REQUEST] next() called successfully');
     } catch (error) {
-      console.error('[VERIFY-REQUEST] Error calling next():', error);
+      console.error('[VERIFY-REQUEST] Error getting shop token:', error);
+      return res.status(500).json({ error: 'Failed to get shop token' });
     }
     return;
   }
