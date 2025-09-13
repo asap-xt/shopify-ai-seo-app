@@ -193,6 +193,7 @@ export default function Settings() {
       setRobotsTxt(txt);
     } catch (error) {
       console.error('Failed to generate robots.txt:', error);
+      setRobotsTxt('# Error generating robots.txt\n# ' + error.message);
     }
   };
 
