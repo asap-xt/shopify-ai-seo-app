@@ -544,25 +544,6 @@ app.get('/sitemap.xml', (req, res) => {
   res.redirect(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`);
 });
 
-// Root route - serve the app
-app.get('/', (req, res) => {
-  console.log('[ROOT] Request with params:', req.query);
-  // Променете условието - махнете проверката за embedded
-  if (req.query.shop && req.query.host) {
-    // Embedded app request - Cache busting for index.html
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store'
-    });
-    res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
-  } else {
-    // Non-embedded
-    res.send('Please install this app from Shopify Admin');
-  }
-});
 
 // Explicit SPA routes → serve fresh index.html
 const spaRoutes = [
