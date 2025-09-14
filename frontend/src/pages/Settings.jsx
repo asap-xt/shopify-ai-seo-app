@@ -19,7 +19,7 @@ import {
   Spinner,
   ProgressBar
 } from '@shopify/polaris';
-import { ClipboardIcon, ExternalIcon, ViewIcon } from '@shopify/polaris-icons';
+import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const qs = (k, d = '') => {
@@ -401,7 +401,14 @@ export default function Settings() {
             </Text>
             
             <Banner status="info">
-              Don't forget to click "Save Settings" after making changes.
+              <BlockStack gap="200">
+                <Text variant="bodyMd" fontWeight="semibold">How it works:</Text>
+                <ol style={{ marginLeft: '20px', marginBottom: 0 }}>
+                  <li>Select AI bots below</li>
+                  <li>Save Settings</li>
+                  <li>Generate robots.txt</li>
+                </ol>
+              </BlockStack>
             </Banner>
             
             <Divider />
@@ -695,6 +702,17 @@ export default function Settings() {
         </Box>
       </Card>
 
+      {/* Arrow between cards */}
+      <Box paddingInlineStart="600" paddingInlineEnd="600">
+        <InlineStack align="center" blockAlign="center">
+          <Box>
+            <Icon source={ArrowDownIcon} color="subdued" />
+          </Box>
+          <Text variant="bodySm" tone="subdued">
+            Configure what data the AI bots can access
+          </Text>
+        </InlineStack>
+      </Box>
 
       {/* AI Discovery Features */}
       <Card>

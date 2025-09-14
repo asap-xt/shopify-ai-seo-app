@@ -92,7 +92,9 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
     };
     
     // Save to MongoDB
-    const enabled = Object.values(features || {}).some(f => f === true);
+    const hasEnabledBots = Object.values(bots || {}).some(bot => bot.enabled === true);
+    const hasEnabledFeatures = Object.values(features || {}).some(f => f === true);
+    const enabled = hasEnabledBots || hasEnabledFeatures; // Enable if either bots OR features are selected
     
     const settings = await AIDiscoverySettings.findOneAndUpdate(
       { shop },
