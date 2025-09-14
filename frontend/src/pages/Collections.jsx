@@ -246,100 +246,69 @@ export default function CollectionsPage({ shop: shopProp }) {
     );
     
     const handleStartEnhancement = async () => {
-      // Не затваряме модала - ще покажем progress модала
-      setAIEnhanceProgress({
-        processing: true,
-        current: 0,
-        total: selectedWithSEO.length,
-        currentItem: '',
-        results: null
-      });
-      
-      const results = { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 };
-      
-      for (let i = 0; i < selectedWithSEO.length; i++) {
-        const collection = selectedWithSEO[i];
-        
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i,
-          currentItem: collection.title
-        }));
-        
-        try {
-          console.log('AI_ENHANCE clicked for collection:', collection);
-          
-          // Проверка на eligibility
-          const eligibility = await api('/ai-enhance/check-eligibility', {
-            method: 'POST',
-            shop,
-            body: { shop },
-          });
-          
-          console.log('Eligibility response:', eligibility);
-          
-          if (!eligibility?.eligible) {
-            setToast('Your plan does not allow AI enhancement for collections');
-            break;
-          }
-          
-          console.log('About to call AI enhance for collection ID:', collection.id);
+      try {
+        setIsProcessing(true);
+        setProcessingMessage('Checking eligibility...');
 
-          // Използваме правилния endpoint с ID в URL
-          const enhanceData = await api(`/ai-enhance/collection/${collection.id}`, {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              languages: selectedLanguages || availableLanguages, // добавяме езици
-            },
-          });
-          
-          console.log('Enhance data response:', enhanceData);
-          
-          if (!enhanceData?.ok) {
-            throw new Error(enhanceData?.error || 'AI enhancement failed');
-          }
-          
-          await api('/api/seo/apply-collection-multi', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              collectionId: collection.id,
-              results: enhanceData.data.results.filter(r => r?.seo).map(r => ({
-                language: r.language,
-                seo: r.seo,
-              })),
-              options: {
-                updateTitle: true,
-                updateDescription: true,
-                updateSeo: true,
-                updateMetafields: true,
-              },
-            },
-          });
-          
-          setProgress(prev => ({ ...prev, current: prev.current + 1, percent: Math.round(((prev.current + 1) / prev.total) * 100) }));
-          results[collection.id] = { success: true, data: enhanceData.data };
-        } catch (error) {
-          console.error('Enhancement error:', error);
-          results.failed++;
+        // Check eligibility first
+        const eligibility = await api('/ai-enhance/check-eligibility', {
+          method: 'POST',
+          shop,
+          body: { shop },
+        });
+
+        if (!eligibility.eligible) {
+          setToast(eligibility.reason || 'AI Enhance add-ons not available for your plan');
+          return;
         }
+
+        // Process selected collections
+        const results = { successful: 0, failed: 0, skipped: 0 };
         
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i + 1
-        }));
+        for (const collection of selectedWithSEO) {
+          try {
+            setProcessingMessage(`Enhancing collection ${collection.title}...`);
+            
+            // Fix: Use the correct endpoint with collection ID
+            const enhanceResult = await api(`/ai-enhance/collection/${collection.id}`, {
+              method: 'POST',
+              shop,
+              body: {
+                shop,
+                languages: selectedLanguages || availableLanguages,
+              },
+            });
+
+            if (enhanceResult.success) {
+              results.successful++;
+            } else {
+              results.failed++;
+            }
+          } catch (error) {
+            console.error('Error enhancing collection:', collection.id, error);
+            results.failed++;
+          }
+        }
+
+        // Show results
+        setAIEnhanceProgress({
+          processing: false,
+          current: 0,
+          total: 0,
+          currentItem: '',
+          results: results
+        });
+        
+        // Refresh collections list
+        await fetchCollections();
+        
+      } catch (error) {
+        console.error('AI Enhance error:', error);
+        setToast('Failed to enhance collections');
+      } finally {
+        setIsProcessing(false);
+        setProcessingMessage('');
       }
-      
-      setAIEnhanceProgress(prev => ({
-        ...prev,
-        processing: false,
-        results
-      }));
-      
-      setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
     };
     
     const handleClose = () => {
