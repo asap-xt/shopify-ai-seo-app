@@ -273,7 +273,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             body: { shop },
           });
           
-          if (!eligibility?.ok) {
+          if (!eligibility?.eligible) {
             setToast('Your plan does not allow AI enhancement for collections');
             break;
           }
