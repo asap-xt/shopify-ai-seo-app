@@ -263,6 +263,11 @@ export default function CollectionsPage({ shop: shopProp }) {
         }
 
         // Process selected collections
+        console.log('Selected collections:', selectedCollections);
+        console.log('Selected collections length:', selectedCollections.length);
+        console.log('Shop domain:', shop);
+        console.log('Selected language:', selectedLanguages);
+        
         const results = { successful: 0, failed: 0, skipped: 0 };
         
         for (const collection of selectedWithSEO) {
