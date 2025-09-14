@@ -113,7 +113,12 @@ export default function BulkEdit({ shop: shopProp }) {
     results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
   });
   
-  // Load models on mount
+  // Plan and help modal state
+  const [plan, setPlan] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
+  
+  // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
     api(`/plans/me`, { shop })
@@ -121,6 +126,7 @@ export default function BulkEdit({ shop: shopProp }) {
         const models = data?.modelsSuggested || ['anthropic/claude-3.5-sonnet'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
+        setPlan(data?.plan || 'starter');
       })
       .catch((e) => console.error('[BULK-EDIT] /plans/me failed:', e));
   }, [shop, api]);
@@ -230,6 +236,13 @@ export default function BulkEdit({ shop: shopProp }) {
     if (shop) loadProducts(1, false, null);
   }, [shop, loadProducts, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
+  // Show help modal when no products are loaded initially
+  useEffect(() => {
+    if (products.length === 0 && !loading && shop) {
+      setShowHelpModal(true);
+    }
+  }, [products.length, loading, shop]);
+  
   // Unified search function
   const handleSearch = useCallback((value) => {
     setSearchValue(value);
@@ -291,6 +304,13 @@ export default function BulkEdit({ shop: shopProp }) {
     
     const handleStartEnhancement = async () => {
       console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
+      
+      // Check if plan allows AI enhancement
+      if (plan && !['Growth Extra', 'Enterprise'].includes(plan)) {
+        setShowAIEnhanceModal(false);
+        setShowPlanUpgradeModal(true);
+        return;
+      }
       
       // Не затваряме модала - ще покажем progress модала
       setAIEnhanceProgress({
@@ -1678,6 +1698,69 @@ export default function BulkEdit({ shop: shopProp }) {
       {deleteModal}
       {deleteConfirmModal}
       {AIEnhanceModal()}
+      
+      {/* Help Modal for first-time users */}
+      <Modal
+        open={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        title="Sync your products"
+        primaryAction={{
+          content: 'Sync Products',
+          onAction: () => {
+            setShowHelpModal(false);
+            handleSyncProducts();
+          }
+        }}
+        secondaryActions={[
+          {
+            content: 'Skip for now',
+            onAction: () => setShowHelpModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd">
+              To get started with AI SEO optimization, you need to sync your products from Shopify first.
+            </Text>
+            <Text variant="bodyMd">
+              This will import all your products so you can optimize them for better search visibility.
+            </Text>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+      
+      {/* Plan Upgrade Modal for AI Enhancement */}
+      <Modal
+        open={showPlanUpgradeModal}
+        onClose={() => setShowPlanUpgradeModal(false)}
+        title="Upgrade Required"
+        primaryAction={{
+          content: 'Upgrade Plan',
+          onAction: () => {
+            setShowPlanUpgradeModal(false);
+            // TODO: Add upgrade logic or redirect to billing
+            setToast('Please upgrade your plan to use AI Enhancement features');
+          }
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowPlanUpgradeModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd" fontWeight="semibold">
+              AI enhancement is only available for Growth Extra and Enterprise plans.
+            </Text>
+            <Text variant="bodyMd">
+              Please upgrade in order to use this feature!
+            </Text>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
