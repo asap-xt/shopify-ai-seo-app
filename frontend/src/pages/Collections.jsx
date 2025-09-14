@@ -263,18 +263,13 @@ export default function CollectionsPage({ shop: shopProp }) {
         }
 
         // Process selected collections
-        console.log('Selected collections:', selectedCollections);
-        console.log('Selected collections length:', selectedCollections.length);
-        console.log('Shop domain:', shop);
-        console.log('Selected language:', selectedLanguages);
-        
         const results = { successful: 0, failed: 0, skipped: 0 };
         
-        for (const collection of selectedWithSEO) {
+        for (const collection of selectedCollections) {
           try {
             setProcessingMessage(`Enhancing collection ${collection.title}...`);
             
-            // Fix: Use the correct endpoint with collection ID
+            // Call the enhance endpoint for each collection
             const enhanceResult = await api(`/ai-enhance/collection/${collection.id}`, {
               method: 'POST',
               shop,
@@ -286,16 +281,22 @@ export default function CollectionsPage({ shop: shopProp }) {
 
             if (enhanceResult.success) {
               results.successful++;
+              setToast(`Enhanced ${collection.title}`);
+            } else if (enhanceResult.skipped) {
+              results.skipped++;
+              setToast(`Skipped ${collection.title}: ${enhanceResult.reason}`);
             } else {
               results.failed++;
+              setToast(`Failed to enhance ${collection.title}`);
             }
           } catch (error) {
             console.error('Error enhancing collection:', collection.id, error);
             results.failed++;
+            setToast(`Error enhancing ${collection.title}`);
           }
         }
 
-        // Show results
+        // Show results modal
         setAIEnhanceProgress({
           processing: false,
           current: 0,
@@ -304,7 +305,7 @@ export default function CollectionsPage({ shop: shopProp }) {
           results: results
         });
         
-        // Refresh collections list
+        // Refresh collections list to show updated data
         await fetchCollections();
         
       } catch (error) {
