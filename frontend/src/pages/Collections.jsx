@@ -245,6 +245,115 @@ export default function CollectionsPage({ shop: shopProp }) {
       c.optimizedLanguages?.length > 0
     );
     
+    // Debug version of AI enhancement with detailed logging
+    const handleAIActionDebug = async (collection) => {
+      console.log('=== AI_ENHANCE DEBUG START ===');
+      console.log('1. Collection:', collection);
+      console.log('2. Selected collections:', selectedCollections);
+      console.log('3. Shop:', shop);
+      
+      try {
+        // Check eligibility
+        console.log('4. Checking eligibility...');
+        const eligibility = await api('/ai-enhance/check-eligibility', {
+          method: 'POST',
+          shop,
+          body: { shop },
+        });
+        console.log('5. Eligibility response:', eligibility);
+        
+        if (!eligibility.eligible) {
+          console.log('6. Not eligible - showing error');
+          setToast('AI Enhanced add-ons not available for your plan');
+          return;
+        }
+
+        console.log('7. Eligible! Proceeding...');
+        
+        // Process selected collections or single collection
+        const collectionsToProcess = selectedCollections.length > 0 
+          ? collections.filter(c => selectedCollections.includes(c.id))
+          : [collection];
+        
+        console.log('8. Collections to process:', collectionsToProcess);
+        
+        if (collectionsToProcess.length === 0) {
+          console.log('9. No collections to process - showing info');
+          setToast('Please select collections to enhance');
+          return;
+        }
+
+        setIsProcessing(true);
+        const results = { successful: 0, failed: 0, skipped: 0 };
+        const errors = [];
+
+        // Process each collection
+        for (const col of collectionsToProcess) {
+          console.log(`10. Processing collection: ${col.title} (${col.id})`);
+          
+          try {
+            // Get selected languages from collection
+            const selectedLanguages = col.languages || ['en'];
+            console.log(`11. Selected languages for ${col.title}:`, selectedLanguages);
+            
+            // Make the API call with correct endpoint format
+            const endpoint = `/ai-enhance/collection/${col.id}`;
+            console.log(`12. Calling endpoint: ${endpoint}`);
+            console.log('13. Request body:', { shop, selectedLanguages });
+            
+            const enhanceData = await api(endpoint, {
+              method: 'POST',
+              shop,
+              body: {
+                shop,
+                languages: selectedLanguages,
+              },
+            });
+            
+            console.log(`14. Enhance response for ${col.title}:`, enhanceData);
+            
+            if (enhanceData.success) {
+              results.successful++;
+              console.log(`15. Success for ${col.title}`);
+            } else {
+              results.failed++;
+              errors.push(`${col.title}: ${enhanceData.error || 'Unknown error'}`);
+              console.log(`16. Failed for ${col.title}:`, enhanceData.error);
+            }
+          } catch (error) {
+            console.error(`17. Error enhancing ${col.title}:`, error);
+            results.failed++;
+            errors.push(`${col.title}: ${error.message}`);
+          }
+        }
+
+        setIsProcessing(false);
+        console.log('18. Final results:', results);
+        console.log('19. Errors:', errors);
+
+        // Show results modal
+        const message = `AI Enhancement Complete\n\nSuccessful: ${results.successful}\nFailed: ${results.failed}\nSkipped: ${results.skipped}${
+          errors.length > 0 ? '\n\nErrors:\n' + errors.join('\n') : ''
+        }`;
+        
+        console.log('20. Showing modal with message:', message);
+        alert(message);
+
+        // Reload collections if any were successful
+        if (results.successful > 0) {
+          console.log('21. Reloading collections...');
+          await loadCollections();
+        }
+        
+      } catch (error) {
+        console.error('22. AI enhance error:', error);
+        setIsProcessing(false);
+        setToast(error.message || 'Enhancement failed');
+      } finally {
+        console.log('=== AI_ENHANCE DEBUG END ===');
+      }
+    };
+
     const handleStartEnhancement = async () => {
       try {
         setIsProcessing(true);
