@@ -272,6 +272,10 @@ export default function CollectionsPage({ shop: shopProp }) {
         
         for (const collection of selectedCollections) {
           try {
+            console.log('Starting AI enhance for collection:', collection);
+            console.log('API endpoint:', `/ai-enhance/collection/${collection.id}`);
+            console.log('Request body:', { shop, selectedLanguages: selectedLanguages || availableLanguages });
+            
             setProcessingMessage(`Enhancing collection ${collection.title}...`);
             
             // Call the enhance endpoint for each collection
