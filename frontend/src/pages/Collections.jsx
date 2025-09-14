@@ -43,6 +43,9 @@ export default function CollectionsPage({ shop: shopProp }) {
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
   
+  // Processing state
+  const [processingMessage, setProcessingMessage] = useState('');
+  
   // Filter state
   const [searchValue, setSearchValue] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
