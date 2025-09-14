@@ -277,13 +277,14 @@ export default function CollectionsPage({ shop: shopProp }) {
             setToast('Your plan does not allow AI enhancement for collections');
             break;
           }
-          const enhanceData = await api('/ai-enhance/collection', {
+
+          // Използваме правилния endpoint с ID в URL
+          const enhanceData = await api(`/ai-enhance/collection/${collection.id}`, {
             method: 'POST',
             shop,
             body: {
               shop,
-              collectionId: collection.id,
-              languages: selectedLanguages,
+              languages: selectedLanguages || availableLanguages, // добавяме езици
             },
           });
           
