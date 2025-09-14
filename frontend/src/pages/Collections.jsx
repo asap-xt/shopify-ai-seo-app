@@ -267,16 +267,23 @@ export default function CollectionsPage({ shop: shopProp }) {
         }));
         
         try {
+          console.log('AI_ENHANCE clicked for collection:', collection);
+          
+          // Проверка на eligibility
           const eligibility = await api('/ai-enhance/check-eligibility', {
             method: 'POST',
             shop,
             body: { shop },
           });
           
+          console.log('Eligibility response:', eligibility);
+          
           if (!eligibility?.eligible) {
             setToast('Your plan does not allow AI enhancement for collections');
             break;
           }
+          
+          console.log('About to call AI enhance for collection ID:', collection.id);
 
           // Използваме правилния endpoint с ID в URL
           const enhanceData = await api(`/ai-enhance/collection/${collection.id}`, {
@@ -287,6 +294,8 @@ export default function CollectionsPage({ shop: shopProp }) {
               languages: selectedLanguages || availableLanguages, // добавяме езици
             },
           });
+          
+          console.log('Enhance data response:', enhanceData);
           
           if (!enhanceData?.ok) {
             throw new Error(enhanceData?.error || 'AI enhancement failed');
