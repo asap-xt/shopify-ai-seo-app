@@ -320,4 +320,178 @@ Output JSON with:
   }
 });
 
+// POST /ai-enhance/collection/:collectionId - Batch enhance all products in collection
+router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { collectionId } = req.params;
+    const { languages = ['en'] } = req.body;
+    
+    console.log('🔍 [AI-ENHANCE-BATCH] Starting for collection:', collectionId);
+    
+    // Check plan
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    
+    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
+      return res.status(403).json({ 
+        error: 'AI enhancement requires Growth Extra or Enterprise plan',
+        currentPlan: planKey
+      });
+    }
+    
+    // Get all products in collection
+    const query = `
+      query GetCollectionProducts($id: ID!) {
+        collection(id: $id) {
+          title
+          products(first: 250) {
+            edges {
+              node {
+                id
+                title
+                metafields(namespace: "seo_ai", first: 20) {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(req, shop, query, { id: collectionId });
+    
+    if (!data?.collection) {
+      return res.status(404).json({ error: 'Collection not found' });
+    }
+    
+    const products = data.collection.products.edges.map(e => e.node);
+    console.log('🔍 [AI-ENHANCE-BATCH] Found products:', products.length);
+    
+    const results = {
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      errors: []
+    };
+    
+    // Process each product
+    for (const product of products) {
+      try {
+        // Check if already has SEO for any language
+        const hasSeo = product.metafields.edges.some(e => 
+          e.node.key.startsWith('seo__')
+        );
+        
+        if (!hasSeo) {
+          console.log('🔍 [AI-ENHANCE-BATCH] Skipping product without SEO:', product.title);
+          results.skipped++;
+          continue;
+        }
+        
+        // Process each language
+        for (const language of languages) {
+          const metafieldKey = `seo__${language.toLowerCase()}`;
+          const seoMetafield = product.metafields.edges.find(e => 
+            e.node.key === metafieldKey
+          );
+          
+          if (!seoMetafield) {
+            console.log(`🔍 [AI-ENHANCE-BATCH] No ${language} SEO for:`, product.title);
+            continue;
+          }
+          
+          const currentSeo = JSON.parse(seoMetafield.node.value);
+          
+          // Generate enhancement
+          const messages = [
+            {
+              role: 'system',
+              content: `Generate enhanced bullets and FAQ for a product in ${language}.
+Output JSON with:
+{
+  "bullets": ["benefit1", "benefit2", "benefit3", "benefit4"],
+  "faq": [
+    {"q": "question1", "a": "answer1"},
+    {"q": "question2", "a": "answer2"}, 
+    {"q": "question3", "a": "answer3"}
+  ]
+}`
+            },
+            {
+              role: 'user',
+              content: `Product: ${currentSeo.title}\nDescription: ${currentSeo.metaDescription}`
+            }
+          ];
+          
+          const { content } = await openrouterChat('google/gemini-2.5-flash-lite', messages, true);
+          const enhanced = JSON.parse(content);
+          
+          // Save enhanced data back to metafield
+          const updatedSeo = {
+            ...currentSeo,
+            bullets: enhanced.bullets || currentSeo.bullets,
+            faq: enhanced.faq || currentSeo.faq
+          };
+          
+          // Update metafield mutation
+          const updateMutation = `
+            mutation UpdateProductMetafield($input: [MetafieldsSetInput!]!) {
+              metafieldsSet(metafields: $input) {
+                metafields {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          await shopGraphQL(req, shop, updateMutation, {
+            input: [{
+              ownerId: product.id,
+              namespace: "seo_ai",
+              key: metafieldKey,
+              value: JSON.stringify(updatedSeo),
+              type: "json"
+            }]
+          });
+        }
+        
+        results.successful++;
+      } catch (error) {
+        console.error('🔍 [AI-ENHANCE-BATCH] Error for product:', product.title, error);
+        results.failed++;
+        results.errors.push({
+          product: product.title,
+          error: error.message
+        });
+      }
+    }
+    
+    console.log('🔍 [AI-ENHANCE-BATCH] Complete:', results);
+    
+    res.json({
+      ok: true,
+      data: {
+        collectionTitle: data.collection.title,
+        results
+      }
+    });
+    
+  } catch (error) {
+    console.error('🔍 [AI-ENHANCE-BATCH] Fatal error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
