@@ -300,7 +300,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             console.log(`11. Selected languages for ${col.title}:`, selectedLanguages);
             
             // Make the API call with correct endpoint format
-            const endpoint = `/ai-enhance/collection/${col.id}`;
+            const endpoint = `/ai-enhance/collection/${encodeURIComponent(col.id)}`;
             console.log(`12. Calling endpoint: ${endpoint}`);
             console.log('13. Request body:', { shop, selectedLanguages });
             
@@ -427,7 +427,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         });
         
         // Refresh collections list to show updated data
-        await fetchCollections();
+        await loadCollections();
         
       } catch (error) {
         console.error('AI Enhance error:', error);
