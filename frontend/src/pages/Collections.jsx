@@ -296,22 +296,22 @@ export default function CollectionsPage({ shop: shopProp }) {
           
           try {
             // Get selected languages from collection
-            const selectedLanguages = col.optimizedLanguages || ['en'];
-            console.log(`11. Selected languages for ${col.title}:`, selectedLanguages);
+            const collectionLanguages = col.optimizedLanguages || ['en'];
+            console.log(`11. Collection languages for ${col.title}:`, collectionLanguages);
             
             // Make the API call with correct endpoint format
             console.log(`12. Collection ID: ${col.id}`);
             console.log(`12.1. Encoded ID: ${encodeURIComponent(col.id)}`);
             const endpoint = `/ai-enhance/collection/${encodeURIComponent(col.id)}`;
             console.log(`12.2. Calling endpoint: ${endpoint}`);
-            console.log('13. Request body:', { shop, selectedLanguages });
+            console.log('13. Request body:', { shop, collectionLanguages });
             
             const enhanceData = await api(endpoint, {
               method: 'POST',
               shop,
               body: {
                 shop,
-                languages: selectedLanguages,
+                languages: collectionLanguages,
               },
             });
             
@@ -390,7 +390,8 @@ export default function CollectionsPage({ shop: shopProp }) {
             console.log('Collection ID:', collection.id);
             console.log('Encoded ID:', encodeURIComponent(collection.id));
             console.log('Full endpoint:', `/ai-enhance/collection/${encodeURIComponent(collection.id)}`);
-            console.log('Request body:', { shop, selectedLanguages: selectedLanguages || availableLanguages });
+            const collectionLanguages = collection.optimizedLanguages || ['en'];
+            console.log('Request body:', { shop, collectionLanguages });
             
             setProcessingMessage(`Enhancing collection ${collection.title}...`);
             
@@ -400,7 +401,7 @@ export default function CollectionsPage({ shop: shopProp }) {
               shop,
               body: {
                 shop,
-                languages: selectedLanguages || availableLanguages,
+                languages: collectionLanguages,
               },
             });
 
