@@ -300,8 +300,10 @@ export default function CollectionsPage({ shop: shopProp }) {
             console.log(`11. Selected languages for ${col.title}:`, selectedLanguages);
             
             // Make the API call with correct endpoint format
+            console.log(`12. Collection ID: ${col.id}`);
+            console.log(`12.1. Encoded ID: ${encodeURIComponent(col.id)}`);
             const endpoint = `/ai-enhance/collection/${encodeURIComponent(col.id)}`;
-            console.log(`12. Calling endpoint: ${endpoint}`);
+            console.log(`12.2. Calling endpoint: ${endpoint}`);
             console.log('13. Request body:', { shop, selectedLanguages });
             
             const enhanceData = await api(endpoint, {
@@ -385,13 +387,15 @@ export default function CollectionsPage({ shop: shopProp }) {
         for (const collection of selectedCollections) {
           try {
             console.log('Starting AI enhance for collection:', collection);
-            console.log('API endpoint:', `/ai-enhance/collection/${collection.id}`);
+            console.log('Collection ID:', collection.id);
+            console.log('Encoded ID:', encodeURIComponent(collection.id));
+            console.log('Full endpoint:', `/ai-enhance/collection/${encodeURIComponent(collection.id)}`);
             console.log('Request body:', { shop, selectedLanguages: selectedLanguages || availableLanguages });
             
             setProcessingMessage(`Enhancing collection ${collection.title}...`);
             
             // Call the enhance endpoint for each collection
-            const enhanceResult = await api(`/ai-enhance/collection/${collection.id}`, {
+            const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
               method: 'POST',
               shop,
               body: {
