@@ -404,6 +404,8 @@ export default function CollectionsPage({ shop: shopProp }) {
                 languages: languagesToEnhance,
               },
             });
+            
+            console.log(`Enhance result for ${collection.title}:`, enhanceResult);
 
             if (enhanceResult.success) {
               results.successful++;
