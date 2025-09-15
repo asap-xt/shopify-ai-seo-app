@@ -296,7 +296,7 @@ export default function CollectionsPage({ shop: shopProp }) {
           
           try {
             // Get selected languages from collection
-            const selectedLanguages = col.languages || ['en'];
+            const selectedLanguages = col.optimizedLanguages || ['en'];
             console.log(`11. Selected languages for ${col.title}:`, selectedLanguages);
             
             // Make the API call with correct endpoint format
