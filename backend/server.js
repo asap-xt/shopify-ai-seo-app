@@ -529,6 +529,7 @@ app.use(
         res.setHeader('X-Cache-Bust', Date.now().toString());
         res.setHeader('X-Timestamp', Date.now().toString());
         res.setHeader('X-Random', Math.random().toString());
+        res.setHeader('X-Build-Time', new Date().toISOString());
       }
     },
   })
