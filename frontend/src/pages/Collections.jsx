@@ -386,16 +386,9 @@ export default function CollectionsPage({ shop: shopProp }) {
         
         for (const collection of selectedCollections) {
           try {
-            console.log('Starting AI enhance for collection:', collection);
-            console.log('Collection ID:', collection.id);
-            console.log('Encoded ID:', encodeURIComponent(collection.id));
-            console.log('Full endpoint:', `/ai-enhance/collection/${encodeURIComponent(collection.id)}`);
             const languagesToEnhance = collection.optimizedLanguages || ['en'];
-            console.log('Request body:', { shop, languages: languagesToEnhance });
-            
             // Call the enhance endpoint for each collection
             try {
-              console.log('Before API call');
               const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
                 method: 'POST',
                 shop,
@@ -404,14 +397,11 @@ export default function CollectionsPage({ shop: shopProp }) {
                   languages: languagesToEnhance,
                 },
               });
-              console.log('After API call, result:', enhanceResult);
               
               if (enhanceResult.ok) {
                 results.successful++;
-                console.log(`Enhanced ${collection.title} successfully`);
               } else {
                 results.failed++;
-                console.log(`Failed to enhance ${collection.title}`, enhanceResult);
               }
             } catch (error) {
               console.error('API call error:', error);

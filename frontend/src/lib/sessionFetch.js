@@ -94,7 +94,6 @@ async function getTokenFromAppBridge(app, debug = false) {
  */
 export function makeSessionFetch() {
   return async function sessionFetch(path, { method='GET', headers={}, body, shop, responseType='json' } = {}) {
-    console.log('[SESSION-FETCH] Starting request:', { path, method, shop });
     const url = shop ? `${path}${path.includes('?') ? '&' : '?'}shop=${encodeURIComponent(shop)}` : path;
 
     const app = await getAppBridge();
@@ -120,7 +119,6 @@ export function makeSessionFetch() {
     }
     
     const text = await rsp.text();
-    console.log('[SESSION-FETCH] Response:', { status: rsp.status, text: text.slice(0, 200) });
     
     if (!rsp.ok) {
       let errorData;
