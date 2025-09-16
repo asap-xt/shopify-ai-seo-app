@@ -655,10 +655,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             body: {
               shop,
               collectionId,
-              results: result.data.results.filter(r => r?.seo).map(r => ({
-                language: r.language,
-                seo: r.seo,
-              })),
+              results: result.data.results,  // Директно подай всички резултати
               options: {
                 updateTitle: true,
                 updateDescription: true,
