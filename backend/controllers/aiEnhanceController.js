@@ -320,6 +320,7 @@ Output JSON with:
   }
 });
 
+// POST /ai-enhance/collection/:collectionId
 router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
   console.log('[AI-ENHANCE-COLLECTION] Request details:', {
     shopDomain: req.shopDomain,
@@ -333,15 +334,34 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     if (!shop) {
       return res.status(400).json({ error: 'Shop not provided' });
     }
+    
     const { collectionId } = req.params;
     const { languages = [] } = req.body;
     
+    console.log('[AI-ENHANCE] Starting for collection:', collectionId);
+    console.log('[AI-ENHANCE] Languages to process:', languages);
+    
+    // Check plan
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    
+    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
+      return res.status(403).json({ 
+        error: 'AI enhancement requires Growth Extra or Enterprise plan',
+        currentPlan: planKey
+      });
+    }
+    
     const results = { enhanced: 0, failed: 0, errors: [] };
+    const model = 'google/gemini-1.5-flash';
     
     for (const language of languages) {
       try {
-        // 1. Зареди съществуващото SEO
+        // 1. Load existing SEO
         const metafieldKey = `seo__${language}`;
+        console.log(`[AI-ENHANCE] Loading existing SEO for ${language}`);
+        
         const query = `
           query GetCollectionMetafield($id: ID!) {
             collection(id: $id) {
@@ -353,16 +373,18 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         `;
         
         const data = await shopGraphQL(req, shop, query, { id: collectionId });
-        const existingSeo = JSON.parse(data?.collection?.metafield?.value || '{}');
+        console.log(`[AI-ENHANCE] GraphQL response:`, data?.collection?.metafield ? 'Found' : 'Not found');
         
-        // 2. AI prompt - САМО за bullets & FAQ
-        const prompt = {
-          title: existingSeo.title,
-          description: existingSeo.metaDescription,
-          currentBullets: existingSeo.bullets || [],
-          currentFaq: existingSeo.faq || []
-        };
+        if (!data?.collection?.metafield?.value) {
+          results.errors.push(`${language}: No basic SEO found`);
+          results.failed++;
+          continue;
+        }
         
+        const existingSeo = JSON.parse(data.collection.metafield.value);
+        console.log(`[AI-ENHANCE] Existing SEO title: ${existingSeo.title}`);
+        
+        // 2. Call AI for enhancement
         const messages = [
           {
             role: 'system',
@@ -374,20 +396,33 @@ Guidelines:
 - Create helpful FAQ questions and answers
 - Keep the same language as input
 - Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
-- bullets: array of strings (5 items)
-- faq: array of objects with "q" and "a" keys (3-5 items)`
+- bullets: array of 5 strings
+- faq: array of 3-5 objects with "q" and "a" keys`
           },
           {
             role: 'user',
-            content: JSON.stringify(prompt)
+            content: JSON.stringify({
+              title: existingSeo.title,
+              description: existingSeo.metaDescription,
+              currentBullets: existingSeo.bullets || [],
+              currentFaq: existingSeo.faq || []
+            })
           }
         ];
         
-        // 3. Извикай AI
-        const response = await openrouterChat(model, messages, true);
-        const enhanced = JSON.parse(response.content);
+        console.log(`[AI-ENHANCE] Calling OpenRouter for ${language}`);
+        const { content } = await openrouterChat(model, messages, true);
         
-        // 4. Замести САМО bullets & FAQ
+        let enhanced;
+        try {
+          enhanced = JSON.parse(content);
+          console.log(`[AI-ENHANCE] AI returned ${enhanced.bullets?.length || 0} bullets and ${enhanced.faq?.length || 0} FAQ items`);
+        } catch (parseErr) {
+          console.error(`[AI-ENHANCE] Failed to parse AI response:`, content);
+          throw new Error('Invalid JSON from AI');
+        }
+        
+        // 3. Save enhanced data
         const updatedSeo = {
           ...existingSeo,
           bullets: enhanced.bullets || existingSeo.bullets,
@@ -395,7 +430,6 @@ Guidelines:
           enhancedAt: new Date().toISOString()
         };
         
-        // 5. Запиши обратно
         const mutation = `
           mutation SetMetafield($metafields: [MetafieldsSetInput!]!) {
             metafieldsSet(metafields: $metafields) {
@@ -405,7 +439,7 @@ Guidelines:
           }
         `;
         
-        await shopGraphQL(req, shop, mutation, {
+        const mutationResult = await shopGraphQL(req, shop, mutation, {
           metafields: [{
             ownerId: collectionId,
             namespace: 'seo_ai',
@@ -415,13 +449,22 @@ Guidelines:
           }]
         });
         
+        const userErrors = mutationResult?.metafieldsSet?.userErrors || [];
+        if (userErrors.length > 0) {
+          throw new Error(userErrors.map(e => e.message).join(', '));
+        }
+        
+        console.log(`[AI-ENHANCE] Successfully enhanced ${language}`);
         results.enhanced++;
         
       } catch (error) {
+        console.error(`[AI-ENHANCE] Error for ${language}:`, error);
         results.errors.push(`${language}: ${error.message}`);
         results.failed++;
       }
     }
+    
+    console.log('[AI-ENHANCE] Final results:', results);
     
     res.json({ 
       ok: results.enhanced > 0,
@@ -431,6 +474,7 @@ Guidelines:
     });
     
   } catch (error) {
+    console.error('[AI-ENHANCE] Fatal error:', error);
     res.status(500).json({ error: error.message });
   }
 });
