@@ -384,7 +384,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         
         const results = { successful: 0, failed: 0, skipped: 0 };
         
-        for (const collection of selectedCollections) {
+        for (const collection of selectedWithSEO) {
           try {
             // За всяка колекция вземи нейните оптимизирани езици
             const languagesToEnhance = collection.optimizedLanguages || [];
