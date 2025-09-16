@@ -354,7 +354,7 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     }
     
     const results = { enhanced: 0, failed: 0, errors: [] };
-    const model = 'google/gemini-1.5-flash';
+    const model = 'google/gemini-2.5-flash-lite';
     
     for (const language of languages) {
       try {
