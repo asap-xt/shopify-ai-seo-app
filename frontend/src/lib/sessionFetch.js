@@ -119,6 +119,7 @@ export function makeSessionFetch() {
     }
     
     const text = await rsp.text();
+    console.log('[SESSION-FETCH] Response:', { status: rsp.status, text: text.slice(0, 200) });
     
     if (!rsp.ok) {
       let errorData;
