@@ -1765,66 +1765,91 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
     
     const results = [];
     
+    // Първо вземи основната колекция
+    const query = `
+      query GetCollection($id: ID!) {
+        collection(id: $id) {
+          id
+          title
+          handle
+          descriptionHtml
+          products(first: 10) {
+            edges {
+              node {
+                title
+                productType
+                vendor
+                priceRangeV2 {
+                  minVariantPrice { amount currencyCode }
+                  maxVariantPrice { amount currencyCode }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(req, shop, query, { id: collectionId });
+    const collection = data?.collection;
+    
+    if (!collection) {
+      return res.status(404).json({ error: 'Collection not found' });
+    }
+
     for (const language of languages) {
       try {
-        // Use existing single-language endpoint internally
-        const query = `
-          query GetCollection($id: ID!) {
-            collection(id: $id) {
-              id
-              title
-              handle
-              descriptionHtml
-              products(first: 10) {
-                edges {
-                  node {
-                    title
-                    productType
-                    vendor
-                    priceRangeV2 {
-                      minVariantPrice { amount currencyCode }
-                      maxVariantPrice { amount currencyCode }
-                    }
-                  }
-                }
+        // Вземи преводите за колекцията
+        const translationsQuery = `
+          query GetCollectionTranslations($resourceId: ID!) {
+            translatableResource(resourceId: $resourceId) {
+              translations(locale: "${language}") {
+                key
+                value
               }
             }
           }
         `;
         
-        const data = await shopGraphQL(req, shop, query, { id: collectionId });
-        const collection = data?.collection;
+        const translationData = await shopGraphQL(req, shop, translationsQuery, { 
+          resourceId: collectionId 
+        });
         
-        if (!collection) {
-          throw new Error('Collection not found');
+        // Извлечи преводите
+        let title = collection.title;
+        let description = collection.descriptionHtml;
+        
+        const translations = translationData?.translatableResource?.translations || [];
+        
+        for (const t of translations) {
+          if (t.key === 'title') title = t.value;
+          if (t.key === 'body_html') description = t.value;
         }
         
-        // Generate SEO data locally
-        const cleanDescription = (collection.descriptionHtml || '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
+        // Генерирай SEO с преведените данни
         const seoData = {
-          title: collection.title.slice(0, 70),
-          metaDescription: cleanDescription.slice(0, 160) || `Shop our ${collection.title} collection`,
-          slug: kebab(collection.handle || collection.title),
+          title: title.slice(0, 70),
+          metaDescription: (description || '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160) || `Shop our ${title} collection`,
+          slug: kebab(collection.handle || title),
           categoryKeywords: extractCategoryKeywords(collection),
           bullets: generateCollectionBullets(collection),
-          faq: generateCollectionFAQ(collection),
-          jsonLd: generateCollectionJsonLd(collection)
+          faq: generateCollectionFAQ(collection, title),
+          jsonLd: generateCollectionJsonLd(collection, title, description)
         };
         
         results.push({
-          language: canonLang(language),
-          seo: seoData,
-          success: true
+          language,
+          data: seoData
         });
-      } catch (err) {
+        
+      } catch (error) {
         results.push({
-          language: canonLang(language),
-          error: err.message,
-          success: false
+          language,
+          error: error.message
         });
       }
     }
