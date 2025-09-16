@@ -648,14 +648,22 @@ export default function CollectionsPage({ shop: shopProp }) {
         setCurrentCollection(collection.title);
         
         try {
-          // Multi endpoint с токен
+          console.log('Applying SEO for collection:', collectionId);
+          console.log('Result data:', result.data);
+          console.log('Results array:', result.data?.results);
+          
+          // Проверка на структурата
+          if (!result.data?.results || !Array.isArray(result.data.results)) {
+            throw new Error('Invalid results structure');
+          }
+          
           const data = await api('/seo/apply-collection-multi', {
             method: 'POST',
             shop,
             body: {
               shop,
               collectionId,
-              results: result.data.results,  // Директно подай всички резултати
+              results: result.data.results, // Директно подаваме резултатите
               options: {
                 updateTitle: true,
                 updateDescription: true,
@@ -669,8 +677,8 @@ export default function CollectionsPage({ shop: shopProp }) {
             throw new Error(data?.error || 'Apply failed');
           }
           
-          setProgress(prev => ({ ...prev, current: prev.current + 1, percent: Math.round(((prev.current + 1) / prev.total) * 100) }));
         } catch (err) {
+          console.error('Apply error for collection:', collectionId, err);
           errors.push({ id: collection.id, title: collection.title, message: err.message });
         }
         
@@ -678,15 +686,6 @@ export default function CollectionsPage({ shop: shopProp }) {
         const percent = Math.round((current / total) * 100);
         setProgress({ current, total, percent });
       }
-      
-      // Запазваме успешните резултати за preview
-      const successfulData = {};
-      Object.entries(results).forEach(([collId, result]) => {
-        if (result.success) {
-          successfulData[collId] = result.data;
-        }
-      });
-      setAppliedSeoData(prev => ({ ...prev, ...successfulData }));
       
       setToast('SEO applied successfully!');
       setShowResultsModal(false);
