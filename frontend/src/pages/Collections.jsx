@@ -406,15 +406,18 @@ export default function CollectionsPage({ shop: shopProp }) {
             });
             
             console.log(`Enhance result for ${collection.title}:`, enhanceResult);
-
+            
             if (enhanceResult.success) {
               results.successful++;
+              console.log(`Enhanced ${collection.title} successfully`);
               setToast(`Enhanced ${collection.title}`);
             } else if (enhanceResult.skipped) {
               results.skipped++;
+              console.log(`Skipped ${collection.title}: ${enhanceResult.reason}`);
               setToast(`Skipped ${collection.title}: ${enhanceResult.reason}`);
             } else {
               results.failed++;
+              console.log(`Failed to enhance ${collection.title}:`, enhanceResult);
               setToast(`Failed to enhance ${collection.title}`);
             }
           } catch (error) {
