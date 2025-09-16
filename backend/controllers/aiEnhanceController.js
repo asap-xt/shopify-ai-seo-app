@@ -320,182 +320,107 @@ Output JSON with:
   }
 });
 
-// POST /ai-enhance/collection/:collectionId - Batch enhance all products in collection
-router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
-  console.log('🔍 [AI-ENHANCE-BATCH] Endpoint hit!', {
-    collectionId: req.params.collectionId,
-    shop: req.shopDomain,
-    body: req.body
-  });
-  
+router.post('/collection/:collectionId', async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { collectionId } = req.params;
-    const { languages = ['en'] } = req.body;
+    const { languages = [] } = req.body;
     
-    console.log('🔍 [AI-ENHANCE-BATCH] Starting for collection:', collectionId);
+    const results = { enhanced: 0, failed: 0, errors: [] };
     
-    // Check plan
-    const subscription = await Subscription.findOne({ shop });
-    const planKey = subscription?.plan || '';
-    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    
-    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
-      return res.status(403).json({ 
-        error: 'AI enhancement requires Growth Extra or Enterprise plan',
-        currentPlan: planKey
-      });
-    }
-    
-    // Get all products in collection
-    const query = `
-      query GetCollectionProducts($id: ID!) {
-        collection(id: $id) {
-          title
-          products(first: 250) {
-            edges {
-              node {
-                id
-                title
-                metafields(namespace: "seo_ai", first: 20) {
-                  edges {
-                    node {
-                      key
-                      value
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    `;
-    
-    const data = await shopGraphQL(req, shop, query, { id: collectionId });
-    
-    if (!data?.collection) {
-      return res.status(404).json({ error: 'Collection not found' });
-    }
-    
-    const products = data.collection.products.edges.map(e => e.node);
-    console.log('🔍 [AI-ENHANCE-BATCH] Found products:', products.length);
-    
-    const results = {
-      successful: 0,
-      failed: 0,
-      skipped: 0,
-      errors: []
-    };
-    
-    // Process each product
-    for (const product of products) {
+    for (const language of languages) {
       try {
-        // Check if already has SEO for any language
-        const hasSeo = product.metafields.edges.some(e => 
-          e.node.key.startsWith('seo__')
-        );
-        
-        if (!hasSeo) {
-          console.log('🔍 [AI-ENHANCE-BATCH] Skipping product without SEO:', product.title);
-          results.skipped++;
-          continue;
-        }
-        
-        // Process each language
-        for (const language of languages) {
-          const metafieldKey = `seo__${language.toLowerCase()}`;
-          const seoMetafield = product.metafields.edges.find(e => 
-            e.node.key === metafieldKey
-          );
-          
-          if (!seoMetafield) {
-            console.log(`🔍 [AI-ENHANCE-BATCH] No ${language} SEO for:`, product.title);
-            continue;
-          }
-          
-          const currentSeo = JSON.parse(seoMetafield.node.value);
-          
-          // Generate enhancement
-          const messages = [
-            {
-              role: 'system',
-              content: `Generate enhanced bullets and FAQ for a product in ${language}.
-Output JSON with:
-{
-  "bullets": ["benefit1", "benefit2", "benefit3", "benefit4"],
-  "faq": [
-    {"q": "question1", "a": "answer1"},
-    {"q": "question2", "a": "answer2"}, 
-    {"q": "question3", "a": "answer3"}
-  ]
-}`
-            },
-            {
-              role: 'user',
-              content: `Product: ${currentSeo.title}\nDescription: ${currentSeo.metaDescription}`
-            }
-          ];
-          
-          const { content } = await openrouterChat('google/gemini-2.5-flash-lite', messages, true);
-          const enhanced = JSON.parse(content);
-          
-          // Save enhanced data back to metafield
-          const updatedSeo = {
-            ...currentSeo,
-            bullets: enhanced.bullets || currentSeo.bullets,
-            faq: enhanced.faq || currentSeo.faq
-          };
-          
-          // Update metafield mutation
-          const updateMutation = `
-            mutation UpdateProductMetafield($input: [MetafieldsSetInput!]!) {
-              metafieldsSet(metafields: $input) {
-                metafields {
-                  id
-                }
-                userErrors {
-                  field
-                  message
-                }
+        // 1. Зареди съществуващото SEO
+        const metafieldKey = `seo__${language}`;
+        const query = `
+          query GetCollectionMetafield($id: ID!) {
+            collection(id: $id) {
+              metafield(namespace: "seo_ai", key: "${metafieldKey}") {
+                value
               }
             }
-          `;
-          
-          await shopGraphQL(req, shop, updateMutation, {
-            input: [{
-              ownerId: product.id,
-              namespace: "seo_ai",
-              key: metafieldKey,
-              value: JSON.stringify(updatedSeo),
-              type: "json"
-            }]
-          });
-        }
+          }
+        `;
         
-        results.successful++;
-      } catch (error) {
-        console.error('🔍 [AI-ENHANCE-BATCH] Error for product:', product.title, error);
-        results.failed++;
-        results.errors.push({
-          product: product.title,
-          error: error.message
+        const data = await shopGraphQL(req, shop, query, { id: collectionId });
+        const existingSeo = JSON.parse(data?.collection?.metafield?.value || '{}');
+        
+        // 2. AI prompt - САМО за bullets & FAQ
+        const prompt = {
+          title: existingSeo.title,
+          description: existingSeo.metaDescription,
+          currentBullets: existingSeo.bullets || [],
+          currentFaq: existingSeo.faq || []
+        };
+        
+        const messages = [
+          {
+            role: 'system',
+            content: `You are an AI assistant that enhances e-commerce collection SEO content.
+Your task is to improve ONLY the bullets and FAQ sections.
+Language: ${language}
+Guidelines:
+- Make bullets more compelling and benefit-focused
+- Create helpful FAQ questions and answers
+- Keep the same language as input
+- Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
+- bullets: array of strings (5 items)
+- faq: array of objects with "q" and "a" keys (3-5 items)`
+          },
+          {
+            role: 'user',
+            content: JSON.stringify(prompt)
+          }
+        ];
+        
+        // 3. Извикай AI
+        const response = await openrouterChat(model, messages, true);
+        const enhanced = JSON.parse(response.content);
+        
+        // 4. Замести САМО bullets & FAQ
+        const updatedSeo = {
+          ...existingSeo,
+          bullets: enhanced.bullets || existingSeo.bullets,
+          faq: enhanced.faq || existingSeo.faq,
+          enhancedAt: new Date().toISOString()
+        };
+        
+        // 5. Запиши обратно
+        const mutation = `
+          mutation SetMetafield($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+              userErrors { field message }
+              metafields { id }
+            }
+          }
+        `;
+        
+        await shopGraphQL(req, shop, mutation, {
+          metafields: [{
+            ownerId: collectionId,
+            namespace: 'seo_ai',
+            key: metafieldKey,
+            type: 'json',
+            value: JSON.stringify(updatedSeo)
+          }]
         });
+        
+        results.enhanced++;
+        
+      } catch (error) {
+        results.errors.push(`${language}: ${error.message}`);
+        results.failed++;
       }
     }
     
-    console.log('🔍 [AI-ENHANCE-BATCH] Complete:', results);
-    
-    res.json({
-      ok: true,
-      data: {
-        collectionTitle: data.collection.title,
-        results
-      }
+    res.json({ 
+      ok: results.enhanced > 0,
+      enhanced: results.enhanced,
+      failed: results.failed,
+      errors: results.errors
     });
     
   } catch (error) {
-    console.error('🔍 [AI-ENHANCE-BATCH] Fatal error:', error);
     res.status(500).json({ error: error.message });
   }
 });
