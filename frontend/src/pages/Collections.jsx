@@ -405,20 +405,14 @@ export default function CollectionsPage({ shop: shopProp }) {
               },
             });
             
-            console.log(`Enhance result for ${collection.title}:`, enhanceResult);
+            console.log('Enhance result:', enhanceResult);
             
-            if (enhanceResult.ok) {  // Променено от .success на .ok
+            if (enhanceResult.ok) {
               results.successful++;
               console.log(`Enhanced ${collection.title} successfully`);
-              setToast(`Enhanced ${collection.title}`);
-            } else if (enhanceResult.skipped) {
-              results.skipped++;
-              console.log(`Skipped ${collection.title}: ${enhanceResult.reason}`);
-              setToast(`Skipped ${collection.title}: ${enhanceResult.reason}`);
             } else {
               results.failed++;
-              console.log(`Failed to enhance ${collection.title}:`, enhanceResult);
-              setToast(`Failed to enhance ${collection.title}`);
+              console.log(`Failed to enhance ${collection.title}`, enhanceResult);
             }
           } catch (error) {
             console.error('Error enhancing collection:', collection.id, error);
