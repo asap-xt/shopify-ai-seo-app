@@ -407,7 +407,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             
             console.log(`Enhance result for ${collection.title}:`, enhanceResult);
             
-            if (enhanceResult.success) {
+            if (enhanceResult.ok) {  // Променено от .success на .ok
               results.successful++;
               console.log(`Enhanced ${collection.title} successfully`);
               setToast(`Enhanced ${collection.title}`);
