@@ -393,8 +393,6 @@ export default function CollectionsPage({ shop: shopProp }) {
             const languagesToEnhance = collection.optimizedLanguages || ['en'];
             console.log('Request body:', { shop, languages: languagesToEnhance });
             
-            setProcessingMessage(`Enhancing collection ${collection.title}...`);
-            
             // Call the enhance endpoint for each collection
             try {
               console.log('Before API call');
