@@ -322,6 +322,12 @@ Output JSON with:
 
 // POST /ai-enhance/collection/:collectionId - Batch enhance all products in collection
 router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
+  console.log('🔍 [AI-ENHANCE-BATCH] Endpoint hit!', {
+    collectionId: req.params.collectionId,
+    shop: req.shopDomain,
+    body: req.body
+  });
+  
   try {
     const shop = req.shopDomain;
     const { collectionId } = req.params;
