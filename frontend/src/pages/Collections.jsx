@@ -317,7 +317,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             
             console.log(`14. Enhance response for ${col.title}:`, enhanceData);
             
-            if (enhanceData.success) {
+            if (enhanceData.ok) {  // Променено от .success на .ok
               results.successful++;
               console.log(`15. Success for ${col.title}`);
             } else {
