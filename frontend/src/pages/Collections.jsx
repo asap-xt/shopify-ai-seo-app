@@ -397,6 +397,7 @@ export default function CollectionsPage({ shop: shopProp }) {
             
             // Call the enhance endpoint for each collection
             try {
+              console.log('Before API call');
               const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
                 method: 'POST',
                 shop,
@@ -405,13 +406,14 @@ export default function CollectionsPage({ shop: shopProp }) {
                   languages: languagesToEnhance,
                 },
               });
-              
-              console.log('Enhance result:', enhanceResult);
+              console.log('After API call, result:', enhanceResult);
               
               if (enhanceResult.ok) {
                 results.successful++;
+                console.log(`Enhanced ${collection.title} successfully`);
               } else {
                 results.failed++;
+                console.log(`Failed to enhance ${collection.title}`, enhanceResult);
               }
             } catch (error) {
               console.error('API call error:', error);
