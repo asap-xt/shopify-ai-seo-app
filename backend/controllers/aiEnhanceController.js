@@ -320,9 +320,19 @@ Output JSON with:
   }
 });
 
-router.post('/collection/:collectionId', async (req, res) => {
+router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
+  console.log('[AI-ENHANCE-COLLECTION] Request details:', {
+    shopDomain: req.shopDomain,
+    bodyShop: req.body?.shop,
+    queryShop: req.query?.shop,
+    params: req.params
+  });
+  
   try {
-    const shop = req.shopDomain;
+    const shop = req.shopDomain || req.body?.shop || req.query?.shop;
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
     const { collectionId } = req.params;
     const { languages = [] } = req.body;
     
