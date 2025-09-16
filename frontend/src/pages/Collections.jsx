@@ -386,7 +386,17 @@ export default function CollectionsPage({ shop: shopProp }) {
         
         for (const collection of selectedCollections) {
           try {
-            const languagesToEnhance = collection.optimizedLanguages || ['en'];
+            // За всяка колекция вземи нейните оптимизирани езици
+            const languagesToEnhance = collection.optimizedLanguages || [];
+            
+            if (languagesToEnhance.length === 0) {
+              console.log(`No optimized languages for ${collection.title}, skipping`);
+              results.skipped++;
+              continue;
+            }
+            
+            console.log(`Enhancing ${collection.title} for languages:`, languagesToEnhance);
+            
             // Call the enhance endpoint for each collection
             try {
               const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
