@@ -663,7 +663,10 @@ export default function CollectionsPage({ shop: shopProp }) {
             body: {
               shop,
               collectionId,
-              results: result.data.results, // Директно подаваме резултатите
+              results: result.data.results.map(r => ({
+                language: r.language,
+                seo: r.data  // Преименуваме 'data' на 'seo'
+              })),
               options: {
                 updateTitle: true,
                 updateDescription: true,
