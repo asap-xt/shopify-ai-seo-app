@@ -65,6 +65,42 @@ async function shopGraphQL(shop, query, variables = {}) {
   return json.data;
 }
 
+// Helper: Check which languages have SEO optimization for a product
+async function checkProductSEOLanguages(shop, productId) {
+  try {
+    const query = `
+      query GetProductSEOLanguages($id: ID!) {
+        product(id: $id) {
+          metafields(namespace: "seo_ai", first: 20) {
+            edges {
+              node {
+                key
+                value
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query, { id: productId });
+    const metafields = data?.product?.metafields?.edges || [];
+    
+    // Extract languages from metafield keys (seo__en, seo__bg, seo__fr, etc.)
+    const languages = metafields
+      .map(edge => edge.node.key)
+      .filter(key => key.startsWith('seo__'))
+      .map(key => key.replace('seo__', ''))
+      .filter(lang => lang.length > 0);
+    
+    // Always include 'en' as default if no languages found
+    return languages.length > 0 ? [...new Set(['en', ...languages])] : ['en'];
+  } catch (error) {
+    console.error('[SITEMAP] Error checking SEO languages for product:', productId, error);
+    return ['en']; // Fallback to English only
+  }
+}
+
 // Helper: get plan limits
 async function getPlanLimits(shop) {
   try {
@@ -300,12 +336,23 @@ async function handleGenerate(req, res) {
         }
       }
       
-      // Add product URL with metadata hints for AI
+      // Check if product has SEO optimization for multiple languages
+      const hasMultiLanguageSEO = await checkProductSEOLanguages(shop, product.id);
+      
+      // Add default language URL
       xml += '  <url>\n';
       xml += '    <loc>' + primaryDomain + '/products/' + product.handle + '</loc>\n';
       xml += '    <lastmod>' + lastmod + '</lastmod>\n';
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.8</priority>\n';
+      
+      // Add hreflang for multilingual SEO if available
+      if (hasMultiLanguageSEO.length > 1) {
+        for (const lang of hasMultiLanguageSEO) {
+          const langCode = lang === 'en' ? '' : `/${lang}`;
+          xml += `    <xhtml:link rel="alternate" hreflang="${lang}" href="${primaryDomain}${langCode}/products/${product.handle}" />\n`;
+        }
+      }
       
       // Add AI-optimized metadata
       xml += '    <ai:product>\n';
@@ -355,18 +402,51 @@ async function handleGenerate(req, res) {
       }
       
       xml += '    </ai:product>\n';
+      xml += '  </url>\n';
       
-      // Add language alternatives for multilingual AI indexing
-      if (locales.length > 1) {
-        for (const locale of locales) {
-          if (!locale.primary) {
-            xml += '    <xhtml:link rel="alternate" hreflang="' + locale.locale + '" ';
-            xml += 'href="' + primaryDomain + '/' + locale.locale + '/products/' + product.handle + '"/>\n';
+      // Add separate URLs for each language with SEO optimization
+      for (const lang of hasMultiLanguageSEO) {
+        if (lang !== 'en') { // Skip default language as it's already added
+          const langUrl = `${primaryDomain}/${lang}/products/${product.handle}`;
+          
+          // Try to get SEO data for this language
+          let langTitle = product.title;
+          let langDescription = product.seo?.description || cleanHtmlForXml(product.descriptionHtml);
+          
+          try {
+            const seoQuery = `
+              query GetProductSEO($id: ID!) {
+                product(id: $id) {
+                  metafield(namespace: "seo_ai", key: "seo__${lang}") {
+                    value
+                  }
+                }
+              }
+            `;
+            
+            const seoData = await shopGraphQL(shop, seoQuery, { id: product.id });
+            if (seoData?.product?.metafield?.value) {
+              const seo = JSON.parse(seoData.product.metafield.value);
+              langTitle = seo.title || langTitle;
+              langDescription = seo.metaDescription || langDescription;
+            }
+          } catch (err) {
+            console.log(`[SITEMAP] Could not get SEO for ${lang}:`, err.message);
           }
+          
+          xml += '  <url>\n';
+          xml += '    <loc>' + langUrl + '</loc>\n';
+          xml += '    <lastmod>' + lastmod + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.8</priority>\n';
+          xml += '    <ai:product>\n';
+          xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
+          xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
+          xml += '      <ai:language>' + lang + '</ai:language>\n';
+          xml += '    </ai:product>\n';
+          xml += '  </url>\n';
         }
       }
-      
-      xml += '  </url>\n';
     }
     
     // DEBUG: Summary statistics
