@@ -382,6 +382,9 @@ export default function CollectionsPage({ shop: shopProp }) {
           return;
         }
 
+        // Затваряме AI Enhancement модала и започваме processing
+        setShowAIEnhanceModal(false);
+
         // Process selected collections
         console.log('Selected collections:', selectedCollections);
         console.log('Selected collections length:', selectedCollections.length);
@@ -978,13 +981,19 @@ export default function CollectionsPage({ shop: shopProp }) {
             <Box>
               <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
               <Text variant="headingLg" fontWeight="bold" tone="success">
-                {Object.values(results).filter(r => r.success).length}
+                {Object.values(results).filter(r => r.success && !r.skipped).length}
+              </Text>
+            </Box>
+            <Box>
+              <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
+              <Text variant="headingLg" fontWeight="bold" tone="info">
+                {Object.values(results).filter(r => r.skipped).length}
               </Text>
             </Box>
             <Box>
               <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
               <Text variant="headingLg" fontWeight="bold" tone="critical">
-                {Object.values(results).filter(r => !r.success).length}
+                {Object.values(results).filter(r => !r.success && !r.skipped).length}
               </Text>
             </Box>
           </InlineStack>
@@ -1392,7 +1401,34 @@ export default function CollectionsPage({ shop: shopProp }) {
       {bulkDeleteModal}
       {confirmDeleteModal}
       {deleteProgressModal}
-      {AIEnhanceModal()}
+      
+      {/* AI Enhancement confirmation modal */}
+      <Modal
+        open={showAIEnhanceModal}
+        onClose={() => setShowAIEnhanceModal(false)}
+        title="AI Enhanced add-ons for AI Search"
+        primaryAction={{
+          content: 'Start AI Enhancement',
+          onAction: handleStartEnhancement,
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowAIEnhanceModal(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd">
+              AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} collections.
+            </Text>
+            <Text variant="bodySm" tone="subdued">
+              Note: AI enhancement is only available for Growth Extra and Enterprise plans.
+            </Text>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
       
       <UpgradeModal
         open={showUpgradeModal}
