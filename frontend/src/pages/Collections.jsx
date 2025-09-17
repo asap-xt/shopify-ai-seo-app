@@ -868,6 +868,27 @@ export default function CollectionsPage({ shop: shopProp }) {
     );
   };
   
+  // Progress modal - показва се само когато не се извършва AI Enhancement
+  const progressModal = isProcessing && !aiEnhanceProgress.processing && (
+    <Modal
+      open={isProcessing}
+      title="Processing Collections"
+      onClose={() => {}}
+      noScroll
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">
+            {currentCollection ? `Processing: ${currentCollection}` : 'Preparing...'}
+          </Text>
+          <ProgressBar progress={progress.percent} />
+          <Text variant="bodySm" tone="subdued">
+            {progress.current} of {progress.total} collections ({progress.percent}%)
+          </Text>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
 
   // Language selection modal
   const languageModal = (
@@ -1356,6 +1377,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         </Card>
       </Box>
 
+      {progressModal}
       {languageModal}
       {resultsModal}
       {previewModal}
