@@ -388,56 +388,64 @@ export default function CollectionsPage({ shop: shopProp }) {
         console.log('Shop domain:', shop);
         console.log('Selected language:', selectedLanguages);
         
-        const results = { successful: 0, failed: 0, skipped: 0 };
+        const total = selectedWithSEO.length;
+        setProgress({ current: 0, total, percent: 0 });
         
-        for (const collection of selectedWithSEO) {
+        const results = {};
+        
+        for (let i = 0; i < selectedWithSEO.length; i++) {
+          const collection = selectedWithSEO[i];
+          setCurrentCollection(collection.title);
+          
           try {
             // За всяка колекция вземи нейните оптимизирани езици
             const languagesToEnhance = collection.optimizedLanguages || [];
             
             if (languagesToEnhance.length === 0) {
               console.log(`No optimized languages for ${collection.title}, skipping`);
-              results.skipped++;
+              results[collection.id] = {
+                success: false,
+                error: 'No optimized languages'
+              };
               continue;
             }
             
             console.log(`Enhancing ${collection.title} for languages:`, languagesToEnhance);
             
             // Call the enhance endpoint for each collection
-            try {
-              const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
-                method: 'POST',
+            const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
+              method: 'POST',
+              shop,
+              body: {
                 shop,
-                body: {
-                  shop,
-                  languages: languagesToEnhance,
-                },
-              });
-              
-              if (enhanceResult.ok) {
-                results.successful++;
-              } else {
-                results.failed++;
-              }
-            } catch (error) {
-              console.error('API call error:', error);
-              results.failed++;
-            }
+                languages: languagesToEnhance,
+              },
+            });
+            
+            results[collection.id] = {
+              success: enhanceResult.ok,
+              data: enhanceResult,
+              error: enhanceResult.ok ? null : (enhanceResult.error || 'Enhancement failed')
+            };
+            
           } catch (error) {
             console.error('Error enhancing collection:', collection.id, error);
-            results.failed++;
-            setToast(`Error enhancing ${collection.title}`);
+            results[collection.id] = {
+              success: false,
+              error: error.message
+            };
           }
+          
+          const current = i + 1;
+          const percent = Math.round((current / total) * 100);
+          setProgress({ current, total, percent });
         }
 
-        // Show results modal
-        setAIEnhanceProgress({
-          processing: false,
-          current: 0,
-          total: 0,
-          currentItem: '',
-          results: results
-        });
+        setResults(results);
+        setShowResultsModal(true);
+        
+        const successCount = Object.values(results).filter(r => r.success).length;
+        setToast(`Enhanced ${successCount} collections`);
         
         // Refresh collections list to show updated data
         await loadCollections();
@@ -447,7 +455,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         setToast('Failed to enhance collections');
       } finally {
         setIsProcessing(false);
-        setProcessingMessage('');
+        setCurrentCollection('');
       }
     };
     
@@ -635,7 +643,7 @@ export default function CollectionsPage({ shop: shopProp }) {
       setShowResultsModal(true);
       
       const successCount = Object.values(results).filter(r => r.success).length;
-      setToast(`Generated SEO for ${successCount} collections`);
+      setToast(`Generated optimization for ${successCount} collections`);
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
@@ -706,14 +714,14 @@ export default function CollectionsPage({ shop: shopProp }) {
         setProgress({ current, total, percent });
       }
       
-      setToast('SEO applied successfully!');
+      setToast('Optimization applied successfully!');
       setShowResultsModal(false);
       setResults({});
       setSelectedItems([]);
       await loadCollections();
       
     } catch (err) {
-      setToast(`Error applying SEO: ${err.message}`);
+      setToast(`Error applying optimization: ${err.message}`);
     } finally {
       setIsProcessing(false);
       setCurrentCollection('');
@@ -731,7 +739,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         body: { shop, collectionId, language },
       });
       
-      setToast(`Deleted ${language.toUpperCase()} SEO successfully`);
+      setToast(`Deleted ${language.toUpperCase()} optimization successfully`);
       setShowDeleteModal(false);
       setDeleteTarget(null);
       
@@ -776,7 +784,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         }
       }
       
-      setToast(`Deleted SEO for ${deleteLanguages.join(', ').toUpperCase()}`);
+      setToast(`Deleted optimization for ${deleteLanguages.join(', ').toUpperCase()}`);
       
       // Important: reload AFTER we finish
       setTimeout(async () => {
