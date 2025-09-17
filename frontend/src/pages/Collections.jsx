@@ -269,8 +269,9 @@ export default function CollectionsPage({ shop: shopProp }) {
       setShowAIEnhanceModal(false);
 
       // Process selected collections
-      const selectedWithSEO = collections.filter(c => 
-        selectedItems.includes(c.id) && c.optimizedLanguages?.length > 0
+      const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
+      const selectedWithSEO = selectedCollections.filter(c => 
+        c.optimizedLanguages?.length > 0
       );
       
       const total = selectedWithSEO.length;
@@ -1425,7 +1426,7 @@ export default function CollectionsPage({ shop: shopProp }) {
         <Modal.Section>
           <BlockStack gap="300">
             <Text variant="bodyMd">
-              AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} collections.
+              AI enhancement will improve bullets and FAQ for {collections.filter(c => selectedItems.includes(c.id) && c.optimizedLanguages?.length > 0).length} collections.
             </Text>
             <Text variant="bodySm" tone="subdued">
               Note: AI enhancement is only available for Growth Extra and Enterprise plans.
