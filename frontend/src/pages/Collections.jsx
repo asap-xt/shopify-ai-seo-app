@@ -244,6 +244,109 @@ export default function CollectionsPage({ shop: shopProp }) {
     setShowLanguageModal(true);
   };
   
+  // AI Enhancement function - extracted from modal
+  const handleStartEnhancement = async () => {
+    try {
+      setIsProcessing(true);
+      setProcessingMessage('Checking eligibility...');
+
+      // Check eligibility first
+      const eligibility = await api('/ai-enhance/check-eligibility', {
+        method: 'POST',
+        shop,
+        body: { shop },
+      });
+
+      if (!eligibility.eligible) {
+        // Show upgrade modal instead of toast
+        setCurrentPlan(eligibility.currentPlan || 'starter');
+        setShowAIEnhanceModal(false);
+        setShowUpgradeModal(true);
+        return;
+      }
+
+      // Затваряме AI Enhancement модала и започваме processing
+      setShowAIEnhanceModal(false);
+
+      // Process selected collections
+      const selectedWithSEO = collections.filter(c => 
+        selectedItems.includes(c.id) && c.optimizedLanguages?.length > 0
+      );
+      
+      const total = selectedWithSEO.length;
+      setProgress({ current: 0, total, percent: 0 });
+      
+      const results = {};
+      
+      for (let i = 0; i < selectedWithSEO.length; i++) {
+        const collection = selectedWithSEO[i];
+        setCurrentCollection(collection.title);
+        
+        try {
+          // За всяка колекция вземи нейните оптимизирани езици
+          const languagesToEnhance = collection.optimizedLanguages || [];
+          
+          if (languagesToEnhance.length === 0) {
+            console.log(`No optimized languages for ${collection.title}, skipping`);
+            results[collection.id] = {
+              success: false,
+              skipped: true,
+              error: 'No optimized languages'
+            };
+            continue;
+          }
+          
+          console.log(`Enhancing ${collection.title} for languages:`, languagesToEnhance);
+          
+          // Call the enhance endpoint for each collection
+          const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
+            method: 'POST',
+            shop,
+            body: {
+              shop,
+              languages: languagesToEnhance,
+            },
+          });
+          
+          results[collection.id] = {
+            success: enhanceResult.ok,
+            skipped: false,
+            data: enhanceResult,
+            error: enhanceResult.ok ? null : (enhanceResult.error || 'Enhancement failed')
+          };
+          
+        } catch (error) {
+          console.error('Error enhancing collection:', collection.id, error);
+          results[collection.id] = {
+            success: false,
+            skipped: false,
+            error: error.message
+          };
+        }
+        
+        const current = i + 1;
+        const percent = Math.round((current / total) * 100);
+        setProgress({ current, total, percent });
+      }
+
+      setResults(results);
+      setShowResultsModal(true);
+      
+      const successCount = Object.values(results).filter(r => r.success).length;
+      setToast(`Enhanced ${successCount} collections`);
+      
+      // Refresh collections list to show updated data
+      await loadCollections();
+      
+    } catch (error) {
+      console.error('AI Enhance error:', error);
+      setToast('Failed to enhance collections');
+    } finally {
+      setIsProcessing(false);
+      setCurrentCollection('');
+    }
+  };
+  
   // AI Enhancement Modal - използва Polaris компоненти като другите модали
   const AIEnhanceModal = () => {
     const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
@@ -362,105 +465,6 @@ export default function CollectionsPage({ shop: shopProp }) {
       }
     };
 
-    const handleStartEnhancement = async () => {
-      try {
-        setIsProcessing(true);
-        setProcessingMessage('Checking eligibility...');
-
-        // Check eligibility first
-        const eligibility = await api('/ai-enhance/check-eligibility', {
-          method: 'POST',
-          shop,
-          body: { shop },
-        });
-
-        if (!eligibility.eligible) {
-          // Show upgrade modal instead of toast
-          setCurrentPlan(eligibility.currentPlan || 'starter');
-          setShowAIEnhanceModal(false);
-          setShowUpgradeModal(true);
-          return;
-        }
-
-        // Затваряме AI Enhancement модала и започваме processing
-        setShowAIEnhanceModal(false);
-
-        // Process selected collections
-        console.log('Selected collections:', selectedCollections);
-        console.log('Selected collections length:', selectedCollections.length);
-        console.log('Shop domain:', shop);
-        console.log('Selected language:', selectedLanguages);
-        
-        const total = selectedWithSEO.length;
-        setProgress({ current: 0, total, percent: 0 });
-        
-        const results = {};
-        
-        for (let i = 0; i < selectedWithSEO.length; i++) {
-          const collection = selectedWithSEO[i];
-          setCurrentCollection(collection.title);
-          
-          try {
-            // За всяка колекция вземи нейните оптимизирани езици
-            const languagesToEnhance = collection.optimizedLanguages || [];
-            
-            if (languagesToEnhance.length === 0) {
-              console.log(`No optimized languages for ${collection.title}, skipping`);
-              results[collection.id] = {
-                success: false,
-                error: 'No optimized languages'
-              };
-              continue;
-            }
-            
-            console.log(`Enhancing ${collection.title} for languages:`, languagesToEnhance);
-            
-            // Call the enhance endpoint for each collection
-            const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                languages: languagesToEnhance,
-              },
-            });
-            
-            results[collection.id] = {
-              success: enhanceResult.ok,
-              data: enhanceResult,
-              error: enhanceResult.ok ? null : (enhanceResult.error || 'Enhancement failed')
-            };
-            
-          } catch (error) {
-            console.error('Error enhancing collection:', collection.id, error);
-            results[collection.id] = {
-              success: false,
-              error: error.message
-            };
-          }
-          
-          const current = i + 1;
-          const percent = Math.round((current / total) * 100);
-          setProgress({ current, total, percent });
-        }
-
-        setResults(results);
-        setShowResultsModal(true);
-        
-        const successCount = Object.values(results).filter(r => r.success).length;
-        setToast(`Enhanced ${successCount} collections`);
-        
-        // Refresh collections list to show updated data
-        await loadCollections();
-        
-      } catch (error) {
-        console.error('AI Enhance error:', error);
-        setToast('Failed to enhance collections');
-      } finally {
-        setIsProcessing(false);
-        setCurrentCollection('');
-      }
-    };
     
     const handleClose = () => {
       setShowAIEnhanceModal(false);
