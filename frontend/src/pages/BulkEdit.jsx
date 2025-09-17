@@ -27,6 +27,7 @@ import {
   ActionList,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -117,6 +118,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const [plan, setPlan] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('starter');
   
   // Load models and plan on mount
   useEffect(() => {
@@ -307,6 +309,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       // Check if plan allows AI enhancement
       if (plan && !['Growth Extra', 'Enterprise'].includes(plan)) {
+        setCurrentPlan(plan);
         setShowAIEnhanceModal(false);
         setShowPlanUpgradeModal(true);
         return;
@@ -1730,37 +1733,12 @@ export default function BulkEdit({ shop: shopProp }) {
         </Modal.Section>
       </Modal>
       
-      {/* Plan Upgrade Modal for AI Enhancement */}
-      <Modal
+      <UpgradeModal
         open={showPlanUpgradeModal}
         onClose={() => setShowPlanUpgradeModal(false)}
-        title="Upgrade Required"
-        primaryAction={{
-          content: 'Upgrade Plan',
-          onAction: () => {
-            setShowPlanUpgradeModal(false);
-            // TODO: Add upgrade logic or redirect to billing
-            setToast('Please upgrade your plan to use AI Enhancement features');
-          }
-        }}
-        secondaryActions={[
-          {
-            content: 'Cancel',
-            onAction: () => setShowPlanUpgradeModal(false)
-          }
-        ]}
-      >
-        <Modal.Section>
-          <BlockStack gap="300">
-            <Text variant="bodyMd" fontWeight="semibold">
-              AI enhancement is only available for Growth Extra and Enterprise plans.
-            </Text>
-            <Text variant="bodyMd">
-              Please upgrade in order to use this feature!
-            </Text>
-          </BlockStack>
-        </Modal.Section>
-      </Modal>
+        featureName="AI Enhancement"
+        currentPlan={currentPlan}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
