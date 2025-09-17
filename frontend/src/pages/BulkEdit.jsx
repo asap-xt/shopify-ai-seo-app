@@ -251,10 +251,10 @@ export default function BulkEdit({ shop: shopProp }) {
 
   // Show help modal when no products are loaded initially AND it's first visit OR no products exist
   useEffect(() => {
-    if (products.length === 0 && !loading && shop && (!hasVisitedProducts || lists.length === 0)) {
+    if (products.length === 0 && !loading && shop && !hasVisitedProducts) {
       setShowHelpModal(true);
     }
-  }, [products.length, loading, shop, hasVisitedProducts, lists.length]);
+  }, [products.length, loading, shop, hasVisitedProducts]);
   
   // Unified search function
   const handleSearch = useCallback((value) => {
