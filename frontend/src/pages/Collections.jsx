@@ -24,6 +24,7 @@ import {
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
@@ -97,6 +98,8 @@ export default function CollectionsPage({ shop: shopProp }) {
   
   // AI Enhancement Modal state
   const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('starter');
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,
     current: 0,
@@ -372,7 +375,10 @@ export default function CollectionsPage({ shop: shopProp }) {
         });
 
         if (!eligibility.eligible) {
-          setToast(eligibility.reason || 'AI Enhance add-ons not available for your plan');
+          // Show upgrade modal instead of toast
+          setCurrentPlan(eligibility.currentPlan || 'starter');
+          setShowAIEnhanceModal(false);
+          setShowUpgradeModal(true);
           return;
         }
 
@@ -862,27 +868,6 @@ export default function CollectionsPage({ shop: shopProp }) {
     );
   };
   
-  // Progress modal
-  const progressModal = isProcessing && (
-    <Modal
-      open={isProcessing}
-      title="Processing Collections"
-      onClose={() => {}}
-      noScroll
-    >
-      <Modal.Section>
-        <BlockStack gap="400">
-          <Text variant="bodyMd">
-            {currentCollection ? `Processing: ${currentCollection}` : 'Preparing...'}
-          </Text>
-          <ProgressBar progress={progress.percent} />
-          <Text variant="bodySm" tone="subdued">
-            {progress.current} of {progress.total} collections ({progress.percent}%)
-          </Text>
-        </BlockStack>
-      </Modal.Section>
-    </Modal>
-  );
 
   // Language selection modal
   const languageModal = (
@@ -1371,7 +1356,6 @@ export default function CollectionsPage({ shop: shopProp }) {
         </Card>
       </Box>
 
-      {progressModal}
       {languageModal}
       {resultsModal}
       {previewModal}
@@ -1379,6 +1363,13 @@ export default function CollectionsPage({ shop: shopProp }) {
       {confirmDeleteModal}
       {deleteProgressModal}
       {AIEnhanceModal()}
+      
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        featureName="AI Enhancement"
+        currentPlan={currentPlan}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
