@@ -117,6 +117,9 @@ export default function BulkEdit({ shop: shopProp }) {
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [hasVisitedProducts, setHasVisitedProducts] = useState(
+    localStorage.getItem('hasVisitedProducts') === 'true'
+  );
   const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
   const [currentPlan, setCurrentPlan] = useState('starter');
   
@@ -238,12 +241,20 @@ export default function BulkEdit({ shop: shopProp }) {
     if (shop) loadProducts(1, false, null);
   }, [shop, loadProducts, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
-  // Show help modal when no products are loaded initially
+  // Mark as visited on first load
   useEffect(() => {
-    if (products.length === 0 && !loading && shop) {
+    if (!hasVisitedProducts && shop) {
+      localStorage.setItem('hasVisitedProducts', 'true');
+      setHasVisitedProducts(true);
+    }
+  }, [hasVisitedProducts, shop]);
+
+  // Show help modal when no products are loaded initially AND it's first visit OR no products exist
+  useEffect(() => {
+    if (products.length === 0 && !loading && shop && (!hasVisitedProducts || lists.length === 0)) {
       setShowHelpModal(true);
     }
-  }, [products.length, loading, shop]);
+  }, [products.length, loading, shop, hasVisitedProducts, lists.length]);
   
   // Unified search function
   const handleSearch = useCallback((value) => {
