@@ -489,8 +489,17 @@ router.post('/apply', validateRequest(), async (req, res) => {
 // Public endpoint for AI crawlers
 router.get('/public/:shop', async (req, res) => {
   try {
+    console.log('[STORE-PUBLIC] GET /public/:shop called');
+    console.log('[STORE-PUBLIC] req.params:', req.params);
+    console.log('[STORE-PUBLIC] req.params.shop:', req.params.shop);
+    
     const shop = normalizeShop(req.params.shop);
-    if (!shop) return res.status(400).json({ error: 'Invalid shop' });
+    console.log('[STORE-PUBLIC] Normalized shop:', shop);
+    
+    if (!shop) {
+      console.log('[STORE-PUBLIC] Shop validation failed');
+      return res.status(400).json({ error: 'Invalid shop' });
+    }
     
     // Get metadata from shop metafields
     const query = `{
