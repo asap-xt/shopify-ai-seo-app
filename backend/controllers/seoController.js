@@ -1349,7 +1349,9 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
                 title
                 description
               }
-              productsCount
+              productsCount {
+                count
+              }
               updatedAt
               metafields(namespace: "seo_ai", first: 20) {
                 edges {
@@ -1391,14 +1393,14 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       
       hasSeoData = optimizedLanguages.length > 0;
       
-      console.log(`[COLLECTIONS-GQL] Collection "${c.title}" - products: ${c.productsCount}, languages: ${optimizedLanguages.join(',') || 'none'}`);
+      console.log(`[COLLECTIONS-GQL] Collection "${c.title}" - products: ${c.productsCount?.count || 0}, languages: ${optimizedLanguages.join(',') || 'none'}`);
       
       return {
         id: c.id, // Already in GID format from GraphQL
         title: c.title,
         handle: c.handle,
         description: c.descriptionHtml || '',
-        productsCount: c.productsCount,
+        productsCount: c.productsCount?.count || 0,
         seo: c.seo || null,
         hasSeoData: hasSeoData,
         optimizedLanguages: optimizedLanguages,
