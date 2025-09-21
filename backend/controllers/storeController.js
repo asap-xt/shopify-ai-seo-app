@@ -343,28 +343,12 @@ router.post('/ai-generate', validateRequest(), async (req, res) => {
 
 // Apply metadata to shop
 router.post('/apply', validateRequest(), async (req, res) => {
-  console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
-
-  if (!shop) {
-    console.error('[STORE/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
-  }
-
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[STORE/HANDLER] Resolving Admin token', { shop, tokenSource });
+  const { adminGraphql, shop } = res.locals;
+  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  
+  console.log('[STORE-APPLY] Starting metadata save for shop:', shop);
 
   try {
-    const shop = req.shopDomain;
 
     const { metadata, options = {} } = req.body;
     if (!metadata) return res.status(400).json({ error: 'No metadata provided' });
@@ -376,8 +360,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
       }
     }`;
     
-    const shopData = await shopGraphQL(req, shop, shopQuery);
-    const shopId = shopData?.shop?.id;
+    const shopResp = await adminGraphql.request(shopQuery);
+    const shopId = shopResp?.body?.data?.shop?.id;
     
     if (!shopId) return res.status(404).json({ error: 'Shop not found' });
 
@@ -477,7 +461,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
     `;
 
     const variables = { metafields: metafieldsToSet };
-    const result = await shopGraphQL(req, shop, mutation, variables);
+    const resp = await adminGraphql.request(mutation, { variables });
+    const result = resp?.body?.data;
     
     console.log('[STORE-APPLY] GraphQL result:', {
       metafieldsCreated: result?.metafieldsSet?.metafields?.length || 0,
