@@ -93,9 +93,9 @@ app.use('/api', async (req, res, next) => {
     const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'] || null;
     const sessionShop = res.locals?.shopify?.session?.shop || null; // ако си ползвал validateAuthenticatedSession() по-нагоре
     
-    // Extract shop from URL path if present (e.g., /api/languages/shop/shopname.myshopify.com)
+    // Extract shop from URL path if present (e.g., /api/languages/shop/shopname.myshopify.com or /api/store/public/shopname.myshopify.com)
     let shopFromPath = null;
-    const pathMatch = req.originalUrl.match(/\/shop\/([^\/\?]+)/);
+    const pathMatch = req.originalUrl.match(/\/shop\/([^\/\?]+)/) || req.originalUrl.match(/\/public\/([^\/\?]+)/);
     if (pathMatch) {
       shopFromPath = pathMatch[1];
       console.log('[API-RESOLVER] Shop from path:', shopFromPath);
