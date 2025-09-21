@@ -18,8 +18,8 @@ const PLAN_PRESETS = {
   starter: {
     plan: 'Starter',
     planKey: 'starter',
-    queryLimit: 50,
-    productLimit: 50,
+    queryLimit: 200,
+    productLimit: 100,
     providersAllowed: ['openai', 'anthropic'],
     modelsSuggested: [
       'openai/gpt-4o-mini',
@@ -28,10 +28,23 @@ const PLAN_PRESETS = {
     ],
     autosync: '72h',
   },
+  professional: {
+    plan: 'Professional',
+    planKey: 'professional',
+    queryLimit: 700,
+    productLimit: 350,
+    providersAllowed: ['openai', 'anthropic', 'gemini'],
+    modelsSuggested: [
+      'google/gemini-1.5-flash',
+      'openai/gpt-4o-mini',
+      'anthropic/claude-3-haiku',
+    ],
+    autosync: '48h',
+  },
   growth: {
     plan: 'Growth',
     planKey: 'growth',
-    queryLimit: 1500,
+    queryLimit: 2000,
     productLimit: 1000,
     providersAllowed: ['claude', 'openai', 'gemini'],
     modelsSuggested: [
@@ -46,8 +59,8 @@ const PLAN_PRESETS = {
   growth_extra: {
     plan: 'Growth Extra',
     planKey: 'growth_extra',
-    queryLimit: 4000,
-    productLimit: 2000,
+    queryLimit: 5000,
+    productLimit: 2500,
     providersAllowed: ['gemini', 'openai', 'claude'],
     modelsSuggested: [
       'google/gemini-1.5-flash',
@@ -60,8 +73,8 @@ const PLAN_PRESETS = {
   enterprise: {
     plan: 'Enterprise',
     planKey: 'enterprise',
-    queryLimit: 10000,
-    productLimit: 10000,
+    queryLimit: 12000,
+    productLimit: 6000,
     providersAllowed: ['claude', 'openai', 'gemini', 'deepseek', 'llama'],
     modelsSuggested: [
       'anthropic/claude-3.5-sonnet',

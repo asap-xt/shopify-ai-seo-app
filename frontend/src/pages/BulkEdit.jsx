@@ -48,13 +48,29 @@ const extractNumericId = (gid) => {
 
 // Helper function to get product limits by plan
 const getProductLimitByPlan = (planName) => {
+  // Debug mode: check URL parameter for testing
+  const isDebugMode = new URLSearchParams(window.location.search).get('debug_limits') === 'true';
+  
+  if (isDebugMode) {
+    // Reduced limits for testing with 20 products
+    switch (planName?.toLowerCase()) {
+      case 'starter': return 5;
+      case 'growth': return 10;
+      case 'growth extra': return 15;
+      case 'professional': return 12;
+      case 'enterprise': return 25;
+      default: return 5;
+    }
+  }
+  
+  // Production limits
   switch (planName?.toLowerCase()) {
-    case 'starter': return 50;
+    case 'starter': return 100;
+    case 'professional': return 350;
     case 'growth': return 1000;
-    case 'growth extra': return 2000;
-    case 'professional': return 1500;
-    case 'enterprise': return 10000;
-    default: return 50;
+    case 'growth extra': return 2500;
+    case 'enterprise': return 6000;
+    default: return 100;
   }
 };
 

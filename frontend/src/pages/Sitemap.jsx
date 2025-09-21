@@ -89,26 +89,29 @@ export default function SitemapPage({ shop: shopProp }) {
             <p>
               Your {plan?.plan || 'Starter'} plan includes up to{' '}
               <strong>
-                {plan?.plan === 'Growth' ? 650
-                  : plan?.plan === 'Professional' ? 300
-                  : plan?.plan === 'Growth Extra' ? 2000
-                  : plan?.plan === 'Enterprise' ? 5000
-                  : 50}
+                {plan?.plan === 'Starter' ? 100
+                  : plan?.plan === 'Professional' ? 350
+                  : plan?.plan === 'Growth' ? 1000
+                  : plan?.plan === 'Growth Extra' ? 2500
+                  : plan?.plan === 'Enterprise' ? 6000
+                  : 100}
               </strong>{' '}
               URLs in the sitemap.
               {info?.productCount &&
                 (info.productCount >
-                  (plan?.plan === 'Growth' ? 650
-                    : plan?.plan === 'Professional' ? 300
-                    : plan?.plan === 'Growth Extra' ? 2000
-                    : plan?.plan === 'Enterprise' ? 5000
-                    : 50)) && (
+                  (plan?.plan === 'Starter' ? 100
+                    : plan?.plan === 'Professional' ? 350
+                    : plan?.plan === 'Growth' ? 1000
+                    : plan?.plan === 'Growth Extra' ? 2500
+                    : plan?.plan === 'Enterprise' ? 6000
+                    : 100)) && (
                   <> You have {info.productCount} products, so only the first{' '}
-                    {plan?.plan === 'Growth' ? 650
-                      : plan?.plan === 'Professional' ? 300
-                      : plan?.plan === 'Growth Extra' ? 2000
-                      : plan?.plan === 'Enterprise' ? 5000
-                      : 50} will be included.</>
+                    {plan?.plan === 'Starter' ? 100
+                      : plan?.plan === 'Professional' ? 350
+                      : plan?.plan === 'Growth' ? 1000
+                      : plan?.plan === 'Growth Extra' ? 2500
+                      : plan?.plan === 'Enterprise' ? 6000
+                      : 100} will be included.</>
                 )}
             </p>
           </Banner>

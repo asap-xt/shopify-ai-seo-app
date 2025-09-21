@@ -107,21 +107,21 @@ async function getPlanLimits(shop) {
     const sub = await Subscription.findOne({ shop }).lean().exec();
     console.log('[SITEMAP] Subscription found:', !!sub, 'plan:', sub?.plan);
     
-    if (!sub) return { limit: 50, plan: 'starter' };
+    if (!sub) return { limit: 100, plan: 'starter' };
     
     const planLimits = {
-      'starter': 50,
-      'professional': 300,
-      'growth': 650,
-      'growth_extra': 2000,
-      'enterprise': 5000
+      'starter': 100,
+      'professional': 350,
+      'growth': 1000,
+      'growth_extra': 2500,
+      'enterprise': 6000
     };
     
-    const limit = planLimits[sub.plan?.toLowerCase()] || 50;
+    const limit = planLimits[sub.plan?.toLowerCase()] || 100;
     return { limit, plan: sub.plan };
   } catch (e) {
     console.error('[SITEMAP] Error getting plan limits:', e.message);
-    return { limit: 50, plan: 'starter' };
+    return { limit: 100, plan: 'starter' };
   }
 }
 
