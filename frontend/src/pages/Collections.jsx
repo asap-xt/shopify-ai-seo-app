@@ -1275,8 +1275,6 @@ export default function CollectionsPage({ shop: shopProp }) {
                   clearButton
                   onClearButtonClick={() => setSearchValue('')}
                 />
-                {/* GraphQL API indicator */}
-                <Badge tone="success">GraphQL API</Badge>
               </BlockStack>
             </Box>
             
