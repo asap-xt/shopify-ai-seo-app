@@ -1409,7 +1409,7 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
     });
     
     console.log('[COLLECTIONS-GQL] Returning', collectionsWithData.length, 'collections with data');
-    res.json(collectionsWithData);
+    res.json({ collections: collectionsWithData });
     
   } catch (e) {
     console.error('[COLLECTIONS-GQL] Error:', e);
