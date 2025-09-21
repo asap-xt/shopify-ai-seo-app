@@ -1749,42 +1749,98 @@ function extractCategoryKeywords(collection) {
   return Array.from(keywords).slice(0, 10);
 }
 
-function generateCollectionBullets(collection) {
+function generateCollectionBullets(collection, language = 'en') {
   const bullets = [];
   
+  // Translations for common phrases
+  const translations = {
+    'en': {
+      overProducts: 'Over {count} products to choose from',
+      pricesFrom: 'Prices from {min} to {max}',
+      featuringBrands: 'Featuring brands: {brands}',
+      freeShipping: 'Free shipping on orders over $50',
+      easyReturns: 'Easy returns within 30 days'
+    },
+    'bg': {
+      overProducts: 'Над {count} продукта за избор',
+      pricesFrom: 'Цени от {min} до {max}',
+      featuringBrands: 'Включени марки: {brands}',
+      freeShipping: 'Безплатна доставка за поръчки над $50',
+      easyReturns: 'Лесно връщане в рамките на 30 дни'
+    },
+    'fr': {
+      overProducts: 'Plus de {count} produits au choix',
+      pricesFrom: 'Prix de {min} à {max}',
+      featuringBrands: 'Marques présentées: {brands}',
+      freeShipping: 'Livraison gratuite sur les commandes de plus de 50$',
+      easyReturns: 'Retours faciles dans les 30 jours'
+    }
+  };
+  
+  const t = translations[language] || translations['en'];
+  
   if (collection.productsCount > 10) {
-    bullets.push(`Over ${collection.productsCount} products to choose from`);
+    bullets.push(t.overProducts.replace('{count}', collection.productsCount));
   }
   
   const priceRange = getPriceRange(collection.products?.edges || []);
   if (priceRange) {
-    bullets.push(`Prices from ${priceRange.min} to ${priceRange.max}`);
+    bullets.push(t.pricesFrom.replace('{min}', priceRange.min).replace('{max}', priceRange.max));
   }
   
   const brands = getUniqueBrands(collection.products?.edges || []);
   if (brands.length > 0) {
-    bullets.push(`Featuring brands: ${brands.slice(0, 3).join(', ')}`);
+    bullets.push(t.featuringBrands.replace('{brands}', brands.slice(0, 3).join(', ')));
   }
   
-  bullets.push('Free shipping on orders over $50');
-  bullets.push('Easy returns within 30 days');
+  bullets.push(t.freeShipping);
+  bullets.push(t.easyReturns);
   
   return bullets.slice(0, 5);
 }
 
-function generateCollectionFAQ(collection) {
+function generateCollectionFAQ(collection, language = 'en') {
+  const translations = {
+    'en': {
+      howManyProducts: 'How many products are in the {title} collection?',
+      containsProducts: 'This collection contains {count} carefully selected products.',
+      freeShippingQ: 'Do you offer free shipping?',
+      freeShippingA: 'Yes, we offer free shipping on all orders over $50.',
+      returnPolicyQ: 'What is your return policy?',
+      returnPolicyA: 'We accept returns within 30 days of purchase for a full refund.'
+    },
+    'bg': {
+      howManyProducts: 'Колко продукта има в колекцията {title}?',
+      containsProducts: 'Тази колекция съдържа {count} внимателно подбрани продукта.',
+      freeShippingQ: 'Предлагате ли безплатна доставка?',
+      freeShippingA: 'Да, предлагаме безплатна доставка за всички поръчки над $50.',
+      returnPolicyQ: 'Какви са условията за връщане?',
+      returnPolicyA: 'Приемаме връщания в рамките на 30 дни от покупката за пълно възстановяване.'
+    },
+    'fr': {
+      howManyProducts: 'Combien de produits y a-t-il dans la collection {title}?',
+      containsProducts: 'Cette collection contient {count} produits soigneusement sélectionnés.',
+      freeShippingQ: 'Offrez-vous la livraison gratuite?',
+      freeShippingA: 'Oui, nous offrons la livraison gratuite sur toutes les commandes de plus de 50$.',
+      returnPolicyQ: 'Quelle est votre politique de retour?',
+      returnPolicyA: 'Nous acceptons les retours dans les 30 jours suivant l\'achat pour un remboursement complet.'
+    }
+  };
+  
+  const t = translations[language] || translations['en'];
+  
   return [
     {
-      q: `How many products are in the ${collection.title} collection?`,
-      a: `This collection contains ${collection.productsCount} carefully selected products.`
+      q: t.howManyProducts.replace('{title}', collection.title),
+      a: t.containsProducts.replace('{count}', collection.productsCount || 0)
     },
     {
-      q: 'Do you offer free shipping?',
-      a: 'Yes, we offer free shipping on all orders over $50.'
+      q: t.freeShippingQ,
+      a: t.freeShippingA
     },
     {
-      q: 'What is your return policy?',
-      a: 'We accept returns within 30 days of purchase for a full refund.'
+      q: t.returnPolicyQ,
+      a: t.returnPolicyA
     }
   ];
 }
@@ -1933,8 +1989,8 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
             .slice(0, 160) || `Shop our ${title} collection`,
           slug: kebab(collection.handle || title),
           categoryKeywords: extractCategoryKeywords(translatedCollection),
-          bullets: generateCollectionBullets(translatedCollection),
-          faq: generateCollectionFAQ(translatedCollection, title),
+          bullets: generateCollectionBullets(translatedCollection, language),
+          faq: generateCollectionFAQ(translatedCollection, language),
           jsonLd: generateCollectionJsonLd(translatedCollection, title, description)
         };
         
