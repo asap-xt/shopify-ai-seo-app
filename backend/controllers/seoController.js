@@ -1775,11 +1775,11 @@ function generateCollectionFAQ(collection, language = 'en') {
   // Basic FAQ using only universal data and collection name (already translated)
   const faq = [];
   
-  // Only use collection title (already translated) and universal numbers
-  if (collection.title && collection.productsCount) {
+  // Always add at least one FAQ with collection title (already translated) and product count
+  if (collection.title) {
     faq.push({
       q: `${collection.title}?`,
-      a: `${collection.productsCount} products.`
+      a: `${collection.productsCount || 0} products.`
     });
   }
   
