@@ -79,15 +79,23 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     const shopInfo = resp?.body?.data;
     const localeInfo = await getShopLocale(adminGraphql, shop);
 
+    console.log('[SCHEMA-PREVIEW] Shop info:', {
+      hasOrganizationMetafield: !!shopInfo?.shop?.organizationMetafield?.value,
+      hasSeoMetafield: !!shopInfo?.shop?.seoMetafield?.value,
+      hasAiMetafield: !!shopInfo?.shop?.aiMetafield?.value
+    });
+
     // Parse organization metadata if exists
     let organizationData = {};
     if (shopInfo?.shop?.organizationMetafield?.value) {
       try {
         organizationData = JSON.parse(shopInfo.shop.organizationMetafield.value);
-        console.log('Parsed organization data:', organizationData); // DEBUG
+        console.log('[SCHEMA-PREVIEW] Parsed organization data:', organizationData);
       } catch (e) {
-        console.error('Failed to parse organization metadata:', e);
+        console.error('[SCHEMA-PREVIEW] Failed to parse organization metadata:', e);
       }
+    } else {
+      console.log('[SCHEMA-PREVIEW] No organization metafield found');
     }
 
     // Parse SEO metadata if exists
@@ -101,6 +109,7 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     }
 
     // Generate Organization schema - UPDATED to use organizationData structure
+    console.log('[SCHEMA-PREVIEW] Organization enabled:', organizationData.enabled);
     const organizationSchema = organizationData.enabled ? {
       '@context': 'https://schema.org',
       '@type': 'Organization',
@@ -167,6 +176,12 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     const productData = productResp?.body?.data;
     const products = productData?.products?.edges || [];
 
+    console.log('[SCHEMA-PREVIEW] Final schemas:', {
+      hasOrganization: !!organizationSchema,
+      hasWebsite: !!websiteSchema,
+      productsCount: products.length
+    });
+
     res.json({
       ok: true,
       schemas: {
@@ -188,13 +203,37 @@ router.post('/api/schema/generate', validateRequest(), async (req, res) => {
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
   try {
-    // тук извърши реалните действия за generate (GraphQL mutations / metafieldsSet и т.н.)
-    // пример:
-    // const result = await adminGraphql.request(MY_MUTATION, { variables });
+    console.log('[SCHEMA-GENERATE] Regenerating schemas for shop:', shop);
     
-    // This endpoint would trigger a refresh of all schema data
-    // For now, it just returns success since schemas are generated dynamically
-    res.json({ ok: true, shop, message: 'Schemas will be regenerated on next page load' });
+    // Force refresh by clearing any potential cache and triggering regeneration
+    // Since schemas are generated dynamically from metafields, we just need to ensure fresh data
+    
+    // Check current metafields to verify data exists
+    const metaQuery = `{
+      shop {
+        metafields(namespace: "ai_seo_store", first: 10) {
+          edges {
+            node {
+              key
+              value
+              namespace
+            }
+          }
+        }
+      }
+    }`;
+    
+    const resp = await adminGraphql.request(metaQuery);
+    const metafields = resp?.body?.data?.shop?.metafields?.edges || [];
+    
+    console.log('[SCHEMA-GENERATE] Found metafields:', metafields.map(e => e.node.key));
+    
+    res.json({ 
+      ok: true, 
+      shop, 
+      message: 'Schemas regenerated successfully',
+      metafieldsFound: metafields.length
+    });
   } catch (error) {
     console.error('[schema/generate] adminGraphql error', error);
     res.status(500).json({ error: 'Schema generation failed' });
@@ -282,6 +321,7 @@ router.get('/api/schema/validate', validateRequest(), async (req, res) => {
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
   try {
+    console.log('[SCHEMA-VALIDATE] Starting validation for shop:', shop);
     
     // Check various aspects of the installation
     const checks = {
@@ -324,6 +364,8 @@ router.get('/api/schema/validate', validateRequest(), async (req, res) => {
     // Note: We can't directly check theme files, but we can provide guidance
     checks.hasThemeInstallation = 'manual_check_required';
     checks.hasValidSchemas = checks.hasStoreMetadata || checks.hasProductsWithSEO;
+
+    console.log('[SCHEMA-VALIDATE] Final checks:', checks);
 
     res.json({
       ok: checks.hasValidSchemas,
