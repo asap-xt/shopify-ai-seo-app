@@ -495,7 +495,9 @@ router.post('/apply', validateRequest(), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error applying metadata:', error);
+    console.error('[STORE-APPLY] Error applying metadata:', error.message);
+    console.error('[STORE-APPLY] Error stack:', error.stack);
+    console.error('[STORE-APPLY] Error details:', error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });
