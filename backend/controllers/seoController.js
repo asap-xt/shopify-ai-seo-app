@@ -1415,61 +1415,6 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   }
 });
 
-// GET /collections/compare - Compare REST vs GraphQL data
-router.get('/collections/compare', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    
-    console.log('[COLLECTIONS-COMPARE] Comparing REST vs GraphQL for shop:', shop);
-    
-    // Get data from both endpoints
-    const restPromise = fetch(`${req.protocol}://${req.get('host')}/collections/list?shop=${encodeURIComponent(shop)}`, {
-      headers: { 'Authorization': req.headers.authorization }
-    }).then(r => r.json());
-    
-    const graphqlPromise = fetch(`${req.protocol}://${req.get('host')}/collections/list-graphql?shop=${encodeURIComponent(shop)}`, {
-      headers: { 'Authorization': req.headers.authorization }
-    }).then(r => r.json());
-    
-    const [restData, graphqlData] = await Promise.all([restPromise, graphqlPromise]);
-    
-    // Compare structures
-    const comparison = {
-      restCount: restData?.length || 0,
-      graphqlCount: graphqlData?.length || 0,
-      match: JSON.stringify(restData) === JSON.stringify(graphqlData),
-      restSample: restData?.[0] || null,
-      graphqlSample: graphqlData?.[0] || null,
-      differences: []
-    };
-    
-    // Find differences
-    if (restData && graphqlData) {
-      restData.forEach((restItem, index) => {
-        const gqlItem = graphqlData[index];
-        if (gqlItem) {
-          Object.keys(restItem).forEach(key => {
-            if (JSON.stringify(restItem[key]) !== JSON.stringify(gqlItem[key])) {
-              comparison.differences.push({
-                collection: restItem.title,
-                field: key,
-                rest: restItem[key],
-                graphql: gqlItem[key]
-              });
-            }
-          });
-        }
-      });
-    }
-    
-    res.json(comparison);
-    
-  } catch (e) {
-    console.error('[COLLECTIONS-COMPARE] Error:', e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // GET /collections/list - Updated version, languages included
 router.get('/collections/list', validateRequest(), async (req, res) => {
   try {
