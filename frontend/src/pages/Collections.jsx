@@ -25,7 +25,6 @@ import {
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
-import { useFeatureFlags } from '../hooks/useFeatureFlags.js';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
@@ -36,8 +35,6 @@ export default function CollectionsPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   // Единен session-aware fetch за компонента
   const api = useMemo(() => makeSessionFetch(), []);
-  // Feature flags
-  const { flags, loading: flagsLoading } = useFeatureFlags();
   // Collection list state
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -148,12 +145,10 @@ export default function CollectionsPage({ shop: shopProp }) {
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
       });
       
-      // Choose endpoint based on feature flag
-      const endpoint = flags.useGraphQLCollections 
-        ? `/collections/list-graphql?${params}`
-        : `/collections/list?${params}`;
+      // Use GraphQL endpoint
+      const endpoint = `/collections/list-graphql?${params}`;
       
-      console.log('[COLLECTIONS] Using endpoint:', endpoint, 'GraphQL enabled:', flags.useGraphQLCollections);
+      console.log('[COLLECTIONS] Using GraphQL endpoint:', endpoint);
       
       // URL вече съдържа shop → не подаваме {shop}, за да не дублираме
       const data = await api(endpoint);
@@ -182,15 +177,15 @@ export default function CollectionsPage({ shop: shopProp }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, searchValue, optimizedFilter, api, flags.useGraphQLCollections]);
+  }, [shop, searchValue, optimizedFilter, api]);
   
   // Initial load and filter changes
   useEffect(() => {
-    if (shop && !flagsLoading) {
+    if (shop) {
       loadCollections();
       setSelectedHaveSEO(false); // Reset SEO tracking on reload
     }
-  }, [shop, optimizedFilter, flagsLoading, loadCollections]);
+  }, [shop, optimizedFilter, loadCollections]);
   
   // Search debounce effect
   useEffect(() => {
@@ -1280,13 +1275,8 @@ export default function CollectionsPage({ shop: shopProp }) {
                   clearButton
                   onClearButtonClick={() => setSearchValue('')}
                 />
-                {/* Debug badge for API endpoint */}
-                <InlineStack gap="200" align="start">
-                  <Badge tone={flags.useGraphQLCollections ? 'success' : 'info'}>
-                    {flags.useGraphQLCollections ? 'GraphQL API' : 'REST API'}
-                  </Badge>
-                  {flagsLoading && <Badge tone="attention">Loading flags...</Badge>}
-                </InlineStack>
+                {/* GraphQL API indicator */}
+                <Badge tone="success">GraphQL API</Badge>
               </BlockStack>
             </Box>
             

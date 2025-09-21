@@ -82,15 +82,10 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
       }
     `;
 
-    console.log('[SCHEMA-PREVIEW] Executing store meta query...');
     const resp = await adminGraphql.request(storeMetaQuery);
-    console.log('[SCHEMA-PREVIEW] Raw response:', JSON.stringify(resp, null, 2));
-    console.log('[SCHEMA-PREVIEW] Response type:', typeof resp);
-    console.log('[SCHEMA-PREVIEW] Response keys:', Object.keys(resp || {}));
     
     // Shopify SDK returns { data: {...} } directly, not wrapped in body
     const shopInfo = resp?.data;
-    console.log('[SCHEMA-PREVIEW] Extracted shopInfo:', JSON.stringify(shopInfo, null, 2));
     const localeInfo = await getShopLocale(adminGraphql, shop);
 
     console.log('[SCHEMA-PREVIEW] Shop info:', {

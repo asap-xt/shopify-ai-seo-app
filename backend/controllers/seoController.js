@@ -1417,7 +1417,8 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   }
 });
 
-// GET /collections/list - Updated version, languages included
+// GET /collections/list - Updated version, languages included - DEPRECATED, use GraphQL version
+/*
 router.get('/collections/list', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -1537,6 +1538,7 @@ router.get('/collections/list', validateRequest(), async (req, res) => {
     res.status(e.status || 500).json({ error: e.message });
   }
 });
+*/
 
 // POST /seo/generate-collection
 router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
