@@ -737,8 +737,8 @@ export default function CollectionsPage({ shop: shopProp }) {
       setShowResultsModal(false);
       setResults({});
       setSelectedItems([]);
-      setSelectAllPages(false); // Reset Select All checkbox
       await loadCollections();
+      setSelectAllPages(false); // Reset Select All checkbox after reload
       
     } catch (err) {
       setToast(`Error applying optimization: ${err.message}`);
