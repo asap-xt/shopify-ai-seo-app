@@ -363,7 +363,18 @@ router.post('/apply', validateRequest(), async (req, res) => {
     const shopResp = await adminGraphql.request(shopQuery);
     const shopId = shopResp?.body?.data?.shop?.id;
     
-    if (!shopId) return res.status(404).json({ error: 'Shop not found' });
+    console.log('[STORE-APPLY] Shop query result:', {
+      hasBody: !!shopResp?.body,
+      hasData: !!shopResp?.body?.data,
+      hasShop: !!shopResp?.body?.data?.shop,
+      shopId: shopId,
+      fullResponse: JSON.stringify(shopResp?.body, null, 2)
+    });
+    
+    if (!shopId) {
+      console.log('[STORE-APPLY] Shop ID not found in response');
+      return res.status(404).json({ error: 'Shop not found' });
+    }
 
     const metafieldsToSet = [];
 
