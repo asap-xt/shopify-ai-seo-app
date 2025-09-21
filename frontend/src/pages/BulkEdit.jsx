@@ -612,7 +612,14 @@ export default function BulkEdit({ shop: shopProp }) {
         productsToProcess = products.filter(p => selectedItems.includes(p._id));
       }
       
+      // Apply plan limit - only process up to the plan's product limit
+      const planLimit = getProductLimitByPlan(plan);
+      const originalTotal = productsToProcess.length;
+      productsToProcess = productsToProcess.slice(0, planLimit);
+      
       const total = productsToProcess.length;
+      const skippedDueToPlan = originalTotal - total;
+      
       setProgress({ current: 0, total, percent: 0 });
       
       const batchSize = 5;
@@ -677,11 +684,15 @@ export default function BulkEdit({ shop: shopProp }) {
       const successCount = Object.keys(results).filter(k => results[k].success && !results[k].skipped).length;
       const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
       
+      let toastMessage = `Generated Optimization for AI Search for ${successCount} products`;
       if (skippedCount > 0) {
-        setToast(`Generated Optimization for AI Search for ${successCount} products (${skippedCount} already optimised)`);
-      } else {
-        setToast(`Generated Optimization for AI Search for ${successCount} products`);
+        toastMessage += ` (${skippedCount} already optimised)`;
       }
+      if (skippedDueToPlan > 0) {
+        toastMessage += ` (${skippedDueToPlan} skipped due to plan limit)`;
+      }
+      
+      setToast(toastMessage);
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
@@ -1411,10 +1422,28 @@ export default function BulkEdit({ shop: shopProp }) {
                     )}
                   </Text>
                   {(selectedItems.length > 0 || selectAllPages) && (
-                    <Text variant="bodySm" tone="subdued">
+                    <Text>
                       Selected: {selectAllPages ? Math.min(totalCount, getProductLimitByPlan(plan)) : selectedItems.length}/{getProductLimitByPlan(plan)}
                     </Text>
                   )}
+                </InlineStack>
+              </Banner>
+            )}
+            
+            {/* Plan Limit Warning Banner */}
+            {plan && (selectedItems.length > getProductLimitByPlan(plan) || (selectAllPages && totalCount > getProductLimitByPlan(plan))) && (
+              <Banner tone="warning">
+                <InlineStack gap="200" align="space-between">
+                  <Text>
+                    <strong>Plan Limit Exceeded:</strong> You've selected more products than your {plan} plan allows. 
+                    Only the first {getProductLimitByPlan(plan)} products will be processed.
+                  </Text>
+                  <Button
+                    size="micro"
+                    onClick={() => setShowPlanUpgradeModal(true)}
+                  >
+                    Upgrade Plan
+                  </Button>
                 </InlineStack>
               </Banner>
             )}
