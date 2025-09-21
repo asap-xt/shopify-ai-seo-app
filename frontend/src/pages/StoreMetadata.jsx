@@ -15,6 +15,8 @@ export default function StoreMetadata({ shop: shopProp }) {
   const [toast, setToast] = useState('');
   const [storeData, setStoreData] = useState(null);
   const api = useMemo(() => makeSessionFetch({ debug: true }), []);
+  const [previewing, setPreviewing] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [formData, setFormData] = useState({
     seo: {
       title: '',
@@ -164,6 +166,70 @@ export default function StoreMetadata({ shop: shopProp }) {
       setToast(`Save failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Preview metadata function
+  async function handlePreview() {
+    setPreviewing(true);
+    try {
+      // First save the current data
+      await handleSave();
+      
+      // Then open preview in new tab
+      const publicUrl = `/api/store/public/${encodeURIComponent(shop)}`;
+      window.open(publicUrl, '_blank');
+      
+    } catch (error) {
+      setToast(`Preview failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  // Clear all metadata function
+  async function handleClear() {
+    setClearing(true);
+    try {
+      // Reset form to empty state
+      setFormData({
+        seo: {
+          title: '',
+          metaDescription: '',
+          keywords: ''
+        },
+        aiMetadata: {
+          businessType: '',
+          targetAudience: '',
+          uniqueSellingPoints: '',
+          brandVoice: '',
+          primaryCategories: '',
+          shippingInfo: '',
+          returnPolicy: ''
+        },
+        organizationSchema: {
+          enabled: false,
+          name: '',
+          email: '',
+          phone: '',
+          logo: '',
+          sameAs: ''
+        },
+        localBusinessSchema: {
+          enabled: false,
+          priceRange: '',
+          openingHours: ''
+        }
+      });
+      
+      // Save empty data to clear from backend/preview
+      await handleSave();
+      setToast('Metadata cleared successfully!');
+      
+    } catch (error) {
+      setToast(`Clear failed: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -404,16 +470,26 @@ export default function StoreMetadata({ shop: shopProp }) {
               <Button
                 onClick={handleSave}
                 loading={saving}
+                primary
               >
                 Save Metadata
               </Button>
+              
+              <Button
+                onClick={handlePreview}
+                loading={previewing}
+              >
+                Preview Metadata
+              </Button>
+              
+              <Button
+                onClick={handleClear}
+                loading={clearing}
+                destructive
+              >
+                Clear Metadata
+              </Button>
             </InlineStack>
-            
-            <Box paddingBlockStart="400">
-              <Text variant="bodyMd" color="subdued">
-                Public metadata URL: <Link url={publicUrl} external>{publicUrl}</Link>
-              </Text>
-            </Box>
           </Box>
         </Card>
       </Layout.Section>
