@@ -1916,6 +1916,13 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
           if (t.key === 'body_html') description = t.value;
         }
         
+        // Създай обект с преведени данни
+        const translatedCollection = {
+          ...collection,
+          title: title,
+          descriptionHtml: description
+        };
+        
         // Генерирай SEO с преведените данни
         const seoData = {
           title: title.slice(0, 70),
@@ -1925,10 +1932,10 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
             .trim()
             .slice(0, 160) || `Shop our ${title} collection`,
           slug: kebab(collection.handle || title),
-          categoryKeywords: extractCategoryKeywords(collection),
-          bullets: generateCollectionBullets(collection),
-          faq: generateCollectionFAQ(collection, title),
-          jsonLd: generateCollectionJsonLd(collection, title, description)
+          categoryKeywords: extractCategoryKeywords(translatedCollection),
+          bullets: generateCollectionBullets(translatedCollection),
+          faq: generateCollectionFAQ(translatedCollection, title),
+          jsonLd: generateCollectionJsonLd(translatedCollection, title, description)
         };
         
         results.push({
