@@ -25,6 +25,7 @@ import {
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
+import { useFeatureFlags } from '../hooks/useFeatureFlags.js';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
@@ -35,6 +36,8 @@ export default function CollectionsPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   // Единен session-aware fetch за компонента
   const api = useMemo(() => makeSessionFetch(), []);
+  // Feature flags
+  const { flags, loading: flagsLoading } = useFeatureFlags();
   // Collection list state
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -144,8 +147,16 @@ export default function CollectionsPage({ shop: shopProp }) {
         ...(searchValue && { search: searchValue }),
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
       });
+      
+      // Choose endpoint based on feature flag
+      const endpoint = flags.useGraphQLCollections 
+        ? `/collections/list-graphql?${params}`
+        : `/collections/list?${params}`;
+      
+      console.log('[COLLECTIONS] Using endpoint:', endpoint, 'GraphQL enabled:', flags.useGraphQLCollections);
+      
       // URL вече съдържа shop → не подаваме {shop}, за да не дублираме
-      const data = await api(`/collections/list?${params}`);
+      const data = await api(endpoint);
       
       // Apply client-side filtering for search
       let filteredCollections = data.collections || [];
@@ -171,15 +182,15 @@ export default function CollectionsPage({ shop: shopProp }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, searchValue, optimizedFilter, api]);
+  }, [shop, searchValue, optimizedFilter, api, flags.useGraphQLCollections]);
   
   // Initial load and filter changes
   useEffect(() => {
-    if (shop) {
+    if (shop && !flagsLoading) {
       loadCollections();
       setSelectedHaveSEO(false); // Reset SEO tracking on reload
     }
-  }, [shop, optimizedFilter]);
+  }, [shop, optimizedFilter, flagsLoading, loadCollections]);
   
   // Search debounce effect
   useEffect(() => {
@@ -1258,15 +1269,24 @@ export default function CollectionsPage({ shop: shopProp }) {
           <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
             {/* Search field on the left */}
             <Box minWidth="400px" maxWidth="600px">
-              <TextField
-                label=""
-                placeholder="Search by collection name..."
-                value={searchValue}
-                onChange={setSearchValue}
-                prefix={<SearchIcon />}
-                clearButton
-                onClearButtonClick={() => setSearchValue('')}
-              />
+              <BlockStack gap="200">
+                <TextField
+                  label=""
+                  placeholder="Search by collection name..."
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  prefix={<SearchIcon />}
+                  clearButton
+                  onClearButtonClick={() => setSearchValue('')}
+                />
+                {/* Debug badge for API endpoint */}
+                <InlineStack gap="200" align="start">
+                  <Badge tone={flags.useGraphQLCollections ? 'success' : 'info'}>
+                    {flags.useGraphQLCollections ? 'GraphQL API' : 'REST API'}
+                  </Badge>
+                  {flagsLoading && <Badge tone="attention">Loading flags...</Badge>}
+                </InlineStack>
+              </BlockStack>
             </Box>
             
             {/* Buttons stacked vertically on the right */}

@@ -203,6 +203,17 @@ app.post('/api/auth/session', validateRequest(), async (req, res) => {
   });
 });
 
+// Feature flags endpoint
+app.get('/api/feature-flags', validateRequest(), (req, res) => {
+  const flags = {
+    useGraphQLCollections: process.env.USE_GRAPHQL_COLLECTIONS === 'true' || false,
+    // Add more feature flags here as needed
+  };
+  
+  console.log('[FEATURE-FLAGS] Returning flags:', flags, 'for shop:', req.shopDomain);
+  res.json(flags);
+});
+
 // Mount core routers
 app.use(authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
