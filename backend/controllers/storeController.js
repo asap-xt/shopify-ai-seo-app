@@ -368,14 +368,15 @@ router.post('/apply', validateRequest(), async (req, res) => {
     const shopResp = await adminGraphql.request(shopQuery);
     console.log('[STORE-APPLY] Raw shopResp:', shopResp);
     console.log('[STORE-APPLY] shopResp type:', typeof shopResp);
-    const shopId = shopResp?.body?.data?.shop?.id;
+    
+    // Shopify SDK returns { data: { shop: { id: "..." } } } directly, not wrapped in body
+    const shopId = shopResp?.data?.shop?.id;
     
     console.log('[STORE-APPLY] Shop query result:', {
-      hasBody: !!shopResp?.body,
-      hasData: !!shopResp?.body?.data,
-      hasShop: !!shopResp?.body?.data?.shop,
+      hasData: !!shopResp?.data,
+      hasShop: !!shopResp?.data?.shop,
       shopId: shopId,
-      fullResponse: JSON.stringify(shopResp?.body, null, 2)
+      fullResponse: JSON.stringify(shopResp?.data, null, 2)
     });
     
     if (!shopId) {
