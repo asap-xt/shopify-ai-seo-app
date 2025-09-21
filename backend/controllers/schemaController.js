@@ -36,7 +36,7 @@ async function getShopLocale(adminGraphql, shop) {
     `;
     
     const resp = await adminGraphql.request(query);
-    const data = resp?.body?.data;
+    const data = resp?.data;
     const shopLocales = data?.shopLocales || [];
     const primaryLocale = shopLocales.find(l => l.primary) || shopLocales[0];
     
@@ -83,7 +83,11 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     `;
 
     const resp = await adminGraphql.request(storeMetaQuery);
-    const shopInfo = resp?.body?.data;
+    console.log('[SCHEMA-PREVIEW] Raw response type:', typeof resp);
+    console.log('[SCHEMA-PREVIEW] Raw response keys:', Object.keys(resp || {}));
+    
+    // Shopify SDK returns { data: {...} } directly, not wrapped in body
+    const shopInfo = resp?.data;
     const localeInfo = await getShopLocale(adminGraphql, shop);
 
     console.log('[SCHEMA-PREVIEW] Shop info:', {
@@ -231,7 +235,7 @@ router.post('/api/schema/generate', validateRequest(), async (req, res) => {
     }`;
     
     const resp = await adminGraphql.request(metaQuery);
-    const metafields = resp?.body?.data?.shop?.metafields?.edges || [];
+    const metafields = resp?.data?.shop?.metafields?.edges || [];
     
     console.log('[SCHEMA-GENERATE] Found metafields:', metafields.map(e => e.node.key));
     
@@ -278,7 +282,7 @@ router.get('/status', validateRequest(), async (req, res) => {
     }`;
 
     const resp = await adminGraphql.request(metafieldsQuery);
-    const data = resp?.body?.data;
+    const data = resp?.data;
     
     // Check which schemas are configured
     const schemas = {
@@ -352,7 +356,7 @@ router.get('/api/schema/validate', validateRequest(), async (req, res) => {
     `;
 
     const resp = await adminGraphql.request(metaQuery);
-    const data = resp?.body?.data;
+    const data = resp?.data;
     
     // Check if organization schema exists and is enabled
     let hasOrgSchema = false;
