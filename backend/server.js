@@ -233,7 +233,13 @@ app.use('/api/schema', advancedSchemaRouter);
 app.use('/api/sitemap', sitemapRouter);
 
 // Store metadata routes
-app.use('/api/store', storeRouter);
+app.use('/api/store', (req, res, next) => {
+  console.log('[STORE-ROUTER] Request to:', req.method, req.url);
+  console.log('[STORE-ROUTER] Full path:', req.path);
+  console.log('[STORE-ROUTER] Params:', req.params);
+  console.log('[STORE-ROUTER] Query:', req.query);
+  next();
+}, storeRouter);
 
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
