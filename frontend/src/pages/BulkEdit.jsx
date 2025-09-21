@@ -25,6 +25,7 @@ import {
   ChoiceList,
   Popover,
   ActionList,
+  Banner,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
@@ -43,6 +44,18 @@ const extractNumericId = (gid) => {
   if (!gid) return '';
   const match = String(gid).match(/\/(\d+)$/);
   return match ? match[1] : gid;
+};
+
+// Helper function to get product limits by plan
+const getProductLimitByPlan = (planName) => {
+  switch (planName?.toLowerCase()) {
+    case 'starter': return 50;
+    case 'growth': return 1000;
+    case 'growth extra': return 2000;
+    case 'professional': return 1500;
+    case 'enterprise': return 10000;
+    default: return 50;
+  }
 };
 
 
@@ -1386,6 +1399,26 @@ export default function BulkEdit({ shop: shopProp }) {
       <Card>
         <Box padding="400">
           <BlockStack gap="300">
+            {/* Plan Info Banner */}
+            {plan && (
+              <Banner tone="info">
+                <InlineStack gap="200" align="space-between">
+                  <Text>
+                    Your <strong>{plan}</strong> plan includes up to{' '}
+                    <strong>{getProductLimitByPlan(plan)}</strong> products for SEO optimization.
+                    {totalCount > getProductLimitByPlan(plan) && (
+                      <> You have {totalCount} products, so only the first {getProductLimitByPlan(plan)} will be processed.</>
+                    )}
+                  </Text>
+                  {(selectedItems.length > 0 || selectAllPages) && (
+                    <Text variant="bodySm" tone="subdued">
+                      Selected: {selectAllPages ? Math.min(totalCount, getProductLimitByPlan(plan)) : selectedItems.length}/{getProductLimitByPlan(plan)}
+                    </Text>
+                  )}
+                </InlineStack>
+              </Banner>
+            )}
+            
             {/* First row: Search bar + Generate AI button */}
             <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
               <Box minWidth="400px">
