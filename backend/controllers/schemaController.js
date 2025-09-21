@@ -27,20 +27,27 @@ async function getShopLocale(adminGraphql, shop) {
           currencyCode
           ianaTimezone
         }
-        localization {
-          availableLanguages { isoCode name }
-          primaryLanguage { isoCode name }
+        shopLocales {
+          locale
+          primary
+          published
         }
       }
     `;
     
     const resp = await adminGraphql.request(query);
     const data = resp?.body?.data;
+    const shopLocales = data?.shopLocales || [];
+    const primaryLocale = shopLocales.find(l => l.primary) || shopLocales[0];
+    
     return {
       url: data?.shop?.primaryDomain?.url || `https://${shop}`,
       currency: data?.shop?.currencyCode || 'USD',
-      language: data?.localization?.primaryLanguage?.isoCode || 'en',
-      languages: data?.localization?.availableLanguages || []
+      language: primaryLocale?.locale || 'en',
+      languages: shopLocales.filter(l => l.published).map(l => ({
+        isoCode: l.locale,
+        name: l.locale.toUpperCase()
+      }))
     };
   } catch (err) {
     console.error('Failed to get shop locale:', err);

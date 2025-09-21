@@ -422,6 +422,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
         enabled: metadata.organizationSchema.enabled === true
       };
       
+      console.log('[STORE-APPLY] Organization schema data:', orgSchemaData);
+      
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
@@ -429,6 +431,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
         type: 'json',
         value: JSON.stringify(orgSchemaData)
       });
+    } else {
+      console.log('[STORE-APPLY] No organization schema in metadata');
     }
 
     // Local business schema (Enterprise only)
@@ -443,8 +447,16 @@ router.post('/apply', validateRequest(), async (req, res) => {
     }
 
     if (metafieldsToSet.length === 0) {
+      console.log('[STORE-APPLY] No metafields to update');
       return res.status(400).json({ error: 'No metafields to update' });
     }
+
+    console.log('[STORE-APPLY] Saving metafields:', metafieldsToSet.map(m => ({
+      namespace: m.namespace,
+      key: m.key,
+      type: m.type,
+      valueLength: m.value?.length || 0
+    })));
 
     // Apply metafields
     const mutation = `
@@ -466,6 +478,11 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     const variables = { metafields: metafieldsToSet };
     const result = await shopGraphQL(req, shop, mutation, variables);
+    
+    console.log('[STORE-APPLY] GraphQL result:', {
+      metafieldsCreated: result?.metafieldsSet?.metafields?.length || 0,
+      userErrors: result?.metafieldsSet?.userErrors || []
+    });
 
     if (result?.metafieldsSet?.userErrors?.length > 0) {
       return res.status(400).json({ 
