@@ -360,23 +360,17 @@ router.post('/apply', validateRequest(), async (req, res) => {
       }
     }`;
     
-    let shopResp, shopId;
-    try {
-      shopResp = await adminGraphql.request(shopQuery);
-      shopId = shopResp?.body?.data?.shop?.id;
-      
-      console.log('[STORE-APPLY] Shop query result:', {
-        hasBody: !!shopResp?.body,
-        hasData: !!shopResp?.body?.data,
-        hasShop: !!shopResp?.body?.data?.shop,
-        shopId: shopId,
-        fullResponse: JSON.stringify(shopResp?.body, null, 2)
-      });
-    } catch (gqlError) {
-      console.log('[STORE-APPLY] GraphQL error:', gqlError.message);
-      console.log('[STORE-APPLY] GraphQL response:', gqlError.response);
-      throw gqlError;
-    }
+    console.log('[STORE-APPLY] Executing shop query...');
+    const shopResp = await adminGraphql.request(shopQuery);
+    const shopId = shopResp?.body?.data?.shop?.id;
+    
+    console.log('[STORE-APPLY] Shop query result:', {
+      hasBody: !!shopResp?.body,
+      hasData: !!shopResp?.body?.data,
+      hasShop: !!shopResp?.body?.data?.shop,
+      shopId: shopId,
+      fullResponse: JSON.stringify(shopResp?.body, null, 2)
+    });
     
     if (!shopId) {
       console.log('[STORE-APPLY] Shop ID not found in response');
