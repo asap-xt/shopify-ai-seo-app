@@ -361,7 +361,13 @@ router.post('/apply', validateRequest(), async (req, res) => {
     }`;
     
     console.log('[STORE-APPLY] Executing shop query...');
+    console.log('[STORE-APPLY] Shop query:', shopQuery);
+    console.log('[STORE-APPLY] adminGraphql exists:', !!adminGraphql);
+    console.log('[STORE-APPLY] adminGraphql.request type:', typeof adminGraphql?.request);
+    
     const shopResp = await adminGraphql.request(shopQuery);
+    console.log('[STORE-APPLY] Raw shopResp:', shopResp);
+    console.log('[STORE-APPLY] shopResp type:', typeof shopResp);
     const shopId = shopResp?.body?.data?.shop?.id;
     
     console.log('[STORE-APPLY] Shop query result:', {
