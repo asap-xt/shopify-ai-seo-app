@@ -1327,6 +1327,149 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
+// GET /collections/list-graphql - New GraphQL version
+router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    console.log('[COLLECTIONS-GQL] Fetching collections via GraphQL for shop:', shop);
+    
+    // Single GraphQL query to get all collections with metafields and product counts
+    const query = `
+      query GetCollectionsWithMetafields {
+        collections(first: 50) {
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              descriptionHtml
+              seo {
+                title
+                description
+              }
+              productsCount
+              updatedAt
+              metafields(namespace: "seo_ai", first: 20) {
+                edges {
+                  node {
+                    key
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(req, shop, query);
+    const collections = data?.collections?.edges || [];
+    
+    console.log('[COLLECTIONS-GQL] Found', collections.length, 'collections');
+    
+    // Transform to same structure as REST endpoint
+    const collectionsWithData = collections.map(edge => {
+      const c = edge.node;
+      
+      // Extract optimized languages from metafields
+      const metafields = c.metafields?.edges || [];
+      const optimizedLanguages = [];
+      let hasSeoData = false;
+      
+      metafields.forEach(mfEdge => {
+        const mf = mfEdge.node;
+        if (mf.key && mf.key.startsWith('seo__')) {
+          const lang = mf.key.replace('seo__', '');
+          if (lang && !optimizedLanguages.includes(lang)) {
+            optimizedLanguages.push(lang);
+          }
+        }
+      });
+      
+      hasSeoData = optimizedLanguages.length > 0;
+      
+      console.log(`[COLLECTIONS-GQL] Collection "${c.title}" - products: ${c.productsCount}, languages: ${optimizedLanguages.join(',') || 'none'}`);
+      
+      return {
+        id: c.id, // Already in GID format from GraphQL
+        title: c.title,
+        handle: c.handle,
+        description: c.descriptionHtml || '',
+        productsCount: c.productsCount,
+        seo: c.seo || null,
+        hasSeoData: hasSeoData,
+        optimizedLanguages: optimizedLanguages,
+        updatedAt: c.updatedAt
+      };
+    });
+    
+    console.log('[COLLECTIONS-GQL] Returning', collectionsWithData.length, 'collections with data');
+    res.json(collectionsWithData);
+    
+  } catch (e) {
+    console.error('[COLLECTIONS-GQL] Error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /collections/compare - Compare REST vs GraphQL data
+router.get('/collections/compare', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    console.log('[COLLECTIONS-COMPARE] Comparing REST vs GraphQL for shop:', shop);
+    
+    // Get data from both endpoints
+    const restPromise = fetch(`${req.protocol}://${req.get('host')}/collections/list?shop=${encodeURIComponent(shop)}`, {
+      headers: { 'Authorization': req.headers.authorization }
+    }).then(r => r.json());
+    
+    const graphqlPromise = fetch(`${req.protocol}://${req.get('host')}/collections/list-graphql?shop=${encodeURIComponent(shop)}`, {
+      headers: { 'Authorization': req.headers.authorization }
+    }).then(r => r.json());
+    
+    const [restData, graphqlData] = await Promise.all([restPromise, graphqlPromise]);
+    
+    // Compare structures
+    const comparison = {
+      restCount: restData?.length || 0,
+      graphqlCount: graphqlData?.length || 0,
+      match: JSON.stringify(restData) === JSON.stringify(graphqlData),
+      restSample: restData?.[0] || null,
+      graphqlSample: graphqlData?.[0] || null,
+      differences: []
+    };
+    
+    // Find differences
+    if (restData && graphqlData) {
+      restData.forEach((restItem, index) => {
+        const gqlItem = graphqlData[index];
+        if (gqlItem) {
+          Object.keys(restItem).forEach(key => {
+            if (JSON.stringify(restItem[key]) !== JSON.stringify(gqlItem[key])) {
+              comparison.differences.push({
+                collection: restItem.title,
+                field: key,
+                rest: restItem[key],
+                graphql: gqlItem[key]
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    res.json(comparison);
+    
+  } catch (e) {
+    console.error('[COLLECTIONS-COMPARE] Error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /collections/list - Updated version, languages included
 router.get('/collections/list', validateRequest(), async (req, res) => {
   try {
