@@ -156,12 +156,10 @@ ${JSON.stringify(allSchemas, null, 2)}
                             </Badge>
                           </InlineStack>
                           
-                          {schemas.organization && (
-                            <Box background="bg-surface-secondary" padding="200" borderRadius="200">
-                              <pre style={{ fontSize: '12px', overflow: 'auto' }}>
-                                {JSON.stringify(schemas.organization, null, 2)}
-                              </pre>
-                            </Box>
+                          {!schemas.organization && (
+                            <Text as="p" tone="subdued">
+                              Configure organization details in Store Metadata to enable this schema.
+                            </Text>
                           )}
                         </BlockStack>
                       </Box>
@@ -178,12 +176,10 @@ ${JSON.stringify(allSchemas, null, 2)}
                             </Badge>
                           </InlineStack>
                           
-                          {schemas.website && (
-                            <Box background="bg-surface-secondary" padding="200" borderRadius="200">
-                              <pre style={{ fontSize: '12px', overflow: 'auto' }}>
-                                {JSON.stringify(schemas.website, null, 2)}
-                              </pre>
-                            </Box>
+                          {!schemas.website && (
+                            <Text as="p" tone="subdued">
+                              Website schema is automatically generated from your store information.
+                            </Text>
                           )}
                         </BlockStack>
                       </Box>
