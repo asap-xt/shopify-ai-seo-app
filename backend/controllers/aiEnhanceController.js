@@ -96,6 +96,45 @@ async function openrouterChat(model, messages, response_format_json = true) {
   return { content, usage: j?.usage || {} };
 }
 
+async function generateEnhancedBulletsFAQ(data) {
+  const { shop, productId, model, language, product, existingSeo } = data;
+  
+  const prompt = {
+    instruction: "Generate ONLY enhanced bullets and FAQ. Keep response minimal.",
+    language: language,
+    existingSeo: existingSeo,  // Подаваме цялото съществуващо SEO
+    task: "Create 3-5 compelling bullet points and 2-3 FAQ items based on the existing SEO content"
+  };
+  
+  // Изпращаме минимален prompt за икономия на токени
+  const messages = [
+    {
+      role: 'system',
+      content: `Language: ${language}. Return ONLY JSON with bullets array and faq array. Nothing else.`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify(prompt)
+    }
+  ];
+  
+  const { content, usage } = await openrouterChat(model, messages, true);
+  
+  let enhanced;
+  try {
+    enhanced = JSON.parse(content);
+  } catch (parseError) {
+    console.error(`[AI-ENHANCE] JSON parse error for ${language}:`, parseError);
+    throw new Error('Invalid JSON from AI');
+  }
+  
+  return {
+    bullets: enhanced.bullets || [],
+    faq: enhanced.faq || [],
+    usage
+  };
+}
+
 // POST /ai-enhance/product
 router.post('/product', validateRequest(), async (req, res) => {
   try {
@@ -142,7 +181,13 @@ router.post('/product', validateRequest(), async (req, res) => {
         const data = await shopGraphQL(req, shop, query, { productId });
         console.log(`🔍 [DEBUG] Current SEO found:`, !!data?.product?.metafield?.value);
         
-        if (!data?.product?.metafield?.value) {
+        // Вземаме съществуващото SEO
+        const metafield = data?.product?.metafield;
+        const existingSeo = metafield?.value ? JSON.parse(metafield.value) : null;
+
+        // Ако няма базово SEO, пропускаме
+        if (!existingSeo || !existingSeo.title) {
+          console.log(`Skipping ${language} - no base SEO found`);
           results.push({ 
             language, 
             error: 'No basic SEO found' 
@@ -150,50 +195,30 @@ router.post('/product', validateRequest(), async (req, res) => {
           continue;
         }
         
-        const currentSeo = JSON.parse(data.product.metafield.value);
+        // Генерираме САМО bullets и FAQ
+        const enhancedResult = await generateEnhancedBulletsFAQ({
+          shop,
+          productId: productId,
+          model,
+          language,
+          product: data.product,
+          existingSeo  // Подаваме цялото съществуващо SEO
+        });
         
-        // Simple prompt
-        const messages = [
-          {
-            role: 'system',
-            content: `Generate enhanced bullets and FAQ for a product in ${language}.
-Output JSON with:
-{
-  "bullets": ["benefit1", "benefit2", "benefit3", "benefit4"],
-  "faq": [
-    {"q": "question1", "a": "answer1"},
-    {"q": "question2", "a": "answer2"}, 
-    {"q": "question3", "a": "answer3"}
-  ]
-}`
-          },
-          {
-            role: 'user',
-            content: `Title: ${currentSeo.title}\nDescription: ${currentSeo.metaDescription}`
-          }
-        ];
-        
-        const { content, usage } = await openrouterChat(model, messages, true);
-        
-        console.log(`🔍 [DEBUG] AI raw response for ${language}:`, content);
-        
-        let enhanced;
-        try {
-          enhanced = JSON.parse(content);
-          console.log(`🔍 [DEBUG] AI parsed JSON for ${language}:`, JSON.stringify(enhanced, null, 2));
-          console.log(`🔍 [DEBUG] AI generated bullets:`, enhanced.bullets?.length);
-          console.log(`🔍 [DEBUG] AI generated FAQ:`, enhanced.faq?.length);
-        } catch (parseError) {
-          console.error(`🔍 [DEBUG] JSON parse error for ${language}:`, parseError);
-          console.error(`🔍 [DEBUG] Raw content that failed to parse:`, content);
-          throw new Error('Invalid JSON from AI');
-        }
+        // Запазваме всичко от базовото SEO, обновяваме само bullets и FAQ
+        const updatedSeo = {
+          ...existingSeo,  // Запазва title, description, slug, bodyHtml, jsonLd
+          bullets: enhancedResult.bullets || existingSeo.bullets,
+          faq: enhancedResult.faq || existingSeo.faq,
+          updatedAt: new Date().toISOString()
+        };
         
         const result = {
           language,
-          bullets: enhanced.bullets || [],
-          faq: enhanced.faq || [],
-          usage
+          bullets: enhancedResult.bullets || [],
+          faq: enhancedResult.faq || [],
+          usage: enhancedResult.usage,
+          updatedSeo
         };
         
         console.log(`🔍 [AI-ENHANCE] Final result for ${language}:`, JSON.stringify(result, null, 2));
