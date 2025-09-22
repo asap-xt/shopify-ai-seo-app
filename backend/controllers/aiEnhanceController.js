@@ -205,13 +205,41 @@ router.post('/product', validateRequest(), async (req, res) => {
           existingSeo  // Подаваме цялото съществуващо SEO
         });
         
-        // Запазваме всичко от базовото SEO, обновяваме само bullets и FAQ
+        // Обновяваме САМО bullets и FAQ в съществуващия SEO обект
         const updatedSeo = {
-          ...existingSeo,  // Запазва title, description, slug, bodyHtml, jsonLd
+          ...existingSeo,  // Запазва title, metaDescription, bodyHtml, jsonLd и всичко друго
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
           updatedAt: new Date().toISOString()
         };
+
+        // Записваме обратно в СЪЩИЯ metafield
+        const metafieldInput = {
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: metafieldKey,  // същият ключ като базовото SEO
+          type: 'json',
+          value: JSON.stringify(updatedSeo)
+        };
+
+        const mutation = `
+          mutation SetMetafield($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+              userErrors { field message }
+              metafields { id }
+            }
+          }
+        `;
+
+        // Използваме съществуващата логика за запис
+        const mutationResult = await shopGraphQL(req, shop, mutation, {
+          metafields: [metafieldInput]
+        });
+
+        const userErrors = mutationResult?.metafieldsSet?.userErrors || [];
+        if (userErrors.length > 0) {
+          throw new Error(userErrors.map(e => e.message).join(', '));
+        }
         
         const result = {
           language,
@@ -221,7 +249,7 @@ router.post('/product', validateRequest(), async (req, res) => {
           updatedSeo
         };
         
-        console.log(`🔍 [AI-ENHANCE] Final result for ${language}:`, JSON.stringify(result, null, 2));
+        console.log(`🔍 [AI-ENHANCE] Successfully enhanced and saved ${language}`);
         
         results.push(result);
         
