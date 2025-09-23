@@ -618,7 +618,7 @@ router.get('/:productId', validateRequest(), async (req, res) => {
   }
 });
 
-// DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB
+// DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB - MIGRATED TO GRAPHQL
 router.delete('/:id/metafields', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -629,34 +629,53 @@ router.delete('/:id/metafields', validateRequest(), async (req, res) => {
     
     console.log('[DELETE-METAFIELDS] Deleting metafields for product:', productGid);
     
-    // 1. Изтриваме metafields от Shopify
-    const token = await resolveAdminTokenForShop(req.shopDomain);
-    
+    // 1. Изтриваме metafields от Shopify - MIGRATED TO GRAPHQL
     // Първо вземаме metafields за да видим какви има
-    const metafieldUrl = `https://${shop}/admin/api/2025-07/products/${productId}/metafields.json?namespace=seo_ai`;
-    const mfResponse = await fetch(metafieldUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (mfResponse.ok) {
-      const mfData = await mfResponse.json();
-      const metafields = mfData.metafields || [];
-      
-      // Изтриваме всеки metafield
-      for (const mf of metafields) {
-        if (mf.key && mf.key.startsWith('seo__')) {
-          const deleteUrl = `https://${shop}/admin/api/2025-07/metafields/${mf.id}.json`;
-          await fetch(deleteUrl, {
-            method: 'DELETE',
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'Content-Type': 'application/json',
+    const query = `
+      query GetProductMetafields($id: ID!) {
+        product(id: $id) {
+          id
+          metafields(namespace: "seo_ai", first: 20) {
+            edges {
+              node {
+                id
+                key
+                value
+              }
             }
-          });
-          console.log(`[DELETE-METAFIELDS] Deleted metafield: ${mf.key}`);
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(req, shop, query, { id: productGid });
+    
+    if (data?.product?.metafields?.edges) {
+      const metafields = data.product.metafields.edges;
+      
+      // Изтриваме всеки metafield с GraphQL
+      for (const edge of metafields) {
+        const mf = edge.node;
+        if (mf.key && mf.key.startsWith('seo__')) {
+          const deleteMutation = `
+            mutation DeleteMetafield($id: ID!) {
+              metafieldDelete(input: { id: $id }) {
+                deletedId
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: mf.id });
+          
+          if (deleteResult?.metafieldDelete?.userErrors?.length === 0) {
+            console.log(`[DELETE-METAFIELDS] Deleted metafield: ${mf.key}`);
+          } else {
+            console.error(`[DELETE-METAFIELDS] Failed to delete metafield ${mf.key}:`, deleteResult?.metafieldDelete?.userErrors);
+          }
         }
       }
     }
