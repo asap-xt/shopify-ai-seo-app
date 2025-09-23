@@ -2152,6 +2152,9 @@ router.get('/collections/:id/seo-data', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const collectionId = req.params.id;
     
+    // Convert numeric ID to GID format for GraphQL
+    const gid = collectionId.startsWith('gid://') ? collectionId : `gid://shopify/Collection/${collectionId}`;
+    
     // GraphQL query to get collection metafields
     const query = `
       query GetCollectionMetafields($id: ID!) {
@@ -2172,7 +2175,7 @@ router.get('/collections/:id/seo-data', validateRequest(), async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(req, shop, query, { id: collectionId });
+    const data = await shopGraphQL(req, shop, query, { id: gid });
     
     if (!data?.collection) {
       return res.status(404).json({ error: 'Collection not found' });
