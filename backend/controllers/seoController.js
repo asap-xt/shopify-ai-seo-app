@@ -2146,32 +2146,44 @@ export {
   shopGraphQL,
 };
 
-// GET /collections/:id/seo-data - Returns SEO data for preview
+// GET /collections/:id/seo-data - Returns SEO data for preview - MIGRATED TO GRAPHQL
 router.get('/collections/:id/seo-data', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const token = await resolveAdminTokenForShop(shop);
     const collectionId = req.params.id;
     
-    // Get metafields
-    const metafieldUrl = `https://${shop}/admin/api/${API_VERSION}/collections/${collectionId.split('/').pop()}/metafields.json?namespace=seo_ai`;
-    const mfResponse = await fetch(metafieldUrl, {
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
+    // GraphQL query to get collection metafields
+    const query = `
+      query GetCollectionMetafields($id: ID!) {
+        collection(id: $id) {
+          id
+          title
+          metafields(namespace: "seo_ai", first: 20) {
+            edges {
+              node {
+                id
+                key
+                value
+                type
+              }
+            }
+          }
+        }
       }
-    });
+    `;
     
-    if (!mfResponse.ok) {
-      return res.status(404).json({ error: 'No SEO data found' });
+    const data = await shopGraphQL(req, shop, query, { id: collectionId });
+    
+    if (!data?.collection) {
+      return res.status(404).json({ error: 'Collection not found' });
     }
     
-    const mfData = await mfResponse.json();
-    const metafields = mfData.metafields || [];
+    const metafields = data.collection.metafields?.edges || [];
     
     // Group by language
     const results = [];
-    metafields.forEach(mf => {
+    metafields.forEach(edge => {
+      const mf = edge.node;
       if (mf.key && mf.key.startsWith('seo__')) {
         const lang = mf.key.replace('seo__', '');
         try {
