@@ -575,7 +575,10 @@ app.get('/', async (req, res) => {
           }
           button:hover { background: #006e52; }
         </style>
-        <script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script>
+        <script>
+          window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';
+          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+        </script>
         <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
       </head>
       <body>
@@ -651,13 +654,23 @@ app.get('/', async (req, res) => {
       const indexPath = path.join(distPath, 'index.html');
       let html = fs.readFileSync(indexPath, 'utf8');
       
-      // Inject the Shopify API key into the HTML
-      html = html.replace(
-        '</head>',
-        `<script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script>
-        <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
-        </head>`
-      );
+      // Inject the Shopify API key and other data into the HTML
+      const apiKey = process.env.SHOPIFY_API_KEY || '';
+      
+      // Find the closing </head> tag and inject our script before it
+      const headEndIndex = html.indexOf('</head>');
+      if (headEndIndex !== -1) {
+        const injection = `
+      <script>
+        window.__SHOPIFY_API_KEY = '${apiKey}';
+        window.__SHOPIFY_SHOP = '${shop}';
+        window.__SHOPIFY_HOST = '${host || ''}';
+        console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+      </script>
+      <meta name="shopify-api-key" content="${apiKey}">
+    `;
+        html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
+      }
       
       return res.send(html);
     }
@@ -765,23 +778,28 @@ const spaRoutes = [
   '/settings'
 ];
 
-spaRoutes.forEach((route) => {
-  app.get(route, (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
-    
-    // Inject API key
-    const apiKey = process.env.SHOPIFY_API_KEY || '';
-    html = html.replace(
-      '</head>',
-      `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
-      <meta name="shopify-api-key" content="${apiKey}">
-      </head>`
-    );
-    
-    res.send(html);
+  spaRoutes.forEach((route) => {
+    app.get(route, (_req, res) => {
+      res.set('Cache-Control', 'no-store');
+      let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+      
+      // Inject API key
+      const apiKey = process.env.SHOPIFY_API_KEY || '';
+      const headEndIndex = html.indexOf('</head>');
+      if (headEndIndex !== -1) {
+        const injection = `
+        <script>
+          window.__SHOPIFY_API_KEY = '${apiKey}';
+          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+        </script>
+        <meta name="shopify-api-key" content="${apiKey}">
+      `;
+        html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
+      }
+      
+      res.send(html);
+    });
   });
-});
 
 // Wildcard for all /ai-seo/* routes (but not /apps/* routes)
 app.get('/ai-seo*', (req, res, next) => {
@@ -794,12 +812,17 @@ app.get('/ai-seo*', (req, res, next) => {
   
   // Inject API key
   const apiKey = process.env.SHOPIFY_API_KEY || '';
-  html = html.replace(
-    '</head>',
-    `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
-    <meta name="shopify-api-key" content="${apiKey}">
-    </head>`
-  );
+  const headEndIndex = html.indexOf('</head>');
+  if (headEndIndex !== -1) {
+    const injection = `
+      <script>
+        window.__SHOPIFY_API_KEY = '${apiKey}';
+        console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+      </script>
+      <meta name="shopify-api-key" content="${apiKey}">
+    `;
+    html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
+  }
   
   res.send(html);
 });
@@ -1166,31 +1189,36 @@ App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURICompo
       }
     });
 
-    // Catch-all for any unmatched routes - MUST be last
-    app.get('*', (req, res) => {
-      console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
-      console.log('[CATCH-ALL] Unmatched route:', req.url);
-      console.log('[CATCH-ALL] Method:', req.method);
-      // Check if it's an app request
-      if (req.url.includes('/apps/')) {
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-        res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-        let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
-        
-        // Inject API key
-        const apiKey = process.env.SHOPIFY_API_KEY || '';
-        html = html.replace(
-          '</head>',
-          `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
-          <meta name="shopify-api-key" content="${apiKey}">
-          </head>`
-        );
-        
-        res.send(html);
-      } else {
-        res.status(404).send('Not found');
-      }
-    });
+// Catch-all for any unmatched routes - MUST be last
+app.get('*', (req, res) => {
+  console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
+  console.log('[CATCH-ALL] Unmatched route:', req.url);
+  console.log('[CATCH-ALL] Method:', req.method);
+  // Check if it's an app request
+  if (req.url.includes('/apps/')) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+    let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
+    
+    // Inject API key
+    const apiKey = process.env.SHOPIFY_API_KEY || '';
+    const headEndIndex = html.indexOf('</head>');
+    if (headEndIndex !== -1) {
+      const injection = `
+        <script>
+          window.__SHOPIFY_API_KEY = '${apiKey}';
+          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+        </script>
+        <meta name="shopify-api-key" content="${apiKey}">
+      `;
+      html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
+    }
+    
+    res.send(html);
+  } else {
+    res.status(404).send('Not found');
+  }
+});
 
     app.listen(PORT, () => {
       console.log(`✔ Server listening on ${PORT}`);
