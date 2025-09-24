@@ -661,7 +661,10 @@ app.get('/', async (req, res) => {
           console.log('[SERVER] HTML before injection length:', html.length);
           
           // First, replace the placeholder in the existing meta tag
+          console.log('[SERVER] Before placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
           html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+          console.log('[SERVER] After placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
+          console.log('[SERVER] After placeholder replacement - contains API key:', html.includes(apiKey));
           console.log('[SERVER] Replaced VITE_SHOPIFY_API_KEY placeholder');
           
           // Find the closing </head> tag and inject our script before it
@@ -809,6 +812,8 @@ const spaRoutes = [
       
       // Inject API key
       const apiKey = process.env.SHOPIFY_API_KEY || '';
+      // First, replace the placeholder in the existing meta tag
+      html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
       const headEndIndex = html.indexOf('</head>');
       if (headEndIndex !== -1) {
         const injection = `
@@ -836,6 +841,8 @@ app.get('/ai-seo*', (req, res, next) => {
   
   // Inject API key
   const apiKey = process.env.SHOPIFY_API_KEY || '';
+  // First, replace the placeholder in the existing meta tag
+  html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
   const headEndIndex = html.indexOf('</head>');
   if (headEndIndex !== -1) {
     const injection = `
@@ -1226,6 +1233,8 @@ app.get('*', (req, res) => {
     
     // Inject API key
     const apiKey = process.env.SHOPIFY_API_KEY || '';
+    // First, replace the placeholder in the existing meta tag
+    html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
     const headEndIndex = html.indexOf('</head>');
     if (headEndIndex !== -1) {
       const injection = `
