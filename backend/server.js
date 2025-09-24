@@ -521,7 +521,7 @@ app.use((req, res, next) => {
 });
 
 // Handle root request - това е App URL endpoint-а
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
   const { shop, hmac, timestamp, host, embedded } = req.query;
   
   console.log('[APP URL] Request with params:', req.query);
@@ -606,19 +606,20 @@ app.get('/', async (req, res) => {
   });
   
   // Проверка дали приложението е инсталирано
-  try {
-    const ShopModel = (await import('./db/Shop.js')).default;
-    const existingShop = await ShopModel.findOne({ shop }).lean();
-    
-    if (!existingShop || !existingShop.accessToken) {
-      // Приложението не е инсталирано - започни OAuth
-      console.log('[APP URL] App not installed, redirecting to /auth');
+  (async () => {
+    try {
+      const ShopModel = (await import('./db/Shop.js')).default;
+      const existingShop = await ShopModel.findOne({ shop }).lean();
       
-      // За Partners Dashboard, използвай специален redirect
-      if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
-        // Генерирай пълен OAuth URL директно
-        const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
-        return res.send(`
+      if (!existingShop || !existingShop.accessToken) {
+        // Приложението не е инсталирано - започни OAuth
+        console.log('[APP URL] App not installed, redirecting to /auth');
+        
+        // За Partners Dashboard, използвай специален redirect
+        if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
+          // Генерирай пълен OAuth URL директно
+          const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
+          return res.send(`
             <!DOCTYPE html>
             <html>
             <head>
@@ -652,25 +653,26 @@ app.get('/', async (req, res) => {
       
       res.send(html);
       
-  } catch (err) {
-    console.error('[APP URL] Error:', err);
-    
-    // При грешка покажи съобщение
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Error</title>
-      </head>
-      <body>
-        <h1>Error loading app</h1>
-        <p>${err.message}</p>
-        <p>Please try again or contact support.</p>
-      </body>
-      </html>
-    `);
-  }
+    } catch (err) {
+      console.error('[APP URL] Error:', err);
+      
+      // При грешка покажи съобщение
+      res.status(500).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Error</title>
+        </head>
+        <body>
+          <h1>Error loading app</h1>
+          <p>${err.message}</p>
+          <p>Please try again or contact support.</p>
+        </body>
+        </html>
+      `);
+    }
+  })();
 });
 
 // Partners може да очаква /api endpoint
