@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Provider as AppBridgeProvider } from '@shopify/app-bridge-react';
+import { AppProvider } from '@shopify/app-bridge-react';
 import App from './App.jsx';
 
 // Get URL parameters
@@ -90,9 +90,9 @@ function ShopifyAppBridgeWrapper() {
   }
   
   return (
-    <AppBridgeProvider config={config}>
+    <AppProvider config={config}>
       <App />
-    </AppBridgeProvider>
+    </AppProvider>
   );
 }
 
