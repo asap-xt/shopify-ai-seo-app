@@ -660,6 +660,10 @@ app.get('/', async (req, res) => {
           console.log('[SERVER] API Key length:', apiKey.length);
           console.log('[SERVER] HTML before injection length:', html.length);
           
+          // First, replace the placeholder in the existing meta tag
+          html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+          console.log('[SERVER] Replaced VITE_SHOPIFY_API_KEY placeholder');
+          
           // Find the closing </head> tag and inject our script before it
           const headEndIndex = html.indexOf('</head>');
           console.log('[SERVER] Head end index:', headEndIndex);
