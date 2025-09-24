@@ -646,7 +646,14 @@ app.get('/', async (req, res) => {
     if (id_token || (existingShop && existingShop.accessToken)) {
       console.log('[APP URL] Serving embedded app');
       const indexPath = path.join(distPath, 'index.html');
-      const html = fs.readFileSync(indexPath, 'utf8');
+      let html = fs.readFileSync(indexPath, 'utf8');
+      
+      // Inject the Shopify API key into the HTML
+      html = html.replace(
+        '</head>',
+        `<script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script></head>`
+      );
+      
       return res.send(html);
     }
     
@@ -756,7 +763,18 @@ const spaRoutes = [
 spaRoutes.forEach((route) => {
   app.get(route, (_req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.sendFile(path.join(distPath, 'index.html'));
+    let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+    
+    // Inject API key
+    const apiKey = process.env.SHOPIFY_API_KEY || '';
+    html = html.replace(
+      '</head>',
+      `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
+      <meta name="shopify-api-key" content="${apiKey}">
+      </head>`
+    );
+    
+    res.send(html);
   });
 });
 
@@ -767,7 +785,18 @@ app.get('/ai-seo*', (req, res, next) => {
     return next();
   }
   res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(distPath, 'index.html'));
+  let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+  
+  // Inject API key
+  const apiKey = process.env.SHOPIFY_API_KEY || '';
+  html = html.replace(
+    '</head>',
+    `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
+    <meta name="shopify-api-key" content="${apiKey}">
+    </head>`
+  );
+  
+  res.send(html);
 });
 
 // Debug: list all mounted routes
@@ -1141,7 +1170,18 @@ App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURICompo
       if (req.url.includes('/apps/')) {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
         res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-        res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+        let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
+        
+        // Inject API key
+        const apiKey = process.env.SHOPIFY_API_KEY || '';
+        html = html.replace(
+          '</head>',
+          `<script>window.__SHOPIFY_API_KEY = '${apiKey}';</script>
+          <meta name="shopify-api-key" content="${apiKey}">
+          </head>`
+        );
+        
+        res.send(html);
       } else {
         res.status(404).send('Not found');
       }
