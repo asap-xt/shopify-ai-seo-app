@@ -279,6 +279,75 @@ app.get('/delete-test-shop', async (req, res) => {
   }
 });
 
+// Test OAuth callback endpoint
+app.get('/test-oauth-callback', async (req, res) => {
+  try {
+    console.log('[TEST_OAUTH_CALLBACK] Testing OAuth callback...');
+    
+    // Simulate OAuth callback with test parameters
+    const testParams = {
+      code: 'test-code-' + Date.now(),
+      hmac: 'test-hmac-' + Date.now(),
+      shop: 'asapxt-teststore.myshopify.com',
+      state: 'test-state-' + Date.now(),
+      host: 'YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvYXNhcHh0LXRlc3RzdG9yZQ'
+    };
+    
+    console.log('[TEST_OAUTH_CALLBACK] Test params:', testParams);
+    
+    // Make internal request to OAuth callback
+    const callbackUrl = `/auth/callback?${new URLSearchParams(testParams).toString()}`;
+    console.log('[TEST_OAUTH_CALLBACK] Callback URL:', callbackUrl);
+    
+    res.json({ 
+      success: true, 
+      message: 'OAuth callback test endpoint created', 
+      callbackUrl: callbackUrl,
+      testParams: testParams
+    });
+  } catch (error) {
+    console.error('[TEST_OAUTH_CALLBACK] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Generate direct OAuth URL for testing
+app.get('/generate-oauth-url', (req, res) => {
+  try {
+    console.log('[GENERATE_OAUTH_URL] Generating direct OAuth URL...');
+    
+    const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
+    const state = 'test-state-' + Date.now();
+    
+    const oauthUrl = `https://${shop}/admin/oauth/authorize?` + new URLSearchParams({
+      client_id: process.env.SHOPIFY_API_KEY,
+      scope: process.env.SHOPIFY_API_SCOPES || 'read_products,write_products',
+      redirect_uri: `${process.env.APP_URL}/auth/callback`,
+      state: state
+    }).toString();
+    
+    console.log('[GENERATE_OAUTH_URL] Generated OAuth URL:', oauthUrl);
+    
+    res.json({ 
+      success: true, 
+      message: 'Direct OAuth URL generated', 
+      oauthUrl: oauthUrl,
+      shop: shop,
+      state: state,
+      redirectUri: `${process.env.APP_URL}/auth/callback`
+    });
+  } catch (error) {
+    console.error('[GENERATE_OAUTH_URL] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Simple test endpoint without any imports
 app.get('/simple-test', (req, res) => {
   console.log('[SIMPLE_TEST] Simple test endpoint called!');
