@@ -614,9 +614,32 @@ app.get('/', (req, res) => {
       console.log('[APP URL] Found shop:', !!existingShop);
       console.log('[APP URL] Shop data:', existingShop ? { shop: existingShop.shop, hasAccessToken: !!existingShop.accessToken, accessToken: existingShop.accessToken?.substring(0, 10) + '...' } : null);
       
-      if (!existingShop || !existingShop.accessToken) {
-        // Приложението не е инсталирано - започни OAuth
-        console.log('[APP URL] App not installed, redirecting to /auth');
+      // Check if we have id_token in the request (new OAuth flow with JWT)
+      if (req.query.id_token && existingShop) {
+        console.log('[APP URL] Found id_token, updating shop with JWT token...');
+        console.log('[APP URL] ID token:', req.query.id_token);
+        
+        // Update shop with JWT token
+        const updatedShop = await ShopModel.findOneAndUpdate(
+          { shop }, 
+          { 
+            jwtToken: req.query.id_token,
+            installedAt: new Date(),
+            scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
+          }, 
+          { new: true }
+        );
+        console.log('[APP URL] Updated shop with JWT token:', !!updatedShop);
+        
+        // For JWT flow, we need to extract the real access token from the JWT
+        // But for now, let's create a placeholder that indicates JWT flow
+        existingShop.accessToken = 'jwt-flow-active';
+        existingShop.jwtToken = req.query.id_token;
+      }
+      
+      if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'test-token-1758739825423') {
+        // Приложението не е инсталирано или има тестов token - започни OAuth
+        console.log('[APP URL] App not installed or has test token, redirecting to /auth');
         
         // За Partners Dashboard, използвай специален redirect
         if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
