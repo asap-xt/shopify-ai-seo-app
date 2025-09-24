@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import fetch from 'node-fetch';
 import express from 'express';
 import Shop from './db/Shop.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
@@ -63,6 +64,21 @@ function verifyHmac(query, secret) {
   return crypto.timingSafeEqual(Buffer.from(digest, 'utf8'), Buffer.from(hmac, 'utf8'));
 }
 
+// Verify JWT token from Shopify
+function verifyJWT(token, secret) {
+  try {
+    const decoded = jwt.verify(token, secret, {
+      algorithms: ['HS256'],
+      issuer: 'https://shopify.com',
+      clockTolerance: 5 // 5 seconds clock tolerance
+    });
+    return decoded;
+  } catch (error) {
+    console.error('[AUTH] JWT verification failed:', error);
+    return null;
+  }
+}
+
 async function exchangeToken(shop, code) {
   console.log(`[AUTH] Exchanging token for shop: ${shop}`);
   
@@ -88,25 +104,6 @@ async function exchangeToken(shop, code) {
     const tokenData = JSON.parse(responseText);
     console.log(`[AUTH] Token exchange successful, scopes: ${tokenData.scope}`);
     
-    // Token type check
-    console.log('[AUTH] Token type check:', {
-      tokenPrefix: tokenData.access_token?.substring(0, 6),
-      expectedPrefix: 'shpua_',
-      isCorrectType: tokenData.access_token?.startsWith('shpua_')
-    });
-    
-    // След token exchange request:
-    console.log('[AUTH] Full token response:', JSON.stringify(tokenData, null, 2));
-    console.log('[AUTH] Requested scopes:', process.env.SHOPIFY_API_SCOPES);
-    console.log('[AUTH] Received scope:', tokenData.scope);
-    console.log('[AUTH] Associated user scope:', tokenData.associated_user_scope);
-    
-    // Проверете какво връща Shopify
-    if (!tokenData.access_token) {
-      console.error('[AUTH] No access token in response!', tokenData);
-      throw new Error('No access token received from Shopify');
-    }
-    
     return tokenData; // { access_token, scope, ... }
   } catch (error) {
     console.error('[AUTH] Token exchange error:', error);
@@ -131,6 +128,55 @@ async function registerWebhooks(shop, accessToken) {
     } catch (e) { 
       console.error(`[AUTH] Failed to register webhook ${w.topic}:`, e);
     }
+  }
+}
+
+// Exchange JWT for access token using Shopify's token exchange endpoint
+async function exchangeJWTForAccessToken(jwtToken) {
+  console.log('[AUTH] Exchanging JWT for access token...');
+  
+  try {
+    const decoded = verifyJWT(jwtToken, SHOPIFY_API_SECRET);
+    if (!decoded) {
+      throw new Error('Invalid JWT token');
+    }
+    
+    const shop = decoded.dest.replace('https://', '').replace('/admin', '');
+    console.log('[AUTH] JWT decoded, shop:', shop);
+    
+    // For JWT flow, we need to use the token exchange endpoint
+    const resp = await fetch('https://shopify.com/admin/api/unstable/access_tokens', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwtToken}`
+      },
+      body: JSON.stringify({
+        client_id: SHOPIFY_API_KEY,
+        subject_token: jwtToken,
+        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange'
+      })
+    });
+    
+    if (!resp.ok) {
+      const error = await resp.text();
+      console.error('[AUTH] Token exchange failed:', error);
+      throw new Error(`Token exchange failed: ${error}`);
+    }
+    
+    const data = await resp.json();
+    console.log('[AUTH] Token exchange successful');
+    
+    return {
+      accessToken: data.access_token,
+      scope: data.scope,
+      shop: shop
+    };
+  } catch (error) {
+    console.error('[AUTH] JWT exchange error:', error);
+    // Fallback: store JWT token and handle differently
+    return null;
   }
 }
 
@@ -168,33 +214,48 @@ router.get(CALLBACK_PATH, async (req, res) => {
     // Check if we have id_token (new OAuth flow with JWT)
     if (id_token) {
       console.log('2. Processing JWT token flow...');
-      console.log('3. ID token:', id_token);
       
-      // For JWT flow, we need to decode the token to get shop info
-      // But for now, let's use the shop parameter from the query
-      if (!shop || !shop.endsWith('.myshopify.com')) {
-        console.error('[AUTH] Missing shop parameter in JWT flow');
-        return res.status(400).send('Missing shop parameter');
+      const tokenData = await exchangeJWTForAccessToken(id_token);
+      
+      if (tokenData) {
+        // Successfully exchanged JWT for access token
+        const savedShop = await Shop.findOneAndUpdate(
+          { shop: tokenData.shop }, 
+          { 
+            shop: tokenData.shop, 
+            accessToken: tokenData.accessToken, 
+            scopes: tokenData.scope, 
+            installedAt: new Date(),
+            jwtToken: id_token 
+          }, 
+          { upsert: true, new: true }
+        );
+        console.log('6. Saved shop doc:', savedShop);
+        
+        // Register webhooks
+        await registerWebhooks(tokenData.shop, tokenData.accessToken);
+      } else {
+        // Fallback: store JWT token as placeholder
+        if (!shop || !shop.endsWith('.myshopify.com')) {
+          console.error('[AUTH] Missing shop parameter in JWT flow');
+          return res.status(400).send('Missing shop parameter');
+        }
+        
+        // For now, store JWT token and mark the shop as using JWT flow
+        const savedShop = await Shop.findOneAndUpdate(
+          { shop }, 
+          { 
+            shop, 
+            accessToken: 'jwt-pending', // Special marker
+            scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects',
+            installedAt: new Date(),
+            jwtToken: id_token,
+            useJWT: true  // Flag to indicate JWT flow
+          }, 
+          { upsert: true, new: true }
+        );
+        console.log('6. Saved shop with JWT marker:', savedShop);
       }
-      
-      console.log('4. Using shop from query:', shop);
-      
-      // For JWT flow, we don't need to exchange code for token
-      // The access token is embedded in the JWT token
-      // But for now, let's create a dummy token and save the shop
-      const accessToken = 'jwt-token-placeholder'; // TODO: Extract real token from JWT
-      const scopes = 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects';
-      
-      console.log('5. Saving shop with JWT token...');
-      const savedShop = await Shop.findOneAndUpdate(
-        { shop }, 
-        { shop, accessToken, scopes, installedAt: new Date(), jwtToken: id_token }, 
-        { upsert: true, new: true }
-      );
-      console.log('6. Saved shop doc:', savedShop);
-
-      // Register webhooks
-      await registerWebhooks(shop, accessToken);
 
       // Redirect to embedded app
       const finalHost = host
@@ -208,19 +269,15 @@ router.get(CALLBACK_PATH, async (req, res) => {
       return res.redirect(302, embeddedUrl);
     }
 
-    // 1) Validate (traditional OAuth flow)
+    // Traditional OAuth flow (for initial installation)
     const stateCookie = req.cookies?.shopify_oauth_state;
     
-    // Debug cookies and headers
-    console.log('[AUTH DEBUG] All cookies:', Object.keys(req.cookies || {}));
-    console.log('[AUTH DEBUG] Headers:', req.headers);
-    
-    // Temporarily skip state validation in dev mode
-    if (process.env.NODE_ENV !== 'production' || !stateCookie) {
-      console.warn('[AUTH] Skipping state validation in dev mode');
-    } else if (!state || state !== stateCookie) {
-      console.error('[AUTH] State mismatch', { state, stateCookie });
-      return res.status(400).send('Invalid state');
+    // Skip state validation in development or if missing
+    if (process.env.NODE_ENV === 'production' && stateCookie) {
+      if (!state || state !== stateCookie) {
+        console.error('[AUTH] State mismatch', { state, stateCookie });
+        return res.status(400).send('Invalid state');
+      }
     }
     
     if (!verifyHmac(req.query, SHOPIFY_API_SECRET)) {
@@ -233,17 +290,11 @@ router.get(CALLBACK_PATH, async (req, res) => {
       return res.status(400).send('Missing params');
     }
 
-    // 2) Exchange code for token
-    console.log('2. Exchanging code for token...');
+    // Exchange code for token
     const tokenResp = await exchangeToken(shop, code);
-    console.log('3. Token response:', tokenResp);
-    console.log('4. Access token:', tokenResp.access_token);
-    console.log('5. Token type:', typeof tokenResp.access_token);
-    
     const accessToken = tokenResp.access_token;
     const scopes = tokenResp.scope || '';
 
-    console.log('6. Saving to DB...');
     const savedShop = await Shop.findOneAndUpdate(
       { shop }, 
       { shop, accessToken, scopes, installedAt: new Date() }, 
@@ -251,16 +302,15 @@ router.get(CALLBACK_PATH, async (req, res) => {
     );
     console.log('7. Saved shop doc:', savedShop);
 
-    // 4) Register webhooks
+    // Register webhooks
     await registerWebhooks(shop, accessToken);
 
-    // 5) Redirect to EMBEDDED app URL per Shopify docs:
-    // https://{base64_decode(host)}/apps/{api_key}/
+    // Redirect to embedded app URL
     const finalHost = host
       ? host.toString()
       : base64UrlEncode(`${shop}/admin`);
     
-    const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, ''); // ".../admin"
+    const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, '');
     const embeddedUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/`;
     
     console.log('[AUTH] Redirecting to embedded app:', embeddedUrl);

@@ -14,6 +14,10 @@ const shopSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  useJWT: {
+    type: Boolean,
+    default: false
+  },
   scopes: {
     type: String,
     required: false

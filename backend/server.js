@@ -520,14 +520,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Handle root request - това е App URL endpoint-а
-app.get('/', (req, res) => {
-  const { shop, hmac, timestamp, host, embedded } = req.query;
+// Handle root request - this is the App URL endpoint
+app.get('/', async (req, res) => {
+  const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
   
   console.log('[APP URL] Request with params:', req.query);
   console.log('[APP URL] Headers:', req.headers);
   
-  // Ако няма shop параметър, покажи install форма
+  // If no shop parameter, show install form
   if (!shop) {
     return res.send(`
       <!DOCTYPE html>
@@ -597,108 +597,109 @@ app.get('/', (req, res) => {
     `);
   }
   
-  // За embedded apps, трябва специални headers
+  // Set proper headers for embedded apps
   res.set({
     'Content-Type': 'text/html; charset=utf-8',
-    'X-Frame-Options': 'ALLOWALL', // Позволява iframe
+    'X-Frame-Options': 'ALLOWALL',
     'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://partners.shopify.com",
     'Cache-Control': 'no-store, no-cache, must-revalidate'
   });
   
-  // Проверка дали приложението е инсталирано
-  (async () => {
-    try {
-      const ShopModel = (await import('./db/Shop.js')).default;
-      console.log('[APP URL] Looking for shop:', shop);
-      const existingShop = await ShopModel.findOne({ shop }).lean();
-      console.log('[APP URL] Found shop:', !!existingShop);
-      console.log('[APP URL] Shop data:', existingShop ? { shop: existingShop.shop, hasAccessToken: !!existingShop.accessToken, accessToken: existingShop.accessToken?.substring(0, 10) + '...' } : null);
+  try {
+    const ShopModel = (await import('./db/Shop.js')).default;
+    console.log('[APP URL] Looking for shop:', shop);
+    let existingShop = await ShopModel.findOne({ shop }).lean();
+    console.log('[APP URL] Found shop:', !!existingShop);
+    
+    // Handle JWT token if present
+    if (id_token) {
+      console.log('[APP URL] Found id_token, handling JWT flow...');
       
-      // Check if we have id_token in the request (new OAuth flow with JWT)
-      if (req.query.id_token && existingShop) {
-        console.log('[APP URL] Found id_token, updating shop with JWT token...');
-        console.log('[APP URL] ID token:', req.query.id_token);
-        
-        // Update shop with JWT token
-        const updatedShop = await ShopModel.findOneAndUpdate(
-          { shop }, 
+      // For JWT flow, check if shop exists and update it
+      if (!existingShop) {
+        // Create shop record with JWT marker
+        existingShop = await ShopModel.create({
+          shop,
+          accessToken: 'jwt-pending',
+          jwtToken: id_token,
+          useJWT: true,
+          installedAt: new Date(),
+          scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
+        });
+      } else {
+        // Update existing shop with JWT token
+        existingShop = await ShopModel.findOneAndUpdate(
+          { shop },
           { 
-            jwtToken: req.query.id_token,
-            installedAt: new Date(),
-            scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
-          }, 
+            jwtToken: id_token,
+            useJWT: true,
+            installedAt: new Date()
+          },
           { new: true }
-        );
-        console.log('[APP URL] Updated shop with JWT token:', !!updatedShop);
-        
-        // For JWT flow, we need to extract the real access token from the JWT
-        // But for now, let's create a placeholder that indicates JWT flow
-        existingShop.accessToken = 'jwt-flow-active';
-        existingShop.jwtToken = req.query.id_token;
+        ).lean();
       }
       
-      if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'test-token-1758739825423') {
-        // Приложението не е инсталирано или има тестов token - започни OAuth
-        console.log('[APP URL] App not installed or has test token, redirecting to /auth');
-        
-        // За Partners Dashboard, използвай специален redirect
-        if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
-          // Генерирай пълен OAuth URL директно
-          const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
-          return res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <title>Installing...</title>
-              <script>
-                // Redirect в top frame, не в iframe
-                if (window.top !== window.self) {
-                  window.top.location.href = '${authUrl}';
-                } else {
-                  window.location.href = '${authUrl}';
-                }
-              </script>
-            </head>
-            <body>
-              <p>Redirecting to installation...</p>
-            </body>
-            </html>
-          `);
-        }
-        
-        return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
-      }
-      
-      // Приложението е инсталирано - сервирай embedded app
-      console.log('[APP URL] App installed, serving embedded app');
-      
-      // Прочети index.html и го върни
+      // Serve the embedded app
+      console.log('[APP URL] Serving embedded app (JWT flow)');
       const indexPath = path.join(distPath, 'index.html');
       const html = fs.readFileSync(indexPath, 'utf8');
-      
-      res.send(html);
-      
-    } catch (err) {
-      console.error('[APP URL] Error:', err);
-      
-      // При грешка покажи съобщение
-      res.status(500).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Error</title>
-        </head>
-        <body>
-          <h1>Error loading app</h1>
-          <p>${err.message}</p>
-          <p>Please try again or contact support.</p>
-        </body>
-        </html>
-      `);
+      return res.send(html);
     }
-  })();
+    
+    // Check if app is installed
+    if (!existingShop || (!existingShop.accessToken || existingShop.accessToken === 'test-token-1758739825423')) {
+      console.log('[APP URL] App not installed or has test token, redirecting to /auth');
+      
+      // Handle Partners Dashboard redirect specially
+      if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
+        const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Installing...</title>
+            <script>
+              if (window.top !== window.self) {
+                window.top.location.href = '${authUrl}';
+              } else {
+                window.location.href = '${authUrl}';
+              }
+            </script>
+          </head>
+          <body>
+            <p>Redirecting to installation...</p>
+          </body>
+          </html>
+        `);
+      }
+      
+      return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
+    }
+    
+    // App is installed - serve embedded app
+    console.log('[APP URL] App installed, serving embedded app');
+    const indexPath = path.join(distPath, 'index.html');
+    const html = fs.readFileSync(indexPath, 'utf8');
+    res.send(html);
+    
+  } catch (err) {
+    console.error('[APP URL] Error:', err);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Error</title>
+      </head>
+      <body>
+        <h1>Error loading app</h1>
+        <p>${err.message}</p>
+        <p>Please try again or contact support.</p>
+      </body>
+      </html>
+    `);
+  }
 });
 
 // Partners може да очаква /api endpoint
