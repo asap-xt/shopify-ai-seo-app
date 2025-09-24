@@ -654,7 +654,9 @@ app.get('/', async (req, res) => {
       // Inject the Shopify API key into the HTML
       html = html.replace(
         '</head>',
-        `<script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script></head>`
+        `<script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script>
+        <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
+        </head>`
       );
       
       return res.send(html);

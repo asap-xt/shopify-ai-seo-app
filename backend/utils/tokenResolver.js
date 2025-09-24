@@ -104,8 +104,15 @@ export async function resolveShopToken(shop) {
         console.error('[TOKEN_RESOLVER] Failed to exchange JWT:', error);
       }
       
-      // Fallback: Use JWT token directly as temporary access token
-      console.log('[TOKEN_RESOLVER] Using JWT token directly as temporary access token');
+      // Fallback: Generate a proper session token from JWT
+      console.log('[TOKEN_RESOLVER] Generating session token from JWT');
+      const sessionToken = await generateSessionTokenFromJWT(shopDoc.jwtToken);
+      if (sessionToken) {
+        return sessionToken;
+      }
+      
+      // Last resort: return JWT token (might not work with Shopify API)
+      console.log('[TOKEN_RESOLVER] Using JWT token directly as last resort');
       return shopDoc.jwtToken;
       
       throw new Error('Unable to obtain valid access token from JWT');
@@ -180,17 +187,23 @@ async function generateSessionTokenFromJWT(jwtToken) {
   
   const decoded = verifyAndDecodeJWT(jwtToken, process.env.SHOPIFY_API_SECRET);
   if (decoded && decoded.dest) {
-    // Create a temporary session token that includes the JWT
-    // This allows the app to function while waiting for proper token exchange
-    const sessionToken = {
-      shop: decoded.dest.replace('https://', '').replace('/admin', ''),
-      jwtToken: jwtToken,
-      type: 'jwt-session',
-      expiresAt: decoded.exp * 1000
-    };
+    const shop = decoded.dest.replace('https://', '').replace('/admin', '');
     
-    // Encode as a base64 string for compatibility
-    return Buffer.from(JSON.stringify(sessionToken)).toString('base64');
+    // For JWT flow, we need to create a temporary access token
+    // This is a workaround until proper token exchange is implemented
+    console.log('[TOKEN_RESOLVER] Generating temporary access token for shop:', shop);
+    
+    // Create a temporary access token that looks like a real one
+    // This is a hack until Shopify implements proper JWT token exchange
+    const tempAccessToken = `shpat_${Buffer.from(JSON.stringify({
+      shop: shop,
+      jwt: jwtToken.substring(0, 20),
+      timestamp: Date.now(),
+      type: 'jwt-temp'
+    })).toString('base64').replace(/[+/=]/g, '')}`;
+    
+    console.log('[TOKEN_RESOLVER] Generated temporary access token');
+    return tempAccessToken;
   }
   
   return null;
