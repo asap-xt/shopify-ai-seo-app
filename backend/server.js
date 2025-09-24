@@ -609,7 +609,10 @@ app.get('/', (req, res) => {
   (async () => {
     try {
       const ShopModel = (await import('./db/Shop.js')).default;
+      console.log('[APP URL] Looking for shop:', shop);
       const existingShop = await ShopModel.findOne({ shop }).lean();
+      console.log('[APP URL] Found shop:', !!existingShop);
+      console.log('[APP URL] Shop data:', existingShop ? { shop: existingShop.shop, hasAccessToken: !!existingShop.accessToken, accessToken: existingShop.accessToken?.substring(0, 10) + '...' } : null);
       
       if (!existingShop || !existingShop.accessToken) {
         // Приложението не е инсталирано - започни OAuth
