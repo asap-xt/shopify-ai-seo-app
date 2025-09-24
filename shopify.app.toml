@@ -23,6 +23,12 @@ redirect_urls = [
 [access_scopes]
 scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects"
 
+# App Proxy Configuration for Sitemap
+[app_proxy]
+url = "https://new-ai-seo-app-production.up.railway.app"
+subpath = "apps/new-ai-seo"
+subpath_prefix = "sitemap"
+
 [pos]
 embedded = false
 

@@ -89,6 +89,19 @@ app.use('/api', async (req, res, next) => {
     console.log('[API-RESOLVER] URL:', req.originalUrl);
     console.log('[API-RESOLVER] Method:', req.method);
     
+    // Skip authentication for public sitemap endpoints
+    console.log('[API-RESOLVER] Checking if should skip auth...');
+    console.log('[API-RESOLVER] URL contains /sitemap/public:', req.originalUrl.includes('/sitemap/public'));
+    console.log('[API-RESOLVER] URL contains /sitemap/generate:', req.originalUrl.includes('/sitemap/generate'));
+    console.log('[API-RESOLVER] URL contains /sitemap/view:', req.originalUrl.includes('/sitemap/view'));
+    console.log('[API-RESOLVER] Method is GET:', req.method === 'GET');
+    
+    // Skip auth for all sitemap GET requests
+    if (req.originalUrl.includes('/sitemap/') && req.method === 'GET') {
+      console.log('[API-RESOLVER] Skipping authentication for public sitemap');
+      return next();
+    }
+    
     // 1) resolve shop от различни места
     const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'] || null;
     const sessionShop = res.locals?.shopify?.session?.shop || null; // ако си ползвал validateAuthenticatedSession() по-нагоре
@@ -153,6 +166,10 @@ app.use('/api', async (req, res, next) => {
 // ========= DEBUG + SHOP RESOLVER за /api/store =========
 // Този middleware е премахнат защото се дублира с общия /api middleware по-горе
 
+
+// App Proxy routes for sitemap (MUST be very early to avoid catch-all)
+
+
 // Debug middleware
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.url}`);
@@ -163,6 +180,45 @@ app.use((req, res, next) => {
 /** Health / debug */
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
+
+// Test sitemap endpoint
+app.get('/test-sitemap.xml', (req, res) => {
+  console.log('[TEST_SITEMAP] Test sitemap endpoint called!');
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.send('<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://test.com</loc></url></urlset>');
+});
+
+// Test MongoDB connection
+app.get('/test-mongo', async (req, res) => {
+  try {
+    console.log('[TEST_MONGO] Testing MongoDB connection...');
+    const Sitemap = (await import('./db/Sitemap.js')).default;
+    const count = await Sitemap.countDocuments();
+    res.json({ 
+      success: true, 
+      message: 'MongoDB connected', 
+      sitemapCount: count 
+    });
+  } catch (error) {
+    console.error('[TEST_MONGO] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Simple test endpoint without any imports
+app.get('/simple-test', (req, res) => {
+  console.log('[SIMPLE_TEST] Simple test endpoint called!');
+  res.json({ 
+    success: true, 
+    message: 'Simple test endpoint works!',
+    timestamp: new Date().toISOString(),
+    url: req.url,
+    method: req.method
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Shopify OAuth Routes for Public App (moved to start function)
@@ -180,6 +236,8 @@ import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /ap
 import debugRouter from './controllers/debugRouter.js';
 import productsRouter from './controllers/productsController.js';
 import sitemapRouter from './controllers/sitemapController.js';
+import appProxyRouter from './controllers/appProxyController.js';
+import publicSitemapRouter from './controllers/publicSitemapController.js';
 import storeRouter from './controllers/storeController.js';
 import schemaRouter from './controllers/schemaController.js';
 import aiDiscoveryRouter from './controllers/aiDiscoveryController.js';
@@ -221,6 +279,9 @@ app.use('/api/schema', advancedSchemaRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);
+
+
+
 
 // Store metadata routes
 app.use('/api/store', (req, res, next) => {
@@ -278,6 +339,7 @@ async function mountOptionalRouters(app) {
   }
 }
 
+
 // Handle Shopify's app routes - both by handle and by API key
 app.get('/apps/:app_identifier', (req, res) => {
   console.log('[APP] Request for app:', req.params.app_identifier);
@@ -286,8 +348,15 @@ app.get('/apps/:app_identifier', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
-app.get('/apps/:app_identifier/*', (req, res) => {
+app.get('/apps/:app_identifier/*', (req, res, next) => {
   console.log('[APP] Request for app route:', req.url);
+  
+  // Skip our App Proxy routes
+  if (req.params.app_identifier === 'new-ai-seo') {
+    console.log('[APP] Skipping new-ai-seo app proxy route');
+    return next();
+  }
+  
   res.set('Cache-Control', 'no-store');
   res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
@@ -503,54 +572,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve assets with aggressive caching for production
-app.use(
-  express.static(distPath, {
-    index: false,
-    etag: false,
-    lastModified: false,
-    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0, // 1 year cache in production
-    setHeaders(res, filePath) {
-      if (process.env.NODE_ENV === 'production') {
-        // Cache JS/CSS files for 1 year in production
-        if (filePath.match(/\.(js|css)$/)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-        // Cache images for 1 year in production
-        if (filePath.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-        // Cache fonts for 1 year in production
-        if (filePath.match(/\.(woff|woff2|ttf|eot)$/)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        }
-      } else {
-        // Development: disable caching for all files
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('Surrogate-Control', 'no-store');
-        res.setHeader('Last-Modified', new Date().toUTCString());
-        res.setHeader('ETag', `"${Date.now()}-${Math.random()}"`);
-        res.setHeader('Vary', '*');
-        res.setHeader('X-Cache-Bust', Date.now().toString());
-        res.setHeader('X-Timestamp', Date.now().toString());
-        res.setHeader('X-Random', Math.random().toString());
-        res.setHeader('X-Build-Time', new Date().toISOString());
-      }
-    },
-  })
-);
 
-// Public sitemap route
-app.get('/sitemap.xml', (req, res) => {
-  const shop = req.query.shop || req.headers.host?.replace('.myshopify.com', '');
-  if (!shop) {
-    return res.status(400).send('Shop not specified');
-  }
-  // Redirect to the API endpoint
-  res.redirect(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`);
-});
+
+
 
 
 // Explicit SPA routes → serve fresh index.html
@@ -573,8 +597,12 @@ spaRoutes.forEach((route) => {
   });
 });
 
-// Wildcard for all /ai-seo/* routes
-app.get('/ai-seo*', (_req, res) => {
+// Wildcard for all /ai-seo/* routes (but not /apps/* routes)
+app.get('/ai-seo*', (req, res, next) => {
+  // Skip /apps/* routes
+  if (req.path.startsWith('/apps/')) {
+    return next();
+  }
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(distPath, 'index.html'));
 });
@@ -688,6 +716,78 @@ async function start() {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
 
+    // APP PROXY ROUTES (MUST be first, before all other middleware)
+    console.log('[SERVER] Registering App Proxy routes...');
+    app.use('/apps/new-ai-seo', appProxyRouter);
+
+    // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
+    console.log('[SERVER] Registering public sitemap endpoints...');
+    
+    // Direct public sitemap endpoint - no authentication required
+    app.get('/public-sitemap', async (req, res) => {
+      console.log('[PUBLIC_SITEMAP_DIRECT] ===== PUBLIC SITEMAP DIRECT REQUEST =====');
+      console.log('[PUBLIC_SITEMAP_DIRECT] Query:', req.query);
+      
+      try {
+        // Import required modules
+        const Sitemap = (await import('./db/Sitemap.js')).default;
+        
+        // Helper function to normalize shop
+        function normalizeShop(s) {
+          if (!s) return null;
+          s = String(s).trim().toLowerCase();
+          if (/^https?:\/\//.test(s)) {
+            const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            return u.toLowerCase();
+          }
+          if (!/\.myshopify\.com$/i.test(s)) return s.toLowerCase() + '.myshopify.com';
+          return s.toLowerCase();
+        }
+        
+        const shop = normalizeShop(req.query.shop);
+        if (!shop) {
+          console.error('[PUBLIC_SITEMAP_DIRECT] Missing shop parameter');
+          return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+        }
+        
+        console.log('[PUBLIC_SITEMAP_DIRECT] Processing for shop:', shop);
+        
+        // Get saved sitemap with content
+        const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        console.log('[PUBLIC_SITEMAP_DIRECT] Found sitemap:', !!sitemapDoc);
+        
+        if (!sitemapDoc || !sitemapDoc.content) {
+          console.log('[PUBLIC_SITEMAP_DIRECT] No sitemap found, returning instructions');
+          return res.status(404).send(`
+Sitemap not found for shop: ${shop}
+
+To generate a sitemap:
+1. Install the NEW AI SEO app in your Shopify admin
+2. Go to the Sitemap section and click "Generate Sitemap"
+3. Your sitemap will be available at this URL
+
+App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+          `);
+        }
+        
+        // Serve the saved sitemap
+        console.log('[PUBLIC_SITEMAP_DIRECT] Serving sitemap for shop:', shop);
+        res.set({
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=21600', // 6 hours
+          'Last-Modified': new Date(sitemapDoc.generatedAt).toUTCString(),
+          'X-Sitemap-Cache': 'HIT',
+          'X-Sitemap-Generated': sitemapDoc.generatedAt,
+          'X-Sitemap-Products': sitemapDoc.productCount?.toString() || '0'
+        });
+        res.send(sitemapDoc.content);
+        
+      } catch (error) {
+        console.error('[PUBLIC_SITEMAP_DIRECT] Error:', error);
+        return res.status(500).send(`Failed to serve sitemap: ${error.message}`);
+      }
+    });
+
     // Mount Shopify OAuth Routes
     app.use('/api/auth', authBegin());
     app.use('/api/auth/callback', authCallback());
@@ -695,6 +795,194 @@ async function start() {
 
     // Mount optional routers before listening
     await mountOptionalRouters(app);
+
+
+    // Serve assets with aggressive caching for production (MUST be before catch-all)
+    app.use(
+      express.static(distPath, {
+        index: false,
+        etag: false,
+        lastModified: false,
+        maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0, // 1 year cache in production
+        setHeaders(res, filePath) {
+          if (process.env.NODE_ENV === 'production') {
+            // Cache JS/CSS files for 1 year in production
+            if (filePath.match(/\.(js|css)$/)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+            // Cache images for 1 year in production
+            if (filePath.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+            // Cache fonts for 1 year in production
+            if (filePath.match(/\.(woff|woff2|ttf|eot)$/)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+          } else {
+            // Development: disable caching for all files
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.setHeader('Surrogate-Control', 'no-store');
+            res.setHeader('Last-Modified', new Date().toUTCString());
+            res.setHeader('ETag', `"${Date.now()}-${Math.random()}"`);
+            res.setHeader('Vary', '*');
+            res.setHeader('X-Cache-Bust', Date.now().toString());
+            res.setHeader('X-Timestamp', Date.now().toString());
+            res.setHeader('X-Random', Math.random().toString());
+            res.setHeader('X-Build-Time', new Date().toISOString());
+          }
+        },
+      })
+    );
+
+    // Public sitemap endpoints (MUST be before catch-all)
+    console.log('[SERVER] Registering public sitemap endpoints...');
+    
+    // Simple public sitemap endpoint - no authentication required
+    app.get('/sitemap.xml', async (req, res) => {
+      console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
+      console.log('[PUBLIC_SITEMAP] Query:', req.query);
+      
+      try {
+        // Import required modules
+        const Sitemap = (await import('./db/Sitemap.js')).default;
+        
+        // Helper function to normalize shop
+        function normalizeShop(s) {
+          if (!s) return null;
+          s = String(s).trim().toLowerCase();
+          if (/^https?:\/\//.test(s)) {
+            const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            return u.toLowerCase();
+          }
+          if (!/\.myshopify\.com$/i.test(s)) return s.toLowerCase() + '.myshopify.com';
+          return s.toLowerCase();
+        }
+        
+        const shop = normalizeShop(req.query.shop);
+        if (!shop) {
+          console.error('[PUBLIC_SITEMAP] Missing shop parameter');
+          return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+        }
+        
+        console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
+        
+        // Get saved sitemap with content
+        const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        console.log('[PUBLIC_SITEMAP] Found sitemap:', !!sitemapDoc);
+        
+        if (!sitemapDoc || !sitemapDoc.content) {
+          console.log('[PUBLIC_SITEMAP] No sitemap found, returning instructions');
+          return res.status(404).send(`
+Sitemap not found for shop: ${shop}
+
+To generate a sitemap:
+1. Install the NEW AI SEO app in your Shopify admin
+2. Go to the Sitemap section and click "Generate Sitemap"
+3. Your sitemap will be available at this URL
+
+App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+          `);
+        }
+        
+        // Serve the saved sitemap
+        console.log('[PUBLIC_SITEMAP] Serving sitemap for shop:', shop);
+        res.set({
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=21600', // 6 hours
+          'Last-Modified': new Date(sitemapDoc.generatedAt).toUTCString(),
+          'X-Sitemap-Cache': 'HIT',
+          'X-Sitemap-Generated': sitemapDoc.generatedAt,
+          'X-Sitemap-Products': sitemapDoc.productCount?.toString() || '0'
+        });
+        res.send(sitemapDoc.content);
+        
+      } catch (error) {
+        console.error('[PUBLIC_SITEMAP] Error:', error);
+        return res.status(500).send(`Failed to serve sitemap: ${error.message}`);
+      }
+    });
+    
+    // Alternative public sitemap endpoint
+    app.get('/public-sitemap.xml', async (req, res) => {
+      console.log('[PUBLIC_SITEMAP_ALT] ===== ALTERNATIVE PUBLIC SITEMAP REQUEST =====');
+      console.log('[PUBLIC_SITEMAP_ALT] Query:', req.query);
+      
+      try {
+        // Import required modules
+        const Sitemap = (await import('./db/Sitemap.js')).default;
+        
+        // Helper function to normalize shop
+        function normalizeShop(s) {
+          if (!s) return null;
+          s = String(s).trim().toLowerCase();
+          if (/^https?:\/\//.test(s)) {
+            const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            return u.toLowerCase();
+          }
+          if (!/\.myshopify\.com$/i.test(s)) return s.toLowerCase() + '.myshopify.com';
+          return s.toLowerCase();
+        }
+        
+        const shop = normalizeShop(req.query.shop);
+        if (!shop) {
+          console.error('[PUBLIC_SITEMAP_ALT] Missing shop parameter');
+          return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+        }
+        
+        console.log('[PUBLIC_SITEMAP_ALT] Processing for shop:', shop);
+        
+        // Get saved sitemap with content
+        const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        console.log('[PUBLIC_SITEMAP_ALT] Found sitemap:', !!sitemapDoc);
+        
+        if (!sitemapDoc || !sitemapDoc.content) {
+          console.log('[PUBLIC_SITEMAP_ALT] No sitemap found, returning instructions');
+          return res.status(404).send(`
+Sitemap not found for shop: ${shop}
+
+To generate a sitemap:
+1. Install the NEW AI SEO app in your Shopify admin
+2. Go to the Sitemap section and click "Generate Sitemap"
+3. Your sitemap will be available at this URL
+
+App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+          `);
+        }
+        
+        // Serve the saved sitemap
+        console.log('[PUBLIC_SITEMAP_ALT] Serving sitemap for shop:', shop);
+        res.set({
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=21600', // 6 hours
+          'Last-Modified': new Date(sitemapDoc.generatedAt).toUTCString(),
+          'X-Sitemap-Cache': 'HIT',
+          'X-Sitemap-Generated': sitemapDoc.generatedAt,
+          'X-Sitemap-Products': sitemapDoc.productCount?.toString() || '0'
+        });
+        res.send(sitemapDoc.content);
+        
+      } catch (error) {
+        console.error('[PUBLIC_SITEMAP_ALT] Error:', error);
+        return res.status(500).send(`Failed to serve sitemap: ${error.message}`);
+      }
+    });
+
+    // Catch-all for any unmatched routes - MUST be last
+    app.get('*', (req, res) => {
+      console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
+      console.log('[CATCH-ALL] Unmatched route:', req.url);
+      console.log('[CATCH-ALL] Method:', req.method);
+      // Check if it's an app request
+      if (req.url.includes('/apps/')) {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
+        res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+        res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+      } else {
+        res.status(404).send('Not found');
+      }
+    });
 
     app.listen(PORT, () => {
       console.log(`✔ Server listening on ${PORT}`);
@@ -713,20 +1001,6 @@ async function start() {
   }
 }
 
-// Catch-all for any unmatched routes - should be last
-app.get('*', (req, res) => {
-  console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
-  console.log('[CATCH-ALL] Unmatched route:', req.url);
-  console.log('[CATCH-ALL] Method:', req.method);
-  // Check if it's an app request
-  if (req.url.includes('/apps/')) {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-    res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
-  } else {
-    res.status(404).send('Not found');
-  }
-});
 
 start();
 

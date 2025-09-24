@@ -666,12 +666,111 @@ async function serveSitemap(req, res) {
   }
 }
 
+// Public sitemap endpoint (no authentication required)
+async function handlePublicSitemap(req, res) {
+  console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
+  console.log('[PUBLIC_SITEMAP] Query:', req.query);
+  
+  const shop = normalizeShop(req.query.shop);
+  if (!shop) {
+    console.error('[PUBLIC_SITEMAP] Missing shop parameter');
+    return res.status(400).send('Missing shop parameter. Use: /api/sitemap/public?shop=your-shop.myshopify.com');
+  }
+  
+  console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
+  
+  try {
+    // Check for cached sitemap
+    const cachedSitemap = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+    
+    if (cachedSitemap && cachedSitemap.content) {
+      console.log('[PUBLIC_SITEMAP] Serving cached sitemap for shop:', shop);
+      
+      res.set({
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=21600', // 6 hours
+        'Last-Modified': new Date(cachedSitemap.generatedAt).toUTCString(),
+        'X-Sitemap-Cache': 'HIT',
+        'X-Sitemap-Generated': cachedSitemap.generatedAt,
+        'X-Sitemap-Products': cachedSitemap.productCount?.toString() || '0'
+      });
+      return res.send(cachedSitemap.content);
+    } else {
+      console.log('[PUBLIC_SITEMAP] No cached sitemap found for shop:', shop);
+      return res.status(404).send(`
+Sitemap not found for shop: ${shop}
+
+To generate a sitemap:
+1. Install the NEW AI SEO app in your Shopify admin
+2. Go to the Sitemap section and click "Generate Sitemap"
+3. Your sitemap will be available at this URL
+
+App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+      `);
+    }
+  } catch (error) {
+    console.error('[PUBLIC_SITEMAP] Error:', error);
+    res.status(500).send(`Failed to serve sitemap: ${error.message}`);
+  }
+}
+
+// Public sitemap endpoint (no authentication required) - simplified version
+async function servePublicSitemap(req, res) {
+  console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
+  console.log('[PUBLIC_SITEMAP] Query:', req.query);
+  
+  try {
+    const shop = normalizeShop(req.query.shop);
+    if (!shop) {
+      console.error('[PUBLIC_SITEMAP] Missing shop parameter');
+      return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+    }
+    
+    console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
+    
+    // Get saved sitemap with content
+    const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+    console.log('[PUBLIC_SITEMAP] Found sitemap:', !!sitemapDoc);
+    
+    if (!sitemapDoc || !sitemapDoc.content) {
+      console.log('[PUBLIC_SITEMAP] No sitemap found, returning instructions');
+      return res.status(404).send(`
+Sitemap not found for shop: ${shop}
+
+To generate a sitemap:
+1. Install the NEW AI SEO app in your Shopify admin
+2. Go to the Sitemap section and click "Generate Sitemap"
+3. Your sitemap will be available at this URL
+
+App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+      `);
+    }
+    
+    // Serve the saved sitemap
+    console.log('[PUBLIC_SITEMAP] Serving sitemap for shop:', shop);
+    res.set({
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=21600', // 6 hours
+      'Last-Modified': new Date(sitemapDoc.generatedAt).toUTCString(),
+      'X-Sitemap-Cache': 'HIT',
+      'X-Sitemap-Generated': sitemapDoc.generatedAt,
+      'X-Sitemap-Products': sitemapDoc.productCount?.toString() || '0'
+    });
+    res.send(sitemapDoc.content);
+    
+  } catch (err) {
+    console.error('[PUBLIC_SITEMAP] Error:', err);
+    res.status(500).send(`Failed to serve sitemap: ${err.message}`);
+  }
+}
+
 // Mount routes on router
 router.get('/info', handleInfo);
 router.get('/progress', handleProgress);
 router.post('/generate', handleGenerate); // POST generates new sitemap
 router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
+router.get('/public', servePublicSitemap); // Public endpoint (no auth required)
 
 // Export default router
 export default router;
