@@ -193,11 +193,20 @@ app.get('/test-mongo', async (req, res) => {
   try {
     console.log('[TEST_MONGO] Testing MongoDB connection...');
     const Sitemap = (await import('./db/Sitemap.js')).default;
-    const count = await Sitemap.countDocuments();
+    const Shop = (await import('./db/Shop.js')).default;
+    
+    const sitemapCount = await Sitemap.countDocuments();
+    const shopCount = await Shop.countDocuments();
+    
+    // Get all shops
+    const shops = await Shop.find({}).lean();
+    
     res.json({ 
       success: true, 
       message: 'MongoDB connected', 
-      sitemapCount: count 
+      sitemapCount: sitemapCount,
+      shopCount: shopCount,
+      shops: shops.map(s => ({ shop: s.shop, hasAccessToken: !!s.accessToken, createdAt: s.createdAt }))
     });
   } catch (error) {
     console.error('[TEST_MONGO] Error:', error);
