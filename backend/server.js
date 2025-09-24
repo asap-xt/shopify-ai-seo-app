@@ -615,9 +615,9 @@ app.get('/', async (req, res) => {
     if (id_token) {
       console.log('[APP URL] Found id_token, handling JWT flow...');
       
-      // For JWT flow, check if shop exists and update it
+      // Create or update shop record with JWT token
       if (!existingShop) {
-        // Create shop record with JWT marker
+        // Create new shop record
         existingShop = await ShopModel.create({
           shop,
           accessToken: 'jwt-pending',
@@ -626,6 +626,7 @@ app.get('/', async (req, res) => {
           installedAt: new Date(),
           scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
         });
+        console.log('[APP URL] Created new shop with JWT');
       } else {
         // Update existing shop with JWT token
         existingShop = await ShopModel.findOneAndUpdate(
@@ -633,55 +634,50 @@ app.get('/', async (req, res) => {
           { 
             jwtToken: id_token,
             useJWT: true,
-            installedAt: new Date()
+            updatedAt: new Date()
           },
           { new: true }
         ).lean();
+        console.log('[APP URL] Updated existing shop with JWT');
       }
-      
-      // Serve the embedded app
-      console.log('[APP URL] Serving embedded app (JWT flow)');
+    }
+    
+    // Always serve the app if we have JWT token
+    if (id_token || (existingShop && existingShop.accessToken)) {
+      console.log('[APP URL] Serving embedded app');
       const indexPath = path.join(distPath, 'index.html');
       const html = fs.readFileSync(indexPath, 'utf8');
       return res.send(html);
     }
     
-    // Check if app is installed
-    if (!existingShop || (!existingShop.accessToken || existingShop.accessToken === 'test-token-1758739825423')) {
-      console.log('[APP URL] App not installed or has test token, redirecting to /auth');
-      
-      // Handle Partners Dashboard redirect specially
-      if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
-        const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
-        return res.send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Installing...</title>
-            <script>
-              if (window.top !== window.self) {
-                window.top.location.href = '${authUrl}';
-              } else {
-                window.location.href = '${authUrl}';
-              }
-            </script>
-          </head>
-          <body>
-            <p>Redirecting to installation...</p>
-          </body>
-          </html>
-        `);
-      }
-      
-      return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
+    // No JWT token and app not installed - redirect to OAuth
+    console.log('[APP URL] App not installed, redirecting to /auth');
+    
+    // Handle Partners Dashboard redirect specially
+    if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
+      const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Installing...</title>
+          <script>
+            if (window.top !== window.self) {
+              window.top.location.href = '${authUrl}';
+            } else {
+              window.location.href = '${authUrl}';
+            }
+          </script>
+        </head>
+        <body>
+          <p>Redirecting to installation...</p>
+        </body>
+        </html>
+      `);
     }
     
-    // App is installed - serve embedded app
-    console.log('[APP URL] App installed, serving embedded app');
-    const indexPath = path.join(distPath, 'index.html');
-    const html = fs.readFileSync(indexPath, 'utf8');
-    res.send(html);
+    return res.redirect(`/auth?${new URLSearchParams(req.query).toString()}`);
     
   } catch (err) {
     console.error('[APP URL] Error:', err);
