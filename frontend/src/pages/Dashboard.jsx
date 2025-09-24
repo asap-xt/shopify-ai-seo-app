@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Page, Text, InlineStack, BlockStack, Badge } from '@shopify/polaris';
-import { useApi } from '../hooks/useApi.js';
+import { useShopApi } from '../hooks/useShopApi.js';
 
 export default function Dashboard({ i18n, shop }) {
-  const api = useApi(shop);
+  const { api } = useShopApi();
   const [data, setData] = useState(null);
 
   useEffect(() => {

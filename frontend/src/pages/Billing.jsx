@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useAppBridge } from '@shopify/app-bridge-react';
+// import { useAppBridge } from '@shopify/app-bridge-react'; // Removed - using App Bridge v4
 import { Card, Page, RadioButton, Button, BlockStack, Text } from '@shopify/polaris';
-import { makeApiFetch } from '../lib/apiFetch.js';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const plans = [
   { key: 'starter',   label: 'Starter ($10/mo)' },
@@ -12,8 +12,8 @@ const plans = [
 ];
 
 export default function Billing({ i18n, shop }) {
-  const app = useAppBridge();
-  const api = useMemo(() => makeApiFetch(app), [app]);
+  // const app = useAppBridge(); // Removed - using App Bridge v4
+  const api = useMemo(() => makeSessionFetch(), []);
   const [current, setCurrent] = useState('starter');
   const [loading, setLoading] = useState(false);
   const [resp, setResp] = useState(null);

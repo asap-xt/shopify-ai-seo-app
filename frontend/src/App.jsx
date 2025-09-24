@@ -7,7 +7,7 @@ import {
   Button, Layout, BlockStack, InlineStack, Tabs
 } from '@shopify/polaris';
 import { useEffect, useState, useMemo } from 'react';
-import { useAppBridge } from './providers/AppBridgeProvider.jsx';
+// import { useAppBridge } from './providers/AppBridgeProvider.jsx'; // Removed - using App Bridge v4
 import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 
@@ -602,7 +602,7 @@ const translations = {
 };
 
 export default function App() {
-  const app = useAppBridge();
+  // const app = useAppBridge(); // Removed - using App Bridge v4
   const { path } = useRoute();
   const { lang, setLang, t } = useI18n();
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));

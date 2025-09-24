@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Page, TextField, Button, Select, BlockStack, Text } from '@shopify/polaris';
-import { useApi } from '../hooks/useApi.js';
+import { useShopApi } from '../hooks/useShopApi.js';
 
 export default function SeoGenerate({ i18n, shop }) {
-  const api = useApi(shop);
+  const { api } = useShopApi();
 
   const [plan, setPlan] = useState(null);
   const [productId, setProductId] = useState('123456');

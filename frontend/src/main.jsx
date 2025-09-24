@@ -13,33 +13,40 @@ const embedded = params.get('embedded') === '1';
 console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
 console.log('[MAIN] Full URL:', window.location.href);
 
-function ShopifyAppWrapper() {
+function ShopifyAppBridgeWrapper() {
   const [isReady, setIsReady] = useState(false);
   
-  // Get API key from various sources
-  const apiKey = useMemo(() => {
-    // First try window object (injected by server)
-    if (window.__SHOPIFY_API_KEY) {
-      console.log('[MAIN] Using injected API key');
-      return window.__SHOPIFY_API_KEY;
-    }
-    
-    // Then try environment variable
-    if (import.meta.env.VITE_SHOPIFY_API_KEY) {
-      console.log('[MAIN] Using env API key');
-      return import.meta.env.VITE_SHOPIFY_API_KEY;
-    }
-    
-    // Try to get from meta tag
-    const metaTag = document.querySelector('meta[name="shopify-api-key"]');
-    if (metaTag) {
-      console.log('[MAIN] Using meta tag API key');
-      return metaTag.getAttribute('content');
-    }
-    
-    console.error('[MAIN] No API key found!');
-    return null;
-  }, []);
+      // Get API key from various sources
+      const apiKey = useMemo(() => {
+        console.log('[MAIN] Checking for API key...');
+        console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
+        console.log('[MAIN] import.meta.env.VITE_SHOPIFY_API_KEY:', import.meta.env.VITE_SHOPIFY_API_KEY);
+        
+        // First try window object (injected by server)
+        if (window.__SHOPIFY_API_KEY) {
+          console.log('[MAIN] Using injected API key:', window.__SHOPIFY_API_KEY);
+          return window.__SHOPIFY_API_KEY;
+        }
+        
+        // Then try environment variable
+        if (import.meta.env.VITE_SHOPIFY_API_KEY) {
+          console.log('[MAIN] Using env API key:', import.meta.env.VITE_SHOPIFY_API_KEY);
+          return import.meta.env.VITE_SHOPIFY_API_KEY;
+        }
+        
+        // Try to get from meta tag
+        const metaTag = document.querySelector('meta[name="shopify-api-key"]');
+        console.log('[MAIN] Meta tag found:', !!metaTag);
+        if (metaTag) {
+          const content = metaTag.getAttribute('content');
+          console.log('[MAIN] Using meta tag API key:', content);
+          return content;
+        }
+        
+        console.error('[MAIN] No API key found!');
+        console.error('[MAIN] Available window properties:', Object.keys(window).filter(k => k.includes('SHOPIFY')));
+        return null;
+      }, []);
   
   useEffect(() => {
     // Give a moment for any async operations

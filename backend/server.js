@@ -654,23 +654,43 @@ app.get('/', async (req, res) => {
       const indexPath = path.join(distPath, 'index.html');
       let html = fs.readFileSync(indexPath, 'utf8');
       
-      // Inject the Shopify API key and other data into the HTML
-      const apiKey = process.env.SHOPIFY_API_KEY || '';
-      
-      // Find the closing </head> tag and inject our script before it
-      const headEndIndex = html.indexOf('</head>');
-      if (headEndIndex !== -1) {
-        const injection = `
-      <script>
-        window.__SHOPIFY_API_KEY = '${apiKey}';
-        window.__SHOPIFY_SHOP = '${shop}';
-        window.__SHOPIFY_HOST = '${host || ''}';
-        console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
-      </script>
-      <meta name="shopify-api-key" content="${apiKey}">
-    `;
-        html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
-      }
+          // Inject the Shopify API key and other data into the HTML
+          const apiKey = process.env.SHOPIFY_API_KEY || '';
+          console.log('[SERVER] API Key from env:', apiKey ? 'SET' : 'MISSING');
+          console.log('[SERVER] API Key length:', apiKey.length);
+          console.log('[SERVER] HTML before injection length:', html.length);
+          
+          // Find the closing </head> tag and inject our script before it
+          const headEndIndex = html.indexOf('</head>');
+          console.log('[SERVER] Head end index:', headEndIndex);
+          
+          if (headEndIndex !== -1) {
+            const injection = `
+              <script>
+                console.log('[SERVER INJECTED] Starting injection...');
+                window.__SHOPIFY_API_KEY = '${apiKey}';
+                window.__SHOPIFY_SHOP = '${shop}';
+                window.__SHOPIFY_HOST = '${host || ''}';
+                console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+                console.log('[SERVER INJECTED] API Key value:', window.__SHOPIFY_API_KEY);
+                console.log('[SERVER INJECTED] Shop:', window.__SHOPIFY_SHOP);
+                console.log('[SERVER INJECTED] Host:', window.__SHOPIFY_HOST);
+                console.log('[SERVER INJECTED] Injection complete!');
+              </script>
+              <meta name="shopify-api-key" content="${apiKey}">
+              <script>
+                // Test if injection worked
+                setTimeout(() => {
+                  console.log('[SERVER INJECTED] Delayed check - API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
+                }, 100);
+              </script>
+            `;
+            html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
+            console.log('[SERVER] HTML after injection length:', html.length);
+            console.log('[SERVER] Injection added successfully');
+          } else {
+            console.error('[SERVER] Could not find </head> tag in HTML!');
+          }
       
       return res.send(html);
     }
