@@ -10,6 +10,18 @@ const shopSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  jwtToken: {
+    type: String,
+    required: false
+  },
+  scopes: {
+    type: String,
+    required: false
+  },
+  installedAt: {
+    type: Date,
+    required: false
+  },
   plan: {
     type: String,
     default: 'starter' // default plan
