@@ -568,9 +568,30 @@ async function handleSitemapProxy(req, res) {
 // Test endpoint to verify controller is working
 router.get('/test', (req, res) => {
   console.log('[APP_PROXY] Test endpoint called!');
-  res.json({ 
-    message: 'App Proxy controller is working!', 
+  res.json({
+    message: 'App Proxy controller is working!',
     url: req.url,
+    query: req.query,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Debug endpoint to see what parameters we receive
+router.get('/debug', (req, res) => {
+  console.log('[APP_PROXY] Debug endpoint called!');
+  console.log('[APP_PROXY] Full request object:', JSON.stringify({
+    url: req.url,
+    method: req.method,
+    query: req.query,
+    headers: req.headers,
+    body: req.body
+  }, null, 2));
+  
+  res.json({
+    message: 'Debug endpoint - check server logs for full request details',
+    url: req.url,
+    query: req.query,
     headers: req.headers,
     timestamp: new Date().toISOString()
   });
@@ -579,5 +600,25 @@ router.get('/test', (req, res) => {
 // Mount App Proxy routes with HMAC verification
 router.get('/sitemap.xml', appProxyAuth, handleSitemapProxy);
 router.get('/sitemap', appProxyAuth, handleSitemapProxy);
+
+// Debug routes without HMAC verification
+router.get('/debug-sitemap', (req, res) => {
+  console.log('[APP_PROXY] Debug sitemap endpoint called!');
+  console.log('[APP_PROXY] Full request object:', JSON.stringify({
+    url: req.url,
+    method: req.method,
+    query: req.query,
+    headers: req.headers,
+    body: req.body
+  }, null, 2));
+  
+  res.json({
+    message: 'Debug sitemap endpoint - no HMAC verification',
+    url: req.url,
+    query: req.query,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
+});
 
 export default router;
