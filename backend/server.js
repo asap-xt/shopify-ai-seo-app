@@ -529,7 +529,7 @@ app.get('/', async (req, res) => {
   
   // If no shop parameter, show install form
   if (!shop) {
-    return res.send(`
+    let html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -575,6 +575,8 @@ app.get('/', async (req, res) => {
           }
           button:hover { background: #006e52; }
         </style>
+        <script>window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';</script>
+        <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
       </head>
       <body>
         <div class="container">
@@ -594,7 +596,8 @@ app.get('/', async (req, res) => {
         </div>
       </body>
       </html>
-    `);
+    `;
+    return res.send(html);
   }
   
   // Set proper headers for embedded apps

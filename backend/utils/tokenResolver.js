@@ -11,8 +11,8 @@ function verifyAndDecodeJWT(token, secret) {
   try {
     const decoded = jwt.verify(token, secret, {
       algorithms: ['HS256'],
-      issuer: 'https://shopify.com',
       clockTolerance: 5
+      // Remove issuer validation as Shopify uses shop-specific issuers
     });
     return decoded;
   } catch (error) {
@@ -81,35 +81,32 @@ export async function resolveShopToken(shop) {
       // Try to exchange JWT for access token
       try {
         console.log('[TOKEN_RESOLVER] Attempting to exchange JWT for access token...');
-        const { accessToken } = await exchangeJWTForAccessToken(shopDoc.jwtToken, shop);
+        const result = await exchangeJWTForAccessToken(shopDoc.jwtToken, shop);
         
-        if (accessToken) {
+        if (result && result.accessToken) {
           // Update shop with real access token
           await Shop.findOneAndUpdate(
             { shop },
-            { accessToken },
+            { accessToken: result.accessToken },
             { new: true }
           );
           
           // Cache the token
           sessionTokenCache.set(cacheKey, {
-            token: accessToken,
+            token: result.accessToken,
             expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
           });
           
           console.log('[TOKEN_RESOLVER] Successfully exchanged JWT for access token');
-          return accessToken;
+          return result.accessToken;
         }
       } catch (error) {
         console.error('[TOKEN_RESOLVER] Failed to exchange JWT:', error);
       }
       
-      // Fallback: Generate session token from JWT (temporary solution)
-      console.log('[TOKEN_RESOLVER] Generating temporary session token from JWT');
-      const sessionToken = await generateSessionTokenFromJWT(shopDoc.jwtToken);
-      if (sessionToken) {
-        return sessionToken;
-      }
+      // Fallback: Use JWT token directly as temporary access token
+      console.log('[TOKEN_RESOLVER] Using JWT token directly as temporary access token');
+      return shopDoc.jwtToken;
       
       throw new Error('Unable to obtain valid access token from JWT');
     }

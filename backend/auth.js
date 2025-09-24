@@ -69,8 +69,8 @@ function verifyJWT(token, secret) {
   try {
     const decoded = jwt.verify(token, secret, {
       algorithms: ['HS256'],
-      issuer: 'https://shopify.com',
       clockTolerance: 5 // 5 seconds clock tolerance
+      // Remove issuer validation as Shopify uses shop-specific issuers
     });
     return decoded;
   } catch (error) {
