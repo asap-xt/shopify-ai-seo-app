@@ -217,6 +217,42 @@ app.get('/test-mongo', async (req, res) => {
   }
 });
 
+// Create test shop record
+app.get('/create-test-shop', async (req, res) => {
+  try {
+    console.log('[CREATE_TEST_SHOP] Creating test shop record...');
+    const Shop = (await import('./db/Shop.js')).default;
+    
+    const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
+    const accessToken = 'test-token-' + Date.now();
+    
+    const savedShop = await Shop.findOneAndUpdate(
+      { shop }, 
+      { 
+        shop, 
+        accessToken, 
+        scopes: 'read_products,write_products', 
+        installedAt: new Date() 
+      }, 
+      { upsert: true, new: true }
+    );
+    
+    console.log('[CREATE_TEST_SHOP] Created shop:', savedShop);
+    
+    res.json({ 
+      success: true, 
+      message: 'Test shop record created', 
+      shop: savedShop
+    });
+  } catch (error) {
+    console.error('[CREATE_TEST_SHOP] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Simple test endpoint without any imports
 app.get('/simple-test', (req, res) => {
   console.log('[SIMPLE_TEST] Simple test endpoint called!');
