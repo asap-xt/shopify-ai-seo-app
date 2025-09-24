@@ -104,14 +104,34 @@ export async function resolveShopToken(shop) {
         console.error('[TOKEN_RESOLVER] Failed to exchange JWT:', error);
       }
       
-      // Fallback: Generate a proper session token from JWT
-      console.log('[TOKEN_RESOLVER] Generating session token from JWT');
-      const sessionToken = await generateSessionTokenFromJWT(shopDoc.jwtToken);
-      if (sessionToken) {
-        return sessionToken;
+      // For JWT flow, we need to validate the session token with Shopify SDK
+      console.log('[TOKEN_RESOLVER] Validating JWT session token with Shopify SDK');
+      try {
+        // Import Shopify SDK
+        const { shopify } = await import('../auth.js');
+        
+        // Validate the JWT session token to get a proper session
+        const session = await shopify.auth.validateSessionToken(shopDoc.jwtToken);
+        
+        if (session && session.accessToken) {
+          console.log('[TOKEN_RESOLVER] Successfully validated JWT session token');
+          
+          // Cache the access token
+          const cacheKey = `${shop}:${shopDoc.jwtToken.substring(0, 20)}`;
+          sessionTokenCache.set(cacheKey, {
+            token: session.accessToken,
+            expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
+          });
+          
+          return session.accessToken;
+        } else {
+          console.error('[TOKEN_RESOLVER] JWT session validation returned no access token');
+        }
+      } catch (error) {
+        console.error('[TOKEN_RESOLVER] JWT session validation failed:', error);
       }
       
-      // Last resort: return JWT token (might not work with Shopify API)
+      // Last resort: try to use JWT token directly (might not work)
       console.log('[TOKEN_RESOLVER] Using JWT token directly as last resort');
       return shopDoc.jwtToken;
       
@@ -180,34 +200,6 @@ async function exchangeJWTForAccessToken(jwtToken, shop) {
   return null;
 }
 
-// Generate a temporary session token from JWT (workaround)
-async function generateSessionTokenFromJWT(jwtToken) {
-  // This is a temporary workaround until Shopify fully implements JWT token exchange
-  // In production, you should implement proper token exchange
-  
-  const decoded = verifyAndDecodeJWT(jwtToken, process.env.SHOPIFY_API_SECRET);
-  if (decoded && decoded.dest) {
-    const shop = decoded.dest.replace('https://', '').replace('/admin', '');
-    
-    // For JWT flow, we need to create a temporary access token
-    // This is a workaround until proper token exchange is implemented
-    console.log('[TOKEN_RESOLVER] Generating temporary access token for shop:', shop);
-    
-    // Create a temporary access token that looks like a real one
-    // This is a hack until Shopify implements proper JWT token exchange
-    const tempAccessToken = `shpat_${Buffer.from(JSON.stringify({
-      shop: shop,
-      jwt: jwtToken.substring(0, 20),
-      timestamp: Date.now(),
-      type: 'jwt-temp'
-    })).toString('base64').replace(/[+/=]/g, '')}`;
-    
-    console.log('[TOKEN_RESOLVER] Generated temporary access token');
-    return tempAccessToken;
-  }
-  
-  return null;
-}
 
 // Export additional utilities
 export { verifyAndDecodeJWT, extractShopFromJWT };
