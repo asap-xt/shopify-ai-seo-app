@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AppProvider } from '@shopify/app-bridge-react';
 import App from './App.jsx';
 
 // Get URL parameters
@@ -14,7 +13,7 @@ const embedded = params.get('embedded') === '1';
 console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
 console.log('[MAIN] Full URL:', window.location.href);
 
-function ShopifyAppBridgeWrapper() {
+function ShopifyAppWrapper() {
   const [isReady, setIsReady] = useState(false);
   
   // Get API key from various sources
@@ -74,27 +73,19 @@ function ShopifyAppBridgeWrapper() {
     );
   }
   
-  const config = {
-    apiKey,
-    host,
-    forceRedirect: true
-  };
-  
-  console.log('[MAIN] AppBridge config:', { 
+  console.log('[MAIN] App config:', { 
     apiKey: apiKey ? 'SET' : 'MISSING', 
-    host: host ? 'SET' : 'MISSING' 
+    host: host ? 'SET' : 'MISSING',
+    shop: shop ? 'SET' : 'MISSING'
   });
   
   if (!isReady) {
     return <div>Loading...</div>;
   }
   
-  return (
-    <AppProvider config={config}>
-      <App />
-    </AppProvider>
-  );
+  // In App Bridge v4, we don't need Provider - just render the app directly
+  return <App />;
 }
 
 // Render the app
-createRoot(document.getElementById('root')).render(<ShopifyAppBridgeWrapper />);
+createRoot(document.getElementById('root')).render(<ShopifyAppWrapper />);
