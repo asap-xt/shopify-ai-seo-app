@@ -253,6 +253,32 @@ app.get('/create-test-shop', async (req, res) => {
   }
 });
 
+// Delete test shop record
+app.get('/delete-test-shop', async (req, res) => {
+  try {
+    console.log('[DELETE_TEST_SHOP] Deleting test shop record...');
+    const Shop = (await import('./db/Shop.js')).default;
+    
+    const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
+    
+    const deletedShop = await Shop.findOneAndDelete({ shop });
+    
+    console.log('[DELETE_TEST_SHOP] Deleted shop:', deletedShop);
+    
+    res.json({ 
+      success: true, 
+      message: 'Test shop record deleted', 
+      shop: deletedShop
+    });
+  } catch (error) {
+    console.error('[DELETE_TEST_SHOP] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Simple test endpoint without any imports
 app.get('/simple-test', (req, res) => {
   console.log('[SIMPLE_TEST] Simple test endpoint called!');
