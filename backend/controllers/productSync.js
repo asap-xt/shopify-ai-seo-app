@@ -596,7 +596,6 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
 
 // Export functions for use in other controllers
 export { 
-  syncProductsForShop, 
   generateFeed,
   getPublishedLocales,
   getProductSeoLocales,
