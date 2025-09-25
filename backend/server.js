@@ -82,32 +82,52 @@ app.get('/debug/sessions', async (req, res) => {
   }
 });
 
-// Debug route to check shop tokens
-app.get('/debug/shop-token', async (req, res) => {
-  const shop = req.query.shop;
-  if (!shop) return res.json({ error: 'Missing shop param' });
-  
-  try {
-    const Shop = await import('./db/Shop.js');
-    const shopDoc = await Shop.default.findOne({ shop }).lean();
+  // Debug route to check shop tokens
+  app.get('/debug/shop-token', async (req, res) => {
+    const shop = req.query.shop;
+    if (!shop) return res.json({ error: 'Missing shop param' });
     
-    res.json({
-      found: !!shopDoc,
-      shop: shopDoc?.shop,
-      hasToken: !!shopDoc?.accessToken,
-      tokenType: shopDoc?.accessToken?.substring(0, 10),
-      tokenLength: shopDoc?.accessToken?.length,
-      useJWT: shopDoc?.useJWT,
-      hasJWTToken: !!shopDoc?.jwtToken,
-      jwtTokenPrefix: shopDoc?.jwtToken?.substring(0, 20),
-      plan: shopDoc?.plan,
-      createdAt: shopDoc?.createdAt,
-      installedAt: shopDoc?.installedAt
-    });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
+    try {
+      const Shop = await import('./db/Shop.js');
+      const shopDoc = await Shop.default.findOne({ shop }).lean();
+      
+      res.json({
+        found: !!shopDoc,
+        shop: shopDoc?.shop,
+        hasToken: !!shopDoc?.accessToken,
+        tokenType: shopDoc?.accessToken?.substring(0, 10),
+        tokenLength: shopDoc?.accessToken?.length,
+        useJWT: shopDoc?.useJWT,
+        hasJWTToken: !!shopDoc?.jwtToken,
+        jwtTokenPrefix: shopDoc?.jwtToken?.substring(0, 20),
+        plan: shopDoc?.plan,
+        createdAt: shopDoc?.createdAt,
+        installedAt: shopDoc?.installedAt
+      });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
+
+  // Debug route to delete shop record (force reinstall)
+  app.delete('/debug/shop-token', async (req, res) => {
+    const shop = req.query.shop;
+    if (!shop) return res.json({ error: 'Missing shop param' });
+    
+    try {
+      const Shop = await import('./db/Shop.js');
+      const result = await Shop.default.deleteOne({ shop });
+      
+      res.json({
+        success: true,
+        shop: shop,
+        deleted: result.deletedCount > 0,
+        message: result.deletedCount > 0 ? 'Shop record deleted - app needs to be reinstalled' : 'Shop record not found'
+      });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
 
 // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
 app.use('/api', async (req, res, next) => {
