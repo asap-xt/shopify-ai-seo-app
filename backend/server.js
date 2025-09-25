@@ -698,6 +698,20 @@ app.get('/', async (req, res) => {
         // Check if we have a valid access token for API calls
         const hasValidAccessToken = existingShop && existingShop.accessToken && existingShop.accessToken !== 'jwt-pending';
         
+        // If we have jwt-pending token, force OAuth flow
+        if (existingShop?.accessToken === 'jwt-pending') {
+          console.log('[APP URL] Found jwt-pending token, forcing OAuth flow...');
+          const oauthUrl = `https://${shop}/admin/oauth/authorize?` + new URLSearchParams({
+            client_id: process.env.SHOPIFY_API_KEY,
+            scope: process.env.SHOPIFY_API_SCOPES || 'read_products,write_products',
+            redirect_uri: `${process.env.APP_URL}/api/auth/callback`,
+            state: 'oauth-' + Date.now()
+          }).toString();
+          
+          console.log('[APP URL] Redirecting to OAuth:', oauthUrl);
+          return res.redirect(oauthUrl);
+        }
+        
         // Always serve the app if we have JWT token, but show OAuth prompt if no access token
         if (id_token || (existingShop && existingShop.accessToken)) {
           console.log('[APP URL] Serving embedded app');
