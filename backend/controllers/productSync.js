@@ -4,6 +4,74 @@
 import mongoose from 'mongoose';
 import Product from '../db/Product.js';
 
+const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
+
+// Helper function for consistent GraphQL calls
+async function adminGraphQL(shop, token, query, variables = {}) {
+  const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': token,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const text = await res.text();
+  let json; 
+  try { 
+    json = JSON.parse(text); 
+  } catch { 
+    /* noop */ 
+  }
+  if (!res.ok) throw new Error(`Admin GraphQL failed: ${res.status} ${text}`);
+  if (json?.errors) throw new Error(`Admin GraphQL error: ${JSON.stringify(json.errors)}`);
+  return json.data;
+}
+
+// Get published locales from shop
+async function getPublishedLocales(shop, token) {
+  const q = `
+    query GetLocales {
+      shop {
+        publishedLocales { locale name primary }
+      }
+    }
+  `;
+  const data = await adminGraphQL(shop, token, q);
+  const list = data?.shop?.publishedLocales || [];
+  const codes = list.map(l => l.locale);
+  const primary = list.find(l => l.primary)?.locale || codes[0] || 'en';
+  return { list, codes, primary };
+}
+
+// Extract optimized languages from metafield keys
+function seoKeysToLocales(keys = []) {
+  // Expected keys: seo__en, seo__es, seo__bg ...
+  return [...new Set(
+    keys
+      .filter(k => typeof k === 'string' && k.startsWith('seo__'))
+      .map(k => k.slice('seo__'.length))
+  )];
+}
+
+// Get product SEO locales from metafields
+async function getProductSeoLocales(shop, token, productGid) {
+  const q = `
+    query ProductMeta($id: ID!) {
+      product(id: $id) {
+        id
+        metafields(first: 100, namespace: "seo_ai") {
+          edges { node { key } }
+        }
+      }
+    }
+  `;
+  const data = await adminGraphQL(shop, token, q, { id: productGid });
+  const edges = data?.product?.metafields?.edges || [];
+  const keys = edges.map(e => e?.node?.key).filter(Boolean);
+  return seoKeysToLocales(keys);
+}
+
 // Mongo model for cached feed
 const FeedCacheSchema = new mongoose.Schema(
   {
@@ -99,72 +167,10 @@ function pickPrices(variants, product, shopCurrency) {
 }
 
 // Get published locales from Shopify (requires read_locales scope)
-async function getPublishedLocales(shop, accessToken) {
-  const query = `
-    query ShopLocales {
-      shopLocales {
-        locale
-        name
-        primary
-        published
-      }
-    }
-  `;
-  
-  try {
-    console.log('[PRODUCT_SYNC] Fetching published locales for:', shop);
-    const res = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query }),
-    });
-    
-    if (!res.ok) {
-      throw new Error(`shopLocales GraphQL failed: ${res.status} ${await res.text()}`);
-    }
-    
-    const json = await res.json();
-    console.log('[PRODUCT_SYNC] Raw shopLocales response:', JSON.stringify(json, null, 2));
-    
-    if (json.errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
-    }
-    
-    const all = json?.data?.shopLocales || [];
-    const published = all.filter(l => l.published);
-    
-    console.log('[PRODUCT_SYNC] All locales:', all.map(l => `${l.locale} (pub=${l.published}, primary=${l.primary})`));
-    console.log('[PRODUCT_SYNC] Published locales:', published);
-    
-    return published;
-  } catch (e) {
-    console.error('[PRODUCT_SYNC] Failed to get published locales:', e.message);
-    console.error('[PRODUCT_SYNC] Error details:', e);
-    throw e; // Re-throw to handle upstream
-  }
-}
-
-// Get shop languages with proper error handling
-async function getShopLanguages(shop, accessToken) {
-  try {
-    const locales = await getPublishedLocales(shop, accessToken);
-    
-    // Convert to language codes (bg-BG -> bg, but keep full locale for metafields)
-    const languages = locales
-      .map(l => l.locale.toLowerCase().replace('_', '-')) // normalize pt_BR -> pt-br
-      .map(l => l.split('-')[0]) // pt-br -> pt
-      .filter((v, i, a) => a.indexOf(v) === i); // unique
-    
-    const result = languages.length ? languages : ['en'];
-    console.log('[PRODUCT_SYNC] Final languages result:', result);
-    return result;
-  } catch (e) {
-    console.error('[PRODUCT_SYNC] Falling back to default language due to error:', e.message);
-    return ['en'];
-  }
+// Updated getShopLanguages to use new getPublishedLocales
+async function getShopLanguages(shop, token) {
+  const { list, codes, primary } = await getPublishedLocales(shop, token);
+  return { details: list, codes, primary };
 }
 
 // NEW: Get shop currency
@@ -257,53 +263,50 @@ function determineSeoStatus(metafieldsMap, languages = []) {
   };
 }
 
-function toProductDocument(node, shop, shopLanguages, shopCurrency) {
-  const {
-    id,
-    handle,
-    title,
-    descriptionHtml,
-    vendor,
-    productType,
-    tags,
-    onlineStoreUrl,
-    updatedAt,
-    seo,
-    status,
-    createdAt,
-    publishedAt,
-    totalInventory,
-    featuredImage,
-    metafieldsData = {}
-  } = node || {};
-  
-  const productId = id.split('/').pop(); // Keep as string
+function gidToNumericId(gid) {
+  return gid?.split('/')?.pop();
+}
+
+function toProductDocument(node, shop, shopLangCodes, shopCurrency, optimizedLangCodes) {
+  const numericId = gidToNumericId(node.id);
   const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
-  const seoStatus = determineSeoStatus(metafieldsData, shopLanguages);
   
   return {
-    shop,
-    shopifyProductId: id, // Full GID
-    productId, // Just the ID number as string
-    gid: id,
-    title,
-    description: sanitizeHtmlBasic(descriptionHtml),
-    handle,
-    vendor,
-    productType,
-    tags: csv(tags),
+    // Required fields for MongoDB
+    shop,                               // <— required
+    shopifyProductId: numericId,        // <— required
+    productId: node.id,                 // (full GID for compatibility)
+    gid: node.id,
+    title: node.title,
+    handle: node.handle,
+    status: node.status || 'ACTIVE',
+    priceMin: node.priceRangeV2?.minVariantPrice?.amount ?? null,
+    priceCurrency: node.priceRangeV2?.minVariantPrice?.currencyCode ?? shopCurrency ?? 'USD',
+    // Always arrays of strings (codes), never objects or JSON strings
+    languages: Array.isArray(shopLangCodes) ? shopLangCodes : [],
+    availableLanguages: Array.isArray(shopLangCodes) ? shopLangCodes : [],
+    optimizedLanguages: Array.isArray(optimizedLangCodes) ? optimizedLangCodes : [],
+    
+    // Additional fields
+    description: sanitizeHtmlBasic(node.descriptionHtml),
+    vendor: node.vendor,
+    productType: node.productType,
+    tags: csv(node.tags),
     price: price ? String(price) : null,
-    currency, // Now dynamic
+    currency,
     available,
-    status: status || 'ACTIVE',
-    totalInventory: totalInventory || 0,
-    createdAt: createdAt ? new Date(createdAt) : null,
-    publishedAt: publishedAt ? new Date(publishedAt) : null,
-    featuredImage: featuredImage ? {
-      url: featuredImage.url,
-      altText: featuredImage.altText || ''
+    totalInventory: node.totalInventory || 0,
+    createdAt: node.createdAt ? new Date(node.createdAt) : null,
+    publishedAt: node.publishedAt ? new Date(node.publishedAt) : null,
+    featuredImage: node.featuredImage ? {
+      url: node.featuredImage.url,
+      altText: node.featuredImage.altText || ''
     } : null,
-    seoStatus,
+    seoStatus: {
+      optimized: false,
+      languages: [],
+      lastCheckedAt: new Date()
+    },
     syncedAt: new Date(),
     
     // Images as objects
@@ -312,7 +315,9 @@ function toProductDocument(node, shop, shopLanguages, shopCurrency) {
       url: e?.node?.url,
       alt: e?.node?.altText || ''
     })).filter(img => img.url),
-    aiOptimized: {} // Will be deprecated
+    
+    // Legacy fields
+    aiOptimized: {}
   };
 }
 
@@ -467,15 +472,22 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
       // Добавете метаполетата към node обекта
       node.metafieldsData = metafieldsMap;
       
-      // Определете SEO статуса динамично
-      const seoStatus = determineSeoStatus(metafieldsMap, languages);
+      // Получете оптимизираните езици за този продукт
+      const optimizedLangs = await getProductSeoLocales(shop, accessToken, node.id);
       
-      const item = toFeedItem(node, shop, shopCurrency);
-      item.languages = languages;
-      item.seoStatus = seoStatus;
-      item.availableLanguages = languages;
+      // Създайте документа с правилните типове данни
+      const productDoc = toProductDocument(node, shop, shopLanguages, shopCurrency, optimizedLangs);
       
-      items.push(item);
+      // Лог за езиците
+      if (optimizedLangs.length === 0) {
+        shopLanguages.forEach(lc => {
+          if (!optimizedLangs.includes(lc)) {
+            console.log(`[PRODUCT_SYNC] Language ${lc} available but not optimized for product ${node.title}`);
+          }
+        });
+      }
+      
+      items.push(productDoc);
     }
     
     if (!conn.pageInfo?.hasNextPage) break;
@@ -505,26 +517,36 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
   
   try {
     // Опитайте се да вземете данните
-    const [currency, languages] = await Promise.all([
+    const [currency, languageData] = await Promise.all([
       getShopCurrency(shop, accessToken),
-      getPublishedLocales(shop, accessToken)
+      getShopLanguages(shop, accessToken)
     ]);
     
     console.log(`Shop currency: ${currency}`);
-    console.log(`Shop languages: ${languages.join(', ')}`);
+    console.log(`Shop languages: ${languageData.codes.join(', ')}`);
     
-    const products = await fetchAllProducts({ shop, accessToken, shopLanguages: languages, shopCurrency: currency });
+    const products = await fetchAllProducts({ shop, accessToken, shopLanguages: languageData.codes, shopCurrency: currency });
     console.log(`Fetched ${products.length} products from Shopify`);
     
-    // Запазете в MongoDB
+    // Запазете в MongoDB с правилни upsert операции
     const Product = (await import('../db/Product.js')).default;
     await Product.deleteMany({ shop });
-    const savedProducts = await Product.insertMany(
-      products.map(p => ({
-        ...p,
-        syncedAt: new Date(),
-      }))
-    );
+    
+    const savedProducts = [];
+    for (const productDoc of products) {
+      const saved = await Product.findOneAndUpdate(
+        { shop: productDoc.shop, shopifyProductId: productDoc.shopifyProductId },
+        {
+          $set: productDoc,
+          $setOnInsert: {
+            shop: productDoc.shop,
+            shopifyProductId: productDoc.shopifyProductId,
+          },
+        },
+        { upsert: true, new: true, runValidators: true }
+      );
+      savedProducts.push(saved);
+    }
     
     console.log(`Sync complete: saved ${savedProducts.length} products to MongoDB`);
     return savedProducts;
