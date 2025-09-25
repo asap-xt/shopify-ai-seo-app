@@ -22,6 +22,7 @@ import {
 } from './utils/tokenResolver.js';
 import { attachIdToken } from './middleware/attachIdToken.js';
 import { attachShop } from './middleware/attachShop.js';
+import { normalizeShop } from './utils/normalizeShop.js';
 
 // Shopify SDK for Public App
 import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
@@ -62,8 +63,27 @@ app.use((_, res, next) => {
 app.use(cors({ origin: true, credentials: true }));
 app.use(compression()); // Enable gzip compression
 app.use(cookieParser());
+
+// Премахни application/json за GET/HEAD, за да не се парсва тяло
+app.use((req, res, next) => {
+  if ((req.method === 'GET' || req.method === 'HEAD') &&
+      req.headers['content-type']?.includes('application/json')) {
+    delete req.headers['content-type'];
+  }
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Централизиран JSON parse error handler
+app.use((err, req, res, next) => {
+  if (err?.type === 'entity.parse.failed') {
+    return res.status(400).json({ ok: false, error: 'Invalid JSON body' });
+  }
+  next(err);
+});
+
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // ---- Debug helper: виж какви сесии имаш за shop
@@ -1109,13 +1129,30 @@ async function start() {
   // DEBUG ENDPOINTS (MUST be first, before all other middleware)
   console.log('[SERVER] Registering debug endpoints...');
   app.get('/debug/env', (req, res) => {
+    const key = process.env.SHOPIFY_API_KEY || '';
     res.json({
-      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'MISSING',
-      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'MISSING',
-      NODE_ENV: process.env.NODE_ENV || 'undefined',
-      API_KEY_LENGTH: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.length : 0,
-      API_KEY_PREFIX: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.substring(0, 10) + '...' : 'N/A'
+      ok: true,
+      SHOPIFY_API_KEY_present: Boolean(key),
+      SHOPIFY_API_KEY_len: key.length,
+      SHOPIFY_API_KEY_preview: key ? `${key.slice(0,4)}…${key.slice(-4)}` : null,
+      NODE_ENV: process.env.NODE_ENV || null,
+      embedded: true
     });
+  });
+
+  app.get('/debug/whoami', (req, res) => {
+    const fromQuery = req.query.shop;
+    const fromHost = (()=>{
+      try {
+        const host = req.query.host;
+        if (!host) return null;
+        const decoded = Buffer.from(host, 'base64').toString('utf8');
+        const m = decoded.match(/store\/([^/?]+)/);
+        return m ? `${m[1]}.myshopify.com` : null;
+      } catch { return null; }
+    })();
+    const shop = normalizeShop(fromQuery || fromHost || req.session?.shop);
+    res.json({ ok:true, shop, raw: { query: req.query.shop, host: req.query.host }});
   });
 
   // App Bridge JavaScript injection endpoint

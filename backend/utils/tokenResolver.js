@@ -1,6 +1,6 @@
 // backend/utils/tokenResolver.js
 import fetch from 'node-fetch';
-import { normalizeShop } from './shop.js';
+import { normalizeShop } from './normalizeShop.js';
 import Shop from '../db/Shop.js'; // Директен import в началото на файла
 
 /** Heuristic: reject session tokens / placeholders stored by mistake */

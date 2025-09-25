@@ -1,6 +1,7 @@
 import express from 'express';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken, resolveAdminToken } from '../utils/tokenResolver.js';
+import { normalizeShop } from '../utils/normalizeShop.js';
 
 // ===== Config
 const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';
@@ -8,15 +9,9 @@ const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';
 // ---- helpers
 const normalizeLocale = (l) => (l ? String(l).trim().toLowerCase() : null);
 
-// Helper function to normalize shop domain (fixes duplicate domain issue)
-function normalizeShopDomain(input) {
-  if (!input) return '';
-  return Array.isArray(input) ? input[0] : String(input).trim();
-}
-
 // Unified GraphQL client with token normalization
 async function adminGraphQL(shop, token, query, variables = {}) {
-  const shopDomain = normalizeShopDomain(shop);
+  const shopDomain = normalizeShop(shop);
   const url = `https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`;
 
   const res = await fetch(url, {
@@ -55,12 +50,11 @@ async function adminGraphQL(shop, token, query, variables = {}) {
 
 // Query: all published shop locales
 const Q_SHOP_LOCALES = `
-  query ShopLocales {
-    shopLocales {
+  query PublishedLocales {
+    publishedLocales {
       locale
       name
       primary
-      published
     }
   }
 `;
@@ -68,8 +62,11 @@ const Q_SHOP_LOCALES = `
 async function getShopLocales(shop, token) {
   const json = await adminGraphQL(shop, token, Q_SHOP_LOCALES);
   if (json.errors) throw new Error(JSON.stringify(json.errors));
-  const locales = json?.data?.shopLocales ?? [];
-  return locales.filter(l => l.published); // [{ locale, name, primary, published }]
+  const locales = json?.data?.publishedLocales ?? [];
+  return {
+    locales: locales.map(l => l.locale), // ['bg', 'en', 'es']
+    detailed: locales // [{ locale, name, primary }]
+  };
 }
 
 // Query: SEO metafields for product (to see which languages are optimized)
@@ -303,20 +300,22 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
   console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
-    const locales = await getShopLocales(shop, token);
-    const primary = locales.find(l => l.primary)?.locale || null;
+    const { locales, detailed } = await getShopLocales(shop, token);
+    const primary = detailed.find(l => l.primary)?.locale || null;
     
-    console.log(`[LANGUAGE-CONTROLLER] Shop languages response for ${shop}:`, { locales, primary });
+    console.log(`[LANGUAGE-CONTROLLER] Shop languages response for ${shop}:`, { locales, detailed, primary });
     return res.json({
       shop,
-      locales,                                    // [{ locale,name,primary,published }]
+      locales,                                    // ['bg', 'en', 'es']
+      detailed,                                   // [{ locale, name, primary }]
       primary
     });
   } catch (e) {
     console.error('[LANGUAGE-CONTROLLER] Error:', e.message);
     return res.status(200).json({
       shop,
-      locales: [{ locale: 'en', name: 'English', primary: true, published: true }],
+      locales: ['en'],
+      detailed: [{ locale: 'en', name: 'English', primary: true }],
       primary: 'en',
       _error: e.message || String(e),
     });
@@ -334,13 +333,12 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
 
   try {
     const productGid = toGID(productId);
-    const [shopLocales, optimizedLocales] = await Promise.all([
+    const [{ locales: shopLocales, detailed }, optimizedLocales] = await Promise.all([
       getShopLocales(shop, token),
       getOptimizedLocalesForProduct(shop, token, productGid),
     ]);
 
-    const byCode = new Map(shopLocales.map(l => [l.locale, l]));
-    const languages = shopLocales.map(l => ({
+    const languages = detailed.map(l => ({
       ...l,
       optimized: optimizedLocales.includes(l.locale),
     }));
@@ -348,17 +346,17 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
     return res.json({
       shop,
       productId: productGid,
-      availableLanguages: shopLocales,  // for UI: all published
-      languages,                        // for UI: with optimized flag
-      primary: shopLocales.find(l => l.primary)?.locale || null,
+      availableLanguages: shopLocales,  // ['bg', 'en', 'es'] - string array
+      languages,                        // [{ locale, name, primary, optimized }] - for UI
+      primary: detailed.find(l => l.primary)?.locale || null,
     });
   } catch (e) {
     console.error('[LANGUAGE-CONTROLLER] Error:', e.message);
     return res.status(200).json({
       shop,
       productId: toGID(productId),
-      availableLanguages: [{ locale: 'en', name: 'English', primary: true, published: true }],
-      languages: [{ locale: 'en', name: 'English', primary: true, published: true, optimized: false }],
+      availableLanguages: ['en'],
+      languages: [{ locale: 'en', name: 'English', primary: true, optimized: false }],
       primary: 'en',
       _error: e.message || String(e),
     });

@@ -1,45 +1,59 @@
 // frontend/src/utils/api.js
-import createApp from '@shopify/app-bridge';
+// API helper във фронта (фиксира x is not a function + GET без JSON body)
 import { getSessionToken } from '@shopify/app-bridge-utils';
 
 // Get API key from multiple sources
-const apiKey = window.__SHOPIFY_API_KEY || import.meta.env.VITE_SHOPIFY_API_KEY;
+const apiKey = window.__SHOPIFY_API_KEY || import.meta.env?.VITE_SHOPIFY_API_KEY;
+const app = window.__SHOPIFY_APP_BRIDGE__;
 
-const app = createApp({ 
-  apiKey: apiKey, 
-  host: new URLSearchParams(location.search).get('host') 
-});
-const shopDomain = new URLSearchParams(location.search).get('shop');
+export function useApi() {
+  const search = new URLSearchParams(window.location.search);
+  const shop = search.get('shop') || undefined;
+  const idToken = search.get('id_token') || undefined;
 
+  return async function api(path, { method = 'GET', params, body, headers } = {}) {
+    const qs = new URLSearchParams({ ...(params || {}), ...(shop ? { shop } : {}) }).toString();
+    const url = `${path}${qs ? (path.includes('?') ? '&' : '?') + qs : ''}`;
+
+    // Get session token for authorization
+    let authHeaders = {};
+    if (app) {
+      try {
+        const sessionToken = await getSessionToken(app);
+        authHeaders = { Authorization: `Bearer ${sessionToken}` };
+      } catch (err) {
+        console.warn('[API] Failed to get session token:', err);
+      }
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers: {
+        ...(method !== 'GET' && { 'Content-Type': 'application/json' }),
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : authHeaders),
+        ...headers,
+      },
+      body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) throw new Error(await res.text().catch(()=>'Request failed'));
+    const ct = res.headers.get('content-type') || '';
+    return ct.includes('application/json') ? res.json() : res.text();
+  };
+}
+
+// Legacy functions for backward compatibility
 export async function apiFetch(path, options = {}) {
-  const idToken = await getSessionToken(app);
-  const headers = new Headers(options.headers || {});
-  headers.set('Authorization', `Bearer ${idToken}`);
-  
-  // Check if shop parameter already exists in path
-  const url = new URL(path, window.location.origin);
-  if (!url.searchParams.has('shop') && shopDomain) {
-    url.searchParams.set('shop', shopDomain);
-  }
-  
-  return fetch(url.pathname + url.search, { ...options, headers });
+  const api = useApi();
+  return api(path, options);
 }
 
-// Helper for JSON responses
 export async function apiJson(path, options = {}) {
-  const response = await apiFetch(path, options);
-  return response.json();
+  const api = useApi();
+  return api(path, options);
 }
 
-// Helper for POST requests
 export async function apiPost(path, data, options = {}) {
-  return apiFetch(path, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    body: JSON.stringify(data),
-    ...options
-  });
+  const api = useApi();
+  return api(path, { method: 'POST', body: data, ...options });
 }

@@ -183,12 +183,11 @@ function pickPrices(variants, product, shopCurrency) {
 async function getShopLanguages(req, shop) {
   const token = await resolveAdminToken(req, shop);
   const query = `
-    query ShopLocales {
-      shopLocales {
+    query PublishedLocales {
+      publishedLocales {
         locale
         name
         primary
-        published
       }
     }`;
   const r = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
@@ -198,7 +197,7 @@ async function getShopLanguages(req, shop) {
   });
   const j = await r.json();
   if (j.errors) throw new Error(JSON.stringify(j.errors));
-  const list = j.data.shopLocales.filter(l=>l.published);
+  const list = j.data.publishedLocales || [];
   const codes = list.map(l => (l.locale || '').split('-')[0]); // „къси" кодове за бързо филтриране
   return { locales: list, codes };
 }
@@ -303,10 +302,6 @@ function toProductDocument(node, shop, shopLocales, shopCurrency, optimizedLangC
   
   // Determine SEO status for each language
   const optimizedSet = new Set(optimizedLangCodes);
-  const languages = shopLocales.map(l => ({
-    ...l,
-    optimized: optimizedSet.has(l.locale)
-  }));
   
   return {
     // Required fields for MongoDB
@@ -319,9 +314,9 @@ function toProductDocument(node, shop, shopLocales, shopCurrency, optimizedLangC
     status: node.status || 'ACTIVE',
     priceMin: node.priceRangeV2?.minVariantPrice?.amount ?? null,
     priceCurrency: node.priceRangeV2?.minVariantPrice?.currencyCode ?? shopCurrency ?? 'USD',
-    // Language objects with full information
-    languages: languages.filter(l => l.optimized).map(l => l.locale), // Only optimized language codes
-    availableLanguages: shopLocales,   // All available languages as objects
+    // Language arrays - only strings for MongoDB compatibility
+    languages: shopLocales.filter(l => optimizedSet.has(l.locale)).map(l => l.locale), // ['bg', 'en'] - optimized only
+    availableLanguages: shopLocales.map(l => l.locale),   // ['bg', 'en', 'es'] - all available
     
     // Additional fields
     description: sanitizeHtmlBasic(node.descriptionHtml),
