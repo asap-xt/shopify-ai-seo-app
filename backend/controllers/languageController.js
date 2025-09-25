@@ -15,15 +15,15 @@ const toGID = (id) => {
   return s; // let Shopify validate
 };
 
-/** Resolve Admin token using centralized function */
-async function resolveAdminToken(shop) {
+/** Resolve Admin token using centralized function with id_token */
+async function resolveAdminToken(shop, req) {
   console.log('=== LANGUAGE CONTROLLER TOKEN RESOLVE ===');
   
   try {
-    const token = await resolveShopToken(shop);
+    const token = await resolveShopToken(shop, { idToken: req?.idToken, requested: 'offline' });
     console.log('1. Token resolved successfully from centralized resolver');
     console.log('2. Token type:', typeof token);
-    return { token, authUsed: 'database' };
+    return { token, authUsed: 'token_exchange' };
   } catch (err) {
     console.error('3. Token resolution failed:', err.message);
     return { token: null, authUsed: 'none' };
@@ -213,7 +213,7 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   console.log('[LANGUAGE-ENDPOINT] Starting with shop:', shop);
   
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain);
+  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
   console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
@@ -240,7 +240,7 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
 router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain);
+  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
 
   if (!productId) return res.status(400).json({ error: 'Missing :productId' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
@@ -268,7 +268,7 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
 /** Optional: quick sanity ping to expose the real GQL error quickly */
 router.get('/ping/:shop', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain);
+  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {

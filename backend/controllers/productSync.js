@@ -207,24 +207,30 @@ function determineSeoStatus(node, shopLanguages) {
     const metafieldKey = `metafield_seo_${lang}`;
     console.log('[PRODUCT_SYNC] Checking metafield key:', metafieldKey, 'exists:', !!node[metafieldKey]);
     
-    if (node[metafieldKey]?.value) {
-      try {
-        const seoData = JSON.parse(node[metafieldKey].value);
-        console.log('[PRODUCT_SYNC] Found SEO data for', lang, ':', Object.keys(seoData));
-        
-        if (seoData && Object.keys(seoData).length > 0) {
-          seoLanguages.push({
-            code: lang,
-            optimized: true,
-            lastOptimizedAt: new Date() // TODO: get actual date from metafield if available
-          });
-          hasAnyOptimization = true;
-        }
-      } catch (e) {
-        console.error('[PRODUCT_SYNC] Failed to parse SEO data for', lang, ':', e.message);
-      }
+    // Check if this language has any SEO optimization (seo__, bullets__, faq__)
+    const hasSeoMetafield = !!node[metafieldKey]?.value;
+    const hasBulletsMetafield = !!node[`metafield_bullets_${lang}`]?.value;
+    const hasFaqMetafield = !!node[`metafield_faq_${lang}`]?.value;
+    
+    const hasAnyOptimization = hasSeoMetafield || hasBulletsMetafield || hasFaqMetafield;
+    
+    if (hasAnyOptimization) {
+      console.log('[PRODUCT_SYNC] Found optimization for', lang, '- SEO:', hasSeoMetafield, 'Bullets:', hasBulletsMetafield, 'FAQ:', hasFaqMetafield);
+      
+      seoLanguages.push({
+        code: lang,
+        optimized: true,
+        lastOptimizedAt: new Date()
+      });
+      hasAnyOptimization = true;
     } else {
-      console.log('[PRODUCT_SYNC] No SEO metafield found for language:', lang);
+      // Add language as available but not optimized
+      seoLanguages.push({
+        code: lang,
+        optimized: false,
+        lastOptimizedAt: null
+      });
+      console.log('[PRODUCT_SYNC] Language', lang, 'available but not optimized');
     }
   }
   
@@ -344,7 +350,11 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
 
   // Build dynamic query with metafields for all shop languages
   const languageMetafields = shopLanguages
-    .map(lang => `metafield_seo_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") { value }`)
+    .flatMap(lang => [
+      `metafield_seo_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") { value }`,
+      `metafield_bullets_${lang}: metafield(namespace: "seo_ai", key: "bullets__${lang}") { value }`,
+      `metafield_faq_${lang}: metafield(namespace: "seo_ai", key: "faq__${lang}") { value }`
+    ])
     .join('\n');
 
   const query = `
