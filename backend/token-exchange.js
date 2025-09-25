@@ -40,25 +40,23 @@ const shopify = shopifyApi({
  * Body: { shop: string, sessionToken: string }
  */
 router.post('/', async (req, res) => {
-  console.log('=== TOKEN EXCHANGE DEBUG ===');
-  console.log('1. Request body:', req.body);
-  console.log('2. Session token type:', typeof req.body.sessionToken);
-  
   try {
-    const { shop, sessionToken } = req.body || {};
-    if (!shop) return res.status(400).json({ error: 'Missing "shop"' });
-    if (!sessionToken) return res.status(400).json({ error: 'Missing "sessionToken"' });
+    const { shop, sessionToken } = req.body;
+    console.log('[TOKEN_EXCHANGE] Starting for shop:', shop);
+    console.log('[TOKEN_EXCHANGE] Has session token:', !!sessionToken);
+    if (!shop || !sessionToken) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
 
-    console.log('3. Calling shopify.auth.tokenExchange...');
+    // Token exchange
     const tokenResult = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
       requestedTokenType: RequestedTokenType.OfflineAccessToken,
     });
     
-    console.log('4. Token exchange result:', tokenResult);
-    console.log('5. Result type:', typeof tokenResult);
-    console.log('6. Result keys:', Object.keys(tokenResult || {}));
+    console.log('[TOKEN_EXCHANGE] Response type:', typeof tokenResult);
+    console.log('[TOKEN_EXCHANGE] Response keys:', Object.keys(tokenResult || {}));
     
     // Извличане на токена от резултата
     let accessToken;
@@ -74,8 +72,8 @@ router.post('/', async (req, res) => {
       accessToken = tokenResult;
     }
     
-    console.log('7. Extracted token:', accessToken);
-    console.log('8. Token type:', typeof accessToken);
+    console.log('[TOKEN_EXCHANGE] Extracted token type:', typeof accessToken);
+    console.log('[TOKEN_EXCHANGE] Token starts with shpat_:', accessToken?.startsWith('shpat_'));
     
     if (!accessToken || typeof accessToken !== 'string') {
       throw new Error('Invalid accessToken extracted from token exchange result');
@@ -92,11 +90,14 @@ router.post('/', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log('9. Token saved successfully');
-    return res.status(200).json({ status: 'ok' });
+    console.log(`✅ Token exchange successful for shop: ${shop}`);
+    return res.status(200).json({ 
+      status: 'ok', 
+      shop,
+      tokenSaved: true 
+    });
   } catch (error) {
-    console.error('=== TOKEN EXCHANGE ERROR ===');
-    console.error('Error details:', error);
+    console.error('❌ Token exchange error:', error);
     return res.status(500).json({ error: 'Token exchange failed' });
   }
 });
