@@ -31,7 +31,6 @@ export default function ShopifyAppBridgeProvider({ children }) {
   console.log('[APP-BRIDGE-PROVIDER] Debug info:', {
     window__SHOPIFY_API_KEY: window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING',
     window__SHOPIFY_API_KEY_value: window.__SHOPIFY_API_KEY,
-    import_meta_env_VITE_SHOPIFY_API_KEY: import.meta.env?.VITE_SHOPIFY_API_KEY ? 'SET' : 'MISSING',
   });
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export default function ShopifyAppBridgeProvider({ children }) {
     return () => { s.remove(); };
   }, []);
 
-  const apiKey = window.__SHOPIFY_API_KEY || import.meta.env?.VITE_SHOPIFY_API_KEY;
+  const apiKey = window.__SHOPIFY_API_KEY;
 
   useEffect(() => {
     if (!ready) return; // Изчакваме готовността
@@ -87,8 +86,7 @@ export default function ShopifyAppBridgeProvider({ children }) {
     });
   }, [ready, apiKey, hostParam]);
 
-  if (!apiKey || !hostParam || !ready) return null; // или loader
-
+  // Always render children, even if App Bridge is not ready yet
   return (
     <AppBridgeContext.Provider value={app}>
       {children}
