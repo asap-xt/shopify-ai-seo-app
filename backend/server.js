@@ -174,10 +174,15 @@ app.use('/api', async (req, res, next) => {
     if (!shop) return res.status(400).json({ error: 'Missing shop' });
     if (!req.query) req.query = {};
     if (!req.query.shop) req.query.shop = shop;
+    
+    // Extract session token (id_token) from Authorization or query for Token Exchange
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const idToken = req.query.id_token || bearerToken || null;
 
     // 2) Use centralized token resolver
     console.log('[API RESOLVER] Using centralized token resolver for shop:', shop);
-    const accessToken = await resolveShopToken(shop);
+    const accessToken = await resolveShopToken(shop, { idToken, requested: 'offline' });
     console.log('[API RESOLVER] Token resolved successfully');
     
     // Create session object with real token
@@ -695,24 +700,12 @@ app.get('/', async (req, res) => {
       }
     }
     
-        // Check if we have a valid OAuth access token for API calls
-        const hasValidAccessToken = existingShop && existingShop.accessToken && existingShop.accessToken.startsWith('shpat_');
-        
         console.log('[APP URL] Processing embedded app with JWT token');
-        console.log('[APP URL] Has valid OAuth access token:', hasValidAccessToken);
         
-        // For embedded apps, we MUST have a valid OAuth access token for GraphQL API
-        // JWT tokens cannot be used for Admin GraphQL API calls
-        if (!hasValidAccessToken) {
-          console.log('[APP URL] No valid OAuth access token found, redirecting to OAuth...');
-          const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${process.env.SHOPIFY_API_KEY}&scope=${encodeURIComponent(process.env.SHOPIFY_API_SCOPES)}&redirect_uri=${encodeURIComponent(process.env.APP_URL + '/auth/callback')}&state=oauth-${Date.now()}`;
-          console.log('[APP URL] Redirecting to OAuth:', authUrl);
-          return res.redirect(authUrl);
-        }
-        
-        // Always serve the app for embedded requests with valid access token
+        // For embedded apps, we use Token Exchange to get Admin API access tokens
+        // The tokenResolver will handle JWT -> Admin token exchange automatically
         if (id_token || embedded === '1') {
-          console.log('[APP URL] Serving embedded app with valid OAuth token');
+          console.log('[APP URL] Serving embedded app - Token Exchange will handle authentication');
           
           const indexPath = path.join(distPath, 'index.html');
           let html = fs.readFileSync(indexPath, 'utf8');
