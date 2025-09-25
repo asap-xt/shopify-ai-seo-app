@@ -101,7 +101,9 @@ async function checkProductSEOLanguages(shop, productId) {
       .filter(lang => lang.length > 0);
     
     // Always include 'en' as default if no languages found
-    return languages.length > 0 ? [...new Set(['en', ...languages])] : ['en'];
+    const result = languages.length > 0 ? [...new Set(['en', ...languages])] : ['en'];
+    console.log('[SITEMAP] Product', productId, 'SEO languages:', result);
+    return result;
   } catch (error) {
     console.error('[SITEMAP] Error checking SEO languages for product:', productId, error);
     return ['en']; // Fallback to English only
@@ -344,7 +346,7 @@ async function handleGenerate(req, res) {
       }
       
       // Check if product has SEO optimization for multiple languages
-      const hasMultiLanguageSEO = await checkProductSEOLanguages(shop, product.id);
+      const hasMultiLanguageSEO = await checkProductSEOLanguages(shop, product.id, locales);
       
       // Add default language URL
       xml += '  <url>\n';

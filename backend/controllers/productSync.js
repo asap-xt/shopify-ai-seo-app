@@ -111,14 +111,25 @@ async function getShopLanguages(shop, accessToken) {
   `;
   
   try {
+    console.log('[PRODUCT_SYNC] Fetching shop languages for:', shop);
     const data = await adminGraphQL({ shop, accessToken, query });
-    const published = (data?.data?.shopLocales || [])
+    console.log('[PRODUCT_SYNC] Raw shopLocales response:', JSON.stringify(data, null, 2));
+    
+    const shopLocales = data?.data?.shopLocales || [];
+    console.log('[PRODUCT_SYNC] Parsed shopLocales:', shopLocales);
+    
+    const published = shopLocales
       .filter(l => l.published)
       .map(l => l.locale.toLowerCase().split('-')[0]) // bg-BG -> bg
       .filter((v, i, a) => a.indexOf(v) === i); // unique
-    return published.length ? published : ['en'];
+    
+    console.log('[PRODUCT_SYNC] Published languages:', published);
+    const result = published.length ? published : ['en'];
+    console.log('[PRODUCT_SYNC] Final languages result:', result);
+    return result;
   } catch (e) {
-    console.error('Failed to get shop languages:', e.message);
+    console.error('[PRODUCT_SYNC] Failed to get shop languages:', e.message);
+    console.error('[PRODUCT_SYNC] Error details:', e);
     return ['en'];
   }
 }
