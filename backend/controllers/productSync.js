@@ -98,12 +98,13 @@ function pickPrices(variants, product, shopCurrency) {
   return { price, currency, available };
 }
 
-// Get shop languages first
-async function getShopLanguages(shop, accessToken) {
+// Get published locales from Shopify (requires read_locales scope)
+async function getPublishedLocales(shop, accessToken) {
   const query = `
     query ShopLocales {
       shopLocales {
         locale
+        name
         primary
         published
       }
@@ -111,25 +112,57 @@ async function getShopLanguages(shop, accessToken) {
   `;
   
   try {
-    console.log('[PRODUCT_SYNC] Fetching shop languages for:', shop);
-    const data = await adminGraphQL({ shop, accessToken, query });
-    console.log('[PRODUCT_SYNC] Raw shopLocales response:', JSON.stringify(data, null, 2));
+    console.log('[PRODUCT_SYNC] Fetching published locales for:', shop);
+    const res = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
     
-    const shopLocales = data?.data?.shopLocales || [];
-    console.log('[PRODUCT_SYNC] Parsed shopLocales:', shopLocales);
+    if (!res.ok) {
+      throw new Error(`shopLocales GraphQL failed: ${res.status} ${await res.text()}`);
+    }
     
-    const published = shopLocales
-      .filter(l => l.published)
-      .map(l => l.locale.toLowerCase().split('-')[0]) // bg-BG -> bg
+    const json = await res.json();
+    console.log('[PRODUCT_SYNC] Raw shopLocales response:', JSON.stringify(json, null, 2));
+    
+    if (json.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
+    }
+    
+    const all = json?.data?.shopLocales || [];
+    const published = all.filter(l => l.published);
+    
+    console.log('[PRODUCT_SYNC] All locales:', all.map(l => `${l.locale} (pub=${l.published}, primary=${l.primary})`));
+    console.log('[PRODUCT_SYNC] Published locales:', published);
+    
+    return published;
+  } catch (e) {
+    console.error('[PRODUCT_SYNC] Failed to get published locales:', e.message);
+    console.error('[PRODUCT_SYNC] Error details:', e);
+    throw e; // Re-throw to handle upstream
+  }
+}
+
+// Get shop languages with proper error handling
+async function getShopLanguages(shop, accessToken) {
+  try {
+    const locales = await getPublishedLocales(shop, accessToken);
+    
+    // Convert to language codes (bg-BG -> bg, but keep full locale for metafields)
+    const languages = locales
+      .map(l => l.locale.toLowerCase().replace('_', '-')) // normalize pt_BR -> pt-br
+      .map(l => l.split('-')[0]) // pt-br -> pt
       .filter((v, i, a) => a.indexOf(v) === i); // unique
     
-    console.log('[PRODUCT_SYNC] Published languages:', published);
-    const result = published.length ? published : ['en'];
+    const result = languages.length ? languages : ['en'];
     console.log('[PRODUCT_SYNC] Final languages result:', result);
     return result;
   } catch (e) {
-    console.error('[PRODUCT_SYNC] Failed to get shop languages:', e.message);
-    console.error('[PRODUCT_SYNC] Error details:', e);
+    console.error('[PRODUCT_SYNC] Falling back to default language due to error:', e.message);
     return ['en'];
   }
 }
@@ -373,12 +406,19 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
  */
 export async function syncProductsForShop(req, shop, opts = {}) {
   if (!shop) throw new Error('Missing shop');
-  const accessToken = opts.accessToken || await resolveAccessToken(shop);
+  
+  // Use strict token resolver that requires id_token for read_locales scope
+  let accessToken = opts.accessToken;
+  if (!accessToken) {
+    const { resolveAdminTokenOrThrow } = await import('../utils/tokenResolver.js');
+    accessToken = await resolveAdminTokenOrThrow(shop, { idToken: req?.idToken });
+  }
+  
   if (!accessToken) throw new Error(`No Admin API token available for shop ${shop}`);
 
   console.log(`Starting product sync for ${shop}...`);
   
-  // First get shop currency and languages
+  // First get shop currency and languages (requires proper token with read_locales)
   const [shopCurrency, shopLanguages] = await Promise.all([
     getShopCurrency(shop, accessToken),
     getShopLanguages(shop, accessToken)

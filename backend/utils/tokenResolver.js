@@ -124,7 +124,7 @@ export async function resolveShopToken(
     if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) console.log('[TOKEN_RESOLVER] Missing SHOPIFY_API_KEY/SECRET');
   }
 
-  // 3) Env fallback for dev/ops
+  // 3) Env fallback for dev/ops (only if explicitly allowed)
   const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN || process.env.SHOPIFY_ACCESS_TOKEN;
   if (isLikelyAdminToken(envToken)) {
     console.log('[TOKEN_RESOLVER] Using env fallback Admin token');
@@ -133,6 +133,87 @@ export async function resolveShopToken(
 
   // 4) Nothing worked
   throw new Error('No valid Admin API token (DB invalid; no id_token to exchange).');
+}
+
+/**
+ * Strict version that requires id_token and never falls back to env token
+ * Use this for critical operations that need proper scopes (like read_locales)
+ */
+export async function resolveAdminTokenOrThrow(shop, { idToken = null } = {}) {
+  const normalizedShop = normalizeShop(shop);
+  if (!normalizedShop) {
+    throw new Error('Invalid shop domain: ' + JSON.stringify(shop));
+  }
+  
+  console.log('[TOKEN_RESOLVER] Strict resolve for:', normalizedShop);
+  const { SHOPIFY_API_KEY, SHOPIFY_API_SECRET } = process.env;
+
+  // 1) Try DB token if valid AND from current app
+  try {
+    const Shop = (await import('../db/Shop.js')).default;
+    const shopDoc = await Shop.findOne({ shop: normalizedShop }).lean();
+    if (shopDoc?.accessToken && shopDoc.appApiKey === SHOPIFY_API_KEY && isLikelyAdminToken(shopDoc.accessToken)) {
+      console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB (same app)');
+      return shopDoc.accessToken;
+    }
+  } catch (err) {
+    console.warn('[TOKEN_RESOLVER] Could not read shop token from DB:', err.message);
+  }
+
+  // 2) Require id_token for Token Exchange (no env fallback)
+  if (!idToken) {
+    throw new Error('Missing id_token for token exchange (required for read_locales scope)');
+  }
+
+  if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) {
+    throw new Error('Missing SHOPIFY_API_KEY/SECRET for token exchange');
+  }
+
+  console.log('[TOKEN_RESOLVER] Performing strict Token Exchange with id_token...');
+  const requested_token_type = 'urn:shopify:params:oauth:token-type:offline-access-token';
+
+  const url = new URL(`/admin/oauth/access_token`, `https://${normalizedShop}`).toString();
+  const body = {
+    client_id: SHOPIFY_API_KEY,
+    client_secret: SHOPIFY_API_SECRET,
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    subject_token: idToken,
+    subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+    requested_token_type,
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Token exchange failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  const adminAccessToken = data.access_token;
+  if (!isLikelyAdminToken(adminAccessToken)) {
+    throw new Error('Token exchange returned an invalid/short token');
+  }
+
+  // Persist for future calls with appApiKey guard
+  try {
+    const Shop = (await import('../db/Shop.js')).default;
+    await Shop.updateOne(
+      { shop: normalizedShop },
+      { $set: { shop: normalizedShop, accessToken: adminAccessToken, appApiKey: SHOPIFY_API_KEY, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    console.log('[TOKEN_RESOLVER] ✅ Persisted new Admin token to DB with appApiKey (strict)');
+  } catch (e) {
+    console.warn('[TOKEN_RESOLVER] Warning: failed to persist exchanged token:', e.message);
+  }
+
+  console.log('[TOKEN_RESOLVER] Strict token exchange OK');
+  return adminAccessToken;
 }
 
 /**
