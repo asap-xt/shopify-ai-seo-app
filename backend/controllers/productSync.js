@@ -6,9 +6,16 @@ import Product from '../db/Product.js';
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
+// Helper function to normalize shop domain (fixes duplicate domain issue)
+function normalizeShopDomain(input) {
+  if (!input) return '';
+  return Array.isArray(input) ? input[0] : String(input).trim();
+}
+
 // Helper function for consistent GraphQL calls
 async function simpleAdminGraphQL(shop, token, query, variables = {}) {
-  const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+  const shopDomain = normalizeShopDomain(shop);
+  const res = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -28,17 +35,25 @@ async function simpleAdminGraphQL(shop, token, query, variables = {}) {
   return json.data;
 }
 
-// Get published locales from shop
+// Get published locales from shop using shopLocales query
 async function getPublishedLocales(shop, token) {
   const q = `
-    query GetLocales {
-      shop {
-        publishedLocales { locale name primary }
+    query ShopLocales {
+      shopLocales(first: 250) {
+        edges {
+          node {
+            locale
+            name
+            primary
+            published
+          }
+        }
       }
     }
   `;
   const data = await simpleAdminGraphQL(shop, token, q);
-  const list = data?.shop?.publishedLocales || [];
+  const edges = data?.shopLocales?.edges || [];
+  const list = edges.map(e => e.node).filter(l => l.published);
   const codes = list.map(l => l.locale);
   const primary = list.find(l => l.primary)?.locale || codes[0] || 'en';
   return { list, codes, primary };
@@ -267,9 +282,16 @@ function gidToNumericId(gid) {
   return gid?.split('/')?.pop();
 }
 
-function toProductDocument(node, shop, shopLangCodes, shopCurrency, optimizedLangCodes) {
+function toProductDocument(node, shop, shopLocales, shopCurrency, optimizedLangCodes) {
   const numericId = gidToNumericId(node.id);
   const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
+  
+  // Determine SEO status for each language
+  const optimizedSet = new Set(optimizedLangCodes);
+  const languages = shopLocales.map(l => ({
+    ...l,
+    optimized: optimizedSet.has(l.locale)
+  }));
   
   return {
     // Required fields for MongoDB
@@ -282,10 +304,9 @@ function toProductDocument(node, shop, shopLangCodes, shopCurrency, optimizedLan
     status: node.status || 'ACTIVE',
     priceMin: node.priceRangeV2?.minVariantPrice?.amount ?? null,
     priceCurrency: node.priceRangeV2?.minVariantPrice?.currencyCode ?? shopCurrency ?? 'USD',
-    // Always arrays of strings (codes), never objects or JSON strings
-    languages: Array.isArray(shopLangCodes) ? shopLangCodes : [],
-    availableLanguages: Array.isArray(shopLangCodes) ? shopLangCodes : [],
-    optimizedLanguages: Array.isArray(optimizedLangCodes) ? optimizedLangCodes : [],
+    // Language objects with full information
+    languages: languages.filter(l => l.optimized), // Only optimized languages
+    availableLanguages: shopLocales,   // All available languages
     
     // Additional fields
     description: sanitizeHtmlBasic(node.descriptionHtml),
@@ -380,10 +401,10 @@ function toFeedItem(node, shop, shopCurrency) {
   };
 }
 
-async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency }) {
-  // Първо вземете езиците динамично
-  const languages = shopLanguages || await getShopLanguages(shop, accessToken);
-  console.log('[PRODUCT_SYNC] Shop languages:', languages.join(', '));
+async function fetchAllProducts({ shop, accessToken, shopLocales, shopCurrency }) {
+  // Използвайте подадените shopLocales
+  const languages = shopLocales || [];
+  console.log('[PRODUCT_SYNC] Shop languages:', languages.map(l => l.locale).join(', '));
   
   const pageSize = 50;
   let after = null;
@@ -476,13 +497,13 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
       const optimizedLangs = await getProductSeoLocales(shop, accessToken, node.id);
       
       // Създайте документа с правилните типове данни
-      const productDoc = toProductDocument(node, shop, shopLanguages, shopCurrency, optimizedLangs);
+      const productDoc = toProductDocument(node, shop, languages, shopCurrency, optimizedLangs);
       
       // Лог за езиците
       if (optimizedLangs.length === 0) {
-        shopLanguages.forEach(lc => {
-          if (!optimizedLangs.includes(lc)) {
-            console.log(`[PRODUCT_SYNC] Language ${lc} available but not optimized for product ${node.title}`);
+        languages.forEach(l => {
+          if (!optimizedLangs.includes(l.locale)) {
+            console.log(`[PRODUCT_SYNC] Language ${l.locale} available but not optimized for product ${node.title}`);
           }
         });
       }
@@ -515,17 +536,17 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
     throw new Error('No valid access token available');
   }
   
-  try {
-    // Опитайте се да вземете данните
-    const [currency, languageData] = await Promise.all([
-      getShopCurrency(shop, accessToken),
-      getShopLanguages(shop, accessToken)
-    ]);
-    
-    console.log(`Shop currency: ${currency}`);
-    console.log(`Shop languages: ${languageData.codes.join(', ')}`);
-    
-    const products = await fetchAllProducts({ shop, accessToken, shopLanguages: languageData.codes, shopCurrency: currency });
+         try {
+           // Опитайте се да вземете данните
+           const [currency, languageData] = await Promise.all([
+             getShopCurrency(shop, accessToken),
+             getShopLanguages(shop, accessToken)
+           ]);
+           
+           console.log(`Shop currency: ${currency}`);
+           console.log(`Shop languages: ${languageData.codes.join(', ')}`);
+           
+           const products = await fetchAllProducts({ shop, accessToken, shopLocales: languageData.details, shopCurrency: currency });
     console.log(`Fetched ${products.length} products from Shopify`);
     
     // Запазете в MongoDB с правилни upsert операции

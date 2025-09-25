@@ -7,6 +7,102 @@ const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';
 
 // ---- helpers
 const normalizeLocale = (l) => (l ? String(l).trim().toLowerCase() : null);
+
+// Helper function to normalize shop domain (fixes duplicate domain issue)
+function normalizeShopDomain(input) {
+  if (!input) return '';
+  return Array.isArray(input) ? input[0] : String(input).trim();
+}
+
+// Unified GraphQL client with token normalization
+async function adminGraphQL(shop, token, query, variables = {}) {
+  const shopDomain = normalizeShopDomain(shop);
+  const url = `https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  // retry on 401 with forced token exchange
+  if (res.status === 401) {
+    console.log('[LANGUAGE-GRAPHQL] Got 401, attempting token exchange...');
+    try {
+      const freshToken = await resolveShopToken(shopDomain, { requested: 'offline' });
+      const retry = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': freshToken,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+      return await retry.json();
+    } catch (e) {
+      console.error('[LANGUAGE-GRAPHQL] Token exchange failed:', e.message);
+      throw e;
+    }
+  }
+
+  return await res.json();
+}
+
+// Query: all published shop locales
+const Q_SHOP_LOCALES = `
+  query ShopLocales {
+    shopLocales(first: 250) {
+      edges {
+        node {
+          locale
+          name
+          primary
+          published
+        }
+      }
+    }
+  }
+`;
+
+async function getShopLocales(shop, token) {
+  const json = await adminGraphQL(shop, token, Q_SHOP_LOCALES);
+  if (json.errors) throw new Error(JSON.stringify(json.errors));
+  const edges = json?.data?.shopLocales?.edges ?? [];
+  return edges.map(e => e.node); // [{ locale, name, primary, published }]
+}
+
+// Query: SEO metafields for product (to see which languages are optimized)
+const Q_PRODUCT_SEO_KEYS = `
+  query ProductSeoMetafields($id: ID!) {
+    product(id: $id) {
+      id
+      metafields(first: 100, namespace: "seo_ai") {
+        edges {
+          node { key }
+        }
+      }
+    }
+  }
+`;
+
+async function getOptimizedLocalesForProduct(shop, token, productGid) {
+  const json = await adminGraphQL(shop, token, Q_PRODUCT_SEO_KEYS, { id: productGid });
+  if (json.errors) throw new Error(JSON.stringify(json.errors));
+  const edges = json?.data?.product?.metafields?.edges ?? [];
+  // keys are like "seo__en", "seo__es"...
+  const locales = [];
+  for (const e of edges) {
+    const k = e?.node?.key || '';
+    const m = /^seo__([a-z]{2}(-[A-Z]{2})?)$/.exec(k);
+    if (m) locales.push(m[1]);
+  }
+  return locales; // ["en", "es", ...]
+}
 const toGID = (id) => {
   const s = String(id || '').trim();
   if (!s) return s;
@@ -220,20 +316,21 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
   console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
-    const out = await resolveLanguages({ shop, productId: null, token, authUsed });
-    // remove product-specific fields
-    const { productLanguages, allLanguagesOption, shouldShowSelector, ...rest } = out;
-    rest.source = rest.source.split('|')[0];
-    console.log(`[LANGUAGE-CONTROLLER] Shop languages response for ${shop}:`, rest);
-    return res.json(rest);
+    const locales = await getShopLocales(shop, token);
+    const primary = locales.find(l => l.primary)?.locale || null;
+    
+    console.log(`[LANGUAGE-CONTROLLER] Shop languages response for ${shop}:`, { locales, primary });
+    return res.json({
+      shop,
+      locales,                                    // [{ locale,name,primary,published }]
+      primary
+    });
   } catch (e) {
+    console.error('[LANGUAGE-CONTROLLER] Error:', e.message);
     return res.status(200).json({
       shop,
-      primaryLanguage: 'en',
-      shopLanguages: ['en'],
-      authUsed,
-      source: 'fallback',
-      tookMs: 0,
+      locales: [{ locale: 'en', name: 'English', primary: true, published: true }],
+      primary: 'en',
       _error: e.message || String(e),
     });
   }
@@ -249,45 +346,34 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {
-    const out = await resolveLanguages({ shop, productId, token, authUsed });
-    
-    // Get optimized languages for this product using the new productSync functions
-    try {
-      const { getProductSeoLocales } = await import('./productSync.js');
-      const optimized = await getProductSeoLocales(shop, token, toGID(productId));
-      out.optimizedLanguages = optimized;
-    } catch (e) {
-      console.warn('[LANGUAGE-CONTROLLER] Could not get optimized languages:', e.message);
-      out.optimizedLanguages = [];
-    }
-    
+    const productGid = toGID(productId);
+    const [shopLocales, optimizedLocales] = await Promise.all([
+      getShopLocales(shop, token),
+      getOptimizedLocalesForProduct(shop, token, productGid),
+    ]);
+
+    const byCode = new Map(shopLocales.map(l => [l.locale, l]));
+    const languages = shopLocales.map(l => ({
+      ...l,
+      optimized: optimizedLocales.includes(l.locale),
+    }));
+
     return res.json({
       shop,
-      productId: toGID(productId),
-      shopLanguages: out.shopLanguages,          // string codes only
-      productLanguages: out.productLanguages,    // string codes only  
-      optimizedLanguages: out.optimizedLanguages, // string codes only
-      primaryLanguage: out.primaryLanguage,
-      shouldShowSelector: out.shouldShowSelector,
-      allLanguagesOption: out.allLanguagesOption,
-      authUsed: out.authUsed,
-      source: out.source,
-      tookMs: out.tookMs,
-      ...(out._errors ? { _errors: out._errors } : {})
+      productId: productGid,
+      availableLanguages: shopLocales,  // for UI: all published
+      languages,                        // for UI: with optimized flag
+      primary: shopLocales.find(l => l.primary)?.locale || null,
     });
   } catch (e) {
+    console.error('[LANGUAGE-CONTROLLER] Error:', e.message);
     return res.status(200).json({
       shop,
       productId: toGID(productId),
-      primaryLanguage: 'en',
-      shopLanguages: ['en'],
-      productLanguages: ['en'],
-      shouldShowSelector: false,
-      allLanguagesOption: null,
-      authUsed,
-      source: 'fallback|fallback',
-      tookMs: 0,
-      _errors: [e.message || String(e)],
+      availableLanguages: [{ locale: 'en', name: 'English', primary: true, published: true }],
+      languages: [{ locale: 'en', name: 'English', primary: true, published: true, optimized: false }],
+      primary: 'en',
+      _error: e.message || String(e),
     });
   }
 });

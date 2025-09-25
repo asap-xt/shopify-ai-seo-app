@@ -38,9 +38,19 @@ const productSchema = new mongoose.Schema({
     lastCheckedAt: Date
   },
   
-  // Динамичен SEO статус за всеки език
-  languages: [String],
-  availableLanguages: [String],
+  // Динамичен SEO статус за всеки език - използваме обекти за пълна информация
+  languages: [{
+    locale: { type: String, required: true },
+    name: { type: String, default: '' },
+    primary: { type: Boolean, default: false },
+    published: { type: Boolean, default: true }
+  }],
+  availableLanguages: [{
+    locale: { type: String, required: true },
+    name: { type: String, default: '' },
+    primary: { type: Boolean, default: false },
+    published: { type: Boolean, default: true }
+  }],
   
   // Съхранявайте метаполетата за референция
   _metafields: mongoose.Schema.Types.Mixed,
@@ -73,6 +83,20 @@ const productSchema = new mongoose.Schema({
 // Existing index
 productSchema.index({ shop: 1, shopifyProductId: 1 }, { unique: true });
 productSchema.index({ shop: 1, handle: 1 });
+
+// Normalization function for backward compatibility
+function normalizeLangs(val) {
+  if (!Array.isArray(val)) return [];
+  if (val.length && typeof val[0] === 'string') {
+    return val.map(l => ({ locale: l, name: '', primary: false, published: true }));
+  }
+  if (val.length && typeof val[0] === 'object' && val[0] !== null) return val;
+  return [];
+}
+
+// Apply normalization to language fields
+productSchema.path('languages').set(normalizeLangs);
+productSchema.path('availableLanguages').set(normalizeLangs);
 
 // NEW INDEXES for better query performance
 productSchema.index({ shop: 1, 'seoStatus.optimized': 1 });
