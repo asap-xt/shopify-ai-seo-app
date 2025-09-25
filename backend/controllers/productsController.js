@@ -7,9 +7,17 @@ import { resolveShopToken } from '../utils/tokenResolver.js';
 import fetch from 'node-fetch';
 
 // Use the new per-shop token resolver from server.js
-async function resolveAdminTokenForShop(shop) {
+async function resolveAdminTokenForShop(shop, req = null) {
   try {
-    return await resolveShopToken(shop);
+    // Extract idToken from request if available
+    let idToken = null;
+    if (req) {
+      const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      idToken = req.query.id_token || bearerToken || null;
+    }
+    
+    return await resolveShopToken(shop, { idToken, requested: 'offline' });
   } catch (err) {
     const error = new Error(`No Admin API token available for shop ${shop}: ${err.message}`);
     error.status = 400;
@@ -601,7 +609,7 @@ router.get('/:productId', validateRequest(), async (req, res) => {
         }
       `;
       
-      const data = await shopGraphQL(shop, query, { id: gid });
+      const data = await shopGraphQL(req, shop, query, { id: gid });
       
       if (!data.product) {
         return res.status(404).json({ error: 'Product not found' });
@@ -743,7 +751,7 @@ router.get('/verify-seo/:productId', validateRequest(), async (req, res) => {
       }
     `;
     
-    const languagesResult = await shopGraphQL(shop, languagesQuery);
+    const languagesResult = await shopGraphQL(req, shop, languagesQuery);
     const shopLanguages = (languagesResult?.shopLocales || [])
       .filter(l => l.published)
       .map(l => l.locale.toLowerCase().split('-')[0]);
@@ -764,7 +772,7 @@ router.get('/verify-seo/:productId', validateRequest(), async (req, res) => {
       }
     `;
     
-    const result = await shopGraphQL(shop, metafieldsQuery, { id: gid });
+    const result = await shopGraphQL(req, shop, metafieldsQuery, { id: gid });
     
     if (!result?.product) {
       return res.status(404).json({ error: 'Product not found' });
@@ -839,7 +847,7 @@ router.post('/resync-all', validateRequest(), async (req, res) => {
       }
     `;
     
-    const languagesResult = await shopGraphQL(shop, languagesQuery);
+    const languagesResult = await shopGraphQL(req, shop, languagesQuery);
     const shopLanguages = (languagesResult?.shopLocales || [])
       .filter(l => l.published)
       .map(l => l.locale.toLowerCase().split('-')[0]);
@@ -864,7 +872,7 @@ router.post('/resync-all', validateRequest(), async (req, res) => {
       }
     `;
     
-    const result = await shopGraphQL(shop, productsQuery, { first: limit });
+    const result = await shopGraphQL(req, shop, productsQuery, { first: limit });
     
     let syncedCount = 0;
     
