@@ -32,122 +32,43 @@ function extractShopFromJWT(jwtToken, secret) {
   return null;
 }
 
-export async function resolveShopToken(shop) {
-  console.log('[TOKEN_RESOLVER] Resolving token for shop:', shop);
+export async function resolveShopToken(shopDomain) {
+  console.log('[TOKEN_RESOLVER] Resolving token for shop:', shopDomain);
   
   try {
-    // Import Shop model
-    const { default: Shop } = await import('../db/Shop.js');
-    
-    // Look up the shop
-    const shopDoc = await Shop.findOne({ shop }).lean();
-    
-    if (!shopDoc) {
-      console.error('[TOKEN_RESOLVER] Shop not found in database:', shop);
-      throw new Error(`Shop ${shop} not found in database`);
-    }
+    const Shop = await import('../db/Shop.js');
+    // Use correct field 'shop' (not 'shopDomain')
+    const shopDoc = await Shop.default.findOne({ shop: shopDomain }).lean();
     
     console.log('[TOKEN_RESOLVER] Found shop doc:', {
-      shop: shopDoc.shop,
-      hasAccessToken: !!shopDoc.accessToken,
-      hasJWTToken: !!shopDoc.jwtToken,
-      useJWT: shopDoc.useJWT,
-      accessTokenPrefix: shopDoc.accessToken?.substring(0, 10)
+      shop: shopDoc?.shop,
+      hasAccessToken: !!shopDoc?.accessToken,
+      accessTokenPrefix: shopDoc?.accessToken?.substring(0, 10),
+      useJWT: shopDoc?.useJWT,
+      hasJWTToken: !!shopDoc?.jwtToken
     });
     
-    // If shop is using JWT flow and has a JWT token
-    if (shopDoc.useJWT && shopDoc.jwtToken) {
-      console.log('[TOKEN_RESOLVER] Shop uses JWT flow');
-      
-      // Check if we have a cached session token for this JWT
-      const cacheKey = `${shop}:${shopDoc.jwtToken.substring(0, 20)}`;
-      if (sessionTokenCache.has(cacheKey)) {
-        const cached = sessionTokenCache.get(cacheKey);
-        // Check if cached token is still valid (expires after 55 minutes)
-        if (cached.expiresAt > Date.now()) {
-          console.log('[TOKEN_RESOLVER] Using cached session token');
-          return cached.token;
-        } else {
-          sessionTokenCache.delete(cacheKey);
-        }
-      }
-      
-      // If we have a real access token (not jwt-pending), use it
-      if (shopDoc.accessToken && shopDoc.accessToken !== 'jwt-pending') {
-        console.log('[TOKEN_RESOLVER] Using stored access token');
-        return shopDoc.accessToken;
-      }
-      
-      // JWT tokens cannot be used directly as access tokens for GraphQL API
-      // We need a proper OAuth access token for API calls
-      console.log('[TOKEN_RESOLVER] JWT token found but no valid access token for API calls');
-      console.log('[TOKEN_RESOLVER] Shop needs to complete OAuth flow to get access token');
-      
-      // Return null to indicate we need OAuth
-      throw new Error(`Shop ${shop} has JWT token but no valid access token for API calls. OAuth flow required.`);
-    }
-    
-    // Traditional flow - use stored access token
-    if (shopDoc.accessToken) {
-      console.log('[TOKEN_RESOLVER] Using traditional access token');
+    if (shopDoc?.accessToken) {
+      console.log('[TOKEN_RESOLVER] Using stored access token');
       return shopDoc.accessToken;
     }
-    
-    throw new Error(`No access token available for shop ${shop}`);
-    
-  } catch (error) {
-    console.error('[TOKEN_RESOLVER] Error resolving token:', error);
-    
-    // Last resort: check environment variables
-    const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN || 
-                     process.env.SHOPIFY_ACCESS_TOKEN ||
-                     process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-    
-    if (envToken) {
-      console.log('[TOKEN_RESOLVER] Falling back to environment token');
-      return envToken;
-    }
-    
-    throw error;
-  }
-}
-
-// Helper function to exchange JWT for access token
-async function exchangeJWTForAccessToken(jwtToken, shop) {
-  const SHOPIFY_API_KEY = process.env.SHOPIFY_API_KEY;
-  
-  try {
-    // This is a placeholder for the actual token exchange
-    // Shopify's token exchange endpoint is still in development
-    // For now, we'll use a workaround
-    
-    // Try to use Shopify's new token exchange endpoint
-    const response = await fetch('https://shopify.com/admin/api/unstable/access_tokens', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwtToken}`
-      },
-      body: JSON.stringify({
-        client_id: SHOPIFY_API_KEY,
-        subject_token: jwtToken,
-        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange'
-      })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      return { accessToken: data.access_token, scope: data.scope };
-    }
-    
-    console.error('[TOKEN_RESOLVER] Token exchange failed:', await response.text());
-  } catch (error) {
-    console.error('[TOKEN_RESOLVER] Token exchange error:', error);
+  } catch (err) {
+    console.error('[TOKEN_RESOLVER] Error loading shop:', err);
   }
   
+  // Fallback to env token
+  const envToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || 
+                   process.env.SHOPIFY_ACCESS_TOKEN ||
+                   process.env.SHOPIFY_ADMIN_API_TOKEN;
+  if (envToken) {
+    console.log('[TOKEN_RESOLVER] Using fallback env token');
+    return envToken;
+  }
+  
+  console.error('[TOKEN_RESOLVER] No token found for shop:', shopDomain);
   return null;
 }
+
 
 
 // Export additional utilities
