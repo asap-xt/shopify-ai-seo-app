@@ -108,11 +108,11 @@ const toGID = (id) => {
 };
 
 /** Resolve Admin token using centralized function with id_token */
-async function resolveAdminToken(shop, req) {
+async function resolveAdminTokenForLanguage(shop, req) {
   console.log('=== LANGUAGE CONTROLLER TOKEN RESOLVE ===');
   
   try {
-    const token = await resolveShopToken(shop, { idToken: req?.idToken, requested: 'offline' });
+    const token = await resolveAdminToken(req, shop);
     console.log('1. Token resolved successfully from centralized resolver');
     console.log('2. Token type:', typeof token);
     return { token, authUsed: 'token_exchange' };
@@ -299,7 +299,7 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   console.log('[LANGUAGE-ENDPOINT] Starting with shop:', shop);
   
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
+  const { token, authUsed } = await resolveAdminTokenForLanguage(req.shopDomain, req);
   console.log('[LANGUAGE-ENDPOINT] Token resolved:', { token: token ? `${token.substring(0, 10)}...` : 'null', authUsed });
 
   try {
@@ -327,7 +327,7 @@ router.get('/shop/:shop', validateRequest(), async (req, res) => {
 router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
   const productId = String(req.params.productId || '').trim();
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
+  const { token, authUsed } = await resolveAdminTokenForLanguage(req.shopDomain, req);
 
   if (!productId) return res.status(400).json({ error: 'Missing :productId' });
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
@@ -368,7 +368,7 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
 /** Optional: quick sanity ping to expose the real GQL error quickly */
 router.get('/ping/:shop', validateRequest(), async (req, res) => {
   const shop = req.shopDomain;
-  const { token, authUsed } = await resolveAdminToken(req.shopDomain, req);
+  const { token, authUsed } = await resolveAdminTokenForLanguage(req.shopDomain, req);
   if (!token) return res.status(500).json({ error: 'Admin token missing (session/header/env)' });
 
   try {

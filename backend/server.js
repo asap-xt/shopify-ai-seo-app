@@ -8,7 +8,6 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import bodyParser from 'body-parser';
 import compression from 'compression';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -63,9 +62,8 @@ app.use((_, res, next) => {
 app.use(cors({ origin: true, credentials: true }));
 app.use(compression()); // Enable gzip compression
 app.use(cookieParser());
-app.use(bodyParser.json({ limit: '1mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // ---- Debug helper: виж какви сесии имаш за shop
