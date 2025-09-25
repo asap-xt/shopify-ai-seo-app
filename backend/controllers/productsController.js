@@ -273,6 +273,7 @@ router.post('/sync', validateRequest(), async (req, res) => {
     res.json({
       success: true,
       shop,
+      synced: result.length,
       count: result.length,
       message: `Successfully synced ${result.length} products`
     });
