@@ -7,7 +7,7 @@ import Product from '../db/Product.js';
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
 // Helper function for consistent GraphQL calls
-async function adminGraphQL(shop, token, query, variables = {}) {
+async function simpleAdminGraphQL(shop, token, query, variables = {}) {
   const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: {
@@ -37,7 +37,7 @@ async function getPublishedLocales(shop, token) {
       }
     }
   `;
-  const data = await adminGraphQL(shop, token, q);
+  const data = await simpleAdminGraphQL(shop, token, q);
   const list = data?.shop?.publishedLocales || [];
   const codes = list.map(l => l.locale);
   const primary = list.find(l => l.primary)?.locale || codes[0] || 'en';
@@ -66,7 +66,7 @@ async function getProductSeoLocales(shop, token, productGid) {
       }
     }
   `;
-  const data = await adminGraphQL(shop, token, q, { id: productGid });
+  const data = await simpleAdminGraphQL(shop, token, q, { id: productGid });
   const edges = data?.product?.metafields?.edges || [];
   const keys = edges.map(e => e?.node?.key).filter(Boolean);
   return seoKeysToLocales(keys);
