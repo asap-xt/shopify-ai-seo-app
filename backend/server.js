@@ -178,9 +178,9 @@ app.use('/api', async (req, res, next) => {
     console.log('[API-RESOLVER] URL contains /sitemap/view:', req.originalUrl.includes('/sitemap/view'));
     console.log('[API-RESOLVER] Method is GET:', req.method === 'GET');
     
-    // Skip auth for all sitemap GET requests
-    if (req.originalUrl.includes('/sitemap/') && req.method === 'GET') {
-      console.log('[API-RESOLVER] Skipping authentication for public sitemap');
+    // Skip auth for all sitemap GET requests and debug endpoints
+    if ((req.originalUrl.includes('/sitemap/') || req.originalUrl.includes('/debug/')) && req.method === 'GET') {
+      console.log('[API-RESOLVER] Skipping authentication for public endpoint');
       return next();
     }
     

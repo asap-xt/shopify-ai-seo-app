@@ -382,3 +382,50 @@ export function extractShopFromJWT(decoded) {
   const m = dest.match(/https?:\/\/([a-zA-Z0-9-]+\.myshopify\.com)/);
   return m ? m[1] : null;
 }
+
+// New simplified token resolver for Admin API calls
+export async function resolveAdminToken(req, shop) {
+  if (!shop) throw new Error('resolveAdminToken: missing shop');
+  if (req._resolvedAdminToken && req._resolvedAdminTokenShop === shop) {
+    return req._resolvedAdminToken;
+  }
+
+  const idToken = req.idToken; // от attachIdToken
+  const apiKey = process.env.SHOPIFY_API_KEY;
+  const secret = process.env.SHOPIFY_API_SECRET;
+  const url = `https://${shop}/admin/oauth/access_token`;
+
+  // 1) Ако имаме id_token -> винаги обменяме
+  if (idToken) {
+    const body = {
+      client_id: apiKey,
+      client_secret: secret,
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token: idToken,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+      requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+    };
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(()=>'');
+      throw new Error(`Token exchange failed: ${r.status} ${t}`);
+    }
+    const json = await r.json();
+    req._resolvedAdminToken = json.access_token;
+    req._resolvedAdminTokenShop = shop;
+    return json.access_token;
+  }
+
+  // 2) Без id_token – вземи токен от DB за ТАЗИ app (appApiKey match). Без match -> грешка.
+  const saved = await Shop.findOne({ shop, appApiKey: apiKey }).lean();
+  if (saved?.accessToken) {
+    req._resolvedAdminToken = saved.accessToken;
+    req._resolvedAdminTokenShop = shop;
+    return saved.accessToken;
+  }
+  throw new Error('No admin token available. Provide Authorization: Bearer <id_token>.');
+}

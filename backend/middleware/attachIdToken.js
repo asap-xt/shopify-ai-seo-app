@@ -1,8 +1,8 @@
 // backend/middleware/attachIdToken.js
 export function attachIdToken(req, _res, next) {
-  const h = req.headers['authorization'] || req.headers['Authorization'] || '';
-  const bearer = h.startsWith('Bearer ') ? h.slice(7) : null;
-  // allow both header and ?id_token=
-  req.idToken = req.query?.id_token || bearer || null;
+  const auth = req.headers['authorization'];
+  const alt  = req.headers['x-shopify-id-token'];
+  const bearer = auth && auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+  req.idToken = bearer || (alt ? String(alt).trim() : null);
   next();
 }

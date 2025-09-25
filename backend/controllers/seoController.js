@@ -119,7 +119,7 @@ function requireShop(req) {
 }
 
 // Import centralized token resolver
-import { resolveShopToken } from '../utils/tokenResolver.js';
+import { resolveShopToken, resolveAdminToken } from '../utils/tokenResolver.js';
 
 // Resolve Admin token using centralized function
 async function resolveAdminTokenForShop(shop, req = null) {
@@ -161,7 +161,7 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
   console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
   
-  const token = await resolveAdminTokenForShop(shop, req);
+  const token = await resolveAdminToken(req, shop);
   console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
   
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
@@ -1398,7 +1398,27 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(req, shop, query);
+    const token = await resolveAdminToken(req, shop);
+    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token,
+      },
+      body: JSON.stringify({ query }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+    
+    const data = result.data;
     const collections = data?.collections?.edges || [];
     
     console.log('[COLLECTIONS-GQL] Found', collections.length, 'collections');
@@ -2020,7 +2040,27 @@ router.get('/collections/check-definitions', validateRequest(), async (req, res)
       }
     `;
     
-    const data = await shopGraphQL(req, shop, query);
+    const token = await resolveAdminToken(req, shop);
+    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token,
+      },
+      body: JSON.stringify({ query }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+    
+    const data = result.data;
     const definitions = data?.metafieldDefinitions?.edges || [];
     
     res.json({ 

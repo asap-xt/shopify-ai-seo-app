@@ -3,6 +3,7 @@
 
 import mongoose from 'mongoose';
 import Product from '../db/Product.js';
+import { resolveAdminToken } from '../utils/tokenResolver.js';
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
@@ -178,10 +179,28 @@ function pickPrices(variants, product, shopCurrency) {
 }
 
 // Get published locales from Shopify (requires read_locales scope)
-// Updated getShopLanguages to use new getPublishedLocales
-async function getShopLanguages(shop, token) {
-  const { list, codes, primary } = await getPublishedLocales(shop, token);
-  return { details: list, codes, primary };
+// Updated getShopLanguages to use new resolveAdminToken
+async function getShopLanguages(req, shop) {
+  const token = await resolveAdminToken(req, shop);
+  const query = `
+    query ShopLocales {
+      shopLocales {
+        locale
+        name
+        primary
+        published
+      }
+    }`;
+  const r = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+    body: JSON.stringify({ query })
+  });
+  const j = await r.json();
+  if (j.errors) throw new Error(JSON.stringify(j.errors));
+  const list = j.data.shopLocales.filter(l=>l.published);
+  const codes = list.map(l => (l.locale || '').split('-')[0]); // „къси" кодове за бързо филтриране
+  return { locales: list, codes };
 }
 
 // NEW: Get shop currency
@@ -301,8 +320,8 @@ function toProductDocument(node, shop, shopLocales, shopCurrency, optimizedLangC
     priceMin: node.priceRangeV2?.minVariantPrice?.amount ?? null,
     priceCurrency: node.priceRangeV2?.minVariantPrice?.currencyCode ?? shopCurrency ?? 'USD',
     // Language objects with full information
-    languages: languages.filter(l => l.optimized), // Only optimized languages
-    availableLanguages: shopLocales,   // All available languages
+    languages: languages.filter(l => l.optimized).map(l => l.locale), // Only optimized language codes
+    availableLanguages: shopLocales,   // All available languages as objects
     
     // Additional fields
     description: sanitizeHtmlBasic(node.descriptionHtml),
@@ -536,13 +555,13 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
            // Опитайте се да вземете данните
            const [currency, languageData] = await Promise.all([
              getShopCurrency(shop, accessToken),
-             getShopLanguages(shop, accessToken)
+             getShopLanguages(req, shop)
            ]);
            
            console.log(`Shop currency: ${currency}`);
            console.log(`Shop languages: ${languageData.codes.join(', ')}`);
            
-           const products = await fetchAllProducts({ shop, accessToken, shopLocales: languageData.details, shopCurrency: currency });
+           const products = await fetchAllProducts({ shop, accessToken, shopLocales: languageData.locales, shopCurrency: currency });
     console.log(`Fetched ${products.length} products from Shopify`);
     
     // Запазете в MongoDB с правилни upsert операции
