@@ -67,7 +67,12 @@ router.post('/', async (req, res) => {
 
     await Shop.findOneAndUpdate(
       { shop },
-      { shop, accessToken, updatedAt: new Date() },
+      { 
+        shop, 
+        accessToken,
+        appApiKey: process.env.SHOPIFY_API_KEY,  // Важно!
+        updatedAt: new Date() 
+      },
       { upsert: true, new: true }
     );
 

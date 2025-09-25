@@ -58,6 +58,9 @@ export async function resolveShopToken(
       console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB (same app)');
       return shopDoc.accessToken;
     } else if (shopDoc?.accessToken) {
+      console.log('[TOKEN_RESOLVER] Token API key:', shopDoc.appApiKey);
+      console.log('[TOKEN_RESOLVER] Current API key:', SHOPIFY_API_KEY);
+      
       if (shopDoc.appApiKey !== SHOPIFY_API_KEY) {
         console.log('[TOKEN_RESOLVER] Token from different app (API key mismatch), will exchange');
       } else {

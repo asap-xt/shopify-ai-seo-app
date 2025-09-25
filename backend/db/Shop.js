@@ -10,6 +10,10 @@ const shopSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  appApiKey: {  // Добавете това поле
+    type: String,
+    default: () => process.env.SHOPIFY_API_KEY
+  },
   jwtToken: {
     type: String,
     required: false
