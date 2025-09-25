@@ -21,6 +21,7 @@ import {
   resolveShopToken,
   extractShopFromJWT
 } from './utils/tokenResolver.js';
+import { attachIdToken } from './middleware/attachIdToken.js';
 
 // Shopify SDK for Public App
 import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
@@ -155,7 +156,7 @@ app.get('/api/whoami', async (req, res) => {
 });
 
 // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
-app.use('/api', async (req, res, next) => {
+app.use('/api', attachIdToken, async (req, res, next) => {
   try {
     console.log('[API-RESOLVER] ===== API MIDDLEWARE CALLED =====');
     console.log('[API-RESOLVER] URL:', req.originalUrl);
@@ -200,14 +201,10 @@ app.use('/api', async (req, res, next) => {
     if (!req.query) req.query = {};
     if (!req.query.shop) req.query.shop = shop;
     
-    // Extract session token (id_token) from Authorization or query for Token Exchange
-    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const idToken = req.query.id_token || bearerToken || null;
-
-    // 2) Use centralized token resolver
+    // 2) Use centralized token resolver with id_token from middleware
     console.log('[API RESOLVER] Using centralized token resolver for shop:', shop);
-    const accessToken = await resolveShopToken(shop, { idToken, requested: 'offline' });
+    console.log('[API RESOLVER] Has id_token:', !!req.idToken);
+    const accessToken = await resolveShopToken(shop, { idToken: req.idToken, requested: 'offline' });
     console.log('[API RESOLVER] Token resolved successfully');
     
     // Create session object with real token

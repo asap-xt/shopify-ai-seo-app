@@ -1,6 +1,6 @@
 // frontend/src/hooks/useShopApi.js
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { makeSessionFetch } from '../lib/sessionFetch.js';
+import { apiJson, apiPost } from '../utils/api.js';
 
 /**
  * Custom hook за лесна работа с Shopify API
@@ -12,9 +12,14 @@ const qs = (k, d = '') => {
 };
 
 export function useShopApi() {
-  // Нов вариант: винаги използвай собствен session-token fetch,
-  // който създава App Bridge вътрешно чрез host от URL (няма race).
-  const api = useMemo(() => makeSessionFetch(), []);
+  // New API wrapper that automatically includes session tokens
+  const api = useMemo(() => async (endpoint, options = {}) => {
+    if (options.method === 'POST' || options.body) {
+      return apiPost(endpoint, options.body || {}, options);
+    } else {
+      return apiJson(endpoint, options);
+    }
+  }, []);
 
   const shop = qs('shop', '');
   return { api, shop };
