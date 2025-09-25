@@ -12,16 +12,23 @@ const qs = (k, d = '') => {
 };
 
 export function useShopApi() {
-  // New API wrapper that automatically includes session tokens
-  const api = useMemo(() => async (endpoint, options = {}) => {
-    if (options.method === 'POST' || options.body) {
-      return apiPost(endpoint, options.body || {}, options);
-    } else {
-      return apiJson(endpoint, options);
-    }
-  }, []);
-
   const shop = qs('shop', '');
+  
+  // New API wrapper that automatically includes session tokens and shop parameter
+  const api = useMemo(() => async (endpoint, options = {}) => {
+    // Ensure shop parameter is always included
+    const url = new URL(endpoint, window.location.origin);
+    if (!url.searchParams.has('shop') && shop) {
+      url.searchParams.set('shop', shop);
+    }
+    
+    if (options.method === 'POST' || options.body) {
+      return apiPost(url.pathname + url.search, options.body || {}, options);
+    } else {
+      return apiJson(url.pathname + url.search, options);
+    }
+  }, [shop]);
+
   return { api, shop };
 }
 
