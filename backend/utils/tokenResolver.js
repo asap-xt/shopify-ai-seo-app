@@ -85,8 +85,7 @@ export async function resolveShopToken(shop) {
       // JWT tokens from Shopify can be used directly as Bearer tokens for GraphQL API
       console.log('[TOKEN_RESOLVER] Using JWT token directly for API calls');
       
-      // Cache the JWT token
-      const cacheKey = `${shop}:${shopDoc.jwtToken.substring(0, 20)}`;
+      // Cache the JWT token (reuse the same cacheKey from above)
       sessionTokenCache.set(cacheKey, {
         token: shopDoc.jwtToken,
         expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
