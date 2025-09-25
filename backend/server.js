@@ -543,16 +543,6 @@ async function mountOptionalRouters(app) {
     // not present – skip
   }
 
-  // Debug endpoint to check environment variables
-  app.get('/api/debug/env', (req, res) => {
-    res.json({
-      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'MISSING',
-      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'MISSING',
-      NODE_ENV: process.env.NODE_ENV || 'undefined',
-      API_KEY_LENGTH: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.length : 0,
-      API_KEY_PREFIX: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.substring(0, 10) + '...' : 'N/A'
-    });
-  });
 
   // Debug endpoint to check token validity
   app.get('/api/debug/token/:shop', async (req, res) => {
@@ -1118,9 +1108,21 @@ async function start() {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
 
-    // APP PROXY ROUTES (MUST be first, before all other middleware)
-    console.log('[SERVER] Registering App Proxy routes...');
-    app.use('/apps/new-ai-seo', appProxyRouter);
+  // DEBUG ENDPOINTS (MUST be first, before all other middleware)
+  console.log('[SERVER] Registering debug endpoints...');
+  app.get('/api/debug/env', (req, res) => {
+    res.json({
+      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'MISSING',
+      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'MISSING',
+      NODE_ENV: process.env.NODE_ENV || 'undefined',
+      API_KEY_LENGTH: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.length : 0,
+      API_KEY_PREFIX: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.substring(0, 10) + '...' : 'N/A'
+    });
+  });
+
+  // APP PROXY ROUTES (MUST be first, before all other middleware)
+  console.log('[SERVER] Registering App Proxy routes...');
+  app.use('/apps/new-ai-seo', appProxyRouter);
 
     // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
     console.log('[SERVER] Registering public sitemap endpoints...');
