@@ -700,30 +700,36 @@ app.get('/', async (req, res) => {
     if (id_token) {
       console.log('[APP URL] Found id_token, handling JWT flow...');
       
-      // Create or update shop record with JWT token
+      // Create or update shop record with JWT token (NEVER overwrite valid accessToken)
       if (!existingShop) {
-        // Create new shop record
+        // Create new shop record without accessToken (will be set via Token Exchange)
         existingShop = await ShopModel.create({
           shop,
-          accessToken: 'jwt-pending',
-          jwtToken: id_token,
-          useJWT: true,
+          sessionIdToken: id_token,
+          sessionUpdatedAt: new Date(),
           installedAt: new Date(),
           scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
         });
-        console.log('[APP URL] Created new shop with JWT');
+        console.log('[APP URL] Created new shop with session token (no accessToken overwrite)');
       } else {
-        // Update existing shop with JWT token
+        // Update existing shop with session token (preserve existing accessToken)
+        const doc = await ShopModel.findOne({ shop });
+        if (doc?.accessToken && doc.accessToken !== 'jwt-pending') {
+          console.log('[APP URL] DB already has Admin token; not touching accessToken');
+        }
+        
         existingShop = await ShopModel.findOneAndUpdate(
           { shop },
           { 
-            jwtToken: id_token,
-            useJWT: true,
-            updatedAt: new Date()
+            $set: { 
+              sessionIdToken: id_token, 
+              sessionUpdatedAt: new Date() 
+            },
+            $setOnInsert: { accessToken: null } // не презаписвай ако вече има валиден
           },
-          { new: true }
+          { upsert: true, new: true }
         ).lean();
-        console.log('[APP URL] Updated existing shop with JWT');
+        console.log('[APP URL] Updated existing shop with session token (preserved accessToken)');
       }
     }
     
