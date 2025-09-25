@@ -130,9 +130,19 @@ async function resolveAdminTokenForShop(shop, req = null) {
     // Try to get idToken from request if available
     let idToken = null;
     if (req) {
+      console.log('=== ID TOKEN EXTRACTION DEBUG ===');
+      console.log('req.headers:', Object.keys(req.headers));
+      console.log('req.headers.authorization:', req.headers['authorization'] ? 'Present' : 'Missing');
+      console.log('req.headers.Authorization:', req.headers['Authorization'] ? 'Present' : 'Missing');
+      console.log('req.query.id_token:', req.query.id_token ? 'Present' : 'Missing');
+      console.log('req.body?.id_token:', req.body?.id_token ? 'Present' : 'Missing');
+      
       idToken = req.headers['authorization']?.replace('Bearer ', '') || 
+                req.headers['Authorization']?.replace('Bearer ', '') ||
                 req.query.id_token ||
                 req.body?.id_token;
+      
+      console.log('Extracted idToken:', idToken ? 'Present' : 'Missing');
     }
     
     const token = await resolveShopToken(shop, { idToken, requested: 'offline' });
