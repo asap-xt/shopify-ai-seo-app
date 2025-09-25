@@ -572,3 +572,12 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
     throw error;
   }
 }
+
+// Export functions for use in other controllers
+export { 
+  syncProductsForShop, 
+  generateFeed,
+  getPublishedLocales,
+  getProductSeoLocales,
+  getShopLanguages
+};

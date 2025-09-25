@@ -127,6 +127,7 @@ function shapeOutput({ shop, productId, shopLocalesRaw, productLocalesRaw, authU
     || shopLocales[0]?.locale
     || 'en';
 
+  // Always return string codes only, never objects
   const shopLanguages = shopLocales
     .map(l => l.locale)
     .filter((v, i, a) => v && a.indexOf(v) === i);
@@ -142,8 +143,10 @@ function shapeOutput({ shop, productId, shopLocalesRaw, productLocalesRaw, authU
     shop,
     productId,
     primaryLanguage,
-    shopLanguages: shopLanguages.length ? shopLanguages : ['en'],
-    productLanguages: effectiveProduct,
+    shopLanguages: shopLanguages.length ? shopLanguages : ['en'], // <-- only string codes
+    shopLanguageDetails: shopLocales, // <-- full objects if needed for UI
+    productLanguages: effectiveProduct, // <-- only string codes
+    optimizedLanguages: [], // <-- will be filled by product-specific logic
     shouldShowSelector,
     allLanguagesOption: shouldShowSelector ? { label: 'All languages', value: 'all' } : null,
     authUsed,
@@ -247,7 +250,31 @@ router.get('/product/:shop/:productId', validateRequest(), async (req, res) => {
 
   try {
     const out = await resolveLanguages({ shop, productId, token, authUsed });
-    return res.json(out);
+    
+    // Get optimized languages for this product using the new productSync functions
+    try {
+      const { getProductSeoLocales } = await import('./productSync.js');
+      const optimized = await getProductSeoLocales(shop, token, toGID(productId));
+      out.optimizedLanguages = optimized;
+    } catch (e) {
+      console.warn('[LANGUAGE-CONTROLLER] Could not get optimized languages:', e.message);
+      out.optimizedLanguages = [];
+    }
+    
+    return res.json({
+      shop,
+      productId: toGID(productId),
+      shopLanguages: out.shopLanguages,          // string codes only
+      productLanguages: out.productLanguages,    // string codes only  
+      optimizedLanguages: out.optimizedLanguages, // string codes only
+      primaryLanguage: out.primaryLanguage,
+      shouldShowSelector: out.shouldShowSelector,
+      allLanguagesOption: out.allLanguagesOption,
+      authUsed: out.authUsed,
+      source: out.source,
+      tookMs: out.tookMs,
+      ...(out._errors ? { _errors: out._errors } : {})
+    });
   } catch (e) {
     return res.status(200).json({
       shop,
