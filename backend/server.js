@@ -695,18 +695,24 @@ app.get('/', async (req, res) => {
       }
     }
     
-        // Check if we have a valid access token for API calls
-        const hasValidAccessToken = existingShop && existingShop.accessToken && existingShop.accessToken !== 'jwt-pending';
+        // Check if we have a valid OAuth access token for API calls
+        const hasValidAccessToken = existingShop && existingShop.accessToken && existingShop.accessToken.startsWith('shpat_');
         
-        // For embedded apps, we should use session tokens, not OAuth redirects
-        // JWT tokens from Shopify should be processed directly
         console.log('[APP URL] Processing embedded app with JWT token');
+        console.log('[APP URL] Has valid OAuth access token:', hasValidAccessToken);
         
-        // Always serve the app for embedded requests
-        // The frontend will handle showing install prompt if needed
+        // For embedded apps, we MUST have a valid OAuth access token for GraphQL API
+        // JWT tokens cannot be used for Admin GraphQL API calls
+        if (!hasValidAccessToken) {
+          console.log('[APP URL] No valid OAuth access token found, redirecting to OAuth...');
+          const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${process.env.SHOPIFY_API_KEY}&scope=${encodeURIComponent(process.env.SHOPIFY_API_SCOPES)}&redirect_uri=${encodeURIComponent(process.env.APP_URL + '/auth/callback')}&state=oauth-${Date.now()}`;
+          console.log('[APP URL] Redirecting to OAuth:', authUrl);
+          return res.redirect(authUrl);
+        }
+        
+        // Always serve the app for embedded requests with valid access token
         if (id_token || embedded === '1') {
-          console.log('[APP URL] Serving embedded app');
-          console.log('[APP URL] Has valid access token:', hasValidAccessToken);
+          console.log('[APP URL] Serving embedded app with valid OAuth token');
           
           const indexPath = path.join(distPath, 'index.html');
           let html = fs.readFileSync(indexPath, 'utf8');
