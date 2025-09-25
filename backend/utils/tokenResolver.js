@@ -49,6 +49,7 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
     if (shopDoc?.accessToken && !forceExchange) {
       if (shopDoc.appApiKey === process.env.SHOPIFY_API_KEY && isLikelyAdminToken(shopDoc.accessToken)) {
         console.log('[TOKEN_RESOLVER] Using stored token, will validate...');
+        // TODO: Add token validation here if needed
         return shopDoc.accessToken;
       }
     }

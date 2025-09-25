@@ -1,14 +1,19 @@
 import mongoose from 'mongoose';
 
 const productSchema = new mongoose.Schema({
-  shop: { type: String, required: true },
-  productId: { type: Number, required: true },
+  shop: { type: String, required: true, index: true },
+  shopifyProductId: { type: String, required: true },
+  productId: String, // Keep for compatibility but allow string
   title: String,
   description: String,
   price: String,
   currency: String,
   tags: [String],
-  images: [String],
+  images: [{
+    id: String,
+    alt: String,
+    url: String
+  }],
   available: Boolean,
   aiOptimized: {
     title: String,
@@ -66,7 +71,8 @@ const productSchema = new mongoose.Schema({
 });
 
 // Existing index
-productSchema.index({ shop: 1, productId: 1 }, { unique: true });
+productSchema.index({ shop: 1, shopifyProductId: 1 }, { unique: true });
+productSchema.index({ shop: 1, handle: 1 });
 
 // NEW INDEXES for better query performance
 productSchema.index({ shop: 1, 'seoStatus.optimized': 1 });

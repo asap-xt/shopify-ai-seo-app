@@ -277,13 +277,14 @@ function toProductDocument(node, shop, shopLanguages, shopCurrency) {
     metafieldsData = {}
   } = node || {};
   
-  const productId = Number(id.split('/').pop());
+  const productId = id.split('/').pop(); // Keep as string
   const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
   const seoStatus = determineSeoStatus(metafieldsData, shopLanguages);
   
   return {
     shop,
-    productId,
+    shopifyProductId: id, // Full GID
+    productId, // Just the ID number as string
     gid: id,
     title,
     description: sanitizeHtmlBasic(descriptionHtml),
@@ -305,8 +306,12 @@ function toProductDocument(node, shop, shopLanguages, shopCurrency) {
     seoStatus,
     syncedAt: new Date(),
     
-    // Legacy fields (kept for compatibility)
-    images: (node?.images?.edges || []).map(e => e?.node?.url).filter(Boolean),
+    // Images as objects
+    images: (node?.images?.edges || []).map(e => ({
+      id: e?.node?.id,
+      url: e?.node?.url,
+      alt: e?.node?.altText || ''
+    })).filter(img => img.url),
     aiOptimized: {} // Will be deprecated
   };
 }
@@ -516,8 +521,6 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
     await Product.deleteMany({ shop });
     const savedProducts = await Product.insertMany(
       products.map(p => ({
-        shop,
-        shopifyProductId: p.productId,
         ...p,
         syncedAt: new Date(),
       }))
