@@ -61,9 +61,25 @@ router.post('/', async (req, res) => {
     console.log('6. Result keys:', Object.keys(tokenResult || {}));
     
     // Извличане на токена от резултата
-    const accessToken = tokenResult.accessToken || tokenResult;
+    let accessToken;
+    if (tokenResult && typeof tokenResult === 'object') {
+      if (tokenResult.session && tokenResult.session.accessToken) {
+        accessToken = tokenResult.session.accessToken;
+      } else if (tokenResult.accessToken) {
+        accessToken = tokenResult.accessToken;
+      } else {
+        throw new Error('No accessToken found in token result');
+      }
+    } else {
+      accessToken = tokenResult;
+    }
+    
     console.log('7. Extracted token:', accessToken);
     console.log('8. Token type:', typeof accessToken);
+    
+    if (!accessToken || typeof accessToken !== 'string') {
+      throw new Error('Invalid accessToken extracted from token exchange result');
+    }
 
     await Shop.findOneAndUpdate(
       { shop },
