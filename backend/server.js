@@ -549,7 +549,8 @@ async function mountOptionalRouters(app) {
       SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'MISSING',
       SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'MISSING',
       NODE_ENV: process.env.NODE_ENV || 'undefined',
-      API_KEY_LENGTH: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.length : 0
+      API_KEY_LENGTH: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.length : 0,
+      API_KEY_PREFIX: process.env.SHOPIFY_API_KEY ? process.env.SHOPIFY_API_KEY.substring(0, 10) + '...' : 'N/A'
     });
   });
 
