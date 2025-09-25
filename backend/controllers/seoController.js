@@ -109,7 +109,7 @@ function normalizeShop(shop) {
 }
 
 function requireShop(req) {
-  const shop = normalizeShop(req.query.shop || req.body?.shop || req.headers['x-shop']);
+  const shop = req.shopDomain || normalizeShop(req.query.shop || req.body?.shop || req.headers['x-shop']);
   if (!shop) {
     const err = new Error('Missing ?shop');
     err.status = 400;

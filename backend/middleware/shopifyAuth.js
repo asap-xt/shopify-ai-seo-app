@@ -169,7 +169,7 @@ export function validateEmbeddedSession() {
 // Combined middleware using centralized token resolver
 export function validateRequest() {
   return async (req, res, next) => {
-    const shop = req.query.shop || req.body?.shop;
+    const shop = req.shopDomain || req.query.shop || req.body?.shop;
     if (!shop) {
       return res.status(400).json({ error: 'Shop parameter required' });
     }

@@ -1,6 +1,12 @@
 // backend/utils/tokenResolver.js
 import fetch from 'node-fetch';
 import { normalizeShop } from './normalizeShop.js';
+
+function canon(shop) {
+  if (Array.isArray(shop)) shop = shop[0];
+  if (typeof shop === 'string') shop = shop.split(',')[0]; // безопасност
+  return normalizeShop(shop);
+}
 import Shop from '../db/Shop.js'; // Директен import в началото на файла
 
 /** Heuristic: reject session tokens / placeholders stored by mistake */
@@ -126,7 +132,7 @@ export async function resolveShopToken(
   { idToken = null, requested = 'offline' } = {}
 ) {
   // Normalize shop domain (handles arrays, duplicates, validation)
-  const shop = normalizeShop(shopInput);
+  const shop = canon(shopInput);
   if (!shop) {
     throw new Error('Invalid shop domain: ' + JSON.stringify(shopInput));
   }
@@ -385,6 +391,7 @@ export function extractShopFromJWT(decoded) {
 
 // New simplified token resolver for Admin API calls
 export async function resolveAdminToken(req, shop) {
+  shop = canon(shop); // гарантира низ, не масив
   if (!shop) throw new Error('resolveAdminToken: missing shop');
   if (req._resolvedAdminToken && req._resolvedAdminTokenShop === shop) {
     return req._resolvedAdminToken;

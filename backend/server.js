@@ -64,6 +64,19 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(compression()); // Enable gzip compression
 app.use(cookieParser());
 
+// Горещ фикc за дублиран shop параметър (много рано, преди attachShop)
+app.use((req, _res, next) => {
+  // 1) Нормализирай shop от query/body към 1 брой низ
+  if (Array.isArray(req.query.shop)) req.query.shop = req.query.shop[0];
+  if (Array.isArray(req.body?.shop)) req.body.shop = req.body.shop[0];
+  // 2) Премахни дублиране на 'shop' при вътрешни пренасочвания
+  if (typeof req.query.shop === 'string') {
+    const s = req.query.shop.split(',')[0].trim();
+    if (s !== req.query.shop) req.query.shop = s; // хваща и 'a,b'
+  }
+  next();
+});
+
 // Премахни application/json за GET/HEAD, за да не се парсва тяло
 app.use((req, res, next) => {
   if ((req.method === 'GET' || req.method === 'HEAD') &&
@@ -106,8 +119,8 @@ app.get('/debug/sessions', async (req, res) => {
 });
 
   // Debug route to check shop tokens
-  app.get('/debug/shop-token', async (req, res) => {
-    const shop = req.query.shop;
+  app.get('/debug/shop-token', attachShop, async (req, res) => {
+    const shop = req.shopDomain;
     if (!shop) return res.json({ error: 'Missing shop param' });
     
     try {
@@ -133,8 +146,8 @@ app.get('/debug/sessions', async (req, res) => {
   });
 
   // Debug route to delete shop record (force reinstall)
-  app.delete('/debug/shop-token', async (req, res) => {
-    const shop = req.query.shop;
+  app.delete('/debug/shop-token', attachShop, async (req, res) => {
+    const shop = req.shopDomain;
     if (!shop) return res.json({ error: 'Missing shop param' });
     
     try {
@@ -153,9 +166,9 @@ app.get('/debug/sessions', async (req, res) => {
   });
 
 // Quick sanity endpoint: confirms we can exchange the session token for an Admin API token
-app.get('/api/whoami', async (req, res) => {
+app.get('/api/whoami', attachShop, async (req, res) => {
   try {
-    const shop = req.query.shop;
+    const shop = req.shopDomain;
     const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const idToken = req.query.id_token || bearerToken || null;

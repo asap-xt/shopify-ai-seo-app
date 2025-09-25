@@ -70,7 +70,7 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
  */
 router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
-    const shop = req.shopDomain || req.query.shop;
+    const shop = req.shopDomain;
     const { bots, features, advancedSchemaEnabled } = req.body;
     
     console.log('[AI-DISCOVERY] Saving settings for shop:', shop);
@@ -128,7 +128,7 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
  */
 router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
   try {
-    const shop = req.shopDomain || req.query.shop;
+    const shop = req.shopDomain;
     
     console.log('[ROBOTS-TXT] Request received');
     console.log('[ROBOTS-TXT] Shop:', shop);
@@ -432,7 +432,7 @@ router.get('/debug-shop/:shop', validateRequest(), async (req, res) => {
 // Debug endpoint for authentication testing
 router.get('/ai-discovery/test-auth', validateRequest(), async (req, res) => {
   try {
-    const shop = req.shopDomain || req.query.shop;
+    const shop = req.shopDomain;
     
     // Check what's available in res.locals
     const hasAdminSession = !!res.locals.adminSession;
