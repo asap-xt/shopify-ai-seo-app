@@ -37,7 +37,6 @@ export async function resolveShopToken(shopDomain) {
   
   try {
     const Shop = await import('../db/Shop.js');
-    // Use correct field 'shop' (not 'shopDomain')
     const shopDoc = await Shop.default.findOne({ shop: shopDomain }).lean();
     
     console.log('[TOKEN_RESOLVER] Found shop doc:', {
@@ -48,25 +47,33 @@ export async function resolveShopToken(shopDomain) {
       hasJWTToken: !!shopDoc?.jwtToken
     });
     
-    if (shopDoc?.accessToken) {
-      console.log('[TOKEN_RESOLVER] Using stored access token');
+    // For embedded apps, we need a proper OAuth access token (shpat_)
+    // JWT tokens cannot be used directly for GraphQL API calls
+    if (shopDoc?.accessToken && shopDoc.accessToken.startsWith('shpat_')) {
+      console.log('[TOKEN_RESOLVER] Using valid OAuth access token');
       return shopDoc.accessToken;
+    }
+    
+    // If we only have jwt-pending or JWT token, we need to trigger OAuth installation
+    if (shopDoc?.accessToken === 'jwt-pending' || shopDoc?.useJWT) {
+      console.log('[TOKEN_RESOLVER] JWT token found but need OAuth access token for API calls');
+      throw new Error('App needs to be installed via OAuth to get proper access token');
     }
   } catch (err) {
     console.error('[TOKEN_RESOLVER] Error loading shop:', err);
   }
   
-  // Fallback to env token
+  // Fallback to env token for development
   const envToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || 
                    process.env.SHOPIFY_ACCESS_TOKEN ||
                    process.env.SHOPIFY_ADMIN_API_TOKEN;
-  if (envToken) {
+  if (envToken && envToken.startsWith('shpat_')) {
     console.log('[TOKEN_RESOLVER] Using fallback env token');
     return envToken;
   }
   
-  console.error('[TOKEN_RESOLVER] No token found for shop:', shopDomain);
-  return null;
+  console.error('[TOKEN_RESOLVER] No valid access token found for shop:', shopDomain);
+  throw new Error('No valid access token available. App needs to be installed.');
 }
 
 
