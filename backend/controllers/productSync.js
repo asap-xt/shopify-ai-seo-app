@@ -196,15 +196,22 @@ function csv(arr) {
 
 // Determine SEO optimization status from metafields dynamically
 function determineSeoStatus(node, shopLanguages) {
+  console.log('[PRODUCT_SYNC] Determining SEO status for languages:', shopLanguages);
+  console.log('[PRODUCT_SYNC] Available metafield keys in node:', Object.keys(node).filter(k => k.includes('metafield')));
+  
   const seoLanguages = [];
   let hasAnyOptimization = false;
   
   // Check for SEO metafields based on actual shop languages
   for (const lang of shopLanguages) {
     const metafieldKey = `metafield_seo_${lang}`;
+    console.log('[PRODUCT_SYNC] Checking metafield key:', metafieldKey, 'exists:', !!node[metafieldKey]);
+    
     if (node[metafieldKey]?.value) {
       try {
         const seoData = JSON.parse(node[metafieldKey].value);
+        console.log('[PRODUCT_SYNC] Found SEO data for', lang, ':', Object.keys(seoData));
+        
         if (seoData && Object.keys(seoData).length > 0) {
           seoLanguages.push({
             code: lang,
@@ -214,8 +221,10 @@ function determineSeoStatus(node, shopLanguages) {
           hasAnyOptimization = true;
         }
       } catch (e) {
-        // Invalid JSON, skip
+        console.error('[PRODUCT_SYNC] Failed to parse SEO data for', lang, ':', e.message);
       }
+    } else {
+      console.log('[PRODUCT_SYNC] No SEO metafield found for language:', lang);
     }
   }
   
