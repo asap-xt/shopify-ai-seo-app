@@ -1,5 +1,6 @@
 // backend/utils/tokenResolver.js
 import fetch from 'node-fetch';
+import { normalizeShop } from './shop.js';
 
 /** Heuristic: reject session tokens / placeholders stored by mistake */
 export function isLikelyAdminToken(token) {
@@ -12,16 +13,17 @@ export function isLikelyAdminToken(token) {
   return true;
 }
 
-export async function invalidateShopToken(shopDomain) {
+export async function invalidateShopToken(shopInput) {
   try {
-    // Ensure shopDomain is a string, not an array
-    if (Array.isArray(shopDomain)) {
-      shopDomain = shopDomain.find(s => s && typeof s === 'string' && s.trim()) || shopDomain[0];
+    const shop = normalizeShop(shopInput);
+    if (!shop) {
+      console.warn('[TOKEN_RESOLVER] Cannot invalidate - invalid shop:', shopInput);
+      return;
     }
     
     const Shop = (await import('../db/Shop.js')).default;
-    await Shop.updateOne({ shop: shopDomain }, { $unset: { accessToken: "", appApiKey: "" } });
-    console.log('[TOKEN_RESOLVER] Invalidated stored token for', shopDomain);
+    await Shop.updateOne({ shop }, { $unset: { accessToken: "", appApiKey: "" } });
+    console.log('[TOKEN_RESOLVER] Invalidated stored token for', shop);
   } catch (e) {
     console.warn('[TOKEN_RESOLVER] Failed to invalidate token:', e.message);
   }
@@ -36,22 +38,22 @@ export async function invalidateShopToken(shopDomain) {
  *   4) Else throw.
  */
 export async function resolveShopToken(
-  shopDomain,
+  shopInput,
   { idToken = null, requested = 'offline' } = {}
 ) {
-  // Ensure shopDomain is a string, not an array
-  if (Array.isArray(shopDomain)) {
-    shopDomain = shopDomain.find(s => s && typeof s === 'string' && s.trim()) || shopDomain[0];
-    console.log('[TOKEN_RESOLVER] Shop was array, using first valid:', shopDomain);
+  // Normalize shop domain (handles arrays, duplicates, validation)
+  const shop = normalizeShop(shopInput);
+  if (!shop) {
+    throw new Error('Invalid shop domain: ' + JSON.stringify(shopInput));
   }
   
-  console.log('[TOKEN_RESOLVER] Resolving Admin token for:', shopDomain);
+  console.log('[TOKEN_RESOLVER] Resolving Admin token for:', shop);
   const { SHOPIFY_API_KEY, SHOPIFY_API_SECRET } = process.env;
 
   // 1) Try DB token if valid AND from current app
   try {
     const Shop = (await import('../db/Shop.js')).default;
-    const shopDoc = await Shop.findOne({ shop: shopDomain }).lean();
+    const shopDoc = await Shop.findOne({ shop }).lean();
     if (shopDoc?.accessToken && shopDoc.appApiKey === SHOPIFY_API_KEY && isLikelyAdminToken(shopDoc.accessToken)) {
       console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB (same app)');
       return shopDoc.accessToken;
@@ -75,7 +77,7 @@ export async function resolveShopToken(
         ? 'urn:shopify:params:oauth:token-type:online-access-token'
         : 'urn:shopify:params:oauth:token-type:offline-access-token';
 
-    const url = `https://${shopDomain}/admin/oauth/access_token`;
+    const url = new URL(`/admin/oauth/access_token`, `https://${shop}`).toString();
     const body = {
       client_id: SHOPIFY_API_KEY,
       client_secret: SHOPIFY_API_SECRET,
@@ -106,8 +108,8 @@ export async function resolveShopToken(
     try {
       const Shop = (await import('../db/Shop.js')).default;
       await Shop.updateOne(
-        { shop: shopDomain },
-        { $set: { shop: shopDomain, accessToken: adminAccessToken, appApiKey: SHOPIFY_API_KEY, updatedAt: new Date() } },
+        { shop },
+        { $set: { shop, accessToken: adminAccessToken, appApiKey: SHOPIFY_API_KEY, updatedAt: new Date() } },
         { upsert: true }
       );
       console.log('[TOKEN_RESOLVER] ✅ Persisted new Admin token to DB with appApiKey');

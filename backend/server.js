@@ -22,6 +22,7 @@ import {
   extractShopFromJWT
 } from './utils/tokenResolver.js';
 import { attachIdToken } from './middleware/attachIdToken.js';
+import { attachShop } from './middleware/attachShop.js';
 
 // Shopify SDK for Public App
 import { authBegin, authCallback, ensureInstalledOnShop, validateRequest } from './middleware/shopifyAuth.js';
@@ -155,6 +156,9 @@ app.get('/api/whoami', async (req, res) => {
   }
 });
 
+// Normalize shop domain for all requests
+app.use(attachShop);
+
 // make id_token available to every API handler via req.idToken
 app.use('/api', attachIdToken);
 app.use('/plans', attachIdToken);
@@ -180,29 +184,11 @@ app.use('/api', async (req, res, next) => {
       return next();
     }
     
-    // 1) resolve shop от различни места
-    const headerShop = req.headers['x-shop'] || req.headers['x-shop-domain'] || null;
-    const sessionShop = res.locals?.shopify?.session?.shop || null; // ако си ползвал validateAuthenticatedSession() по-нагоре
+    // Use normalized shop from attachShop middleware
+    const shop = req.shopDomain;
+    console.log('[API-RESOLVER] Using normalized shop:', shop);
     
-    // Extract shop from URL path if present (e.g., /api/languages/shop/shopname.myshopify.com or /api/store/public/shopname.myshopify.com)
-    let shopFromPath = null;
-    const pathMatch = req.originalUrl.match(/\/shop\/([^\/\?]+)/) || req.originalUrl.match(/\/public\/([^\/\?]+)/);
-    if (pathMatch) {
-      shopFromPath = pathMatch[1];
-      console.log('[API-RESOLVER] Shop from path:', shopFromPath);
-    }
-    
-    // Handle shop parameter - could be string or array if duplicated
-    let shop = req.query?.shop || headerShop || req.body?.shop || sessionShop || shopFromPath || null;
-    
-    // If shop is an array (duplicated parameter), take the first valid one
-    if (Array.isArray(shop)) {
-      shop = shop.find(s => s && typeof s === 'string' && s.trim()) || shop[0];
-      console.log('[API-RESOLVER] Shop was array, using first valid:', shop);
-    }
-    
-    console.log('[API-RESOLVER] Resolved shop:', shop);
-    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    if (!shop) return res.status(400).json({ error: 'Missing or invalid shop domain' });
     if (!req.query) req.query = {};
     if (!req.query.shop) req.query.shop = shop;
     
