@@ -21,7 +21,8 @@ export default function ShopifyAppBridgeProvider({ children }) {
   const params = new URLSearchParams(window.location.search);
   const host = params.get('host');
   const shop = params.get('shop');
-  const apiKey = import.meta.env.VITE_SHOPIFY_API_KEY;
+  // Try multiple sources for API key
+  const apiKey = window.__SHOPIFY_API_KEY || import.meta.env.VITE_SHOPIFY_API_KEY;
 
   console.log('[APP-BRIDGE-PROVIDER] Public App - Initializing with:', {
     host: host ? 'Present' : 'Missing',
