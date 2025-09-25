@@ -555,10 +555,6 @@ export async function syncProductsForShop(shop, idToken = null, retryCount = 0) 
         { shop: productDoc.shop, shopifyProductId: productDoc.shopifyProductId },
         {
           $set: productDoc,
-          $setOnInsert: {
-            shop: productDoc.shop,
-            shopifyProductId: productDoc.shopifyProductId,
-          },
         },
         { upsert: true, new: true, runValidators: true }
       );
