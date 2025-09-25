@@ -1110,7 +1110,7 @@ async function start() {
 
   // DEBUG ENDPOINTS (MUST be first, before all other middleware)
   console.log('[SERVER] Registering debug endpoints...');
-  app.get('/api/debug/env', (req, res) => {
+  app.get('/debug/env', (req, res) => {
     res.json({
       SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'MISSING',
       SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'MISSING',
