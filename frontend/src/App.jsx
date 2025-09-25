@@ -607,60 +607,7 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
-  const [needsInstallation, setNeedsInstallation] = useState(false);
-  
-  // Check if app needs installation by testing API access
-  useEffect(() => {
-    if (!shop) return;
-    
-    const checkInstallation = async () => {
-      try {
-        const response = await fetch(`/api/plans/me?shop=${shop}`);
-        if (response.status === 401 || response.status === 403) {
-          console.log('[APP] API access denied - app needs installation');
-          setNeedsInstallation(true);
-        } else {
-          setNeedsInstallation(false);
-        }
-      } catch (error) {
-        console.error('[APP] Error checking installation:', error);
-        setNeedsInstallation(true);
-      }
-    };
-    
-    checkInstallation();
-  }, [shop]);
-  
-  // Show installation prompt if needed
-  if (needsInstallation && shop) {
-    return (
-      <AppProvider i18n={translations}>
-        <Frame>
-          <Page title="App Installation Required">
-            <Layout>
-              <Layout.Section>
-                <Card>
-                  <BlockStack gap="400">
-                    <Text variant="headingMd">Install App</Text>
-                    <Text>This app needs to be installed to access your store data.</Text>
-                    <Button 
-                      primary 
-                      onClick={() => {
-                        const installUrl = `/api/auth?shop=${shop}`;
-                        window.top.location.href = installUrl;
-                      }}
-                    >
-                      Install App
-                    </Button>
-                  </BlockStack>
-                </Card>
-              </Layout.Section>
-            </Layout>
-          </Page>
-        </Frame>
-      </AppProvider>
-    );
-  }
+  // App is installed via Shopify Install Modal, no frontend install button needed
   
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
