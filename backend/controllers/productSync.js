@@ -39,24 +39,20 @@ async function simpleAdminGraphQL(shop, token, query, variables = {}) {
 async function getPublishedLocales(shop, token) {
   const q = `
     query ShopLocales {
-      shopLocales(first: 250) {
-        edges {
-          node {
-            locale
-            name
-            primary
-            published
-          }
-        }
+      shopLocales {
+        locale
+        name
+        primary
+        published
       }
     }
   `;
   const data = await simpleAdminGraphQL(shop, token, q);
-  const edges = data?.shopLocales?.edges || [];
-  const list = edges.map(e => e.node).filter(l => l.published);
-  const codes = list.map(l => l.locale);
-  const primary = list.find(l => l.primary)?.locale || codes[0] || 'en';
-  return { list, codes, primary };
+  const list = data?.shopLocales || [];
+  const publishedList = list.filter(l => l.published);
+  const codes = publishedList.map(l => l.locale);
+  const primary = publishedList.find(l => l.primary)?.locale || codes[0] || 'en';
+  return { list: publishedList, codes, primary };
 }
 
 // Extract optimized languages from metafield keys
