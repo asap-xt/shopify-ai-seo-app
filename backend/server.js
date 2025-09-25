@@ -242,14 +242,7 @@ app.use('/api', async (req, res, next) => {
     res.locals.adminGraphql = new shopify.clients.Graphql({ session });
     res.locals.shop = shop;
 
-    // 4) COMPAT: подай токена и на "legacy custom" код, който чете от env
-    req.__origAdminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
-    process.env.SHOPIFY_ADMIN_API_TOKEN = accessToken;
-    const _end = res.end;
-    res.end = function(...args) {
-      process.env.SHOPIFY_ADMIN_API_TOKEN = req.__origAdminToken;
-      return _end.apply(this, args);
-    };
+    // Public App only - no legacy env token manipulation
 
     // console.log('[API RESOLVER]', shop, best.accessToken.slice(0,12), 'isOnline=', best.isOnline);
     return next();
@@ -314,101 +307,11 @@ app.get('/test-mongo', async (req, res) => {
 });
 
 // Create test shop record
-app.get('/create-test-shop', async (req, res) => {
-  try {
-    console.log('[CREATE_TEST_SHOP] Creating test shop record...');
-    const Shop = (await import('./db/Shop.js')).default;
-    
-    const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
-    const accessToken = 'test-token-' + Date.now();
-    
-    const savedShop = await Shop.findOneAndUpdate(
-      { shop }, 
-      { 
-        shop, 
-        accessToken, 
-        scopes: 'read_products,write_products', 
-        installedAt: new Date() 
-      }, 
-      { upsert: true, new: true }
-    );
-    
-    console.log('[CREATE_TEST_SHOP] Created shop:', savedShop);
-    
-    res.json({ 
-      success: true, 
-      message: 'Test shop record created', 
-      shop: savedShop
-    });
-  } catch (error) {
-    console.error('[CREATE_TEST_SHOP] Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
+// Removed - Public App doesn't create fake tokens
 
-// Delete test shop record
-app.get('/delete-test-shop', async (req, res) => {
-  try {
-    console.log('[DELETE_TEST_SHOP] Deleting test shop record...');
-    const Shop = (await import('./db/Shop.js')).default;
-    
-    const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
-    
-    const deletedShop = await Shop.findOneAndDelete({ shop });
-    
-    console.log('[DELETE_TEST_SHOP] Deleted shop:', deletedShop);
-    
-    res.json({ 
-      success: true, 
-      message: 'Test shop record deleted', 
-      shop: deletedShop
-    });
-  } catch (error) {
-    console.error('[DELETE_TEST_SHOP] Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
+// Removed - Public App doesn't need fake shop deletion
 
-// Test OAuth callback endpoint
-app.get('/test-oauth-callback', async (req, res) => {
-  try {
-    console.log('[TEST_OAUTH_CALLBACK] Testing OAuth callback...');
-    
-    // Simulate OAuth callback with test parameters
-    const testParams = {
-      code: 'test-code-' + Date.now(),
-      hmac: 'test-hmac-' + Date.now(),
-      shop: 'asapxt-teststore.myshopify.com',
-      state: 'test-state-' + Date.now(),
-      host: 'YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvYXNhcHh0LXRlc3RzdG9yZQ'
-    };
-    
-    console.log('[TEST_OAUTH_CALLBACK] Test params:', testParams);
-    
-    // Make internal request to OAuth callback
-    const callbackUrl = `/auth/callback?${new URLSearchParams(testParams).toString()}`;
-    console.log('[TEST_OAUTH_CALLBACK] Callback URL:', callbackUrl);
-    
-    res.json({ 
-      success: true, 
-      message: 'OAuth callback test endpoint created', 
-      callbackUrl: callbackUrl,
-      testParams: testParams
-    });
-  } catch (error) {
-    console.error('[TEST_OAUTH_CALLBACK] Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
+// Removed - Public App uses real OAuth flow only
 
 // Generate direct OAuth URL for testing
 app.get('/generate-oauth-url', (req, res) => {

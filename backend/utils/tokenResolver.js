@@ -41,8 +41,7 @@ export async function invalidateShopToken(shopInput) {
  * Strategy:
  *   1) If DB token exists AND passes isLikelyAdminToken -> use it.
  *   2) Else, if idToken present -> Token Exchange -> persist -> return.
- *   3) Else, env fallback SHOPIFY_ADMIN_API_TOKEN (dev) -> return.
- *   4) Else throw.
+ *   3) Else throw (Public App only - no fallbacks).
  */
 export async function resolveAccessToken(shop, idToken = null, forceExchange = false) {
   console.log('[TOKEN_RESOLVER] Strict resolve for:', shop);
@@ -69,11 +68,7 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
       }
     }
     
-    // Fallback to env token if available (for development)
-    if (process.env.SHOPIFY_ADMIN_API_TOKEN) {
-      console.log('[TOKEN_RESOLVER] No DB token, using env fallback Admin token');
-      return process.env.SHOPIFY_ADMIN_API_TOKEN;
-    }
+    // No fallback - Public App only
     
     throw new Error('No valid token and no idToken for exchange');
   } catch (err) {
@@ -85,11 +80,7 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
       await invalidateShopToken(shop);
     }
     
-    // Final fallback to env token if available (for development)
-    if (process.env.SHOPIFY_ADMIN_API_TOKEN) {
-      console.log('[TOKEN_RESOLVER] Using env fallback Admin token after error');
-      return process.env.SHOPIFY_ADMIN_API_TOKEN;
-    }
+    // No fallback - Public App only
     
     throw err;
   }
@@ -217,12 +208,7 @@ export async function resolveShopToken(
     if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET) console.log('[TOKEN_RESOLVER] Missing SHOPIFY_API_KEY/SECRET');
   }
 
-  // 3) Env fallback for dev/ops (only if explicitly allowed)
-  const envToken = process.env.SHOPIFY_ADMIN_API_TOKEN || process.env.SHOPIFY_ACCESS_TOKEN;
-  if (isLikelyAdminToken(envToken)) {
-    console.log('[TOKEN_RESOLVER] Using env fallback Admin token');
-    return envToken;
-  }
+  // 3) No env fallback - Public App only
 
   // 4) Nothing worked
   throw new Error('No valid Admin API token (DB invalid; no id_token to exchange).');
