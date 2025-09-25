@@ -14,32 +14,47 @@ export function useAppBridge() {
 }
 
 export default function ShopifyAppBridgeProvider({ children }) {
+  const [ready, setReady] = useState(!!window.__SHOPIFY_API_KEY);
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  const params = new URLSearchParams(window.location.search);
-  const host = params.get('host');
-  const shop = params.get('shop');
-  // Try multiple sources for API key
-  const apiKey = window.__SHOPIFY_API_KEY || import.meta.env.VITE_SHOPIFY_API_KEY;
+  const search = new URLSearchParams(window.location.search);
+  const hostParam = search.get('host') || window.__SHOPIFY_HOST;
 
-  console.log('[APP-BRIDGE-PROVIDER] Public App - Initializing with:', {
-    host: host ? 'Present' : 'Missing',
-    shop: shop ? 'Present' : 'Missing',
-    apiKey: apiKey ? 'Present' : 'Missing'
+  console.log('[APP-BRIDGE-PROVIDER] Initializing with:', {
+    host: hostParam ? 'Present' : 'Missing',
+    shop: search.get('shop') ? 'Present' : 'Missing',
+    ready: ready
   });
   
   console.log('[APP-BRIDGE-PROVIDER] Debug info:', {
     window__SHOPIFY_API_KEY: window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING',
     window__SHOPIFY_API_KEY_value: window.__SHOPIFY_API_KEY,
-    import_meta_env_VITE_SHOPIFY_API_KEY: import.meta.env.VITE_SHOPIFY_API_KEY ? 'SET' : 'MISSING',
-    final_apiKey: apiKey
+    import_meta_env_VITE_SHOPIFY_API_KEY: import.meta.env?.VITE_SHOPIFY_API_KEY ? 'SET' : 'MISSING',
   });
 
   useEffect(() => {
-    // Public App: Always try to initialize App Bridge
-    // Even if host is missing, we should still attempt initialization
+    if (window.__SHOPIFY_API_KEY) { 
+      setReady(true); 
+      return; 
+    }
+    
+    // динамична инжекция на /app-bridge.js (ще сетне window.__SHOPIFY_API_KEY и __SHOPIFY_HOST)
+    const s = document.createElement('script');
+    s.src = `/app-bridge.js?${search.toString()}`;
+    s.async = true;
+    s.onload = () => setReady(true);
+    s.onerror = () => setReady(false);
+    document.head.appendChild(s);
+    return () => { s.remove(); };
+  }, []);
+
+  const apiKey = window.__SHOPIFY_API_KEY || import.meta.env?.VITE_SHOPIFY_API_KEY;
+
+  useEffect(() => {
+    if (!ready) return; // Изчакваме готовността
+    
     if (!apiKey) {
       console.error('[APP-BRIDGE-PROVIDER] Missing API key - cannot initialize App Bridge');
       setError('Missing API key');
@@ -47,20 +62,21 @@ export default function ShopifyAppBridgeProvider({ children }) {
       return;
     }
 
-    // For public apps, we need host parameter for embedded apps
-    if (!host) {
-      console.warn('[APP-BRIDGE-PROVIDER] No host parameter - app may not be embedded');
-      // Still try to initialize for non-embedded scenarios
+    if (!hostParam) {
+      console.error('[APP-BRIDGE-PROVIDER] Missing host parameter - cannot initialize App Bridge');
+      setError('Missing host parameter');
+      setLoading(false);
+      return;
     }
 
     import('@shopify/app-bridge').then(({ createApp }) => {
       const appInstance = createApp({
         apiKey,
-        host: host || shop, // Use shop as fallback if host is missing
-        forceRedirect: false // Important for public apps
+        host: hostParam,
+        forceRedirect: true
       });
       
-      console.log('[APP-BRIDGE-PROVIDER] Public App - App instance created');
+      console.log('[APP-BRIDGE-PROVIDER] App Bridge instance created successfully');
       setApp(appInstance);
       window.__SHOPIFY_APP_BRIDGE__ = appInstance; // for backward compatibility
       setLoading(false);
@@ -69,18 +85,9 @@ export default function ShopifyAppBridgeProvider({ children }) {
       setError(err.message);
       setLoading(false);
     });
-  }, [apiKey, host, shop]);
+  }, [ready, apiKey, hostParam]);
 
-  // Public App: Always render children, even if App Bridge fails
-  // This ensures the app can still function in non-embedded scenarios
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    console.warn('[APP-BRIDGE-PROVIDER] App Bridge initialization failed:', error);
-    // Still render children for graceful degradation
-  }
+  if (!apiKey || !hostParam || !ready) return null; // или loader
 
   return (
     <AppBridgeContext.Provider value={app}>

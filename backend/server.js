@@ -1120,6 +1120,22 @@ async function start() {
     });
   });
 
+  // App Bridge JavaScript injection endpoint
+  app.get('/app-bridge.js', (req, res) => {
+    const { shop } = req.query;
+    let { host } = req.query;
+    // ако host липсва, конструираме го от shop
+    if (!host && shop) {
+      host = Buffer.from(`${shop}/admin`, 'utf8').toString('base64');
+    }
+    const apiKey = process.env.SHOPIFY_API_KEY || '';
+    res.type('application/javascript').send(`
+      window.__SHOPIFY_API_KEY = ${JSON.stringify(apiKey)};
+      window.__SHOPIFY_SHOP = ${JSON.stringify(shop || null)};
+      window.__SHOPIFY_HOST = ${JSON.stringify(host || null)};
+    `);
+  });
+
   // APP PROXY ROUTES (MUST be first, before all other middleware)
   console.log('[SERVER] Registering App Proxy routes...');
   app.use('/apps/new-ai-seo', appProxyRouter);
