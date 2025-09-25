@@ -42,7 +42,7 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
   
   try {
     const Shop = (await import('../db/Shop.js')).default;
-    const shopDoc = await Shop.default.findOne({ shop }).lean();
+    const shopDoc = await Shop.findOne({ shop }).lean();
     
     // Ако имаме валиден токен и не форсираме exchange
     if (shopDoc?.accessToken && !forceExchange) {
@@ -61,6 +61,12 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
       }
     }
     
+    // Fallback to env token if available (for development)
+    if (process.env.SHOPIFY_ADMIN_API_TOKEN) {
+      console.log('[TOKEN_RESOLVER] No DB token, using env fallback Admin token');
+      return process.env.SHOPIFY_ADMIN_API_TOKEN;
+    }
+    
     throw new Error('No valid token and no idToken for exchange');
   } catch (err) {
     console.error('[TOKEN_RESOLVER] Error:', err);
@@ -69,6 +75,12 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
     if (err.message.includes('401') || err.message.includes('Invalid API key')) {
       console.log('[TOKEN_RESOLVER] 401 error, clearing invalid token from DB');
       await invalidateShopToken(shop);
+    }
+    
+    // Final fallback to env token if available (for development)
+    if (process.env.SHOPIFY_ADMIN_API_TOKEN) {
+      console.log('[TOKEN_RESOLVER] Using env fallback Admin token after error');
+      return process.env.SHOPIFY_ADMIN_API_TOKEN;
     }
     
     throw err;
@@ -90,7 +102,7 @@ async function performTokenExchange(shop, idToken) {
       // Токенът вече е записан в DB от /token-exchange endpoint
       // Вземете го от DB
       const Shop = (await import('../db/Shop.js')).default;
-      const updatedShop = await Shop.default.findOne({ shop }).lean();
+      const updatedShop = await Shop.findOne({ shop }).lean();
       return updatedShop?.accessToken;
     }
     
