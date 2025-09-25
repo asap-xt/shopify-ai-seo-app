@@ -397,13 +397,24 @@ export async function resolveAdminToken(req, shop) {
     return req._resolvedAdminToken;
   }
 
-  const idToken = req.idToken; // от attachIdToken
   const apiKey = process.env.SHOPIFY_API_KEY;
-  const secret = process.env.SHOPIFY_API_SECRET;
-  const url = `https://${shop}/admin/oauth/access_token`;
+  
+  // 1) Първо опитай да използваш stored offline token
+  const saved = await Shop.findOne({ shop, appApiKey: apiKey }).lean();
+  if (saved?.accessToken && isLikelyAdminToken(saved.accessToken)) {
+    console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB');
+    req._resolvedAdminToken = saved.accessToken;
+    req._resolvedAdminTokenShop = shop;
+    return saved.accessToken;
+  }
 
-  // 1) Ако имаме id_token -> винаги обменяме
+  // 2) Само ако няма валиден stored token -> опитай token exchange
+  const idToken = req.idToken; // от attachIdToken
   if (idToken) {
+    console.log('[TOKEN_RESOLVER] No valid stored token, attempting token exchange');
+    const secret = process.env.SHOPIFY_API_SECRET;
+    const url = `https://${shop}/admin/oauth/access_token`;
+    
     const body = {
       client_id: apiKey,
       client_secret: secret,
@@ -412,27 +423,36 @@ export async function resolveAdminToken(req, shop) {
       subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
       requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
     };
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) {
-      const t = await r.text().catch(()=>'');
-      throw new Error(`Token exchange failed: ${r.status} ${t}`);
+    
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(()=>'');
+        throw new Error(`Token exchange failed: ${r.status} ${t}`);
+      }
+      const json = await r.json();
+      const accessToken = json.access_token;
+      
+      // Запази новия токен в DB
+      await Shop.findOneAndUpdate(
+        { shop },
+        { shop, accessToken, appApiKey: apiKey },
+        { upsert: true }
+      );
+      
+      req._resolvedAdminToken = accessToken;
+      req._resolvedAdminTokenShop = shop;
+      return accessToken;
+    } catch (err) {
+      console.error('[TOKEN_RESOLVER] Token exchange failed:', err.message);
+      throw err;
     }
-    const json = await r.json();
-    req._resolvedAdminToken = json.access_token;
-    req._resolvedAdminTokenShop = shop;
-    return json.access_token;
   }
 
-  // 2) Без id_token – вземи токен от DB за ТАЗИ app (appApiKey match). Без match -> грешка.
-  const saved = await Shop.findOne({ shop, appApiKey: apiKey }).lean();
-  if (saved?.accessToken) {
-    req._resolvedAdminToken = saved.accessToken;
-    req._resolvedAdminTokenShop = shop;
-    return saved.accessToken;
-  }
-  throw new Error('No admin token available. Provide Authorization: Bearer <id_token>.');
+  // 3) Няма нито stored token, нито id_token
+  throw new Error('No admin token available. Provide Authorization: Bearer <id_token> or ensure app is installed.');
 }

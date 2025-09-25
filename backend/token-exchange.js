@@ -48,35 +48,35 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
-    // Token exchange
-    const tokenResult = await shopify.auth.tokenExchange({
-      shop,
-      sessionToken,
-      requestedTokenType: RequestedTokenType.OfflineAccessToken,
+    // Директен HTTP token exchange с правилните параметри
+    const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: process.env.SHOPIFY_API_KEY,
+        client_secret: process.env.SHOPIFY_API_SECRET,
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        subject_token: sessionToken,
+        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+        requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+      }),
     });
-    
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[TOKEN_EXCHANGE] HTTP error:', response.status, errorText);
+      return res.status(response.status).json({ error: errorText });
+    }
+
+    const tokenResult = await response.json();
     console.log('[TOKEN_EXCHANGE] Response type:', typeof tokenResult);
     console.log('[TOKEN_EXCHANGE] Response keys:', Object.keys(tokenResult || {}));
     
-    // Извличане на токена от резултата
-    let accessToken;
-    if (tokenResult && typeof tokenResult === 'object') {
-      if (tokenResult.session && tokenResult.session.accessToken) {
-        accessToken = tokenResult.session.accessToken;
-      } else if (tokenResult.accessToken) {
-        accessToken = tokenResult.accessToken;
-      } else {
-        throw new Error('No accessToken found in token result');
-      }
-    } else {
-      accessToken = tokenResult;
-    }
-    
-    console.log('[TOKEN_EXCHANGE] Extracted token type:', typeof accessToken);
+    const accessToken = tokenResult.access_token;
     console.log('[TOKEN_EXCHANGE] Token starts with shpat_:', accessToken?.startsWith('shpat_'));
     
     if (!accessToken || typeof accessToken !== 'string') {
-      throw new Error('Invalid accessToken extracted from token exchange result');
+      throw new Error('No access_token in token exchange response');
     }
 
     await Shop.findOneAndUpdate(

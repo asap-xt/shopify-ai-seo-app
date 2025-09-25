@@ -3,6 +3,8 @@
 // - For App Bridge v4, session tokens are handled differently
 // - Falls back gracefully for non-embedded scenarios.
 
+import { getSessionToken } from '@shopify/app-bridge-utils';
+
 // Simplified for App Bridge v4 - no session token management needed
 async function getAppBridge(debug = false) {
   if (debug) console.log('[SFETCH] App Bridge v4 - no session token management needed');
@@ -14,8 +16,23 @@ async function getTokenFromAppBridge(app, debug = false) {
   return null; // App Bridge v4 doesn't use session tokens
 }
 
-// Public App - Authenticated fetch function
-export async function makeSessionFetch(debug = false) {
+// Public App - Authenticated fetch function (синхронна фабрика)
+export function sessionFetch(shop) {
+  return async (url, init) => {
+    const token = await getSessionToken(); // App Bridge
+    return fetch(url, {
+      ...init,
+      headers: { 
+        ...(init?.headers || {}), 
+        Authorization: `Bearer ${token}`, 
+        'X-Shop-Domain': shop 
+      },
+    });
+  };
+}
+
+// Legacy compatibility - синхронна фабрика
+export function makeSessionFetch(debug = false) {
   if (debug) console.log('[SFETCH] Creating session fetch for App Bridge v4');
   
   return async (url, options = {}) => {
