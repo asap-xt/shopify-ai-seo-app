@@ -29,6 +29,13 @@ export default function ShopifyAppBridgeProvider({ children }) {
     shop: shop ? 'Present' : 'Missing',
     apiKey: apiKey ? 'Present' : 'Missing'
   });
+  
+  console.log('[APP-BRIDGE-PROVIDER] Debug info:', {
+    window__SHOPIFY_API_KEY: window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING',
+    window__SHOPIFY_API_KEY_value: window.__SHOPIFY_API_KEY,
+    import_meta_env_VITE_SHOPIFY_API_KEY: import.meta.env.VITE_SHOPIFY_API_KEY ? 'SET' : 'MISSING',
+    final_apiKey: apiKey
+  });
 
   useEffect(() => {
     // Public App: Always try to initialize App Bridge
