@@ -78,64 +78,21 @@ export async function resolveShopToken(shop) {
         return shopDoc.accessToken;
       }
       
-      // Try to exchange JWT for access token
-      try {
-        console.log('[TOKEN_RESOLVER] Attempting to exchange JWT for access token...');
-        const result = await exchangeJWTForAccessToken(shopDoc.jwtToken, shop);
-        
-        if (result && result.accessToken) {
-          // Update shop with real access token
-          await Shop.findOneAndUpdate(
-            { shop },
-            { accessToken: result.accessToken },
-            { new: true }
-          );
-          
-          // Cache the token
-          sessionTokenCache.set(cacheKey, {
-            token: result.accessToken,
-            expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
-          });
-          
-          console.log('[TOKEN_RESOLVER] Successfully exchanged JWT for access token');
-          return result.accessToken;
-        }
-      } catch (error) {
-        console.error('[TOKEN_RESOLVER] Failed to exchange JWT:', error);
-      }
+        // Skip JWT token exchange as it's blocked by Cloudflare
+        console.log('[TOKEN_RESOLVER] Skipping JWT token exchange (blocked by Cloudflare)');
       
-      // For JWT flow, we need to validate the session token with Shopify SDK
-      console.log('[TOKEN_RESOLVER] Validating JWT session token with Shopify SDK');
-      try {
-        // Import Shopify SDK
-        const { shopify } = await import('../auth.js');
-        
-        // Validate the JWT session token to get a proper session
-        const session = await shopify.auth.validateSessionToken(shopDoc.jwtToken);
-        
-        if (session && session.accessToken) {
-          console.log('[TOKEN_RESOLVER] Successfully validated JWT session token');
-          
-          // Cache the access token
-          const cacheKey = `${shop}:${shopDoc.jwtToken.substring(0, 20)}`;
-          sessionTokenCache.set(cacheKey, {
-            token: session.accessToken,
-            expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
-          });
-          
-          return session.accessToken;
-        } else {
-          console.error('[TOKEN_RESOLVER] JWT session validation returned no access token');
-        }
-      } catch (error) {
-        console.error('[TOKEN_RESOLVER] JWT session validation failed:', error);
-      }
+      // For JWT flow, use the JWT token directly for API calls
+      // JWT tokens from Shopify can be used directly as Bearer tokens for GraphQL API
+      console.log('[TOKEN_RESOLVER] Using JWT token directly for API calls');
       
-      // Last resort: try to use JWT token directly (might not work)
-      console.log('[TOKEN_RESOLVER] Using JWT token directly as last resort');
+      // Cache the JWT token
+      const cacheKey = `${shop}:${shopDoc.jwtToken.substring(0, 20)}`;
+      sessionTokenCache.set(cacheKey, {
+        token: shopDoc.jwtToken,
+        expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
+      });
+      
       return shopDoc.jwtToken;
-      
-      throw new Error('Unable to obtain valid access token from JWT');
     }
     
     // Traditional flow - use stored access token

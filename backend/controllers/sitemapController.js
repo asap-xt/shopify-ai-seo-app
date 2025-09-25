@@ -44,12 +44,25 @@ async function shopGraphQL(shop, query, variables = {}) {
   const url = 'https://' + shop + '/admin/api/' + API_VERSION + '/graphql.json';
   console.log('[SITEMAP] GraphQL request to:', url);
   
+  // Check if token is JWT (starts with 'eyJ') and use appropriate header
+  const isJWT = token && token.startsWith('eyJ');
+  console.log('[SITEMAP] Token type:', isJWT ? 'JWT' : 'Access Token');
+  
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (isJWT) {
+    // For JWT tokens, use Authorization Bearer header
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    // For traditional access tokens, use X-Shopify-Access-Token header
+    headers['X-Shopify-Access-Token'] = token;
+  }
+  
   const rsp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'X-Shopify-Access-Token': token,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ query, variables }),
   });
   
