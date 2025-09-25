@@ -135,49 +135,22 @@ app.get('/debug/sessions', async (req, res) => {
 // Quick sanity endpoint: confirms we can exchange the session token for an Admin API token
 app.get('/api/whoami', async (req, res) => {
   try {
-    // 1) Read shop from query (preferred) or derive from the session token (id_token)
+    const shop = req.query.shop;
     const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const idToken = req.query.id_token || bearerToken || null;
 
-    let shop = req.query.shop;
-    if (!shop && idToken) {
-      // Try to infer shop from the JWT's dest/iss
-      const inferred = extractShopFromJWT(
-        // We don't need to verify here; tokenResolver will fail cleanly if it's invalid
-        // extractShopFromJWT accepts a decoded payload OR the raw token string – pass raw token:
-        // (the helper can parse dest/iss from either)
-        // If your extractShopFromJWT expects a decoded object only in your codebase,
-        // simply remove this block and rely on req.query.shop.
-        { dest: '', iss: '' } // <- leave placeholder if your helper needs an object only
-      );
-      // If your extractShopFromJWT requires a decoded payload, skip inference and require ?shop=
-      // (Most setups already pass ?shop= in every request)
-      if (inferred) shop = inferred;
-    }
+    if (!shop) return res.status(400).json({ error: 'Missing ?shop=' });
 
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop. Pass ?shop=<shop>.myshopify.com or include a valid id_token.' });
-    }
-
-    // 2) Resolve (or exchange) an Admin API access token for this shop
-    const adminAccessToken = await resolveShopToken(shop, {
-      idToken,
-      requested: 'offline', // or 'online' if your use-case needs it
-    });
-
-    // 3) Return a safe preview (don't log/return full tokens)
+    const adminAccessToken = await resolveShopToken(shop, { idToken, requested: 'offline' });
     const tokenPreview = adminAccessToken
       ? `${adminAccessToken.slice(0, 6)}…${adminAccessToken.slice(-4)}`
       : null;
 
-    res.json({
-      shop,
-      tokenPreview
-    });
-  } catch (err) {
-    console.error('[WHOAMI] Error:', err?.message || err);
-    res.status(401).json({ error: 'Unable to resolve Admin API token', detail: err?.message || String(err) });
+    res.json({ shop, tokenPreview });
+  } catch (e) {
+    console.error('[WHOAMI] Error:', e?.message || e);
+    res.status(401).json({ error: 'Unable to resolve Admin API token', detail: e.message });
   }
 });
 
