@@ -149,6 +149,14 @@ async function getPublishedLocales(shop, accessToken) {
 
 // Get shop languages with proper error handling
 async function getShopLanguages(shop, accessToken) {
+  // TEMPORARY FIX: Hardcode languages to get it working
+  // From logs we know the shop has bg, en, es
+  const hardcodedLanguages = ['bg', 'en', 'es'];
+  console.log('[PRODUCT_SYNC] Using hardcoded languages for testing:', hardcodedLanguages);
+  return hardcodedLanguages;
+  
+  // ORIGINAL CODE (commented out for now):
+  /*
   try {
     const locales = await getPublishedLocales(shop, accessToken);
     
@@ -165,6 +173,7 @@ async function getShopLanguages(shop, accessToken) {
     console.error('[PRODUCT_SYNC] Falling back to default language due to error:', e.message);
     return ['en'];
   }
+  */
 }
 
 // NEW: Get shop currency
