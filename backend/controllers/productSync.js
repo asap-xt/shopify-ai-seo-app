@@ -482,77 +482,68 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
 
 /**
  * Sync products from Shopify and save to MongoDB + FeedCache
- * @returns {Promise<{shop:string, count:number, bytes:number, updatedAt:Date}>}
+ * @returns {Promise<Array>} Array of saved products
  */
-export async function syncProductsForShop(req, shop, opts = {}) {
-  if (!shop) throw new Error('Missing shop');
-  
-  // Use strict token resolver that requires id_token for read_locales scope
-  let accessToken = opts.accessToken;
-  if (!accessToken) {
-    const { resolveAdminTokenOrThrow } = await import('../utils/tokenResolver.js');
-    accessToken = await resolveAdminTokenOrThrow(shop, { idToken: req?.idToken });
-  }
-  
-  if (!accessToken) throw new Error(`No Admin API token available for shop ${shop}`);
-
+export async function syncProductsForShop(shop, idToken = null, retryCount = 0) {
   console.log(`Starting product sync for ${shop}...`);
   
-  // First get shop currency and languages (requires proper token with read_locales)
-  const [shopCurrency, shopLanguages] = await Promise.all([
-    getShopCurrency(shop, accessToken),
-    getShopLanguages(shop, accessToken)
-  ]);
+  let accessToken;
   
-  console.log(`Shop currency: ${shopCurrency}`);
-  console.log(`Shop languages: ${shopLanguages.join(', ')}`);
-  
-  // Вземете продуктите с динамични метаполета
-  const rawProducts = await fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency });
-  console.log(`Fetched ${rawProducts.length} products from Shopify`);
-
-  // Save each product to MongoDB
-  let savedCount = 0;
-  const feedItems = [];
-  
-  for (const node of rawProducts) {
-    try {
-      // Convert to Product document with dynamic languages and currency
-      const productDoc = toProductDocument(node, shop, shopLanguages, shopCurrency);
-      
-      // Update or create in MongoDB
-      await Product.findOneAndUpdate(
-        { shop, productId: productDoc.productId },
-        productDoc,
-        { upsert: true, new: true }
-      );
-      
-      savedCount++;
-      
-      // Also prepare feed item
-      feedItems.push(toFeedItem(node, shopCurrency));
-    } catch (e) {
-      console.error(`Failed to save product ${node.id}:`, e.message);
-    }
+  try {
+    // Първи опит с текущия токен
+    const { resolveAccessToken } = await import('../utils/tokenResolver.js');
+    accessToken = await resolveAccessToken(shop, idToken);
+  } catch (err) {
+    console.error('Initial token resolution failed:', err);
+    throw new Error('No valid access token available');
   }
-
-  // Update FeedCache for backward compatibility
-  const lines = feedItems.map((obj) => JSON.stringify(obj));
-  const ndjson = lines.join('\n');
-  const updatedAt = new Date();
   
-  await FeedCache.updateOne(
-    { shop },
-    { $set: { format: 'ndjson', data: ndjson, updatedAt } },
-    { upsert: true }
-  );
-
-  console.log(`Sync complete: saved ${savedCount} products to MongoDB`);
-
-  return {
-    shop,
-    count: savedCount,
-    bytes: Buffer.byteLength(ndjson, 'utf8'),
-    updatedAt,
-  };
+  try {
+    // Опитайте се да вземете данните
+    const [currency, languages] = await Promise.all([
+      getShopCurrency(shop, accessToken),
+      getPublishedLocales(shop, accessToken)
+    ]);
+    
+    console.log(`Shop currency: ${currency}`);
+    console.log(`Shop languages: ${languages.join(', ')}`);
+    
+    const products = await fetchAllProducts({ shop, accessToken, shopLanguages: languages, shopCurrency: currency });
+    console.log(`Fetched ${products.length} products from Shopify`);
+    
+    // Запазете в MongoDB
+    const Product = (await import('../db/Product.js')).default;
+    await Product.deleteMany({ shop });
+    const savedProducts = await Product.insertMany(
+      products.map(p => ({
+        shop,
+        shopifyProductId: p.productId,
+        ...p,
+        syncedAt: new Date(),
+      }))
+    );
+    
+    console.log(`Sync complete: saved ${savedProducts.length} products to MongoDB`);
+    return savedProducts;
+    
+  } catch (error) {
+    // Ако грешката е 401 и имаме idToken, опитайте Token Exchange
+    if (error.message.includes('401') && idToken && retryCount < 1) {
+      console.log('[PRODUCT_SYNC] Got 401, attempting token exchange...');
+      
+      try {
+        // Форсирайте нов Token Exchange
+        const { resolveAccessToken } = await import('../utils/tokenResolver.js');
+        accessToken = await resolveAccessToken(shop, idToken, true);
+        
+        // Опитайте отново със новия токен
+        return await syncProductsForShop(shop, null, retryCount + 1); // Рекурсивно извикване без idToken
+      } catch (exchangeError) {
+        console.error('Token exchange failed:', exchangeError);
+        throw new Error('Authentication failed after token exchange attempt');
+      }
+    }
+    
+    throw error;
+  }
 }

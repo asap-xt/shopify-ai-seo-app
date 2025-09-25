@@ -37,6 +37,70 @@ export async function invalidateShopToken(shopInput) {
  *   3) Else, env fallback SHOPIFY_ADMIN_API_TOKEN (dev) -> return.
  *   4) Else throw.
  */
+export async function resolveAccessToken(shop, idToken = null, forceExchange = false) {
+  console.log('[TOKEN_RESOLVER] Strict resolve for:', shop);
+  
+  try {
+    const Shop = (await import('../db/Shop.js')).default;
+    const shopDoc = await Shop.default.findOne({ shop }).lean();
+    
+    // Ако имаме валиден токен и не форсираме exchange
+    if (shopDoc?.accessToken && !forceExchange) {
+      if (shopDoc.appApiKey === process.env.SHOPIFY_API_KEY && isLikelyAdminToken(shopDoc.accessToken)) {
+        console.log('[TOKEN_RESOLVER] Using stored token, will validate...');
+        return shopDoc.accessToken;
+      }
+    }
+    
+    // Ако имаме idToken, направете Token Exchange
+    if (idToken) {
+      console.log('[TOKEN_RESOLVER] Performing Token Exchange...');
+      const newToken = await performTokenExchange(shop, idToken);
+      if (newToken) {
+        return newToken;
+      }
+    }
+    
+    throw new Error('No valid token and no idToken for exchange');
+  } catch (err) {
+    console.error('[TOKEN_RESOLVER] Error:', err);
+    
+    // Ако грешката е 401, изчисти невалидния токен от DB
+    if (err.message.includes('401') || err.message.includes('Invalid API key')) {
+      console.log('[TOKEN_RESOLVER] 401 error, clearing invalid token from DB');
+      await invalidateShopToken(shop);
+    }
+    
+    throw err;
+  }
+}
+
+async function performTokenExchange(shop, idToken) {
+  try {
+    const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/token-exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shop, sessionToken: idToken })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[TOKEN_RESOLVER] Token exchange successful');
+      
+      // Токенът вече е записан в DB от /token-exchange endpoint
+      // Вземете го от DB
+      const Shop = (await import('../db/Shop.js')).default;
+      const updatedShop = await Shop.default.findOne({ shop }).lean();
+      return updatedShop?.accessToken;
+    }
+    
+    throw new Error('Token exchange failed');
+  } catch (err) {
+    console.error('[TOKEN_RESOLVER] Token exchange error:', err);
+    throw err;
+  }
+}
+
 export async function resolveShopToken(
   shopInput,
   { idToken = null, requested = 'offline' } = {}

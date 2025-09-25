@@ -249,17 +249,24 @@ router.post('/sync', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    // Вземете idToken от request
+    const idToken = req.headers['authorization']?.replace('Bearer ', '') || 
+                   req.query.id_token ||
+                   req.body?.id_token;
+    
+    console.log('[PRODUCT_SYNC] Starting sync with idToken:', !!idToken);
+    
     // Import dynamically to avoid circular dependencies
     const { syncProductsForShop } = await import('./productSync.js');
     
-    // Start sync (this is the simple version, later we'll make it a background job)
-    const result = await syncProductsForShop(req, shop);
+    // Подайте idToken към sync функцията
+    const result = await syncProductsForShop(shop, idToken);
     
     res.json({
       success: true,
       shop,
-      synced: result.count,
-      message: `Successfully synced ${result.count} products`
+      count: result.length,
+      message: `Successfully synced ${result.length} products`
     });
 
   } catch (error) {
