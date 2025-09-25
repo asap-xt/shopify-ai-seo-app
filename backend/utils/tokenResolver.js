@@ -14,8 +14,13 @@ export function isLikelyAdminToken(token) {
 
 export async function invalidateShopToken(shopDomain) {
   try {
+    // Ensure shopDomain is a string, not an array
+    if (Array.isArray(shopDomain)) {
+      shopDomain = shopDomain.find(s => s && typeof s === 'string' && s.trim()) || shopDomain[0];
+    }
+    
     const Shop = (await import('../db/Shop.js')).default;
-    await Shop.updateOne({ shop: shopDomain }, { $unset: { accessToken: "" } });
+    await Shop.updateOne({ shop: shopDomain }, { $unset: { accessToken: "", appApiKey: "" } });
     console.log('[TOKEN_RESOLVER] Invalidated stored token for', shopDomain);
   } catch (e) {
     console.warn('[TOKEN_RESOLVER] Failed to invalidate token:', e.message);
@@ -34,6 +39,12 @@ export async function resolveShopToken(
   shopDomain,
   { idToken = null, requested = 'offline' } = {}
 ) {
+  // Ensure shopDomain is a string, not an array
+  if (Array.isArray(shopDomain)) {
+    shopDomain = shopDomain.find(s => s && typeof s === 'string' && s.trim()) || shopDomain[0];
+    console.log('[TOKEN_RESOLVER] Shop was array, using first valid:', shopDomain);
+  }
+  
   console.log('[TOKEN_RESOLVER] Resolving Admin token for:', shopDomain);
   const { SHOPIFY_API_KEY, SHOPIFY_API_SECRET } = process.env;
 
