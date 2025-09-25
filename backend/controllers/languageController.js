@@ -1,6 +1,6 @@
 import express from 'express';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import { resolveShopToken } from '../utils/tokenResolver.js';
+import { resolveShopToken, resolveAdminToken } from '../utils/tokenResolver.js';
 
 // ===== Config
 const API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';

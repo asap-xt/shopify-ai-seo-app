@@ -15,8 +15,14 @@ export async function apiFetch(path, options = {}) {
   const idToken = await getSessionToken(app);
   const headers = new Headers(options.headers || {});
   headers.set('Authorization', `Bearer ${idToken}`);
-  const sep = path.includes('?') ? '&' : '?';
-  return fetch(`${path}${sep}shop=${encodeURIComponent(shopDomain)}`, { ...options, headers });
+  
+  // Check if shop parameter already exists in path
+  const url = new URL(path, window.location.origin);
+  if (!url.searchParams.has('shop') && shopDomain) {
+    url.searchParams.set('shop', shopDomain);
+  }
+  
+  return fetch(url.pathname + url.search, { ...options, headers });
 }
 
 // Helper for JSON responses
