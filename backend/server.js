@@ -1349,6 +1349,82 @@ app.get('*', (req, res) => {
 
 start();
 
+// Debug endpoint to check token validity
+app.get('/debug/check-token/:shop', async (req, res) => {
+  try {
+    const shop = req.params.shop;
+    const Shop = (await import('./db/Shop.js')).default;
+    const shopDoc = await Shop.findOne({ shop }).lean();
+    
+    if (!shopDoc) {
+      return res.json({ error: 'Shop not found' });
+    }
+    
+    // Проверете токена
+    const token = shopDoc.accessToken;
+    const tokenInfo = {
+      exists: !!token,
+      startsWithShpua: token?.startsWith('shpua_'),
+      startsWithShpat: token?.startsWith('shpat_'),
+      length: token?.length,
+      apiKey: shopDoc.appApiKey,
+      currentApiKey: process.env.SHOPIFY_API_KEY,
+      apiKeyMatch: shopDoc.appApiKey === process.env.SHOPIFY_API_KEY,
+      lastUpdated: shopDoc.updatedAt
+    };
+    
+    // Тествайте токена
+    const testQuery = `{ shop { name } }`;
+    try {
+      const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: testQuery })
+      });
+      
+      const result = await response.json();
+      tokenInfo.testResult = {
+        status: response.status,
+        ok: response.ok,
+        data: result
+      };
+    } catch (err) {
+      tokenInfo.testError = err.message;
+    }
+    
+    res.json(tokenInfo);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Debug endpoint to force token refresh
+app.post('/force-token-refresh/:shop', async (req, res) => {
+  try {
+    const shop = req.params.shop;
+    const Shop = (await import('./db/Shop.js')).default;
+    
+    // Изтрийте стария токен
+    await Shop.findOneAndUpdate(
+      { shop },
+      { 
+        $unset: { accessToken: 1, appApiKey: 1 },
+        $set: { needsTokenExchange: true }
+      }
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'Token cleared. Next request will trigger token exchange.' 
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Process safety logs
 // ---------------------------------------------------------------------------
