@@ -542,6 +542,70 @@ async function mountOptionalRouters(app) {
   } catch {
     // not present – skip
   }
+
+  // Debug endpoint to check token validity
+  app.get('/api/debug/token/:shop', async (req, res) => {
+    try {
+      const shop = req.params.shop;
+      const { resolveShopToken } = await import('./utils/tokenResolver.js');
+      const Shop = (await import('./db/Shop.js')).default;
+      
+      // Get token from DB
+      const shopDoc = await Shop.findOne({ shop }).lean();
+      
+      // Try to resolve token
+      const token = await resolveShopToken(shop);
+      
+      // Test token with simple GraphQL query
+      const testQuery = `query { shop { name } }`;
+      const testRes = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': token,
+        },
+        body: JSON.stringify({ query: testQuery }),
+      });
+      
+      const testData = await testRes.json();
+      
+      res.json({
+        shop,
+        tokenInDB: !!shopDoc?.accessToken,
+        tokenType: typeof token,
+        tokenPrefix: token ? token.substring(0, 10) + '...' : null,
+        appApiKey: shopDoc?.appApiKey,
+        currentAppKey: process.env.SHOPIFY_API_KEY,
+        keyMatch: shopDoc?.appApiKey === process.env.SHOPIFY_API_KEY,
+        testStatus: testRes.status,
+        testSuccess: testRes.ok,
+        testData: testData?.data ? 'SUCCESS' : testData?.errors || 'UNKNOWN'
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Debug endpoint to force token refresh
+  app.post('/api/debug/refresh-token/:shop', async (req, res) => {
+    try {
+      const shop = req.params.shop;
+      const { invalidateShopToken, resolveShopToken } = await import('./utils/tokenResolver.js');
+      
+      // Clear old token
+      await invalidateShopToken(shop);
+      
+      // Try to get new token (will fail without idToken, but clears cache)
+      try {
+        const newToken = await resolveShopToken(shop, { requested: 'offline' });
+        res.json({ success: true, hasNewToken: !!newToken });
+      } catch (e) {
+        res.json({ success: true, cleared: true, note: 'Token cleared, need idToken for new one' });
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 
