@@ -648,11 +648,16 @@ app.get('/', async (req, res) => {
       }
     }
     
-    // Always serve the app if we have JWT token
-    if (id_token || (existingShop && existingShop.accessToken)) {
-      console.log('[APP URL] Serving embedded app');
-      const indexPath = path.join(distPath, 'index.html');
-      let html = fs.readFileSync(indexPath, 'utf8');
+        // Check if we have a valid access token for API calls
+        const hasValidAccessToken = existingShop && existingShop.accessToken && existingShop.accessToken !== 'jwt-pending';
+        
+        // Always serve the app if we have JWT token, but show OAuth prompt if no access token
+        if (id_token || (existingShop && existingShop.accessToken)) {
+          console.log('[APP URL] Serving embedded app');
+          console.log('[APP URL] Has valid access token:', hasValidAccessToken);
+          
+          const indexPath = path.join(distPath, 'index.html');
+          let html = fs.readFileSync(indexPath, 'utf8');
       
           // Inject the Shopify API key and other data into the HTML
           const apiKey = process.env.SHOPIFY_API_KEY || '';
@@ -662,7 +667,8 @@ app.get('/', async (req, res) => {
           
           // First, replace the placeholder in the existing meta tag
           console.log('[SERVER] Before placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
-          html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+          console.log('[SERVER] API Key to inject:', apiKey ? 'SET (' + apiKey.length + ' chars)' : 'MISSING');
+          html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
           console.log('[SERVER] After placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
           console.log('[SERVER] After placeholder replacement - contains API key:', html.includes(apiKey));
           console.log('[SERVER] Replaced VITE_SHOPIFY_API_KEY placeholder');
@@ -813,7 +819,7 @@ const spaRoutes = [
       // Inject API key
       const apiKey = process.env.SHOPIFY_API_KEY || '';
       // First, replace the placeholder in the existing meta tag
-      html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+      html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
       const headEndIndex = html.indexOf('</head>');
       if (headEndIndex !== -1) {
         const injection = `

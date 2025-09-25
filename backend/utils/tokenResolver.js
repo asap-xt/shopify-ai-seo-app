@@ -78,20 +78,13 @@ export async function resolveShopToken(shop) {
         return shopDoc.accessToken;
       }
       
-        // Skip JWT token exchange as it's blocked by Cloudflare
-        console.log('[TOKEN_RESOLVER] Skipping JWT token exchange (blocked by Cloudflare)');
+      // JWT tokens cannot be used directly as access tokens for GraphQL API
+      // We need a proper OAuth access token for API calls
+      console.log('[TOKEN_RESOLVER] JWT token found but no valid access token for API calls');
+      console.log('[TOKEN_RESOLVER] Shop needs to complete OAuth flow to get access token');
       
-      // For JWT flow, use the JWT token directly for API calls
-      // JWT tokens from Shopify can be used directly as Bearer tokens for GraphQL API
-      console.log('[TOKEN_RESOLVER] Using JWT token directly for API calls');
-      
-      // Cache the JWT token (reuse the same cacheKey from above)
-      sessionTokenCache.set(cacheKey, {
-        token: shopDoc.jwtToken,
-        expiresAt: Date.now() + (55 * 60 * 1000) // 55 minutes
-      });
-      
-      return shopDoc.jwtToken;
+      // Return null to indicate we need OAuth
+      throw new Error(`Shop ${shop} has JWT token but no valid access token for API calls. OAuth flow required.`);
     }
     
     // Traditional flow - use stored access token

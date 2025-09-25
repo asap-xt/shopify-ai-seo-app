@@ -47,14 +47,16 @@ async function shopGraphQL(shop, query, variables = {}) {
   // Check if token is JWT (starts with 'eyJ') and use appropriate header
   const isJWT = token && token.startsWith('eyJ');
   console.log('[SITEMAP] Token type:', isJWT ? 'JWT' : 'Access Token');
+  console.log('[SITEMAP] Token prefix:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
   
   const headers = {
     'Content-Type': 'application/json',
   };
   
   if (isJWT) {
-    // For JWT tokens, use Authorization Bearer header
-    headers['Authorization'] = `Bearer ${token}`;
+    // For JWT tokens, try both Authorization Bearer and X-Shopify-Access-Token
+    console.log('[SITEMAP] Using JWT token with X-Shopify-Access-Token header (JWT tokens work as access tokens)');
+    headers['X-Shopify-Access-Token'] = token;
   } else {
     // For traditional access tokens, use X-Shopify-Access-Token header
     headers['X-Shopify-Access-Token'] = token;
