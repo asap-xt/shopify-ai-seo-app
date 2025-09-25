@@ -4,7 +4,12 @@ import '@shopify/shopify-api/adapters/node'; // Required adapter for Node
 import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
 import { MongoDBSessionStorage } from '@shopify/shopify-app-session-storage-mongodb';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // Build hostName from env (accept a few names) and sanitize
 function getHostName() {
@@ -14,10 +19,14 @@ function getHostName() {
     process.env.BASE_URL ||
     process.env.HOST ||
     '';
-  return raw.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  console.log('[SHOPIFY-API] Raw URL:', raw);
+  const result = raw.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  console.log('[SHOPIFY-API] HostName:', result);
+  return result;
 }
 
 const hostName = getHostName();
+console.log('[SHOPIFY-API] Final hostName:', hostName);
 if (!hostName) {
   // Won't crash, but SDK init will if hostName is empty; warn loudly
   console.warn('⚠️ APP_URL / SHOPIFY_APP_URL / BASE_URL / HOST is not set. Please set your public app URL in Railway.');
