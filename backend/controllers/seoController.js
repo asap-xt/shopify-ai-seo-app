@@ -122,12 +122,20 @@ function requireShop(req) {
 import { resolveShopToken } from '../utils/tokenResolver.js';
 
 // Resolve Admin token using centralized function
-async function resolveAdminTokenForShop(shop) {
+async function resolveAdminTokenForShop(shop, req = null) {
   console.log('=== TOKEN RESOLVER DEBUG ===');
   console.log('1. Looking for shop:', shop);
   
   try {
-    const token = await resolveShopToken(shop);
+    // Try to get idToken from request if available
+    let idToken = null;
+    if (req) {
+      idToken = req.headers['authorization']?.replace('Bearer ', '') || 
+                req.query.id_token ||
+                req.body?.id_token;
+    }
+    
+    const token = await resolveShopToken(shop, { idToken, requested: 'offline' });
     console.log('2. Token resolved successfully');
     console.log('3. Token type:', typeof token);
     console.log('4. Token starts with shpat_:', token?.startsWith('shpat_'));
@@ -143,7 +151,7 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
   console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
   
-  const token = await resolveAdminTokenForShop(shop);
+  const token = await resolveAdminTokenForShop(shop, req);
   console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
   
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
