@@ -95,4 +95,4 @@ function ShopifyAppBridgeWrapper() {
 }
 
 // Render the app
-createRoot(document.getElementById('root')).render(<ShopifyAppWrapper />);
+createRoot(document.getElementById('root')).render(<ShopifyAppBridgeWrapper />);
