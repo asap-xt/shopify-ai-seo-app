@@ -56,15 +56,11 @@ async function adminGraphQL(shop, token, query, variables = {}) {
 // Query: all published shop locales
 const Q_SHOP_LOCALES = `
   query ShopLocales {
-    shopLocales(first: 250) {
-      edges {
-        node {
-          locale
-          name
-          primary
-          published
-        }
-      }
+    shopLocales {
+      locale
+      name
+      primary
+      published
     }
   }
 `;
@@ -72,8 +68,8 @@ const Q_SHOP_LOCALES = `
 async function getShopLocales(shop, token) {
   const json = await adminGraphQL(shop, token, Q_SHOP_LOCALES);
   if (json.errors) throw new Error(JSON.stringify(json.errors));
-  const edges = json?.data?.shopLocales?.edges ?? [];
-  return edges.map(e => e.node); // [{ locale, name, primary, published }]
+  const locales = json?.data?.shopLocales ?? [];
+  return locales.filter(l => l.published); // [{ locale, name, primary, published }]
 }
 
 // Query: SEO metafields for product (to see which languages are optimized)
@@ -184,16 +180,7 @@ async function shopifyGQL({ shop, token, query, variables }) {
   return json.data;
 }
 
-// ---- queries
-const Q_SHOP_LOCALES = `
-  query ShopLocales {
-    shopLocales {
-      locale
-      primary
-      published
-    }
-  }
-`;
+// ---- queries (removed duplicate Q_SHOP_LOCALES)
 
 const Q_PRODUCT_LOCALES = `
   query ProductLocales($id: ID!) {
