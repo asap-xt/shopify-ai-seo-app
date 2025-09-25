@@ -2,8 +2,11 @@
 import createApp from '@shopify/app-bridge';
 import { getSessionToken } from '@shopify/app-bridge-utils';
 
+// Get API key from multiple sources
+const apiKey = window.__SHOPIFY_API_KEY || import.meta.env.VITE_SHOPIFY_API_KEY;
+
 const app = createApp({ 
-  apiKey: import.meta.env.VITE_SHOPIFY_API_KEY, 
+  apiKey: apiKey, 
   host: new URLSearchParams(location.search).get('host') 
 });
 const shopDomain = new URLSearchParams(location.search).get('shop');
