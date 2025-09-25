@@ -1,6 +1,7 @@
 // backend/utils/tokenResolver.js
 import fetch from 'node-fetch';
 import { normalizeShop } from './shop.js';
+import Shop from '../db/Shop.js'; // Директен import в началото на файла
 
 /** Heuristic: reject session tokens / placeholders stored by mistake */
 export function isLikelyAdminToken(token) {
@@ -41,7 +42,7 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
   console.log('[TOKEN_RESOLVER] Strict resolve for:', shop);
   
   try {
-    const Shop = (await import('../db/Shop.js')).default;
+    // Използвайте Shop директно
     const shopDoc = await Shop.findOne({ shop }).lean();
     
     // Ако имаме валиден токен и не форсираме exchange
@@ -89,7 +90,9 @@ export async function resolveAccessToken(shop, idToken = null, forceExchange = f
 
 async function performTokenExchange(shop, idToken) {
   try {
-    const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/token-exchange`, {
+    console.log('[TOKEN_RESOLVER] Calling token exchange endpoint...');
+    
+    const response = await fetch(`${process.env.APP_URL}/token-exchange`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shop, sessionToken: idToken })
@@ -97,16 +100,20 @@ async function performTokenExchange(shop, idToken) {
     
     if (response.ok) {
       const data = await response.json();
-      console.log('[TOKEN_RESOLVER] Token exchange successful');
+      console.log('[TOKEN_RESOLVER] Token exchange response:', data.status);
       
-      // Токенът вече е записан в DB от /token-exchange endpoint
-      // Вземете го от DB
-      const Shop = (await import('../db/Shop.js')).default;
+      // Изчакайте малко и вземете новия токен от DB
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const updatedShop = await Shop.findOne({ shop }).lean();
-      return updatedShop?.accessToken;
+      if (updatedShop?.accessToken) {
+        console.log('[TOKEN_RESOLVER] New token retrieved from DB');
+        return updatedShop.accessToken;
+      }
     }
     
-    throw new Error('Token exchange failed');
+    const errorText = await response.text();
+    throw new Error(`Token exchange failed: ${errorText}`);
   } catch (err) {
     console.error('[TOKEN_RESOLVER] Token exchange error:', err);
     throw err;
