@@ -155,8 +155,13 @@ app.get('/api/whoami', async (req, res) => {
   }
 });
 
+// make id_token available to every API handler via req.idToken
+app.use('/api', attachIdToken);
+app.use('/plans', attachIdToken);
+app.use('/collections', attachIdToken);
+
 // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
-app.use('/api', attachIdToken, async (req, res, next) => {
+app.use('/api', async (req, res, next) => {
   try {
     console.log('[API-RESOLVER] ===== API MIDDLEWARE CALLED =====');
     console.log('[API-RESOLVER] URL:', req.originalUrl);

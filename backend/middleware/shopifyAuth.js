@@ -175,8 +175,8 @@ export function validateRequest() {
     }
 
     try {
-      // Use centralized token resolver
-      const accessToken = await resolveShopToken(shop);
+      // Use centralized token resolver with id_token
+      const accessToken = await resolveShopToken(shop, { idToken: req.idToken, requested: 'offline' });
       
       // Set session data
       req.shopifySession = {

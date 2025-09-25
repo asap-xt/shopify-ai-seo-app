@@ -1,48 +1,19 @@
 // frontend/src/utils/api.js
-// API wrapper that automatically includes fresh session tokens
+import createApp from '@shopify/app-bridge';
+import { getSessionToken } from '@shopify/app-bridge-utils';
 
+const app = createApp({ 
+  apiKey: import.meta.env.VITE_SHOPIFY_API_KEY, 
+  host: new URLSearchParams(location.search).get('host') 
+});
 const shopDomain = new URLSearchParams(location.search).get('shop');
 
 export async function apiFetch(path, options = {}) {
-  try {
-    // Get fresh session token from App Bridge
-    let idToken = null;
-    if (window.shopify?.idToken) {
-      idToken = await window.shopify.idToken();
-    }
-    
-    const headers = new Headers(options.headers || {});
-    
-    // Add Authorization header with fresh session token
-    if (idToken) {
-      headers.set('Authorization', `Bearer ${idToken}`);
-      console.log('[API_FETCH] Added Authorization header with session token');
-    } else {
-      console.warn('[API_FETCH] No session token available - Token Exchange may fail');
-    }
-    
-    // Keep ?shop= in the URL for server convenience
-    const sep = path.includes('?') ? '&' : '?';
-    const url = `${path}${sep}shop=${encodeURIComponent(shopDomain)}`;
-    
-    console.log('[API_FETCH] Making request to:', url);
-    
-    const response = await fetch(url, { 
-      ...options, 
-      headers 
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[API_FETCH] Request failed:', response.status, errorText);
-      throw new Error(`API request failed: ${response.status} ${errorText}`);
-    }
-    
-    return response;
-  } catch (error) {
-    console.error('[API_FETCH] Error:', error);
-    throw error;
-  }
+  const idToken = await getSessionToken(app);
+  const headers = new Headers(options.headers || {});
+  headers.set('Authorization', `Bearer ${idToken}`);
+  const sep = path.includes('?') ? '&' : '?';
+  return fetch(`${path}${sep}shop=${encodeURIComponent(shopDomain)}`, { ...options, headers });
 }
 
 // Helper for JSON responses
