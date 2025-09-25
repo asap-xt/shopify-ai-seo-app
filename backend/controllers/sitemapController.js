@@ -46,10 +46,20 @@ async function shopGraphQL(shop, query, variables = {}) {
   
   console.log('[SITEMAP] Token prefix:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
   
+  // Use appropriate header based on token type
   const headers = {
     'Content-Type': 'application/json',
-    'X-Shopify-Access-Token': token,
   };
+  
+  if (token && token.startsWith('eyJ')) {
+    // JWT token - use Authorization header
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log('[SITEMAP] Using JWT token for GraphQL');
+  } else {
+    // OAuth access token - use X-Shopify-Access-Token header
+    headers['X-Shopify-Access-Token'] = token;
+    console.log('[SITEMAP] Using OAuth access token for GraphQL');
+  }
   
   const rsp = await fetch(url, {
     method: 'POST',

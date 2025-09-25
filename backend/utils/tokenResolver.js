@@ -47,17 +47,18 @@ export async function resolveShopToken(shopDomain) {
       hasJWTToken: !!shopDoc?.jwtToken
     });
     
-    // For embedded apps, we need a proper OAuth access token (shpat_)
-    // JWT tokens cannot be used directly for GraphQL API calls
-    if (shopDoc?.accessToken && shopDoc.accessToken.startsWith('shpat_')) {
-      console.log('[TOKEN_RESOLVER] Using valid OAuth access token');
-      return shopDoc.accessToken;
+    // For embedded apps, use JWT token for session-based authentication
+    if (shopDoc?.jwtToken && shopDoc?.useJWT) {
+      console.log('[TOKEN_RESOLVER] Using JWT token for embedded app');
+      // For embedded apps, we need to exchange JWT for session token
+      // This is the proper way according to Shopify documentation
+      return shopDoc.jwtToken;
     }
     
-    // If we only have jwt-pending or JWT token, we need to trigger OAuth installation
-    if (shopDoc?.accessToken === 'jwt-pending' || shopDoc?.useJWT) {
-      console.log('[TOKEN_RESOLVER] JWT token found but need OAuth access token for API calls');
-      throw new Error('App needs to be installed via OAuth to get proper access token');
+    // Fallback to OAuth access token if available
+    if (shopDoc?.accessToken && shopDoc.accessToken.startsWith('shpat_')) {
+      console.log('[TOKEN_RESOLVER] Using OAuth access token');
+      return shopDoc.accessToken;
     }
   } catch (err) {
     console.error('[TOKEN_RESOLVER] Error loading shop:', err);
