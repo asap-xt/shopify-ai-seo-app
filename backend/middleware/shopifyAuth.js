@@ -44,6 +44,32 @@ export function authCallback() {
         afterAuth: async (ctx) => {
           const { session } = ctx;
           console.log('[SHOPIFY-AUTH] Session stored for shop:', session.shop);
+          console.log('[SHOPIFY-AUTH] Access token received:', session.accessToken ? 'YES' : 'NO');
+          
+          // CRITICAL: Save access token to MongoDB for our tokenResolver
+          if (session.accessToken) {
+            try {
+              const Shop = (await import('../db/Shop.js')).default;
+              
+              await Shop.findOneAndUpdate(
+                { shop: session.shop },
+                {
+                  shop: session.shop,
+                  accessToken: session.accessToken,
+                  scopes: session.scope,
+                  useJWT: false, // This is traditional OAuth flow
+                  installedAt: new Date(),
+                  updatedAt: new Date()
+                },
+                { upsert: true, new: true }
+              );
+              
+              console.log('[SHOPIFY-AUTH] ✅ Access token saved to MongoDB for shop:', session.shop);
+              console.log('[SHOPIFY-AUTH] Token prefix:', session.accessToken.substring(0, 10) + '...');
+            } catch (error) {
+              console.error('[SHOPIFY-AUTH] ❌ Failed to save access token to MongoDB:', error);
+            }
+          }
         }
       });
       return middleware(req, res, next);
