@@ -2,88 +2,41 @@
 import crypto from 'crypto';
 
 /**
- * Verify App Proxy request signature
+ * Verify App Proxy request signature (correct implementation per Shopify AI)
  * @param {Object} req - Express request object
  * @param {string} secret - App secret from environment
  * @returns {boolean} - Whether the request is valid
  */
-export function verifyAppProxyRequest(req, secret) {
+export function verifyAppProxySignature(req, secret) {
   try {
     console.log('[APP_PROXY] Starting HMAC verification...');
     console.log('[APP_PROXY] Query params:', req.query);
     
-    const signature = req.query.signature;
-    if (!signature) {
+    const url = new URL(req.originalUrl, `https://${req.headers.host}`);
+    const sig = url.searchParams.get('signature') || '';
+    
+    if (!sig) {
       console.log('[APP_PROXY] No signature provided');
       return false;
     }
+    
+    // Build the message from all query params EXCEPT 'signature', as Shopify sends it
+    url.searchParams.delete('signature');
+    const message = url.searchParams.toString(); // raw query string order is OK from Node/Express
+    
+    console.log('[APP_PROXY] Message for HMAC:', message);
+    console.log('[APP_PROXY] Received signature:', sig);
 
-    // Remove signature from query parameters for verification
-    const queryParams = { ...req.query };
-    delete queryParams.signature;
-    
-    console.log('[APP_PROXY] Query params without signature:', queryParams);
+    const digest = crypto
+      .createHmac('sha256', secret)
+      .update(message, 'utf8')
+      .digest('hex');
 
-    // Sort parameters by key (alphabetical order)
-    const sortedKeys = Object.keys(queryParams).sort();
-    console.log('[APP_PROXY] Sorted keys:', sortedKeys);
+    console.log('[APP_PROXY] Computed digest:', digest);
 
-    // Try different query string formats as per various Shopify documentation
-    const queryStringFormats = [
-      // Format 1: With '&' separator (most common)
-      sortedKeys.map(key => `${key}=${queryParams[key]}`).join('&'),
-      // Format 2: Without separator (some documentation suggests this)
-      sortedKeys.map(key => `${key}=${queryParams[key]}`).join(''),
-      // Format 3: With '&' and sorted by value too
-      sortedKeys.sort().map(key => `${key}=${queryParams[key]}`).join('&'),
-      // Format 4: URL encoded values
-      sortedKeys.map(key => `${key}=${encodeURIComponent(queryParams[key])}`).join('&'),
-      // Format 5: URL encoded keys and values
-      sortedKeys.map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`).join('&'),
-      // Format 6: Raw query string from request
-      req.url.split('?')[1]?.replace(/[?&]signature=[^&]*/, '').replace(/[?&]hmac=[^&]*/, '') || ''
-    ];
-    
-    console.log('[APP_PROXY] Trying different query string formats:');
-    queryStringFormats.forEach((format, index) => {
-      console.log(`[APP_PROXY] Format ${index + 1}:`, format);
-    });
-
-    // Try each format until one works
-    let isValid = false;
-    let workingFormat = -1;
-    let workingAlgorithm = '';
-    
-    // Try different algorithms and formats
-    const algorithms = ['sha256', 'sha1'];
-    
-    for (let i = 0; i < queryStringFormats.length; i++) {
-      const queryString = queryStringFormats[i];
-      
-      for (const algorithm of algorithms) {
-        const hmac = crypto
-          .createHmac(algorithm, secret)
-          .update(queryString)
-          .digest('hex');
-        
-        console.log(`[APP_PROXY] Format ${i + 1} ${algorithm.toUpperCase()} HMAC:`, hmac);
-        
-        if (hmac === signature) {
-          isValid = true;
-          workingFormat = i + 1;
-          workingAlgorithm = algorithm;
-          console.log(`[APP_PROXY] ✅ HMAC matches with format ${workingFormat} and algorithm ${algorithm}!`);
-          break;
-        }
-      }
-      
-      if (isValid) break;
-    }
-    
-    if (!isValid) {
-      console.log('[APP_PROXY] ❌ No format matched the signature');
-      console.log('[APP_PROXY] Received signature:', signature);
-    }
+    // constant-time compare
+    const isValid = digest.length === sig.length &&
+           crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sig));
 
     console.log('[APP_PROXY] HMAC verification:', isValid ? 'VALID' : 'INVALID');
     return isValid;
@@ -124,7 +77,7 @@ export function appProxyAuth(req, res, next) {
     return res.status(500).send('Server configuration error');
   }
 
-  if (verifyAppProxyRequest(req, secret)) {
+  if (verifyAppProxySignature(req, secret)) {
     console.log('[APP_PROXY] ✅ Request verified successfully');
     next();
   } else {

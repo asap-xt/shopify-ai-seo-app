@@ -25,9 +25,15 @@ scopes = "read_products,write_products,read_themes,write_themes,read_translation
 
 # App Proxy Configuration for Sitemap
 [app_proxy]
-url = "https://new-ai-seo-app-production.up.railway.app"
-subpath = "apps/new-ai-seo"
-subpath_prefix = "sitemap"
+# This is the *destination* on your server that Shopify will call.
+# You already mount your router there in server.js:
+#   app.use('/apps/new-ai-seo', appProxyRouter)
+url = "https://new-ai-seo-app-production.up.railway.app/apps/new-ai-seo"
+
+# Merchant-facing URL on the storefront:
+# https://{shop}.myshopify.com/apps/new-ai-seo/<anything>
+prefix  = "apps"
+subpath = "new-ai-seo"
 
 [pos]
 embedded = false
