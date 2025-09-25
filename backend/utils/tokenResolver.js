@@ -37,15 +37,19 @@ export async function resolveShopToken(
   console.log('[TOKEN_RESOLVER] Resolving Admin token for:', shopDomain);
   const { SHOPIFY_API_KEY, SHOPIFY_API_SECRET } = process.env;
 
-  // 1) Try DB token if valid
+  // 1) Try DB token if valid AND from current app
   try {
     const Shop = (await import('../db/Shop.js')).default;
     const shopDoc = await Shop.findOne({ shop: shopDomain }).lean();
-    if (shopDoc?.accessToken && isLikelyAdminToken(shopDoc.accessToken)) {
-      console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB');
+    if (shopDoc?.accessToken && shopDoc.appApiKey === SHOPIFY_API_KEY && isLikelyAdminToken(shopDoc.accessToken)) {
+      console.log('[TOKEN_RESOLVER] Using valid stored Admin token from DB (same app)');
       return shopDoc.accessToken;
     } else if (shopDoc?.accessToken) {
-      console.log('[TOKEN_RESOLVER] Found invalid token in DB:', shopDoc.accessToken.substring(0, 15) + '...');
+      if (shopDoc.appApiKey !== SHOPIFY_API_KEY) {
+        console.log('[TOKEN_RESOLVER] Token from different app (API key mismatch), will exchange');
+      } else {
+        console.log('[TOKEN_RESOLVER] Found invalid token in DB:', shopDoc.accessToken.substring(0, 15) + '...');
+      }
       console.log('[TOKEN_RESOLVER] Will perform Token Exchange instead');
     }
   } catch (err) {
@@ -87,15 +91,15 @@ export async function resolveShopToken(
       throw new Error('Token exchange returned an invalid/short token');
     }
 
-    // Persist for future calls
+    // Persist for future calls with appApiKey guard
     try {
       const Shop = (await import('../db/Shop.js')).default;
       await Shop.updateOne(
         { shop: shopDomain },
-        { $set: { shop: shopDomain, accessToken: adminAccessToken, updatedAt: new Date() } },
+        { $set: { shop: shopDomain, accessToken: adminAccessToken, appApiKey: SHOPIFY_API_KEY, updatedAt: new Date() } },
         { upsert: true }
       );
-      console.log('[TOKEN_RESOLVER] ✅ Persisted new Admin token to DB');
+      console.log('[TOKEN_RESOLVER] ✅ Persisted new Admin token to DB with appApiKey');
     } catch (e) {
       console.warn('[TOKEN_RESOLVER] Warning: failed to persist exchanged token:', e.message);
     }
@@ -147,11 +151,15 @@ export async function adminGraphQLWithRecover({
   let res = await doFetch(token);
 
   if (res.status === 401) {
-    console.log('[TOKEN_RESOLVER] Got 401, invalidating token and retrying...');
+    console.log('[TOKEN_RESOLVER] 401 received, invalidating token and retrying...');
     // Invalidate and retry once via fresh exchange
     await invalidateShopToken(shop);
     token = await resolveShopToken(shop, { idToken, requested: 'offline' });
     res = await doFetch(token);
+  }
+
+  if (res.status === 401) {
+    throw new Error('Admin GraphQL 401 after refresh');
   }
 
   const text = await res.text();
