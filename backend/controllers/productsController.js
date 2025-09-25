@@ -268,7 +268,7 @@ router.post('/sync', validateRequest(), async (req, res) => {
     const { syncProductsForShop } = await import('./productSync.js');
     
     // Подайте idToken към sync функцията
-    const result = await syncProductsForShop(shop, idToken);
+    const result = await syncProductsForShop(shop, idToken, req);
     
     res.json({
       success: true,

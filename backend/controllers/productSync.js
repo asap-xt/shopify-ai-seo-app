@@ -537,7 +537,7 @@ async function fetchAllProducts({ shop, accessToken, shopLocales, shopCurrency }
  * Sync products from Shopify and save to MongoDB + FeedCache
  * @returns {Promise<Array>} Array of saved products
  */
-export async function syncProductsForShop(shop, idToken = null, retryCount = 0) {
+export async function syncProductsForShop(shop, idToken = null, req = null, retryCount = 0) {
   console.log(`Starting product sync for ${shop}...`);
   
   let accessToken;
