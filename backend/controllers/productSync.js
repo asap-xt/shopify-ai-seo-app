@@ -194,49 +194,65 @@ function csv(arr) {
     : [];
 }
 
+function safeJsonParse(str, defaultValue = null) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return defaultValue;
+  }
+}
+
 // Determine SEO optimization status from metafields dynamically
-function determineSeoStatus(node, shopLanguages) {
-  console.log('[PRODUCT_SYNC] Determining SEO status for languages:', shopLanguages);
-  console.log('[PRODUCT_SYNC] Available metafield keys in node:', Object.keys(node).filter(k => k.includes('metafield')));
+function determineSeoStatus(metafieldsMap, languages = []) {
+  console.log('[PRODUCT_SYNC] Determining SEO status for languages:', languages);
+  console.log('[PRODUCT_SYNC] Available metafield keys:', Object.keys(metafieldsMap));
   
-  const seoLanguages = [];
+  const optimizedLanguages = {};
   let hasAnyOptimization = false;
   
-  // Check for SEO metafields based on actual shop languages
-  for (const lang of shopLanguages) {
-    const metafieldKey = `metafield_seo_${lang}`;
-    console.log('[PRODUCT_SYNC] Checking metafield key:', metafieldKey, 'exists:', !!node[metafieldKey]);
+  for (const lang of languages) {
+    // Проверете за метаполета с различни възможни ключове
+    const seoKey = `seo__${lang}`;
+    const seoAltKey = `seo_${lang}`;
+    const bulletsKey = `bullets__${lang}`;
+    const bulletsAltKey = `bullets_${lang}`;
+    const faqKey = `faq__${lang}`;
+    const faqAltKey = `faq_${lang}`;
     
-    // Check if this language has any SEO optimization (seo__, bullets__, faq__)
-    const hasSeoMetafield = !!node[metafieldKey]?.value;
-    const hasBulletsMetafield = !!node[`metafield_bullets_${lang}`]?.value;
-    const hasFaqMetafield = !!node[`metafield_faq_${lang}`]?.value;
+    const hasSeo = !!(metafieldsMap[seoKey] || metafieldsMap[seoAltKey]);
+    const hasBullets = !!(metafieldsMap[bulletsKey] || metafieldsMap[bulletsAltKey]);
+    const hasFaq = !!(metafieldsMap[faqKey] || metafieldsMap[faqAltKey]);
     
-    const hasLangOptimization = hasSeoMetafield || hasBulletsMetafield || hasFaqMetafield;
+    const isOptimized = hasSeo || hasBullets || hasFaq;
     
-    if (hasLangOptimization) {
-      console.log('[PRODUCT_SYNC] Found optimization for', lang, '- SEO:', hasSeoMetafield, 'Bullets:', hasBulletsMetafield, 'FAQ:', hasFaqMetafield);
-      
-      seoLanguages.push({
-        code: lang,
+    if (isOptimized) {
+      console.log(`[PRODUCT_SYNC] Found optimization for ${lang} - SEO: ${hasSeo} Bullets: ${hasBullets} FAQ: ${hasFaq}`);
+      optimizedLanguages[lang] = {
         optimized: true,
+        hasSeo,
+        hasBullets,
+        hasFaq,
         lastOptimizedAt: new Date()
-      });
-      hasAnyOptimization = true; // Set global flag
+      };
+      hasAnyOptimization = true;
     } else {
-      // Add language as available but not optimized
-      seoLanguages.push({
-        code: lang,
+      console.log(`[PRODUCT_SYNC] Language ${lang} available but not optimized`);
+      optimizedLanguages[lang] = {
         optimized: false,
+        hasSeo: false,
+        hasBullets: false,
+        hasFaq: false,
         lastOptimizedAt: null
-      });
-      console.log('[PRODUCT_SYNC] Language', lang, 'available but not optimized');
+      };
     }
   }
   
   return {
     optimized: hasAnyOptimization,
-    languages: seoLanguages,
+    languages: Object.entries(optimizedLanguages).map(([code, status]) => ({
+      code,
+      ...status
+    })),
     lastCheckedAt: new Date()
   };
 }
@@ -257,12 +273,13 @@ function toProductDocument(node, shop, shopLanguages, shopCurrency) {
     createdAt,
     publishedAt,
     totalInventory,
-    featuredImage
+    featuredImage,
+    metafieldsData = {}
   } = node || {};
   
   const productId = Number(id.split('/').pop());
   const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
-  const seoStatus = determineSeoStatus(node, shopLanguages);
+  const seoStatus = determineSeoStatus(metafieldsData, shopLanguages);
   
   return {
     shop,
@@ -294,7 +311,7 @@ function toProductDocument(node, shop, shopLanguages, shopCurrency) {
   };
 }
 
-function toFeedItem(node, shopCurrency) {
+function toFeedItem(node, shop, shopCurrency) {
   const {
     id,
     handle,
@@ -306,13 +323,18 @@ function toFeedItem(node, shopCurrency) {
     onlineStoreUrl,
     updatedAt,
     seo,
+    metafieldsData = {}
   } = node || {};
-  const bullets = node?.metafield_seo_ai_bullets?.value ? JSON.parse(node.metafield_seo_ai_bullets.value) : [];
-  const faq = node?.metafield_seo_ai_faq?.value ? JSON.parse(node.metafield_seo_ai_faq.value) : [];
+  
+  // Вземете bullets и FAQ от основните метаполета (не езикови)
+  const bullets = safeJsonParse(metafieldsData.bullets, []);
+  const faq = safeJsonParse(metafieldsData.faq, []);
+    
   const images = (node?.images?.edges || []).map((e) => ({
     id: e?.node?.id,
     alt: e?.node?.altText || '',
   }));
+  
   const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
   const bodyHtml = sanitizeHtmlBasic(descriptionHtml || '');
   const jsonLd = minimalJsonLd({
@@ -335,28 +357,29 @@ function toFeedItem(node, shopCurrency) {
     currency,
     available,
     images,
-    seo: { title: seo?.title || null, metaDescription: seo?.description || null },
+    seo: { 
+      title: seo?.title || null, 
+      metaDescription: seo?.description || null 
+    },
     seo_ai: { bullets, faq },
     bodyHtml,
     jsonLd,
     updatedAt,
+    // Метаполетата ще бъдат достъпни за проверка
+    _metafields: metafieldsData
   };
 }
 
 async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency }) {
-  const pageSize = 100;
+  // Първо вземете езиците динамично
+  const languages = shopLanguages || await getShopLanguages(shop, accessToken);
+  console.log('[PRODUCT_SYNC] Shop languages:', languages.join(', '));
+  
+  const pageSize = 50;
   let after = null;
   const items = [];
 
-  // Build dynamic query with metafields for all shop languages
-  const languageMetafields = shopLanguages
-    .flatMap(lang => [
-      `metafield_seo_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") { value }`,
-      `metafield_bullets_${lang}: metafield(namespace: "seo_ai", key: "bullets__${lang}") { value }`,
-      `metafield_faq_${lang}: metafield(namespace: "seo_ai", key: "faq__${lang}") { value }`
-    ])
-    .join('\n');
-
+  // Базова заявка без хардкоднати метаполета
   const query = `
     query Products($first: Int!, $after: String) {
       products(first: $first, after: $after, sortKey: UPDATED_AT) {
@@ -364,14 +387,14 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
         edges {
           cursor
           node {
-            id
-            title
-            handle
-            descriptionHtml
-            onlineStoreUrl
-            vendor
-            productType
-            tags
+            id 
+            title 
+            handle 
+            descriptionHtml 
+            onlineStoreUrl 
+            vendor 
+            productType 
+            tags 
             updatedAt
             createdAt
             publishedAt
@@ -382,17 +405,32 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
               altText
             }
             seo { title description }
-            images(first: 10) { edges { node { id url altText } } }
-            variants(first: 50) { edges { node { id price availableForSale } } }
+            images(first: 10) { 
+              edges { 
+                node { id url altText } 
+              } 
+            }
+            variants(first: 50) { 
+              edges { 
+                node { id price availableForSale } 
+              } 
+            }
             priceRangeV2 {
               minVariantPrice {
                 amount
                 currencyCode
               }
             }
-            metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") { value }
-            metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") { value }
-            ${languageMetafields}
+            # Вземете ВСИЧКИ метаполета от namespace seo_ai
+            metafields(first: 100, namespace: "seo_ai") {
+              edges {
+                node {
+                  key
+                  value
+                  namespace
+                }
+              }
+            }
           }
         }
       }
@@ -406,14 +444,37 @@ async function fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency
       query,
       variables: { first: pageSize, after },
     });
+    
     const conn = rsp?.data?.products;
+    if (!conn) break;
+    
     for (const edge of conn?.edges || []) {
       const node = edge?.node;
       if (!node) continue;
-      items.push(node);
-      after = edge?.cursor || null;
+      
+      // Преобразувайте метаполетата в по-удобен формат
+      const metafieldsMap = {};
+      for (const mfEdge of node.metafields?.edges || []) {
+        const { key, value } = mfEdge.node;
+        metafieldsMap[key] = value;
+      }
+      
+      // Добавете метаполетата към node обекта
+      node.metafieldsData = metafieldsMap;
+      
+      // Определете SEO статуса динамично
+      const seoStatus = determineSeoStatus(metafieldsMap, languages);
+      
+      const item = toFeedItem(node, shop, shopCurrency);
+      item.languages = languages;
+      item.seoStatus = seoStatus;
+      item.availableLanguages = languages;
+      
+      items.push(item);
     }
-    if (!conn?.pageInfo?.hasNextPage) break;
+    
+    if (!conn.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo?.endCursor;
   }
 
   return items;
@@ -446,6 +507,7 @@ export async function syncProductsForShop(req, shop, opts = {}) {
   console.log(`Shop currency: ${shopCurrency}`);
   console.log(`Shop languages: ${shopLanguages.join(', ')}`);
   
+  // Вземете продуктите с динамични метаполета
   const rawProducts = await fetchAllProducts({ shop, accessToken, shopLanguages, shopCurrency });
   console.log(`Fetched ${rawProducts.length} products from Shopify`);
 

@@ -25,10 +25,20 @@ const productSchema = new mongoose.Schema({
     languages: [{
       code: String,
       optimized: Boolean,
+      hasSeo: Boolean,
+      hasBullets: Boolean,
+      hasFaq: Boolean,
       lastOptimizedAt: Date
     }],
     lastCheckedAt: Date
   },
+  
+  // Динамичен SEO статус за всеки език
+  languages: [String],
+  availableLanguages: [String],
+  
+  // Съхранявайте метаполетата за референция
+  _metafields: mongoose.Schema.Types.Mixed,
   
   // Product metadata for display and filtering
   featuredImage: {
