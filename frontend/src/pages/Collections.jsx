@@ -125,7 +125,7 @@ export default function CollectionsPage({ shop: shopProp }) {
   useEffect(() => {
     if (!shop) return;
     console.log('[COLLECTIONS] Loading languages for shop:', shop);
-    api(`/api/languages/shop/${shop}`)
+    api(`/api/languages/shop/${shop}?shop=${shop}`)
       .then((data) => {
         console.log('[COLLECTIONS] Languages API response:', data);
         const langs = data?.shopLanguages || ['en'];
