@@ -124,13 +124,16 @@ export default function CollectionsPage({ shop: shopProp }) {
   // Load shop languages
   useEffect(() => {
     if (!shop) return;
+    console.log('[COLLECTIONS] Loading languages for shop:', shop);
     api(`/api/languages/shop/${shop}`)
       .then((data) => {
+        console.log('[COLLECTIONS] Languages API response:', data);
         const langs = data?.shopLanguages || ['en'];
         setAvailableLanguages(langs);
         setSelectedLanguages([]);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[COLLECTIONS] Languages API error:', err);
         setAvailableLanguages(['en']);
         setSelectedLanguages([]);
       });
