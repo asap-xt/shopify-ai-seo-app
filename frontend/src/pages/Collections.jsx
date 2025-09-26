@@ -126,9 +126,14 @@ export default function CollectionsPage({ shop: shopProp }) {
     if (!shop) return;
     console.log('[COLLECTIONS] Loading languages for shop:', shop);
     api(`/api/languages/shop/${shop}?shop=${shop}`)
+      .then((response) => {
+        console.log('[COLLECTIONS] Languages API response:', response);
+        return response.json();
+      })
       .then((data) => {
-        console.log('[COLLECTIONS] Languages API response:', data);
+        console.log('[COLLECTIONS] Languages API data:', data);
         const langs = data?.shopLanguages || ['en'];
+        console.log('[COLLECTIONS] Extracted languages:', langs);
         setAvailableLanguages(langs);
         setSelectedLanguages([]);
       })
