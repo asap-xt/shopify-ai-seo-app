@@ -694,8 +694,10 @@ app.get('/', async (req, res) => {
       // Create or update shop record with JWT token (NEVER overwrite valid accessToken)
       if (!existingShop) {
         // Create new shop record without accessToken (will be set via Token Exchange)
+        // Create shop record with JWT token - accessToken will be set via Token Exchange
         existingShop = await ShopModel.create({
           shop,
+          accessToken: 'jwt-pending', // Placeholder until token exchange
           jwtToken: id_token,
           useJWT: true,
           installedAt: new Date(),
@@ -716,7 +718,7 @@ app.get('/', async (req, res) => {
               jwtToken: id_token, 
               useJWT: true 
             },
-            $setOnInsert: { accessToken: null } // не презаписвай ако вече има валиден
+            $setOnInsert: { accessToken: 'jwt-pending' } // Placeholder until token exchange
           },
           { upsert: true, new: true }
         ).lean();

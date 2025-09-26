@@ -1,6 +1,8 @@
 // backend/utils/tokenResolver.js
 // Unified token resolver that works consistently across all controllers
 
+import fetch from 'node-fetch';
+
 let ShopModel = null;
 
 async function loadShopModel() {
@@ -71,9 +73,32 @@ export async function resolveAdminTokenForShop(shop) {
                    shopRecord.token || 
                    shopRecord.access_token;
       
-      if (token && String(token).trim()) {
+      if (token && String(token).trim() && token !== 'jwt-pending') {
         console.log(`[TOKEN_RESOLVER] Found valid token in DB for ${normalizedShop}`);
         return String(token).trim();
+      }
+
+      // If we have JWT token but no valid access token, try token exchange
+      if (shopRecord.jwtToken && (!token || token === 'jwt-pending')) {
+        console.log(`[TOKEN_RESOLVER] Found JWT token, attempting token exchange for ${normalizedShop}`);
+        try {
+          const accessToken = await exchangeJWTForAccessToken(normalizedShop, shopRecord.jwtToken);
+          
+          // Save the access token to database
+          await Shop.findOneAndUpdate(
+            { shop: normalizedShop },
+            { 
+              accessToken: accessToken,
+              updatedAt: new Date()
+            }
+          );
+          
+          console.log(`[TOKEN_RESOLVER] Token exchange successful for ${normalizedShop}`);
+          return accessToken;
+        } catch (exchangeError) {
+          console.error(`[TOKEN_RESOLVER] Token exchange failed for ${normalizedShop}:`, exchangeError.message);
+          throw new Error(`Token exchange failed for shop: ${normalizedShop}`);
+        }
       }
     }
 
@@ -84,6 +109,48 @@ export async function resolveAdminTokenForShop(shop) {
     console.error(`[TOKEN_RESOLVER] Database error for ${normalizedShop}:`, dbError);
     throw new Error(`Failed to retrieve access token for shop: ${normalizedShop}`);
   }
+}
+
+async function exchangeJWTForAccessToken(shop, jwtToken) {
+  console.log(`[TOKEN_EXCHANGE] Exchanging JWT for access token: ${shop}`);
+  
+  const tokenUrl = `https://${shop}/admin/oauth/access_token`;
+  const requestBody = {
+    client_id: process.env.SHOPIFY_API_KEY,
+    client_secret: process.env.SHOPIFY_API_SECRET,
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    subject_token: jwtToken,
+    subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+    requested_token_type: 'urn:ietf:params:oauth:token-type:access_token'
+  };
+
+  console.log(`[TOKEN_EXCHANGE] Request URL: ${tokenUrl}`);
+  console.log(`[TOKEN_EXCHANGE] Request body keys:`, Object.keys(requestBody));
+
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const responseText = await response.text();
+  console.log(`[TOKEN_EXCHANGE] Response status: ${response.status}`);
+  console.log(`[TOKEN_EXCHANGE] Response text: ${responseText}`);
+
+  if (!response.ok) {
+    throw new Error(`Token exchange failed: ${response.status} ${responseText}`);
+  }
+
+  const tokenData = JSON.parse(responseText);
+  
+  if (!tokenData.access_token) {
+    throw new Error('No access_token in token exchange response');
+  }
+
+  console.log(`[TOKEN_EXCHANGE] Success! Token starts with: ${tokenData.access_token.substring(0, 10)}...`);
+  return tokenData.access_token;
 }
 
 /**
