@@ -156,7 +156,17 @@ export default function CollectionsPage({ shop: shopProp }) {
       console.log('[COLLECTIONS] Using GraphQL endpoint:', endpoint);
       
       // URL вече съдържа shop → не подаваме {shop}, за да не дублираме
-      const data = await api(endpoint);
+      const response = await api(endpoint);
+      console.log('[COLLECTIONS] API Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[COLLECTIONS] API Error:', response.status, errorText);
+        throw new Error(`API Error: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[COLLECTIONS] API Response data:', data);
       
       // Apply client-side filtering for search
       let filteredCollections = data.collections || [];
