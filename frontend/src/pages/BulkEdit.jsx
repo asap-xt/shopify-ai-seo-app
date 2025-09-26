@@ -312,7 +312,7 @@ export default function BulkEdit({ shop: shopProp }) {
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
     if (checked) {
-      setSelectedItems(products.map(p => p._id));
+      setSelectedItems(products.map(p => p.id));
     } else {
       setSelectedItems([]);
     }
@@ -633,7 +633,7 @@ export default function BulkEdit({ shop: shopProp }) {
             const languagesToGenerate = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
             
             if (languagesToGenerate.length === 0) {
-              results[product._id] = {
+              results[product.id] = {
                 success: true,
                 skipped: true,
                 message: 'All selected languages already have AI Search Optimisation'
@@ -652,13 +652,13 @@ export default function BulkEdit({ shop: shopProp }) {
               }
             });
             
-            results[product._id] = {
+            results[product.id] = {
               success: true,
               data,
               languages: languagesToGenerate,
             };
           } catch (err) {
-            results[product._id] = {
+            results[product.id] = {
               success: false,
               error: err.message,
             };
@@ -898,7 +898,7 @@ export default function BulkEdit({ shop: shopProp }) {
             
             setProducts(prevProducts => 
               prevProducts.map(prod => {
-                if (prod._id === product._id) {
+                if (prod._id === product.id) {
                   const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
                   const newOptimized = currentOptimized.filter(lang => 
                     !data.deletedLanguages.includes(lang)
@@ -1011,7 +1011,7 @@ export default function BulkEdit({ shop: shopProp }) {
     
     return (
       <ResourceItem
-        id={product._id}
+        id={product.id}
         url=""
         media={media}
         accessibilityLabel={`View details for ${product.title}`}
