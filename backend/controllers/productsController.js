@@ -6,6 +6,47 @@ import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 
 const router = express.Router();
 
+// Helper function to process product metafields and generate optimizationSummary
+function processProductMetafields(metafields) {
+  if (!metafields?.edges) {
+    return {
+      optimized: false,
+      optimizedLanguages: [],
+      lastOptimized: null
+    };
+  }
+
+  const optimizedLanguages = [];
+  let lastOptimized = null;
+
+  metafields.edges.forEach(({ node: metafield }) => {
+    if (metafield.key && metafield.key.startsWith('seo__')) {
+      try {
+        const seoData = JSON.parse(metafield.value);
+        if (seoData && seoData.language) {
+          optimizedLanguages.push(seoData.language);
+          
+          // Track the most recent optimization
+          if (seoData.updatedAt) {
+            const updatedAt = new Date(seoData.updatedAt);
+            if (!lastOptimized || updatedAt > lastOptimized) {
+              lastOptimized = updatedAt;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[PRODUCTS] Failed to parse metafield ${metafield.key}:`, error.message);
+      }
+    }
+  });
+
+  return {
+    optimized: optimizedLanguages.length > 0,
+    optimizedLanguages: [...new Set(optimizedLanguages)], // Remove duplicates
+    lastOptimized: lastOptimized?.toISOString() || null
+  };
+}
+
 // Apply authentication to all routes
 router.use(requireAuth);
 
@@ -31,6 +72,16 @@ const PRODUCTS_QUERY = `
             minVariantPrice {
               amount
               currencyCode
+            }
+          }
+          metafields(first: 50, namespace: "seo_ai") {
+            edges {
+              node {
+                id
+                key
+                value
+                type
+              }
             }
           }
         }
@@ -137,7 +188,18 @@ router.get('/list', async (req, res) => {
     };
 
     const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
-    const products = data?.products?.edges?.map(edge => edge.node) || [];
+    const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
+    
+    // Process products to add optimizationSummary
+    const products = rawProducts.map(product => {
+      const optimizationSummary = processProductMetafields(product.metafields);
+      return {
+        ...product,
+        optimizationSummary,
+        // Keep metafields for debugging if needed
+        metafields: product.metafields
+      };
+    });
 
     return res.json({
       success: true,

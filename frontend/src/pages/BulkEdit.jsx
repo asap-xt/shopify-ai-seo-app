@@ -1755,7 +1755,7 @@ export default function BulkEdit({ shop: shopProp }) {
             headerContent={
               <Box paddingBlockEnd="200">
                 <Text variant="bodyMd" fontWeight="semibold">
-                  Select products to optimize SEO
+                  Select all
                 </Text>
               </Box>
             }
