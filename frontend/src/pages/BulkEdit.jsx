@@ -747,7 +747,7 @@ export default function BulkEdit({ shop: shopProp }) {
             console.log(`[BULK-EDIT] Optimistic update for product ${productId}, languages:`, data.appliedLanguages);
             setProducts(prevProducts => 
               prevProducts.map(prod => {
-                if (prod._id === productId) {
+                if (prod.id === productId) {
                   const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
                   const newOptimized = [...new Set([...currentOptimized, ...data.appliedLanguages])];
                   
@@ -900,13 +900,13 @@ export default function BulkEdit({ shop: shopProp }) {
             
             setProducts(prevProducts => 
               prevProducts.map(prod => {
-                if (prod._id === product.id) {
+                if (prod.id === product.id) {
                   const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
                   const newOptimized = currentOptimized.filter(lang => 
                     !data.deletedLanguages.includes(lang)
                   );
                   
-                  console.log('[BULK-DELETE] Updating product:', prod._id);
+                  console.log('[BULK-DELETE] Updating product:', prod.id);
                   console.log('[BULK-DELETE] Languages before:', currentOptimized);
                   console.log('[BULK-DELETE] Languages after:', newOptimized);
                   
@@ -1752,6 +1752,13 @@ export default function BulkEdit({ shop: shopProp }) {
             totalItemsCount={totalCount}
             emptyState={emptyState}
             showHeader={true}
+            headerContent={
+              <Box paddingBlockEnd="200">
+                <Text variant="bodyMd" fontWeight="semibold">
+                  Select products to optimize SEO
+                </Text>
+              </Box>
+            }
           />
           
           {hasMore && !loading && (
