@@ -659,7 +659,7 @@ function fixupAndValidate(payload) {
 /* --------------------------- Routes --------------------------- */
 
 // Plans (used by Dashboard/AI SEO form)
-router.get('/plans/me', validateRequest(), async (req, res) => {
+router.get('/plans/me', async (req, res) => {
   console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
     queryShop: req.query?.shop,
     bodyShop: req.body?.shop,
@@ -669,7 +669,8 @@ router.get('/plans/me', validateRequest(), async (req, res) => {
   const shop =
     req.query?.shop ||
     req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
+    res.locals?.shopify?.session?.shop ||
+    req.shopDomain;
 
   if (!shop) {
     console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
