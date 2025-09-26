@@ -51,12 +51,13 @@ async function getOfflineTokenViaExchange(shop, sessionToken) {
       requestedTokenType: RequestedTokenType.OfflineAccessToken,
     });
 
-    // Store the token
+    // Store the token (extract accessToken from Session object)
+    const tokenString = accessToken.accessToken || accessToken;
     await Shop.findOneAndUpdate(
       { shop },
       { 
         shop, 
-        accessToken, 
+        accessToken: tokenString, 
         updatedAt: new Date(),
         tokenType: 'offline',
         authMethod: 'token_exchange'
@@ -65,7 +66,7 @@ async function getOfflineTokenViaExchange(shop, sessionToken) {
     );
 
     console.log(`[TOKEN_EXCHANGE] Success for ${shop}`);
-    return accessToken;
+    return tokenString;
 
   } catch (error) {
     console.error(`[TOKEN_EXCHANGE] Failed for ${shop}:`, error.message);
@@ -87,7 +88,7 @@ async function getOnlineTokenViaExchange(shop, sessionToken) {
     });
 
     console.log(`[TOKEN_EXCHANGE] Online token success for ${shop}`);
-    return accessToken;
+    return accessToken.accessToken || accessToken;
 
   } catch (error) {
     console.error(`[TOKEN_EXCHANGE] Online token failed for ${shop}:`, error.message);
