@@ -45,14 +45,14 @@ async function getOfflineTokenViaExchange(shop, sessionToken) {
   try {
     console.log(`[TOKEN_EXCHANGE] Exchanging session token for offline token: ${shop}`);
     
-    const accessToken = await shopify.auth.tokenExchange({
+    const result = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
       requestedTokenType: RequestedTokenType.OfflineAccessToken,
     });
 
     // Store the token (extract accessToken from Session object)
-    const tokenString = accessToken.accessToken || accessToken;
+    const tokenString = result.accessToken || result;
     await Shop.findOneAndUpdate(
       { shop },
       { 
@@ -81,14 +81,14 @@ async function getOnlineTokenViaExchange(shop, sessionToken) {
   try {
     console.log(`[TOKEN_EXCHANGE] Exchanging session token for online token: ${shop}`);
     
-    const accessToken = await shopify.auth.tokenExchange({
+    const result = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
       requestedTokenType: RequestedTokenType.OnlineAccessToken,
     });
 
     console.log(`[TOKEN_EXCHANGE] Online token success for ${shop}`);
-    return accessToken.accessToken || accessToken;
+    return result.accessToken || result;
 
   } catch (error) {
     console.error(`[TOKEN_EXCHANGE] Online token failed for ${shop}:`, error.message);
