@@ -238,9 +238,11 @@ export default function BulkEdit({ shop: shopProp }) {
       // Log първия продукт за проверка
       if (data.products?.length > 0) {
         console.log('[BULK-EDIT-LOAD] First product data:', {
-          id: data.products[0]._id,
+          id: data.products[0].id,
+          _id: data.products[0]._id,
           title: data.products[0].title,
-          optimizationSummary: data.products[0].optimizationSummary
+          optimizationSummary: data.products[0].optimizationSummary,
+          allKeys: Object.keys(data.products[0])
         });
       }
       
@@ -339,7 +341,7 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // AI Enhancement Modal - използва Polaris компоненти като другите модали
   const AIEnhanceModal = () => {
-    const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+    const selectedProducts = products.filter(p => selectedItems.includes(p.id));
     const selectedWithSEO = selectedProducts.filter(p => 
       p.optimizationSummary?.optimizedLanguages?.length > 0
     );
@@ -604,7 +606,7 @@ export default function BulkEdit({ shop: shopProp }) {
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
-        productsToProcess = products.filter(p => selectedItems.includes(p._id));
+        productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
       // Apply plan limit - only process up to the plan's product limit
@@ -709,7 +711,7 @@ export default function BulkEdit({ shop: shopProp }) {
       
       for (let i = 0; i < successfulResults.length; i++) {
         const [productId, result] = successfulResults[i];
-        const product = products.find(p => p._id === productId);
+        const product = products.find(p => p.id === productId);
         
         if (!product) continue;
         
@@ -849,7 +851,7 @@ export default function BulkEdit({ shop: shopProp }) {
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
-        productsToProcess = products.filter(p => selectedItems.includes(p._id));
+        productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
       const total = productsToProcess.length;
@@ -1486,7 +1488,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   {(() => {
                     if (selectedItems.length === 0 && !selectAllPages) return null;
                     
-                    const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                    const selectedProducts = products.filter(p => selectedItems.includes(p.id));
                     const hasOptimizedProducts = selectedProducts.some(p => 
                       p.optimizationSummary?.optimizedLanguages?.length > 0
                     );
@@ -1508,7 +1510,7 @@ export default function BulkEdit({ shop: shopProp }) {
                   <Button
                     onClick={openDeleteModal}
                     disabled={(selectedItems.length === 0 && !selectAllPages) || (() => {
-                      const selectedProducts = products.filter(p => selectedItems.includes(p._id));
+                      const selectedProducts = products.filter(p => selectedItems.includes(p.id));
                       const hasOptimizedProducts = selectedProducts.some(p => 
                         p.optimizationSummary?.optimizedLanguages?.length > 0
                       );
