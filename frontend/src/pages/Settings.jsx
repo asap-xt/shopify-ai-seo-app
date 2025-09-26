@@ -112,7 +112,7 @@ export default function Settings() {
 
   const checkSchemaStatus = async () => {
     try {
-      const data = await api(`/api/schema/status`, { shop });
+      const data = await api(`/api/schema/status?shop=${shop}`);
       setAdvancedSchemaStatus({
         enabled: data.enabled,
         generating: data.generating,
@@ -128,7 +128,7 @@ export default function Settings() {
   const checkGenerationProgress = async () => {
     try {
       // Check directly in MongoDB for data
-      const data = await api(`/ai/schema-data.json`, { shop });
+      const data = await api(`/ai/schema-data.json?shop=${shop}`);
       
       if (data.schemas && data.schemas.length > 0) {
         // Generation complete
@@ -167,7 +167,7 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const data = await api(`/api/ai-discovery/settings`, { shop });
+      const data = await api(`/api/ai-discovery/settings?shop=${shop}`);
       console.log('Loaded settings:', data); // Debug log
       console.log('Settings plan:', data?.plan);
       console.log('Normalized plan:', normalizePlan(data?.plan));
@@ -191,8 +191,7 @@ export default function Settings() {
     console.log('[GENERATE ROBOTS] Called with shop:', shop);
     
     try {
-      const txt = await api(`/api/ai-discovery/robots-txt`, { 
-        shop,
+      const txt = await api(`/api/ai-discovery/robots-txt?shop=${shop}`, { 
         responseType: 'text'  // <-- Важно!
       });
       
@@ -260,9 +259,8 @@ export default function Settings() {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      await api('/api/ai-discovery/settings', {
+      await api(`/api/ai-discovery/settings?shop=${shop}`, {
         method: 'POST',
-        shop,
         body: {
           shop,
           bots: settings.bots,
@@ -289,9 +287,8 @@ export default function Settings() {
 
   const applyRobotsTxt = async () => {
     try {
-      const data = await api('/api/ai-discovery/apply-robots', {
+      const data = await api(`/api/ai-discovery/apply-robots?shop=${shop}`, {
         method: 'POST',
-        shop,
         body: { shop }
       });
       
@@ -319,9 +316,8 @@ export default function Settings() {
 
   const setTestPlan = async (plan) => {
     try {
-      await api('/test/set-plan', {
+      await api(`/test/set-plan?shop=${shop}`, {
         method: 'POST',
-        shop,
         body: { shop, plan }
       });
       setToast(`Test plan set to ${plan}`);
@@ -679,7 +675,7 @@ export default function Settings() {
                       }
                       
                       console.log('[APPLY AUTO] Applying robots.txt...');
-                      const data = await api('/api/ai-discovery/apply-robots', {
+                      const data = await api(`/api/ai-discovery/apply-robots?shop=${shop}`, {
                         method: 'POST',
                         shop,
                         body: { shop }
@@ -916,7 +912,7 @@ export default function Settings() {
                   primary
                   onClick={async () => {
                     // First check if there's existing data
-                    const existingData = await api(`/ai/schema-data.json`, { shop });
+                    const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
                     
                     if (existingData.schemas && existingData.schemas.length > 0) {
                       // Has data - ask if to regenerate
@@ -941,7 +937,7 @@ export default function Settings() {
                     });
                     
                     try {
-                      const data = await api('/api/schema/generate-all', {
+                      const data = await api(`/api/schema/generate-all?shop=${shop}`, {
                         method: 'POST',
                         shop,
                         body: { shop }
@@ -972,7 +968,7 @@ export default function Settings() {
                   onClick={async () => {
                     if (confirm('This will delete all advanced schema data. Are you sure?')) {
                       try {
-                        await api('/api/schema/delete', {
+                        await api(`/api/schema/delete?shop=${shop}`, {
                           method: 'DELETE',
                           shop,
                           body: { shop }
@@ -1005,7 +1001,7 @@ export default function Settings() {
           onClick={async () => {
             if (window.confirm('Are you sure you want to reset all AI Discovery settings to defaults?')) {
               try {
-                await api(`/api/ai-discovery/settings`, {
+                await api(`/api/ai-discovery/settings?shop=${shop}`, {
                   method: 'DELETE',
                   shop
                 });
@@ -1415,7 +1411,7 @@ onChange={async (checked) => {
   // Save the setting in AI Discovery settings
   try {
     console.log('Saving settings to AI Discovery...');
-    await api('/api/ai-discovery/settings', {
+    await api(`/api/ai-discovery/settings?shop=${shop}`, {
       method: 'POST',
       shop,
       body: {

@@ -155,7 +155,7 @@ export default function BulkEdit({ shop: shopProp }) {
   // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
-    api(`/plans/me`, { shop })
+    api(`/plans/me?shop=${shop}`)
       .then((data) => {
         const models = data?.modelsSuggested || ['anthropic/claude-3.5-sonnet'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));

@@ -86,7 +86,7 @@ const DashboardCard = React.memo(({ shop }) => {
 
   useEffect(() => {
     if (!currentShop) return;
-    api(`/plans/me`, { shop: currentShop })
+    api(`/plans/me?shop=${currentShop}`)
       .then((data) => { if (data && !data.error) setPlan(data); })
       .catch((e) => console.error('Failed to load plan:', e));
   }, [currentShop, api]);
@@ -96,7 +96,7 @@ const DashboardCard = React.memo(({ shop }) => {
     if (!currentShop) return;
 
     // 1) Проверка на definitions със session token
-    api(`/collections/check-definitions`, { shop: currentShop })
+    api(`/collections/check-definitions?shop=${currentShop}`)
       .then(data => {
 
         // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
@@ -106,9 +106,8 @@ const DashboardCard = React.memo(({ shop }) => {
         
         if (missingLangs.length > 0) {
           // 2) Създай липсващите definitions със session token
-          return api('/collections/create-definitions', {
+          return api(`/collections/create-definitions?shop=${currentShop}`, {
             method: 'POST',
-            shop: currentShop,
             body: { shop: currentShop, languages: missingLangs },
           });
         }

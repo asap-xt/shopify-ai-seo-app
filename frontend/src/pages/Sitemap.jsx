@@ -29,7 +29,7 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     try {
       // ✅ backend routes live under /api
-      const j = await api(`/api/sitemap/info`, { shop });
+      const j = await api(`/api/sitemap/info?shop=${shop}`);
       setInfo(j);
     } catch (e) {
       setToast(e.message || 'Failed to load sitemap info');
@@ -40,7 +40,7 @@ export default function SitemapPage({ shop: shopProp }) {
   const loadPlan = useCallback(async () => {
     if (!shop) return;
     try {
-      const j = await api(`/plans/me`, { shop });
+      const j = await api(`/plans/me?shop=${shop}`);
       setPlan(j || null);
     } catch (e) {
       // non-blocking; just log toast optionally

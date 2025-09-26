@@ -19,14 +19,14 @@ export default function Billing({ i18n, shop }) {
   const [resp, setResp] = useState(null);
 
   useEffect(() => {
-    api('/billing/plan', { shop }).then(p => setCurrent(p.plan || 'starter')).catch(()=>{});
+    api(`/billing/plan?shop=${shop}`).then(p => setCurrent(p.plan || 'starter')).catch(()=>{});
   }, [api, shop]);
 
   async function changePlan() {
     setLoading(true);
     setResp(null);
     try {
-      const res = await api('/billing/subscribe', { method: 'POST', body: { plan: current }, shop });
+      const res = await api(`/billing/subscribe?shop=${shop}`, { method: 'POST', body: { plan: current } });
       setResp(res);
     } catch (e) {
       setResp({ error: e.message || String(e) });
