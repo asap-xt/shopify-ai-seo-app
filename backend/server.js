@@ -696,8 +696,8 @@ app.get('/', async (req, res) => {
         // Create new shop record without accessToken (will be set via Token Exchange)
         existingShop = await ShopModel.create({
           shop,
-          sessionIdToken: id_token,
-          sessionUpdatedAt: new Date(),
+          jwtToken: id_token,
+          useJWT: true,
           installedAt: new Date(),
           scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
         });
@@ -713,8 +713,8 @@ app.get('/', async (req, res) => {
           { shop },
           { 
             $set: { 
-              sessionIdToken: id_token, 
-              sessionUpdatedAt: new Date() 
+              jwtToken: id_token, 
+              useJWT: true 
             },
             $setOnInsert: { accessToken: null } // не презаписвай ако вече има валиден
           },
