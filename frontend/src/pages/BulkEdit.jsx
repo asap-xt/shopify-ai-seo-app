@@ -1743,7 +1743,7 @@ export default function BulkEdit({ shop: shopProp }) {
           </Box>
 
           <Box>
-            <Box paddingBlockEnd="200" paddingInlineStart="200">
+            <Box paddingBlockEnd="200" paddingInlineStart="300">
               <InlineStack gap="200" align="start">
                 <Checkbox
                   checked={selectedItems.length === products.length && products.length > 0}
