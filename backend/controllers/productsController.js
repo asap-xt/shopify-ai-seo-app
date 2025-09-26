@@ -1,971 +1,229 @@
-// backend/controllers/productsController.js
-import { Router } from 'express';
-import Product from '../db/Product.js';
-import { requireShop, shopGraphQL } from './seoController.js';
-import { validateRequest } from '../middleware/shopifyAuth.js';
-import { resolveShopToken } from '../utils/tokenResolver.js';
-import fetch from 'node-fetch';
+// backend/controllers/productsController.js  
+// Fixed products controller using centralized token resolver and sync
 
-// Use the new per-shop token resolver from server.js
-async function resolveAdminTokenForShop(shop, req = null) {
-  try {
-    // Extract idToken from request if available
-    let idToken = null;
-    if (req) {
-      const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-      idToken = req.query.id_token || bearerToken || null;
-    }
-    
-    return await resolveShopToken(shop, { idToken, requested: 'offline' });
-  } catch (err) {
-    const error = new Error(`No Admin API token available for shop ${shop}: ${err.message}`);
-    error.status = 400;
-    throw error;
-  }
-}
+import express from 'express';
+import { syncProductsForShop } from './productSync.js';
+import { executeShopifyGraphQL } from '../utils/tokenResolver.js';
+import { apiResolver, productSyncResolver, attachShop } from '../middleware/apiResolver.js';
 
+const router = express.Router();
 
+// Apply middleware to all routes
+router.use(attachShop);
 
-
-
-
-const router = Router();
-
-// Helper to convert numeric ID to GID
-function toGID(productId) {
-  if (/^\d+$/.test(String(productId))) return `gid://shopify/Product/${productId}`;
-  return String(productId);
-}
-
-// Helper to safely query products with valid productIds
-function getValidProductsQuery(baseQuery) {
-  return {
-    ...baseQuery,
-    $and: [
-      ...(baseQuery.$and || []),
-      {
-        $or: [
-          { productId: { $type: 'number' } },
-          { productId: { $exists: false } } // Allow products without productId
-        ]
-      },
-      // ПРЕМАХНИ: { productId: { $ne: NaN } }, // MongoDB не може да сравнява с NaN
-      { productId: { $ne: null } }
-    ]
-  };
-}
-
-// GET /api/products/list - List products with pagination and filters
-router.get('/list', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const {
-      page = 1,
-      limit = 50,
-      search = '',
-      tags = '',
-      optimized,
-      status,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
-
-    // Build MongoDB query
-    const query = { shop };
-
-   // Search filter (title, handle, or productId)
-if (search) {
-  const searchConditions = [
-    { title: { $regex: search, $options: 'i' } },
-    { handle: { $regex: search, $options: 'i' } }
-  ];
-  
-  // Safe numeric check
-  const trimmedSearch = search.trim();
-  if (/^\d+$/.test(trimmedSearch)) {
-    const numericId = parseInt(trimmedSearch);
-    if (Number.isFinite(numericId) && numericId > 0) {
-      searchConditions.push({ productId: numericId });
-    }
-  }
-  
-  // Check for GID format
-  if (trimmedSearch.startsWith('gid://')) {
-    const match = trimmedSearch.match(/\/(\d+)$/);
-    if (match && match[1]) {
-      const extractedId = parseInt(match[1]);
-      if (Number.isFinite(extractedId) && extractedId > 0) {
-        searchConditions.push({ productId: extractedId });
-      }
-    }
-  }
-  
-  query.$or = searchConditions;
-}
-
-    // Tags filter
-    if (tags) {
-      const tagArray = tags.split(',').map(t => t.trim()).filter(Boolean);
-      if (tagArray.length) {
-        query.tags = { $in: tagArray };
-      }
-    }
-
-// Language filter
-if (req.query.languageFilter) {
-  const [action, lang] = req.query.languageFilter.split('_');
-  if (action === 'has') {
-    query['seoStatus.languages'] = { 
-      $elemMatch: { code: lang, optimized: true } 
-    };
-  } else if (action === 'missing') {
-    query['$or'] = [
-      { 'seoStatus.languages': { $not: { $elemMatch: { code: lang, optimized: true } } } },
-      { 'seoStatus.languages': { $exists: false } }
-    ];
-  }
-}
-
-    // SEO optimization filter
-    if (optimized !== undefined && optimized !== '') {
-      query['seoStatus.optimized'] = optimized === 'true';
-    }
-
-    // Status filter
-    if (status && ['ACTIVE', 'DRAFT', 'ARCHIVED'].includes(status)) {
-      query.status = status;
-    }
-
-    // Apply valid products filter
-    const safeQuery = getValidProductsQuery(query);
-
-    // Execute queries with read preference set to primary to avoid replication lag
-    const [products, total] = await Promise.all([
-      Product.find(safeQuery)
-        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-        .skip((page - 1) * limit)
-        .limit(Number(limit))
-        .read('primary')  // Force read from primary node
-        .lean(),
-      Product.countDocuments(safeQuery).read('primary')  // Force count from primary too
-    ]);
-
-    // CRITICAL FIX: Fetch metafields from Shopify for AI enhance functionality
-    const productsWithMetafields = await Promise.all(products.map(async (product) => {
-      // Get metafields from Shopify for this product
-      const productGid = toGID(product.productId);
-      let metafields = [];
-      
-      try {
-        const metafieldsQuery = `
-          query GetProductMetafields($productId: ID!) {
-            product(id: $productId) {
-              metafields(first: 20, namespace: "seo_ai") {
-                edges {
-                  node {
-                    key
-                    value
-                    namespace
-                  }
-                }
-              }
-            }
-          }
-        `;
-        
-        const result = await shopGraphQL(req, shop, metafieldsQuery, { productId: productGid });
-        
-        if (result?.product?.metafields?.edges) {
-          metafields = result.product.metafields.edges.map(edge => ({
-            key: `${edge.node.namespace}.${edge.node.key}`,
-            value: edge.node.value,
-            namespace: edge.node.namespace
-          }));
-        }
-      } catch (error) {
-        console.warn(`Failed to fetch metafields for product ${product.productId}:`, error.message);
-      }
-
-      return {
-        ...product,
-        metafields, // Add metafields for frontend AI enhance
-        optimizationSummary: {
-          isOptimized: product.seoStatus?.optimized || false,
-          optimizedLanguages: product.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || [],
-          lastOptimized: product.seoStatus?.languages
-            ?.filter(l => l.optimized && l.lastOptimizedAt)
-            ?.map(l => l.lastOptimizedAt)
-            ?.sort((a, b) => new Date(b) - new Date(a))[0] || null
-        }
-      };
-    }));
-
-    res.json({
-      products: productsWithMetafields,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit),
-        hasNext: page < Math.ceil(total / limit),
-        hasPrev: page > 1
-      }
-    });
-
-  } catch (error) {
-    console.error('GET /api/products/list error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to fetch products' });
-  }
-});
-
-// GET /api/products/sync-status - Check sync status
-router.get('/sync-status', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    
-    const safeQuery = getValidProductsQuery({ shop });
-    
-    const [totalInDB, lastSync, invalidCount] = await Promise.all([
-      Product.countDocuments(safeQuery).read('primary'),
-      Product.findOne(safeQuery).sort({ syncedAt: -1 }).select('syncedAt').read('primary').lean(),
-      Product.countDocuments({
-        shop,
-        $or: [
-          { productId: { $type: 'string' } },
-          { productId: null },
-          { productId: { $exists: false } }
-        ]
-      }).read('primary')
-    ]);
-
-    res.json({
-      shop,
-      totalProducts: totalInDB,
-      invalidProducts: invalidCount,
-      lastSyncedAt: lastSync?.syncedAt || null,
-      needsSync: !lastSync || (Date.now() - new Date(lastSync.syncedAt) > 24 * 60 * 60 * 1000) // older than 24h
-    });
-
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
-  }
-});
-
-// POST /api/products/sync - Sync products from Shopify
-router.post('/sync', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    
-    // Вземете idToken от request
-    const idToken = req.headers['authorization']?.replace('Bearer ', '') || 
-                   req.query.id_token ||
-                   req.body?.id_token;
-    
-    console.log('[PRODUCT_SYNC] Starting sync with idToken:', !!idToken);
-    
-    // Import dynamically to avoid circular dependencies
-    const { syncProductsForShop } = await import('./productSync.js');
-    
-    // Подайте idToken към sync функцията
-    const result = await syncProductsForShop(shop, idToken, req);
-    
-    res.json({
-      success: true,
-      shop,
-      synced: result.length,
-      count: result.length,
-      message: `Successfully synced ${result.length} products`
-    });
-
-  } catch (error) {
-    console.error('POST /api/products/sync error:', error);
-    res.status(error.status || 500).json({ 
-      success: false,
-      error: error.message || 'Sync failed' 
-    });
-  }
-});
-
-// GET /api/products/tags/list - Get all unique tags for filtering
-router.get('/tags/list', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    
-    const safeQuery = getValidProductsQuery({ shop });
-    
-    // Use MongoDB aggregation to get unique tags with primary read
-    const tags = await Product.distinct('tags', safeQuery).read('primary');
-    
-    res.json({
-      tags: tags.filter(Boolean).sort(),
-      count: tags.length
-    });
-
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
-  }
-});
-
-// GET /api/products/seo-status - Get SEO optimization statistics
-router.get('/seo-status', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-
-    console.log(`Getting SEO status for shop: ${shop}`);
-
-    // Use aggregation to safely count products
-    const countPipeline = [
-      { $match: { shop } },
-      {
-        $addFields: {
-          isValidProduct: {
-            $and: [
-              { $isNumber: "$productId" },
-              { $ne: ["$productId", null] },
-              { $ne: [{ $toString: "$productId" }, "NaN"] }
-            ]
-          }
-        }
-      }
-    ];
-
-    // Get total valid products with primary read
-    const totalResult = await Product.aggregate([
-      ...countPipeline,
-      { $match: { isValidProduct: true } },
-      { $count: "total" }
-    ]).read('primary');
-    const total = totalResult[0]?.total || 0;
-
-    // Get optimized products with primary read
-    const optimizedResult = await Product.aggregate([
-      ...countPipeline,
-      { $match: { isValidProduct: true, 'seoStatus.optimized': true } },
-      { $count: "optimized" }
-    ]).read('primary');
-    const optimized = optimizedResult[0]?.optimized || 0;
-
-    // Get invalid products count with primary read
-    const invalidResult = await Product.aggregate([
-      { $match: { shop } },
-      {
-        $addFields: {
-          isInvalid: {
-            $or: [
-              { $eq: [{ $type: "$productId" }, "string"] },
-              { $eq: ["$productId", null] },
-              { $not: [{ $isNumber: "$productId" }] },
-              { $eq: [{ $toString: "$productId" }, "NaN"] }
-            ]
-          }
-        }
-      },
-      { $match: { isInvalid: true } },
-      { $count: "invalid" }
-    ]).read('primary');
-    const invalidCount = invalidResult[0]?.invalid || 0;
-
-    const unoptimized = total - optimized;
-
-    // Get products by language using aggregation with primary read
-    const languageStats = await Product.aggregate([
-      ...countPipeline,
-      { $match: { isValidProduct: true } },
-      { $match: { 'seoStatus.languages': { $exists: true, $type: 'array' } } },
-      { $unwind: '$seoStatus.languages' },
-      { $match: { 'seoStatus.languages.optimized': true } },
-      { $group: {
-          _id: '$seoStatus.languages.code',
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]).read('primary');
-
-    // Get last sync info with primary read
-    const lastSyncResult = await Product.aggregate([
-      ...countPipeline,
-      { $match: { isValidProduct: true } },
-      { $sort: { syncedAt: -1 } },
-      { $limit: 1 },
-      { $project: { syncedAt: 1 } }
-    ]).read('primary');
-    const lastSync = lastSyncResult[0];
-
-    res.json({
-      shop,
-      total,
-      optimized,
-      unoptimized,
-      invalidProducts: invalidCount,
-      optimizationRate: total > 0 ? ((optimized / total) * 100).toFixed(1) + '%' : '0%',
-      languageStats: languageStats.map(ls => ({
-        language: ls._id,
-        count: ls.count
-      })),
-      lastSyncedAt: lastSync?.syncedAt || null,
-      warning: invalidCount > 0 ? `Found ${invalidCount} products with invalid IDs. Run cleanup to fix.` : null
-    });
-
-  } catch (error) {
-    console.error('GET /api/products/seo-status error:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch SEO status' });
-  }
-});
-
-// DELETE /api/products/clear - Clear all products for a shop
-router.delete('/clear', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    
-    const result = await Product.deleteMany({ shop });
-    res.json({ 
-      success: true,
-      shop,
-      deleted: result.deletedCount 
-    });
-    
-  } catch (error) {
-    console.error('DELETE /api/products/clear error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/products/cleanup - Clean up invalid products
-router.post('/cleanup', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-
-    console.log(`Starting cleanup for shop: ${shop}`);
-
-    // Use aggregation to find invalid products without triggering cast errors with primary read
-    const invalidProducts = await Product.aggregate([
-      { $match: { shop } },
-      {
-        $addFields: {
-          isInvalid: {
-            $or: [
-              { $eq: [{ $type: "$productId" }, "string"] },
-              { $eq: ["$productId", null] },
-              { $not: [{ $isNumber: "$productId" }] },
-              { $eq: [{ $toString: "$productId" }, "NaN"] }
-            ]
-          }
-        }
-      },
-      { $match: { isInvalid: true } },
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          productId: 1,
-          productIdType: { $type: "$productId" },
-          productIdString: { $toString: "$productId" }
-        }
-      }
-    ]).read('primary');
-
-    console.log(`Found ${invalidProducts.length} invalid products`);
-
-    // Delete invalid products using their _id
-    const idsToDelete = invalidProducts.map(p => p._id);
-    let deleteResult = { deletedCount: 0 };
-    
-    if (idsToDelete.length > 0) {
-      deleteResult = await Product.deleteMany({
-        _id: { $in: idsToDelete }
-      });
-      console.log(`Deleted ${deleteResult.deletedCount} products`);
-    }
-
-    // Count remaining valid products with primary read
-    const remainingCount = await Product.countDocuments({
-      shop,
-      productId: { $type: 'number' }
-    }).read('primary');
-
-    res.json({
-      success: true,
-      shop,
-      cleaned: {
-        found: invalidProducts.length,
-        deleted: deleteResult.deletedCount,
-        details: invalidProducts.map(p => ({
-          _id: p._id,
-          title: p.title,
-          productId: p.productId,
-          type: p.productIdType,
-          asString: p.productIdString
-        }))
-      },
-      remaining: remainingCount
-    });
-
-  } catch (error) {
-    console.error('POST /api/products/cleanup error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/products/bulk-select - Get products for bulk operations
-router.get('/bulk-select', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const { 
-      ids, // comma-separated product IDs
-      optimized = 'all' // all, true, false
-    } = req.query;
-
-    // Build query with safe filters
-    const query = getValidProductsQuery({ shop });
-
-    // Filter by specific IDs if provided
-    if (ids) {
-      const idArray = ids.split(',').map(id => {
-        const num = parseInt(id);
-        return !isNaN(num) && isFinite(num) ? num : null;
-      }).filter(Boolean);
-      
-      if (idArray.length > 0) {
-        query.productId = { $in: idArray };
-      }
-    }
-
-    // Filter by optimization status
-    if (optimized !== 'all') {
-      query['seoStatus.optimized'] = optimized === 'true';
-    }
-
-    const products = await Product.find(query)
-      .select('productId title handle seoStatus tags images')
-      .limit(200) // Limit for bulk operations
-      .read('primary')  // Force read from primary node
-      .lean();
-
-    res.json({
-      products: products.map(p => ({
-        id: p.productId,
-        gid: toGID(p.productId),
-        title: p.title,
-        handle: p.handle,
-        image: p.images?.[0] || null,
-        isOptimized: p.seoStatus?.optimized || false,
-        optimizedLanguages: p.seoStatus?.languages?.filter(l => l.optimized).map(l => l.code) || []
-      })),
-      count: products.length
-    });
-
-  } catch (error) {
-    console.error('GET /api/products/bulk-select error:', error);
-    res.status(error.status || 500).json({ error: error.message });
-  }
-});
-
-// GET /api/products/:productId - Get single product with full details
-// ВАЖНО: Този route е последен, защото съдържа динамичен параметър
-router.get('/:productId', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const { productId } = req.params;
-    const gid = toGID(productId);
-    
-    // Parse numeric ID safely
-    const numericId = parseInt(productId);
-    const isValidNumeric = !isNaN(numericId) && isFinite(numericId);
-    
-    // Build query conditions
-    const queryConditions = [{ gid }];
-    if (isValidNumeric) {
-      queryConditions.push({ productId: numericId });
-    }
-    
-    // Try to find in MongoDB first with primary read
-    let product = await Product.findOne({ 
-      shop, 
-      $or: queryConditions
-    }).read('primary').lean();
-
-    if (!product) {
-      // If not in DB, fetch from Shopify
-      const query = `
-        query GetProduct($id: ID!) {
-          product(id: $id) {
-            id
-            title
-            handle
-            descriptionHtml
-            status
-            vendor
-            productType
-            tags
-            createdAt
-            publishedAt
-            totalInventory
-            featuredImage {
-              url
-              altText
-            }
-          }
-        }
-      `;
-      
-      const data = await shopGraphQL(req, shop, query, { id: gid });
-      
-      if (!data.product) {
-        return res.status(404).json({ error: 'Product not found' });
-      }
-      
-      // Return Shopify data (not saved to DB yet)
-      product = {
-        ...data.product,
-        productId: numericId,
-        shop,
-        gid,
-        seoStatus: { optimized: false, languages: [] }
-      };
-    }
-
-    res.json({ product });
-
-  } catch (error) {
-    console.error('GET /api/products/:productId error:', error);
-    res.status(error.status || 500).json({ error: error.message });
-  }
-});
-
-// DELETE /api/products/:id/metafields - Изтрива SEO metafields и обновява MongoDB - MIGRATED TO GRAPHQL
-router.delete('/:id/metafields', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const productId = req.params.id;
-    
-    // Конвертираме в GID ако е необходимо
-    const productGid = toGID(productId);
-    
-    console.log('[DELETE-METAFIELDS] Deleting metafields for product:', productGid);
-    
-    // 1. Изтриваме metafields от Shopify - MIGRATED TO GRAPHQL
-    // Първо вземаме metafields за да видим какви има
-    const query = `
-      query GetProductMetafields($id: ID!) {
-        product(id: $id) {
+// GraphQL query for listing products
+const PRODUCTS_LIST_QUERY = `
+  query GetProductsList($first: Int!, $after: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
+    products(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse) {
+      edges {
+        node {
           id
-          metafields(namespace: "seo_ai", first: 20) {
-            edges {
-              node {
-                id
-                key
-                value
-              }
-            }
-          }
-        }
-      }
-    `;
-    
-    const data = await shopGraphQL(req, shop, query, { id: productGid });
-    
-    if (data?.product?.metafields?.edges) {
-      const metafields = data.product.metafields.edges;
-      
-      // Изтриваме всеки metafield с GraphQL
-      for (const edge of metafields) {
-        const mf = edge.node;
-        if (mf.key && mf.key.startsWith('seo__')) {
-          const deleteMutation = `
-            mutation DeleteMetafield($id: ID!) {
-              metafieldDelete(input: { id: $id }) {
-                deletedId
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }
-          `;
-          
-          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: mf.id });
-          
-          if (deleteResult?.metafieldDelete?.userErrors?.length === 0) {
-            console.log(`[DELETE-METAFIELDS] Deleted metafield: ${mf.key}`);
-          } else {
-            console.error(`[DELETE-METAFIELDS] Failed to delete metafield ${mf.key}:`, deleteResult?.metafieldDelete?.userErrors);
-          }
-        }
-      }
-    }
-    
-    // 2. Обновяваме MongoDB - маркираме всички езици като неоптимизирани
-    const numericId = productId.replace('gid://shopify/Product/', '');
-    const product = await Product.findOne({ shop, productId: parseInt(numericId) }).read('primary');
-    
-    if (product && product.seoStatus) {
-      const updatedLanguages = product.seoStatus.languages || [];
-      updatedLanguages.forEach(lang => {
-        lang.optimized = false;
-      });
-      
-      await Product.findOneAndUpdate(
-        { shop, productId: parseInt(numericId) },
-        { 
-          'seoStatus.optimized': false,
-          'seoStatus.languages': updatedLanguages
-        }
-      );
-      
-      console.log(`[DELETE-METAFIELDS] Updated MongoDB for product ${numericId}`);
-    }
-    
-    res.json({ 
-      ok: true, 
-      message: 'SEO metafields deleted and MongoDB updated',
-      productId: productGid
-    });
-    
-  } catch (err) {
-    console.error('[DELETE-METAFIELDS] Error:', err.message);
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message || 'Failed to delete metafields' 
-    });
-  }
-});
-
-// GET /api/products/verify-seo/:productId - Verify real SEO status from Shopify
-router.get('/verify-seo/:productId', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const { productId } = req.params;
-    const gid = toGID(productId);
-    
-    console.log('[VERIFY-SEO] Checking real status for:', gid);
-    
-    // Get available languages from shop
-    const languagesQuery = `
-      query {
-        shopLocales {
-          locale
-          primary
-          published
-        }
-      }
-    `;
-    
-    const languagesResult = await shopGraphQL(req, shop, languagesQuery);
-    const shopLanguages = (languagesResult?.shopLocales || [])
-      .filter(l => l.published)
-      .map(l => l.locale.toLowerCase().split('-')[0]);
-    
-    // Check metafields directly in Shopify
-    const metafieldsQuery = `
-      query GetProductMetafields($id: ID!) {
-        product(id: $id) {
-          id
+          handle
           title
-          ${shopLanguages.map(lang => `
-            metafield_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") {
-              id
-              value
+          status
+          productType
+          vendor
+          createdAt
+          updatedAt
+          featuredImage {
+            url
+            altText
+          }
+          priceRangeV2 {
+            minVariantPrice {
+              amount
+              currencyCode
             }
-          `).join('')}
+          }
         }
       }
-    `;
-    
-    const result = await shopGraphQL(req, shop, metafieldsQuery, { id: gid });
-    
-    if (!result?.product) {
-      return res.status(404).json({ error: 'Product not found' });
-    }
-    
-    // Check which languages have valid SEO data
-    const optimizedLanguages = [];
-    shopLanguages.forEach(lang => {
-      const metafieldKey = `metafield_${lang}`;
-      if (result.product[metafieldKey]?.value) {
-        try {
-          const parsed = JSON.parse(result.product[metafieldKey].value);
-          if (parsed?.title || parsed?.metaDescription) {
-            optimizedLanguages.push(lang);
-          }
-        } catch (e) {
-          // Invalid JSON
-        }
+      pageInfo {
+        hasNextPage
+        endCursor
       }
-    });
-    
-    // Update MongoDB with real data
-    const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
-    if (!isNaN(numericId)) {
-      await Product.findOneAndUpdate(
-        { shop, productId: numericId },
-        { 
-          $set: {
-            'seoStatus.optimized': optimizedLanguages.length > 0,
-            'seoStatus.languages': optimizedLanguages.map(lang => ({
-              code: lang,
-              optimized: true,
-              lastOptimizedAt: new Date()
-            }))
-          }
-        },
-        { upsert: true }
-      );
     }
-    
-    res.json({
-      productId: gid,
-      title: result.product.title,
-      shopLanguages,
-      optimizedLanguages,
-      isOptimized: optimizedLanguages.length > 0,
-      realTimeCheck: true
-    });
-    
-  } catch (error) {
-    console.error('[VERIFY-SEO] Error:', error);
-    res.status(500).json({ error: error.message });
   }
-});
+`;
 
-// POST /api/products/resync-all - Force resync all products with Shopify
-router.post('/resync-all', validateRequest(), async (req, res) => {
-  try {
-    const shop = req.shopDomain;
-    const { limit = 50 } = req.body;
-    
-    console.log('[RESYNC-ALL] Starting full resync for shop:', shop);
-    
-    // Get languages
-    const languagesQuery = `
-      query {
-        shopLocales {
-          locale
-          primary
-          published
-        }
+// GraphQL query for product tags
+const PRODUCT_TAGS_QUERY = `
+  query GetProductTags($first: Int!) {
+    productTags(first: $first) {
+      edges {
+        node
       }
-    `;
-    
-    const languagesResult = await shopGraphQL(req, shop, languagesQuery);
-    const shopLanguages = (languagesResult?.shopLocales || [])
-      .filter(l => l.published)
-      .map(l => l.locale.toLowerCase().split('-')[0]);
-    
-    // Get products with metafields
-    const productsQuery = `
-      query GetProducts($first: Int!) {
-        products(first: $first) {
-          edges {
-            node {
-              id
-              title
-              ${shopLanguages.map(lang => `
-                metafield_${lang}: metafield(namespace: "seo_ai", key: "seo__${lang}") {
-                  id
-                  value
-                }
-              `).join('')}
-            }
-          }
-        }
-      }
-    `;
-    
-    const result = await shopGraphQL(req, shop, productsQuery, { first: limit });
-    
-    let syncedCount = 0;
-    
-    for (const { node } of result.products.edges) {
-      const optimizedLanguages = [];
-      
-      shopLanguages.forEach(lang => {
-        const metafieldKey = `metafield_${lang}`;
-        if (node[metafieldKey]?.value) {
-          try {
-            const parsed = JSON.parse(node[metafieldKey].value);
-            if (parsed?.title || parsed?.metaDescription) {
-              optimizedLanguages.push(lang);
-            }
-          } catch (e) {
-            // Invalid JSON
-          }
-        }
-      });
-      
-      const numericId = parseInt(node.id.replace('gid://shopify/Product/', ''));
-      
-      await Product.findOneAndUpdate(
-        { shop, productId: numericId },
-        {
-          $set: {
-            gid: node.id,
-            title: node.title,
-            'seoStatus.optimized': optimizedLanguages.length > 0,
-            'seoStatus.languages': optimizedLanguages.map(lang => ({
-              code: lang,
-              optimized: true,
-              lastOptimizedAt: new Date()
-            }))
-          }
-        },
-        { upsert: true }
-      );
-      
-      syncedCount++;
     }
+  }
+`;
+
+// Helper to normalize shop
+function normalizeShop(shop) {
+  if (!shop) return null;
+  const s = String(shop).trim();
+  if (/^https?:\/\//.test(s)) {
+    const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    return u.toLowerCase();
+  }
+  if (!/\.myshopify\.com$/i.test(s)) return `${s.toLowerCase()}.myshopify.com`;
+  return s.toLowerCase();
+}
+
+// Convert sort parameters
+function convertSortKey(sortBy) {
+  const sortMap = {
+    'title': 'TITLE',
+    'createdAt': 'CREATED_AT', 
+    'updatedAt': 'UPDATED_AT',
+    'productType': 'PRODUCT_TYPE',
+    'vendor': 'VENDOR'
+  };
+  return sortMap[sortBy] || 'UPDATED_AT';
+}
+
+// GET /api/products/list
+router.get('/list', apiResolver, async (req, res) => {
+  try {
+    const shop = req.normalizedShop || normalizeShop(req.query.shop);
     
-    console.log('[RESYNC-ALL] Synced', syncedCount, 'products');
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter is required' });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 250); // Max 250
+    const sortBy = req.query.sortBy || 'updatedAt';
+    const sortOrder = req.query.sortOrder || 'desc';
     
-    res.json({
+    const sortKey = convertSortKey(sortBy);
+    const reverse = sortOrder === 'desc';
+    
+    console.log(`[PRODUCTS] Fetching products for ${shop}, page ${page}, limit ${limit}`);
+
+    const variables = {
+      first: limit,
+      sortKey: sortKey,
+      reverse: reverse
+    };
+
+    // Handle pagination with cursor if not first page
+    if (page > 1) {
+      // For simplicity, we'll skip cursor pagination in this basic implementation
+      // In production, you'd want to implement proper cursor-based pagination
+    }
+
+    const data = await executeShopifyGraphQL(shop, PRODUCTS_LIST_QUERY, variables);
+    const products = data?.products?.edges?.map(edge => edge.node) || [];
+
+    return res.json({
       success: true,
-      shop,
-      synced: syncedCount,
-      message: `Successfully resynced ${syncedCount} products with real Shopify data`
+      products: products,
+      pagination: {
+        page: page,
+        limit: limit,
+        hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
+        endCursor: data?.products?.pageInfo?.endCursor
+      },
+      shop: shop
     });
-    
+
   } catch (error) {
-    console.error('[RESYNC-ALL] Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[PRODUCTS] List error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch products',
+      message: error.message
+    });
   }
 });
 
-// POST /api/products/verify-after-delete
-router.post('/verify-after-delete', validateRequest(), async (req, res) => {
+// GET /api/products/tags/list
+router.get('/tags/list', apiResolver, async (req, res) => {
   try {
-    const shop = req.shopDomain;
-    const { productIds, deletedLanguages } = req.body;
+    const shop = req.normalizedShop || normalizeShop(req.query.shop);
     
-    console.log('[VERIFY-AFTER-DELETE] Checking products:', productIds);
-    
-    for (const productId of productIds) {
-      const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
-      
-      // Update MongoDB - remove deleted languages
-      const product = await Product.findOne({ shop, productId: numericId });
-      
-      if (product?.seoStatus?.languages) {
-        const remainingLanguages = product.seoStatus.languages
-          .filter(lang => !deletedLanguages.includes(lang.code));
-        
-        await Product.updateOne(
-          { shop, productId: numericId },
-          {
-            $set: {
-              'seoStatus.optimized': remainingLanguages.length > 0,
-              'seoStatus.languages': remainingLanguages
-            }
-          }
-        );
-      }
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter is required' });
     }
-    
-    res.json({ ok: true, updated: productIds.length });
-    
+
+    console.log(`[PRODUCTS] Fetching product tags for ${shop}`);
+
+    const data = await executeShopifyGraphQL(shop, PRODUCT_TAGS_QUERY, { first: 250 });
+    const tags = data?.productTags?.edges?.map(edge => edge.node) || [];
+
+    return res.json({
+      success: true,
+      tags: tags,
+      count: tags.length,
+      shop: shop
+    });
+
   } catch (error) {
-    console.error('[VERIFY-AFTER-DELETE] Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[PRODUCTS] Tags error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch product tags',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/products/sync
+router.post('/sync', productSyncResolver, async (req, res) => {
+  try {
+    const shop = req.normalizedShop || normalizeShop(req.query.shop || req.body.shop);
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter is required for sync' });
+    }
+
+    console.log(`[PRODUCT_SYNC] Starting sync with idToken: ${!!req.headers.authorization}`);
+    console.log(`Starting product sync for ${shop}...`);
+
+    const result = await syncProductsForShop(shop);
+
+    return res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error(`POST /api/products/sync error:`, error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Product sync failed',
+      shop: req.normalizedShop
+    });
+  }
+});
+
+// GET /api/products/sync/status  
+router.get('/sync/status', apiResolver, async (req, res) => {
+  try {
+    const shop = req.normalizedShop || normalizeShop(req.query.shop);
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter is required' });
+    }
+
+    // Check if we have cached data
+    const { FeedCache } = await import('./productSync.js');
+    const cache = await FeedCache.findOne({ shop }).lean();
+
+    return res.json({
+      success: true,
+      shop: shop,
+      lastSync: cache?.updatedAt || null,
+      hasData: !!cache?.data,
+      dataSize: cache?.data?.length || 0
+    });
+
+  } catch (error) {
+    console.error('[PRODUCTS] Sync status error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get sync status',
+      message: error.message
+    });
   }
 });
 

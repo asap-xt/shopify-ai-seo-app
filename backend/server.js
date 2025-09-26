@@ -17,8 +17,7 @@ import fs from 'fs';
 import mongoose from 'mongoose';
 import Shop from './db/Shop.js';
 import {
-  resolveShopToken,
-  extractShopFromJWT
+  resolveShopToken
 } from './utils/tokenResolver.js';
 import { attachIdToken } from './middleware/attachIdToken.js';
 import { attachShop } from './middleware/attachShop.js';
@@ -384,6 +383,10 @@ import aiEndpointsRouter from './controllers/aiEndpointsController.js';
 import aiEnhanceRouter from './controllers/aiEnhanceController.js';
 import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 
+// Import new middleware and controllers
+import { attachShop as attachShopFromApiResolver } from './middleware/apiResolver.js';
+import collectionsRouter from './controllers/collectionsController.js';
+
 // Session validation endpoint (replaces old /api/auth)
 app.post('/api/auth/session', validateRequest(), async (req, res) => {
   const { shop, host } = req.body;
@@ -415,6 +418,9 @@ app.use('/api', aiDiscoveryRouter);
 app.use(aiEndpointsRouter);
 app.use('/ai-enhance', aiEnhanceRouter);
 app.use('/api/schema', advancedSchemaRouter);
+
+// Mount the new controllers with fixed authentication
+app.use('/collections', collectionsRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);

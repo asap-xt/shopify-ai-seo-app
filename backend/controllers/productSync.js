@@ -1,88 +1,8 @@
 // backend/controllers/productSync.js
-// Builds an AI-ready catalog feed from Shopify Admin API and saves to MongoDB + FeedCache
+// Fixed version that uses centralized token resolver
 
 import mongoose from 'mongoose';
-import Product from '../db/Product.js';
-import { resolveAdminToken } from '../utils/tokenResolver.js';
-
-const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
-
-// Helper function to normalize shop domain (fixes duplicate domain issue)
-function normalizeShopDomain(input) {
-  if (!input) return '';
-  return Array.isArray(input) ? input[0] : String(input).trim();
-}
-
-// Helper function for consistent GraphQL calls
-async function simpleAdminGraphQL(shop, token, query, variables = {}) {
-  const shopDomain = normalizeShopDomain(shop);
-  const res = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': token,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const text = await res.text();
-  let json; 
-  try { 
-    json = JSON.parse(text); 
-  } catch { 
-    /* noop */ 
-  }
-  if (!res.ok) throw new Error(`Admin GraphQL failed: ${res.status} ${text}`);
-  if (json?.errors) throw new Error(`Admin GraphQL error: ${JSON.stringify(json.errors)}`);
-  return json.data;
-}
-
-// Get published locales from shop using shopLocales query
-async function getPublishedLocales(shop, token) {
-  const q = `
-    query ShopLocales {
-      shopLocales {
-        locale
-        name
-        primary
-        published
-      }
-    }
-  `;
-  const data = await simpleAdminGraphQL(shop, token, q);
-  const list = data?.shopLocales || [];
-  const publishedList = list.filter(l => l.published);
-  const codes = publishedList.map(l => l.locale);
-  const primary = publishedList.find(l => l.primary)?.locale || codes[0] || 'en';
-  return { list: publishedList, codes, primary };
-}
-
-// Extract optimized languages from metafield keys
-function seoKeysToLocales(keys = []) {
-  // Expected keys: seo__en, seo__es, seo__bg ...
-  return [...new Set(
-    keys
-      .filter(k => typeof k === 'string' && k.startsWith('seo__'))
-      .map(k => k.slice('seo__'.length))
-  )];
-}
-
-// Get product SEO locales from metafields
-async function getProductSeoLocales(shop, token, productGid) {
-  const q = `
-    query ProductMeta($id: ID!) {
-      product(id: $id) {
-        id
-        metafields(first: 100, namespace: "seo_ai") {
-          edges { node { key } }
-        }
-      }
-    }
-  `;
-  const data = await simpleAdminGraphQL(shop, token, q, { id: productGid });
-  const edges = data?.product?.metafields?.edges || [];
-  const keys = edges.map(e => e?.node?.key).filter(Boolean);
-  return seoKeysToLocales(keys);
-}
+import { resolveAdminTokenForShop, executeShopifyGraphQL } from '../utils/tokenResolver.js';
 
 // Mongo model for cached feed
 const FeedCacheSchema = new mongoose.Schema(
@@ -96,6 +16,81 @@ const FeedCacheSchema = new mongoose.Schema(
 );
 
 export const FeedCache = mongoose.models.FeedCache || mongoose.model('FeedCache', FeedCacheSchema);
+
+// GraphQL Queries
+const SHOP_INFO_QUERY = `
+  query GetShopInfo {
+    shop {
+      currencyCode
+      primaryDomain {
+        host
+        url
+      }
+    }
+  }
+`;
+
+const SHOP_LOCALES_QUERY = `
+  query GetShopLocales {
+    shopLocales {
+      locale
+      primary
+      published
+    }
+  }
+`;
+
+const PRODUCTS_QUERY = `
+  query GetProducts($first: Int!, $after: String) {
+    products(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          handle
+          title
+          descriptionHtml
+          productType
+          vendor
+          tags
+          status
+          createdAt
+          updatedAt
+          variants(first: 50) {
+            edges {
+              node {
+                id
+                title
+                price
+                compareAtPrice
+                sku
+                inventoryQuantity
+                availableForSale
+              }
+            }
+          }
+          images(first: 10) {
+            edges {
+              node {
+                id
+                url
+                altText
+              }
+            }
+          }
+          seo {
+            title
+            description
+          }
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
 
 function sanitizeHtmlBasic(html = '') {
   let out = String(html)
@@ -122,487 +117,223 @@ function minimalJsonLd({ name, description, price, currency, url }) {
   return obj;
 }
 
-function getAdminApiVersion() {
-  return process.env.SHOPIFY_API_VERSION || '2025-07';
-}
-
-async function adminGraphQL({ shop, accessToken, query, variables }) {
-  if (!shop || !accessToken) throw new Error('Missing shop or access token for Admin GraphQL');
-  const url = `https://${shop}/admin/api/${getAdminApiVersion()}/graphql.json`;
-  const rsp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await rsp.json();
-  if (!rsp.ok || json.errors) {
-    const msg = json.errors ? JSON.stringify(json.errors) : await rsp.text();
-    throw new Error(`Admin GraphQL error: ${msg}`);
-  }
-  return json;
-}
-
-// Import centralized token resolver
-import { resolveShopToken } from '../utils/tokenResolver.js';
-
-/**
- * Resolve an Admin API access token using centralized function.
- */
-async function resolveAccessToken(shop) {
-  try {
-    return await resolveShopToken(shop);
-  } catch (err) {
-    console.error('Error resolving access token:', err.message);
-    return null;
-  }
-}
-
-// Updated pickPrices to accept currency
-function pickPrices(variants, product, shopCurrency) {
-  let price = null;
-  let available = false;
+function pickPrices(variants) {
+  let price = null,
+    currency = null,
+    available = false;
   
   for (const edge of variants?.edges || []) {
     const v = edge?.node;
     if (!v) continue;
-    const p = parseFloat(v.price);
-    if (!Number.isNaN(p)) {
-      if (price === null || p < price) price = p;
+    const p = parseFloat(v.price ?? v.priceV2?.amount ?? 0);
+    if (p > 0) {
+      price = p;
+      currency = currency || 'USD'; // Default fallback
+      available = available || !!v.availableForSale;
+      break;
     }
-    if (v.availableForSale) available = true;
   }
-  
-  // Get currency from product or fallback to shop currency
-  const currency = product?.priceRangeV2?.minVariantPrice?.currencyCode || shopCurrency || 'USD';
-  
   return { price, currency, available };
 }
 
-// Get published locales from Shopify (requires read_locales scope)
-// Updated getShopLanguages to use new resolveAdminToken
-async function getShopLanguages(req, shop) {
-  const token = await resolveAdminToken(req, shop);
-  const query = `
-    query PublishedLocales {
-      publishedLocales {
-        locale
-        name
-        primary
-      }
-    }`;
-  const r = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
-    body: JSON.stringify({ query })
-  });
-  const j = await r.json();
-  if (j.errors) throw new Error(JSON.stringify(j.errors));
-  const list = j.data.publishedLocales || [];
-  const codes = list.map(l => (l.locale || '').split('-')[0]); // „къси" кодове за бързо филтриране
-  return { locales: list, codes };
-}
-
-// NEW: Get shop currency
-async function getShopCurrency(shop, accessToken) {
-  const query = `
-    query ShopCurrency {
-      shop {
-        currencyCode
-      }
-    }
-  `;
-  
+// Get shop basic info
+async function getShopInfo(shop) {
   try {
-    const data = await adminGraphQL({ shop, accessToken, query });
-    return data?.data?.shop?.currencyCode || 'USD';
-  } catch (e) {
-    console.error('Failed to get shop currency:', e.message);
-    return 'USD';
+    const data = await executeShopifyGraphQL(shop, SHOP_INFO_QUERY);
+    const shopData = data?.shop;
+    
+    return {
+      currency: shopData?.currencyCode || 'USD',
+      domain: shopData?.primaryDomain?.host || shop,
+      url: shopData?.primaryDomain?.url || `https://${shop}`
+    };
+  } catch (error) {
+    console.error(`[SYNC] Failed to get shop info for ${shop}:`, error.message);
+    return {
+      currency: 'USD',
+      domain: shop,
+      url: `https://${shop}`
+    };
   }
 }
 
-function csv(arr) {
-  return Array.isArray(arr)
-    ? arr
-    : typeof arr === 'string'
-    ? arr.split(',').map((s) => s.trim()).filter(Boolean)
-    : [];
-}
-
-function safeJsonParse(str, defaultValue = null) {
+// Get shop supported languages  
+async function getShopLanguages(shop) {
   try {
-    return JSON.parse(str);
-  } catch {
-    return defaultValue;
+    const data = await executeShopifyGraphQL(shop, SHOP_LOCALES_QUERY);
+    const locales = data?.shopLocales || [];
+    
+    return locales
+      .filter(locale => locale.published)
+      .map(locale => locale.locale)
+      .filter(Boolean);
+  } catch (error) {
+    console.error(`[SYNC] Failed to get shop languages for ${shop}:`, error.message);
+    return ['en']; // Default fallback
   }
 }
 
-// Determine SEO optimization status from metafields dynamically
-function determineSeoStatus(metafieldsMap, languages = []) {
-  console.log('[PRODUCT_SYNC] Determining SEO status for languages:', languages);
-  console.log('[PRODUCT_SYNC] Available metafield keys:', Object.keys(metafieldsMap));
+// Fetch all products using pagination
+async function fetchAllProducts(shop) {
+  const products = [];
+  let hasNextPage = true;
+  let cursor = null;
   
-  const optimizedLanguages = {};
-  let hasAnyOptimization = false;
+  console.log(`[SYNC] Starting to fetch products for ${shop}`);
   
-  for (const lang of languages) {
-    // Проверете за метаполета с различни възможни ключове
-    const seoKey = `seo__${lang}`;
-    const seoAltKey = `seo_${lang}`;
-    const bulletsKey = `bullets__${lang}`;
-    const bulletsAltKey = `bullets_${lang}`;
-    const faqKey = `faq__${lang}`;
-    const faqAltKey = `faq_${lang}`;
-    
-    const hasSeo = !!(metafieldsMap[seoKey] || metafieldsMap[seoAltKey]);
-    const hasBullets = !!(metafieldsMap[bulletsKey] || metafieldsMap[bulletsAltKey]);
-    const hasFaq = !!(metafieldsMap[faqKey] || metafieldsMap[faqAltKey]);
-    
-    const isOptimized = hasSeo || hasBullets || hasFaq;
-    
-    if (isOptimized) {
-      console.log(`[PRODUCT_SYNC] Found optimization for ${lang} - SEO: ${hasSeo} Bullets: ${hasBullets} FAQ: ${hasFaq}`);
-      optimizedLanguages[lang] = {
-        optimized: true,
-        hasSeo,
-        hasBullets,
-        hasFaq,
-        lastOptimizedAt: new Date()
-      };
-      hasAnyOptimization = true;
-    } else {
-      console.log(`[PRODUCT_SYNC] Language ${lang} available but not optimized`);
-      optimizedLanguages[lang] = {
-        optimized: false,
-        hasSeo: false,
-        hasBullets: false,
-        hasFaq: false,
-        lastOptimizedAt: null
-      };
+  while (hasNextPage) {
+    try {
+      const variables = { first: 50 };
+      if (cursor) {
+        variables.after = cursor;
+      }
+      
+      const data = await executeShopifyGraphQL(shop, PRODUCTS_QUERY, variables);
+      const productsData = data?.products;
+      
+      if (!productsData) {
+        console.error(`[SYNC] No products data returned for ${shop}`);
+        break;
+      }
+      
+      const edges = productsData.edges || [];
+      console.log(`[SYNC] Fetched ${edges.length} products for ${shop}`);
+      
+      products.push(...edges.map(edge => edge.node));
+      
+      hasNextPage = productsData.pageInfo?.hasNextPage || false;
+      cursor = productsData.pageInfo?.endCursor || null;
+      
+      if (edges.length === 0) {
+        hasNextPage = false;
+      }
+      
+    } catch (error) {
+      console.error(`[SYNC] Error fetching products for ${shop}:`, error.message);
+      hasNextPage = false;
     }
   }
   
-  return {
-    optimized: hasAnyOptimization,
-    languages: Object.entries(optimizedLanguages).map(([code, status]) => ({
-      code,
-      ...status
-    })),
-    lastCheckedAt: new Date()
-  };
+  console.log(`[SYNC] Total products fetched for ${shop}: ${products.length}`);
+  return products;
 }
 
-function gidToNumericId(gid) {
-  return gid?.split('/')?.pop();
-}
-
-function toProductDocument(node, shop, shopLocales, shopCurrency, optimizedLangCodes) {
-  const numericId = gidToNumericId(node.id);
-  const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
+// Format product for AI consumption
+function formatProductForAI(product, { shopCurrency, shopDomain, shopUrl, languages }) {
+  const { price, currency, available } = pickPrices(product.variants);
   
-  // Determine SEO status for each language
-  const optimizedSet = new Set(optimizedLangCodes);
+  // Extract image info
+  const images = product.images?.edges?.map(edge => ({
+    id: edge.node.id,
+    url: edge.node.url,
+    alt: edge.node.altText || ''
+  })) || [];
   
-  return {
-    // Required fields for MongoDB
-    shop,                               // <— required
-    shopifyProductId: numericId,        // <— required
-    productId: node.id,                 // (full GID for compatibility)
-    gid: node.id,
-    title: node.title,
-    handle: node.handle,
-    status: node.status || 'ACTIVE',
-    priceMin: node.priceRangeV2?.minVariantPrice?.amount ?? null,
-    priceCurrency: node.priceRangeV2?.minVariantPrice?.currencyCode ?? shopCurrency ?? 'USD',
-    // Language arrays - only strings for MongoDB compatibility
-    languages: shopLocales.filter(l => optimizedSet.has(l.locale)).map(l => l.locale), // ['bg', 'en'] - optimized only
-    availableLanguages: shopLocales.map(l => l.locale),   // ['bg', 'en', 'es'] - all available
-    
-    // Additional fields
-    description: sanitizeHtmlBasic(node.descriptionHtml),
-    vendor: node.vendor,
-    productType: node.productType,
-    tags: csv(node.tags),
-    price: price ? String(price) : null,
-    currency,
-    available,
-    totalInventory: node.totalInventory || 0,
-    createdAt: node.createdAt ? new Date(node.createdAt) : null,
-    publishedAt: node.publishedAt ? new Date(node.publishedAt) : null,
-    featuredImage: node.featuredImage ? {
-      url: node.featuredImage.url,
-      altText: node.featuredImage.altText || ''
-    } : null,
-    seoStatus: {
-      optimized: false,
-      languages: [],
-      lastCheckedAt: new Date()
-    },
-    syncedAt: new Date(),
-    
-    // Images as objects
-    images: (node?.images?.edges || []).map(e => ({
-      id: e?.node?.id,
-      url: e?.node?.url,
-      alt: e?.node?.altText || ''
-    })).filter(img => img.url),
-    
-    // Legacy fields
-    aiOptimized: {}
-  };
-}
-
-function toFeedItem(node, shop, shopCurrency) {
-  const {
-    id,
-    handle,
-    title,
-    descriptionHtml,
-    vendor,
-    productType,
-    tags,
-    onlineStoreUrl,
-    updatedAt,
-    seo,
-    metafieldsData = {}
-  } = node || {};
+  // Build product URL
+  const productUrl = `${shopUrl}/products/${product.handle}`;
   
-  // Вземете bullets и FAQ от основните метаполета (не езикови)
-  const bullets = safeJsonParse(metafieldsData.bullets, []);
-  const faq = safeJsonParse(metafieldsData.faq, []);
-    
-  const images = (node?.images?.edges || []).map((e) => ({
-    id: e?.node?.id,
-    alt: e?.node?.altText || '',
-  }));
-  
-  const { price, currency, available } = pickPrices(node?.variants, node, shopCurrency);
-  const bodyHtml = sanitizeHtmlBasic(descriptionHtml || '');
+  // Create minimal JSON-LD
   const jsonLd = minimalJsonLd({
-    name: seo?.title || title,
-    description: seo?.description || bodyHtml.replace(/<[^>]+>/g, ' ').trim().slice(0, 500),
-    price,
-    currency,
-    url: onlineStoreUrl,
+    name: product.title,
+    description: sanitizeHtmlBasic(product.descriptionHtml),
+    price: price,
+    currency: currency || shopCurrency,
+    url: productUrl
   });
-
+  
   return {
-    productId: id,
-    handle,
-    title,
-    vendor,
-    productType,
-    tags: csv(tags),
-    url: onlineStoreUrl || null,
-    price,
-    currency,
-    available,
-    images,
-    seo: { 
-      title: seo?.title || null, 
-      metaDescription: seo?.description || null 
+    productId: product.id,
+    handle: product.handle,
+    title: product.title || '',
+    description: sanitizeHtmlBasic(product.descriptionHtml || ''),
+    productType: product.productType || '',
+    vendor: product.vendor || '',
+    tags: product.tags || [],
+    status: product.status || 'ACTIVE',
+    price: price,
+    currency: currency || shopCurrency,
+    available: available,
+    images: images,
+    url: productUrl,
+    seo: {
+      title: product.seo?.title || product.title,
+      description: product.seo?.description || ''
     },
-    seo_ai: { bullets, faq },
-    bodyHtml,
-    jsonLd,
-    updatedAt,
-    // Метаполетата ще бъдат достъпни за проверка
-    _metafields: metafieldsData
+    variants: product.variants?.edges?.map(edge => edge.node) || [],
+    languages: languages,
+    jsonLd: jsonLd,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+    shop: shopDomain
   };
 }
 
-async function fetchAllProducts({ shop, accessToken, shopLocales, shopCurrency }) {
-  // Използвайте подадените shopLocales
-  const languages = shopLocales || [];
-  console.log('[PRODUCT_SYNC] Shop languages:', languages.map(l => l.locale).join(', '));
-  
-  const pageSize = 50;
-  let after = null;
-  const items = [];
-
-  // Базова заявка без хардкоднати метаполета
-  const query = `
-    query Products($first: Int!, $after: String) {
-      products(first: $first, after: $after, sortKey: UPDATED_AT) {
-        pageInfo { hasNextPage endCursor }
-        edges {
-          cursor
-          node {
-            id 
-            title 
-            handle 
-            descriptionHtml 
-            onlineStoreUrl 
-            vendor 
-            productType 
-            tags 
-            updatedAt
-            createdAt
-            publishedAt
-            status
-            totalInventory
-            featuredImage {
-              url
-              altText
-            }
-            seo { title description }
-            images(first: 10) { 
-              edges { 
-                node { id url altText } 
-              } 
-            }
-            variants(first: 50) { 
-              edges { 
-                node { id price availableForSale } 
-              } 
-            }
-            priceRangeV2 {
-              minVariantPrice {
-                amount
-                currencyCode
-              }
-            }
-            # Вземете ВСИЧКИ метаполета от namespace seo_ai
-            metafields(first: 100, namespace: "seo_ai") {
-              edges {
-                node {
-                  key
-                  value
-                  namespace
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  for (;;) {
-    const rsp = await adminGraphQL({
-      shop,
-      accessToken,
-      query,
-      variables: { first: pageSize, after },
-    });
-    
-    const conn = rsp?.data?.products;
-    if (!conn) break;
-    
-    for (const edge of conn?.edges || []) {
-      const node = edge?.node;
-      if (!node) continue;
-      
-      // Преобразувайте метаполетата в по-удобен формат
-      const metafieldsMap = {};
-      for (const mfEdge of node.metafields?.edges || []) {
-        const { key, value } = mfEdge.node;
-        metafieldsMap[key] = value;
-      }
-      
-      // Добавете метаполетата към node обекта
-      node.metafieldsData = metafieldsMap;
-      
-      // Получете оптимизираните езици за този продукт
-      const optimizedLangs = await getProductSeoLocales(shop, accessToken, node.id);
-      
-      // Създайте документа с правилните типове данни
-      const productDoc = toProductDocument(node, shop, languages, shopCurrency, optimizedLangs);
-      
-      // Лог за езиците
-      if (optimizedLangs.length === 0) {
-        languages.forEach(l => {
-          if (!optimizedLangs.includes(l.locale)) {
-            console.log(`[PRODUCT_SYNC] Language ${l.locale} available but not optimized for product ${node.title}`);
-          }
-        });
-      }
-      
-      items.push(productDoc);
-    }
-    
-    if (!conn.pageInfo?.hasNextPage) break;
-    after = conn.pageInfo?.endCursor;
-  }
-
-  return items;
-}
-
-/**
- * Sync products from Shopify and save to MongoDB + FeedCache
- * @returns {Promise<Array>} Array of saved products
- */
-export async function syncProductsForShop(shop, idToken = null, req = null, retryCount = 0) {
-  console.log(`Starting product sync for ${shop}...`);
-  
-  let accessToken;
+// Main sync function
+export async function syncProductsForShop(shop) {
+  const startTime = Date.now();
+  console.log(`[SYNC] Starting product sync for ${shop}`);
   
   try {
-    // Първи опит с текущия токен
-    const { resolveAccessToken } = await import('../utils/tokenResolver.js');
-    accessToken = await resolveAccessToken(shop, idToken);
-  } catch (err) {
-    console.error('Initial token resolution failed:', err);
-    throw new Error('No valid access token available');
-  }
-  
-         try {
-           // Опитайте се да вземете данните
-           const [currency, languageData] = await Promise.all([
-             getShopCurrency(shop, accessToken),
-             getShopLanguages(req, shop)
-           ]);
-           
-           console.log(`Shop currency: ${currency}`);
-           console.log(`Shop languages: ${languageData.codes.join(', ')}`);
-           
-           const products = await fetchAllProducts({ shop, accessToken, shopLocales: languageData.locales, shopCurrency: currency });
-    console.log(`Fetched ${products.length} products from Shopify`);
+    // Verify shop has valid token
+    await resolveAdminTokenForShop(shop);
     
-    // Запазете в MongoDB с правилни upsert операции
-    const Product = (await import('../db/Product.js')).default;
-    await Product.deleteMany({ shop });
+    // Get shop info and languages in parallel
+    const [shopInfo, languages] = await Promise.all([
+      getShopInfo(shop),
+      getShopLanguages(shop)
+    ]);
     
-    const savedProducts = [];
-    for (const productDoc of products) {
-      const saved = await Product.findOneAndUpdate(
-        { shop: productDoc.shop, shopifyProductId: productDoc.shopifyProductId },
-        {
-          $set: productDoc,
-        },
-        { upsert: true, new: true, runValidators: true }
-      );
-      savedProducts.push(saved);
+    console.log(`[SYNC] Shop info for ${shop}:`, shopInfo);
+    console.log(`[SYNC] Shop languages for ${shop}:`, languages);
+    
+    // Fetch all products
+    const products = await fetchAllProducts(shop);
+    
+    if (products.length === 0) {
+      console.log(`[SYNC] No products found for ${shop}`);
     }
     
-    console.log(`Sync complete: saved ${savedProducts.length} products to MongoDB`);
-    return savedProducts;
+    // Format products for AI
+    const formattedProducts = products.map(product =>
+      formatProductForAI(product, {
+        shopCurrency: shopInfo.currency,
+        shopDomain: shopInfo.domain,
+        shopUrl: shopInfo.url,
+        languages: languages
+      })
+    );
+    
+    // Convert to NDJSON
+    const ndjsonData = formattedProducts
+      .map(product => JSON.stringify(product))
+      .join('\n');
+    
+    // Save to cache
+    await FeedCache.findOneAndUpdate(
+      { shop },
+      { 
+        shop,
+        format: 'ndjson',
+        data: ndjsonData,
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    
+    const duration = Date.now() - startTime;
+    console.log(`[SYNC] Product sync completed for ${shop} in ${duration}ms. Products: ${products.length}`);
+    
+    return {
+      success: true,
+      productsCount: products.length,
+      duration,
+      shop
+    };
     
   } catch (error) {
-    // Ако грешката е 401 и имаме idToken, опитайте Token Exchange
-    if (error.message.includes('401') && idToken && retryCount < 1) {
-      console.log('[PRODUCT_SYNC] Got 401, attempting token exchange...');
-      
-      try {
-        // Форсирайте нов Token Exchange
-        const { resolveAccessToken } = await import('../utils/tokenResolver.js');
-        accessToken = await resolveAccessToken(shop, idToken, true);
-        
-        // Опитайте отново със новия токен
-        return await syncProductsForShop(shop, null, retryCount + 1); // Рекурсивно извикване без idToken
-      } catch (exchangeError) {
-        console.error('Token exchange failed:', exchangeError);
-        throw new Error('Authentication failed after token exchange attempt');
-      }
-    }
+    const duration = Date.now() - startTime;
+    console.error(`[SYNC] Product sync failed for ${shop} after ${duration}ms:`, error.message);
     
     throw error;
   }
 }
-
-// Export functions for use in other controllers
-export { 
-  getPublishedLocales,
-  getProductSeoLocales,
-  getShopLanguages
-};

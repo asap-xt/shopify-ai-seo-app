@@ -17,12 +17,14 @@ export function attachShop(req, _res, next) {
   const qShop  = Array.isArray(req.query.shop) ? req.query.shop[0] : req.query.shop;
   const bShop  = Array.isArray(req.body?.shop) ? req.body.shop[0] : req.body?.shop;
   const sShop  = Array.isArray(req.session?.shop) ? req.session.shop[0] : req.session?.shop;
-  const raw    = qShop ?? bShop ?? sShop ?? shopFromHostQuery(req);
+  const pShop  = Array.isArray(req.params?.shop) ? req.params.shop[0] : req.params?.shop;
+  const raw    = qShop ?? bShop ?? sShop ?? pShop ?? shopFromHostQuery(req);
 
   req.shopDomain = normalizeShop(raw); // винаги низ или null
   
   console.log('[ATTACH_SHOP] Raw shop from query:', req.query?.shop);
   console.log('[ATTACH_SHOP] Raw shop from body:', req.body?.shop);
+  console.log('[ATTACH_SHOP] Raw shop from params:', req.params?.shop);
   console.log('[ATTACH_SHOP] Normalized shop domain:', req.shopDomain);
   
   next();
