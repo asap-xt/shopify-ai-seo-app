@@ -1746,11 +1746,10 @@ export default function BulkEdit({ shop: shopProp }) {
             selectedItems={selectedItems}
             onSelectionChange={handleSelectionChange}
             selectable={true}
-            // bulkActions={bulkActions}
             loading={loading}
             totalItemsCount={totalCount}
             emptyState={emptyState}
-            showHeader={false}
+            showHeader={true}
           />
           
           {hasMore && !loading && (
