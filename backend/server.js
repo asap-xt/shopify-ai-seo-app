@@ -405,7 +405,7 @@ app.post('/api/auth/session', validateRequest(), async (req, res) => {
 
 
 // Mount core routers
-app.use(authRouter);
+app.use('/auth', authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
 app.use('/billing', billingRouter);
 app.use(seoRouter);
