@@ -1742,23 +1742,33 @@ export default function BulkEdit({ shop: shopProp }) {
             )}
           </Box>
 
-          <ResourceList
-            resourceName={{ singular: 'product', plural: 'products' }}
-            items={products}
-            renderItem={renderItem}
-            selectedItems={selectedItems}
-            onSelectionChange={handleSelectionChange}
-            selectable={true}
-            loading={loading}
-            totalItemsCount={totalCount}
-            emptyState={emptyState}
-            showHeader={true}
-            headerContent={
-              selectedItems.length > 0 
-                ? `Select all (${selectedItems.length} selected products)`
-                : 'Select all'
-            }
-          />
+          <Box>
+            <Box paddingBlockEnd="200" paddingInlineStart="200">
+              <InlineStack gap="200" align="center">
+                <Checkbox
+                  checked={selectedItems.length === products.length && products.length > 0}
+                  onChange={handleSelectAllPages}
+                  label=""
+                />
+                <Text variant="bodyMd" fontWeight="semibold">
+                  Select all
+                  {selectedItems.length > 0 && ` (${selectedItems.length} selected products)`}
+                </Text>
+              </InlineStack>
+            </Box>
+            <ResourceList
+              resourceName={{ singular: 'product', plural: 'products' }}
+              items={products}
+              renderItem={renderItem}
+              selectedItems={selectedItems}
+              onSelectionChange={handleSelectionChange}
+              selectable={true}
+              loading={loading}
+              totalItemsCount={totalCount}
+              emptyState={emptyState}
+              showHeader={true}
+            />
+          </Box>
           
           {hasMore && !loading && (
             <Box padding="400" textAlign="center">
