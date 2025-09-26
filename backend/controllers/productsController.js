@@ -1,19 +1,17 @@
-// backend/controllers/productsController.js  
-// Fixed products controller using centralized token resolver and sync
+// backend/controllers/productsController.js
+// Modern products controller using token exchange
 
 import express from 'express';
-import { syncProductsForShop } from './productSync.js';
-import { executeShopifyGraphQL } from '../utils/tokenResolver.js';
-import { apiResolver, productSyncResolver, attachShop } from '../middleware/apiResolver.js';
+import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 
 const router = express.Router();
 
-// Apply middleware to all routes
-router.use(attachShop);
+// Apply authentication to all routes
+router.use(requireAuth);
 
-// GraphQL query for listing products
-const PRODUCTS_LIST_QUERY = `
-  query GetProductsList($first: Int!, $after: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
+// GraphQL queries
+const PRODUCTS_QUERY = `
+  query GetProducts($first: Int!, $after: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
     products(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse) {
       edges {
         node {
@@ -45,7 +43,6 @@ const PRODUCTS_LIST_QUERY = `
   }
 `;
 
-// GraphQL query for product tags
 const PRODUCT_TAGS_QUERY = `
   query GetProductTags($first: Int!) {
     productTags(first: $first) {
@@ -56,17 +53,57 @@ const PRODUCT_TAGS_QUERY = `
   }
 `;
 
-// Helper to normalize shop
-function normalizeShop(shop) {
-  if (!shop) return null;
-  const s = String(shop).trim();
-  if (/^https?:\/\//.test(s)) {
-    const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    return u.toLowerCase();
+const SYNC_PRODUCTS_QUERY = `
+  query SyncProducts($first: Int!, $after: String) {
+    products(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          handle
+          title
+          descriptionHtml
+          productType
+          vendor
+          tags
+          status
+          createdAt
+          updatedAt
+          variants(first: 50) {
+            edges {
+              node {
+                id
+                title
+                price
+                compareAtPrice
+                sku
+                inventoryQuantity
+                availableForSale
+              }
+            }
+          }
+          images(first: 10) {
+            edges {
+              node {
+                id
+                url
+                altText
+              }
+            }
+          }
+          seo {
+            title
+            description
+          }
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
   }
-  if (!/\.myshopify\.com$/i.test(s)) return `${s.toLowerCase()}.myshopify.com`;
-  return s.toLowerCase();
-}
+`;
 
 // Convert sort parameters
 function convertSortKey(sortBy) {
@@ -81,23 +118,17 @@ function convertSortKey(sortBy) {
 }
 
 // GET /api/products/list
-router.get('/list', apiResolver, async (req, res) => {
+router.get('/list', async (req, res) => {
   try {
-    const shop = req.normalizedShop || normalizeShop(req.query.shop);
-    
-    if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter is required' });
-    }
-
     const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 250); // Max 250
+    const limit = Math.min(parseInt(req.query.limit) || 50, 250);
     const sortBy = req.query.sortBy || 'updatedAt';
     const sortOrder = req.query.sortOrder || 'desc';
     
     const sortKey = convertSortKey(sortBy);
     const reverse = sortOrder === 'desc';
     
-    console.log(`[PRODUCTS] Fetching products for ${shop}, page ${page}, limit ${limit}`);
+    console.log(`[PRODUCTS] Fetching products for ${req.auth.shop}, page ${page}, limit ${limit}`);
 
     const variables = {
       first: limit,
@@ -105,13 +136,7 @@ router.get('/list', apiResolver, async (req, res) => {
       reverse: reverse
     };
 
-    // Handle pagination with cursor if not first page
-    if (page > 1) {
-      // For simplicity, we'll skip cursor pagination in this basic implementation
-      // In production, you'd want to implement proper cursor-based pagination
-    }
-
-    const data = await executeShopifyGraphQL(shop, PRODUCTS_LIST_QUERY, variables);
+    const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
     const products = data?.products?.edges?.map(edge => edge.node) || [];
 
     return res.json({
@@ -123,7 +148,11 @@ router.get('/list', apiResolver, async (req, res) => {
         hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
         endCursor: data?.products?.pageInfo?.endCursor
       },
-      shop: shop
+      shop: req.auth.shop,
+      auth: {
+        tokenType: req.auth.tokenType,
+        source: req.auth.source
+      }
     });
 
   } catch (error) {
@@ -137,24 +166,18 @@ router.get('/list', apiResolver, async (req, res) => {
 });
 
 // GET /api/products/tags/list
-router.get('/tags/list', apiResolver, async (req, res) => {
+router.get('/tags/list', async (req, res) => {
   try {
-    const shop = req.normalizedShop || normalizeShop(req.query.shop);
-    
-    if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter is required' });
-    }
+    console.log(`[PRODUCTS] Fetching product tags for ${req.auth.shop}`);
 
-    console.log(`[PRODUCTS] Fetching product tags for ${shop}`);
-
-    const data = await executeShopifyGraphQL(shop, PRODUCT_TAGS_QUERY, { first: 250 });
+    const data = await executeGraphQL(req, PRODUCT_TAGS_QUERY, { first: 250 });
     const tags = data?.productTags?.edges?.map(edge => edge.node) || [];
 
     return res.json({
       success: true,
       tags: tags,
       count: tags.length,
-      shop: shop
+      shop: req.auth.shop
     });
 
   } catch (error) {
@@ -168,61 +191,52 @@ router.get('/tags/list', apiResolver, async (req, res) => {
 });
 
 // POST /api/products/sync
-router.post('/sync', productSyncResolver, async (req, res) => {
+router.post('/sync', async (req, res) => {
   try {
-    const shop = req.normalizedShop || normalizeShop(req.query.shop || req.body.shop);
+    console.log(`[PRODUCT_SYNC] Starting sync for ${req.auth.shop}...`);
+
+    const allProducts = [];
+    let hasNextPage = true;
+    let cursor = null;
     
-    if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter is required for sync' });
+    // Fetch all products using pagination
+    while (hasNextPage) {
+      const variables = { first: 50 };
+      if (cursor) {
+        variables.after = cursor;
+      }
+      
+      const data = await executeGraphQL(req, SYNC_PRODUCTS_QUERY, variables);
+      const productsData = data?.products;
+      
+      if (!productsData) break;
+      
+      const edges = productsData.edges || [];
+      console.log(`[SYNC] Fetched ${edges.length} products for ${req.auth.shop}`);
+      
+      allProducts.push(...edges.map(edge => edge.node));
+      
+      hasNextPage = productsData.pageInfo?.hasNextPage || false;
+      cursor = productsData.pageInfo?.endCursor || null;
+      
+      if (edges.length === 0) break;
     }
 
-    console.log(`[PRODUCT_SYNC] Starting sync with idToken: ${!!req.headers.authorization}`);
-    console.log(`Starting product sync for ${shop}...`);
-
-    const result = await syncProductsForShop(shop);
+    console.log(`[SYNC] Total products synced for ${req.auth.shop}: ${allProducts.length}`);
 
     return res.json({
       success: true,
-      ...result
+      productsCount: allProducts.length,
+      shop: req.auth.shop,
+      message: `Successfully synced ${allProducts.length} products`
     });
 
   } catch (error) {
-    console.error(`POST /api/products/sync error:`, error);
+    console.error(`[PRODUCT_SYNC] Error:`, error);
     return res.status(500).json({
       success: false,
       error: error.message || 'Product sync failed',
-      shop: req.normalizedShop
-    });
-  }
-});
-
-// GET /api/products/sync/status  
-router.get('/sync/status', apiResolver, async (req, res) => {
-  try {
-    const shop = req.normalizedShop || normalizeShop(req.query.shop);
-    
-    if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter is required' });
-    }
-
-    // Check if we have cached data
-    const { FeedCache } = await import('./productSync.js');
-    const cache = await FeedCache.findOne({ shop }).lean();
-
-    return res.json({
-      success: true,
-      shop: shop,
-      lastSync: cache?.updatedAt || null,
-      hasData: !!cache?.data,
-      dataSize: cache?.data?.length || 0
-    });
-
-  } catch (error) {
-    console.error('[PRODUCTS] Sync status error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to get sync status',
-      message: error.message
+      shop: req.auth.shop
     });
   }
 });

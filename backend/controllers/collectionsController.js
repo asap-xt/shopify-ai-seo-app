@@ -1,10 +1,13 @@
 // backend/controllers/collectionsController.js
-// Fixed collections controller using centralized token resolver
+// Modern collections controller using token exchange
 
 import express from 'express';
-import { executeShopifyGraphQL } from '../utils/tokenResolver.js';
+import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 
 const router = express.Router();
+
+// Apply authentication to all routes
+router.use(requireAuth);
 
 // GraphQL query for fetching collections
 const COLLECTIONS_QUERY = `
@@ -39,25 +42,13 @@ const COLLECTIONS_QUERY = `
   }
 `;
 
-// Helper to normalize shop domain
-function normalizeShop(shop) {
-  if (!shop) return null;
-  const s = String(shop).trim();
-  if (/^https?:\/\//.test(s)) {
-    const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    return u.toLowerCase();
-  }
-  if (!/\.myshopify\.com$/i.test(s)) return `${s.toLowerCase()}.myshopify.com`;
-  return s.toLowerCase();
-}
-
 // Fetch all collections using pagination
-async function fetchAllCollections(shop) {
+async function fetchAllCollections(req) {
   const collections = [];
   let hasNextPage = true;
   let cursor = null;
   
-  console.log(`[COLLECTIONS] Starting to fetch collections for ${shop}`);
+  console.log(`[COLLECTIONS] Starting to fetch collections for ${req.auth.shop}`);
   
   while (hasNextPage) {
     try {
@@ -66,16 +57,16 @@ async function fetchAllCollections(shop) {
         variables.after = cursor;
       }
       
-      const data = await executeShopifyGraphQL(shop, COLLECTIONS_QUERY, variables);
+      const data = await executeGraphQL(req, COLLECTIONS_QUERY, variables);
       const collectionsData = data?.collections;
       
       if (!collectionsData) {
-        console.error(`[COLLECTIONS] No collections data returned for ${shop}`);
+        console.error(`[COLLECTIONS] No collections data returned for ${req.auth.shop}`);
         break;
       }
       
       const edges = collectionsData.edges || [];
-      console.log(`[COLLECTIONS] Fetched ${edges.length} collections for ${shop}`);
+      console.log(`[COLLECTIONS] Fetched ${edges.length} collections for ${req.auth.shop}`);
       
       collections.push(...edges.map(edge => edge.node));
       
@@ -87,12 +78,12 @@ async function fetchAllCollections(shop) {
       }
       
     } catch (error) {
-      console.error(`[COLLECTIONS] Error fetching collections for ${shop}:`, error.message);
+      console.error(`[COLLECTIONS] Error fetching collections for ${req.auth.shop}:`, error.message);
       hasNextPage = false;
     }
   }
   
-  console.log(`[COLLECTIONS] Total collections fetched for ${shop}: ${collections.length}`);
+  console.log(`[COLLECTIONS] Total collections fetched for ${req.auth.shop}: ${collections.length}`);
   return collections;
 }
 
@@ -119,48 +110,42 @@ function formatCollection(collection, shop) {
   };
 }
 
-// GET /collections/list-graphql?shop=...
+// GET /collections/list-graphql
 router.get('/list-graphql', async (req, res) => {
   try {
-    const shop = normalizeShop(req.query.shop);
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing or invalid shop parameter' });
-    }
-
-    console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${shop}`);
-
-    const collections = await fetchAllCollections(shop);
+    console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${req.auth.shop}`);
+    
+    const collections = await fetchAllCollections(req);
     const formattedCollections = collections.map(collection => 
-      formatCollection(collection, shop)
+      formatCollection(collection, req.auth.shop)
     );
-
+    
     return res.json({
       success: true,
       collections: formattedCollections,
       count: formattedCollections.length,
-      shop: shop
+      shop: req.auth.shop,
+      auth: {
+        tokenType: req.auth.tokenType,
+        source: req.auth.source
+      }
     });
 
   } catch (error) {
     console.error('[COLLECTIONS-GQL] Error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch collections',
-      message: error.message 
+      message: error.message
     });
   }
 });
 
-// GET /collections/check-definitions?shop=...
+// GET /collections/check-definitions
 router.get('/check-definitions', async (req, res) => {
   try {
-    const shop = normalizeShop(req.query.shop);
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing or invalid shop parameter' });
-    }
-
-    console.log(`[COLLECTIONS] Checking definitions for shop: ${shop}`);
-
+    console.log(`[COLLECTIONS] Checking definitions for shop: ${req.auth.shop}`);
+    
     // Simple query to check if we can access collections
     const testQuery = `
       query TestCollectionsAccess {
@@ -174,23 +159,27 @@ router.get('/check-definitions', async (req, res) => {
         }
       }
     `;
-
-    const data = await executeShopifyGraphQL(shop, testQuery);
+    
+    const data = await executeGraphQL(req, testQuery);
     const hasCollections = data?.collections?.edges?.length > 0;
-
+    
     return res.json({
       success: true,
       hasCollections,
-      shop: shop,
-      message: hasCollections ? 'Collections accessible' : 'No collections found'
+      shop: req.auth.shop,
+      message: hasCollections ? 'Collections accessible' : 'No collections found',
+      auth: {
+        tokenType: req.auth.tokenType,
+        source: req.auth.source
+      }
     });
 
   } catch (error) {
     console.error('[COLLECTIONS] Check definitions error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       error: 'Failed to check collections access',
-      message: error.message 
+      message: error.message
     });
   }
 });

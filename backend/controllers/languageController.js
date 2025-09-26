@@ -1,10 +1,13 @@
 // backend/controllers/languageController.js
-// Fixed version using centralized token resolver
+// Modern language controller using token exchange
 
 import express from 'express';
-import { executeShopifyGraphQL } from '../utils/tokenResolver.js';
+import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 
 const router = express.Router();
+
+// Apply authentication to all routes
+router.use(requireAuth);
 
 // Helper functions
 const normalizeLocale = (l) => (l ? String(l).trim().toLowerCase() : null);
@@ -15,17 +18,6 @@ const toGID = (id) => {
   if (/^\d+$/.test(s)) return `gid://shopify/Product/${s}`;
   return s;
 };
-
-function normalizeShop(shop) {
-  if (!shop) return null;
-  const s = String(shop).trim();
-  if (/^https?:\/\//.test(s)) {
-    const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    return u.toLowerCase();
-  }
-  if (!/\.myshopify\.com$/i.test(s)) return `${s.toLowerCase()}.myshopify.com`;
-  return s.toLowerCase();
-}
 
 // GraphQL queries
 const Q_SHOP_LOCALES = `
@@ -53,45 +45,45 @@ const Q_PRODUCT_LOCALES = `
 `;
 
 // Main language resolver function
-async function resolveLanguages({ shop, productId, authUsed = 'token_exchange' }) {
+async function resolveLanguages({ req, productId }) {
   const t0 = Date.now();
   const errors = [];
   let shopLocalesRaw = [];
   let productLocalesRaw = [];
 
-  console.log(`[LANGUAGE-ENDPOINT] Starting language resolution for shop: ${shop}, product: ${productId || 'none'}`);
+  console.log(`[LANGUAGE] Starting language resolution for shop: ${req.auth.shop}, product: ${productId || 'none'}`);
 
   try {
     // Get shop locales
-    console.log(`[LANGUAGE-ENDPOINT] Fetching shop locales...`);
-    const shopData = await executeShopifyGraphQL(shop, Q_SHOP_LOCALES);
+    console.log(`[LANGUAGE] Fetching shop locales...`);
+    const shopData = await executeGraphQL(req, Q_SHOP_LOCALES);
     shopLocalesRaw = shopData?.shopLocales || [];
-    console.log(`[LANGUAGE-ENDPOINT] Found ${shopLocalesRaw.length} shop locales`);
+    console.log(`[LANGUAGE] Found ${shopLocalesRaw.length} shop locales`);
   } catch (error) {
-    console.error(`[LANGUAGE-ENDPOINT] Shop locales error:`, error.message);
+    console.error(`[LANGUAGE] Shop locales error:`, error.message);
     errors.push(`Shop locales: ${error.message}`);
   }
 
   // Get product locales if productId provided
   if (productId) {
     try {
-      console.log(`[LANGUAGE-ENDPOINT] Fetching product locales for ${productId}...`);
+      console.log(`[LANGUAGE] Fetching product locales for ${productId}...`);
       const gidProductId = toGID(productId);
-      const productData = await executeShopifyGraphQL(shop, Q_PRODUCT_LOCALES, { id: gidProductId });
+      const productData = await executeGraphQL(req, Q_PRODUCT_LOCALES, { id: gidProductId });
       productLocalesRaw = productData?.product?.resourcePublications?.edges || [];
-      console.log(`[LANGUAGE-ENDPOINT] Found ${productLocalesRaw.length} product locales`);
+      console.log(`[LANGUAGE] Found ${productLocalesRaw.length} product locales`);
     } catch (error) {
-      console.error(`[LANGUAGE-ENDPOINT] Product locales error:`, error.message);
+      console.error(`[LANGUAGE] Product locales error:`, error.message);
       errors.push(`Product locales: ${error.message}`);
     }
   }
 
   return shapeOutput({
-    shop,
+    shop: req.auth.shop,
     productId,
     shopLocalesRaw,
     productLocalesRaw,
-    authUsed,
+    authUsed: req.auth.source,
     source: errors.length > 0 ? 'partial' : 'graphql',
     errors,
     tookMs: Date.now() - t0
@@ -132,28 +124,19 @@ function shapeOutput({ shop, productId, shopLocalesRaw, productLocalesRaw, authU
     authUsed,
     source: `${source}${productId ? '|graphql' : ''}`,
     errors,
-    tookMs: Date.now() - tookMs
+    tookMs
   };
 }
 
 // Route handlers
 router.get('/shop/:shop', async (req, res) => {
   try {
-    // Try multiple sources for shop domain
-    const shop = normalizeShop(req.params.shop || req.query.shop || req.shopDomain);
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing or invalid shop parameter' });
-    }
-
     console.log(`[LANGUAGE-ENDPOINT] ===== HANDLER CALLED =====`);
-    console.log(`[LANGUAGE-ENDPOINT] req.shopDomain: ${shop}`);
-    console.log(`[LANGUAGE-ENDPOINT] req.params:`, req.params);
-    console.log(`[LANGUAGE-ENDPOINT] Starting with shop: ${shop}`);
+    console.log(`[LANGUAGE-ENDPOINT] Starting with shop: ${req.auth.shop}`);
 
     const result = await resolveLanguages({ 
-      shop, 
-      productId: null, 
-      authUsed: 'token_exchange' 
+      req,
+      productId: null
     });
     
     // Remove product-specific fields for shop-only endpoint
@@ -165,10 +148,10 @@ router.get('/shop/:shop', async (req, res) => {
   } catch (error) {
     console.error(`[LANGUAGE-CONTROLLER] Error:`, error.message);
     return res.status(200).json({
-      shop: normalizeShop(req.params.shop),
+      shop: req.auth.shop,
       primaryLanguage: 'en',
       shopLanguages: ['en'],
-      authUsed: 'token_exchange',
+      authUsed: req.auth.source,
       source: 'fallback',
       tookMs: 0,
       _error: error.message || String(error),
@@ -178,20 +161,15 @@ router.get('/shop/:shop', async (req, res) => {
 
 router.get('/product/:shop/:productId', async (req, res) => {
   try {
-    const shop = normalizeShop(req.params.shop || req.query.shop || req.shopDomain);
     const productId = String(req.params.productId || '').trim();
 
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing or invalid shop parameter' });
-    }
     if (!productId) {
       return res.status(400).json({ error: 'Missing productId parameter' });
     }
 
     const result = await resolveLanguages({ 
-      shop, 
-      productId, 
-      authUsed: 'token_exchange' 
+      req,
+      productId
     });
     
     return res.json(result);
@@ -199,14 +177,14 @@ router.get('/product/:shop/:productId', async (req, res) => {
   } catch (error) {
     console.error(`[LANGUAGE-CONTROLLER] Error:`, error.message);
     return res.status(200).json({
-      shop: normalizeShop(req.params.shop),
+      shop: req.auth.shop,
       productId: toGID(req.params.productId),
       primaryLanguage: 'en',
       shopLanguages: ['en'],
       productLanguages: ['en'],
       shouldShowSelector: false,
       allLanguagesOption: null,
-      authUsed: 'token_exchange',
+      authUsed: req.auth.source,
       source: 'fallback|fallback',
       tookMs: 0,
       _errors: [error.message || String(error)],
@@ -217,25 +195,21 @@ router.get('/product/:shop/:productId', async (req, res) => {
 // Ping endpoint for testing
 router.get('/ping/:shop', async (req, res) => {
   try {
-    const shop = normalizeShop(req.params.shop || req.query.shop || req.shopDomain);
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing or invalid shop parameter' });
-    }
-
     // Simple test query
     const testQuery = `query { shop { id name } }`;
-    const data = await executeShopifyGraphQL(shop, testQuery);
+    const data = await executeGraphQL(req, testQuery);
     
     return res.json({ 
       ok: true, 
-      authUsed: 'token_exchange', 
-      shop: data?.shop 
+      authUsed: req.auth.source, 
+      shop: data?.shop,
+      tokenType: req.auth.tokenType
     });
 
   } catch (error) {
     return res.status(500).json({ 
       ok: false, 
-      authUsed: 'token_exchange', 
+      authUsed: req.auth.source, 
       error: error.message 
     });
   }

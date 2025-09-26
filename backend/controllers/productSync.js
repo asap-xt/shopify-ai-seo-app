@@ -1,19 +1,32 @@
 // backend/controllers/productSync.js
-// Fixed version that uses centralized token resolver
+// Modern product sync using token exchange
 
 import mongoose from 'mongoose';
-import { resolveAdminTokenForShop, executeShopifyGraphQL } from '../utils/tokenResolver.js';
+import { executeGraphQL } from '../middleware/modernAuth.js';
 
 // Mongo model for cached feed
-const FeedCacheSchema = new mongoose.Schema(
-  {
-    shop: { type: String, index: true, required: true, unique: true },
-    format: { type: String, default: 'ndjson' },
-    data: { type: String, default: '' }, // NDJSON content
-    updatedAt: { type: Date, default: Date.now },
+const FeedCacheSchema = new mongoose.Schema({
+  shop: {
+    type: String,
+    index: true,
+    required: true,
+    unique: true
   },
-  { collection: 'feed_cache' }
-);
+  format: {
+    type: String,
+    default: 'ndjson'
+  },
+  data: {
+    type: String,
+    default: ''
+  }, // NDJSON content
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  },
+}, {
+  collection: 'feed_cache'
+});
 
 export const FeedCache = mongoose.models.FeedCache || mongoose.model('FeedCache', FeedCacheSchema);
 
@@ -99,12 +112,19 @@ function sanitizeHtmlBasic(html = '') {
     .replace(/\son\w+="[^"]*"/gi, '')
     .replace(/\son\w+='[^']*'/gi, '')
     .replace(/\son\w+=\S+/gi, '');
+  
   out = out.replace(/<(?!\/?(p|ul|ol|li|br|strong|em|b|i|h1|h2|h3|a|img)\b)[^>]*>/gi, '');
   return out;
 }
 
 function minimalJsonLd({ name, description, price, currency, url }) {
-  const obj = { '@context': 'https://schema.org', '@type': 'Product', name, description };
+  const obj = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name,
+    description
+  };
+  
   if (price != null && currency) {
     obj.offers = {
       '@type': 'Offer',
@@ -113,18 +133,18 @@ function minimalJsonLd({ name, description, price, currency, url }) {
       availability: 'https://schema.org/InStock',
     };
   }
+  
   if (url) obj.url = url;
   return obj;
 }
 
 function pickPrices(variants) {
-  let price = null,
-    currency = null,
-    available = false;
+  let price = null, currency = null, available = false;
   
   for (const edge of variants?.edges || []) {
     const v = edge?.node;
     if (!v) continue;
+    
     const p = parseFloat(v.price ?? v.priceV2?.amount ?? 0);
     if (p > 0) {
       price = p;
@@ -133,34 +153,35 @@ function pickPrices(variants) {
       break;
     }
   }
+  
   return { price, currency, available };
 }
 
 // Get shop basic info
-async function getShopInfo(shop) {
+async function getShopInfo(req) {
   try {
-    const data = await executeShopifyGraphQL(shop, SHOP_INFO_QUERY);
+    const data = await executeGraphQL(req, SHOP_INFO_QUERY);
     const shopData = data?.shop;
     
     return {
       currency: shopData?.currencyCode || 'USD',
-      domain: shopData?.primaryDomain?.host || shop,
-      url: shopData?.primaryDomain?.url || `https://${shop}`
+      domain: shopData?.primaryDomain?.host || req.auth.shop,
+      url: shopData?.primaryDomain?.url || `https://${req.auth.shop}`
     };
   } catch (error) {
-    console.error(`[SYNC] Failed to get shop info for ${shop}:`, error.message);
+    console.error(`[SYNC] Failed to get shop info for ${req.auth.shop}:`, error.message);
     return {
       currency: 'USD',
-      domain: shop,
-      url: `https://${shop}`
+      domain: req.auth.shop,
+      url: `https://${req.auth.shop}`
     };
   }
 }
 
-// Get shop supported languages  
-async function getShopLanguages(shop) {
+// Get shop supported languages
+async function getShopLanguages(req) {
   try {
-    const data = await executeShopifyGraphQL(shop, SHOP_LOCALES_QUERY);
+    const data = await executeGraphQL(req, SHOP_LOCALES_QUERY);
     const locales = data?.shopLocales || [];
     
     return locales
@@ -168,18 +189,18 @@ async function getShopLanguages(shop) {
       .map(locale => locale.locale)
       .filter(Boolean);
   } catch (error) {
-    console.error(`[SYNC] Failed to get shop languages for ${shop}:`, error.message);
+    console.error(`[SYNC] Failed to get shop languages for ${req.auth.shop}:`, error.message);
     return ['en']; // Default fallback
   }
 }
 
 // Fetch all products using pagination
-async function fetchAllProducts(shop) {
+async function fetchAllProducts(req) {
   const products = [];
   let hasNextPage = true;
   let cursor = null;
   
-  console.log(`[SYNC] Starting to fetch products for ${shop}`);
+  console.log(`[SYNC] Starting to fetch products for ${req.auth.shop}`);
   
   while (hasNextPage) {
     try {
@@ -188,16 +209,16 @@ async function fetchAllProducts(shop) {
         variables.after = cursor;
       }
       
-      const data = await executeShopifyGraphQL(shop, PRODUCTS_QUERY, variables);
+      const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
       const productsData = data?.products;
       
       if (!productsData) {
-        console.error(`[SYNC] No products data returned for ${shop}`);
+        console.error(`[SYNC] No products data returned for ${req.auth.shop}`);
         break;
       }
       
       const edges = productsData.edges || [];
-      console.log(`[SYNC] Fetched ${edges.length} products for ${shop}`);
+      console.log(`[SYNC] Fetched ${edges.length} products for ${req.auth.shop}`);
       
       products.push(...edges.map(edge => edge.node));
       
@@ -209,12 +230,12 @@ async function fetchAllProducts(shop) {
       }
       
     } catch (error) {
-      console.error(`[SYNC] Error fetching products for ${shop}:`, error.message);
+      console.error(`[SYNC] Error fetching products for ${req.auth.shop}:`, error.message);
       hasNextPage = false;
     }
   }
   
-  console.log(`[SYNC] Total products fetched for ${shop}: ${products.length}`);
+  console.log(`[SYNC] Total products fetched for ${req.auth.shop}: ${products.length}`);
   return products;
 }
 
@@ -269,28 +290,25 @@ function formatProductForAI(product, { shopCurrency, shopDomain, shopUrl, langua
 }
 
 // Main sync function
-export async function syncProductsForShop(shop) {
+export async function syncProductsForShop(req) {
   const startTime = Date.now();
-  console.log(`[SYNC] Starting product sync for ${shop}`);
+  console.log(`[SYNC] Starting product sync for ${req.auth.shop}`);
   
   try {
-    // Verify shop has valid token
-    await resolveAdminTokenForShop(shop);
-    
     // Get shop info and languages in parallel
     const [shopInfo, languages] = await Promise.all([
-      getShopInfo(shop),
-      getShopLanguages(shop)
+      getShopInfo(req),
+      getShopLanguages(req)
     ]);
     
-    console.log(`[SYNC] Shop info for ${shop}:`, shopInfo);
-    console.log(`[SYNC] Shop languages for ${shop}:`, languages);
+    console.log(`[SYNC] Shop info for ${req.auth.shop}:`, shopInfo);
+    console.log(`[SYNC] Shop languages for ${req.auth.shop}:`, languages);
     
     // Fetch all products
-    const products = await fetchAllProducts(shop);
+    const products = await fetchAllProducts(req);
     
     if (products.length === 0) {
-      console.log(`[SYNC] No products found for ${shop}`);
+      console.log(`[SYNC] No products found for ${req.auth.shop}`);
     }
     
     // Format products for AI
@@ -310,9 +328,9 @@ export async function syncProductsForShop(shop) {
     
     // Save to cache
     await FeedCache.findOneAndUpdate(
-      { shop },
+      { shop: req.auth.shop },
       { 
-        shop,
+        shop: req.auth.shop,
         format: 'ndjson',
         data: ndjsonData,
         updatedAt: new Date()
@@ -321,18 +339,22 @@ export async function syncProductsForShop(shop) {
     );
     
     const duration = Date.now() - startTime;
-    console.log(`[SYNC] Product sync completed for ${shop} in ${duration}ms. Products: ${products.length}`);
+    console.log(`[SYNC] Product sync completed for ${req.auth.shop} in ${duration}ms. Products: ${products.length}`);
     
     return {
       success: true,
       productsCount: products.length,
       duration,
-      shop
+      shop: req.auth.shop,
+      auth: {
+        tokenType: req.auth.tokenType,
+        source: req.auth.source
+      }
     };
     
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`[SYNC] Product sync failed for ${shop} after ${duration}ms:`, error.message);
+    console.error(`[SYNC] Product sync failed for ${req.auth.shop} after ${duration}ms:`, error.message);
     
     throw error;
   }
