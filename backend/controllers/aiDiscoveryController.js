@@ -25,7 +25,7 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     if (!accessToken) {
       throw new Error('No access token available');
@@ -80,7 +80,7 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
     }
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     if (!accessToken) {
       throw new Error('No access token available');
@@ -140,7 +140,7 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
     }
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     if (!accessToken) {
       throw new Error('No access token available');
@@ -206,7 +206,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     if (!accessToken) {
       throw new Error('No access token available');
@@ -285,7 +285,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     if (!accessToken) {
       throw new Error('No access token available');
@@ -416,7 +416,7 @@ router.get('/debug-shop/:shop', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     
     // The token is already available in res.locals from the /api middleware
-    const accessToken = res.locals.adminSession?.accessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     res.json({
       shop: shop,
@@ -436,8 +436,8 @@ router.get('/ai-discovery/test-auth', validateRequest(), async (req, res) => {
     
     // Check what's available in res.locals
     const hasAdminSession = !!res.locals.adminSession;
-    const hasAccessToken = !!res.locals.adminSession?.accessToken;
-    const accessToken = res.locals.adminSession?.accessToken;
+    const hasAccessToken = !!res.locals.shopify?.session?.accessToken || req.shopAccessToken;
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
     // Try the centralized resolver
     let resolvedToken = null;
