@@ -48,17 +48,7 @@ class AIDiscoveryService {
    */
   async getSettings(shop, session) {
     try {
-      // Import shopGraphQL function
-      const { shopGraphQL } = await import('../controllers/seoController.js');
-      
-      // Create a mock req object for shopGraphQL
-      const mockReq = {
-        shopDomain: shop,
-        query: { shop },
-        body: { shop }
-      };
-      
-      // GraphQL query to get shop metafields
+      // Direct GraphQL call using session.accessToken
       const metafieldsQuery = `
         query GetShopMetafields {
           shop {
@@ -76,8 +66,26 @@ class AIDiscoveryService {
         }
       `;
       
-      const data = await shopGraphQL(mockReq, shop, metafieldsQuery);
-      const metafields = data?.shop?.metafields?.edges || [];
+      const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': session.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: metafieldsQuery })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`GraphQL request failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+      }
+      
+      const metafields = result.data?.shop?.metafields?.edges || [];
       
       let settings = null;
       
