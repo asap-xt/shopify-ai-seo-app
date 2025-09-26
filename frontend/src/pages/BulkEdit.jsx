@@ -1766,7 +1766,7 @@ export default function BulkEdit({ shop: shopProp }) {
               loading={loading}
               totalItemsCount={totalCount}
               emptyState={emptyState}
-              showHeader={true}
+              showHeader={false}
             />
           </Box>
           
