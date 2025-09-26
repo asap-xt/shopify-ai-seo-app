@@ -136,16 +136,35 @@ export async function resolveAccessToken(req) {
     };
   }
 
-  // If no cached token and we have session token, do token exchange
+  // If we have session token, try token exchange, but fallback to cached if it fails
   if (sessionToken) {
-    console.log(`[AUTH] No cached token, performing token exchange for ${shop}`);
-    const accessToken = await getOfflineTokenViaExchange(shop, sessionToken);
-    return {
-      shop,
-      accessToken,
-      tokenType: 'offline', 
-      source: 'token_exchange'
-    };
+    try {
+      console.log(`[AUTH] Attempting token exchange for ${shop}`);
+      const accessToken = await getOfflineTokenViaExchange(shop, sessionToken);
+      return {
+        shop,
+        accessToken,
+        tokenType: 'offline', 
+        source: 'token_exchange'
+      };
+    } catch (exchangeError) {
+      console.log(`[AUTH] Token exchange failed for ${shop}:`, exchangeError.message);
+      
+      // Fallback to any cached token (even if not from token_exchange)
+      const fallbackToken = await Shop.findOne({ shop }).lean();
+      if (fallbackToken?.accessToken) {
+        console.log(`[AUTH] Using fallback cached token for ${shop}`);
+        return {
+          shop,
+          accessToken: fallbackToken.accessToken,
+          tokenType: 'offline',
+          source: 'fallback_cached'
+        };
+      }
+      
+      // If no fallback available, re-throw the original error
+      throw exchangeError;
+    }
   }
 
   throw new Error(`No authentication available for shop: ${shop}`);
