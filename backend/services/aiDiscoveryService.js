@@ -48,28 +48,45 @@ class AIDiscoveryService {
    */
   async getSettings(shop, session) {
     try {
-      // Вземаме settings от metafield
-      const response = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': session.accessToken,
-            'Content-Type': 'application/json'
+      // Import shopGraphQL function
+      const { shopGraphQL } = await import('../controllers/seoController.js');
+      
+      // Create a mock req object for shopGraphQL
+      const mockReq = {
+        shopDomain: shop,
+        query: { shop },
+        body: { shop }
+      };
+      
+      // GraphQL query to get shop metafields
+      const metafieldsQuery = `
+        query GetShopMetafields {
+          shop {
+            metafields(namespace: "ai_discovery", first: 10) {
+              edges {
+                node {
+                  id
+                  key
+                  value
+                  type
+                }
+              }
+            }
           }
         }
-      );
+      `;
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch settings');
-      }
+      const data = await shopGraphQL(mockReq, shop, metafieldsQuery);
+      const metafields = data?.shop?.metafields?.edges || [];
       
-      const data = await response.json();
-      const metafield = data.metafields?.[0];
       let settings = null;
       
-      if (metafield?.value) {
+      // Find the settings metafield
+      const settingsMetafield = metafields.find(edge => edge.node.key === 'settings');
+      
+      if (settingsMetafield?.node?.value) {
         try {
-          settings = JSON.parse(metafield.value);
+          settings = JSON.parse(settingsMetafield.node.value);
         } catch (e) {
           console.error('Failed to parse settings:', e);
           settings = this.getDefaultSettings();
