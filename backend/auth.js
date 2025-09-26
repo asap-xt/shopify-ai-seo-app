@@ -288,15 +288,21 @@ router.get('/callback', async (req, res) => {
 
     // 6) Save shop record to database
     console.log('[AUTH] Saving shop record to database...');
+    
+    // Ensure accessToken is always a string
+    const accessTokenString = typeof accessToken === 'object' && accessToken.accessToken 
+      ? accessToken.accessToken 
+      : accessToken;
+    
     const shopRecord = await Shop.findOneAndUpdate(
       { shop }, 
       { 
         shop, 
-        accessToken, 
+        accessToken: accessTokenString, 
         scopes, 
         installedAt: new Date(),
         updatedAt: new Date(),
-        tokenType: accessToken.startsWith('shpat_') ? 'offline' : 'online',
+        tokenType: accessTokenString.startsWith('shpat_') ? 'offline' : 'online',
         isActive: true
       }, 
       { upsert: true, new: true }

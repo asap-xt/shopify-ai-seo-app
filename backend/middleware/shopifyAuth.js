@@ -51,11 +51,16 @@ export function authCallback() {
             try {
               const Shop = (await import('../db/Shop.js')).default;
               
+              // Ensure accessToken is always a string
+              const accessTokenString = typeof session.accessToken === 'object' && session.accessToken.accessToken 
+                ? session.accessToken.accessToken 
+                : session.accessToken;
+              
               await Shop.findOneAndUpdate(
                 { shop: session.shop },
                 {
                   shop: session.shop,
-                  accessToken: session.accessToken,
+                  accessToken: accessTokenString,
                   scopes: session.scope,
                   useJWT: false, // This is traditional OAuth flow
                   installedAt: new Date(),
