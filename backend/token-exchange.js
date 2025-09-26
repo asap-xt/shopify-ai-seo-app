@@ -72,7 +72,7 @@ router.post('/', async (req, res) => {
     console.log('[TOKEN_EXCHANGE] Response type:', typeof tokenResult);
     console.log('[TOKEN_EXCHANGE] Response keys:', Object.keys(tokenResult || {}));
     
-    const accessToken = tokenResult.access_token;
+    const accessToken = typeof tokenResult === 'string' ? tokenResult : tokenResult.access_token;
     console.log('[TOKEN_EXCHANGE] Token starts with shpat_:', accessToken?.startsWith('shpat_'));
     
     if (!accessToken || typeof accessToken !== 'string') {
