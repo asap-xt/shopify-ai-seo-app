@@ -1,1 +1,0 @@
-function t(e=!1){return e&&console.log("[SFETCH] Creating session fetch for App Bridge v4"),async(o,s={})=>{e&&console.log("[SFETCH] Fetching:",o,{...s,body:void 0});const n=await fetch(o,{...s,headers:{"Content-Type":"application/json",...s.headers}});return e&&console.log("[SFETCH] Response:",n.status,n.statusText),n}}export{t as m};

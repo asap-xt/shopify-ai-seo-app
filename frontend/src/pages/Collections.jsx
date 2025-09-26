@@ -139,6 +139,10 @@ export default function CollectionsPage({ shop: shopProp }) {
   const loadCollections = useCallback(async () => {
     setLoading(true);
     try {
+      console.log('[COLLECTIONS] Shop value:', shop);
+      console.log('[COLLECTIONS] Shop prop:', shopProp);
+      console.log('[COLLECTIONS] URL search params:', window.location.search);
+      
       const params = new URLSearchParams({
         shop,
         ...(searchValue && { search: searchValue }),

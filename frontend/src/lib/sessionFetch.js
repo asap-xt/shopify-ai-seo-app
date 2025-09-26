@@ -32,11 +32,11 @@ export function sessionFetch(shop) {
 }
 
 // Legacy compatibility - синхронна фабрика
-export function makeSessionFetch(debug = false) {
+export function makeSessionFetch(debug = true) {
   if (debug) console.log('[SFETCH] Creating session fetch for App Bridge v4');
   
   return async (url, options = {}) => {
-    if (debug) console.log('[SFETCH] Fetching:', url, { ...options, body: undefined });
+    console.log('[SFETCH] Fetching:', url, { ...options, body: undefined });
     
     // For App Bridge v4, we don't need session tokens
     // Just make a regular fetch request
@@ -48,7 +48,7 @@ export function makeSessionFetch(debug = false) {
       },
     });
     
-    if (debug) console.log('[SFETCH] Response:', response.status, response.statusText);
+    console.log('[SFETCH] Response:', response.status, response.statusText);
     return response;
   };
 }
