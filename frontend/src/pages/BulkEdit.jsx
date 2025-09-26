@@ -1754,16 +1754,10 @@ export default function BulkEdit({ shop: shopProp }) {
             emptyState={emptyState}
             showHeader={true}
             headerContent={
-              <InlineStack gap="200" align="center">
-                <Text variant="bodyMd" fontWeight="semibold">
-                  Select all
-                </Text>
-                {selectedItems.length > 0 && (
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    ({selectedItems.length} selected products)
-                  </Text>
-                )}
-              </InlineStack>
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                Select all
+                {selectedItems.length > 0 && ` (${selectedItems.length} selected products)`}
+              </Text>
             }
           />
           
