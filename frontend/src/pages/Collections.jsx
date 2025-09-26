@@ -34,6 +34,8 @@ const qs = (k, d = '') => {
 export default function CollectionsPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   console.log('[COLLECTIONS] Component initialized with shop:', shop, 'shopProp:', shopProp);
+  // Единен session-aware fetch за компонента
+  const api = useMemo(() => makeSessionFetch(), []);
   // Collection list state
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
