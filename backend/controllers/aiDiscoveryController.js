@@ -27,6 +27,14 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
+    console.log('[AI-DISCOVERY] Debug token info:', {
+      shop,
+      hasShopifySession: !!res.locals.shopify?.session,
+      hasAccessToken: !!accessToken,
+      tokenStartsWith: accessToken ? accessToken.substring(0, 10) + '...' : 'none',
+      hasShopAccessToken: !!req.shopAccessToken
+    });
+    
     if (!accessToken) {
       throw new Error('No access token available');
     }
