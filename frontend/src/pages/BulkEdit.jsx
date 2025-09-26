@@ -1754,10 +1754,9 @@ export default function BulkEdit({ shop: shopProp }) {
             emptyState={emptyState}
             showHeader={true}
             headerContent={
-              <Text as="span" variant="bodyMd" fontWeight="semibold">
-                Select all
-                {selectedItems.length > 0 && ` (${selectedItems.length} selected products)`}
-              </Text>
+              selectedItems.length > 0 
+                ? `Select all (${selectedItems.length} selected products)`
+                : 'Select all'
             }
           />
           
