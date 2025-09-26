@@ -1352,7 +1352,8 @@ export default function BulkEdit({ shop: shopProp }) {
       });
       
       if (response.success) {
-        setToast(`✅ Synced ${response.synced} products successfully!`);
+        const syncedCount = response.productsCount || response.synced || 0;
+        setToast(`✅ Synced ${syncedCount} products successfully!`);
         // Reload products after sync
         setTimeout(() => {
           loadProducts(1, false, Date.now());
@@ -1743,9 +1744,16 @@ export default function BulkEdit({ shop: shopProp }) {
 
           <Box>
             <Box paddingBlockEnd="200" paddingInlineStart="200">
-              <Text variant="bodyMd" fontWeight="semibold">
-                Select all
-              </Text>
+              <InlineStack gap="200" align="center">
+                <Text variant="bodyMd" fontWeight="semibold">
+                  Select all
+                </Text>
+                {selectedItems.length > 0 && (
+                  <Text variant="bodySm" tone="subdued">
+                    ({selectedItems.length} selected products)
+                  </Text>
+                )}
+              </InlineStack>
             </Box>
             <ResourceList
               resourceName={{ singular: 'product', plural: 'products' }}
