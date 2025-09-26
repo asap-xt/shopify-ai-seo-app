@@ -8,7 +8,7 @@ const shopSchema = new mongoose.Schema({
   },
   accessToken: {
     type: String,
-    required: true
+    required: false
   },
   appApiKey: {  // Добавете това поле
     type: String,
