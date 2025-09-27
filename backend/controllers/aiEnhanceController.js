@@ -138,20 +138,29 @@ async function generateEnhancedBulletsFAQ(data) {
 // POST /ai-enhance/product
 router.post('/product', validateRequest(), async (req, res) => {
   try {
+    console.log('🔍 [AI-ENHANCE/DEBUG] ===== REQUEST START =====');
+    console.log('🔍 [AI-ENHANCE/DEBUG] req.body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 [AI-ENHANCE/DEBUG] req.shopDomain:', req.shopDomain);
+    
     const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
     
-    console.log('🔍 [DEBUG] Starting AI enhance for product:', productId);
-    console.log('🔍 [DEBUG] Languages:', languages);
+    console.log('🔍 [AI-ENHANCE/DEBUG] Starting AI enhance for product:', productId);
+    console.log('🔍 [AI-ENHANCE/DEBUG] Languages:', languages);
     
     // Check plan
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    console.log('🔍 [DEBUG] Shop plan:', planKey);
+    console.log('🔍 [AI-ENHANCE/DEBUG] Shop plan:', planKey);
+    console.log('🔍 [AI-ENHANCE/DEBUG] Subscription found:', !!subscription);
     
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    console.log('🔍 [AI-ENHANCE/DEBUG] Normalized plan:', normalizedPlan);
+    console.log('🔍 [AI-ENHANCE/DEBUG] Plan check:', ['growth_extra', 'enterprise'].includes(normalizedPlan) || planKey === 'growth extra');
+    
     if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
+      console.log('🔍 [AI-ENHANCE/DEBUG] ===== PLAN CHECK FAILED =====');
       return res.status(403).json({ 
         error: 'AI enhancement requires Growth Extra or Enterprise plan',
         currentPlan: planKey 
