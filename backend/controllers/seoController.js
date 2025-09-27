@@ -1589,6 +1589,9 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
           title
           handle
           descriptionHtml
+          productsCount {
+            count
+          }
           products(first: 10) {
             edges {
               node {
@@ -1613,6 +1616,14 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
       return res.status(404).json({ error: 'Collection not found' });
     }
     
+    // Transform productsCount to match expected format
+    const transformedCollection = {
+      ...collection,
+      productsCount: collection.productsCount?.count || 0
+    };
+    
+    console.log(`[GENERATE-COLLECTION] Collection "${collection.title}" has ${transformedCollection.productsCount} products`);
+    
     // Generate SEO data locally (no AI costs)
     const cleanDescription = (collection.descriptionHtml || '')
       .replace(/<[^>]+>/g, ' ')
@@ -1623,10 +1634,10 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
       title: collection.title.slice(0, 70),
       metaDescription: cleanDescription.slice(0, 160) || `Shop our ${collection.title} collection`,
       slug: kebab(collection.handle || collection.title),
-      categoryKeywords: extractCategoryKeywords(collection),
-      bullets: generateCollectionBullets(collection),
-      faq: generateCollectionFAQ(collection),
-      jsonLd: generateCollectionJsonLd(collection)
+      categoryKeywords: extractCategoryKeywords(transformedCollection),
+      bullets: generateCollectionBullets(transformedCollection),
+      faq: generateCollectionFAQ(transformedCollection),
+      jsonLd: generateCollectionJsonLd(transformedCollection)
     };
     
     const result = {
