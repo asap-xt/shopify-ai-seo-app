@@ -397,6 +397,32 @@ async function ensureMetafieldDefinition(shop, language) {
 }
 
 /* --------------------------- Collection Metafield Definition Helper --------------------------- */
+// Get existing metafield definition ID
+async function getMetafieldDefinitionId(shop, key) {
+  try {
+    const query = `
+      query GetMetafieldDefinition($namespace: String!, $key: String!) {
+        metafieldDefinitions(namespace: $namespace, key: $key, first: 1) {
+          edges {
+            node {
+              id
+              namespace
+              key
+            }
+          }
+        }
+      }
+    `;
+    
+    const result = await shopGraphQL(req, shop, query, { namespace: 'seo_ai', key });
+    const definition = result?.metafieldDefinitions?.edges?.[0]?.node;
+    return definition?.id || null;
+  } catch (e) {
+    console.error(`[COLLECTION METAFIELDS] Error getting definition ID for ${key}:`, e.message);
+    return null;
+  }
+}
+
 // Creates metafield definitions for Collections
 async function ensureCollectionMetafieldDefinitions(shop, languages) {
   console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
@@ -437,14 +463,16 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
         const errors = result.metafieldDefinitionCreate.userErrors;
         if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
           console.log(`[COLLECTION METAFIELDS] Definition already exists for ${key} - OK`);
-          results.push({ lang, status: 'exists' });
+          // Try to get existing definition ID
+          const existingDefinition = await getMetafieldDefinitionId(shop, key);
+          results.push({ lang, status: 'exists', definitionId: existingDefinition });
         } else {
           console.error(`[COLLECTION METAFIELDS] Errors for ${key}:`, errors);
           results.push({ lang, status: 'error', errors });
         }
       } else if (result?.metafieldDefinitionCreate?.createdDefinition) {
         console.log(`[COLLECTION METAFIELDS] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
-        results.push({ lang, status: 'created' });
+        results.push({ lang, status: 'created', definitionId: result.metafieldDefinitionCreate.createdDefinition.id });
       }
     } catch (e) {
       console.error(`[COLLECTION METAFIELDS] Exception for ${key}:`, e.message);
@@ -1641,11 +1669,20 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
     
     // Update metafields
     if (options.updateMetafields !== false) {
+      // Ensure definition exists for this language
+      const definitionResults = await ensureCollectionMetafieldDefinitions(shop, [language]);
+      const definitionResult = definitionResults[0];
+      const definitionId = definitionResult?.definitionId;
+      
+      console.log(`[APPLY-COLLECTION] Definition result for ${language}:`, definitionResult);
+      console.log(`[APPLY-COLLECTION] Definition ID:`, definitionId);
+      
       const metafields = [{
         ownerId: collectionId,
         namespace: 'seo_ai',  // Same namespace like products!
         key: `seo__${language}`,  // Same format like products!
         type: 'json',
+        metafieldDefinitionId: definitionId, // Link to definition!
         value: JSON.stringify({
           ...seo,
           language,
@@ -1996,7 +2033,12 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
           // Always update metafields
           if (options.updateMetafields !== false) {
             // Ensure definition exists for this language
-            await ensureCollectionMetafieldDefinitions(shop, [language]);
+            const definitionResults = await ensureCollectionMetafieldDefinitions(shop, [language]);
+            const definitionResult = definitionResults[0];
+            const definitionId = definitionResult?.definitionId;
+            
+            console.log(`[APPLY-MULTI] Definition result for ${language}:`, definitionResult);
+            console.log(`[APPLY-MULTI] Definition ID:`, definitionId);
             
             const key = `seo__${String(language || 'en').toLowerCase()}`; // ALWAYS lowercase!
             
@@ -2005,6 +2047,7 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
               namespace: 'seo_ai',  // Same namespace as products!
               key,
               type: 'json',
+              metafieldDefinitionId: definitionId, // Link to definition!
               value: JSON.stringify({
                 ...seo,
                 language: key.replace('seo__', ''), // also lowercase
