@@ -57,9 +57,9 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: Q, variables: { shop } }),
     });
-    const res = await planResponse.json();
-    if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
-    const planData = res?.data?.plansMe;
+    const planRes = await planResponse.json();
+    if (planRes?.errors?.length) throw new Error(planRes.errors[0]?.message || 'GraphQL error');
+    const planData = planRes?.data?.plansMe;
     const rawPlan = planData.plan || 'starter';
     const normalizedPlan = rawPlan.toLowerCase().replace(/\s+/g, '_');
     
@@ -367,9 +367,9 @@ async function applyRobotsTxt(shop, robotsTxt) {
       body: JSON.stringify({ query: Q, variables: { shop } }),
     });
     if (planResponse.ok) {
-      const res = await planResponse.json();
-      if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
-      const planData = res?.data?.plansMe;
+      const planRes = await planResponse.json();
+      if (planRes?.errors?.length) throw new Error(planRes.errors[0]?.message || 'GraphQL error');
+      const planData = planRes?.data?.plansMe;
       const normalizedPlan = normalizePlan(planData.plan);
       
       const supportedPlans = ['growth', 'growth_extra', 'enterprise'];
