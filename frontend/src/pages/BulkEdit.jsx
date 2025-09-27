@@ -611,11 +611,12 @@ export default function BulkEdit({ shop: shopProp }) {
       return;
     }
     
-    if (!model || !model.trim()) {
+    // Ensure we have a valid model
+    let finalModel = model;
+    if (!finalModel || !finalModel.trim()) {
       console.log('[BULK-EDIT/DEBUG] Model is empty, using fallback');
-      const fallbackModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
-      console.log('[BULK-EDIT/DEBUG] Using fallback model:', fallbackModel);
-      setModel(fallbackModel);
+      finalModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
+      console.log('[BULK-EDIT/DEBUG] Using fallback model:', finalModel);
     }
     
     setShowLanguageModal(false);
@@ -671,7 +672,7 @@ export default function BulkEdit({ shop: shopProp }) {
             
             console.log('[BULK-EDIT/DEBUG] Making API call with:');
             console.log('[BULK-EDIT/DEBUG] - productId:', productGid);
-            console.log('[BULK-EDIT/DEBUG] - model:', model);
+            console.log('[BULK-EDIT/DEBUG] - model:', finalModel);
             console.log('[BULK-EDIT/DEBUG] - languages:', languagesToGenerate);
             
             const data = await api('/api/seo/generate-multi', {
@@ -680,7 +681,7 @@ export default function BulkEdit({ shop: shopProp }) {
               body: {
                 shop,
                 productId: productGid,
-                model,
+                model: finalModel,
                 languages: languagesToGenerate,
               }
             });
