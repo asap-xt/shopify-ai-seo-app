@@ -777,7 +777,7 @@ export default function CollectionsPage({ shop: shopProp }) {
     setIsDeleting(true);
     setDeleteError('');
     try {
-      await api('/collections/delete-seo', {
+      await api('/seo/collections/delete-seo', {
         method: 'DELETE',
         shop,
         body: { shop, collectionId, language },
@@ -813,7 +813,7 @@ export default function CollectionsPage({ shop: shopProp }) {
       for (const collection of collectionsToProcess) {
         for (const language of deleteLanguages) {
           try {
-            await api('/collections/delete-seo', {
+            await api('/seo/collections/delete-seo', {
               method: 'DELETE',
               shop,
               body: { shop, collectionId: collection.id, language },
