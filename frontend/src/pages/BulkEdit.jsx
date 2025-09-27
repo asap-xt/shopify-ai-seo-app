@@ -408,18 +408,18 @@ export default function BulkEdit({ shop: shopProp }) {
             shop,
             body: {
               shop,
-              productId: product.gid || `gid://shopify/Product/${product.productId}`,
+              productId: product.gid || `gid://shopify/Product/${product.id}`,
               languages: product.optimizationSummary.optimizedLanguages,
             },
           });
           
-          console.log(`🔍 [AI-ENHANCE] Product ${product.productId} enhance data:`, enhanceData);
+          console.log(`🔍 [AI-ENHANCE] Product ${product.id} enhance data:`, enhanceData);
           
           // Apply the enhanced SEO
           if (enhanceData.results && enhanceData.results.length > 0) {
             const applyData = {
               shop,
-              productId: product.gid || `gid://shopify/Product/${product.productId}`,
+              productId: product.gid || `gid://shopify/Product/${product.id}`,
               results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
                 console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI bullets:`, r.bullets);
                 console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI FAQ:`, r.faq);
@@ -441,7 +441,7 @@ export default function BulkEdit({ shop: shopProp }) {
               options: { updateBullets: true, updateFaq: true }
             };
             
-            console.log(`🔍 [AI-ENHANCE] Applying data for product ${product.productId}:`, applyData);
+            console.log(`🔍 [AI-ENHANCE] Applying data for product ${product.id}:`, applyData);
             console.log(`🔍 [AI-ENHANCE] First result SEO object:`, JSON.stringify(applyData.results[0]?.seo, null, 2));
             
             const applyResult = await api('/api/seo/apply-multi', {
@@ -450,10 +450,10 @@ export default function BulkEdit({ shop: shopProp }) {
               body: applyData
             });
             
-            console.log(`🔍 [AI-ENHANCE] Apply result for product ${product.productId}:`, applyResult);
+            console.log(`🔍 [AI-ENHANCE] Apply result for product ${product.id}:`, applyResult);
             results.successful++;
           } else {
-            console.log(`🔍 [AI-ENHANCE] No valid results for product ${product.productId}:`, enhanceData);
+            console.log(`🔍 [AI-ENHANCE] No valid results for product ${product.id}:`, enhanceData);
             results.failed++;
           }
         } catch (error) {
