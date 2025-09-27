@@ -88,7 +88,7 @@ async function fetchAllCollections(req) {
 }
 
 // Format collection data
-function formatCollection(collection, shop) {
+function formatCollection(collection, shop, shopLanguages = ['en']) {
   return {
     id: collection.id,
     handle: collection.handle,
@@ -106,7 +106,10 @@ function formatCollection(collection, shop) {
       description: collection.seo?.description || collection.description
     },
     updatedAt: collection.updatedAt,
-    shop: shop
+    shop: shop,
+    // Add optimizedLanguages - use all available shop languages
+    // In the future, this could be based on actual SEO data for each language
+    optimizedLanguages: collection.optimizedLanguages || shopLanguages
   };
 }
 
@@ -116,8 +119,33 @@ router.get('/list-graphql', async (req, res) => {
     console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${req.auth.shop}`);
     
     const collections = await fetchAllCollections(req);
+    
+    // Get shop languages dynamically
+    const Q_SHOP_LOCALES = `
+      query ShopLocales {
+        shopLocales {
+          locale
+          primary
+          published
+        }
+      }
+    `;
+    
+    let shopLanguages = ['en']; // fallback
+    try {
+      const shopData = await executeGraphQL(req, Q_SHOP_LOCALES);
+      const shopLocales = shopData?.shopLocales || [];
+      shopLanguages = shopLocales
+        .filter(l => l.published)
+        .map(l => l.locale)
+        .filter(Boolean);
+      console.log(`[COLLECTIONS-GQL] Found ${shopLanguages.length} shop languages: ${shopLanguages.join(',')}`);
+    } catch (error) {
+      console.error(`[COLLECTIONS-GQL] Error fetching shop languages:`, error.message);
+    }
+    
     const formattedCollections = collections.map(collection => 
-      formatCollection(collection, req.auth.shop)
+      formatCollection(collection, req.auth.shop, shopLanguages)
     );
     
     return res.json({
