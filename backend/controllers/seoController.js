@@ -397,6 +397,49 @@ async function ensureMetafieldDefinition(shop, language) {
 }
 
 /* --------------------------- Collection Metafield Definition Helper --------------------------- */
+// Delete collection metafield by key
+async function deleteCollectionMetafield(shop, collectionId, key) {
+  try {
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            namespace
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: collectionId,
+        namespace: 'seo_ai',    
+        key: key
+      }]
+    };
+    
+    const result = await shopGraphQL(req, shop, deleteMutation, variables);
+    
+    if (result?.metafieldsDelete?.userErrors?.length > 0) {
+      const errorMessages = result.metafieldsDelete.userErrors.map(e => e.message);
+      console.log(`[DELETE-COLLECTION-METAFIELD] Delete errors for ${key}:`, errorMessages);
+      throw new Error(`Delete failed: ${errorMessages.join(', ')}`);
+    }
+    
+    console.log(`[DELETE-COLLECTION-METAFIELD] Successfully deleted metafield ${key}`);
+    return true;
+  } catch (e) {
+    console.error(`[DELETE-COLLECTION-METAFIELD] Error deleting ${key}:`, e.message);
+    throw e;
+  }
+}
+
 // Get existing metafield definition ID
 async function getMetafieldDefinitionId(shop, key) {
   try {
@@ -1682,7 +1725,8 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
         namespace: 'seo_ai',  // Same namespace like products!
         key: `seo__${language}`,  // Same format like products!
         type: 'json',
-        metafieldDefinitionId: definitionId, // Link to definition!
+        // Note: metafieldDefinitionId might not be supported in metafieldsSet
+        // We'll rely on the definition being created and Shopify auto-linking
         value: JSON.stringify({
           ...seo,
           language,
@@ -2042,12 +2086,21 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
             
             const key = `seo__${String(language || 'en').toLowerCase()}`; // ALWAYS lowercase!
             
+            // Delete any existing metafield with this key first
+            try {
+              console.log(`[APPLY-MULTI] Deleting existing metafield ${key} for ${collectionId}`);
+              await deleteCollectionMetafield(shop, collectionId, key);
+            } catch (e) {
+              console.log(`[APPLY-MULTI] No existing metafield to delete for ${key}:`, e.message);
+            }
+            
             const metafields = [{
               ownerId: collectionId,
               namespace: 'seo_ai',  // Same namespace as products!
               key,
               type: 'json',
-              metafieldDefinitionId: definitionId, // Link to definition!
+              // Note: metafieldDefinitionId might not be supported in metafieldsSet
+              // We'll rely on the definition being created and Shopify auto-linking
               value: JSON.stringify({
                 ...seo,
                 language: key.replace('seo__', ''), // also lowercase
