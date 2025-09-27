@@ -36,7 +36,7 @@ export function makeSessionFetch(debug = true) {
   if (debug) console.log('[SFETCH] Creating session fetch for App Bridge v4');
   
   return async (url, options = {}) => {
-    console.log('[SFETCH] Fetching:', url, { ...options, body: undefined });
+    console.log('[SFETCH] Fetching:', url, options);
     
     const { method = 'GET', headers = {}, body, responseType, ...otherOptions } = options;
     
