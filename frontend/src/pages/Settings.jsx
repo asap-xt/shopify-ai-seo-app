@@ -59,10 +59,13 @@ export default function Settings() {
     console.log(`[DEBUG] runGQL called with query:`, query);
     console.log(`[DEBUG] runGQL variables:`, variables);
     
+    const body = JSON.stringify({ query, variables });
+    console.log(`[DEBUG] runGQL body:`, body);
+    
     const res = await api('/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
+      body: body,
     });
     
     console.log(`[DEBUG] runGQL response:`, res);
