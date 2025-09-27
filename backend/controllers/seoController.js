@@ -343,9 +343,11 @@ async function openrouterChat(model, messages, response_format_json = true) {
 }
 
 /* --------------------------- Metafield Definition Helper --------------------------- */
-async function ensureMetafieldDefinition(shop, language) {
+async function ensureMetafieldDefinition(req, shop, language) {
   const key = `seo__${language}`;
-  console.log(`[METAFIELD DEF] Checking/creating definition for: ${key}`);
+  console.log(`[PRODUCT METAFIELDS] ===== STARTING DEFINITION CREATION =====`);
+  console.log(`[PRODUCT METAFIELDS] Creating definition for language: ${language}, key: ${key}`);
+  console.log(`[PRODUCT METAFIELDS] Shop: ${shop}`);
   
   // Simpler approach - create directly without checking
   const createMutation = `
@@ -356,6 +358,8 @@ async function ensureMetafieldDefinition(shop, language) {
         name: "AI SEO - ${language.toUpperCase()}"
         type: "json"
         ownerType: PRODUCT
+        description: "AI-generated SEO content for ${language.toUpperCase()} language"
+        pin: true
       }) {
         createdDefinition {
           id
@@ -376,24 +380,69 @@ async function ensureMetafieldDefinition(shop, language) {
     if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
       const errors = result.metafieldDefinitionCreate.userErrors;
       // If error is "already exists", that's OK
-      if (errors.some(e => e.message.includes('already exists'))) {
-        console.log(`[METAFIELD DEF] Definition already exists for ${key} - OK`);
+      if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
+        console.log(`[PRODUCT METAFIELDS] Definition already exists for ${key} - OK`);
         return { exists: true };
       }
-      console.error(`[METAFIELD DEF] Errors:`, errors);
+      console.error(`[PRODUCT METAFIELDS] Errors:`, errors);
       return { errors };
     }
     
     if (result?.metafieldDefinitionCreate?.createdDefinition) {
-      console.log(`[METAFIELD DEF] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
+      console.log(`[PRODUCT METAFIELDS] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
       return { created: true };
     }
   } catch (e) {
-    console.error(`[METAFIELD DEF] Exception:`, e.message);
+    console.error(`[PRODUCT METAFIELDS] Exception:`, e.message);
     // Continue - metafield will still work
   }
   
+  console.log(`[PRODUCT METAFIELDS] ===== DEFINITION CREATION COMPLETE =====`);
   return { attempted: true };
+}
+
+/* --------------------------- Product Metafield Helper --------------------------- */
+// Delete product metafield by key
+async function deleteProductMetafield(req, shop, productId, key) {
+  try {
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            namespace
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: productId,
+        namespace: 'seo_ai',    
+        key: key
+      }]
+    };
+    
+    const result = await shopGraphQL(req, shop, deleteMutation, variables);
+    
+    if (result?.metafieldsDelete?.userErrors?.length > 0) {
+      const errorMessages = result.metafieldsDelete.userErrors.map(e => e.message);
+      console.log(`[DELETE-PRODUCT-METAFIELD] Delete errors for ${key}:`, errorMessages);
+      throw new Error(`Delete failed: ${errorMessages.join(', ')}`);
+    }
+    
+    console.log(`[DELETE-PRODUCT-METAFIELD] Successfully deleted metafield ${key}`);
+    return true;
+  } catch (e) {
+    console.error(`[DELETE-PRODUCT-METAFIELD] Error deleting ${key}:`, e.message);
+    throw e;
+  }
 }
 
 /* --------------------------- Collection Metafield Definition Helper --------------------------- */
@@ -1257,9 +1306,18 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       }
 
       // 2. Ensure metafield definition exists
-      await ensureMetafieldDefinition(shop, language.toLowerCase());
+      await ensureMetafieldDefinition(req, shop, language.toLowerCase());
 
-      // 3. Always write language-specific metafield with full SEO data
+      // 3. Delete any existing metafield with this key first
+      const mfKey = `seo__${language.toLowerCase()}`;
+      try {
+        console.log(`[APPLY-SEO] Deleting existing metafield ${mfKey} for ${productId}`);
+        await deleteProductMetafield(req, shop, productId, mfKey);
+      } catch (e) {
+        console.log(`[APPLY-SEO] No existing metafield to delete for ${mfKey}:`, e.message);
+      }
+
+      // 4. Always write language-specific metafield with full SEO data
       const metaMutation = `
         mutation SetAiSeo($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
@@ -1282,6 +1340,8 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         namespace: 'seo_ai',
         key: mfKey,
         type: 'json',
+        // Note: metafieldDefinitionId might not be supported in metafieldsSet
+        // We'll rely on the definition being created and Shopify auto-linking
         value: JSON.stringify(metafieldData),
       }];
 
