@@ -406,7 +406,7 @@ app.get('/simple-test', (req, res) => {
 import authRouter from './auth.js';                      // mounts /auth
 import tokenExchangeRouter from './token-exchange.js';   // mounts /token-exchange
 import billingRouter from './billing.js';                // mounts /billing/*
-import seoRouter from './controllers/seoController.js';  // mounts /plans/me, /seo/*
+import seoRouter from './controllers/seoController.js';  // mounts /seo/* (plans/me е премахнат)
 import languageRouter from './controllers/languageController.js';  // mounts /api/languages/*
 import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
 import debugRouter from './controllers/debugRouter.js';
@@ -1102,67 +1102,7 @@ app.get('/debug/routes', (req, res) => {
   res.status(200).json({ routes });
 });
 
-// Тестови endpoint за промяна на план (само за development)
-app.post('/test/set-plan', async (req, res) => {
-  const { shop, plan } = req.body;
-  
-  console.log('[TEST-PLAN] Request:', { shop, plan });
-  
-  if (!shop || !plan) {
-    return res.status(400).json({ error: 'Missing shop or plan' });
-  }
-  
-  try {
-    const { default: Subscription } = await import('./db/Subscription.js');
-    
-    // Нормализираме плана
-    const normalizedPlan = plan === 'growth_extra' ? 'growth extra' : plan;
-    console.log('[TEST-PLAN] Normalized plan:', normalizedPlan);
-    
-    const result = await Subscription.findOneAndUpdate(
-      { shop },
-      {
-        shop,
-        plan: normalizedPlan,
-        startedAt: new Date(),
-        queryLimit: 
-          plan === 'enterprise' ? 10000 :
-          plan === 'growth_extra' || plan === 'growth extra' ? 4000 :
-          plan === 'growth' ? 1500 :
-          plan === 'professional' ? 600 : 50,
-        productLimit:
-          plan === 'enterprise' ? 10000 :
-          plan === 'growth_extra' || plan === 'growth extra' ? 2000 :
-          plan === 'growth' ? 1000 :
-          plan === 'professional' ? 300 : 150
-      },
-      { upsert: true, new: true }
-    );
-    
-    console.log('[TEST-PLAN] Database result:', {
-      shop: result.shop,
-      plan: result.plan,
-      queryLimit: result.queryLimit,
-      productLimit: result.productLimit
-    });
-    
-    // Изчистваме кеша
-    try {
-      const { default: aiDiscoveryService } = await import('./services/aiDiscoveryService.js');
-      if (aiDiscoveryService?.cache) {
-        aiDiscoveryService.cache.clear();
-        console.log('[TEST-PLAN] Cache cleared successfully');
-      }
-    } catch (e) {
-      console.log('[TEST-PLAN] Cache clear failed:', e.message);
-    }
-    
-    res.json({ success: true, message: `Plan set to ${plan}`, debug: { normalizedPlan, result } });
-  } catch (error) {
-    console.error('[TEST-PLAN] Error setting plan:', error);
-    res.status(500).json({ error: 'Failed to set plan' });
-  }
-});
+// Старият /test/set-plan endpoint е премахнат - използваме GraphQL версията
 
 // ---------------------------------------------------------------------------
 // Global error handler

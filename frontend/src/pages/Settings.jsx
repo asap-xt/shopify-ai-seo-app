@@ -352,7 +352,7 @@ export default function Settings() {
       console.log(`[DEBUG] GraphQL result:`, result);
       
       setToast(`Test plan set to ${plan || 'actual'}`);
-      // кратък refresh, за да се презареди /plans/me и бейджа/гейтинга
+      // кратък refresh, за да се презареди GraphQL плановете и бейджа/гейтинга
       setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error('[DEBUG] Failed to set test plan', error);

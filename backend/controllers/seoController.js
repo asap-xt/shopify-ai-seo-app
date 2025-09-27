@@ -1,5 +1,5 @@
 // backend/controllers/seoController.js
-// Routes: /plans/me, /seo/generate, /seo/apply
+// Routes: /seo/generate, /seo/apply (plans/me е премахнат - използваме GraphQL)
 // Behavior: Do NOT generate if the product has no real translation for the requested language.
 
 import express from 'express';
@@ -868,43 +868,7 @@ function fixupAndValidate(payload) {
 
 /* --------------------------- Routes --------------------------- */
 
-// Plans (used by Dashboard/AI SEO form)
-router.get('/plans/me', async (req, res) => {
-  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop ||
-    req.shopDomain;
-
-  if (!shop) {
-    console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
-  }
-
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
-
-  try {
-    const data = await getPlansMeForShop(req.app, shop);
-    // Без cache, за да виждаме override-ите веднага
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    res.removeHeader('ETag');
-    return res.json(data);
-    
-  } catch (error) {
-    console.error('Error in /plans/me:', error);
-    res.status(500).json({ error: 'Failed to load plan' });
-  }
-});
+// Plans endpoint е премахнат - използваме GraphQL версията в server.js
 
 router.post('/seo/generate', validateRequest(), async (req, res) => {
   console.log('[SEO/HANDLER]', req.method, req.originalUrl, {

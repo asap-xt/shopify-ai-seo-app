@@ -215,7 +215,7 @@ function SingleProductPanel({ shop }) {
   const [primaryLanguage, setPrimaryLanguage] = useState('en');
 
   // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž - Ð²ÐµÑ‡Ðµ Ð½Ðµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°Ð¼Ðµ AI Ð¼Ð¾Ð´ÐµÐ»Ð¸
-  // Load models from /plans/me - ÐºÐ¾Ð¼ÐµÐ½Ñ‚Ð°Ñ€ Ð·Ð°Ð¿Ð°Ð·ÐµÐ½ Ð·Ð° Ð¸ÑÑ‚Ð¾Ñ€Ð¸Ñ
+  // Load models from GraphQL - старият /plans/me endpoint е премахнат
 
   // Load languages for shop/product (hides selector when single)
   useEffect(() => {
