@@ -54,16 +54,12 @@ router.post('/generate-multi', validateRequest(), async (req, res) => {
     console.log('[MULTI-SEO/DEBUG] res.locals.shopify:', res.locals?.shopify);
     
     const shopDomain = req.shopDomain;
-    const { productId: pid, model: rawModel, languages } = req.body || {};
-    
-    // Fallback model if empty
-    const model = rawModel && rawModel.trim() ? rawModel.trim() : 'anthropic/claude-3.5-sonnet';
+    const { productId: pid, model, languages } = req.body || {};
     
     console.log('[MULTI-SEO/DEBUG] Extracted values:');
     console.log('[MULTI-SEO/DEBUG] - shopDomain:', shopDomain);
     console.log('[MULTI-SEO/DEBUG] - productId (pid):', pid);
-    console.log('[MULTI-SEO/DEBUG] - rawModel:', rawModel);
-    console.log('[MULTI-SEO/DEBUG] - final model:', model);
+    console.log('[MULTI-SEO/DEBUG] - model:', model);
     console.log('[MULTI-SEO/DEBUG] - languages:', languages);
     console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
     console.log('[MULTI-SEO/DEBUG] - languages length:', languages?.length);
