@@ -398,7 +398,7 @@ async function ensureMetafieldDefinition(shop, language) {
 
 /* --------------------------- Collection Metafield Definition Helper --------------------------- */
 // Delete collection metafield by key
-async function deleteCollectionMetafield(shop, collectionId, key) {
+async function deleteCollectionMetafield(req, shop, collectionId, key) {
   try {
     const deleteMutation = `
       mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
@@ -441,7 +441,7 @@ async function deleteCollectionMetafield(shop, collectionId, key) {
 }
 
 // Get existing metafield definition ID
-async function getMetafieldDefinitionId(shop, key) {
+async function getMetafieldDefinitionId(req, shop, key) {
   try {
     const query = `
       query GetMetafieldDefinition($namespace: String!, $key: String!) {
@@ -467,7 +467,7 @@ async function getMetafieldDefinitionId(shop, key) {
 }
 
 // Creates metafield definitions for Collections
-async function ensureCollectionMetafieldDefinitions(shop, languages) {
+async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
   console.log('[COLLECTION METAFIELDS] ===== STARTING DEFINITION CREATION =====');
   console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
   console.log('[COLLECTION METAFIELDS] Shop:', shop);
@@ -510,7 +510,7 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
         if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
           console.log(`[COLLECTION METAFIELDS] Definition already exists for ${key} - OK`);
           // Try to get existing definition ID
-          const existingDefinition = await getMetafieldDefinitionId(shop, key);
+          const existingDefinition = await getMetafieldDefinitionId(req, shop, key);
           results.push({ lang, status: 'exists', definitionId: existingDefinition });
         } else {
           console.error(`[COLLECTION METAFIELDS] Errors for ${key}:`, errors);
@@ -1718,7 +1718,7 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
     // Update metafields
     if (options.updateMetafields !== false) {
       // Ensure definition exists for this language
-      const definitionResults = await ensureCollectionMetafieldDefinitions(shop, [language]);
+      const definitionResults = await ensureCollectionMetafieldDefinitions(req, shop, [language]);
       const definitionResult = definitionResults[0];
       const definitionId = definitionResult?.definitionId;
       
@@ -2031,7 +2031,7 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
     // Ensure EN definition always exists
     const allLanguages = results.map(r => r.language);
     console.log('[APPLY-MULTI] Ensuring definitions for:', allLanguages);
-    await ensureCollectionMetafieldDefinitions(shop, allLanguages);
+    await ensureCollectionMetafieldDefinitions(req, shop, allLanguages);
     
     for (const result of results) {
       try {
@@ -2083,7 +2083,7 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
           if (options.updateMetafields !== false) {
             // Ensure definition exists for this language
             console.log(`[APPLY-MULTI] ===== ENSURING DEFINITION FOR ${language} =====`);
-            const definitionResults = await ensureCollectionMetafieldDefinitions(shop, [language]);
+            const definitionResults = await ensureCollectionMetafieldDefinitions(req, shop, [language]);
             const definitionResult = definitionResults[0];
             const definitionId = definitionResult?.definitionId;
             
@@ -2097,7 +2097,7 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
             // Delete any existing metafield with this key first
             try {
               console.log(`[APPLY-MULTI] Deleting existing metafield ${key} for ${collectionId}`);
-              await deleteCollectionMetafield(shop, collectionId, key);
+              await deleteCollectionMetafield(req, shop, collectionId, key);
             } catch (e) {
               console.log(`[APPLY-MULTI] No existing metafield to delete for ${key}:`, e.message);
             }
@@ -2212,7 +2212,7 @@ router.post('/collections/create-definitions', validateRequest(), async (req, re
     
     console.log('[CREATE-DEFINITIONS] Creating definitions for languages:', languages);
     
-    const results = await ensureCollectionMetafieldDefinitions(shop, languages);
+    const results = await ensureCollectionMetafieldDefinitions(req, shop, languages);
     
     res.json({
       ok: true,
@@ -2243,7 +2243,7 @@ router.post('/collections/init-metafields', validateRequest(), async (req, res) 
     const uniqueLanguages = [...new Set(languages)];
     console.log('[INIT] Creating collection metafield definitions for languages:', uniqueLanguages);
     
-    const results = await ensureCollectionMetafieldDefinitions(shop, uniqueLanguages);
+    const results = await ensureCollectionMetafieldDefinitions(req, shop, uniqueLanguages);
     
     res.json({
       ok: true,
