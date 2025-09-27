@@ -696,27 +696,61 @@ app.get('/', async (req, res) => {
       
       if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'jwt-pending' || 
           existingShop.appApiKey !== process.env.SHOPIFY_API_KEY) {
-        console.log('[APP URL] No valid access token found or API key mismatch, marking for token exchange...');
+        console.log('[APP URL] No valid access token found, performing immediate token exchange...');
         
-        // Маркирай като pending, но НЕ пренасочвай
-        await ShopModel.findOneAndUpdate(
-          { shop },
-          {
-            shop,
-            accessToken: 'jwt-pending',
-            appApiKey: process.env.SHOPIFY_API_KEY,
-            useJWT: true,
-            needsTokenExchange: true,
-            updatedAt: new Date()
-          },
-          { upsert: true, new: true }
-        );
-        
-        console.log('[APP URL] Shop marked for token exchange, serving app...');
+        // НАПРАВИ TOKEN EXCHANGE ВЕДНАГА НА СЪРВЪРА
+        try {
+          console.log('[APP URL] Exchanging JWT for access token:', shop);
+          
+          const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id: process.env.SHOPIFY_API_KEY,
+              client_secret: process.env.SHOPIFY_API_SECRET,
+              grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+              subject_token: id_token,
+              subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+              requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+            }),
+          });
+
+          console.log('[APP URL] Token exchange response status:', tokenResponse.status);
+          
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            const accessToken = tokenData.access_token;
+            
+            if (accessToken) {
+              // Запази в базата данни
+              await ShopModel.findOneAndUpdate(
+                { shop },
+                { 
+                  shop, 
+                  accessToken,
+                  appApiKey: process.env.SHOPIFY_API_KEY,
+                  useJWT: true,
+                  needsTokenExchange: false,
+                  installedAt: new Date(),
+                  updatedAt: new Date() 
+                },
+                { upsert: true, new: true }
+              );
+              
+              console.log('[APP URL] ✅ Token exchange successful, access token saved');
+            } else {
+              console.error('[APP URL] No access token in response');
+            }
+          } else {
+            const errorText = await tokenResponse.text();
+            console.error('[APP URL] Token exchange failed:', tokenResponse.status, errorText);
+          }
+        } catch (error) {
+          console.error('[APP URL] Token exchange error:', error);
+        }
       }
       
-      // Винаги сервирай app-а с id_token
-      console.log('[APP URL] Serving embedded app with id_token for token exchange');
+      console.log('[APP URL] Serving embedded app with token exchange completed');
     }
     
         console.log('[APP URL] Processing embedded app with JWT token');
