@@ -1612,6 +1612,9 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
     const data = await shopGraphQL(req, shop, query, { id: collectionId });
     const collection = data?.collection;
     
+    console.log(`[GENERATE-COLLECTION] Raw GraphQL response:`, JSON.stringify(collection, null, 2));
+    console.log(`[GENERATE-COLLECTION] productsCount from GraphQL:`, collection?.productsCount);
+    
     if (!collection) {
       return res.status(404).json({ error: 'Collection not found' });
     }
@@ -1623,6 +1626,7 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
     };
     
     console.log(`[GENERATE-COLLECTION] Collection "${collection.title}" has ${transformedCollection.productsCount} products`);
+    console.log(`[GENERATE-COLLECTION] Transformed collection:`, JSON.stringify(transformedCollection, null, 2));
     
     // Generate SEO data locally (no AI costs)
     const cleanDescription = (collection.descriptionHtml || '')
