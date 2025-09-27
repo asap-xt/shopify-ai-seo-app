@@ -89,6 +89,13 @@ async function fetchAllCollections(req) {
 
 // Format collection data
 function formatCollection(collection, shop, shopLanguages = ['en']) {
+  const optimizedLanguages = collection.optimizedLanguages || shopLanguages;
+  console.log(`[COLLECTIONS-GQL] Formatting collection "${collection.title}":`, {
+    shopLanguages,
+    collectionOptimizedLanguages: collection.optimizedLanguages,
+    finalOptimizedLanguages: optimizedLanguages
+  });
+  
   return {
     id: collection.id,
     handle: collection.handle,
@@ -109,7 +116,7 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
     shop: shop,
     // Add optimizedLanguages - use all available shop languages
     // In the future, this could be based on actual SEO data for each language
-    optimizedLanguages: collection.optimizedLanguages || shopLanguages
+    optimizedLanguages: optimizedLanguages
   };
 }
 
@@ -147,6 +154,11 @@ router.get('/list-graphql', async (req, res) => {
     const formattedCollections = collections.map(collection => 
       formatCollection(collection, req.auth.shop, shopLanguages)
     );
+    
+    // Debug: log first collection's optimizedLanguages
+    if (formattedCollections.length > 0) {
+      console.log(`[COLLECTIONS-GQL] First collection optimizedLanguages:`, formattedCollections[0].optimizedLanguages);
+    }
     
     return res.json({
       success: true,

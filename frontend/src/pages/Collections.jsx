@@ -180,6 +180,12 @@ export default function CollectionsPage({ shop: shopProp }) {
       const data = await api(endpoint);
       console.log('[COLLECTIONS] API Response data:', data);
       
+      // Debug: log first collection's optimizedLanguages
+      if (data?.collections?.length > 0) {
+        console.log('[COLLECTIONS] First collection optimizedLanguages:', data.collections[0].optimizedLanguages);
+        console.log('[COLLECTIONS] First collection full data:', data.collections[0]);
+      }
+      
       // Apply client-side filtering for search
       let filteredCollections = data.collections || [];
       
@@ -851,6 +857,13 @@ export default function CollectionsPage({ shop: shopProp }) {
     const hasResult = results[collection.id]?.success || appliedSeoData[collection.id];
     const seoData = results[collection.id]?.data || appliedSeoData[collection.id];
     const optimizedLanguages = collection.optimizedLanguages || [];
+    
+    // Debug: log optimizedLanguages for each collection
+    console.log(`[COLLECTIONS] Rendering collection "${collection.title}":`, {
+      optimizedLanguages,
+      availableLanguages,
+      hasSeoData: collection.hasSeoData
+    });
     
     const media = (
       <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
