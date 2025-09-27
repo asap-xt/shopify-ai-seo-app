@@ -47,9 +47,30 @@ router.post('/generate-multi', validateRequest(), async (req, res) => {
   console.log('[MULTI-SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
 
   try {
-    const shop = req.shopDomain;
+    console.log('[MULTI-SEO/DEBUG] ===== REQUEST DEBUG START =====');
+    console.log('[MULTI-SEO/DEBUG] req.body:', JSON.stringify(req.body, null, 2));
+    console.log('[MULTI-SEO/DEBUG] req.query:', JSON.stringify(req.query, null, 2));
+    console.log('[MULTI-SEO/DEBUG] req.shopDomain:', req.shopDomain);
+    console.log('[MULTI-SEO/DEBUG] res.locals.shopify:', res.locals?.shopify);
+    
+    const shopDomain = req.shopDomain;
     const { productId: pid, model, languages } = req.body || {};
+    
+    console.log('[MULTI-SEO/DEBUG] Extracted values:');
+    console.log('[MULTI-SEO/DEBUG] - shopDomain:', shopDomain);
+    console.log('[MULTI-SEO/DEBUG] - productId (pid):', pid);
+    console.log('[MULTI-SEO/DEBUG] - model:', model);
+    console.log('[MULTI-SEO/DEBUG] - languages:', languages);
+    console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
+    console.log('[MULTI-SEO/DEBUG] - languages length:', languages?.length);
+    
     if (!pid || !model || !Array.isArray(languages) || languages.length === 0) {
+      console.log('[MULTI-SEO/DEBUG] ===== VALIDATION FAILED =====');
+      console.log('[MULTI-SEO/DEBUG] Missing values check:');
+      console.log('[MULTI-SEO/DEBUG] - pid exists:', !!pid);
+      console.log('[MULTI-SEO/DEBUG] - model exists:', !!model);
+      console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
+      console.log('[MULTI-SEO/DEBUG] - languages has length:', languages?.length > 0);
       return res.status(400).json({ error: 'Missing productId, model or languages[]' });
     }
     const productId = toGID(String(pid));
