@@ -655,12 +655,12 @@ export default function CollectionsPage({ shop: shopProp }) {
           const data = await api('/seo/generate-collection-multi', {
             method: 'POST',
             shop,
-            body: {
+            body: JSON.stringify({
               shop,
               collectionId: collection.id,
               model,
               languages: selectedLanguages,
-            },
+            }),
           });
           
           results[collection.id] = {
