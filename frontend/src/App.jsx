@@ -607,6 +607,52 @@ export default function App() {
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
   // App is installed via Shopify Install Modal, no frontend install button needed
+
+  // Token exchange logic
+  useEffect(() => {
+    const performTokenExchange = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shop = urlParams.get('shop');
+      const idToken = urlParams.get('id_token');
+      
+      if (shop && idToken) {
+        try {
+          console.log('[APP] Performing token exchange for shop:', shop);
+          
+          const response = await fetch('/token-exchange', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              shop: shop,
+              id_token: idToken
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('[APP] Token exchange failed:', errorData);
+            // Показвай грешка на потребителя
+            return;
+          }
+
+          const result = await response.json();
+          console.log('[APP] Token exchange successful:', result);
+          
+          // Премахни id_token от URL след успешен exchange
+          const newUrl = new URL(window.location);
+          newUrl.searchParams.delete('id_token');
+          window.history.replaceState({}, '', newUrl);
+          
+        } catch (error) {
+          console.error('[APP] Token exchange error:', error);
+        }
+      }
+    };
+    
+    performTokenExchange();
+  }, []);
   
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';

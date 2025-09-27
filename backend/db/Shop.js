@@ -22,6 +22,10 @@ const shopSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  needsTokenExchange: {
+    type: Boolean,
+    default: false
+  },
   scopes: {
     type: String,
     required: false

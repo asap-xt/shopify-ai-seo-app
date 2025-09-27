@@ -689,40 +689,28 @@ app.get('/', async (req, res) => {
     
     // Handle JWT token if present
     if (id_token) {
-      console.log('[APP URL] Found id_token, handling JWT flow...');
+      console.log('[APP URL] Found id_token, processing JWT flow...');
       
-      // Create or update shop record with JWT token (NEVER overwrite valid accessToken)
-      if (!existingShop) {
-        // Create new shop record without accessToken (will be set via Token Exchange)
-        // Create shop record with JWT token - accessToken will be set via Token Exchange
-        existingShop = await ShopModel.create({
-          shop,
-          accessToken: 'jwt-pending', // Placeholder until token exchange
-          jwtToken: id_token,
-          useJWT: true,
-          installedAt: new Date(),
-          scopes: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects'
-        });
-        console.log('[APP URL] Created new shop with session token (no accessToken overwrite)');
-      } else {
-        // Update existing shop with session token (preserve existing accessToken)
-        const doc = await ShopModel.findOne({ shop });
-        if (doc?.accessToken && doc.accessToken !== 'jwt-pending') {
-          console.log('[APP URL] DB already has Admin token; not touching accessToken');
-        }
+      // Check if we have a valid access token for this API key
+      if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'jwt-pending' || 
+          existingShop.appApiKey !== process.env.SHOPIFY_API_KEY) {
+        console.log('[APP URL] No valid access token found or API key mismatch, need token exchange...');
         
+        // Mark as pending and let frontend handle token exchange
         existingShop = await ShopModel.findOneAndUpdate(
           { shop },
-          { 
-            $set: { 
-              jwtToken: id_token, 
-              useJWT: true 
-            },
-            $setOnInsert: { accessToken: 'jwt-pending' } // Placeholder until token exchange
+          {
+            shop,
+            accessToken: 'jwt-pending',
+            appApiKey: process.env.SHOPIFY_API_KEY,
+            useJWT: true,
+            needsTokenExchange: true,
+            jwtToken: id_token,
+            installedAt: new Date(),
+            updatedAt: new Date()
           },
           { upsert: true, new: true }
         ).lean();
-        console.log('[APP URL] Updated existing shop with session token (preserved accessToken)');
       }
     }
     

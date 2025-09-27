@@ -48,7 +48,7 @@ export async function invalidateShopToken(shopInput) {
  * Centralized token resolver for ALL Shopify GraphQL requests
  * This fixes the database schema mismatch and provides consistent authentication
  */
-export async function resolveAdminTokenForShop(shop) {
+export async function resolveAdminTokenForShop(shop, options = {}) {
   if (!shop) {
     throw new Error('Shop domain is required');
   }
@@ -59,7 +59,6 @@ export async function resolveAdminTokenForShop(shop) {
   try {
     const Shop = await loadShopModel();
     
-    // Try both possible field names for maximum compatibility
     const shopRecord = await Shop.findOne({
       $or: [
         { shop: normalizedShop },
@@ -68,37 +67,25 @@ export async function resolveAdminTokenForShop(shop) {
     }).lean().exec();
 
     if (shopRecord) {
-      // Try different possible token field names
       const token = shopRecord.accessToken || 
                    shopRecord.token || 
                    shopRecord.access_token;
       
+      // Проверка за валиден токен
       if (token && String(token).trim() && token !== 'jwt-pending') {
-        console.log(`[TOKEN_RESOLVER] Found valid token in DB for ${normalizedShop}`);
-        return String(token).trim();
+        // Проверка дали токенът е за текущия API key
+        if (shopRecord.appApiKey === process.env.SHOPIFY_API_KEY) {
+          console.log(`[TOKEN_RESOLVER] Found valid token in DB for ${normalizedShop}`);
+          return String(token).trim();
+        } else {
+          console.log(`[TOKEN_RESOLVER] Token found but for different API key for ${normalizedShop}`);
+          throw new Error(`Token mismatch - app needs token exchange for shop: ${normalizedShop}`);
+        }
       }
 
-      // If we have JWT token but no valid access token, try token exchange
-      if (shopRecord.jwtToken && (!token || token === 'jwt-pending')) {
-        console.log(`[TOKEN_RESOLVER] Found JWT token, attempting token exchange for ${normalizedShop}`);
-        try {
-          const accessToken = await exchangeJWTForAccessToken(normalizedShop, shopRecord.jwtToken);
-          
-          // Save the access token to database
-          await Shop.findOneAndUpdate(
-            { shop: normalizedShop },
-            { 
-              accessToken: accessToken,
-              updatedAt: new Date()
-            }
-          );
-          
-          console.log(`[TOKEN_RESOLVER] Token exchange successful for ${normalizedShop}`);
-          return accessToken;
-        } catch (exchangeError) {
-          console.error(`[TOKEN_RESOLVER] Token exchange failed for ${normalizedShop}:`, exchangeError.message);
-          throw new Error(`Token exchange failed for shop: ${normalizedShop}`);
-        }
+      if (shopRecord.needsTokenExchange || token === 'jwt-pending') {
+        console.log(`[TOKEN_RESOLVER] Token exchange needed for ${normalizedShop}`);
+        throw new Error(`Token exchange required for shop: ${normalizedShop}`);
       }
     }
 
