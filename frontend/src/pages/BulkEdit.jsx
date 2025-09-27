@@ -155,14 +155,28 @@ export default function BulkEdit({ shop: shopProp }) {
   // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
-    api(`/plans/me?shop=${shop}`)
-      .then((data) => {
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          plan
+          modelsSuggested
+        }
+      }
+    `;
+    api('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: Q, variables: { shop } }),
+    })
+      .then((res) => {
+        if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+        const data = res?.data?.plansMe;
         const models = data?.modelsSuggested || ['anthropic/claude-3.5-sonnet'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
         setPlan(data?.plan || 'starter');
       })
-      .catch((e) => console.error('[BULK-EDIT] /plans/me failed:', e));
+      .catch((e) => console.error('[BULK-EDIT] GraphQL plansMe failed:', e));
   }, [shop, api]);
   
   // Load shop languages

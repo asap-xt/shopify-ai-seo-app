@@ -45,8 +45,21 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     };
     
     // Get current plan
-    const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
-    const planData = await planResponse.json();
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          plan
+        }
+      }
+    `;
+    const planResponse = await fetch(`${process.env.APP_URL}/graphql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: Q, variables: { shop } }),
+    });
+    const res = await planResponse.json();
+    if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+    const planData = res?.data?.plansMe;
     const rawPlan = planData.plan || 'starter';
     const normalizedPlan = rawPlan.toLowerCase().replace(/\s+/g, '_');
     
@@ -341,9 +354,22 @@ async function applyRobotsTxt(shop, robotsTxt) {
   
   // Просто проверете дали плана поддържа auto robots
   try {
-    const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          plan
+        }
+      }
+    `;
+    const planResponse = await fetch(`${process.env.APP_URL}/graphql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: Q, variables: { shop } }),
+    });
     if (planResponse.ok) {
-      const planData = await planResponse.json();
+      const res = await planResponse.json();
+      if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+      const planData = res?.data?.plansMe;
       const normalizedPlan = normalizePlan(planData.plan);
       
       const supportedPlans = ['growth', 'growth_extra', 'enterprise'];

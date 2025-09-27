@@ -112,8 +112,21 @@ export default function CollectionsPage({ shop: shopProp }) {
   // Load models on mount
   useEffect(() => {
     if (!shop) return;
-    api(`/plans/me`, { shop })
-      .then((data) => {
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          modelsSuggested
+        }
+      }
+    `;
+    api('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: Q, variables: { shop } }),
+    })
+      .then((res) => {
+        if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+        const data = res?.data?.plansMe;
         const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);

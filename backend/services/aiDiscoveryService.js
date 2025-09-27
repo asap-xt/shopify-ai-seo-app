@@ -108,9 +108,23 @@ class AIDiscoveryService {
       
       // НОВО: Добавяме план и availableBots
       try {
-        const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
+        const Q = `
+          query PlansMe($shop:String!) {
+            plansMe(shop:$shop) {
+              plan
+              planKey
+            }
+          }
+        `;
+        const planResponse = await fetch(`${process.env.APP_URL}/graphql`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: Q, variables: { shop } }),
+        });
         if (planResponse.ok) {
-          const planData = await planResponse.json();
+          const res = await planResponse.json();
+          if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+          const planData = res?.data?.plansMe;
           console.log('[PLAN DEBUG] Raw plan:', planData.plan);
           console.log('[PLAN DEBUG] Plan config:', planData);
           console.log('[PLAN DEBUG] Final planKey:', planData.planKey);

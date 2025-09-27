@@ -692,8 +692,20 @@ export default function App() {
     
     const loadInitialData = async (shop) => {
       try {
-        // Опитай се да заредиш планове
-        const plansResponse = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`);
+        // Опитай се да заредиш планове през GraphQL
+        const Q = `
+          query PlansMe($shop:String!) {
+            plansMe(shop:$shop) {
+              shop
+              plan
+            }
+          }
+        `;
+        const plansResponse = await fetch('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: Q, variables: { shop } }),
+        });
         
         if (plansResponse.status === 202) {
           // Трябва token exchange
@@ -712,7 +724,7 @@ export default function App() {
         }
         
         // Заредени са плановете, продължи с други данни...
-        console.log('[APP] Plans loaded successfully');
+        console.log('[APP] Plans loaded successfully via GraphQL');
         
       } catch (error) {
         console.error('[APP] Error loading initial data:', error);

@@ -40,7 +40,34 @@ export default function SitemapPage({ shop: shopProp }) {
   const loadPlan = useCallback(async () => {
     if (!shop) return;
     try {
-      const j = await api(`/plans/me?shop=${shop}`);
+      const Q = `
+        query PlansMe($shop:String!) {
+          plansMe(shop:$shop) {
+            shop
+            plan
+            planKey
+            priceUsd
+            ai_queries_used
+            ai_queries_limit
+            product_limit
+            providersAllowed
+            modelsSuggested
+            autosyncCron
+            trial {
+              active
+              ends_at
+              days_left
+            }
+          }
+        }
+      `;
+      const res = await api('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: Q, variables: { shop } }),
+      });
+      if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+      const j = res?.data?.plansMe;
       setPlan(j || null);
     } catch (e) {
       // non-blocking; just log toast optionally

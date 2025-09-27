@@ -12,8 +12,21 @@ const router = express.Router();
  */
 async function checkFeatureAccess(shop, feature) {
   try {
-    const planResponse = await fetch(`${process.env.APP_URL}/plans/me?shop=${shop}`);
-    const planData = await planResponse.json();
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          plan
+        }
+      }
+    `;
+    const planResponse = await fetch(`${process.env.APP_URL}/graphql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: Q, variables: { shop } }),
+    });
+    const res = await planResponse.json();
+    if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+    const planData = res?.data?.plansMe;
     const plan = planData.plan || 'starter';
     
     return aiDiscoveryService.isFeatureAvailable(plan, feature);

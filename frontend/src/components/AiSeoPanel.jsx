@@ -51,7 +51,20 @@ export default function AiSeoPanel() {
     if (!shop) return;
     (async () => {
       try {
-        const j = await api(`/plans/me`, { shop });
+        const Q = `
+          query PlansMe($shop:String!) {
+            plansMe(shop:$shop) {
+              modelsSuggested
+            }
+          }
+        `;
+        const res = await api('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: Q, variables: { shop } }),
+        });
+        if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+        const j = res?.data?.plansMe;
         const suggested = j?.modelsSuggested || [];
         const opts = suggested.length ? suggested : ['anthropic/claude-3.5-sonnet'];
         setModelOptions(opts.map(m => ({ label: m, value: m })));
