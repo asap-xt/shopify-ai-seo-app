@@ -408,7 +408,7 @@ export default function BulkEdit({ shop: shopProp }) {
             shop,
             body: {
               shop,
-              productId: product.gid || `gid://shopify/Product/${product.id}`,
+              productId: product.gid || toProductGID(product.id),
               languages: product.optimizationSummary.optimizedLanguages,
             },
           });
@@ -419,7 +419,7 @@ export default function BulkEdit({ shop: shopProp }) {
           if (enhanceData.results && enhanceData.results.length > 0) {
             const applyData = {
               shop,
-              productId: product.gid || `gid://shopify/Product/${product.id}`,
+              productId: product.gid || toProductGID(product.id),
               results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
                 console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI bullets:`, r.bullets);
                 console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI FAQ:`, r.faq);
