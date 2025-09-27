@@ -583,6 +583,8 @@ async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
 /* --------------------------- Product JSON-LD Generator --------------------------- */
 function generateProductJsonLd(product, seoData, language) {
   console.log('🟢 [JSON-LD] Generating locally (NOT via AI) for language:', language);
+  console.log('🟢 [JSON-LD] Product data:', JSON.stringify(product, null, 2));
+  console.log('🟢 [JSON-LD] SEO data:', JSON.stringify(seoData, null, 2));
   
   const jsonLd = {
     "@context": "https://schema.org",
