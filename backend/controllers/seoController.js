@@ -1919,6 +1919,9 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
           title
           handle
           descriptionHtml
+          productsCount {
+            count
+          }
           products(first: 10) {
             edges {
               node {
@@ -1939,9 +1942,21 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
     const data = await shopGraphQL(req, shop, query, { id: collectionId });
     const collection = data?.collection;
     
+    console.log(`[GENERATE-COLLECTION-MULTI] Raw GraphQL response:`, JSON.stringify(collection, null, 2));
+    console.log(`[GENERATE-COLLECTION-MULTI] productsCount from GraphQL:`, collection?.productsCount);
+    
     if (!collection) {
       return res.status(404).json({ error: 'Collection not found' });
     }
+    
+    // Transform productsCount to match expected format
+    const transformedCollection = {
+      ...collection,
+      productsCount: collection.productsCount?.count || 0
+    };
+    
+    console.log(`[GENERATE-COLLECTION-MULTI] Collection "${collection.title}" has ${transformedCollection.productsCount} products`);
+    console.log(`[GENERATE-COLLECTION-MULTI] Transformed collection:`, JSON.stringify(transformedCollection, null, 2));
 
     for (const language of languages) {
       try {
@@ -1974,7 +1989,7 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
         
         // Създай обект с преведени данни
         const translatedCollection = {
-          ...collection,
+          ...transformedCollection, // Use transformedCollection with productsCount!
           title: title,
           descriptionHtml: description
         };
