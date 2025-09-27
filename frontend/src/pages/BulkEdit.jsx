@@ -601,9 +601,21 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Generate SEO for selected products
   const generateSEO = async () => {
+    console.log('[BULK-EDIT/DEBUG] ===== GENERATE SEO START =====');
+    console.log('[BULK-EDIT/DEBUG] selectedLanguages:', selectedLanguages);
+    console.log('[BULK-EDIT/DEBUG] model:', model);
+    console.log('[BULK-EDIT/DEBUG] modelOptions:', modelOptions);
+    
     if (!selectedLanguages.length) {
       setToast('Please select at least one language');
       return;
+    }
+    
+    if (!model || !model.trim()) {
+      console.log('[BULK-EDIT/DEBUG] Model is empty, using fallback');
+      const fallbackModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
+      console.log('[BULK-EDIT/DEBUG] Using fallback model:', fallbackModel);
+      setModel(fallbackModel);
     }
     
     setShowLanguageModal(false);
@@ -656,6 +668,11 @@ export default function BulkEdit({ shop: shopProp }) {
               };
               return;
             }
+            
+            console.log('[BULK-EDIT/DEBUG] Making API call with:');
+            console.log('[BULK-EDIT/DEBUG] - productId:', productGid);
+            console.log('[BULK-EDIT/DEBUG] - model:', model);
+            console.log('[BULK-EDIT/DEBUG] - languages:', languagesToGenerate);
             
             const data = await api('/api/seo/generate-multi', {
               method: 'POST',

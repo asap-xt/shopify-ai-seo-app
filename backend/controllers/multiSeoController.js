@@ -64,11 +64,12 @@ router.post('/generate-multi', validateRequest(), async (req, res) => {
     console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
     console.log('[MULTI-SEO/DEBUG] - languages length:', languages?.length);
     
-    if (!pid || !model || !Array.isArray(languages) || languages.length === 0) {
+    if (!pid || !model || !model.trim() || !Array.isArray(languages) || languages.length === 0) {
       console.log('[MULTI-SEO/DEBUG] ===== VALIDATION FAILED =====');
       console.log('[MULTI-SEO/DEBUG] Missing values check:');
       console.log('[MULTI-SEO/DEBUG] - pid exists:', !!pid);
       console.log('[MULTI-SEO/DEBUG] - model exists:', !!model);
+      console.log('[MULTI-SEO/DEBUG] - model is not empty:', model && model.trim());
       console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
       console.log('[MULTI-SEO/DEBUG] - languages has length:', languages?.length > 0);
       return res.status(400).json({ error: 'Missing productId, model or languages[]' });
