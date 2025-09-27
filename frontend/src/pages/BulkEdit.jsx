@@ -660,12 +660,12 @@ export default function BulkEdit({ shop: shopProp }) {
             const data = await api('/api/seo/generate-multi', {
               method: 'POST',
               shop,
-              body: JSON.stringify({
+              body: {
                 shop,
                 productId: productGid,
                 model,
                 languages: languagesToGenerate,
-              })
+              }
             });
             
             results[product.id] = {
