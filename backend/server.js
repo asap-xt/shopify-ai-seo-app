@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { buildSchema, graphql } from 'graphql';
+import { getPlansMeForShop } from './controllers/seoController.js';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
@@ -452,13 +453,28 @@ app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/app
 // --- Minimal GraphQL endpoint for test plan overrides ---
 const schema = buildSchema(`
   enum PlanEnum { starter professional growth growth_extra enterprise }
-  type PlansMe { shop: String!, plan: String! }
-
+  type PlansMe {
+    shop: String! 
+    plan: String!
+    planKey: String
+    priceUsd: Float
+    ai_queries_used: Int
+    ai_queries_limit: Int
+    product_limit: Int
+    providersAllowed: [String!]
+    modelsSuggested: [String!]
+    autosyncCron: String
+    trial: TrialInfo
+  }
+  type TrialInfo {
+    active: Boolean!
+    ends_at: String
+    days_left: Int
+  }
   type Query {
     # optional: ако решиш да четеш плана през GraphQL в бъдеще
     plansMe(shop: String!): PlansMe!
   }
-
   type Mutation {
     # set plan override (null plan = clear override)
     setPlanOverride(shop: String!, plan: PlanEnum): PlansMe!
@@ -466,35 +482,17 @@ const schema = buildSchema(`
 `);
 
 const root = {
-  // Четенето тук е optional; оставяме го да връща ефективния план:
   async plansMe({ shop }, ctx) {
-    const req = ctx.req;
-    const app = ctx.app;
-    // Бейзовият план идва от съществуващия /plans/me (контролерът вече зачита override-а)
-    // За да избегнем вътрешни HTTP повиквания, просто взимаме override или 'starter' като fallback:
-    const override = app.locals.getPlanOverride(shop);
-    const plan = override || 'starter';
-    return { shop, plan };
+    // Една и съща бизнес-логика като REST-а:
+    return await getPlansMeForShop(ctx.app, (shop || '').toLowerCase());
   },
 
   async setPlanOverride({ shop, plan }, ctx) {
-    const req = ctx.req;
-    const app = ctx.app;
-
-    console.log(`[DEBUG] setPlanOverride called with shop: ${shop}, plan: ${plan}`);
-
-    // (по желание) сигурност: ако имаш shop от сесията, сравни:
-    // const sessionShop = res.locals?.shop || req.query?.shop;
-    // if (sessionShop && sessionShop !== shop) throw new Error('Shop mismatch');
-
-    const result = app.locals.setPlanOverride(shop, plan || null);
-    console.log(`[DEBUG] setPlanOverride result:`, result);
-
-    // Върни ефективния план (override или базов 'starter' за краткост):
-    const effectivePlan = app.locals.getPlanOverride(shop) || 'starter';
-    console.log(`[DEBUG] effectivePlan:`, effectivePlan);
-    
-    return { shop, plan: effectivePlan };
+    const { req, app } = ctx;
+    const sessionShop = req.query?.shop || req.body?.shop || req.headers['x-shop'] || null;
+    if (sessionShop && sessionShop !== shop) throw new Error('Shop mismatch');
+    app.locals.setPlanOverride(shop, plan || null);
+    return await getPlansMeForShop(app, (shop || '').toLowerCase());
   }
 };
 

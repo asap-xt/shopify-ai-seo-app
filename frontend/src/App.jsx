@@ -83,13 +83,46 @@ const DashboardCard = React.memo(({ shop }) => {
   const [plan, setPlan] = useState(null);
   const { api } = useShopApi();
   const currentShop = shop || qs('shop', '');
+  const apiSession = useMemo(() => makeSessionFetch(), []);
+
+  // локален помощник за GraphQL
+  const runGQL = async (query, variables) => {
+    const res = await apiSession('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
+    return res?.data;
+  };
 
   useEffect(() => {
     if (!currentShop) return;
-    api(`/plans/me?shop=${currentShop}`)
-      .then((data) => { if (data && !data.error) setPlan(data); })
-      .catch((e) => console.error('Failed to load plan:', e));
-  }, [currentShop, api]);
+    const Q = `
+      query PlansMe($shop:String!) {
+        plansMe(shop:$shop) {
+          shop
+          plan
+          planKey
+          priceUsd
+          ai_queries_used
+          ai_queries_limit
+          product_limit
+          providersAllowed
+          modelsSuggested
+          autosyncCron
+          trial {
+            active
+            ends_at
+            days_left
+          }
+        }
+      }
+    `;
+    runGQL(Q, { shop: currentShop })
+      .then((d) => { const pm = d?.plansMe; if (pm) setPlan(pm); })
+      .catch((e) => console.error('Failed to load plan via GraphQL:', e));
+  }, [currentShop, apiSession]);
 
   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
   useEffect(() => {

@@ -13,6 +13,89 @@ import { validateRequest } from '../middleware/shopifyAuth.js';
 
 const router = express.Router();
 
+// Единствен източник на истината за отговора на "plans me"
+export async function getPlansMeForShop(app, shop) {
+  if (!shop) {
+    throw new Error('Shop not provided');
+  }
+
+  // 1. First check Subscription (this is the truth)
+  let subscription = await Subscription.findOne({ shop });
+  
+  // 2. If no subscription, create trial
+  if (!subscription) {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      throw new Error('Shop not found');
+    }
+    
+    // Create trial subscription
+    subscription = await Subscription.create({
+      shop,
+      plan: 'growth', // trial plan
+      queryLimit: 1500,
+      productLimit: 1000,
+      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+    });
+  }
+  
+  // 3. Get configuration
+  let plan = subscription.plan;
+  
+  // Apply in-memory test override if any:
+  try {
+    const override = app?.locals?.planOverrides?.get?.(shop);
+    if (override) {
+      console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
+      plan = override;
+    }
+  } catch (e) {
+    // no-op
+  }
+  
+  const planConfig = getPlanConfig(plan);
+  if (!planConfig) {
+    throw new Error('Invalid plan');
+  }
+  
+  // 4. Prepare response
+  const modelsSuggested = [];
+  for (const provider of planConfig.providersAllowed) {
+    modelsSuggested.push(...(DEFAULT_MODELS[provider] || []));
+  }
+  
+  const now = new Date();
+  const trialEnd = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
+  const isInTrial = trialEnd && now < trialEnd;
+  
+  return {
+    // Shop info
+    shop,
+    
+    // Plan info - IMPORTANT: include planKey
+    plan: planConfig.name,
+    planKey: planConfig.key,  // <-- THIS WAS MISSING
+    priceUsd: planConfig.priceUsd,
+    
+    // Usage
+    ai_queries_used: subscription.queryCount || 0,
+    ai_queries_limit: subscription.queryLimit,
+    product_limit: subscription.productLimit,
+    
+    // Features
+    providersAllowed: planConfig.providersAllowed,
+    modelsSuggested,
+    autosyncCron: planConfig.autosyncCron,
+    
+    // Trial info
+    trial: isInTrial ? {
+      active: true,
+      ends_at: trialEnd,
+      days_left: Math.ceil((trialEnd - now) / (24 * 60 * 60 * 1000))
+    } : null
+  };
+}
+
 /* --------------------------- Plan presets (unchanged) --------------------------- */
 const PLAN_PRESETS = {
   starter: {
@@ -682,83 +765,13 @@ router.get('/plans/me', async (req, res) => {
   console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
 
   try {
-    const shop = req.shopDomain;
-
-    // 1. First check Subscription (this is the truth)
-    let subscription = await Subscription.findOne({ shop });
-    
-    // 2. If no subscription, create trial
-    if (!subscription) {
-      const shopRecord = await Shop.findOne({ shop });
-      if (!shopRecord) {
-        return res.status(404).json({ error: 'Shop not found' });
-      }
-      
-      // Create trial subscription
-      subscription = await Subscription.create({
-        shop,
-        plan: 'growth', // trial plan
-        queryLimit: 1500,
-        productLimit: 1000,
-        trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
-      });
-    }
-    
-    // 3. Get configuration
-    let plan = subscription.plan;
-    
-    // Apply in-memory test override if any:
-    try {
-      const override = req.app?.locals?.planOverrides?.get?.(shop);
-      if (override) {
-        console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
-        plan = override;
-      }
-    } catch (e) {
-      // no-op
-    }
-    
-    const planConfig = getPlanConfig(plan);
-    if (!planConfig) {
-      return res.status(500).json({ error: 'Invalid plan' });
-    }
-    
-    // 4. Prepare response
-    const modelsSuggested = [];
-    for (const provider of planConfig.providersAllowed) {
-      modelsSuggested.push(...(DEFAULT_MODELS[provider] || []));
-    }
-    
-    const now = new Date();
-    const trialEnd = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
-    const isInTrial = trialEnd && now < trialEnd;
-    
-    res.json({
-      // Shop info
-      shop,
-      
-      // Plan info - IMPORTANT: include planKey
-      plan: planConfig.name,
-      planKey: planConfig.key,  // <-- THIS WAS MISSING
-      priceUsd: planConfig.priceUsd,
-      
-      // Usage
-      ai_queries_used: subscription.queryCount || 0,
-      ai_queries_limit: subscription.queryLimit,
-      product_limit: subscription.productLimit,
-      
-      // Features
-      providersAllowed: planConfig.providersAllowed,
-      modelsSuggested,
-      autosyncCron: planConfig.autosyncCron,
-      
-      // Trial info
-      trial: isInTrial ? {
-        active: true,
-        ends_at: trialEnd,
-        days_left: Math.ceil((trialEnd - now) / (24 * 60 * 60 * 1000))
-      } : null
-    });
+    const data = await getPlansMeForShop(req.app, shop);
+    // Без cache, за да виждаме override-ите веднага
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.removeHeader('ETag');
+    return res.json(data);
     
   } catch (error) {
     console.error('Error in /plans/me:', error);
