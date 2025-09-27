@@ -610,14 +610,15 @@ export default function App() {
 
   // Token exchange logic
   useEffect(() => {
-    const performTokenExchange = async () => {
+    const handleTokenExchange = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const shop = urlParams.get('shop');
       const idToken = urlParams.get('id_token');
       
+      // Първо направи token exchange ако има id_token
       if (shop && idToken) {
         try {
-          console.log('[APP] Performing token exchange for shop:', shop);
+          console.log('[APP] Performing initial token exchange for shop:', shop);
           
           const response = await fetch('/token-exchange', {
             method: 'POST',
@@ -633,25 +634,59 @@ export default function App() {
           if (!response.ok) {
             const errorData = await response.json();
             console.error('[APP] Token exchange failed:', errorData);
-            // Показвай грешка на потребителя
             return;
           }
 
           const result = await response.json();
           console.log('[APP] Token exchange successful:', result);
           
-          // Премахни id_token от URL след успешен exchange
+          // Премахни id_token от URL
           const newUrl = new URL(window.location);
           newUrl.searchParams.delete('id_token');
           window.history.replaceState({}, '', newUrl);
           
+          // Сега зареди данните
+          await loadInitialData(shop);
+          
         } catch (error) {
           console.error('[APP] Token exchange error:', error);
         }
+      } else if (shop) {
+        // Няма id_token, опитай се да заредиш данните директно
+        await loadInitialData(shop);
       }
     };
     
-    performTokenExchange();
+    const loadInitialData = async (shop) => {
+      try {
+        // Опитай се да заредиш планове
+        const plansResponse = await fetch(`/plans/me?shop=${encodeURIComponent(shop)}`);
+        
+        if (plansResponse.status === 202) {
+          // Трябва token exchange
+          const errorData = await plansResponse.json();
+          if (errorData.error === 'token_exchange_required') {
+            console.log('[APP] Token exchange required, but no id_token available');
+            // Пренасочи към OAuth flow
+            window.location.href = `/auth?shop=${encodeURIComponent(shop)}`;
+            return;
+          }
+        }
+        
+        if (!plansResponse.ok) {
+          console.error('[APP] Failed to load plans:', await plansResponse.text());
+          return;
+        }
+        
+        // Заредени са плановете, продължи с други данни...
+        console.log('[APP] Plans loaded successfully');
+        
+      } catch (error) {
+        console.error('[APP] Error loading initial data:', error);
+      }
+    };
+    
+    handleTokenExchange();
   }, []);
   
   const sectionTitle = useMemo(() => {

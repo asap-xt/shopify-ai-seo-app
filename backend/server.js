@@ -201,50 +201,53 @@ app.use('/api', async (req, res, next) => {
     console.log('[API-RESOLVER] URL:', req.originalUrl);
     console.log('[API-RESOLVER] Method:', req.method);
     
-    // Skip authentication for public sitemap endpoints
-    console.log('[API-RESOLVER] Checking if should skip auth...');
-    console.log('[API-RESOLVER] URL contains /sitemap/public:', req.originalUrl.includes('/sitemap/public'));
-    console.log('[API-RESOLVER] URL contains /sitemap/generate:', req.originalUrl.includes('/sitemap/generate'));
-    console.log('[API-RESOLVER] URL contains /sitemap/view:', req.originalUrl.includes('/sitemap/view'));
-    console.log('[API-RESOLVER] Method is GET:', req.method === 'GET');
-    
-    // Skip auth for all sitemap GET requests and debug endpoints
-    if ((req.originalUrl.includes('/sitemap/') || req.originalUrl.includes('/debug/')) && req.method === 'GET') {
+    // Skip authentication for public sitemap endpoints и token exchange
+    if ((req.originalUrl.includes('/sitemap/') || 
+         req.originalUrl.includes('/debug/') ||
+         req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
       console.log('[API-RESOLVER] Skipping authentication for public endpoint');
       return next();
     }
     
-    // Use normalized shop from attachShop middleware
     const shop = req.shopDomain;
     console.log('[API-RESOLVER] Using normalized shop:', shop);
     
     if (!shop) return res.status(400).json({ error: 'Missing or invalid shop domain' });
-    if (!req.query) req.query = {};
-    if (!req.query.shop) req.query.shop = shop;
     
-    // 2) Use centralized token resolver with id_token from middleware
-    console.log('[API RESOLVER] Using centralized token resolver for shop:', shop);
-    console.log('[API RESOLVER] Has id_token:', !!req.idToken);
-    const accessToken = await resolveShopToken(shop, { idToken: req.idToken, requested: 'offline' });
-    console.log('[API RESOLVER] Token resolved successfully');
-    
-    // Create session object with real token
-    const session = {
-      accessToken: accessToken,
-      shop: shop,
-      isOnline: false,
-      scope: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
-    };
+    try {
+      // Опитай се да получиш токен
+      const accessToken = await resolveShopToken(shop, { idToken: req.idToken, requested: 'offline' });
+      
+      // Успех - създай session
+      const session = {
+        accessToken: accessToken,
+        shop: shop,
+        isOnline: false,
+        scope: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
+      };
 
-    // 3) modern client за новите контролери
-    res.locals.adminSession = session;
-    res.locals.adminGraphql = new shopify.clients.Graphql({ session });
-    res.locals.shop = shop;
+      res.locals.adminSession = session;
+      res.locals.adminGraphql = new shopify.clients.Graphql({ session });
+      res.locals.shop = shop;
 
-    // Public App only - no legacy env token manipulation
-
-    // console.log('[API RESOLVER]', shop, best.accessToken.slice(0,12), 'isOnline=', best.isOnline);
-    return next();
+      return next();
+      
+    } catch (tokenError) {
+      console.log('[API-RESOLVER] Token error:', tokenError.message);
+      
+      // Ако грешката е "Token exchange required", върни специален код
+      if (tokenError.message.includes('Token exchange required') || 
+          tokenError.message.includes('Token exchange needed')) {
+        return res.status(202).json({ 
+          error: 'token_exchange_required', 
+          shop: shop,
+          message: 'Frontend should perform token exchange first'
+        });
+      }
+      
+      // Други грешки
+      return res.status(500).json({ error: 'Token resolver failed', details: tokenError.message });
+    }
   } catch (e) {
     console.error('[API RESOLVER] error', e);
     return res.status(500).json({ error: 'Token resolver failed' });
@@ -691,13 +694,12 @@ app.get('/', async (req, res) => {
     if (id_token) {
       console.log('[APP URL] Found id_token, processing JWT flow...');
       
-      // Check if we have a valid access token for this API key
       if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'jwt-pending' || 
           existingShop.appApiKey !== process.env.SHOPIFY_API_KEY) {
-        console.log('[APP URL] No valid access token found or API key mismatch, need token exchange...');
+        console.log('[APP URL] No valid access token found or API key mismatch, marking for token exchange...');
         
-        // Mark as pending and let frontend handle token exchange
-        existingShop = await ShopModel.findOneAndUpdate(
+        // Маркирай като pending, но НЕ пренасочвай
+        await ShopModel.findOneAndUpdate(
           { shop },
           {
             shop,
@@ -705,13 +707,16 @@ app.get('/', async (req, res) => {
             appApiKey: process.env.SHOPIFY_API_KEY,
             useJWT: true,
             needsTokenExchange: true,
-            jwtToken: id_token,
-            installedAt: new Date(),
             updatedAt: new Date()
           },
           { upsert: true, new: true }
-        ).lean();
+        );
+        
+        console.log('[APP URL] Shop marked for token exchange, serving app...');
       }
+      
+      // Винаги сервирай app-а с id_token
+      console.log('[APP URL] Serving embedded app with id_token for token exchange');
     }
     
         console.log('[APP URL] Processing embedded app with JWT token');
