@@ -1194,7 +1194,7 @@ export default function Settings() {
               <Button onClick={() => setTestPlan('starter')}>Starter</Button>
               <Button onClick={() => setTestPlan('professional')}>Professional</Button>
               <Button onClick={() => setTestPlan('growth')}>Growth</Button>
-              <Button onClick={() => setTestPlan('growth extra')}>Growth Extra</Button>
+              <Button onClick={() => setTestPlan('growth_extra')}>Growth Extra</Button>
               <Button onClick={() => setTestPlan('enterprise')}>Enterprise</Button>
             </InlineStack>
           </BlockStack>
