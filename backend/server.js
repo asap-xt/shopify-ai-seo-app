@@ -43,18 +43,32 @@ const planOverrides = new Map(); // key: shop, value: 'starter'|'professional'|'
 app.locals.planOverrides = planOverrides;
 
 app.locals.setPlanOverride = (shop, plan) => {
-  if (!shop) return null;
+  console.log(`[DEBUG] setPlanOverride called with shop: ${shop}, plan: ${plan}`);
+  if (!shop) {
+    console.log(`[DEBUG] No shop provided, returning null`);
+    return null;
+  }
   if (!plan) {
+    console.log(`[DEBUG] No plan provided, deleting override for shop: ${shop}`);
     planOverrides.delete(shop);
     return null;
   }
+  console.log(`[DEBUG] Setting override for shop: ${shop} -> plan: ${plan}`);
   planOverrides.set(shop, plan);
+  console.log(`[DEBUG] Current overrides:`, Array.from(planOverrides.entries()));
   return plan;
 };
 
 app.locals.getPlanOverride = (shop) => {
-  if (!shop) return null;
-  return planOverrides.get(shop) || null;
+  console.log(`[DEBUG] getPlanOverride called with shop: ${shop}`);
+  if (!shop) {
+    console.log(`[DEBUG] No shop provided, returning null`);
+    return null;
+  }
+  const override = planOverrides.get(shop) || null;
+  console.log(`[DEBUG] Found override for shop ${shop}:`, override);
+  console.log(`[DEBUG] Current overrides:`, Array.from(planOverrides.entries()));
+  return override;
 };
 
 // ---------------------------------------------------------------------------
@@ -467,14 +481,19 @@ const root = {
     const req = ctx.req;
     const app = ctx.app;
 
+    console.log(`[DEBUG] setPlanOverride called with shop: ${shop}, plan: ${plan}`);
+
     // (по желание) сигурност: ако имаш shop от сесията, сравни:
     // const sessionShop = res.locals?.shop || req.query?.shop;
     // if (sessionShop && sessionShop !== shop) throw new Error('Shop mismatch');
 
-    app.locals.setPlanOverride(shop, plan || null);
+    const result = app.locals.setPlanOverride(shop, plan || null);
+    console.log(`[DEBUG] setPlanOverride result:`, result);
 
     // Върни ефективния план (override или базов 'starter' за краткост):
     const effectivePlan = app.locals.getPlanOverride(shop) || 'starter';
+    console.log(`[DEBUG] effectivePlan:`, effectivePlan);
+    
     return { shop, plan: effectivePlan };
   }
 };
@@ -482,6 +501,9 @@ const root = {
 app.post('/graphql', express.json(), async (req, res) => {
   try {
     const { query, variables } = req.body || {};
+    console.log(`[DEBUG] GraphQL request - query:`, query);
+    console.log(`[DEBUG] GraphQL request - variables:`, variables);
+    
     const result = await graphql({
       schema,
       source: query,
@@ -489,12 +511,17 @@ app.post('/graphql', express.json(), async (req, res) => {
       contextValue: { req, res, app },
       variableValues: variables || {},
     });
+    
+    console.log(`[DEBUG] GraphQL result:`, result);
+    
     if (result.errors?.length) {
+      console.error(`[DEBUG] GraphQL errors:`, result.errors);
       res.status(400).json(result);
     } else {
       res.json(result);
     }
   } catch (e) {
+    console.error(`[DEBUG] GraphQL exception:`, e);
     res.status(500).json({ errors: [{ message: e.message || 'GraphQL error' }] });
   }
 });

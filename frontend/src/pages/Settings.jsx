@@ -56,12 +56,19 @@ export default function Settings() {
 
   // --- GraphQL helper for this page (minimal, local) ---
   const runGQL = async (query, variables) => {
+    console.log(`[DEBUG] runGQL called with query:`, query);
+    console.log(`[DEBUG] runGQL variables:`, variables);
+    
     const res = await api('/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables }),
     });
+    
+    console.log(`[DEBUG] runGQL response:`, res);
+    
     if (res?.errors?.length) {
+      console.error(`[DEBUG] GraphQL errors:`, res.errors);
       throw new Error(res.errors[0]?.message || 'GraphQL error');
     }
     return res?.data;
@@ -328,19 +335,25 @@ export default function Settings() {
   };
 
   const setTestPlan = async (plan) => {
+    console.log(`[DEBUG] setTestPlan called with plan: ${plan}, shop: ${shop}`);
     try {
       const MUT = `
         mutation SetPlan($shop:String!, $plan: PlanEnum) {
           setPlanOverride(shop:$shop, plan:$plan) { shop plan }
         }
       `;
-      await runGQL(MUT, { shop, plan });
+      console.log(`[DEBUG] GraphQL mutation:`, MUT);
+      console.log(`[DEBUG] Variables:`, { shop, plan });
+      
+      const result = await runGQL(MUT, { shop, plan });
+      console.log(`[DEBUG] GraphQL result:`, result);
+      
       setToast(`Test plan set to ${plan || 'actual'}`);
       // кратък refresh, за да се презареди /plans/me и бейджа/гейтинга
       setTimeout(() => window.location.reload(), 500);
     } catch (error) {
-      console.error('Failed to set test plan', error);
-      setToast('Failed to set test plan');
+      console.error('[DEBUG] Failed to set test plan', error);
+      setToast(`Failed to set test plan: ${error.message}`);
     }
   };
 
