@@ -2578,15 +2578,21 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
 
 // DELETE /collections/delete-seo - Delete collection SEO for specific language
 router.delete('/collections/delete-seo', validateRequest(), async (req, res) => {
+  console.log('[DELETE-COLLECTION-SEO] ===== DELETE REQUEST START =====');
   console.log('[DELETE-COLLECTION-SEO] Request received:', req.body);
+  console.log('[DELETE-COLLECTION-SEO] Headers:', req.headers);
+  console.log('[DELETE-COLLECTION-SEO] Shop domain:', req.shopDomain);
   
   try {
     const shop = req.shopDomain;
     const { collectionId, language } = req.body;
     
     if (!collectionId || !language) {
+      console.log('[DELETE-COLLECTION-SEO] Missing parameters:', { collectionId, language });
       return res.status(400).json({ error: 'Missing collectionId or language' });
     }
+    
+    console.log('[DELETE-COLLECTION-SEO] Parameters validated:', { shop, collectionId, language });
     
     const errors = [];
     const deleted = { metafield: false };
@@ -2640,7 +2646,10 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
     }
     
     // Return response
+    console.log('[DELETE-COLLECTION-SEO] Final result:', { errors: errors.length, deleted });
+    
     if (errors.length === 0) {
+      console.log('[DELETE-COLLECTION-SEO] ===== DELETE SUCCESS =====');
       res.json({ 
         ok: true, 
         shop,
@@ -2650,6 +2659,8 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
         message: `Successfully deleted SEO for language: ${language}`
       });
     } else {
+      console.log('[DELETE-COLLECTION-SEO] ===== DELETE FAILED =====');
+      console.log('[DELETE-COLLECTION-SEO] Errors:', errors);
       res.status(400).json({ 
         ok: false, 
         shop,

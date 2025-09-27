@@ -774,14 +774,19 @@ export default function CollectionsPage({ shop: shopProp }) {
   
   // Delete SEO for a single language
   const deleteSeoForLanguage = async (collectionId, language) => {
+    console.log('[DELETE-SEO] ===== DELETE REQUEST START =====');
+    console.log('[DELETE-SEO] Parameters:', { collectionId, language, shop });
+    
     setIsDeleting(true);
     setDeleteError('');
     try {
-      await api('/seo/collections/delete-seo', {
+      const response = await api('/seo/collections/delete-seo', {
         method: 'DELETE',
         shop,
         body: { shop, collectionId, language },
       });
+      
+      console.log('[DELETE-SEO] Response received:', response);
       
       setToast(`Deleted ${language.toUpperCase()} optimization successfully`);
       setShowDeleteModal(false);
@@ -791,14 +796,21 @@ export default function CollectionsPage({ shop: shopProp }) {
       await loadCollections();
       
     } catch (err) {
+      console.error('[DELETE-SEO] Error:', err);
       setToast(`Delete error: ${err.message}`);
     } finally {
+      console.log('[DELETE-SEO] ===== DELETE REQUEST END =====');
       setIsDeleting(false);
     }
   };
   
   // Bulk delete SEO for selected collections and languages
   const deleteSeoBulk = async (deleteLanguages = []) => {
+    console.log('[DELETE-SEO-BULK] ===== BULK DELETE START =====');
+    console.log('[DELETE-SEO-BULK] Languages to delete:', deleteLanguages);
+    console.log('[DELETE-SEO-BULK] Selected items:', selectedItems);
+    console.log('[DELETE-SEO-BULK] Select all pages:', selectAllPages);
+    
     setIsDeletingBulk(true);
     setDeleteError('');
     try {
@@ -813,13 +825,15 @@ export default function CollectionsPage({ shop: shopProp }) {
       for (const collection of collectionsToProcess) {
         for (const language of deleteLanguages) {
           try {
-            await api('/seo/collections/delete-seo', {
+            console.log(`[DELETE-SEO-BULK] Deleting ${language} for ${collection.title} (${collection.id})`);
+            const response = await api('/seo/collections/delete-seo', {
               method: 'DELETE',
               shop,
               body: { shop, collectionId: collection.id, language },
             });
+            console.log(`[DELETE-SEO-BULK] Success for ${collection.title} - ${language}:`, response);
           } catch (err) {
-            console.error(`Failed to delete ${language} for ${collection.title}:`, err);
+            console.error(`[DELETE-SEO-BULK] Failed to delete ${language} for ${collection.title}:`, err);
             errors.push({ id: collection.id, title: collection.title, message: err.message });
           } finally {
             current++;
@@ -840,8 +854,10 @@ export default function CollectionsPage({ shop: shopProp }) {
       }, 100);
       
     } catch (err) {
+      console.error('[DELETE-SEO-BULK] Error:', err);
       setToast(`Delete error: ${err.message}`);
     } finally {
+      console.log('[DELETE-SEO-BULK] ===== BULK DELETE END =====');
       setIsDeletingBulk(false);
       setPendingDeleteLanguages([]);
       setDeleteLanguages([]);
