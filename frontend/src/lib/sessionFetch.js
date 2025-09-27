@@ -38,18 +38,40 @@ export function makeSessionFetch(debug = true) {
   return async (url, options = {}) => {
     console.log('[SFETCH] Fetching:', url, { ...options, body: undefined });
     
+    const { method = 'GET', headers = {}, body, responseType, ...otherOptions } = options;
+    
     // For App Bridge v4, we don't need session tokens
     // Just make a regular fetch request
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-    
+    const baseInit = {
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    };
+
+    const response = await fetch(url, baseInit);
     console.log('[SFETCH] Response:', response.status, response.statusText);
-    return response;
+    
+    // ===== КЛЮЧОВАТА ПРОМЯНА - ПАРСИРАЙ JSON! =====
+    let data;
+    
+    if (responseType === 'text') {
+      data = await response.text();
+    } else {
+      const text = await response.text();
+      try { 
+        data = text ? JSON.parse(text) : null; 
+      } catch { 
+        data = { error: text?.slice(0, 500) || 'Non-JSON response' }; 
+      }
+    }
+
+    if (!response.ok) {
+      const msg = data?.error || data?.message || `HTTP ${response.status}`;
+      throw new Error(msg);
+    }
+    
+    return data; // ВЪРНИ data, НЕ response!
   };
 }
 
