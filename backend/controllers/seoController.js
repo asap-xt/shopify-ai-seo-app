@@ -705,7 +705,20 @@ router.get('/plans/me', async (req, res) => {
     }
     
     // 3. Get configuration
-    const planConfig = getPlanConfig(subscription.plan);
+    let plan = subscription.plan;
+    
+    // Apply in-memory test override if any:
+    try {
+      const override = req.app?.locals?.planOverrides?.get?.(shop);
+      if (override) {
+        console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
+        plan = override;
+      }
+    } catch (e) {
+      // no-op
+    }
+    
+    const planConfig = getPlanConfig(plan);
     if (!planConfig) {
       return res.status(500).json({ error: 'Invalid plan' });
     }

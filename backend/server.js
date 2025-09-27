@@ -12,6 +12,7 @@ import compression from 'compression';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { buildSchema, graphql } from 'graphql';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
@@ -36,6 +37,25 @@ const __dirname = path.dirname(__filename);
 // ---------------------------------------------------------------------------
 const app = express();
 app.set('trust proxy', 1);
+
+// --- Test plan overrides (in-memory) ---
+const planOverrides = new Map(); // key: shop, value: 'starter'|'professional'|'growth'|'growth_extra'|'enterprise'
+app.locals.planOverrides = planOverrides;
+
+app.locals.setPlanOverride = (shop, plan) => {
+  if (!shop) return null;
+  if (!plan) {
+    planOverrides.delete(shop);
+    return null;
+  }
+  planOverrides.set(shop, plan);
+  return plan;
+};
+
+app.locals.getPlanOverride = (shop) => {
+  if (!shop) return null;
+  return planOverrides.get(shop) || null;
+};
 
 // ---------------------------------------------------------------------------
 // Security (Shopify-embed friendly)
@@ -414,6 +434,70 @@ app.use('/billing', billingRouter);
 app.use(seoRouter);
 app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
 app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
+
+// --- Minimal GraphQL endpoint for test plan overrides ---
+const schema = buildSchema(`
+  enum PlanEnum { starter professional growth growth_extra enterprise }
+  type PlansMe { shop: String!, plan: String! }
+
+  type Query {
+    # optional: ако решиш да четеш плана през GraphQL в бъдеще
+    plansMe(shop: String!): PlansMe!
+  }
+
+  type Mutation {
+    # set plan override (null plan = clear override)
+    setPlanOverride(shop: String!, plan: PlanEnum): PlansMe!
+  }
+`);
+
+const root = {
+  // Четенето тук е optional; оставяме го да връща ефективния план:
+  async plansMe({ shop }, ctx) {
+    const req = ctx.req;
+    const app = ctx.app;
+    // Бейзовият план идва от съществуващия /plans/me (контролерът вече зачита override-а)
+    // За да избегнем вътрешни HTTP повиквания, просто взимаме override или 'starter' като fallback:
+    const override = app.locals.getPlanOverride(shop);
+    const plan = override || 'starter';
+    return { shop, plan };
+  },
+
+  async setPlanOverride({ shop, plan }, ctx) {
+    const req = ctx.req;
+    const app = ctx.app;
+
+    // (по желание) сигурност: ако имаш shop от сесията, сравни:
+    // const sessionShop = res.locals?.shop || req.query?.shop;
+    // if (sessionShop && sessionShop !== shop) throw new Error('Shop mismatch');
+
+    app.locals.setPlanOverride(shop, plan || null);
+
+    // Върни ефективния план (override или базов 'starter' за краткост):
+    const effectivePlan = app.locals.getPlanOverride(shop) || 'starter';
+    return { shop, plan: effectivePlan };
+  }
+};
+
+app.post('/graphql', express.json(), async (req, res) => {
+  try {
+    const { query, variables } = req.body || {};
+    const result = await graphql({
+      schema,
+      source: query,
+      rootValue: root,
+      contextValue: { req, res, app },
+      variableValues: variables || {},
+    });
+    if (result.errors?.length) {
+      res.status(400).json(result);
+    } else {
+      res.json(result);
+    }
+  } catch (e) {
+    res.status(500).json({ errors: [{ message: e.message || 'GraphQL error' }] });
+  }
+});
 app.use('/debug', debugRouter);
 app.use('/api/products', productsRouter);
 app.use(schemaRouter);

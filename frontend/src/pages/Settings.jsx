@@ -53,6 +53,19 @@ export default function Settings() {
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
   const api = useMemo(() => makeSessionFetch(), []);
+
+  // --- GraphQL helper for this page (minimal, local) ---
+  const runGQL = async (query, variables) => {
+    const res = await api('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (res?.errors?.length) {
+      throw new Error(res.errors[0]?.message || 'GraphQL error');
+    }
+    return res?.data;
+  };
   
   // Advanced Schema Data state
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
@@ -316,13 +329,17 @@ export default function Settings() {
 
   const setTestPlan = async (plan) => {
     try {
-      await api(`/test/set-plan?shop=${shop}`, {
-        method: 'POST',
-        body: { shop, plan }
-      });
-      setToast(`Test plan set to ${plan}`);
-      setTimeout(() => window.location.reload(), 1000);
+      const MUT = `
+        mutation SetPlan($shop:String!, $plan: PlanEnum) {
+          setPlanOverride(shop:$shop, plan:$plan) { shop plan }
+        }
+      `;
+      await runGQL(MUT, { shop, plan });
+      setToast(`Test plan set to ${plan || 'actual'}`);
+      // кратък refresh, за да се презареди /plans/me и бейджа/гейтинга
+      setTimeout(() => window.location.reload(), 500);
     } catch (error) {
+      console.error('Failed to set test plan', error);
       setToast('Failed to set test plan');
     }
   };
