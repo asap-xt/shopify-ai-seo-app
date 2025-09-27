@@ -503,6 +503,12 @@ app.post('/graphql', express.json(), async (req, res) => {
     const { query, variables } = req.body || {};
     console.log(`[DEBUG] GraphQL request - query:`, query);
     console.log(`[DEBUG] GraphQL request - variables:`, variables);
+    console.log(`[DEBUG] GraphQL request - body:`, req.body);
+    
+    if (!query) {
+      console.error(`[DEBUG] GraphQL error: No query provided`);
+      return res.status(400).json({ errors: [{ message: 'No query provided' }] });
+    }
     
     const result = await graphql({
       schema,
