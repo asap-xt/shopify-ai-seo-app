@@ -468,12 +468,15 @@ async function getMetafieldDefinitionId(shop, key) {
 
 // Creates metafield definitions for Collections
 async function ensureCollectionMetafieldDefinitions(shop, languages) {
+  console.log('[COLLECTION METAFIELDS] ===== STARTING DEFINITION CREATION =====');
   console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
+  console.log('[COLLECTION METAFIELDS] Shop:', shop);
   
   const results = [];
   
   for (const lang of languages) {
     const key = `seo__${lang.toLowerCase()}`; // ALWAYS lowercase
+    console.log(`[COLLECTION METAFIELDS] Processing language: ${lang}, key: ${key}`);
     
     const createMutation = `
       mutation {
@@ -523,6 +526,8 @@ async function ensureCollectionMetafieldDefinitions(shop, languages) {
     }
   }
   
+  console.log('[COLLECTION METAFIELDS] ===== DEFINITION CREATION COMPLETE =====');
+  console.log('[COLLECTION METAFIELDS] Final results:', results);
   return results;
 }
 
@@ -2077,12 +2082,15 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
           // Always update metafields
           if (options.updateMetafields !== false) {
             // Ensure definition exists for this language
+            console.log(`[APPLY-MULTI] ===== ENSURING DEFINITION FOR ${language} =====`);
             const definitionResults = await ensureCollectionMetafieldDefinitions(shop, [language]);
             const definitionResult = definitionResults[0];
             const definitionId = definitionResult?.definitionId;
             
+            console.log(`[APPLY-MULTI] Definition results:`, definitionResults);
             console.log(`[APPLY-MULTI] Definition result for ${language}:`, definitionResult);
             console.log(`[APPLY-MULTI] Definition ID:`, definitionId);
+            console.log(`[APPLY-MULTI] ===== DEFINITION ENSURED =====`);
             
             const key = `seo__${String(language || 'en').toLowerCase()}`; // ALWAYS lowercase!
             
