@@ -1328,7 +1328,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
           }
         }
       `;
-      const mfKey = `seo__${language.toLowerCase()}`;
       const metafieldData = {
         ...v,
         language: language.toLowerCase(),
