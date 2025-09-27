@@ -46,7 +46,7 @@ export function makeSessionFetch(debug = true) {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
       credentials: 'include',
-      body: body, // Не прави JSON.stringify тук - body вече е string от runGQL
+      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
     };
 
     const response = await fetch(url, baseInit);
