@@ -49,6 +49,7 @@ export default function Settings() {
   const [toast, setToast] = useState('');
   const [toastTimeout, setToastTimeout] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
+  const [showViewButtons, setShowViewButtons] = useState(false);
   
   // Debug toast state changes
   useEffect(() => {
@@ -425,6 +426,9 @@ export default function Settings() {
               setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
               console.log('[SETTINGS] Success toast set after delay');
               
+              // Show View buttons for AI features
+              setShowViewButtons(true);
+              
               // Start polling to check when background regeneration completes
               startPollingForCompletion();
             }, 100);
@@ -459,6 +463,9 @@ export default function Settings() {
         setTimeout(() => {
           setToast('Settings saved successfully');
           console.log('[SETTINGS] Basic success toast set after delay');
+          
+          // Show View buttons for AI features
+          setShowViewButtons(true);
         }, 100);
       }
     } catch (error) {
@@ -538,14 +545,31 @@ export default function Settings() {
         collectionsJson: `/ai/collections-feed.json?shop=${shop}`,
         storeMetadata: `/ai/store-metadata.json?shop=${shop}`,
         schemaData: `/ai/schema-data.json?shop=${shop}`,
-        aiSitemap: `/ai/sitemap-feed.xml?shop=${shop}`,
+        aiSitemap: `/api/sitemap/generate?shop=${shop}&force=true`, // Use the actual sitemap endpoint
         welcomePage: `/ai/welcome?shop=${shop}`
       };
 
-      const data = await api(endpoints[feature]);
-      const contentType = 'application/json'; // sessionFetch always returns JSON
-      
-      setJsonModalContent(JSON.stringify(data, null, 2));
+      if (feature === 'aiSitemap') {
+        // For sitemap, fetch as text since it's XML
+        const response = await fetch(endpoints[feature], {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+          }
+        });
+        
+        if (response.ok) {
+          const xmlContent = await response.text();
+          setJsonModalContent(xmlContent);
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } else {
+        // For other features, use the regular API call
+        const data = await api(endpoints[feature]);
+        setJsonModalContent(JSON.stringify(data, null, 2));
+      }
     } catch (error) {
       setJsonModalContent(`Error loading data: ${error.message}`);
     } finally {
@@ -989,7 +1013,7 @@ export default function Settings() {
                           />
                         </Box>
                         {/* View button is outside checkbox and shows only for saved features */}
-                        {originalSettings?.features?.[feature.key] && feature.key !== 'schemaData' && (
+                        {showViewButtons && originalSettings?.features?.[feature.key] && feature.key !== 'schemaData' && (
                           <Button
                             size="slim"
                             onClick={() => viewJson(feature.key, feature.name)}
