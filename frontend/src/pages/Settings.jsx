@@ -1,5 +1,5 @@
 // frontend/src/pages/Settings.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card,
   Box,
@@ -73,9 +73,9 @@ export default function Settings() {
       console.log('[SETTINGS] Checking for generated data...');
       checkGeneratedData();
     }
-  }, [settings?.features, shop]);
+  }, [settings?.features, shop, checkGeneratedData]);
   
-  const checkGeneratedData = async () => {
+  const checkGeneratedData = useCallback(async () => {
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
       
@@ -115,9 +115,9 @@ export default function Settings() {
     } catch (error) {
       console.error('[SETTINGS] Error checking generated data:', error);
     }
-  };
+  }, [settings?.features, shop, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
-  const checkProductsData = async () => {
+  const checkProductsData = useCallback(async () => {
     try {
       const PRODUCTS_CHECK_QUERY = `
         query CheckProductsData($shop: String!) {
@@ -146,9 +146,9 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking products data:', error);
       return false;
     }
-  };
+  }, [shop, api]);
   
-  const checkCollectionsData = async () => {
+  const checkCollectionsData = useCallback(async () => {
     try {
       const COLLECTIONS_CHECK_QUERY = `
         query CheckCollectionsData($shop: String!) {
@@ -177,9 +177,9 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking collections data:', error);
       return false;
     }
-  };
+  }, [shop, api]);
   
-  const checkStoreMetadata = async () => {
+  const checkStoreMetadata = useCallback(async () => {
     try {
       const STORE_METADATA_CHECK_QUERY = `
         query CheckStoreMetadata($shop: String!) {
@@ -204,9 +204,9 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking store metadata:', error);
       return false;
     }
-  };
+  }, [shop, api]);
   
-  const checkWelcomePage = async () => {
+  const checkWelcomePage = useCallback(async () => {
     try {
       const WELCOME_PAGE_CHECK_QUERY = `
         query CheckWelcomePage($shop: String!) {
@@ -231,7 +231,7 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking welcome page:', error);
       return false;
     }
-  };
+  }, [shop, api]);
   
   // Debug toast state changes
   useEffect(() => {
