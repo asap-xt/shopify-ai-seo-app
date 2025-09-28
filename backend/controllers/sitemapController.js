@@ -1105,6 +1105,25 @@ async function serveSitemap(req, res) {
     
     if (!sitemapDoc || !sitemapDoc.content) {
       // Try to generate new one if none exists
+      console.log('[SITEMAP] No saved sitemap, generating new one...');
+      try {
+        const result = await generateSitemapCore(shop);
+        console.log('[SITEMAP] Generated new sitemap:', result);
+        
+        // Get the newly generated sitemap
+        const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        if (newSitemapDoc && newSitemapDoc.content) {
+          res.set({
+            'Content-Type': 'application/xml; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+            'Last-Modified': new Date(newSitemapDoc.generatedAt).toUTCString()
+          });
+          return res.send(newSitemapDoc.content);
+        }
+      } catch (genErr) {
+        console.error('[SITEMAP] Failed to generate sitemap:', genErr);
+      }
+      
       console.log('[SITEMAP] No saved sitemap, returning 404');
       return res.status(404).send('Sitemap not found. Please generate it first.');
     }
