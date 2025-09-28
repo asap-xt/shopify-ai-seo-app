@@ -1027,7 +1027,7 @@ export default function Settings() {
                             helpText={feature.description}
                           />
                         </Box>
-                        {/* View button is outside checkbox and shows only for saved features */}
+                        {/* View button shows only for features that are saved in originalSettings and have generated data */}
                         {showViewButtons && originalSettings?.features?.[feature.key] && feature.key !== 'schemaData' && (
                           <Button
                             size="slim"
