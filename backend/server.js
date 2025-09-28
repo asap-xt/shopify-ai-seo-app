@@ -591,18 +591,11 @@ const root = {
       console.log('[GRAPHQL] Checking products for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { shopGraphQL } = await import('./utils/shopifyApi.js');
-      const { resolveShopToken } = await import('./utils/tokenResolver.js');
+      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
         throw new Error('Invalid shop parameter');
-      }
-      
-      // Get access token
-      const accessToken = await resolveShopToken(normalizedShop, { requested: 'offline' });
-      if (!accessToken) {
-        throw new Error('No access token available');
       }
       
       const productsQuery = `
@@ -622,7 +615,7 @@ const root = {
         }
       `;
       
-      const data = await shopGraphQL(normalizedShop, productsQuery, { first }, accessToken);
+      const data = await executeShopifyGraphQL(normalizedShop, productsQuery, { first });
       
       return {
         edges: data.products.edges.map(edge => ({
@@ -655,18 +648,11 @@ const root = {
       console.log('[GRAPHQL] Checking collections for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { shopGraphQL } = await import('./utils/shopifyApi.js');
-      const { resolveShopToken } = await import('./utils/tokenResolver.js');
+      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
         throw new Error('Invalid shop parameter');
-      }
-      
-      // Get access token
-      const accessToken = await resolveShopToken(normalizedShop, { requested: 'offline' });
-      if (!accessToken) {
-        throw new Error('No access token available');
       }
       
       const collectionsQuery = `
@@ -686,7 +672,7 @@ const root = {
         }
       `;
       
-      const data = await shopGraphQL(normalizedShop, collectionsQuery, { first }, accessToken);
+      const data = await executeShopifyGraphQL(normalizedShop, collectionsQuery, { first });
       
       return {
         edges: data.collections.edges.map(edge => ({
@@ -719,18 +705,11 @@ const root = {
       console.log('[GRAPHQL] Checking store metadata for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { shopGraphQL } = await import('./utils/shopifyApi.js');
-      const { resolveShopToken } = await import('./utils/tokenResolver.js');
+      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
         throw new Error('Invalid shop parameter');
-      }
-      
-      // Get access token
-      const accessToken = await resolveShopToken(normalizedShop, { requested: 'offline' });
-      if (!accessToken) {
-        throw new Error('No access token available');
       }
       
       const shopQuery = `
@@ -742,7 +721,7 @@ const root = {
         }
       `;
       
-      const data = await shopGraphQL(normalizedShop, shopQuery, {}, accessToken);
+      const data = await executeShopifyGraphQL(normalizedShop, shopQuery);
       
       return {
         shopName: data.shop?.name || null,
