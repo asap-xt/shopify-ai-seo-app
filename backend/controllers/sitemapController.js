@@ -479,11 +479,17 @@ async function handleGenerate(req, res) {
           xml += '    <lastmod>' + lastmod + '</lastmod>\n';
           xml += '    <changefreq>weekly</changefreq>\n';
           xml += '    <priority>0.8</priority>\n';
-          xml += '    <ai:product>\n';
-          xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
-          xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
-          xml += '      <ai:language>' + lang + '</ai:language>\n';
-          xml += '    </ai:product>\n';
+          
+          // Add AI metadata ONLY if AI sitemap is enabled
+          if (isAISitemapEnabled) {
+            console.log('[SITEMAP] Adding AI metadata for multilingual product:', product.handle, 'language:', lang);
+            xml += '    <ai:product>\n';
+            xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
+            xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
+            xml += '      <ai:language>' + lang + '</ai:language>\n';
+            xml += '    </ai:product>\n';
+          }
+          
           xml += '  </url>\n';
         }
       }
