@@ -297,6 +297,7 @@ export default function Settings() {
       generateRobotsTxt(); // Regenerate robots.txt
       
       // Background sitemap regeneration if AI Sitemap is enabled
+      console.log('[SETTINGS] Checking AI Sitemap feature:', settings.features?.aiSitemap);
       if (settings.features?.aiSitemap) {
         try {
           console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION START =====');
