@@ -35,6 +35,7 @@ const normalizePlan = (plan) => {
 export default function Settings() {
   try {
     console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
+    console.log('[SETTINGS] Starting component initialization...');
     // Debug helper
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
@@ -54,6 +55,9 @@ export default function Settings() {
   const [jsonModalContent, setJsonModalContent] = useState(null);
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
+  
+  console.log('[SETTINGS] State variables initialized successfully');
+  
   const api = useMemo(() => makeSessionFetch(), []);
 
   // --- GraphQL helper for this page (minimal, local) ---
