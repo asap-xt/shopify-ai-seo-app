@@ -47,11 +47,25 @@ export default function Settings() {
   const [robotsTxt, setRobotsTxt] = useState('');
   const [showRobotsModal, setShowRobotsModal] = useState(false);
   const [toast, setToast] = useState('');
+  const [toastTimeout, setToastTimeout] = useState(null);
   
   // Debug toast state changes
   useEffect(() => {
     if (toast) {
       console.log('[SETTINGS] Toast state changed to:', toast);
+      
+      // Clear existing timeout
+      if (toastTimeout) {
+        clearTimeout(toastTimeout);
+      }
+      
+      // Set new timeout to clear toast after 5 seconds
+      const timeout = setTimeout(() => {
+        console.log('[SETTINGS] Auto-clearing toast after 5 seconds');
+        setToast('');
+      }, 5000);
+      
+      setToastTimeout(timeout);
     }
   }, [toast]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -1502,6 +1516,27 @@ export default function Settings() {
       {toast && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, background: 'red', color: 'white', padding: '10px', borderRadius: '5px' }}>
           DEBUG TOAST: {toast}
+        </div>
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', top: '80px', right: '20px', zIndex: 9998, background: 'green', color: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '400px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>✅ Success!</div>
+          <div>{toast}</div>
+          <button 
+            onClick={() => setToast('')} 
+            style={{ 
+              position: 'absolute', 
+              top: '5px', 
+              right: '5px', 
+              background: 'none', 
+              border: 'none', 
+              color: 'white', 
+              fontSize: '16px', 
+              cursor: 'pointer' 
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
