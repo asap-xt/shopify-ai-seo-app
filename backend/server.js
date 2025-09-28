@@ -471,6 +471,11 @@ const schema = buildSchema(`
     ends_at: String
     days_left: Int
   }
+  type SitemapResult {
+    success: Boolean!
+    message: String!
+    shop: String!
+  }
   type Query {
     # optional: ако решиш да четеш плана през GraphQL в бъдеще
     plansMe(shop: String!): PlansMe!
@@ -478,6 +483,8 @@ const schema = buildSchema(`
   type Mutation {
     # set plan override (null plan = clear override)
     setPlanOverride(shop: String!, plan: PlanEnum): PlansMe!
+    # regenerate sitemap in background
+    regenerateSitemap(shop: String!): SitemapResult!
   }
 `);
 
@@ -493,6 +500,51 @@ const root = {
     if (sessionShop && sessionShop !== shop) throw new Error('Shop mismatch');
     app.locals.setPlanOverride(shop, plan || null);
     return await getPlansMeForShop(app, (shop || '').toLowerCase());
+  },
+
+  async regenerateSitemap({ shop }, ctx) {
+    try {
+      console.log('[GRAPHQL] Background sitemap regeneration requested for shop:', shop);
+      
+      // Import sitemap generation function
+      const { generateSitemap } = await import('./controllers/sitemapController.js');
+      
+      // Create a mock request object for the sitemap generation
+      const mockReq = {
+        shopDomain: shop,
+        query: { shop: shop },
+        body: { shop: shop }
+      };
+      
+      const mockRes = {
+        status: (code) => ({ json: (data) => console.log(`[GRAPHQL] Sitemap generation response (${code}):`, data) }),
+        json: (data) => console.log('[GRAPHQL] Sitemap generation response:', data)
+      };
+      
+      // Don't await - let it run in background
+      generateSitemap(mockReq, mockRes)
+        .then(() => {
+          console.log('[GRAPHQL] Background sitemap generation completed');
+        })
+        .catch((error) => {
+          console.error('[GRAPHQL] Background sitemap generation failed:', error);
+        });
+      
+      // Return immediately
+      return {
+        success: true,
+        message: 'Sitemap regeneration started in background',
+        shop: shop
+      };
+      
+    } catch (error) {
+      console.error('[GRAPHQL] Error starting sitemap regeneration:', error);
+      return {
+        success: false,
+        message: error.message,
+        shop: shop
+      };
+    }
   }
 };
 

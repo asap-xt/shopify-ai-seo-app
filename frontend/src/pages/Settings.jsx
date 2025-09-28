@@ -299,12 +299,33 @@ export default function Settings() {
       // Background sitemap regeneration if AI Sitemap is enabled
       if (settings.features?.aiSitemap) {
         try {
-          console.log('[SETTINGS] Starting background sitemap regeneration...');
-          await api(`/api/ai-discovery/regenerate-sitemap?shop=${shop}`, {
-            method: 'POST'
+          console.log('[SETTINGS] Starting background sitemap regeneration via GraphQL...');
+          
+          const REGENERATE_SITEMAP_MUTATION = `
+            mutation RegenerateSitemap($shop: String!) {
+              regenerateSitemap(shop: $shop) {
+                success
+                message
+                shop
+              }
+            }
+          `;
+          
+          const result = await api('/graphql', {
+            method: 'POST',
+            body: JSON.stringify({
+              query: REGENERATE_SITEMAP_MUTATION,
+              variables: { shop }
+            })
           });
-          console.log('[SETTINGS] Background sitemap regeneration started');
-          setToast('Settings saved and sitemap regeneration started');
+          
+          console.log('[SETTINGS] GraphQL sitemap regeneration result:', result);
+          
+          if (result?.data?.regenerateSitemap?.success) {
+            setToast('Settings saved and sitemap regeneration started');
+          } else {
+            setToast('Settings saved, but sitemap regeneration failed');
+          }
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
           setToast('Settings saved, but sitemap regeneration failed');
