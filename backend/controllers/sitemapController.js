@@ -345,12 +345,13 @@ async function generateSitemapCore(shop) {
           xml += '      <ai:tags>' + escapeXml(product.tags.join(', ')) + '</ai:tags>\n';
         }
         
-        // Add AI-generated bullets
+        // Add AI-generated bullets from main SEO metafield
         let bullets = null;
-        console.log('[SITEMAP-CORE] Checking bullets for', product.handle, ':', !!product.metafield_seo_ai_bullets?.value);
-        if (product.metafield_seo_ai_bullets?.value) {
+        console.log('[SITEMAP-CORE] Checking bullets for', product.handle, ':', !!product.metafield_seo_ai?.value);
+        if (product.metafield_seo_ai?.value) {
           try {
-            bullets = JSON.parse(product.metafield_seo_ai_bullets.value);
+            const seoData = JSON.parse(product.metafield_seo_ai.value);
+            bullets = seoData.bullets || null;
             console.log('[SITEMAP-CORE] Parsed bullets for', product.handle, ':', bullets?.length || 0, 'items');
           } catch (e) {
             console.log('[SITEMAP-CORE] Could not parse bullets for', product.handle, ':', e.message);
@@ -367,12 +368,13 @@ async function generateSitemapCore(shop) {
           xml += '      </ai:features>\n';
         }
         
-        // Add AI-generated FAQ
+        // Add AI-generated FAQ from main SEO metafield
         let faq = null;
-        console.log('[SITEMAP-CORE] Checking FAQ for', product.handle, ':', !!product.metafield_seo_ai_faq?.value);
-        if (product.metafield_seo_ai_faq?.value) {
+        console.log('[SITEMAP-CORE] Checking FAQ for', product.handle, ':', !!product.metafield_seo_ai?.value);
+        if (product.metafield_seo_ai?.value) {
           try {
-            faq = JSON.parse(product.metafield_seo_ai_faq.value);
+            const seoData = JSON.parse(product.metafield_seo_ai.value);
+            faq = seoData.faq || null;
             console.log('[SITEMAP-CORE] Parsed FAQ for', product.handle, ':', faq?.length || 0, 'items');
           } catch (e) {
             console.log('[SITEMAP-CORE] Could not parse FAQ for', product.handle, ':', e.message);
