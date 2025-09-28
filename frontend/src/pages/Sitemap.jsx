@@ -10,6 +10,7 @@ import {
   Toast,
   Banner,
   Icon,
+  Spinner,
 } from '@shopify/polaris';
 import { CheckIcon, AlertCircleIcon, ClockIcon, ExternalIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
@@ -20,6 +21,7 @@ export default function SitemapPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   const [info, setInfo] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [viewingSitemap, setViewingSitemap] = useState(false);
   const [toast, setToast] = useState('');
   // plan banner state (restored)
   const [plan, setPlan] = useState(null);
@@ -101,6 +103,27 @@ export default function SitemapPage({ shop: shopProp }) {
       setBusy(false);
     }
   }, [shop, loadInfo]);
+
+  const viewSitemap = useCallback(async () => {
+    if (!shop) return;
+    setViewingSitemap(true);
+    
+    try {
+      // Open sitemap in new tab
+      const sitemapUrl = `/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`;
+      const newWindow = window.open(sitemapUrl, '_blank');
+      
+      // Simulate loading time - in reality, the XML will load in the new tab
+      // We'll show loader for a reasonable time to indicate the process
+      setTimeout(() => {
+        setViewingSitemap(false);
+      }, 2000); // Show loader for 2 seconds
+      
+    } catch (e) {
+      setViewingSitemap(false);
+      setToast('Failed to open sitemap');
+    }
+  }, [shop]);
 
   useEffect(() => {
     loadInfo();
@@ -210,11 +233,19 @@ export default function SitemapPage({ shop: shopProp }) {
                     <Box>
                       <Button
                         fullWidth
-                        external
-                        url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`}
+                        onClick={viewSitemap}
+                        loading={viewingSitemap}
+                        disabled={viewingSitemap}
                         icon={ExternalIcon}
                       >
-                        View Sitemap
+                        {viewingSitemap ? (
+                          <InlineStack gap="200" align="center">
+                            <Spinner size="small" />
+                            <Text>Loading sitemap...</Text>
+                          </InlineStack>
+                        ) : (
+                          'View Sitemap'
+                        )}
                       </Button>
                     </Box>
                   </BlockStack>
