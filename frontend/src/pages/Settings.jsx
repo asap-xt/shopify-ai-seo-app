@@ -50,6 +50,11 @@ export default function Settings() {
   const [toastTimeout, setToastTimeout] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
   const [showViewButtons, setShowViewButtons] = useState(false);
+  const [showProductsJsonView, setShowProductsJsonView] = useState(false);
+  const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
+  const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
+  const [showAiSitemapView, setShowAiSitemapView] = useState(false);
+  const [showWelcomePageView, setShowWelcomePageView] = useState(false);
   
   // Debug showViewButtons state changes
   useEffect(() => {
@@ -117,9 +122,9 @@ export default function Settings() {
               // Show completion toast
               setToast('AI-Optimized Sitemap regeneration completed successfully!');
               
-              // Show View buttons for AI features
-              console.log('[SETTINGS] Setting showViewButtons to true for AI sitemap regeneration completion');
-              setShowViewButtons(true);
+              // Show View button only for AI Sitemap
+              console.log('[SETTINGS] Setting showAiSitemapView to true for AI sitemap regeneration completion');
+              setShowAiSitemapView(true);
               return;
           }
         }
@@ -1027,8 +1032,48 @@ export default function Settings() {
                             helpText={feature.description}
                           />
                         </Box>
-                        {/* View button shows only for features that are saved in originalSettings and have generated data */}
-                        {showViewButtons && originalSettings?.features?.[feature.key] && feature.key !== 'schemaData' && (
+                        {/* AI Sitemap View button */}
+                        {feature.key === 'aiSitemap' && showAiSitemapView && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {/* Products JSON View button */}
+                        {feature.key === 'productsJson' && showProductsJsonView && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {/* Collections JSON View button */}
+                        {feature.key === 'collectionsJson' && showCollectionsJsonView && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {/* Store Metadata View button */}
+                        {feature.key === 'storeMetadata' && showStoreMetadataView && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {/* Welcome Page View button */}
+                        {feature.key === 'welcomePage' && showWelcomePageView && (
                           <Button
                             size="slim"
                             onClick={() => viewJson(feature.key, feature.name)}
