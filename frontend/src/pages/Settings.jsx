@@ -476,9 +476,8 @@ export default function Settings() {
           setToast('Settings saved successfully');
           console.log('[SETTINGS] Basic success toast set after delay');
           
-          // Show View buttons for AI features
-          console.log('[SETTINGS] Setting showViewButtons to true for basic save');
-          setShowViewButtons(true);
+          // Don't show View buttons for basic save - only for AI features
+          console.log('[SETTINGS] Basic save completed, not showing View buttons');
         }, 100);
       }
     } catch (error) {
