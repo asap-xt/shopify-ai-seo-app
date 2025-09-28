@@ -47,6 +47,13 @@ export default function Settings() {
   const [robotsTxt, setRobotsTxt] = useState('');
   const [showRobotsModal, setShowRobotsModal] = useState(false);
   const [toast, setToast] = useState('');
+  
+  // Debug toast state changes
+  useEffect(() => {
+    if (toast) {
+      console.log('[SETTINGS] Toast state changed to:', toast);
+    }
+  }, [toast]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showNoBotsModal, setShowNoBotsModal] = useState(false);
   const [showManualInstructions, setShowManualInstructions] = useState(false);
@@ -338,10 +345,14 @@ export default function Settings() {
           
           if (result?.data?.regenerateSitemap?.success) {
             console.log('[SETTINGS] Background regeneration started successfully');
+            console.log('[SETTINGS] Setting toast for AI sitemap regeneration...');
             setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
+            console.log('[SETTINGS] Toast set for AI sitemap regeneration');
           } else {
             console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
+            console.log('[SETTINGS] Setting toast for failed regeneration...');
             setToast('Settings saved, but sitemap regeneration failed');
+            console.log('[SETTINGS] Toast set for failed regeneration');
           }
           
           console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION END =====');
@@ -351,7 +362,9 @@ export default function Settings() {
         }
       } else {
         console.log('[SETTINGS] AI Sitemap disabled, skipping background regeneration');
+        console.log('[SETTINGS] Setting toast for basic save...');
         setToast('Settings saved successfully');
+        console.log('[SETTINGS] Toast set for basic save');
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
