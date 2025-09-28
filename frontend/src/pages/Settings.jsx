@@ -51,6 +51,11 @@ export default function Settings() {
   const [pollingInterval, setPollingInterval] = useState(null);
   const [showViewButtons, setShowViewButtons] = useState(false);
   
+  // Debug showViewButtons state changes
+  useEffect(() => {
+    console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
+  }, [showViewButtons]);
+  
   // Debug toast state changes
   useEffect(() => {
     if (toast) {
@@ -427,6 +432,7 @@ export default function Settings() {
               console.log('[SETTINGS] Success toast set after delay');
               
               // Show View buttons for AI features
+              console.log('[SETTINGS] Setting showViewButtons to true for AI sitemap regeneration');
               setShowViewButtons(true);
               
               // Start polling to check when background regeneration completes
@@ -465,6 +471,7 @@ export default function Settings() {
           console.log('[SETTINGS] Basic success toast set after delay');
           
           // Show View buttons for AI features
+          console.log('[SETTINGS] Setting showViewButtons to true for basic save');
           setShowViewButtons(true);
         }, 100);
       }
