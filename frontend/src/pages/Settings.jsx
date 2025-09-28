@@ -376,6 +376,14 @@ export default function Settings() {
   const [schemaComplete, setSchemaComplete] = useState(false);
   
   const shop = qs('shop', '');
+  
+  // Debug shop extraction
+  console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
+  console.log('[SETTINGS] window.location.search:', window.location.search);
+  console.log('[SETTINGS] Extracted shop:', shop);
+  console.log('[SETTINGS] Shop type:', typeof shop);
+  console.log('[SETTINGS] Shop length:', shop?.length);
+  console.log('[SETTINGS] ===== SHOP EXTRACTION COMPLETE =====');
 
   useEffect(() => {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
