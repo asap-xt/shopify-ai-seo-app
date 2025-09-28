@@ -330,7 +330,8 @@ export default function Settings() {
             body: JSON.stringify({
               query: REGENERATE_SITEMAP_MUTATION,
               variables: { shop }
-            })
+            }),
+            shop: shop
           });
           
           console.log('[SETTINGS] GraphQL sitemap regeneration result:', result);
