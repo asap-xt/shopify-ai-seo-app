@@ -33,8 +33,9 @@ const normalizePlan = (plan) => {
 };
 
 export default function Settings() {
-  console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
-  // Debug helper
+  try {
+    console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
+    // Debug helper
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
@@ -1482,6 +1483,21 @@ export default function Settings() {
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </BlockStack>
   );
+  } catch (error) {
+    console.error('[SETTINGS] Component initialization error:', error);
+    return (
+      <BlockStack gap="400">
+        <Card>
+          <Box padding="400">
+            <Text variant="headingMd">Settings Error</Text>
+            <Box paddingBlockStart="200">
+              <Text>Failed to load settings: {error.message}</Text>
+            </Box>
+          </Box>
+        </Card>
+      </BlockStack>
+    );
+  }
 }
 
 /* 
