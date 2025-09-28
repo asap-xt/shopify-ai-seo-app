@@ -347,11 +347,13 @@ async function generateSitemapCore(shop) {
         
         // Add AI-generated bullets
         let bullets = null;
+        console.log('[SITEMAP-CORE] Checking bullets for', product.handle, ':', !!product.metafield_seo_ai_bullets?.value);
         if (product.metafield_seo_ai_bullets?.value) {
           try {
             bullets = JSON.parse(product.metafield_seo_ai_bullets.value);
+            console.log('[SITEMAP-CORE] Parsed bullets for', product.handle, ':', bullets?.length || 0, 'items');
           } catch (e) {
-            console.log('[SITEMAP-CORE] Could not parse bullets for', product.handle);
+            console.log('[SITEMAP-CORE] Could not parse bullets for', product.handle, ':', e.message);
           }
         }
         
@@ -367,11 +369,13 @@ async function generateSitemapCore(shop) {
         
         // Add AI-generated FAQ
         let faq = null;
+        console.log('[SITEMAP-CORE] Checking FAQ for', product.handle, ':', !!product.metafield_seo_ai_faq?.value);
         if (product.metafield_seo_ai_faq?.value) {
           try {
             faq = JSON.parse(product.metafield_seo_ai_faq.value);
+            console.log('[SITEMAP-CORE] Parsed FAQ for', product.handle, ':', faq?.length || 0, 'items');
           } catch (e) {
-            console.log('[SITEMAP-CORE] Could not parse FAQ for', product.handle);
+            console.log('[SITEMAP-CORE] Could not parse FAQ for', product.handle, ':', e.message);
           }
         }
         
