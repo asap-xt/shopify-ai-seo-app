@@ -36,7 +36,7 @@ export default function Settings() {
   console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
   console.log('[SETTINGS] Starting component initialization...');
   
-  // Debug helper
+  // Debug helper - moved outside try block
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
