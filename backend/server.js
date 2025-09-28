@@ -476,9 +476,60 @@ const schema = buildSchema(`
     message: String!
     shop: String!
   }
+  
+  type ProductEdge {
+    node: Product!
+    cursor: String!
+  }
+  
+  type ProductConnection {
+    edges: [ProductEdge!]!
+    pageInfo: PageInfo!
+  }
+  
+  type Product {
+    id: ID!
+    title: String!
+  }
+  
+  type CollectionEdge {
+    node: Collection!
+    cursor: String!
+  }
+  
+  type CollectionConnection {
+    edges: [CollectionEdge!]!
+    pageInfo: PageInfo!
+  }
+  
+  type Collection {
+    id: ID!
+    title: String!
+  }
+  
+  type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+  }
+  
+  type StoreMetadata {
+    shopName: String
+    description: String
+  }
+  
+  type WelcomePage {
+    title: String
+    content: String
+  }
+  
   type Query {
     # optional: ако решиш да четеш плана през GraphQL в бъдеще
     plansMe(shop: String!): PlansMe!
+    # check for generated data
+    products(shop: String!, first: Int): ProductConnection!
+    collections(shop: String!, first: Int): CollectionConnection!
+    storeMetadata(shop: String!): StoreMetadata
+    welcomePage(shop: String!): WelcomePage
   }
   type Mutation {
     # set plan override (null plan = clear override)
@@ -531,6 +582,177 @@ const root = {
         success: false,
         message: error.message,
         shop: shop
+      };
+    }
+  },
+
+  async products({ shop, first = 1 }, ctx) {
+    try {
+      console.log('[GRAPHQL] Checking products for shop:', shop);
+      
+      const { normalizeShop } = await import('./utils/shop.js');
+      const { shopGraphQL } = await import('./utils/shopifyApi.js');
+      
+      const normalizedShop = normalizeShop(shop);
+      if (!normalizedShop) {
+        throw new Error('Invalid shop parameter');
+      }
+      
+      const productsQuery = `
+        query($first: Int!) {
+          products(first: $first, query: "status:active") {
+            edges {
+              node {
+                id
+                title
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+            }
+          }
+        }
+      `;
+      
+      const data = await shopGraphQL(normalizedShop, productsQuery, { first });
+      
+      return {
+        edges: data.products.edges.map(edge => ({
+          node: {
+            id: edge.node.id,
+            title: edge.node.title
+          },
+          cursor: edge.cursor
+        })),
+        pageInfo: {
+          hasNextPage: data.products.pageInfo.hasNextPage,
+          hasPreviousPage: false
+        }
+      };
+      
+    } catch (error) {
+      console.error('[GRAPHQL] Error checking products:', error);
+      return {
+        edges: [],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false
+        }
+      };
+    }
+  },
+
+  async collections({ shop, first = 1 }, ctx) {
+    try {
+      console.log('[GRAPHQL] Checking collections for shop:', shop);
+      
+      const { normalizeShop } = await import('./utils/shop.js');
+      const { shopGraphQL } = await import('./utils/shopifyApi.js');
+      
+      const normalizedShop = normalizeShop(shop);
+      if (!normalizedShop) {
+        throw new Error('Invalid shop parameter');
+      }
+      
+      const collectionsQuery = `
+        query($first: Int!) {
+          collections(first: $first) {
+            edges {
+              node {
+                id
+                title
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+            }
+          }
+        }
+      `;
+      
+      const data = await shopGraphQL(normalizedShop, collectionsQuery, { first });
+      
+      return {
+        edges: data.collections.edges.map(edge => ({
+          node: {
+            id: edge.node.id,
+            title: edge.node.title
+          },
+          cursor: edge.cursor
+        })),
+        pageInfo: {
+          hasNextPage: data.collections.pageInfo.hasNextPage,
+          hasPreviousPage: false
+        }
+      };
+      
+    } catch (error) {
+      console.error('[GRAPHQL] Error checking collections:', error);
+      return {
+        edges: [],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false
+        }
+      };
+    }
+  },
+
+  async storeMetadata({ shop }, ctx) {
+    try {
+      console.log('[GRAPHQL] Checking store metadata for shop:', shop);
+      
+      const { normalizeShop } = await import('./utils/shop.js');
+      const { shopGraphQL } = await import('./utils/shopifyApi.js');
+      
+      const normalizedShop = normalizeShop(shop);
+      if (!normalizedShop) {
+        throw new Error('Invalid shop parameter');
+      }
+      
+      const shopQuery = `
+        query {
+          shop {
+            name
+            description
+          }
+        }
+      `;
+      
+      const data = await shopGraphQL(normalizedShop, shopQuery);
+      
+      return {
+        shopName: data.shop?.name || null,
+        description: data.shop?.description || null
+      };
+      
+    } catch (error) {
+      console.error('[GRAPHQL] Error checking store metadata:', error);
+      return {
+        shopName: null,
+        description: null
+      };
+    }
+  },
+
+  async welcomePage({ shop }, ctx) {
+    try {
+      console.log('[GRAPHQL] Checking welcome page for shop:', shop);
+      
+      // For now, return a simple welcome page structure
+      // In the future, this could check for actual generated welcome page content
+      return {
+        title: `Welcome to ${shop}`,
+        content: `Welcome to our store!`
+      };
+      
+    } catch (error) {
+      console.error('[GRAPHQL] Error checking welcome page:', error);
+      return {
+        title: null,
+        content: null
       };
     }
   }

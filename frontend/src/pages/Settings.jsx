@@ -67,6 +67,172 @@ export default function Settings() {
     setShowViewButtons(false);
   }, []); // Run only on mount
   
+  // Check for generated data when settings are loaded
+  useEffect(() => {
+    if (settings?.features && shop) {
+      console.log('[SETTINGS] Checking for generated data...');
+      checkGeneratedData();
+    }
+  }, [settings?.features, shop]);
+  
+  const checkGeneratedData = async () => {
+    try {
+      console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
+      
+      // Check Products JSON Feed
+      if (settings.features.productsJson) {
+        console.log('[SETTINGS] Checking Products JSON data...');
+        const hasProductsData = await checkProductsData();
+        setShowProductsJsonView(hasProductsData);
+        console.log('[SETTINGS] Products JSON data exists:', hasProductsData);
+      }
+      
+      // Check Collections JSON Feed  
+      if (settings.features.collectionsJson) {
+        console.log('[SETTINGS] Checking Collections JSON data...');
+        const hasCollectionsData = await checkCollectionsData();
+        setShowCollectionsJsonView(hasCollectionsData);
+        console.log('[SETTINGS] Collections JSON data exists:', hasCollectionsData);
+      }
+      
+      // Check Store Metadata
+      if (settings.features.storeMetadata) {
+        console.log('[SETTINGS] Checking Store Metadata data...');
+        const hasStoreMetadata = await checkStoreMetadata();
+        setShowStoreMetadataView(hasStoreMetadata);
+        console.log('[SETTINGS] Store Metadata exists:', hasStoreMetadata);
+      }
+      
+      // Check Welcome Page
+      if (settings.features.welcomePage) {
+        console.log('[SETTINGS] Checking Welcome Page data...');
+        const hasWelcomePage = await checkWelcomePage();
+        setShowWelcomePageView(hasWelcomePage);
+        console.log('[SETTINGS] Welcome Page exists:', hasWelcomePage);
+      }
+      
+      console.log('[SETTINGS] ===== GENERATED DATA CHECK COMPLETE =====');
+    } catch (error) {
+      console.error('[SETTINGS] Error checking generated data:', error);
+    }
+  };
+  
+  const checkProductsData = async () => {
+    try {
+      const PRODUCTS_CHECK_QUERY = `
+        query CheckProductsData($shop: String!) {
+          products(shop: $shop, first: 1) {
+            edges {
+              node {
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: PRODUCTS_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.products?.edges?.length > 0;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking products data:', error);
+      return false;
+    }
+  };
+  
+  const checkCollectionsData = async () => {
+    try {
+      const COLLECTIONS_CHECK_QUERY = `
+        query CheckCollectionsData($shop: String!) {
+          collections(shop: $shop, first: 1) {
+            edges {
+              node {
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: COLLECTIONS_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.collections?.edges?.length > 0;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking collections data:', error);
+      return false;
+    }
+  };
+  
+  const checkStoreMetadata = async () => {
+    try {
+      const STORE_METADATA_CHECK_QUERY = `
+        query CheckStoreMetadata($shop: String!) {
+          storeMetadata(shop: $shop) {
+            shopName
+            description
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: STORE_METADATA_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.storeMetadata?.shopName;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking store metadata:', error);
+      return false;
+    }
+  };
+  
+  const checkWelcomePage = async () => {
+    try {
+      const WELCOME_PAGE_CHECK_QUERY = `
+        query CheckWelcomePage($shop: String!) {
+          welcomePage(shop: $shop) {
+            title
+            content
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: WELCOME_PAGE_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.welcomePage?.title;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking welcome page:', error);
+      return false;
+    }
+  };
+  
   // Debug toast state changes
   useEffect(() => {
     if (toast) {
