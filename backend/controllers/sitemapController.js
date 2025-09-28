@@ -110,6 +110,46 @@ async function checkProductSEOLanguages(shop, productId) {
   }
 }
 
+// Helper: Get localized content for a product in a specific language
+async function getProductLocalizedContent(shop, productId, language) {
+  try {
+    const metafieldKey = `seo__${language.toLowerCase()}`;
+    const query = `
+      query GetProductLocalizedContent($id: ID!) {
+        product(id: $id) {
+          metafield(namespace: "seo_ai", key: "${metafieldKey}") {
+            value
+            type
+          }
+        }
+      }
+    `;
+    
+    const data = await shopGraphQL(shop, query, { id: productId });
+    const metafield = data?.product?.metafield;
+    
+    if (metafield?.value) {
+      try {
+        const seoData = JSON.parse(metafield.value);
+        console.log(`[SITEMAP-CORE] Found localized content for ${language}:`, {
+          title: seoData.title,
+          metaDescription: seoData.metaDescription?.substring(0, 100) + '...'
+        });
+        return seoData;
+      } catch (parseErr) {
+        console.log(`[SITEMAP-CORE] Failed to parse localized content for ${language}:`, parseErr.message);
+        return null;
+      }
+    }
+    
+    console.log(`[SITEMAP-CORE] No localized content found for ${language}`);
+    return null;
+  } catch (error) {
+    console.log(`[SITEMAP-CORE] Error getting localized content for ${language}:`, error.message);
+    return null;
+  }
+}
+
 // Helper: get plan limits
 async function getPlanLimits(shop) {
   try {
