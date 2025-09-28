@@ -359,14 +359,29 @@ export default function Settings() {
           
           if (result?.data?.regenerateSitemap?.success) {
             console.log('[SETTINGS] Background regeneration started successfully');
-            console.log('[SETTINGS] Setting toast for AI sitemap regeneration...');
-            setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-            console.log('[SETTINGS] Toast set for AI sitemap regeneration');
+            console.log('[SETTINGS] Setting toast for AI sitemap regeneration with delay...');
+            
+            // Clear any existing toast first
+            setToast('');
+            
+            // Set success toast after a short delay to avoid conflicts
+            setTimeout(() => {
+              setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
+              console.log('[SETTINGS] Success toast set after delay');
+            }, 100);
+            
           } else {
             console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
             console.log('[SETTINGS] Setting toast for failed regeneration...');
-            setToast('Settings saved, but sitemap regeneration failed');
-            console.log('[SETTINGS] Toast set for failed regeneration');
+            
+            // Clear any existing toast first
+            setToast('');
+            
+            // Set error toast after a short delay
+            setTimeout(() => {
+              setToast('Settings saved, but sitemap regeneration failed');
+              console.log('[SETTINGS] Error toast set after delay');
+            }, 100);
           }
           
           console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION END =====');
@@ -376,9 +391,16 @@ export default function Settings() {
         }
       } else {
         console.log('[SETTINGS] AI Sitemap disabled, skipping background regeneration');
-        console.log('[SETTINGS] Setting toast for basic save...');
-        setToast('Settings saved successfully');
-        console.log('[SETTINGS] Toast set for basic save');
+        console.log('[SETTINGS] Setting toast for basic save with delay...');
+        
+        // Clear any existing toast first
+        setToast('');
+        
+        // Set basic success toast after a short delay
+        setTimeout(() => {
+          setToast('Settings saved successfully');
+          console.log('[SETTINGS] Basic success toast set after delay');
+        }, 100);
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -1514,12 +1536,7 @@ export default function Settings() {
 
       {/* Toast notifications */}
       {toast && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, background: 'red', color: 'white', padding: '10px', borderRadius: '5px' }}>
-          DEBUG TOAST: {toast}
-        </div>
-      )}
-      {toast && (
-        <div style={{ position: 'fixed', top: '80px', right: '20px', zIndex: 9998, background: 'green', color: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '400px' }}>
+        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, background: 'green', color: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '400px' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>✅ Success!</div>
           <div>{toast}</div>
           <button 
@@ -1539,7 +1556,6 @@ export default function Settings() {
           </button>
         </div>
       )}
-      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </BlockStack>
   );
   } catch (error) {
