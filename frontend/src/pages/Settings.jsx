@@ -299,7 +299,9 @@ export default function Settings() {
       // Background sitemap regeneration if AI Sitemap is enabled
       if (settings.features?.aiSitemap) {
         try {
-          console.log('[SETTINGS] Starting background sitemap regeneration via GraphQL...');
+          console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION START =====');
+          console.log('[SETTINGS] AI Sitemap enabled, starting background regeneration...');
+          console.log('[SETTINGS] Shop:', shop);
           
           const REGENERATE_SITEMAP_MUTATION = `
             mutation RegenerateSitemap($shop: String!) {
@@ -310,6 +312,9 @@ export default function Settings() {
               }
             }
           `;
+          
+          console.log('[SETTINGS] GraphQL mutation:', REGENERATE_SITEMAP_MUTATION);
+          console.log('[SETTINGS] Variables:', { shop });
           
           const result = await api('/graphql', {
             method: 'POST',
@@ -322,14 +327,20 @@ export default function Settings() {
           console.log('[SETTINGS] GraphQL sitemap regeneration result:', result);
           
           if (result?.data?.regenerateSitemap?.success) {
+            console.log('[SETTINGS] Background regeneration started successfully');
             setToast('Settings saved and sitemap regeneration started');
           } else {
+            console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
             setToast('Settings saved, but sitemap regeneration failed');
           }
+          
+          console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION END =====');
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
           setToast('Settings saved, but sitemap regeneration failed');
         }
+      } else {
+        console.log('[SETTINGS] AI Sitemap disabled, skipping background regeneration');
       }
     } catch (error) {
       console.error('Failed to save settings:', error);

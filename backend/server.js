@@ -511,14 +511,21 @@ const root = {
       
       // Create a mock request object for the sitemap generation
       const mockReq = {
-        shopDomain: shop,
         query: { shop: shop },
         body: { shop: shop }
       };
       
       const mockRes = {
-        status: (code) => ({ json: (data) => console.log(`[GRAPHQL] Sitemap generation response (${code}):`, data) }),
-        json: (data) => console.log('[GRAPHQL] Sitemap generation response:', data)
+        status: (code) => ({ 
+          json: (data) => {
+            console.log(`[GRAPHQL] Sitemap generation response (${code}):`, data);
+            return { statusCode: code, data };
+          }
+        }),
+        json: (data) => {
+          console.log('[GRAPHQL] Sitemap generation response:', data);
+          return data;
+        }
       };
       
       // Don't await - let it run in background
