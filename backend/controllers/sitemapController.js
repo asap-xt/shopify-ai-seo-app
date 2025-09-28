@@ -198,6 +198,7 @@ async function generateSitemapCore(shop) {
     
     console.log('[SITEMAP-CORE] Fetching shop data...');
     const shopData = await shopGraphQL(normalizedShop, shopQuery);
+    console.log('[SITEMAP-CORE] Shop data fetched successfully');
     const primaryDomain = shopData.shop.primaryDomain.url;
     
     // Try to get locales
@@ -534,6 +535,15 @@ async function generateSitemapCore(shop) {
     const verification = await Sitemap.findOne({ shop: normalizedShop }).select('content');
     console.log('[SITEMAP-CORE] Verification - content exists:', !!verification?.content);
     console.log('[SITEMAP-CORE] Verification - content length:', verification?.content?.length || 0);
+    
+    console.log('[SITEMAP-CORE] Sitemap generation completed successfully');
+    console.log('[SITEMAP-CORE] Final result:', {
+      success: true,
+      shop: normalizedShop,
+      productCount: allProducts.length,
+      size: xml.length,
+      aiEnabled: isAISitemapEnabled
+    });
     
     return {
       success: true,
