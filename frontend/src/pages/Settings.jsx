@@ -377,7 +377,7 @@ export default function Settings() {
   
   const shop = qs('shop', '');
   
-  // Debug shop extraction
+  // Debug shop extraction - Force rebuild
   console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
   console.log('[SETTINGS] window.location.search:', window.location.search);
   console.log('[SETTINGS] Extracted shop:', shop);
