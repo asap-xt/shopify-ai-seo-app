@@ -17,7 +17,10 @@ const Collections = React.lazy(() => import('./pages/Collections.jsx'));
 const Sitemap = React.lazy(() => import('./pages/Sitemap.jsx'));
 const StoreMetadata = React.lazy(() => import('./pages/StoreMetadata.jsx'));
 const SchemaData = React.lazy(() => import('./pages/SchemaData.jsx'));
-const Settings = React.lazy(() => import('./pages/Settings.jsx'));
+const Settings = React.lazy(() => {
+  console.log('[APP] ===== LOADING SETTINGS COMPONENT =====');
+  return import('./pages/Settings.jsx');
+});
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -764,6 +767,7 @@ export default function App() {
     } 
     // Settings
     else if (path === '/settings') {
+      console.log('[APP] ===== RENDERING SETTINGS PAGE =====');
       return <Settings shop={shop} />;
     } 
     // 404
