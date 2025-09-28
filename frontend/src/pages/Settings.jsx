@@ -69,14 +69,6 @@ export default function Settings() {
     setShowViewButtons(false);
   }, []); // Run only on mount
   
-  // Check for generated data when settings are loaded
-  useEffect(() => {
-    if (settings?.features && shop) {
-      console.log('[SETTINGS] Checking for generated data...');
-      checkGeneratedData();
-    }
-  }, [settings?.features, shop, checkGeneratedData]);
-  
   const checkGeneratedData = useCallback(async () => {
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
@@ -118,6 +110,14 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking generated data:', error);
     }
   }, [settings?.features, shop, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
+  
+  // Check for generated data when settings are loaded
+  useEffect(() => {
+    if (settings?.features && shop) {
+      console.log('[SETTINGS] Checking for generated data...');
+      checkGeneratedData();
+    }
+  }, [settings?.features, shop, checkGeneratedData]);
   
   const checkProductsData = useCallback(async () => {
     try {
