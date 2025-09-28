@@ -208,7 +208,7 @@ export default function SitemapPage({ shop: shopProp }) {
                           <InlineStack align="space-between">
                             <Text variant="bodyMd" color="subdued">Sitemap URL</Text>
                             <Text variant="bodyMd" fontWeight="semibold" breakWord>
-                              /api/sitemap/generate?shop={shop}
+                              /api/sitemap/generate?shop={shop}&force=true
                             </Text>
                           </InlineStack>
                         </Box>
@@ -219,7 +219,7 @@ export default function SitemapPage({ shop: shopProp }) {
                       <Button
                         fullWidth
                         external
-                        url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`}
+                        url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true`}
                         icon={ExternalIcon}
                       >
                         View Sitemap
