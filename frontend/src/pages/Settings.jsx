@@ -336,13 +336,13 @@ export default function Settings() {
           
           console.log('[SETTINGS] GraphQL sitemap regeneration result:', result);
           
-        if (result?.data?.regenerateSitemap?.success) {
-          console.log('[SETTINGS] Background regeneration started successfully');
-          setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-        } else {
-          console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
-          setToast('Settings saved, but sitemap regeneration failed');
-        }
+          if (result?.data?.regenerateSitemap?.success) {
+            console.log('[SETTINGS] Background regeneration started successfully');
+            setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
+          } else {
+            console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
+            setToast('Settings saved, but sitemap regeneration failed');
+          }
           
           console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION END =====');
         } catch (error) {

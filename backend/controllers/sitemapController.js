@@ -1152,7 +1152,10 @@ async function handleProgress(req, res) {
 
 // Add new function to serve saved sitemap
 async function serveSitemap(req, res) {
-  console.log('[SITEMAP] Serve sitemap called, query:', req.query);
+  console.log('[SITEMAP] ===== SERVE SITEMAP CALLED =====');
+  console.log('[SITEMAP] URL:', req.url);
+  console.log('[SITEMAP] Query:', req.query);
+  console.log('[SITEMAP] Method:', req.method);
   
   try {
     const shop = normalizeShop(req.query.shop || req.params.shop);
@@ -1163,6 +1166,7 @@ async function serveSitemap(req, res) {
     
     const forceRegenerate = req.query.force === 'true';
     console.log('[SITEMAP] Force regenerate:', forceRegenerate);
+    console.log('[SITEMAP] Force parameter value:', req.query.force);
     console.log('[SITEMAP] Looking for sitemap for shop:', shop);
     
     // Check if we should force regenerate
