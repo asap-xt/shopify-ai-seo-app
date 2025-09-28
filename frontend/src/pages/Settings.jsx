@@ -48,6 +48,7 @@ export default function Settings() {
   const [showRobotsModal, setShowRobotsModal] = useState(false);
   const [toast, setToast] = useState('');
   const [toastTimeout, setToastTimeout] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
   
   // Debug toast state changes
   useEffect(() => {
@@ -68,6 +69,61 @@ export default function Settings() {
       setToastTimeout(timeout);
     }
   }, [toast]);
+  
+  // Function to start polling for background regeneration completion
+  const startPollingForCompletion = () => {
+    console.log('[SETTINGS] Starting polling for background regeneration completion...');
+    
+    // Clear any existing polling
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 30; // Poll for up to 5 minutes (30 * 10 seconds)
+    
+    const interval = setInterval(async () => {
+      attempts++;
+      console.log(`[SETTINGS] Polling attempt ${attempts}/${maxAttempts}`);
+      
+      try {
+        // Check sitemap info to see if it was recently updated
+        const info = await api(`/api/sitemap/info?shop=${shop}`);
+        console.log('[SETTINGS] Sitemap info:', info);
+        
+        if (info && info.generatedAt) {
+          const generatedTime = new Date(info.generatedAt).getTime();
+          const now = Date.now();
+          const timeDiff = now - generatedTime;
+          
+          // If sitemap was generated within the last 2 minutes, consider it complete
+          if (timeDiff < 120000) { // 2 minutes
+            console.log('[SETTINGS] Background regeneration completed!');
+            clearInterval(interval);
+            setPollingInterval(null);
+            
+            // Show completion toast
+            setToast('AI-Optimized Sitemap regeneration completed successfully!');
+            return;
+          }
+        }
+        
+        // If we've reached max attempts, stop polling
+        if (attempts >= maxAttempts) {
+          console.log('[SETTINGS] Polling timeout reached');
+          clearInterval(interval);
+          setPollingInterval(null);
+          setToast('Background regeneration is taking longer than expected. Please check the sitemap manually.');
+        }
+        
+      } catch (error) {
+        console.error('[SETTINGS] Polling error:', error);
+        // Continue polling on error
+      }
+    }, 10000); // Poll every 10 seconds
+    
+    setPollingInterval(interval);
+  };
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showNoBotsModal, setShowNoBotsModal] = useState(false);
   const [showManualInstructions, setShowManualInstructions] = useState(false);
@@ -368,6 +424,9 @@ export default function Settings() {
             setTimeout(() => {
               setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
               console.log('[SETTINGS] Success toast set after delay');
+              
+              // Start polling to check when background regeneration completes
+              startPollingForCompletion();
             }, 100);
             
           } else {
@@ -1535,27 +1594,7 @@ export default function Settings() {
       )}
 
       {/* Toast notifications */}
-      {toast && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, background: 'green', color: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '400px' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>✅ Success!</div>
-          <div>{toast}</div>
-          <button 
-            onClick={() => setToast('')} 
-            style={{ 
-              position: 'absolute', 
-              top: '5px', 
-              right: '5px', 
-              background: 'none', 
-              border: 'none', 
-              color: 'white', 
-              fontSize: '16px', 
-              cursor: 'pointer' 
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </BlockStack>
   );
   } catch (error) {
