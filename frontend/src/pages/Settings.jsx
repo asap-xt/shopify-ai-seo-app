@@ -114,9 +114,13 @@ export default function Settings() {
             clearInterval(interval);
             setPollingInterval(null);
             
-            // Show completion toast
-            setToast('AI-Optimized Sitemap regeneration completed successfully!');
-            return;
+              // Show completion toast
+              setToast('AI-Optimized Sitemap regeneration completed successfully!');
+              
+              // Show View buttons for AI features
+              console.log('[SETTINGS] Setting showViewButtons to true for AI sitemap regeneration completion');
+              setShowViewButtons(true);
+              return;
           }
         }
         
@@ -432,18 +436,14 @@ export default function Settings() {
             // Clear any existing toast first
             setToast('');
             
-            // Set success toast after a short delay to avoid conflicts
-            setTimeout(() => {
-              setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-              console.log('[SETTINGS] Success toast set after delay');
-              
-              // Show View buttons for AI features
-              console.log('[SETTINGS] Setting showViewButtons to true for AI sitemap regeneration');
-              setShowViewButtons(true);
-              
-              // Start polling to check when background regeneration completes
-              startPollingForCompletion();
-            }, 100);
+          // Set success toast after a short delay to avoid conflicts
+          setTimeout(() => {
+            setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
+            console.log('[SETTINGS] Success toast set after delay');
+            
+            // Start polling to check when background regeneration completes
+            startPollingForCompletion();
+          }, 100);
             
           } else {
             console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
