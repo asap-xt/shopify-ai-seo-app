@@ -33,13 +33,15 @@ const normalizePlan = (plan) => {
 };
 
 export default function Settings() {
-  try {
-    console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
-    console.log('[SETTINGS] Starting component initialization...');
-    // Debug helper
+  console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
+  console.log('[SETTINGS] Starting component initialization...');
+  
+  // Debug helper
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
+
+  try {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
