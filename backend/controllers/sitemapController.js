@@ -155,6 +155,400 @@ function cleanHtmlForXml(html) {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// Core sitemap generation function (without Express req/res dependencies)
+async function generateSitemapCore(shop) {
+  console.log('[SITEMAP-CORE] Starting sitemap generation for shop:', shop);
+  
+  try {
+    const normalizedShop = normalizeShop(shop);
+    if (!normalizedShop) {
+      throw new Error('Invalid shop parameter');
+    }
+    
+    console.log('[SITEMAP-CORE] Normalized shop:', normalizedShop);
+    
+    const { limit, plan } = await getPlanLimits(normalizedShop);
+    console.log('[SITEMAP-CORE] Plan limits:', { limit, plan });
+    
+    // Check AI Discovery settings for AI-Optimized Sitemap
+    let isAISitemapEnabled = false;
+    try {
+      const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
+      const { default: Shop } = await import('../db/Shop.js');
+      
+      const shopRecord = await Shop.findOne({ shop: normalizedShop });
+      if (shopRecord?.accessToken) {
+        const session = { accessToken: shopRecord.accessToken };
+        const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
+        isAISitemapEnabled = settings?.features?.aiSitemap || false;
+        console.log('[SITEMAP-CORE] AI Discovery settings:', { aiSitemap: isAISitemapEnabled });
+      }
+    } catch (error) {
+      console.log('[SITEMAP-CORE] Could not fetch AI Discovery settings, using basic sitemap:', error.message);
+    }
+    
+    // Get shop info and languages
+    const shopQuery = `
+      query {
+        shop {
+          primaryDomain { url }
+        }
+      }
+    `;
+    
+    console.log('[SITEMAP-CORE] Fetching shop data...');
+    const shopData = await shopGraphQL(normalizedShop, shopQuery);
+    const primaryDomain = shopData.shop.primaryDomain.url;
+    
+    // Try to get locales
+    let locales = [{ locale: 'en', primary: true }];
+    try {
+      const localesQuery = `
+        query {
+          shopLocales {
+            locale
+            primary
+          }
+        }
+      `;
+      const localesData = await shopGraphQL(normalizedShop, localesQuery);
+      if (localesData.shopLocales) {
+        locales = localesData.shopLocales;
+      }
+    } catch (localeErr) {
+      console.log('[SITEMAP-CORE] Could not fetch locales, using default:', locales);
+    }
+    
+    console.log('[SITEMAP-CORE] Primary domain:', primaryDomain);
+    console.log('[SITEMAP-CORE] Locales:', locales);
+    
+    // Fetch products with AI-relevant data
+    let allProducts = [];
+    let cursor = null;
+    let hasMore = true;
+    
+    while (hasMore && allProducts.length < limit) {
+      const productsQuery = `
+        query($cursor: String, $first: Int!) {
+          products(first: $first, after: $cursor, query: "status:active") {
+            edges {
+              node {
+                id
+                handle
+                title
+                descriptionHtml
+                vendor
+                productType
+                tags
+                updatedAt
+                publishedAt
+                priceRangeV2 {
+                  minVariantPrice {
+                    amount
+                    currencyCode
+                  }
+                }
+                seo {
+                  title
+                  description
+                }
+                metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") {
+                  value
+                  type
+                }
+                metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") {
+                  value
+                  type
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+            }
+          }
+        }
+      `;
+      
+      const batchSize = Math.min(50, limit - allProducts.length);
+      console.log('[SITEMAP-CORE] Fetching products batch, size:', batchSize, 'cursor:', cursor);
+      
+      const data = await shopGraphQL(normalizedShop, productsQuery, { cursor, first: batchSize });
+      const products = data?.products || { edges: [], pageInfo: {} };
+      
+      allProducts.push(...products.edges);
+      hasMore = products.pageInfo.hasNextPage;
+      cursor = products.edges[products.edges.length - 1]?.cursor;
+      
+      console.log('[SITEMAP-CORE] Fetched', products.edges.length, 'products, total:', allProducts.length);
+    }
+    
+    console.log('[SITEMAP-CORE] Total products fetched:', allProducts.length);
+    
+    // Generate XML
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
+    xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"';
+    
+    // Add AI namespace only if AI sitemap is enabled
+    console.log('[SITEMAP-CORE] isAISitemapEnabled:', isAISitemapEnabled);
+    if (isAISitemapEnabled) {
+      xml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
+      console.log('[SITEMAP-CORE] Added AI namespace to XML');
+    } else {
+      console.log('[SITEMAP-CORE] AI namespace NOT added to XML');
+    }
+    
+    xml += '>\n';
+    
+    // Add products
+    for (const edge of allProducts) {
+      const product = edge.node;
+      const lastmod = new Date(product.updatedAt).toISOString().split('T')[0];
+      
+      // Main product URL
+      xml += '  <url>\n';
+      xml += '    <loc>' + primaryDomain + '/products/' + product.handle + '</loc>\n';
+      xml += '    <lastmod>' + lastmod + '</lastmod>\n';
+      xml += '    <changefreq>weekly</changefreq>\n';
+      xml += '    <priority>0.8</priority>\n';
+      
+      // Add AI metadata ONLY if AI sitemap is enabled
+      console.log('[SITEMAP-CORE] Product', product.handle, '- isAISitemapEnabled:', isAISitemapEnabled);
+      if (isAISitemapEnabled) {
+        console.log('[SITEMAP-CORE] Adding AI metadata for product:', product.handle);
+        xml += '    <ai:product>\n';
+        xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
+        xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
+        
+        if (product.priceRangeV2?.minVariantPrice) {
+          xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+        }
+        
+        if (product.vendor) {
+          xml += '      <ai:brand>' + escapeXml(product.vendor) + '</ai:brand>\n';
+        }
+        
+        if (product.productType) {
+          xml += '      <ai:category>' + escapeXml(product.productType) + '</ai:category>\n';
+        }
+        
+        if (product.tags && product.tags.length > 0) {
+          xml += '      <ai:tags>' + escapeXml(product.tags.join(', ')) + '</ai:tags>\n';
+        }
+        
+        // Add AI-generated bullets
+        let bullets = null;
+        if (product.metafield_seo_ai_bullets?.value) {
+          try {
+            bullets = JSON.parse(product.metafield_seo_ai_bullets.value);
+          } catch (e) {
+            console.log('[SITEMAP-CORE] Could not parse bullets for', product.handle);
+          }
+        }
+        
+        if (bullets && Array.isArray(bullets) && bullets.length > 0) {
+          xml += '      <ai:features>\n';
+          bullets.forEach(bullet => {
+            if (bullet && bullet.trim()) {
+              xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+            }
+          });
+          xml += '      </ai:features>\n';
+        }
+        
+        // Add AI-generated FAQ
+        let faq = null;
+        if (product.metafield_seo_ai_faq?.value) {
+          try {
+            faq = JSON.parse(product.metafield_seo_ai_faq.value);
+          } catch (e) {
+            console.log('[SITEMAP-CORE] Could not parse FAQ for', product.handle);
+          }
+        }
+        
+        if (faq && Array.isArray(faq) && faq.length > 0) {
+          xml += '      <ai:faq>\n';
+          faq.forEach(item => {
+            if (item && item.q && item.a) {
+              xml += '        <ai:qa>\n';
+              xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
+              xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
+              xml += '        </ai:qa>\n';
+            }
+          });
+          xml += '      </ai:faq>\n';
+        }
+        
+        xml += '    </ai:product>\n';
+      }
+      
+      xml += '  </url>\n';
+      
+      // Add multilingual URLs
+      const hasMultiLanguageSEO = await checkProductSEOLanguages(normalizedShop, product.id);
+      if (hasMultiLanguageSEO.length > 1) {
+        for (const lang of hasMultiLanguageSEO) {
+          if (lang === 'en') continue; // Skip English as it's the main URL
+          
+          const langUrl = primaryDomain + '/' + lang + '/products/' + product.handle;
+          let langTitle = product.title;
+          let langDescription = cleanHtmlForXml(product.descriptionHtml);
+          
+          // Try to get localized content
+          try {
+            const seo = await getProductLocalizedContent(normalizedShop, product.id, lang);
+            if (seo) {
+              langTitle = seo.title || langTitle;
+              langDescription = seo.metaDescription || langDescription;
+            }
+          } catch (err) {
+            console.log(`[SITEMAP-CORE] Could not get SEO for ${lang}:`, err.message);
+          }
+          
+          xml += '  <url>\n';
+          xml += '    <loc>' + langUrl + '</loc>\n';
+          xml += '    <lastmod>' + lastmod + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.8</priority>\n';
+          
+          // Add AI metadata ONLY if AI sitemap is enabled
+          if (isAISitemapEnabled) {
+            console.log('[SITEMAP-CORE] Adding AI metadata for multilingual product:', product.handle, 'language:', lang);
+            xml += '    <ai:product>\n';
+            xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
+            xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
+            xml += '      <ai:language>' + lang + '</ai:language>\n';
+            xml += '    </ai:product>\n';
+          }
+          
+          xml += '  </url>\n';
+        }
+      }
+    }
+    
+    // Add collections if plan supports it
+    if (['growth', 'growth_extra', 'enterprise'].includes(plan)) {
+      console.log('[SITEMAP-CORE] Including collections for plan:', plan);
+      try {
+        const collectionsQuery = `
+          query {
+            collections(first: 20) {
+              edges {
+                node {
+                  id
+                  handle
+                  title
+                  updatedAt
+                }
+              }
+            }
+          }
+        `;
+        
+        const collectionsData = await shopGraphQL(normalizedShop, collectionsQuery);
+        const collections = collectionsData?.collections?.edges || [];
+        
+        for (const edge of collections) {
+          const collection = edge.node;
+          const lastmod = new Date(collection.updatedAt).toISOString().split('T')[0];
+          
+          xml += '  <url>\n';
+          xml += '    <loc>' + primaryDomain + '/collections/' + collection.handle + '</loc>\n';
+          xml += '    <lastmod>' + lastmod + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.7</priority>\n';
+          xml += '  </url>\n';
+        }
+        
+        console.log('[SITEMAP-CORE] Added', collections.length, 'collections');
+      } catch (collectionsErr) {
+        console.log('[SITEMAP-CORE] Could not fetch collections:', collectionsErr.message);
+      }
+    }
+    
+    // Add pages
+    try {
+      const pagesQuery = `
+        query {
+          pages(first: 10) {
+            edges {
+              node {
+                id
+                handle
+                title
+                updatedAt
+              }
+            }
+          }
+        }
+      `;
+      
+      const pagesData = await shopGraphQL(normalizedShop, pagesQuery);
+      const pages = pagesData?.pages?.edges || [];
+      
+      for (const edge of pages) {
+        const page = edge.node;
+        const lastmod = new Date(page.updatedAt).toISOString().split('T')[0];
+        
+        xml += '  <url>\n';
+        xml += '    <loc>' + primaryDomain + '/pages/' + page.handle + '</loc>\n';
+        xml += '    <lastmod>' + lastmod + '</lastmod>\n';
+        xml += '    <changefreq>monthly</changefreq>\n';
+        xml += '    <priority>0.6</priority>\n';
+        xml += '  </url>\n';
+      }
+      
+      console.log('[SITEMAP-CORE] Added', pages.length, 'pages');
+    } catch (pagesErr) {
+      console.log('[SITEMAP-CORE] Could not fetch pages:', pagesErr.message);
+    }
+    
+    xml += '</urlset>\n';
+    
+    // Save to database
+    console.log('[SITEMAP-CORE] Attempting to save sitemap...');
+    console.log('[SITEMAP-CORE] XML size:', xml.length, 'bytes');
+    
+    const { default: Sitemap } = await import('../db/Sitemap.js');
+    const sitemapDoc = await Sitemap.findOneAndUpdate(
+      { shop: normalizedShop },
+      {
+        shop: normalizedShop,
+        generatedAt: new Date(),
+        url: primaryDomain + '/sitemap.xml',
+        productCount: allProducts.length,
+        size: xml.length,
+        plan: plan,
+        status: 'completed',
+        content: xml
+      },
+      { upsert: true, new: true }
+    );
+    
+    console.log('[SITEMAP-CORE] Save result:');
+    console.log('[SITEMAP-CORE]   - Document ID:', sitemapDoc._id);
+    console.log('[SITEMAP-CORE]   - Content saved:', !!sitemapDoc.content);
+    
+    // Verify save
+    const verification = await Sitemap.findOne({ shop: normalizedShop }).select('content');
+    console.log('[SITEMAP-CORE] Verification - content exists:', !!verification?.content);
+    console.log('[SITEMAP-CORE] Verification - content length:', verification?.content?.length || 0);
+    
+    return {
+      success: true,
+      shop: normalizedShop,
+      productCount: allProducts.length,
+      size: xml.length,
+      aiEnabled: isAISitemapEnabled
+    };
+    
+  } catch (error) {
+    console.error('[SITEMAP-CORE] Error:', error);
+    throw error;
+  }
+}
+
 // Handler functions
 async function handleGenerate(req, res) {
   console.log('[SITEMAP] Generate called');
@@ -820,6 +1214,6 @@ router.get('/public', servePublicSitemap); // Public endpoint (no auth required)
 
 // Export default router
 // Export the generate function for background regeneration
-export { handleGenerate as generateSitemap };
+export { handleGenerate as generateSitemap, generateSitemapCore };
 
 export default router;

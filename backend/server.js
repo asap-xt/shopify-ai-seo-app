@@ -506,32 +506,13 @@ const root = {
     try {
       console.log('[GRAPHQL] Background sitemap regeneration requested for shop:', shop);
       
-      // Import sitemap generation function
-      const { generateSitemap } = await import('./controllers/sitemapController.js');
+      // Import the core sitemap generation logic
+      const { generateSitemapCore } = await import('./controllers/sitemapController.js');
       
-      // Create a mock request object for the sitemap generation
-      const mockReq = {
-        query: { shop: shop },
-        body: { shop: shop }
-      };
-      
-      const mockRes = {
-        status: (code) => ({ 
-          json: (data) => {
-            console.log(`[GRAPHQL] Sitemap generation response (${code}):`, data);
-            return { statusCode: code, data };
-          }
-        }),
-        json: (data) => {
-          console.log('[GRAPHQL] Sitemap generation response:', data);
-          return data;
-        }
-      };
-      
-      // Don't await - let it run in background
-      generateSitemap(mockReq, mockRes)
-        .then(() => {
-          console.log('[GRAPHQL] Background sitemap generation completed');
+      // Call the core function directly without Express req/res
+      generateSitemapCore(shop)
+        .then((result) => {
+          console.log('[GRAPHQL] Background sitemap generation completed:', result);
         })
         .catch((error) => {
           console.error('[GRAPHQL] Background sitemap generation failed:', error);
