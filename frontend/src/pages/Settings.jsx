@@ -378,10 +378,17 @@ export default function Settings() {
   const shop = qs('shop', '');
 
   useEffect(() => {
+    console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
+    console.log('[SETTINGS] Shop:', shop);
+    console.log('[SETTINGS] API function:', typeof api);
+    
     if (!shop) {
+      console.log('[SETTINGS] No shop, setting loading to false');
       setLoading(false);
       return;
     }
+    
+    console.log('[SETTINGS] Shop available, calling loadSettings...');
     loadSettings();
   }, [shop, api]);
 
@@ -462,10 +469,19 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
+      console.log('[SETTINGS] ===== STARTING LOAD SETTINGS =====');
+      console.log('[SETTINGS] Shop:', shop);
+      console.log('[SETTINGS] API function:', typeof api);
+      console.log('[SETTINGS] Calling API...');
+      
       const data = await api(`/api/ai-discovery/settings?shop=${shop}`);
-      console.log('Loaded settings:', data); // Debug log
-      console.log('Settings plan:', data?.plan);
-      console.log('Normalized plan:', normalizePlan(data?.plan));
+      
+      console.log('[SETTINGS] ===== SETTINGS LOADED =====');
+      console.log('[SETTINGS] Raw data:', data);
+      console.log('[SETTINGS] Settings plan:', data?.plan);
+      console.log('[SETTINGS] Normalized plan:', normalizePlan(data?.plan));
+      console.log('[SETTINGS] Features:', data?.features);
+      
       setSettings(data);
       setOriginalSettings(data); // Save original settings
       
@@ -474,8 +490,11 @@ export default function Settings() {
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
+      
+      console.log('[SETTINGS] ===== LOAD SETTINGS COMPLETE =====');
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      console.error('[SETTINGS] ===== LOAD SETTINGS ERROR =====');
+      console.error('[SETTINGS] Failed to load settings:', error);
       setToast('Failed to load settings');
     } finally {
       setLoading(false);
