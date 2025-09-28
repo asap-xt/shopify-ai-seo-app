@@ -1499,6 +1499,11 @@ export default function Settings() {
       )}
 
       {/* Toast notifications */}
+      {toast && (
+        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, background: 'red', color: 'white', padding: '10px', borderRadius: '5px' }}>
+          DEBUG TOAST: {toast}
+        </div>
+      )}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </BlockStack>
   );
