@@ -260,11 +260,7 @@ async function generateSitemapCore(shop) {
                   title
                   description
                 }
-                metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") {
-                  value
-                  type
-                }
-                metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") {
+                metafield_seo_ai: metafield(namespace: "seo_ai", key: "seo__en") {
                   value
                   type
                 }
@@ -672,11 +668,7 @@ async function handleGenerate(req, res) {
                   title
                   description
                 }
-                metafield_seo_ai_bullets: metafield(namespace: "seo_ai", key: "bullets") {
-                  value
-                  type
-                }
-                metafield_seo_ai_faq: metafield(namespace: "seo_ai", key: "faq") {
+                metafield_seo_ai: metafield(namespace: "seo_ai", key: "seo__en") {
                   value
                   type
                 }
@@ -717,8 +709,8 @@ async function handleGenerate(req, res) {
       console.log('[DEBUG] First product metafields:');
       console.log('  - ID:', firstProduct.id);
       console.log('  - Title:', firstProduct.title);
-      console.log('  - Bullets metafield:', firstProduct.metafield_seo_ai_bullets);
-      console.log('  - FAQ metafield:', firstProduct.metafield_seo_ai_faq);
+      console.log('  - SEO AI metafield:', firstProduct.metafield_seo_ai);
+      console.log('  - SEO AI metafield value:', firstProduct.metafield_seo_ai?.value);
     }
     
     // Generate XML with conditional AI namespace
@@ -763,29 +755,23 @@ async function handleGenerate(req, res) {
       let faq = null;
       
       // DEBUG: Enhanced parsing with logging
-      if (product.metafield_seo_ai_bullets?.value) {
+      if (product.metafield_seo_ai?.value) {
         try { 
-          bullets = JSON.parse(product.metafield_seo_ai_bullets.value);
+          const seoData = JSON.parse(product.metafield_seo_ai.value);
+          bullets = seoData.bullets || null;
+          faq = seoData.faq || null;
+          
           if (bullets && bullets.length > 0) {
             debugProductsWithBullets++;
             console.log(`[DEBUG] Product ${product.id} has ${bullets.length} bullets`);
           }
-        } catch (e) {
-          console.error(`[DEBUG] Failed to parse bullets for product ${product.id}:`, e.message);
-          console.error('  Raw value:', product.metafield_seo_ai_bullets.value);
-        }
-      }
-      
-      if (product.metafield_seo_ai_faq?.value) {
-        try { 
-          faq = JSON.parse(product.metafield_seo_ai_faq.value);
           if (faq && faq.length > 0) {
             debugProductsWithFaq++;
             console.log(`[DEBUG] Product ${product.id} has ${faq.length} FAQ items`);
           }
         } catch (e) {
-          console.error(`[DEBUG] Failed to parse FAQ for product ${product.id}:`, e.message);
-          console.error('  Raw value:', product.metafield_seo_ai_faq.value);
+          console.error(`[DEBUG] Failed to parse SEO AI metafield for product ${product.id}:`, e.message);
+          console.error('  Raw value:', product.metafield_seo_ai.value);
         }
       }
       
