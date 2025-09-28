@@ -33,6 +33,7 @@ const normalizePlan = (plan) => {
 };
 
 export default function Settings() {
+  console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
   // Debug helper
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
@@ -280,6 +281,8 @@ export default function Settings() {
   };
 
   const saveSettings = async () => {
+    console.log('[SETTINGS] ===== SAVE SETTINGS CALLED =====');
+    console.log('[SETTINGS] Current settings:', settings);
     setSaving(true);
     try {
       await api(`/api/ai-discovery/settings?shop=${shop}`, {
