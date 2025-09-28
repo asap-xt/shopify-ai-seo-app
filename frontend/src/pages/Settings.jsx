@@ -50,16 +50,14 @@ export default function Settings() {
   const [toastTimeout, setToastTimeout] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
   const [showViewButtons, setShowViewButtons] = useState(() => {
-    // Initialize from localStorage to persist across component reloads
-    const saved = localStorage.getItem('showViewButtons');
-    return saved === 'true';
+    // Always start with false, don't persist from localStorage
+    // View buttons should only show after successful operations
+    return false;
   });
   
   // Debug showViewButtons state changes
   useEffect(() => {
     console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
-    // Save to localStorage to persist across component reloads
-    localStorage.setItem('showViewButtons', showViewButtons.toString());
   }, [showViewButtons]);
   
   // Debug toast state changes
