@@ -200,8 +200,10 @@ async function generateSitemapCore(shop) {
     const shopData = await shopGraphQL(normalizedShop, shopQuery);
     console.log('[SITEMAP-CORE] Shop data fetched successfully');
     const primaryDomain = shopData.shop.primaryDomain.url;
+    console.log('[SITEMAP-CORE] Primary domain:', primaryDomain);
     
     // Try to get locales
+    console.log('[SITEMAP-CORE] Fetching locales...');
     let locales = [{ locale: 'en', primary: true }];
     try {
       const localesQuery = `
@@ -213,17 +215,22 @@ async function generateSitemapCore(shop) {
         }
       `;
       const localesData = await shopGraphQL(normalizedShop, localesQuery);
+      console.log('[SITEMAP-CORE] Locales data fetched:', localesData);
       if (localesData.shopLocales) {
         locales = localesData.shopLocales;
+        console.log('[SITEMAP-CORE] Using fetched locales:', locales);
+      } else {
+        console.log('[SITEMAP-CORE] No locales found, using default');
       }
     } catch (localeErr) {
-      console.log('[SITEMAP-CORE] Could not fetch locales, using default:', locales);
+      console.log('[SITEMAP-CORE] Could not fetch locales, using default:', localeErr.message);
     }
     
     console.log('[SITEMAP-CORE] Primary domain:', primaryDomain);
     console.log('[SITEMAP-CORE] Locales:', locales);
     
     // Fetch products with AI-relevant data
+    console.log('[SITEMAP-CORE] Starting to fetch products...');
     let allProducts = [];
     let cursor = null;
     let hasMore = true;
