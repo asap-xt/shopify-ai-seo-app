@@ -1,5 +1,5 @@
 // frontend/src/pages/Settings.jsx
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Box,
@@ -50,21 +50,17 @@ export default function Settings() {
   const [toastTimeout, setToastTimeout] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
   const [showViewButtons, setShowViewButtons] = useState(false);
-  const showViewButtonsRef = useRef(false);
-  
-  // Restore showViewButtons from ref on component mount
-  useEffect(() => {
-    if (showViewButtonsRef.current !== showViewButtons) {
-      console.log('[SETTINGS] Restoring showViewButtons from ref:', showViewButtonsRef.current);
-      setShowViewButtons(showViewButtonsRef.current);
-    }
-  }, []); // Run only on mount
   
   // Debug showViewButtons state changes
   useEffect(() => {
     console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
-    showViewButtonsRef.current = showViewButtons;
   }, [showViewButtons]);
+  
+  // Reset showViewButtons on component mount to prevent showing from previous sessions
+  useEffect(() => {
+    console.log('[SETTINGS] Resetting showViewButtons on component mount');
+    setShowViewButtons(false);
+  }, []); // Run only on mount
   
   // Debug toast state changes
   useEffect(() => {
