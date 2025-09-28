@@ -299,7 +299,7 @@ export default function Settings() {
         }
       });
       
-      setToast('Settings saved successfully');
+      // Don't show toast here - will show appropriate toast based on AI sitemap status
       setHasUnsavedChanges(false); // Clear unsaved changes flag
       setOriginalSettings(settings); // Update original settings
       generateRobotsTxt(); // Regenerate robots.txt
@@ -351,6 +351,7 @@ export default function Settings() {
         }
       } else {
         console.log('[SETTINGS] AI Sitemap disabled, skipping background regeneration');
+        setToast('Settings saved successfully');
       }
     } catch (error) {
       console.error('Failed to save settings:', error);

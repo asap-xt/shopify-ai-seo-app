@@ -204,14 +204,6 @@ export default function SitemapPage({ shop: shopProp }) {
                             <Text variant="bodyMd" fontWeight="semibold">{info.generatedAt ? new Date(info.generatedAt).toLocaleString() : 'Unknown'}</Text>
                           </InlineStack>
                         </Box>
-                        <Box paddingBlockEnd="200">
-                          <InlineStack align="space-between">
-                            <Text variant="bodyMd" color="subdued">Sitemap URL</Text>
-                            <Text variant="bodyMd" fontWeight="semibold" breakWord>
-                              /api/sitemap/generate?shop={shop}&force=true
-                            </Text>
-                          </InlineStack>
-                        </Box>
                       </BlockStack>
                     </Box>
 
@@ -219,7 +211,7 @@ export default function SitemapPage({ shop: shopProp }) {
                       <Button
                         fullWidth
                         external
-                        url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true`}
+                        url={`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`}
                         icon={ExternalIcon}
                       >
                         View Sitemap
