@@ -312,8 +312,12 @@ async function handleGenerate(req, res) {
     xml += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"';
     
     // Add AI namespace only if AI sitemap is enabled
+    console.log('[SITEMAP] isAISitemapEnabled:', isAISitemapEnabled);
     if (isAISitemapEnabled) {
       xml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
+      console.log('[SITEMAP] Added AI namespace to XML');
+    } else {
+      console.log('[SITEMAP] AI namespace NOT added to XML');
     }
     
     xml += '>\n';
@@ -387,7 +391,9 @@ async function handleGenerate(req, res) {
       }
       
       // Add AI-optimized metadata ONLY if AI sitemap is enabled
+      console.log('[SITEMAP] Product', product.handle, '- isAISitemapEnabled:', isAISitemapEnabled);
       if (isAISitemapEnabled) {
+        console.log('[SITEMAP] Adding AI metadata for product:', product.handle);
         xml += '    <ai:product>\n';
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
         xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
