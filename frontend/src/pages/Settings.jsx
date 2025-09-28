@@ -562,6 +562,7 @@ export default function Settings() {
       };
 
       if (feature === 'aiSitemap') {
+        console.log('[SETTINGS] Loading AI Sitemap XML...');
         // For sitemap, fetch as text since it's XML
         const response = await fetch(endpoints[feature], {
           method: 'GET',
@@ -572,6 +573,7 @@ export default function Settings() {
         });
         
         if (response.ok) {
+          console.log('[SETTINGS] AI Sitemap XML loaded successfully');
           const xmlContent = await response.text();
           setJsonModalContent(xmlContent);
         } else {
@@ -583,6 +585,7 @@ export default function Settings() {
         setJsonModalContent(JSON.stringify(data, null, 2));
       }
     } catch (error) {
+      console.error('[SETTINGS] Error loading data:', error);
       setJsonModalContent(`Error loading data: ${error.message}`);
     } finally {
       setLoadingJson(false);
@@ -1431,9 +1434,13 @@ export default function Settings() {
           <Modal.Section>
             <Box padding="200" background="bg-surface-secondary" borderRadius="100">
               {loadingJson ? (
-                <InlineStack align="center">
+                <InlineStack align="center" gap="200">
                   <Spinner size="small" />
-                  <Text>Loading...</Text>
+                  <Text variant="bodyMd">
+                    {jsonModalTitle === 'AI-Optimized Sitemap' 
+                      ? 'Loading sitemap XML... This may take a moment for large stores.' 
+                      : 'Loading...'}
+                  </Text>
                 </InlineStack>
               ) : (
                 <pre style={{ 
