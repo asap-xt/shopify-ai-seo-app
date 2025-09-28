@@ -173,6 +173,23 @@ async function handleGenerate(req, res) {
     const { limit, plan } = await getPlanLimits(shop);
     console.log('[SITEMAP] Plan limits:', { limit, plan });
     
+    // Check AI Discovery settings for AI-Optimized Sitemap
+    let isAISitemapEnabled = false;
+    try {
+      const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
+      const { default: Shop } = await import('../db/Shop.js');
+      
+      const shopRecord = await Shop.findOne({ shop });
+      if (shopRecord?.accessToken) {
+        const session = { accessToken: shopRecord.accessToken };
+        const settings = await aiDiscoveryService.getSettings(shop, session);
+        isAISitemapEnabled = settings?.features?.aiSitemap || false;
+        console.log('[SITEMAP] AI Discovery settings:', { aiSitemap: isAISitemapEnabled });
+      }
+    } catch (error) {
+      console.log('[SITEMAP] Could not fetch AI Discovery settings, using basic sitemap:', error.message);
+    }
+    
     // Get shop info and languages for AI discovery
     const shopQuery = `
       query {
@@ -287,13 +304,19 @@ async function handleGenerate(req, res) {
       console.log('  - FAQ metafield:', firstProduct.metafield_seo_ai_faq);
     }
     
-    // Generate AI-optimized XML
+    // Generate XML with conditional AI namespace
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
     xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"\n';
     xml += '        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"\n';
-    xml += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
-    xml += '        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0">\n';
+    xml += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"';
+    
+    // Add AI namespace only if AI sitemap is enabled
+    if (isAISitemapEnabled) {
+      xml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
+    }
+    
+    xml += '>\n';
     
     // Homepage with structured data hint
     xml += '  <url>\n';
@@ -363,54 +386,56 @@ async function handleGenerate(req, res) {
         }
       }
       
-      // Add AI-optimized metadata
-      xml += '    <ai:product>\n';
-      xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
-      xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
-      
-      if (product.priceRangeV2?.minVariantPrice) {
-        xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+      // Add AI-optimized metadata ONLY if AI sitemap is enabled
+      if (isAISitemapEnabled) {
+        xml += '    <ai:product>\n';
+        xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
+        xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
+        
+        if (product.priceRangeV2?.minVariantPrice) {
+          xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+        }
+        
+        if (product.vendor) {
+          xml += '      <ai:brand>' + escapeXml(product.vendor) + '</ai:brand>\n';
+        }
+        
+        if (product.productType) {
+          xml += '      <ai:category>' + escapeXml(product.productType) + '</ai:category>\n';
+        }
+        
+        if (product.tags && product.tags.length > 0) {
+          const tagArray = typeof product.tags === 'string' ? product.tags.split(',').map(t => t.trim()) : product.tags;
+          xml += '      <ai:tags>' + escapeXml(tagArray.join(', ')) + '</ai:tags>\n';
+        }
+        
+        // Add AI-generated bullets
+        if (bullets && Array.isArray(bullets) && bullets.length > 0) {
+          xml += '      <ai:features>\n';
+          bullets.forEach(bullet => {
+            if (bullet && bullet.trim()) { // Extra safety check
+              xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+            }
+          });
+          xml += '      </ai:features>\n';
+        }
+        
+        // Add AI-generated FAQ
+        if (faq && Array.isArray(faq) && faq.length > 0) {
+          xml += '      <ai:faq>\n';
+          faq.forEach(item => {
+            if (item && item.q && item.a) { // Extra safety check
+              xml += '        <ai:qa>\n';
+              xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
+              xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
+              xml += '        </ai:qa>\n';
+            }
+          });
+          xml += '      </ai:faq>\n';
+        }
+        
+        xml += '    </ai:product>\n';
       }
-      
-      if (product.vendor) {
-        xml += '      <ai:brand>' + escapeXml(product.vendor) + '</ai:brand>\n';
-      }
-      
-      if (product.productType) {
-        xml += '      <ai:category>' + escapeXml(product.productType) + '</ai:category>\n';
-      }
-      
-      if (product.tags && product.tags.length > 0) {
-        const tagArray = typeof product.tags === 'string' ? product.tags.split(',').map(t => t.trim()) : product.tags;
-        xml += '      <ai:tags>' + escapeXml(tagArray.join(', ')) + '</ai:tags>\n';
-      }
-      
-      // Add AI-generated bullets
-      if (bullets && Array.isArray(bullets) && bullets.length > 0) {
-        xml += '      <ai:features>\n';
-        bullets.forEach(bullet => {
-          if (bullet && bullet.trim()) { // Extra safety check
-            xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
-          }
-        });
-        xml += '      </ai:features>\n';
-      }
-      
-      // Add AI-generated FAQ
-      if (faq && Array.isArray(faq) && faq.length > 0) {
-        xml += '      <ai:faq>\n';
-        faq.forEach(item => {
-          if (item && item.q && item.a) { // Extra safety check
-            xml += '        <ai:qa>\n';
-            xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
-            xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
-            xml += '        </ai:qa>\n';
-          }
-        });
-        xml += '      </ai:faq>\n';
-      }
-      
-      xml += '    </ai:product>\n';
       xml += '  </url>\n';
       
       // Add separate URLs for each language with SEO optimization
