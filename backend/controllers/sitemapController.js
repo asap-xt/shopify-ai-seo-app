@@ -1095,7 +1095,32 @@ async function serveSitemap(req, res) {
       return res.status(400).send('Missing shop parameter');
     }
     
+    const forceRegenerate = req.query.force === 'true';
+    console.log('[SITEMAP] Force regenerate:', forceRegenerate);
     console.log('[SITEMAP] Looking for sitemap for shop:', shop);
+    
+    // Check if we should force regenerate
+    if (forceRegenerate) {
+      console.log('[SITEMAP] Force regeneration requested, generating new sitemap...');
+      try {
+        const result = await generateSitemapCore(shop);
+        console.log('[SITEMAP] Generated new sitemap:', result);
+        
+        // Get the newly generated sitemap
+        const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        if (newSitemapDoc && newSitemapDoc.content) {
+          res.set({
+            'Content-Type': 'application/xml; charset=utf-8',
+            'Cache-Control': 'public, max-age=3600',
+            'Last-Modified': new Date(newSitemapDoc.generatedAt).toUTCString()
+          });
+          return res.send(newSitemapDoc.content);
+        }
+      } catch (genErr) {
+        console.error('[SITEMAP] Failed to generate sitemap:', genErr);
+        return res.status(500).send('Failed to generate sitemap');
+      }
+    }
     
     // Get saved sitemap with content - use .lean() for better performance
     const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
