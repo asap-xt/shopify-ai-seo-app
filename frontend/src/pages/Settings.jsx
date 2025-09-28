@@ -295,6 +295,21 @@ export default function Settings() {
       setHasUnsavedChanges(false); // Clear unsaved changes flag
       setOriginalSettings(settings); // Update original settings
       generateRobotsTxt(); // Regenerate robots.txt
+      
+      // Background sitemap regeneration if AI Sitemap is enabled
+      if (settings.features?.aiSitemap) {
+        try {
+          console.log('[SETTINGS] Starting background sitemap regeneration...');
+          await api(`/api/ai-discovery/regenerate-sitemap?shop=${shop}`, {
+            method: 'POST'
+          });
+          console.log('[SETTINGS] Background sitemap regeneration started');
+          setToast('Settings saved and sitemap regeneration started');
+        } catch (error) {
+          console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
+          setToast('Settings saved, but sitemap regeneration failed');
+        }
+      }
     } catch (error) {
       console.error('Failed to save settings:', error);
       setToast('Failed to save settings');

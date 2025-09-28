@@ -807,4 +807,7 @@ router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 router.get('/public', servePublicSitemap); // Public endpoint (no auth required)
 
 // Export default router
+// Export the generate function for background regeneration
+export { handleGenerate as generateSitemap };
+
 export default router;
