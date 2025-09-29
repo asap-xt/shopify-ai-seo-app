@@ -221,7 +221,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
     const marketsData = await shopGraphQL(req, shop, marketsQuery);
     const markets = marketsData?.markets?.edges?.map(edge => edge.node) || [];
     
-    console.log('[STORE-DEBUG] marketsData:', JSON.stringify(marketsData, null, 2));
     console.log('[STORE-DEBUG] markets:', markets);
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
     console.log('[STORE-DEBUG] features:', {
