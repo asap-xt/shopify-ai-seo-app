@@ -218,6 +218,7 @@ export default function Settings() {
       
       console.log('[SETTINGS DEBUG] GraphQL Result:', result);
       console.log('[SETTINGS DEBUG] Products edges length:', result?.data?.products?.edges?.length);
+      console.log('[SETTINGS DEBUG] Products edges:', result?.data?.products?.edges);
       
       const hasProducts = result?.data?.products?.edges?.length > 0;
       console.log('[SETTINGS DEBUG] Has products:', hasProducts);
@@ -262,6 +263,7 @@ export default function Settings() {
       
       console.log('[SETTINGS DEBUG] GraphQL Result:', result);
       console.log('[SETTINGS DEBUG] Collections edges length:', result?.data?.collections?.edges?.length);
+      console.log('[SETTINGS DEBUG] Collections edges:', result?.data?.collections?.edges);
       
       const hasCollections = result?.data?.collections?.edges?.length > 0;
       console.log('[SETTINGS DEBUG] Has collections:', hasCollections);
