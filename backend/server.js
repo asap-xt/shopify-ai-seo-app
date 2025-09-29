@@ -595,7 +595,7 @@ const root = {
       console.log('[GRAPHQL] Checking products for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
+      const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
@@ -652,7 +652,7 @@ const root = {
       console.log('[GRAPHQL] Checking collections for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
+      const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
@@ -709,7 +709,7 @@ const root = {
       console.log('[GRAPHQL] Checking store metadata for shop:', shop);
       
       const { normalizeShop } = await import('./utils/shop.js');
-      const { executeShopifyGraphQL } = await import('./utils/shopifyApi.js');
+      const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
       const normalizedShop = normalizeShop(shop);
       if (!normalizedShop) {
