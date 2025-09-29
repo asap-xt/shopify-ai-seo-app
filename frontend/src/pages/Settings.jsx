@@ -860,6 +860,21 @@ export default function Settings() {
   
   console.log('[SETTINGS] checkGeneratedData useEffect created successfully');
 
+  // Force check on mount
+  useEffect(() => {
+    console.log('[SETTINGS] ===== FORCE CHECK ON MOUNT =====');
+    console.log('[SETTINGS] Shop:', shop);
+    console.log('[SETTINGS] Settings:', settings);
+    console.log('[SETTINGS] Settings features:', settings?.features);
+    
+    if (shop && settings?.features) {
+      console.log('[SETTINGS] Both shop and settings available, calling checkGeneratedData...');
+      checkGeneratedData();
+    } else {
+      console.log('[SETTINGS] Missing shop or settings, skipping checkGeneratedData');
+    }
+  }, []); // Run only on mount
+
   // ===== 9. RENDER =====
   try {
     if (!shop) {
