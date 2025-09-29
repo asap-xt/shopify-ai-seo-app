@@ -66,6 +66,11 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // Get saved settings
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
     
+    console.log('[AI-DISCOVERY] DEBUG - savedSettings:', JSON.stringify(savedSettings, null, 2));
+    console.log('[AI-DISCOVERY] DEBUG - savedSettings.features:', JSON.stringify(savedSettings.features, null, 2));
+    console.log('[AI-DISCOVERY] DEBUG - savedSettings exists:', !!savedSettings);
+    console.log('[AI-DISCOVERY] DEBUG - savedSettings.features exists:', !!savedSettings.features);
+    
     // Get default structure for the plan
     const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
     
@@ -88,6 +93,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
+    
+    console.log('[AI-DISCOVERY] DEBUG - Final mergedSettings.features:', JSON.stringify(mergedSettings.features, null, 2));
     
     res.json(mergedSettings);
   } catch (error) {

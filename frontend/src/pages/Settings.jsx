@@ -496,6 +496,16 @@ export default function Settings() {
       console.log('[SETTINGS] Features:', data?.features);
       console.log('[SETTINGS] Products JSON feature:', data?.features?.productsJson);
       console.log('[SETTINGS] Collections JSON feature:', data?.features?.collectionsJson);
+      console.log('[SETTINGS] AI Sitemap feature:', data?.features?.aiSitemap);
+      console.log('[SETTINGS] Welcome Page feature:', data?.features?.welcomePage);
+      console.log('[SETTINGS] Store Metadata feature:', data?.features?.storeMetadata);
+      console.log('[SETTINGS] Schema Data feature:', data?.features?.schemaData);
+      console.log('[SETTINGS] Auto Robots Txt feature:', data?.features?.autoRobotsTxt);
+      
+      // Debug: Check if any features are true
+      const trueFeatures = Object.entries(data?.features || {}).filter(([key, value]) => value === true);
+      console.log('[SETTINGS] Features that are TRUE:', trueFeatures);
+      console.log('[SETTINGS] Number of true features:', trueFeatures.length);
       
       setSettings(data);
       setOriginalSettings(data); // Save original settings
@@ -1290,6 +1300,15 @@ export default function Settings() {
               ].map((feature) => {
                 const isAvailable = isFeatureAvailable(feature.key);
                 const isEnabled = !!settings?.features?.[feature.key];
+                
+                // Debug: Log each feature state
+                console.log(`[SETTINGS DEBUG] Feature ${feature.key}:`, {
+                  isAvailable,
+                  isEnabled,
+                  rawValue: settings?.features?.[feature.key],
+                  plan: settings?.plan,
+                  normalizedPlan: normalizePlan(settings?.plan)
+                });
                 
                 return (
                   <Box key={feature.key}
