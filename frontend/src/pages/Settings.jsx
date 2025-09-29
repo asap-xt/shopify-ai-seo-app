@@ -386,6 +386,19 @@ export default function Settings() {
     }
   }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
+  // Debug useEffect dependencies
+  useEffect(() => {
+    console.log('[SETTINGS DEBUG] ===== useEffect DEPENDENCIES DEBUG =====');
+    console.log('[SETTINGS DEBUG] settings?.features:', settings?.features);
+    console.log('[SETTINGS DEBUG] settings exists:', !!settings);
+    console.log('[SETTINGS DEBUG] settings type:', typeof settings);
+    console.log('[SETTINGS DEBUG] checkProductsData exists:', !!checkProductsData);
+    console.log('[SETTINGS DEBUG] checkCollectionsData exists:', !!checkCollectionsData);
+    console.log('[SETTINGS DEBUG] checkStoreMetadata exists:', !!checkStoreMetadata);
+    console.log('[SETTINGS DEBUG] checkWelcomePage exists:', !!checkWelcomePage);
+    console.log('[SETTINGS DEBUG] ===== END useEffect DEPENDENCIES DEBUG =====');
+  }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
+  
   console.log('[SETTINGS] State variables initialized successfully');
   console.log('[SETTINGS] About to create useEffect hooks...');
 
@@ -419,10 +432,11 @@ export default function Settings() {
   console.log('[SETTINGS] Shop length:', shop?.length);
   
   useEffect(() => {
-    console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
+    console.log('[SETTINGS] ===== LOAD SETTINGS useEffect TRIGGERED =====');
     console.log('[SETTINGS] Shop:', shop);
     console.log('[SETTINGS] API function:', typeof api);
     console.log('[SETTINGS] useEffect dependencies - shop:', shop);
+    console.log('[SETTINGS] useEffect dependencies - api:', typeof api);
     
     if (!shop) {
       console.log('[SETTINGS] No shop, setting loading to false');
@@ -432,7 +446,7 @@ export default function Settings() {
     
     console.log('[SETTINGS] Shop available, calling loadSettings...');
     loadSettings();
-  }, [shop]);
+  }, [shop, api]);
   
   console.log('[SETTINGS] loadSettings useEffect created successfully');
 
@@ -538,8 +552,12 @@ export default function Settings() {
       console.log('[SETTINGS] Features that are TRUE:', trueFeatures);
       console.log('[SETTINGS] Number of true features:', trueFeatures.length);
       
+      console.log('[SETTINGS] Setting settings state...');
+      console.log('[SETTINGS] Data to set:', data);
+      console.log('[SETTINGS] Store Metadata in data:', data?.features?.storeMetadata);
       setSettings(data);
       setOriginalSettings(data); // Save original settings
+      console.log('[SETTINGS] Settings state set successfully');
       
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
