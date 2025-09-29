@@ -280,15 +280,16 @@ export default function Settings() {
       console.log('[SETTINGS DEBUG] Result type:', typeof result);
       console.log('[SETTINGS DEBUG] Result keys:', result ? Object.keys(result) : 'null');
       
-      // Check if it's an error response
-      if (result?.error) {
+      // Check if it's an error response (JSON with error field)
+      if (result?.error && typeof result.error === 'string' && !result.error.includes('<!DOCTYPE html>')) {
         console.log('[SETTINGS DEBUG] Welcome page error:', result.error);
         console.log('[SETTINGS DEBUG] Error debug info:', result.debug);
         return false;
       }
       
-      // If we get HTML content, the page exists
-      const hasWelcomePage = typeof result === 'string' && result.includes('<!DOCTYPE html>');
+      // If we get HTML content (either as string or in error field), the page exists
+      const hasWelcomePage = (typeof result === 'string' && result.includes('<!DOCTYPE html>')) ||
+                            (result?.error && typeof result.error === 'string' && result.error.includes('<!DOCTYPE html>'));
       console.log('[SETTINGS DEBUG] Has welcome page:', hasWelcomePage);
       console.log('[SETTINGS DEBUG] ===== WELCOME PAGE CHECK COMPLETE =====');
       
