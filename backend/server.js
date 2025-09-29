@@ -515,6 +515,10 @@ const schema = buildSchema(`
   type StoreMetadata {
     shopName: String
     description: String
+    seoMetadata: String
+    aiMetadata: String
+    organizationSchema: String
+    localBusinessSchema: String
   }
   
   type WelcomePage {
@@ -749,7 +753,11 @@ const root = {
       
       return {
         shopName: hasAnyMetadata ? data.shop?.name : null,
-        description: hasAnyMetadata ? data.shop?.description : null
+        description: hasAnyMetadata ? data.shop?.description : null,
+        seoMetadata: data.shop?.metafield?.value || null,
+        aiMetadata: data.shop?.aiMetafield?.value || null,
+        organizationSchema: data.shop?.organizationMetafield?.value || null,
+        localBusinessSchema: null // Not implemented yet
       };
       
     } catch (error) {
