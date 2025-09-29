@@ -26,7 +26,7 @@ export default function Settings() {
   console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
   console.log('[SETTINGS] Starting component initialization...');
   
-  // ===== 1. КОНСТАНТИ И HELPERS (БЕЗ HOOKS) =====
+  // ===== 1. ÐšÐžÐÐ¡Ð¢ÐÐÐ¢Ð˜ Ð˜ HELPERS (Ð‘Ð•Ð— HOOKS) =====
   const qs = (k, d = '') => {
     try { return new URLSearchParams(window.location.search).get(k) || d; } 
     catch { return d; }
@@ -41,26 +41,59 @@ export default function Settings() {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
 
-  // ===== 2. ИЗВЛИЧАНЕ НА shop =====
+  // ===== 2. Ð˜Ð—Ð’Ð›Ð˜Ð§ÐÐÐ• ÐÐ shop =====
   const shop = qs('shop', '');
 
-  try {
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [settings, setSettings] = useState(null);
-    const [robotsTxt, setRobotsTxt] = useState('');
-    const [showRobotsModal, setShowRobotsModal] = useState(false);
-    const [toast, setToast] = useState('');
-    const [toastTimeout, setToastTimeout] = useState(null);
-    const [pollingInterval, setPollingInterval] = useState(null);
-    const [showViewButtons, setShowViewButtons] = useState(false);
-    const [showProductsJsonView, setShowProductsJsonView] = useState(false);
-    const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
-    const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
-    const [showAiSitemapView, setShowAiSitemapView] = useState(false);
-    const [showWelcomePageView, setShowWelcomePageView] = useState(false);
-    
-    // Debug showViewButtons state changes
+  // ===== 3. ВСИЧКИ useState HOOKS (ИЗВЪН try блок!) =====
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState(null);
+  const [robotsTxt, setRobotsTxt] = useState('');
+  const [showRobotsModal, setShowRobotsModal] = useState(false);
+  const [toast, setToast] = useState('');
+  const [toastTimeout, setToastTimeout] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
+  const [showViewButtons, setShowViewButtons] = useState(false);
+  const [showProductsJsonView, setShowProductsJsonView] = useState(false);
+  const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
+  const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
+  const [showAiSitemapView, setShowAiSitemapView] = useState(false);
+  const [showWelcomePageView, setShowWelcomePageView] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showNoBotsModal, setShowNoBotsModal] = useState(false);
+  const [showManualInstructions, setShowManualInstructions] = useState(false);
+  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  const [jsonModalTitle, setJsonModalTitle] = useState('');
+  const [jsonModalContent, setJsonModalContent] = useState(null);
+  const [loadingJson, setLoadingJson] = useState(false);
+  const [originalSettings, setOriginalSettings] = useState(null);
+  const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
+  const [processingSchema, setProcessingSchema] = useState(false);
+  const [schemaError, setSchemaError] = useState('');
+  const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
+    enabled: false,
+    generating: false,
+    generated: false,
+    progress: ''
+  });
+  const [schemaGenerating, setSchemaGenerating] = useState(false);
+  const [schemaProgress, setSchemaProgress] = useState({
+    current: 0,
+    total: 0,
+    percent: 0,
+    currentProduct: '',
+    stats: {
+      siteFAQ: false,
+      products: 0,
+      totalSchemas: 0
+    }
+  });
+  const [schemaComplete, setSchemaComplete] = useState(false);
+  
+  // ===== 4. API MEMO =====
+  const api = useMemo(() => makeSessionFetch(), []);
+  
+  // Debug showViewButtons state changes
     useEffect(() => {
       console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
     }, [showViewButtons]);
@@ -72,7 +105,7 @@ export default function Settings() {
     }, []); // Run only on mount
   
   
-  // ===== 6. ГЛАВНАТА ФУНКЦИЯ (СЛЕД helper функциите) =====
+  // ===== 6. Ð“Ð›ÐÐ’ÐÐÐ¢Ð Ð¤Ð£ÐÐšÐ¦Ð˜Ð¯ (Ð¡Ð›Ð•Ð” helper Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸Ñ‚Ðµ) =====
   const checkGeneratedData = useCallback(async () => {
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
@@ -114,9 +147,9 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking generated data:', error);
     }
   }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
-  // ВАЖНО: Махни 'shop' от dependencies тук - вече е в помощните функции
+  // Ð’ÐÐ–ÐÐž: ÐœÐ°Ñ…Ð½Ð¸ 'shop' Ð¾Ñ‚ dependencies Ñ‚ÑƒÐº - Ð²ÐµÑ‡Ðµ Ðµ Ð² Ð¿Ð¾Ð¼Ð¾Ñ‰Ð½Ð¸Ñ‚Ðµ Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸
   
-  // ===== 7. useEffect (ПОСЛЕДЕН) =====
+  // ===== 7. useEffect (ÐŸÐžÐ¡Ð›Ð•Ð”Ð•Ð) =====
   useEffect(() => {
     if (settings?.features && shop) {
       console.log('[SETTINGS] Checking for generated data...');
@@ -202,19 +235,10 @@ export default function Settings() {
     
     setPollingInterval(interval);
   };
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showNoBotsModal, setShowNoBotsModal] = useState(false);
-  const [showManualInstructions, setShowManualInstructions] = useState(false);
-  const [jsonModalOpen, setJsonModalOpen] = useState(false);
-  const [jsonModalTitle, setJsonModalTitle] = useState('');
-  const [jsonModalContent, setJsonModalContent] = useState(null);
-  const [loadingJson, setLoadingJson] = useState(false);
-    const [originalSettings, setOriginalSettings] = useState(null);
   
-  // ===== 4. API MEMO (ПРЕДИ да се използва в useCallback) =====
-  const api = useMemo(() => makeSessionFetch(), []);
+  // ===== 4. API MEMO (ÐŸÐ Ð•Ð”Ð˜ Ð´Ð° ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð° Ð² useCallback) =====
   
-  // ===== 5. HELPER ФУНКЦИИ (които НЕ ЗАВИСЯТ от други callbacks) =====
+  // ===== 5. HELPER Ð¤Ð£ÐÐšÐ¦Ð˜Ð˜ (ÐºÐ¾Ð¸Ñ‚Ð¾ ÐÐ• Ð—ÐÐ’Ð˜Ð¡Ð¯Ð¢ Ð¾Ñ‚ Ð´Ñ€ÑƒÐ³Ð¸ callbacks) =====
   const checkProductsData = useCallback(async () => {
     try {
       const PRODUCTS_CHECK_QUERY = `
@@ -356,41 +380,6 @@ export default function Settings() {
     return res?.data;
   };
   
-  // Advanced Schema Data state
-  const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
-  const [processingSchema, setProcessingSchema] = useState(false);
-  const [schemaError, setSchemaError] = useState('');
-  const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
-    enabled: false,
-    generating: false,
-    generated: false,
-    progress: ''
-  });
-  
-  // Advanced Schema generation progress state
-  const [schemaGenerating, setSchemaGenerating] = useState(false);
-  const [schemaProgress, setSchemaProgress] = useState({
-    current: 0,
-    total: 0,
-    percent: 0,
-    currentProduct: '',
-    stats: {
-      siteFAQ: false,
-      products: 0,
-      totalSchemas: 0
-    }
-  });
-  const [schemaComplete, setSchemaComplete] = useState(false);
-  
-  const shop = qs('shop', '');
-  
-  // Debug shop extraction - Force rebuild
-  console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
-  console.log('[SETTINGS] window.location.search:', window.location.search);
-  console.log('[SETTINGS] Extracted shop:', shop);
-  console.log('[SETTINGS] Shop type:', typeof shop);
-  console.log('[SETTINGS] Shop length:', shop?.length);
-  console.log('[SETTINGS] ===== SHOP EXTRACTION COMPLETE =====');
 
   useEffect(() => {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
@@ -418,7 +407,7 @@ export default function Settings() {
   // Auto-enable AI Discovery when features are selected
   useEffect(() => {
     if (settings && Object.values(settings.features || {}).some(f => f)) {
-      // Автоматично включваме AI Discovery ако има избрани features
+      // ÐÐ²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡Ð½Ð¾ Ð²ÐºÐ»ÑŽÑ‡Ð²Ð°Ð¼Ðµ AI Discovery Ð°ÐºÐ¾ Ð¸Ð¼Ð° Ð¸Ð·Ð±Ñ€Ð°Ð½Ð¸ features
       setSettings(prev => ({
         ...prev,
         enabled: true,
@@ -521,12 +510,12 @@ export default function Settings() {
     
     try {
       const txt = await api(`/api/ai-discovery/robots-txt?shop=${shop}`, { 
-        responseType: 'text'  // <-- Важно!
+        responseType: 'text'  // <-- Ð’Ð°Ð¶Ð½Ð¾!
       });
       
       console.log('[GENERATE ROBOTS] Received:', txt);
       
-      // Ако е празен отговор (304), генерирай базов robots.txt
+      // ÐÐºÐ¾ Ðµ Ð¿Ñ€Ð°Ð·ÐµÐ½ Ð¾Ñ‚Ð³Ð¾Ð²Ð¾Ñ€ (304), Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð°Ð¹ Ð±Ð°Ð·Ð¾Ð² robots.txt
       if (!txt) {
         const defaultTxt = 'User-agent: *\nDisallow: /';
         setRobotsTxt(defaultTxt);
@@ -744,7 +733,7 @@ export default function Settings() {
       console.log(`[DEBUG] GraphQL result:`, result);
       
       setToast(`Test plan set to ${plan || 'actual'}`);
-      // кратък refresh, за да се презареди GraphQL плановете и бейджа/гейтинга
+      // ÐºÑ€Ð°Ñ‚ÑŠÐº refresh, Ð·Ð° Ð´Ð° ÑÐµ Ð¿Ñ€ÐµÐ·Ð°Ñ€ÐµÐ´Ð¸ GraphQL Ð¿Ð»Ð°Ð½Ð¾Ð²ÐµÑ‚Ðµ Ð¸ Ð±ÐµÐ¹Ð´Ð¶Ð°/Ð³ÐµÐ¹Ñ‚Ð¸Ð½Ð³Ð°
       setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error('[DEBUG] Failed to set test plan', error);
@@ -799,30 +788,32 @@ export default function Settings() {
     }
   };
 
-  if (!shop) {
-    return (
-      <Card>
-        <Box padding="400">
-          <Text tone="critical">Missing shop parameter</Text>
-        </Box>
-      </Card>
-    );
-  }
+  // ===== 9. RENDER =====
+  try {
+    if (!shop) {
+      return (
+        <Card>
+          <Box padding="400">
+            <Text tone="critical">Missing shop parameter</Text>
+          </Box>
+        </Card>
+      );
+    }
 
-  if (loading) {
-    return (
-      <Card>
-        <Box padding="400">
-          <InlineStack align="center">
-            <Spinner size="small" />
-            <Text>Loading settings...</Text>
-          </InlineStack>
-        </Box>
-      </Card>
-    );
-  }
+    if (loading) {
+      return (
+        <Card>
+          <Box padding="400">
+            <InlineStack align="center">
+              <Spinner size="small" />
+              <Text>Loading settings...</Text>
+            </InlineStack>
+          </Box>
+        </Card>
+      );
+    }
 
-  return (
+    return (
     <BlockStack gap="600">
       {/* AI Bot Access Control */}
       <Card>
@@ -1074,7 +1065,7 @@ export default function Settings() {
             
             <InlineStack gap="200">
               <Button 
-                onClick={async () => { // <-- Добавете async
+                onClick={async () => { // <-- Ð”Ð¾Ð±Ð°Ð²ÐµÑ‚Ðµ async
                   console.log('[ADD MANUAL] Starting...');
                   console.log('[ADD MANUAL] Settings:', settings);
                   
@@ -1087,7 +1078,7 @@ export default function Settings() {
                       setShowNoBotsModal(true);
                     } else {
                       console.log('[ADD MANUAL] Calling generateRobotsTxt...');
-                      await generateRobotsTxt(); // <-- Добавете await
+                      await generateRobotsTxt(); // <-- Ð”Ð¾Ð±Ð°Ð²ÐµÑ‚Ðµ await
                       console.log('[ADD MANUAL] Robots.txt generated, showing instructions');
                       setShowManualInstructions(true);
                     }
@@ -1543,10 +1534,10 @@ export default function Settings() {
                 <Banner status="info" title="Manual Configuration Steps">
                   <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                     <li>Copy the robots.txt content below</li>
-                    <li>Go to <strong>Online Store → Themes</strong></li>
-                    <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
+                    <li>Go to <strong>Online Store â†’ Themes</strong></li>
+                    <li>Click <strong>Actions â†’ Edit code</strong> on your active theme</li>
                     <li>In the file browser, look for <strong>robots.txt.liquid</strong></li>
-                    <li>If it doesn't exist, click <strong>Add a new template</strong> → Select "robots" → Create</li>
+                    <li>If it doesn't exist, click <strong>Add a new template</strong> â†’ Select "robots" â†’ Create</li>
                     <li>Replace the content with what you copied</li>
                     <li>Click <strong>Save</strong></li>
                   </ol>
@@ -1623,8 +1614,8 @@ export default function Settings() {
               <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                 <li>Click "Continue" to see your custom robots.txt content</li>
                 <li>Copy the generated content</li>
-                  <li>Go to <strong>Online Store → Themes</strong></li>
-                  <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
+                  <li>Go to <strong>Online Store â†’ Themes</strong></li>
+                  <li>Click <strong>Actions â†’ Edit code</strong> on your active theme</li>
                 <li>Find or create <strong>robots.txt.liquid</strong> file</li>
                 <li>Paste the content and save</li>
               </ol>
@@ -1766,7 +1757,7 @@ export default function Settings() {
                 <Box>
                   <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
                   <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
+                    {schemaProgress.stats.siteFAQ ? 'âœ“' : 'â€”'}
                   </Text>
                 </Box>
                 
@@ -1854,7 +1845,7 @@ export default function Settings() {
                 <Box>
                   <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
                   <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
+                    {schemaProgress.stats.siteFAQ ? 'âœ“' : 'â€”'}
                   </Text>
                 </Box>
                 
@@ -1886,9 +1877,9 @@ export default function Settings() {
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </BlockStack>
-  );
+    );
   } catch (error) {
-    console.error('[SETTINGS] Component initialization error:', error);
+    console.error('[SETTINGS] Component render error:', error);
     return (
       <BlockStack gap="400">
         <Card>
