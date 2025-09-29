@@ -182,29 +182,10 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        localizationSettings {
-          supportedLocales {
-            locale
-            primary
-            published
-          }
-        }
-        market {
-          id
-          name
-          handle
-          enabled
+        shopLocales {
+          locale
           primary
-          countries {
-            id
-            name
-            code
-          }
-          currencies {
-            id
-            code
-            name
-          }
+          published
         }
       }
     }`;
@@ -274,9 +255,9 @@ router.get('/generate', validateRequest(), async (req, res) => {
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
         email: shopInfo.contactEmail || shopInfo.email,
-        locales: shopInfo.localizationSettings?.supportedLocales || [],
-        markets: shopInfo.market ? [shopInfo.market] : [],
-        currencies: shopInfo.market?.currencies?.map(curr => curr.code) || []
+        locales: shopInfo.shopLocales || [],
+        markets: [], // TODO: Add markets support later
+        currencies: ['EUR'] // TODO: Add currencies support later
       },
       existingMetadata: metafields,
       plan: plan.plan,
