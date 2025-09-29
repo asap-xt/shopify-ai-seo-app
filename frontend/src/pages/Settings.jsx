@@ -269,11 +269,23 @@ export default function Settings() {
     try {
       console.log('[SETTINGS DEBUG] ===== CHECKING WELCOME PAGE =====');
       console.log('[SETTINGS DEBUG] Shop:', shop);
+      console.log('[SETTINGS DEBUG] Current settings features:', settings?.features);
+      console.log('[SETTINGS DEBUG] Welcome page feature enabled:', settings?.features?.welcomePage);
+      console.log('[SETTINGS DEBUG] Current plan:', settings?.plan);
       
       // Check if welcome page endpoint is accessible
       const result = await api(`/ai/welcome?shop=${shop}`);
       
       console.log('[SETTINGS DEBUG] Welcome page result:', result);
+      console.log('[SETTINGS DEBUG] Result type:', typeof result);
+      console.log('[SETTINGS DEBUG] Result keys:', result ? Object.keys(result) : 'null');
+      
+      // Check if it's an error response
+      if (result?.error) {
+        console.log('[SETTINGS DEBUG] Welcome page error:', result.error);
+        console.log('[SETTINGS DEBUG] Error debug info:', result.debug);
+        return false;
+      }
       
       // If we get HTML content, the page exists
       const hasWelcomePage = typeof result === 'string' && result.includes('<!DOCTYPE html>');
@@ -285,7 +297,7 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking welcome page:', error);
       return false;
     }
-  }, [shop, api]);
+  }, [shop, api, settings]);
 
   // ===== 6. ГЛАВНАТА ФУНКЦИЯ =====
   const checkGeneratedData = useCallback(async () => {
