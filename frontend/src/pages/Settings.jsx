@@ -407,6 +407,7 @@ export default function Settings() {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
     console.log('[SETTINGS] Shop:', shop);
     console.log('[SETTINGS] API function:', typeof api);
+    console.log('[SETTINGS] useEffect dependencies - shop:', shop, 'api:', typeof api);
     
     if (!shop) {
       console.log('[SETTINGS] No shop, setting loading to false');
@@ -507,6 +508,8 @@ export default function Settings() {
       console.log('[SETTINGS] Settings plan:', data?.plan);
       console.log('[SETTINGS] Normalized plan:', normalizePlan(data?.plan));
       console.log('[SETTINGS] Features:', data?.features);
+      console.log('[SETTINGS] Products JSON feature:', data?.features?.productsJson);
+      console.log('[SETTINGS] Collections JSON feature:', data?.features?.collectionsJson);
       
       setSettings(data);
       setOriginalSettings(data); // Save original settings
