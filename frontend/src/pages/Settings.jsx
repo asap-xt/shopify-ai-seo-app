@@ -415,7 +415,7 @@ export default function Settings() {
 
   // Auto-enable AI Discovery when features are selected
   useEffect(() => {
-    if (settings && Object.values(settings.features || {}).some(f => f)) {
+    if (false && settings && Object.values(settings.features || {}).some(f => f)) { // DISABLED: This was causing features to be auto-enabled on first load
       // ÐÐ²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡Ð½Ð¾ Ð²ÐºÐ»ÑŽÑ‡Ð²Ð°Ð¼Ðµ AI Discovery Ð°ÐºÐ¾ Ð¸Ð¼Ð° Ð¸Ð·Ð±Ñ€Ð°Ð½Ð¸ features
       setSettings(prev => ({
         ...prev,

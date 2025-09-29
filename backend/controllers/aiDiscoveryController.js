@@ -85,11 +85,20 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       schemaData: false
     };
     
+    // Check if this is a "fresh" shop (no explicit user settings saved)
+    // If savedSettings.features exists but updatedAt is very old or missing, treat as fresh
+    const isFreshShop = !savedSettings.features || 
+                       !savedSettings.updatedAt || 
+                       (new Date(savedSettings.updatedAt) < new Date(Date.now() - 24 * 60 * 60 * 1000)); // 24 hours ago
+    
+    console.log('[AI-DISCOVERY] DEBUG - isFreshShop:', isFreshShop);
+    console.log('[AI-DISCOVERY] DEBUG - savedSettings.updatedAt:', savedSettings.updatedAt);
+    
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: savedSettings.features || defaultFeatures, // All false for new shops
+      features: isFreshShop ? defaultFeatures : (savedSettings.features || defaultFeatures),
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
