@@ -193,12 +193,14 @@ export default function Settings() {
       
       const PRODUCTS_CHECK_QUERY = `
         query CheckProductsData($shop: String!) {
-          products(first: 1) {
+          products(first: 10) {
             edges {
               node {
                 id
                 title
-                aiOptimized
+                optimizationSummary {
+                  optimizedLanguages
+                }
               }
             }
           }
@@ -221,11 +223,14 @@ export default function Settings() {
       console.log('[SETTINGS DEBUG] Products edges length:', result?.data?.products?.edges?.length);
       console.log('[SETTINGS DEBUG] Products edges:', result?.data?.products?.edges);
       
-      const hasProducts = result?.data?.products?.edges?.length > 0;
-      console.log('[SETTINGS DEBUG] Has products:', hasProducts);
+      // Check if any product has optimized languages
+      const hasOptimizedProducts = result?.data?.products?.edges?.some(edge => 
+        edge?.node?.optimizationSummary?.optimizedLanguages?.length > 0
+      );
+      console.log('[SETTINGS DEBUG] Has optimized products:', hasOptimizedProducts);
       console.log('[SETTINGS DEBUG] ===== PRODUCTS CHECK COMPLETE =====');
       
-      return hasProducts;
+      return hasOptimizedProducts;
     } catch (error) {
       console.error('[SETTINGS] Error checking products data:', error);
       return false;
@@ -239,12 +244,12 @@ export default function Settings() {
       
       const COLLECTIONS_CHECK_QUERY = `
         query CheckCollectionsData($shop: String!) {
-          collections(first: 1) {
+          collections(first: 10) {
             edges {
               node {
                 id
                 title
-                aiOptimized
+                optimizedLanguages
               }
             }
           }
@@ -267,11 +272,14 @@ export default function Settings() {
       console.log('[SETTINGS DEBUG] Collections edges length:', result?.data?.collections?.edges?.length);
       console.log('[SETTINGS DEBUG] Collections edges:', result?.data?.collections?.edges);
       
-      const hasCollections = result?.data?.collections?.edges?.length > 0;
-      console.log('[SETTINGS DEBUG] Has collections:', hasCollections);
+      // Check if any collection has optimized languages
+      const hasOptimizedCollections = result?.data?.collections?.edges?.some(edge => 
+        edge?.node?.optimizedLanguages?.length > 0
+      );
+      console.log('[SETTINGS DEBUG] Has optimized collections:', hasOptimizedCollections);
       console.log('[SETTINGS DEBUG] ===== COLLECTIONS CHECK COMPLETE =====');
       
-      return hasCollections;
+      return hasOptimizedCollections;
     } catch (error) {
       console.error('[SETTINGS] Error checking collections data:', error);
       return false;
