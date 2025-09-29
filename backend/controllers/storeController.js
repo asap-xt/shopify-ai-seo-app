@@ -163,6 +163,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
 
     // Check plan access
     const plan = await fetchPlan(shop);
+    console.log('[STORE-DEBUG] fetchPlan result:', JSON.stringify(plan, null, 2));
     if (plan.plan === 'Starter') {
       return res.status(403).json({ 
         error: 'Store metadata requires Professional plan or higher',

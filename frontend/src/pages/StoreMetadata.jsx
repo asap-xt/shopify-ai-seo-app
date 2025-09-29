@@ -62,6 +62,8 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] GET', url);
       const data = await api(url, { headers: { 'X-Shop': shop } });
       console.log('[StoreMeta] GET ok', { url, keys: Object.keys(data || {}) });
+      console.log('[StoreMeta] storeData.features:', data.features);
+      console.log('[StoreMeta] organizationSchema available:', data.features?.organizationSchema);
       
       setStoreData(data);
       
