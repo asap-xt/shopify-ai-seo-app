@@ -30,7 +30,11 @@ export default function StoreMetadata({ shop: shopProp }) {
       brandVoice: '',
       primaryCategories: '',
       shippingInfo: '',
-      returnPolicy: ''
+      returnPolicy: '',
+      languages: [],
+      supportedCurrencies: [],
+      shippingRegions: [],
+      culturalConsiderations: ''
     },
     organizationSchema: {
       enabled: false,
@@ -95,6 +99,16 @@ export default function StoreMetadata({ shop: shopProp }) {
             ...prev.organizationSchema,
             name: prev.organizationSchema.name || data.shopInfo.name,
             email: prev.organizationSchema.email || data.shopInfo.email
+          },
+          aiMetadata: {
+            ...prev.aiMetadata,
+            // Auto-populate languages and markets from Shopify
+            languages: prev.aiMetadata.languages?.length > 0 ? prev.aiMetadata.languages : 
+              (data.shopInfo.locales || ['en']).map(locale => locale.language || locale),
+            supportedCurrencies: prev.aiMetadata.supportedCurrencies?.length > 0 ? prev.aiMetadata.supportedCurrencies : 
+              (data.shopInfo.currencies || ['EUR']),
+            shippingRegions: prev.aiMetadata.shippingRegions?.length > 0 ? prev.aiMetadata.shippingRegions : 
+              (data.shopInfo.markets || ['EU']).map(market => market.country || market)
           }
         }));
       }
@@ -309,7 +323,11 @@ export default function StoreMetadata({ shop: shopProp }) {
           brandVoice: '',
           primaryCategories: '',
           shippingInfo: '',
-          returnPolicy: ''
+          returnPolicy: '',
+          languages: [],
+          supportedCurrencies: [],
+          shippingRegions: [],
+          culturalConsiderations: ''
         },
         organizationSchema: {
           enabled: false,
@@ -476,6 +494,65 @@ export default function StoreMetadata({ shop: shopProp }) {
                 }))}
                 multiline={2}
               />
+              
+              <Divider />
+              
+              <Text variant="headingMd" as="h3">Languages & Markets</Text>
+              <Text variant="bodyMd" color="subdued">
+                Automatically populated from Shopify settings
+              </Text>
+              
+              <TextField
+                label="Supported Languages"
+                value={formData.aiMetadata.languages?.join(', ') || ''}
+                onChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  aiMetadata: { 
+                    ...prev.aiMetadata, 
+                    languages: value.split(',').map(lang => lang.trim()).filter(lang => lang)
+                  }
+                }))}
+                helpText="Comma-separated language codes (e.g., en, bg, ro, de)"
+                multiline={2}
+              />
+              
+              <TextField
+                label="Supported Currencies"
+                value={formData.aiMetadata.supportedCurrencies?.join(', ') || ''}
+                onChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  aiMetadata: { 
+                    ...prev.aiMetadata, 
+                    supportedCurrencies: value.split(',').map(curr => curr.trim()).filter(curr => curr)
+                  }
+                }))}
+                helpText="Comma-separated currency codes (e.g., EUR, BGN, RON)"
+              />
+              
+              <TextField
+                label="Shipping Regions"
+                value={formData.aiMetadata.shippingRegions?.join(', ') || ''}
+                onChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  aiMetadata: { 
+                    ...prev.aiMetadata, 
+                    shippingRegions: value.split(',').map(region => region.trim()).filter(region => region)
+                  }
+                }))}
+                helpText="Comma-separated regions (e.g., EU, Worldwide, Bulgaria, Romania)"
+                multiline={2}
+              />
+              
+              <TextField
+                label="Cultural Considerations"
+                value={formData.aiMetadata.culturalConsiderations || ''}
+                onChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  aiMetadata: { ...prev.aiMetadata, culturalConsiderations: value }
+                }))}
+                helpText="Cultural context for AI models (e.g., European market focus, Local customs)"
+                multiline={2}
+              />
             </FormLayout>
           </Box>
         </Card>
@@ -546,6 +623,50 @@ export default function StoreMetadata({ shop: shopProp }) {
                         organizationSchema: { ...prev.organizationSchema, sameAs: value }
                       }))}
                       helpText="Comma-separated URLs"
+                      multiline={2}
+                    />
+                  </FormLayout>
+                </Box>
+              )}
+            </Box>
+          </Card>
+        </Layout.Section>
+      )}
+
+      {storeData?.features?.localBusinessSchema && (
+        <Layout.Section>
+          <Card title="Local Business Schema">
+            <Box padding="400">
+              <Checkbox
+                label="Enable Local Business Schema"
+                checked={formData.localBusinessSchema.enabled}
+                onChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  localBusinessSchema: { ...prev.localBusinessSchema, enabled: value }
+                }))}
+              />
+              
+              {formData.localBusinessSchema.enabled && (
+                <Box paddingBlockStart="400">
+                  <FormLayout>
+                    <TextField
+                      label="Price Range"
+                      value={formData.localBusinessSchema.priceRange}
+                      onChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        localBusinessSchema: { ...prev.localBusinessSchema, priceRange: value }
+                      }))}
+                      helpText="e.g., $, $$, $$$, $$$$"
+                    />
+                    
+                    <TextField
+                      label="Opening Hours"
+                      value={formData.localBusinessSchema.openingHours}
+                      onChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        localBusinessSchema: { ...prev.localBusinessSchema, openingHours: value }
+                      }))}
+                      helpText="e.g., Mo-Fr 09:00-18:00, Sa 10:00-16:00"
                       multiline={2}
                     />
                   </FormLayout>

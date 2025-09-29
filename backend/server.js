@@ -730,6 +730,9 @@ const root = {
             aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
               value
             }
+            localBusinessMetafield: metafield(namespace: "ai_seo_store", key: "local_business_schema") {
+              value
+            }
           }
         }
       `;
@@ -740,8 +743,9 @@ const root = {
       const hasSeoMetadata = !!data.shop?.metafield?.value;
       const hasOrganizationMetadata = !!data.shop?.organizationMetafield?.value;
       const hasAiMetadata = !!data.shop?.aiMetafield?.value;
+      const hasLocalBusinessMetadata = !!data.shop?.localBusinessMetafield?.value;
       
-      const hasAnyMetadata = hasSeoMetadata || hasOrganizationMetadata || hasAiMetadata;
+      const hasAnyMetadata = hasSeoMetadata || hasOrganizationMetadata || hasAiMetadata || hasLocalBusinessMetadata;
       
       console.log('[GRAPHQL] Store metadata check:', {
         shop: normalizedShop,
@@ -753,11 +757,11 @@ const root = {
       
       return {
         shopName: hasAnyMetadata ? data.shop?.name : null,
-        description: hasAnyMetadata ? data.shop?.description : null,
+        description: hasSeoMetadata ? JSON.parse(data.shop?.metafield?.value || '{}').metaDescription || data.shop?.description : null,
         seoMetadata: data.shop?.metafield?.value || null,
         aiMetadata: data.shop?.aiMetafield?.value || null,
         organizationSchema: data.shop?.organizationMetafield?.value || null,
-        localBusinessSchema: null // Not implemented yet
+        localBusinessSchema: data.shop?.localBusinessMetafield?.value || null
       };
       
     } catch (error) {
