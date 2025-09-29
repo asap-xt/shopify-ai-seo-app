@@ -191,41 +191,16 @@ export default function Settings() {
       console.log('[SETTINGS DEBUG] ===== CHECKING PRODUCTS DATA =====');
       console.log('[SETTINGS DEBUG] Shop:', shop);
       
-      const PRODUCTS_CHECK_QUERY = `
-        query CheckProductsData($shop: String!) {
-          products(first: 10) {
-            edges {
-              node {
-                id
-                title
-                optimizationSummary {
-                  optimizedLanguages
-                }
-              }
-            }
-          }
-        }
-      `;
+      // Use API endpoint instead of GraphQL
+      const result = await api(`/api/products/list?shop=${shop}&limit=10&optimized=true`);
       
-      console.log('[SETTINGS DEBUG] GraphQL Query:', PRODUCTS_CHECK_QUERY);
-      console.log('[SETTINGS DEBUG] Variables:', { shop });
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: PRODUCTS_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
-      console.log('[SETTINGS DEBUG] Products edges length:', result?.data?.products?.edges?.length);
-      console.log('[SETTINGS DEBUG] Products edges:', result?.data?.products?.edges);
+      console.log('[SETTINGS DEBUG] API Result:', result);
+      console.log('[SETTINGS DEBUG] Products length:', result?.products?.length);
+      console.log('[SETTINGS DEBUG] Products:', result?.products);
       
       // Check if any product has optimized languages
-      const hasOptimizedProducts = result?.data?.products?.edges?.some(edge => 
-        edge?.node?.optimizationSummary?.optimizedLanguages?.length > 0
+      const hasOptimizedProducts = result?.products?.some(product => 
+        product?.optimizationSummary?.optimizedLanguages?.length > 0
       );
       console.log('[SETTINGS DEBUG] Has optimized products:', hasOptimizedProducts);
       console.log('[SETTINGS DEBUG] ===== PRODUCTS CHECK COMPLETE =====');
@@ -242,39 +217,16 @@ export default function Settings() {
       console.log('[SETTINGS DEBUG] ===== CHECKING COLLECTIONS DATA =====');
       console.log('[SETTINGS DEBUG] Shop:', shop);
       
-      const COLLECTIONS_CHECK_QUERY = `
-        query CheckCollectionsData($shop: String!) {
-          collections(first: 10) {
-            edges {
-              node {
-                id
-                title
-                optimizedLanguages
-              }
-            }
-          }
-        }
-      `;
+      // Use API endpoint instead of GraphQL
+      const result = await api(`/collections/list-graphql?shop=${shop}`);
       
-      console.log('[SETTINGS DEBUG] GraphQL Query:', COLLECTIONS_CHECK_QUERY);
-      console.log('[SETTINGS DEBUG] Variables:', { shop });
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: COLLECTIONS_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
-      console.log('[SETTINGS DEBUG] Collections edges length:', result?.data?.collections?.edges?.length);
-      console.log('[SETTINGS DEBUG] Collections edges:', result?.data?.collections?.edges);
+      console.log('[SETTINGS DEBUG] API Result:', result);
+      console.log('[SETTINGS DEBUG] Collections length:', result?.collections?.length);
+      console.log('[SETTINGS DEBUG] Collections:', result?.collections);
       
       // Check if any collection has optimized languages
-      const hasOptimizedCollections = result?.data?.collections?.edges?.some(edge => 
-        edge?.node?.optimizedLanguages?.length > 0
+      const hasOptimizedCollections = result?.collections?.some(collection => 
+        collection?.optimizedLanguages?.length > 0
       );
       console.log('[SETTINGS DEBUG] Has optimized collections:', hasOptimizedCollections);
       console.log('[SETTINGS DEBUG] ===== COLLECTIONS CHECK COMPLETE =====');
