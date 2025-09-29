@@ -5,8 +5,13 @@ import Shop from '../db/Shop.js';
 
 export default async function uninstallWebhook(req, res) {
   try {
+    console.log('[Webhook] ===== UNINSTALL WEBHOOK CALLED =====');
+    console.log('[Webhook] Headers:', req.headers);
+    console.log('[Webhook] Body:', req.body);
+    console.log('[Webhook] Query:', req.query);
+    
     const shop = (req.get('x-shopify-shop-domain') || req.query.shop || '').replace(/^https?:\/\//, '');
-    console.log('[Webhook] app/uninstalled for', shop);
+    console.log('[Webhook] Extracted shop:', shop);
 
     if (!shop) {
       console.error('[Webhook] No shop domain in uninstall webhook');
@@ -34,6 +39,33 @@ export default async function uninstallWebhook(req, res) {
       console.log(`[Webhook] Deleted products for ${shop}`);
     } catch (e) {
       // Ако няма Product модел, продължаваме
+    }
+
+    // Изтрий AI Discovery настройки
+    try {
+      const { default: AIDiscoverySettings } = await import('../db/AIDiscoverySettings.js');
+      await AIDiscoverySettings.deleteOne({ shop });
+      console.log(`[Webhook] Deleted AI Discovery settings for ${shop}`);
+    } catch (e) {
+      console.log(`[Webhook] Could not delete AI Discovery settings for ${shop}:`, e.message);
+    }
+
+    // Изтрий Advanced Schema данни
+    try {
+      const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
+      await AdvancedSchema.deleteMany({ shop });
+      console.log(`[Webhook] Deleted Advanced Schema data for ${shop}`);
+    } catch (e) {
+      console.log(`[Webhook] Could not delete Advanced Schema data for ${shop}:`, e.message);
+    }
+
+    // Изтрий Sitemap данни
+    try {
+      const { default: Sitemap } = await import('../db/Sitemap.js');
+      await Sitemap.deleteMany({ shop });
+      console.log(`[Webhook] Deleted Sitemap data for ${shop}`);
+    } catch (e) {
+      console.log(`[Webhook] Could not delete Sitemap data for ${shop}:`, e.message);
     }
 
     res.status(200).send('ok');
