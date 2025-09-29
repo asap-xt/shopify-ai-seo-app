@@ -729,9 +729,9 @@ export default function Settings() {
     
     const availability = {
       productsJson: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
-      aiSitemap: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
       welcomePage: ['professional', 'growth', 'growth_extra', 'enterprise'],
       collectionsJson: ['growth', 'growth_extra', 'enterprise'],
+      aiSitemap: ['growth_extra', 'enterprise'],
       storeMetadata: ['growth_extra', 'enterprise'],
       schemaData: ['enterprise']
     };
@@ -1265,13 +1265,7 @@ export default function Settings() {
                   key: 'productsJson',
                   name: 'Products JSON Feed',
                   description: 'Bulk product data for AI consumption',
-                  requiredPlan: null
-                },
-                {
-                  key: 'aiSitemap',
-                  name: 'AI-Optimized Sitemap',
-                  description: 'Enhanced sitemap with AI hints',
-                  requiredPlan: null
+                  requiredPlan: 'Starter'
                 },
                 {
                   key: 'welcomePage',
@@ -1284,6 +1278,12 @@ export default function Settings() {
                   name: 'Collections JSON Feed',
                   description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
+                },
+                {
+                  key: 'aiSitemap',
+                  name: 'AI-Optimized Sitemap',
+                  description: 'Enhanced sitemap with AI hints',
+                  requiredPlan: 'Growth Extra'
                 },
                 {
                   key: 'storeMetadata',
