@@ -241,6 +241,9 @@ export default function Settings() {
 
   const checkStoreMetadata = useCallback(async () => {
     try {
+      console.log('[SETTINGS DEBUG] ===== CHECKING STORE METADATA =====');
+      console.log('[SETTINGS DEBUG] Shop:', shop);
+      
       const STORE_METADATA_CHECK_QUERY = `
         query CheckStoreMetadata($shop: String!) {
           storeMetadata(shop: $shop) {
@@ -249,6 +252,9 @@ export default function Settings() {
           }
         }
       `;
+      
+      console.log('[SETTINGS DEBUG] GraphQL Query:', STORE_METADATA_CHECK_QUERY);
+      console.log('[SETTINGS DEBUG] Variables:', { shop });
       
       const result = await api('/graphql', {
         method: 'POST',
@@ -259,9 +265,19 @@ export default function Settings() {
         shop: shop
       });
       
-      return result?.data?.storeMetadata?.shopName;
+      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
+      console.log('[SETTINGS DEBUG] Result data:', result?.data);
+      console.log('[SETTINGS DEBUG] Store metadata:', result?.data?.storeMetadata);
+      console.log('[SETTINGS DEBUG] Shop name:', result?.data?.storeMetadata?.shopName);
+      
+      const hasMetadata = !!result?.data?.storeMetadata?.shopName;
+      console.log('[SETTINGS DEBUG] Has metadata:', hasMetadata);
+      console.log('[SETTINGS DEBUG] ===== STORE METADATA CHECK COMPLETE =====');
+      
+      return hasMetadata;
     } catch (error) {
       console.error('[SETTINGS] Error checking store metadata:', error);
+      console.error('[SETTINGS] Error details:', error?.message, error?.stack);
       return false;
     }
   }, [shop, api]);
@@ -307,6 +323,9 @@ export default function Settings() {
     console.log('[SETTINGS] checkGeneratedData - shop:', shop);
     console.log('[SETTINGS] checkGeneratedData - settings:', settings);
     console.log('[SETTINGS] checkGeneratedData - settings?.features:', settings?.features);
+    console.log('[SETTINGS] checkGeneratedData - Store Metadata feature:', settings?.features?.storeMetadata);
+    console.log('[SETTINGS] checkGeneratedData - Store Metadata type:', typeof settings?.features?.storeMetadata);
+    console.log('[SETTINGS] checkGeneratedData - Store Metadata enabled:', !!settings?.features?.storeMetadata);
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
       
@@ -336,10 +355,21 @@ export default function Settings() {
       
       // Check Store Metadata
       if (settings?.features?.storeMetadata) {
-        console.log('[SETTINGS] Checking Store Metadata data...');
+        console.log('[SETTINGS] ===== CHECKING STORE METADATA IN checkGeneratedData =====');
+        console.log('[SETTINGS] Store Metadata feature is enabled:', settings?.features?.storeMetadata);
+        console.log('[SETTINGS] About to call checkStoreMetadata...');
+        
         const hasStoreMetadata = await checkStoreMetadata();
+        
+        console.log('[SETTINGS] checkStoreMetadata returned:', hasStoreMetadata);
+        console.log('[SETTINGS] Setting showStoreMetadataView to:', hasStoreMetadata);
+        
         setShowStoreMetadataView(hasStoreMetadata);
+        
         console.log('[SETTINGS] Store Metadata exists:', hasStoreMetadata);
+        console.log('[SETTINGS] ===== STORE METADATA CHECK COMPLETE =====');
+      } else {
+        console.log('[SETTINGS] Store Metadata feature is NOT enabled:', settings?.features?.storeMetadata);
       }
       
       // Check Welcome Page
@@ -1372,7 +1402,17 @@ export default function Settings() {
                         )}
                         
                         {/* Store Metadata - View button or Configure button */}
-                        {feature.key === 'storeMetadata' && isEnabled && (
+                        {feature.key === 'storeMetadata' && (() => {
+                          console.log('[SETTINGS DEBUG] ===== STORE METADATA BUTTON RENDER =====');
+                          console.log('[SETTINGS DEBUG] feature.key === storeMetadata:', feature.key === 'storeMetadata');
+                          console.log('[SETTINGS DEBUG] isEnabled:', isEnabled);
+                          console.log('[SETTINGS DEBUG] showStoreMetadataView:', showStoreMetadataView);
+                          console.log('[SETTINGS DEBUG] Should show button:', feature.key === 'storeMetadata' && isEnabled);
+                          console.log('[SETTINGS DEBUG] Button type:', showStoreMetadataView ? 'View' : 'Configure');
+                          console.log('[SETTINGS DEBUG] ===== END STORE METADATA BUTTON DEBUG =====');
+                          
+                          return feature.key === 'storeMetadata' && isEnabled;
+                        })() && (
                           showStoreMetadataView ? (
                             <Button
                               size="slim"
@@ -1385,8 +1425,10 @@ export default function Settings() {
                               size="slim"
                               variant="primary"
                               onClick={() => {
+                                console.log('[SETTINGS DEBUG] Configure button clicked!');
                                 // Open Store Metadata tab in new window
                                 const storeMetadataUrl = `/ai-seo?shop=${shop}#store-metadata`;
+                                console.log('[SETTINGS DEBUG] Opening URL:', storeMetadataUrl);
                                 window.open(storeMetadataUrl, '_blank');
                               }}
                             >
