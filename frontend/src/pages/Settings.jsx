@@ -426,6 +426,8 @@ export default function Settings() {
     console.log('[SETTINGS] Shop available, calling loadSettings...');
     loadSettings();
   }, [shop]);
+  
+  console.log('[SETTINGS] loadSettings useEffect created successfully');
 
 
   // Check schema status when enabled
@@ -855,6 +857,8 @@ export default function Settings() {
       console.log('[SETTINGS] Skipping checkGeneratedData - conditions not met');
     }
   }, [settings?.features, shop, checkGeneratedData]);
+  
+  console.log('[SETTINGS] checkGeneratedData useEffect created successfully');
 
   // ===== 9. RENDER =====
   try {
