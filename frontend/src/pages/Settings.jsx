@@ -786,6 +786,24 @@ export default function Settings() {
         } else {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+      } else if (feature === 'welcomePage') {
+        console.log('[SETTINGS] Loading AI Welcome Page HTML...');
+        // For welcome page, fetch as text since it's HTML
+        const response = await fetch(endpoints[feature], {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+          }
+        });
+        
+        if (response.ok) {
+          console.log('[SETTINGS] AI Welcome Page HTML loaded successfully');
+          const htmlContent = await response.text();
+          setJsonModalContent(htmlContent);
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       } else {
         // For other features, use the regular API call
         const data = await api(endpoints[feature]);
