@@ -95,6 +95,8 @@ export default function Settings() {
   
   console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
   console.log('[SETTINGS] Extracted shop:', shop);
+  console.log('[SETTINGS] API function created:', typeof api);
+  console.log('[SETTINGS] makeSessionFetch function:', typeof makeSessionFetch);
   
   
   // ===== 6. Ð“Ð›ÐÐ’ÐÐÐ¢Ð Ð¤Ð£ÐÐšÐ¦Ð˜Ð¯ (Ð¡Ð›Ð•Ð” helper Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸Ñ‚Ðµ) =====
@@ -378,6 +380,7 @@ export default function Settings() {
   }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
   console.log('[SETTINGS] State variables initialized successfully');
+  console.log('[SETTINGS] About to create useEffect hooks...');
 
   // --- GraphQL helper for this page (minimal, local) ---
   const runGQL = async (query, variables) => {
@@ -403,6 +406,7 @@ export default function Settings() {
   };
   
 
+  console.log('[SETTINGS] Creating loadSettings useEffect...');
   useEffect(() => {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
     console.log('[SETTINGS] Shop:', shop);
@@ -826,6 +830,7 @@ export default function Settings() {
   }, []); // Run only on mount
 
   // Check generated data when settings change
+  console.log('[SETTINGS] Creating checkGeneratedData useEffect...');
   useEffect(() => {
     console.log('[SETTINGS DEBUG] ===== useEffect TRIGGERED =====');
     console.log('[SETTINGS DEBUG] Settings:', settings);
