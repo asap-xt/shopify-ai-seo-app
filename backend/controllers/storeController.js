@@ -182,10 +182,10 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        locales {
-          isoCode
-          name
+        shopLocales {
+          locale
           primary
+          published
         }
       }
     }`;
@@ -279,7 +279,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
         email: shopInfo.contactEmail || shopInfo.email,
-        locales: shopInfo.locales || [],
+        locales: shopInfo.shopLocales || [],
         markets: markets,
         currencies: [...new Set(markets.map(market => market.currencyCode).filter(Boolean))]
       },
