@@ -182,10 +182,10 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        shopLocales {
-          locale
+        locales {
+          isoCode
+          name
           primary
-          published
         }
       }
     }`;
@@ -195,8 +195,32 @@ router.get('/generate', validateRequest(), async (req, res) => {
     
     console.log('[STORE-DEBUG] Raw shopData:', JSON.stringify(shopData, null, 2));
     console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
-    console.log('[STORE-DEBUG] locales:', shopInfo?.localizationSettings?.supportedLocales);
-    console.log('[STORE-DEBUG] market:', shopInfo?.market);
+    console.log('[STORE-DEBUG] locales:', shopInfo?.locales);
+    
+    // Get markets separately
+    const marketsQuery = `{
+      markets(first: 10) {
+        edges {
+          node {
+            id
+            name
+            currencyCode
+            enabled
+            countries {
+              id
+              name
+              code
+            }
+          }
+        }
+      }
+    }`;
+    
+    const marketsData = await shopGraphQL(req, shop, marketsQuery);
+    const markets = marketsData?.markets?.edges?.map(edge => edge.node) || [];
+    
+    console.log('[STORE-DEBUG] marketsData:', JSON.stringify(marketsData, null, 2));
+    console.log('[STORE-DEBUG] markets:', markets);
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
 
@@ -255,9 +279,9 @@ router.get('/generate', validateRequest(), async (req, res) => {
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
         email: shopInfo.contactEmail || shopInfo.email,
-        locales: shopInfo.shopLocales || [],
-        markets: [], // TODO: Add markets support later
-        currencies: ['EUR'] // TODO: Add currencies support later
+        locales: shopInfo.locales || [],
+        markets: markets,
+        currencies: [...new Set(markets.map(market => market.currencyCode).filter(Boolean))]
       },
       existingMetadata: metafields,
       plan: plan.plan,

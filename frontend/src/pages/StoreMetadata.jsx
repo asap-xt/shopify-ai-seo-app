@@ -104,12 +104,12 @@ export default function StoreMetadata({ shop: shopProp }) {
             ...prev.aiMetadata,
             // Auto-populate languages and markets from Shopify
             languages: prev.aiMetadata.languages?.length > 0 ? prev.aiMetadata.languages : 
-              (data.shopInfo.locales || []).filter(locale => locale.published).map(locale => locale.locale),
+              (data.shopInfo.locales || []).map(locale => locale.isoCode),
             supportedCurrencies: prev.aiMetadata.supportedCurrencies?.length > 0 ? prev.aiMetadata.supportedCurrencies : 
               (data.shopInfo.currencies || ['EUR']),
             shippingRegions: prev.aiMetadata.shippingRegions?.length > 0 ? prev.aiMetadata.shippingRegions : 
               (data.shopInfo.markets || []).flatMap(market => 
-                market.market?.countries?.map(country => country.name) || [market.name]
+                market.countries?.map(country => country.name) || [market.name]
               )
           }
         }));
