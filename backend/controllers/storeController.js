@@ -182,20 +182,27 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        shopLocales {
-          locale
-          primary
-          published
-        }
+      }
+    }`;
+    
+    // Get shop locales separately (like in languageController)
+    const localesQuery = `{
+      shopLocales {
+        locale
+        primary
+        published
       }
     }`;
     
     const shopData = await shopGraphQL(req, shop, shopQuery);
+    const localesData = await shopGraphQL(req, shop, localesQuery);
     const shopInfo = shopData?.shop;
+    const shopLocales = localesData?.shopLocales || [];
     
     console.log('[STORE-DEBUG] Raw shopData:', JSON.stringify(shopData, null, 2));
     console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
-    console.log('[STORE-DEBUG] locales:', shopInfo?.locales);
+    console.log('[STORE-DEBUG] localesData:', JSON.stringify(localesData, null, 2));
+    console.log('[STORE-DEBUG] shopLocales:', shopLocales);
     
     // Get markets separately
     const marketsQuery = `{
@@ -279,7 +286,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
         email: shopInfo.contactEmail || shopInfo.email,
-        locales: shopInfo.shopLocales || [],
+        locales: shopLocales,
         markets: markets,
         currencies: [...new Set(markets.map(market => market.currencyCode).filter(Boolean))]
       },
