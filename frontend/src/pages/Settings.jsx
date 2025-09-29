@@ -59,6 +59,7 @@ export default function Settings() {
   const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
   const [showAiSitemapView, setShowAiSitemapView] = useState(false);
   const [showWelcomePageView, setShowWelcomePageView] = useState(false);
+  const [showSchemaDataView, setShowSchemaDataView] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showNoBotsModal, setShowNoBotsModal] = useState(false);
   const [showManualInstructions, setShowManualInstructions] = useState(false);
@@ -1370,14 +1371,28 @@ export default function Settings() {
                           </Button>
                         )}
                         
-                        {/* Store Metadata View button */}
-                        {feature.key === 'storeMetadata' && showStoreMetadataView && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
+                        {/* Store Metadata - View button or Configure button */}
+                        {feature.key === 'storeMetadata' && isEnabled && (
+                          showStoreMetadataView ? (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          ) : (
+                            <Button
+                              size="slim"
+                              variant="primary"
+                              onClick={() => {
+                                // Open Store Metadata tab in new window
+                                const storeMetadataUrl = `/ai-seo?shop=${shop}#store-metadata`;
+                                window.open(storeMetadataUrl, '_blank');
+                              }}
+                            >
+                              Configure
+                            </Button>
+                          )
                         )}
                         
                         {/* Welcome Page View button */}
