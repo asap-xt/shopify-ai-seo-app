@@ -407,6 +407,10 @@ class AIDiscoveryService {
       // Sitemap references
       robotsTxt += '# AI Discovery Endpoints\n';
       
+      if (settings.features?.welcomePage && availableFeatures.includes('welcomePage')) {
+        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/welcome?shop=${shop}\n`;
+      }
+      
       if (settings.features?.productsJson && availableFeatures.includes('productsJson')) {
         robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/products.json?shop=${shop}\n`;
       }
