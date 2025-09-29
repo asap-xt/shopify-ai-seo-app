@@ -110,9 +110,7 @@ export default function StoreMetadata({ shop: shopProp }) {
             supportedCurrencies: prev.aiMetadata.supportedCurrencies?.length > 0 ? prev.aiMetadata.supportedCurrencies : 
               (data.shopInfo.currencies || ['EUR']),
             shippingRegions: prev.aiMetadata.shippingRegions?.length > 0 ? prev.aiMetadata.shippingRegions : 
-              (data.shopInfo.markets || []).flatMap(market => 
-                market.countries?.map(country => country.name) || [market.name]
-              )
+              (data.shopInfo.markets || []).map(market => market.name)
           }
         }));
       }

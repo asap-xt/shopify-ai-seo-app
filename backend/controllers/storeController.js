@@ -205,20 +205,14 @@ router.get('/generate', validateRequest(), async (req, res) => {
     console.log('[STORE-DEBUG] localesData:', JSON.stringify(localesData, null, 2));
     console.log('[STORE-DEBUG] shopLocales:', shopLocales);
     
-    // Get markets separately
+    // Get markets separately (simplified query)
     const marketsQuery = `{
       markets(first: 10) {
         edges {
           node {
             id
             name
-            currencyCode
             enabled
-            countries {
-              id
-              name
-              code
-            }
           }
         }
       }
@@ -294,7 +288,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
         email: shopInfo.contactEmail || shopInfo.email,
         locales: shopLocales,
         markets: markets,
-        currencies: [...new Set(markets.map(market => market.currencyCode).filter(Boolean))]
+        currencies: ['EUR'] // Default currency for now
       },
       existingMetadata: metafields,
       plan: plan.plan,
