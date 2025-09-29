@@ -182,37 +182,28 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        shopLocales {
-          locale
-          primary
-          published
+        localizationSettings {
+          supportedLocales {
+            locale
+            primary
+            published
+          }
         }
-        markets(first: 10) {
-          edges {
-            node {
-              id
-              name
-              handle
-              enabled
-              primary
-              market {
-                id
-                name
-                handle
-                enabled
-                primary
-                countries {
-                  id
-                  name
-                  code
-                }
-                currencies {
-                  id
-                  code
-                  name
-                }
-              }
-            }
+        market {
+          id
+          name
+          handle
+          enabled
+          primary
+          countries {
+            id
+            name
+            code
+          }
+          currencies {
+            id
+            code
+            name
           }
         }
       }
@@ -220,6 +211,11 @@ router.get('/generate', validateRequest(), async (req, res) => {
     
     const shopData = await shopGraphQL(req, shop, shopQuery);
     const shopInfo = shopData?.shop;
+    
+    console.log('[STORE-DEBUG] Raw shopData:', JSON.stringify(shopData, null, 2));
+    console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
+    console.log('[STORE-DEBUG] locales:', shopInfo?.localizationSettings?.supportedLocales);
+    console.log('[STORE-DEBUG] market:', shopInfo?.market);
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
 
@@ -278,11 +274,9 @@ router.get('/generate', validateRequest(), async (req, res) => {
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
         email: shopInfo.contactEmail || shopInfo.email,
-        locales: shopInfo.shopLocales || [],
-        markets: shopInfo.markets?.edges?.map(edge => edge.node) || [],
-        currencies: shopInfo.markets?.edges?.flatMap(edge => 
-          edge.node.market?.currencies?.map(curr => curr.code) || []
-        ) || []
+        locales: shopInfo.localizationSettings?.supportedLocales || [],
+        markets: shopInfo.market ? [shopInfo.market] : [],
+        currencies: shopInfo.market?.currencies?.map(curr => curr.code) || []
       },
       existingMetadata: metafields,
       plan: plan.plan,
