@@ -182,6 +182,39 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
+        shopLocales {
+          locale
+          primary
+          published
+        }
+        markets(first: 10) {
+          edges {
+            node {
+              id
+              name
+              handle
+              enabled
+              primary
+              market {
+                id
+                name
+                handle
+                enabled
+                primary
+                countries {
+                  id
+                  name
+                  code
+                }
+                currencies {
+                  id
+                  code
+                  name
+                }
+              }
+            }
+          }
+        }
       }
     }`;
     
@@ -244,7 +277,12 @@ router.get('/generate', validateRequest(), async (req, res) => {
         name: shopInfo.name,
         description: shopInfo.description,
         url: shopInfo.primaryDomain?.url || shopInfo.url,
-        email: shopInfo.contactEmail || shopInfo.email
+        email: shopInfo.contactEmail || shopInfo.email,
+        locales: shopInfo.shopLocales || [],
+        markets: shopInfo.markets?.edges?.map(edge => edge.node) || [],
+        currencies: shopInfo.markets?.edges?.flatMap(edge => 
+          edge.node.market?.currencies?.map(curr => curr.code) || []
+        ) || []
       },
       existingMetadata: metafields,
       plan: plan.plan,
