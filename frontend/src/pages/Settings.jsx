@@ -411,7 +411,7 @@ export default function Settings() {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
     console.log('[SETTINGS] Shop:', shop);
     console.log('[SETTINGS] API function:', typeof api);
-    console.log('[SETTINGS] useEffect dependencies - shop:', shop, 'api:', typeof api);
+    console.log('[SETTINGS] useEffect dependencies - shop:', shop);
     
     if (!shop) {
       console.log('[SETTINGS] No shop, setting loading to false');
@@ -421,7 +421,7 @@ export default function Settings() {
     
     console.log('[SETTINGS] Shop available, calling loadSettings...');
     loadSettings();
-  }, [shop, api]);
+  }, [shop]);
 
 
   // Check schema status when enabled
