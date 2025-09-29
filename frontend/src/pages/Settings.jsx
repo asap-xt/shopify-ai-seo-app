@@ -111,14 +111,6 @@ export default function Settings() {
     }
   }, [settings?.features, shop, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
-  // Check for generated data when settings are loaded
-  useEffect(() => {
-    if (settings?.features && shop) {
-      console.log('[SETTINGS] Checking for generated data...');
-      checkGeneratedData();
-    }
-  }, [settings?.features, shop, checkGeneratedData]);
-  
   const checkProductsData = useCallback(async () => {
     try {
       const PRODUCTS_CHECK_QUERY = `
@@ -234,6 +226,14 @@ export default function Settings() {
       return false;
     }
   }, [shop, api]);
+  
+  // Check for generated data when settings are loaded
+  useEffect(() => {
+    if (settings?.features && shop) {
+      console.log('[SETTINGS] Checking for generated data...');
+      checkGeneratedData();
+    }
+  }, [settings?.features, shop, checkGeneratedData]);
   
   // Debug toast state changes
   useEffect(() => {
