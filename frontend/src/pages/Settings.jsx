@@ -22,24 +22,27 @@ import {
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
-const qs = (k, d = '') => {
-  try { return new URLSearchParams(window.location.search).get(k) || d; } 
-  catch { return d; }
-};
-
-// Helper function to normalize plan names
-const normalizePlan = (plan) => {
-  return (plan || 'starter').toLowerCase().replace(' ', '_');
-};
-
 export default function Settings() {
   console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
   console.log('[SETTINGS] Starting component initialization...');
   
-  // Debug helper - moved outside try block
+  // ===== 1. КОНСТАНТИ И HELPERS (БЕЗ HOOKS) =====
+  const qs = (k, d = '') => {
+    try { return new URLSearchParams(window.location.search).get(k) || d; } 
+    catch { return d; }
+  };
+
+  const normalizePlan = (plan) => {
+    return (plan || 'starter').toLowerCase().replace(' ', '_');
+  };
+
+  // Debug helper
   const debugLog = (message, data = null) => {
     console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
+
+  // ===== 2. ИЗВЛИЧАНЕ НА shop =====
+  const shop = qs('shop', '');
 
   try {
     const [loading, setLoading] = useState(true);
@@ -68,130 +71,14 @@ export default function Settings() {
       setShowViewButtons(false);
     }, []); // Run only on mount
   
-  // Helper functions - declared FIRST to avoid circular dependencies
-  const checkProductsData = useCallback(async () => {
-    try {
-      const PRODUCTS_CHECK_QUERY = `
-        query CheckProductsData($shop: String!) {
-          products(shop: $shop, first: 1) {
-            edges {
-              node {
-                id
-                title
-              }
-            }
-          }
-        }
-      `;
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: PRODUCTS_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      return result?.data?.products?.edges?.length > 0;
-    } catch (error) {
-      console.error('[SETTINGS] Error checking products data:', error);
-      return false;
-    }
-  }, [shop, api]);
   
-  const checkCollectionsData = useCallback(async () => {
-    try {
-      const COLLECTIONS_CHECK_QUERY = `
-        query CheckCollectionsData($shop: String!) {
-          collections(shop: $shop, first: 1) {
-            edges {
-              node {
-                id
-                title
-              }
-            }
-          }
-        }
-      `;
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: COLLECTIONS_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      return result?.data?.collections?.edges?.length > 0;
-    } catch (error) {
-      console.error('[SETTINGS] Error checking collections data:', error);
-      return false;
-    }
-  }, [shop, api]);
-  
-  const checkStoreMetadata = useCallback(async () => {
-    try {
-      const STORE_METADATA_CHECK_QUERY = `
-        query CheckStoreMetadata($shop: String!) {
-          storeMetadata(shop: $shop) {
-            shopName
-            description
-          }
-        }
-      `;
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: STORE_METADATA_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      return result?.data?.storeMetadata?.shopName;
-    } catch (error) {
-      console.error('[SETTINGS] Error checking store metadata:', error);
-      return false;
-    }
-  }, [shop, api]);
-  
-  const checkWelcomePage = useCallback(async () => {
-    try {
-      const WELCOME_PAGE_CHECK_QUERY = `
-        query CheckWelcomePage($shop: String!) {
-          welcomePage(shop: $shop) {
-            title
-            content
-          }
-        }
-      `;
-      
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: WELCOME_PAGE_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
-      
-      return result?.data?.welcomePage?.title;
-    } catch (error) {
-      console.error('[SETTINGS] Error checking welcome page:', error);
-      return false;
-    }
-  }, [shop, api]);
-  
-  // Main function that uses all helper functions
+  // ===== 6. ГЛАВНАТА ФУНКЦИЯ (СЛЕД helper функциите) =====
   const checkGeneratedData = useCallback(async () => {
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
       
       // Check Products JSON Feed
-      if (settings.features.productsJson) {
+      if (settings?.features?.productsJson) {
         console.log('[SETTINGS] Checking Products JSON data...');
         const hasProductsData = await checkProductsData();
         setShowProductsJsonView(hasProductsData);
@@ -199,7 +86,7 @@ export default function Settings() {
       }
       
       // Check Collections JSON Feed  
-      if (settings.features.collectionsJson) {
+      if (settings?.features?.collectionsJson) {
         console.log('[SETTINGS] Checking Collections JSON data...');
         const hasCollectionsData = await checkCollectionsData();
         setShowCollectionsJsonView(hasCollectionsData);
@@ -207,7 +94,7 @@ export default function Settings() {
       }
       
       // Check Store Metadata
-      if (settings.features.storeMetadata) {
+      if (settings?.features?.storeMetadata) {
         console.log('[SETTINGS] Checking Store Metadata data...');
         const hasStoreMetadata = await checkStoreMetadata();
         setShowStoreMetadataView(hasStoreMetadata);
@@ -215,7 +102,7 @@ export default function Settings() {
       }
       
       // Check Welcome Page
-      if (settings.features.welcomePage) {
+      if (settings?.features?.welcomePage) {
         console.log('[SETTINGS] Checking Welcome Page data...');
         const hasWelcomePage = await checkWelcomePage();
         setShowWelcomePageView(hasWelcomePage);
@@ -227,8 +114,9 @@ export default function Settings() {
       console.error('[SETTINGS] Error checking generated data:', error);
     }
   }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
+  // ВАЖНО: Махни 'shop' от dependencies тук - вече е в помощните функции
   
-  // Check for generated data when settings are loaded
+  // ===== 7. useEffect (ПОСЛЕДЕН) =====
   useEffect(() => {
     if (settings?.features && shop) {
       console.log('[SETTINGS] Checking for generated data...');
@@ -321,11 +209,129 @@ export default function Settings() {
   const [jsonModalTitle, setJsonModalTitle] = useState('');
   const [jsonModalContent, setJsonModalContent] = useState(null);
   const [loadingJson, setLoadingJson] = useState(false);
-  const [originalSettings, setOriginalSettings] = useState(null);
+    const [originalSettings, setOriginalSettings] = useState(null);
+  
+  // ===== 4. API MEMO (ПРЕДИ да се използва в useCallback) =====
+  const api = useMemo(() => makeSessionFetch(), []);
+  
+  // ===== 5. HELPER ФУНКЦИИ (които НЕ ЗАВИСЯТ от други callbacks) =====
+  const checkProductsData = useCallback(async () => {
+    try {
+      const PRODUCTS_CHECK_QUERY = `
+        query CheckProductsData($shop: String!) {
+          products(shop: $shop, first: 1) {
+            edges {
+              node {
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: PRODUCTS_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.products?.edges?.length > 0;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking products data:', error);
+      return false;
+    }
+  }, [shop, api]);
+
+  const checkCollectionsData = useCallback(async () => {
+    try {
+      const COLLECTIONS_CHECK_QUERY = `
+        query CheckCollectionsData($shop: String!) {
+          collections(shop: $shop, first: 1) {
+            edges {
+              node {
+                id
+                title
+              }
+            }
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: COLLECTIONS_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.collections?.edges?.length > 0;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking collections data:', error);
+      return false;
+    }
+  }, [shop, api]);
+
+  const checkStoreMetadata = useCallback(async () => {
+    try {
+      const STORE_METADATA_CHECK_QUERY = `
+        query CheckStoreMetadata($shop: String!) {
+          storeMetadata(shop: $shop) {
+            shopName
+            description
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: STORE_METADATA_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.storeMetadata?.shopName;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking store metadata:', error);
+      return false;
+    }
+  }, [shop, api]);
+
+  const checkWelcomePage = useCallback(async () => {
+    try {
+      const WELCOME_PAGE_CHECK_QUERY = `
+        query CheckWelcomePage($shop: String!) {
+          welcomePage(shop: $shop) {
+            title
+            content
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: WELCOME_PAGE_CHECK_QUERY,
+          variables: { shop }
+        }),
+        shop: shop
+      });
+      
+      return result?.data?.welcomePage?.title;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking welcome page:', error);
+      return false;
+    }
+  }, [shop, api]);
   
   console.log('[SETTINGS] State variables initialized successfully');
-  
-  const api = useMemo(() => makeSessionFetch(), []);
 
   // --- GraphQL helper for this page (minimal, local) ---
   const runGQL = async (query, variables) => {
