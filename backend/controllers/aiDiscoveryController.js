@@ -86,19 +86,29 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     };
     
     // Check if this is a "fresh" shop (no explicit user settings saved)
-    // If savedSettings.features exists but updatedAt is very old or missing, treat as fresh
-    const isFreshShop = !savedSettings.features || 
-                       !savedSettings.updatedAt || 
-                       (new Date(savedSettings.updatedAt) < new Date(Date.now() - 24 * 60 * 60 * 1000)); // 24 hours ago
-    
+    // A shop is "fresh" if:
+    // 1. No features object exists at all, OR
+    // 2. Features object is empty (no keys), OR  
+    // 3. All features are false (never explicitly saved as true)
+    const hasNoFeatures = !savedSettings.features || 
+                          Object.keys(savedSettings.features).length === 0;
+
+    const allFeaturesFalse = savedSettings.features && 
+                             Object.keys(savedSettings.features).length > 0 &&
+                             Object.values(savedSettings.features).every(val => val === false);
+
+    const isFreshShop = hasNoFeatures || allFeaturesFalse;
+
     console.log('[AI-DISCOVERY] DEBUG - isFreshShop:', isFreshShop);
+    console.log('[AI-DISCOVERY] DEBUG - hasNoFeatures:', hasNoFeatures);
+    console.log('[AI-DISCOVERY] DEBUG - allFeaturesFalse:', allFeaturesFalse);
     console.log('[AI-DISCOVERY] DEBUG - savedSettings.updatedAt:', savedSettings.updatedAt);
-    
+
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: isFreshShop ? defaultFeatures : (savedSettings.features || defaultFeatures),
+      features: isFreshShop ? defaultFeatures : savedSettings.features,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
