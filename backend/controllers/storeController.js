@@ -139,28 +139,15 @@ async function fetchPlan(shop) {
 
 // Get current store metadata
 router.get('/generate', validateRequest(), async (req, res) => {
-  console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
-  const shop =
-    req.query?.shop ||
-    req.body?.shop ||
-    res.locals?.shopify?.session?.shop;
-
-  if (!shop) {
-    console.error('[STORE/HANDLER] No shop resolved — cannot load Admin API token');
-    return res.status(400).json({ error: 'Shop not provided' });
+  const { adminGraphql, shop } = res.locals;
+  
+  if (!adminGraphql) {
+    return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[STORE/HANDLER] Resolving Admin token', { shop, tokenSource });
+  console.log('[STORE/HANDLER] Using fresh adminGraphql token for shop:', shop);
 
   try {
-    const shop = req.shopDomain;
 
     // Check plan access
     const plan = await fetchPlan(shop);
@@ -196,15 +183,14 @@ router.get('/generate', validateRequest(), async (req, res) => {
       }
     }`;
     
-    const shopData = await shopGraphQL(req, shop, shopQuery);
-    const localesData = await shopGraphQL(req, shop, localesQuery);
-    const shopInfo = shopData?.shop;
-    const shopLocales = localesData?.shopLocales || [];
+    const shopResp = await adminGraphql.request(shopQuery);
+    const localesResp = await adminGraphql.request(localesQuery);
+    const shopInfo = shopResp?.data?.shop;
+    const shopLocales = localesResp?.data?.shopLocales || [];
     
-    console.log('[STORE-DEBUG] Raw shopData:', JSON.stringify(shopData, null, 2));
     console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
-    console.log('[STORE-DEBUG] localesData:', JSON.stringify(localesData, null, 2));
     console.log('[STORE-DEBUG] shopLocales:', shopLocales);
+    console.log('[STORE-DEBUG] markets:', markets);
     
     // Get markets separately (simplified query)
     const marketsQuery = `{
@@ -219,8 +205,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
       }
     }`;
     
-    const marketsData = await shopGraphQL(req, shop, marketsQuery);
-    const markets = marketsData?.markets?.edges?.map(edge => edge.node) || [];
+    const marketsResp = await adminGraphql.request(marketsQuery);
+    const markets = marketsResp?.data?.markets?.edges?.map(edge => edge.node) || [];
     
     console.log('[STORE-DEBUG] markets:', markets);
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
@@ -248,11 +234,11 @@ router.get('/generate', validateRequest(), async (req, res) => {
       }
     }`;
 
-    const metafieldsData = await shopGraphQL(req, shop, metafieldsQuery);
-    console.log('[STORE-METAFIELDS] Metafields data:', JSON.stringify(metafieldsData, null, 2));
+    const metafieldsResp = await adminGraphql.request(metafieldsQuery);
+    console.log('[STORE-METAFIELDS] Metafields data:', JSON.stringify(metafieldsResp, null, 2));
     const metafields = {};
     
-    metafieldsData?.shop?.metafields?.edges?.forEach(edge => {
+    metafieldsResp?.data?.shop?.metafields?.edges?.forEach(edge => {
       const node = edge.node;
       if (node.type === 'json') {
         const parsed = JSON.parse(node.value);
