@@ -193,11 +193,12 @@ export default function Settings() {
       
       const PRODUCTS_CHECK_QUERY = `
         query CheckProductsData($shop: String!) {
-          products(shop: $shop, first: 1) {
+          products(first: 1) {
             edges {
               node {
                 id
                 title
+                aiOptimized
               }
             }
           }
@@ -238,11 +239,12 @@ export default function Settings() {
       
       const COLLECTIONS_CHECK_QUERY = `
         query CheckCollectionsData($shop: String!) {
-          collections(shop: $shop, first: 1) {
+          collections(first: 1) {
             edges {
               node {
                 id
                 title
+                aiOptimized
               }
             }
           }
