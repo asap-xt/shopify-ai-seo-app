@@ -205,21 +205,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
     console.log('[STORE-DEBUG] localesData:', JSON.stringify(localesData, null, 2));
     console.log('[STORE-DEBUG] shopLocales:', shopLocales);
     
-    // Get markets separately (simplified query)
-    const marketsQuery = `{
-      markets(first: 10) {
-        edges {
-          node {
-            id
-            name
-            enabled
-          }
-        }
-      }
-    }`;
-    
-    const marketsData = await shopGraphQL(req, shop, marketsQuery);
-    const markets = marketsData?.markets?.edges?.map(edge => edge.node) || [];
+    // Skip markets for now - app needs to be reinstalled with read_markets scope
+    const markets = []; // Empty until app is reinstalled
     
     console.log('[STORE-DEBUG] markets:', markets);
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
