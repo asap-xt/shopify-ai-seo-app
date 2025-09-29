@@ -204,12 +204,78 @@ export default function StoreMetadata({ shop: shopProp }) {
       const previewData = result.data?.storeMetadata;
       if (previewData) {
         const previewWindow = window.open('', '_blank');
+        
+        console.log('[STORE-METADATA] Raw preview data:', previewData);
+        console.log('[STORE-METADATA] seoMetadata raw:', previewData.seoMetadata);
+        console.log('[STORE-METADATA] aiMetadata raw:', previewData.aiMetadata);
+        console.log('[STORE-METADATA] organizationSchema raw:', previewData.organizationSchema);
+        
+        // Format the data for better readability
+        const formattedData = {
+          shopName: previewData.shopName,
+          description: previewData.description,
+          seoMetadata: previewData.seoMetadata ? (() => {
+            try { return JSON.parse(previewData.seoMetadata); } 
+            catch (e) { console.error('Error parsing seoMetadata:', e); return previewData.seoMetadata; }
+          })() : null,
+          aiMetadata: previewData.aiMetadata ? (() => {
+            try { return JSON.parse(previewData.aiMetadata); } 
+            catch (e) { console.error('Error parsing aiMetadata:', e); return previewData.aiMetadata; }
+          })() : null,
+          organizationSchema: previewData.organizationSchema ? (() => {
+            try { return JSON.parse(previewData.organizationSchema); } 
+            catch (e) { console.error('Error parsing organizationSchema:', e); return previewData.organizationSchema; }
+          })() : null,
+          localBusinessSchema: previewData.localBusinessSchema ? (() => {
+            try { return JSON.parse(previewData.localBusinessSchema); } 
+            catch (e) { console.error('Error parsing localBusinessSchema:', e); return previewData.localBusinessSchema; }
+          })() : null
+        };
+        
         previewWindow.document.write(`
           <html>
-            <head><title>Store Metadata Preview</title></head>
+            <head>
+              <title>Store Metadata Preview</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+                h1 { color: #333; }
+                .section { margin: 20px 0; }
+                .section h2 { color: #666; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+              </style>
+            </head>
             <body>
               <h1>Store Metadata Preview</h1>
-              <pre>${JSON.stringify(previewData, null, 2)}</pre>
+              <div class="section">
+                <h2>Basic Info</h2>
+                <p><strong>Shop Name:</strong> ${formattedData.shopName || 'Not set'}</p>
+                <p><strong>Description:</strong> ${formattedData.description || 'Not set'}</p>
+              </div>
+              
+              <div class="section">
+                <h2>SEO Metadata</h2>
+                <pre>${JSON.stringify(formattedData.seoMetadata, null, 2)}</pre>
+              </div>
+              
+              <div class="section">
+                <h2>AI Metadata</h2>
+                <pre>${JSON.stringify(formattedData.aiMetadata, null, 2)}</pre>
+              </div>
+              
+              <div class="section">
+                <h2>Organization Schema</h2>
+                <pre>${JSON.stringify(formattedData.organizationSchema, null, 2)}</pre>
+              </div>
+              
+              <div class="section">
+                <h2>Local Business Schema</h2>
+                <pre>${JSON.stringify(formattedData.localBusinessSchema, null, 2)}</pre>
+              </div>
+              
+              <div class="section">
+                <h2>Raw Data</h2>
+                <pre>${JSON.stringify(formattedData, null, 2)}</pre>
+              </div>
             </body>
           </html>
         `);
