@@ -231,8 +231,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
     console.log('[STORE-DEBUG] markets:', markets);
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
     console.log('[STORE-DEBUG] features:', {
-      organizationSchema: ['Professional', 'Growth', 'Growth Extra', 'Enterprise'].includes(plan.plan),
-      localBusinessSchema: plan.plan === 'Enterprise'
+      organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
+      localBusinessSchema: plan.plan.toLowerCase() === 'enterprise'
     });
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
@@ -299,8 +299,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
       existingMetadata: metafields,
       plan: plan.plan,
       features: {
-        organizationSchema: ['Professional', 'Growth', 'Growth Extra', 'Enterprise'].includes(plan.plan),
-        localBusinessSchema: plan.plan === 'Enterprise'
+        organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
+        localBusinessSchema: plan.plan.toLowerCase() === 'enterprise'
       }
     });
   } catch (error) {
@@ -370,7 +370,7 @@ router.post('/ai-generate', validateRequest(), async (req, res) => {
     };
 
     // Add organization schema for eligible plans
-    if (['Professional', 'Growth', 'Growth Extra', 'Enterprise'].includes(plan.plan)) {
+    if (['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase())) {
       generatedMetadata.organizationSchema = {
         enabled: true,
         name: shopInfo.name,
