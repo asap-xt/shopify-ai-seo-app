@@ -408,29 +408,29 @@ class AIDiscoveryService {
       robotsTxt += '# AI Discovery Endpoints\n';
       
       if (settings.features?.welcomePage && availableFeatures.includes('welcomePage')) {
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/welcome?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}\n`;
       }
       
       if (settings.features?.productsJson && availableFeatures.includes('productsJson')) {
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/products.json?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}\n`;
       }
       
       if (settings.features?.aiSitemap && availableFeatures.includes('aiSitemap')) {
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/sitemap-feed.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}\n`;
       }
       
       if (settings.features?.collectionsJson && availableFeatures.includes('collectionsJson')) {
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/collections-feed.json?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}\n`;
       }
       
       if (settings.features?.storeMetadata && availableFeatures.includes('storeMetadata')) {
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/store-metadata.json?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}\n`;
       }
       
       // Advanced Schema Data - Only for Enterprise
       if (settings.features?.schemaData && normalizedPlan === 'enterprise') {
         robotsTxt += '\n# Advanced Schema Data\n';
-        robotsTxt += `Sitemap: https://${process.env.APP_URL || 'new-ai-seo-app-production.up.railway.app'}/ai/schema-sitemap.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}\n`;
       }
       
       // Default deny

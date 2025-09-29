@@ -10,6 +10,7 @@ import Subscription from '../db/Subscription.js';
 import Sitemap from '../db/Sitemap.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import { appProxyAuth } from '../utils/appProxyValidator.js';
+import aiDiscoveryService from '../services/aiDiscoveryService.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
@@ -619,6 +620,343 @@ router.get('/debug-sitemap', (req, res) => {
     headers: req.headers,
     timestamp: new Date().toISOString()
   });
+});
+
+// AI Discovery Endpoints via App Proxy
+// These will be accessible at: https://{shop}.myshopify.com/apps/new-ai-seo/ai/*
+
+// AI Welcome Page
+router.get('/ai/welcome', appProxyAuth, async (req, res) => {
+  console.log('[APP_PROXY] AI Welcome Page requested');
+  const shop = normalizeShop(req.query.shop);
+  
+  if (!shop) {
+    return res.status(400).send('Missing shop parameter');
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).send('Shop not found');
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Check if feature is enabled
+    if (!settings?.features?.welcomePage) {
+      return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
+    }
+
+    // Check plan - Welcome page requires Professional+
+    const subscription = await Subscription.findOne({ shop });
+    let effectivePlan = settings?.planKey || 'starter';
+    
+    if (!subscription) {
+      effectivePlan = 'growth'; // Trial access
+    }
+    
+    const allowedPlans = ['professional', 'growth', 'growth extra', 'enterprise'];
+    
+    if (!allowedPlans.includes(effectivePlan)) {
+      return res.status(403).json({ 
+        error: 'This feature requires Professional plan or higher',
+        debug: {
+          currentPlan: settings?.plan,
+          effectivePlan: effectivePlan,
+          hasSubscription: !!subscription
+        }
+      });
+    }
+    
+    // Get shop info for customization
+    const shopInfoQuery = `
+      query {
+        shop {
+          name
+          description
+          url
+          primaryDomain {
+            url
+          }
+        }
+      }
+    `;
+    
+    const shopResponse = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': shopRecord.accessToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query: shopInfoQuery })
+    });
+    
+    const shopData = await shopResponse.json();
+    const shopInfo = shopData.data?.shop;
+    
+    // Welcome page HTML
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Welcome - ${shopInfo?.name || shop}</title>
+  <meta name="description" content="AI-optimized data endpoints for ${shopInfo?.name || shop}. Access structured product data, collections, and store information.">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="AI Data Endpoints - ${shopInfo?.name}">
+  <meta property="og:description" content="Structured e-commerce data optimized for AI consumption">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/new-ai-seo/ai/welcome">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebAPI",
+    "name": "${shopInfo?.name} AI Data API",
+    "description": "Structured e-commerce data endpoints for AI agents",
+    "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/new-ai-seo/ai/welcome",
+    "provider": {
+      "@type": "Organization",
+      "name": "${shopInfo?.name}",
+      "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      line-height: 1.6; 
+      color: #333;
+      background: #f8f9fa;
+    }
+    .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+    header { 
+      background: white; 
+      border-bottom: 2px solid #e9ecef; 
+      margin: -2rem -2rem 3rem -2rem;
+      padding: 3rem 2rem;
+    }
+    h1 { 
+      font-size: 2.5rem; 
+      margin-bottom: 0.5rem; 
+      color: #2c3e50;
+    }
+    .tagline { 
+      font-size: 1.2rem; 
+      color: #6c757d; 
+    }
+    .section { 
+      background: white; 
+      padding: 2rem; 
+      margin-bottom: 2rem; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .endpoint {
+      background: #f8f9fa;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-left: 4px solid #007bff;
+      border-radius: 4px;
+    }
+    .endpoint h3 {
+      margin: 0 0 0.5rem 0;
+      color: #495057;
+    }
+    .endpoint a {
+      color: #007bff;
+      text-decoration: none;
+      font-family: monospace;
+      font-size: 0.95rem;
+    }
+    .endpoint a:hover { text-decoration: underline; }
+    .endpoint p { 
+      margin: 0.5rem 0 0 0; 
+      color: #6c757d;
+      font-size: 0.95rem;
+    }
+    .meta { 
+      color: #6c757d; 
+      font-size: 0.9rem; 
+      margin-top: 3rem;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background: #28a745;
+      color: white;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-left: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🤖 Welcome, AI Agents!</h1>
+      <p class="tagline">Structured e-commerce data from ${shopInfo?.name || shop}</p>
+    </header>
+    
+    <div class="section">
+      <h2>📊 Available Data Endpoints</h2>
+      <p>All endpoints return JSON data optimized for AI consumption.</p>
+      
+      ${settings?.features?.productsJson ? `
+      <div class="endpoint">
+        <h3>Products Feed <span class="badge">Active</span></h3>
+        <a href="/apps/new-ai-seo/ai/products.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/products.json?shop=${shop}</a>
+        <p>Complete product catalog with descriptions, prices, and AI-optimized metadata</p>
+      </div>
+      ` : ''}
+      
+      ${settings?.features?.collectionsJson ? `
+      <div class="endpoint">
+        <h3>Collections Feed <span class="badge">Active</span></h3>
+        <a href="/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}</a>
+        <p>Product categories and collections with semantic groupings</p>
+      </div>
+      ` : ''}
+      
+      ${settings?.features?.storeMetadata ? `
+      <div class="endpoint">
+        <h3>Store Metadata <span class="badge">Active</span></h3>
+        <a href="/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}</a>
+        <p>Organization and LocalBusiness schema data</p>
+      </div>
+      ` : ''}
+      
+      ${settings?.features?.aiSitemap ? `
+      <div class="endpoint">
+        <h3>AI Sitemap <span class="badge">Active</span></h3>
+        <a href="/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}</a>
+        <p>Enhanced sitemap with AI-optimized hints and metadata</p>
+      </div>
+      ` : ''}
+      
+      ${settings?.features?.schemaData ? `
+      <div class="endpoint">
+        <h3>Advanced Schema Data <span class="badge">Active</span></h3>
+        <a href="/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}</a>
+        <p>BreadcrumbList, FAQPage, and other advanced schema markup</p>
+      </div>
+      ` : ''}
+    </div>
+    
+    <div class="meta">
+      <p>Generated by Shopify AI SEO App • ${new Date().toISOString()}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.type('text/html').send(html);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Welcome Page error:', error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+// AI Products JSON Feed
+router.get('/ai/products.json', appProxyAuth, async (req, res) => {
+  console.log('[APP_PROXY] AI Products JSON requested');
+  const shop = normalizeShop(req.query.shop);
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    if (!settings?.features?.productsJson) {
+      return res.status(403).json({ error: 'Products JSON feature is not enabled' });
+    }
+
+    // Redirect to the main AI endpoints controller
+    res.redirect(`/ai/products.json?shop=${shop}`);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Products JSON error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// AI Collections JSON Feed
+router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
+  console.log('[APP_PROXY] AI Collections JSON requested');
+  const shop = normalizeShop(req.query.shop);
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    if (!settings?.features?.collectionsJson) {
+      return res.status(403).json({ error: 'Collections JSON feature is not enabled' });
+    }
+
+    // Redirect to the main AI endpoints controller
+    res.redirect(`/ai/collections-feed.json?shop=${shop}`);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Collections JSON error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// AI Sitemap Feed
+router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
+  console.log('[APP_PROXY] AI Sitemap requested');
+  const shop = normalizeShop(req.query.shop);
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    if (!settings?.features?.aiSitemap) {
+      return res.status(403).json({ error: 'AI Sitemap feature is not enabled' });
+    }
+
+    // Redirect to the main AI endpoints controller
+    res.redirect(`/ai/sitemap-feed.xml?shop=${shop}`);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Sitemap error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;
