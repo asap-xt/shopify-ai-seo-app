@@ -1445,7 +1445,7 @@ export default function Settings() {
                               onClick={() => {
                                 console.log('[SETTINGS DEBUG] Configure button clicked!');
                                 // Open Store Metadata tab in new window
-                                const storeMetadataUrl = `/ai-seo?shop=${shop}#store-metadata`;
+                                const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
                                 console.log('[SETTINGS DEBUG] Opening URL:', storeMetadataUrl);
                                 window.open(storeMetadataUrl, '_blank');
                               }}

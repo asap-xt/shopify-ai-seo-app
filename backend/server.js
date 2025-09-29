@@ -717,15 +717,39 @@ const root = {
           shop {
             name
             description
+            metafield(namespace: "ai_seo_store", key: "seo_metadata") {
+              value
+            }
+            organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") {
+              value
+            }
+            aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
+              value
+            }
           }
         }
       `;
       
       const data = await executeShopifyGraphQL(normalizedShop, shopQuery);
       
+      // Check if any AI metadata exists
+      const hasSeoMetadata = !!data.shop?.metafield?.value;
+      const hasOrganizationMetadata = !!data.shop?.organizationMetafield?.value;
+      const hasAiMetadata = !!data.shop?.aiMetafield?.value;
+      
+      const hasAnyMetadata = hasSeoMetadata || hasOrganizationMetadata || hasAiMetadata;
+      
+      console.log('[GRAPHQL] Store metadata check:', {
+        shop: normalizedShop,
+        hasSeoMetadata,
+        hasOrganizationMetadata,
+        hasAiMetadata,
+        hasAnyMetadata
+      });
+      
       return {
-        shopName: data.shop?.name || null,
-        description: data.shop?.description || null
+        shopName: hasAnyMetadata ? data.shop?.name : null,
+        description: hasAnyMetadata ? data.shop?.description : null
       };
       
     } catch (error) {
