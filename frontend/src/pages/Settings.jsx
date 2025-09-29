@@ -93,69 +93,14 @@ export default function Settings() {
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
   
-  // Debug showViewButtons state changes
-    useEffect(() => {
-      console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
-    }, [showViewButtons]);
-    
-    // Reset showViewButtons on component mount to prevent showing from previous sessions
-    useEffect(() => {
-      console.log('[SETTINGS] Resetting showViewButtons on component mount');
-      setShowViewButtons(false);
-    }, []); // Run only on mount
+  console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
+  console.log('[SETTINGS] Extracted shop:', shop);
   
   
   // ===== 6. Ð“Ð›ÐÐ’ÐÐÐ¢Ð Ð¤Ð£ÐÐšÐ¦Ð˜Ð¯ (Ð¡Ð›Ð•Ð” helper Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸Ñ‚Ðµ) =====
-  const checkGeneratedData = useCallback(async () => {
-    try {
-      console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
-      
-      // Check Products JSON Feed
-      if (settings?.features?.productsJson) {
-        console.log('[SETTINGS] Checking Products JSON data...');
-        const hasProductsData = await checkProductsData();
-        setShowProductsJsonView(hasProductsData);
-        console.log('[SETTINGS] Products JSON data exists:', hasProductsData);
-      }
-      
-      // Check Collections JSON Feed  
-      if (settings?.features?.collectionsJson) {
-        console.log('[SETTINGS] Checking Collections JSON data...');
-        const hasCollectionsData = await checkCollectionsData();
-        setShowCollectionsJsonView(hasCollectionsData);
-        console.log('[SETTINGS] Collections JSON data exists:', hasCollectionsData);
-      }
-      
-      // Check Store Metadata
-      if (settings?.features?.storeMetadata) {
-        console.log('[SETTINGS] Checking Store Metadata data...');
-        const hasStoreMetadata = await checkStoreMetadata();
-        setShowStoreMetadataView(hasStoreMetadata);
-        console.log('[SETTINGS] Store Metadata exists:', hasStoreMetadata);
-      }
-      
-      // Check Welcome Page
-      if (settings?.features?.welcomePage) {
-        console.log('[SETTINGS] Checking Welcome Page data...');
-        const hasWelcomePage = await checkWelcomePage();
-        setShowWelcomePageView(hasWelcomePage);
-        console.log('[SETTINGS] Welcome Page exists:', hasWelcomePage);
-      }
-      
-      console.log('[SETTINGS] ===== GENERATED DATA CHECK COMPLETE =====');
-    } catch (error) {
-      console.error('[SETTINGS] Error checking generated data:', error);
-    }
-  }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   // Ð’ÐÐ–ÐÐž: ÐœÐ°Ñ…Ð½Ð¸ 'shop' Ð¾Ñ‚ dependencies Ñ‚ÑƒÐº - Ð²ÐµÑ‡Ðµ Ðµ Ð² Ð¿Ð¾Ð¼Ð¾Ñ‰Ð½Ð¸Ñ‚Ðµ Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸
   
   // ===== 7. useEffect (ÐŸÐžÐ¡Ð›Ð•Ð”Ð•Ð) =====
-  useEffect(() => {
-    if (settings?.features && shop) {
-      console.log('[SETTINGS] Checking for generated data...');
-      checkGeneratedData();
-    }
-  }, [settings?.features, shop, checkGeneratedData]);
   
   // Debug toast state changes
   useEffect(() => {
@@ -354,6 +299,49 @@ export default function Settings() {
       return false;
     }
   }, [shop, api]);
+
+  // ===== 6. ГЛАВНАТА ФУНКЦИЯ =====
+  const checkGeneratedData = useCallback(async () => {
+    try {
+      console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
+      
+      // Check Products JSON Feed
+      if (settings?.features?.productsJson) {
+        console.log('[SETTINGS] Checking Products JSON data...');
+        const hasProductsData = await checkProductsData();
+        setShowProductsJsonView(hasProductsData);
+        console.log('[SETTINGS] Products JSON data exists:', hasProductsData);
+      }
+      
+      // Check Collections JSON Feed  
+      if (settings?.features?.collectionsJson) {
+        console.log('[SETTINGS] Checking Collections JSON data...');
+        const hasCollectionsData = await checkCollectionsData();
+        setShowCollectionsJsonView(hasCollectionsData);
+        console.log('[SETTINGS] Collections JSON data exists:', hasCollectionsData);
+      }
+      
+      // Check Store Metadata
+      if (settings?.features?.storeMetadata) {
+        console.log('[SETTINGS] Checking Store Metadata data...');
+        const hasStoreMetadata = await checkStoreMetadata();
+        setShowStoreMetadataView(hasStoreMetadata);
+        console.log('[SETTINGS] Store Metadata exists:', hasStoreMetadata);
+      }
+      
+      // Check Welcome Page
+      if (settings?.features?.welcomePage) {
+        console.log('[SETTINGS] Checking Welcome Page data...');
+        const hasWelcomePage = await checkWelcomePage();
+        setShowWelcomePageView(hasWelcomePage);
+        console.log('[SETTINGS] Welcome Page exists:', hasWelcomePage);
+      }
+      
+      console.log('[SETTINGS] ===== GENERATED DATA CHECK COMPLETE =====');
+    } catch (error) {
+      console.error('[SETTINGS] Error checking generated data:', error);
+    }
+  }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
   console.log('[SETTINGS] State variables initialized successfully');
 
@@ -787,6 +775,26 @@ export default function Settings() {
       setLoadingJson(false);
     }
   };
+
+  // ===== 8. useEffect HOOKS (В КРАЯ!) =====
+  // Debug showViewButtons state changes
+  useEffect(() => {
+    console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
+  }, [showViewButtons]);
+  
+  // Reset showViewButtons on component mount to prevent showing from previous sessions
+  useEffect(() => {
+    console.log('[SETTINGS] Resetting showViewButtons on component mount');
+    setShowViewButtons(false);
+  }, []); // Run only on mount
+
+  // Check generated data when settings change
+  useEffect(() => {
+    if (settings?.features && shop) {
+      console.log('[SETTINGS] Checking for generated data...');
+      checkGeneratedData();
+    }
+  }, [settings?.features, shop, checkGeneratedData]);
 
   // ===== 9. RENDER =====
   try {
