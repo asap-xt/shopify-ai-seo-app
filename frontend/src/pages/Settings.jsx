@@ -1630,10 +1630,10 @@ export default function Settings() {
                 <Banner status="info" title="Manual Configuration Steps">
                   <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                     <li>Copy the robots.txt content below</li>
-                    <li>Go to <strong>Online Store â†’ Themes</strong></li>
-                    <li>Click <strong>Actions â†’ Edit code</strong> on your active theme</li>
+                    <li>Go to <strong>Online Store → Themes</strong></li>
+                    <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
                     <li>In the file browser, look for <strong>robots.txt.liquid</strong></li>
-                    <li>If it doesn't exist, click <strong>Add a new template</strong> â†’ Select "robots" â†’ Create</li>
+                    <li>If it doesn't exist, click <strong>Add a new template</strong> → Select "robots" → Create</li>
                     <li>Replace the content with what you copied</li>
                     <li>Click <strong>Save</strong></li>
                   </ol>
@@ -1710,8 +1710,8 @@ export default function Settings() {
               <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                 <li>Click "Continue" to see your custom robots.txt content</li>
                 <li>Copy the generated content</li>
-                  <li>Go to <strong>Online Store â†’ Themes</strong></li>
-                  <li>Click <strong>Actions â†’ Edit code</strong> on your active theme</li>
+                  <li>Go to <strong>Online Store → Themes</strong></li>
+                  <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
                 <li>Find or create <strong>robots.txt.liquid</strong> file</li>
                 <li>Paste the content and save</li>
               </ol>

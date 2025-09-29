@@ -269,7 +269,7 @@ class AIDiscoveryService {
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
-        autoRobotsTxt: ['growth', 'growth_extra', 'enterprise'].includes(normalizedPlan), // TRUE for Growth+
+        autoRobotsTxt: false, // Always false by default - user must enable manually
         storeMetadata: false,
         schemaData: false
       },

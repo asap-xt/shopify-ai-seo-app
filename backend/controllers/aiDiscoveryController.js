@@ -69,13 +69,23 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // Get default structure for the plan
     const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
     
-    // IMPORTANT: Don't merge features from defaultSettings if there are no saved settings
+    // IMPORTANT: For new shops, all features should be false by default
+    const defaultFeatures = {
+      productsJson: false,
+      aiSitemap: false,
+      welcomePage: false,
+      collectionsJson: false,
+      autoRobotsTxt: false,
+      storeMetadata: false,
+      schemaData: false
+    };
+    
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: savedSettings.features || defaultSettings.features, // Will be all false from default
-      advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false, // ADD THIS
+      features: savedSettings.features || defaultFeatures, // All false for new shops
+      advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
     
