@@ -513,8 +513,11 @@ router.post('/apply', validateRequest(), async (req, res) => {
 router.get('/public/:shop', async (req, res) => {
   try {
     console.log('[STORE-PUBLIC] GET /public/:shop called');
+    console.log('[STORE-PUBLIC] req.url:', req.url);
+    console.log('[STORE-PUBLIC] req.path:', req.path);
     console.log('[STORE-PUBLIC] req.params:', req.params);
     console.log('[STORE-PUBLIC] req.params.shop:', req.params.shop);
+    console.log('[STORE-PUBLIC] req.route:', req.route);
     
     const shop = normalizeShop(req.params.shop);
     console.log('[STORE-PUBLIC] Normalized shop:', shop);
