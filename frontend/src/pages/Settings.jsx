@@ -330,6 +330,10 @@ export default function Settings() {
 
   // ===== 6. ГЛАВНАТА ФУНКЦИЯ =====
   const checkGeneratedData = useCallback(async () => {
+    console.log('[SETTINGS] ===== checkGeneratedData CALLED =====');
+    console.log('[SETTINGS] checkGeneratedData - shop:', shop);
+    console.log('[SETTINGS] checkGeneratedData - settings:', settings);
+    console.log('[SETTINGS] checkGeneratedData - settings?.features:', settings?.features);
     try {
       console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
       
@@ -866,12 +870,15 @@ export default function Settings() {
     console.log('[SETTINGS] Shop:', shop);
     console.log('[SETTINGS] Settings:', settings);
     console.log('[SETTINGS] Settings features:', settings?.features);
+    console.log('[SETTINGS] checkGeneratedData function:', typeof checkGeneratedData);
     
     if (shop && settings?.features) {
       console.log('[SETTINGS] Both shop and settings available, calling checkGeneratedData...');
       checkGeneratedData();
     } else {
       console.log('[SETTINGS] Missing shop or settings, skipping checkGeneratedData');
+      console.log('[SETTINGS] - shop exists:', !!shop);
+      console.log('[SETTINGS] - settings?.features exists:', !!settings?.features);
     }
   }, []); // Run only on mount
 
