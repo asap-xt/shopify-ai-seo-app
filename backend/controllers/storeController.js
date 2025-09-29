@@ -228,6 +228,11 @@ router.get('/generate', validateRequest(), async (req, res) => {
     
     console.log('[STORE-DEBUG] marketsData:', JSON.stringify(marketsData, null, 2));
     console.log('[STORE-DEBUG] markets:', markets);
+    console.log('[STORE-DEBUG] plan.plan:', plan.plan);
+    console.log('[STORE-DEBUG] features:', {
+      organizationSchema: ['Professional', 'Growth', 'Growth Extra', 'Enterprise'].includes(plan.plan),
+      localBusinessSchema: plan.plan === 'Enterprise'
+    });
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
 
@@ -293,8 +298,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
       existingMetadata: metafields,
       plan: plan.plan,
       features: {
-        organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan),
-        localBusinessSchema: plan.plan === 'enterprise'
+        organizationSchema: ['Professional', 'Growth', 'Growth Extra', 'Enterprise'].includes(plan.plan),
+        localBusinessSchema: plan.plan === 'Enterprise'
       }
     });
   } catch (error) {
