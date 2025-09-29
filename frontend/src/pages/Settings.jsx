@@ -186,6 +186,9 @@ export default function Settings() {
   // ===== 5. HELPER Ð¤Ð£ÐÐšÐ¦Ð˜Ð˜ (ÐºÐ¾Ð¸Ñ‚Ð¾ ÐÐ• Ð—ÐÐ’Ð˜Ð¡Ð¯Ð¢ Ð¾Ñ‚ Ð´Ñ€ÑƒÐ³Ð¸ callbacks) =====
   const checkProductsData = useCallback(async () => {
     try {
+      console.log('[SETTINGS DEBUG] ===== CHECKING PRODUCTS DATA =====');
+      console.log('[SETTINGS DEBUG] Shop:', shop);
+      
       const PRODUCTS_CHECK_QUERY = `
         query CheckProductsData($shop: String!) {
           products(shop: $shop, first: 1) {
@@ -199,6 +202,9 @@ export default function Settings() {
         }
       `;
       
+      console.log('[SETTINGS DEBUG] GraphQL Query:', PRODUCTS_CHECK_QUERY);
+      console.log('[SETTINGS DEBUG] Variables:', { shop });
+      
       const result = await api('/graphql', {
         method: 'POST',
         body: JSON.stringify({
@@ -208,7 +214,14 @@ export default function Settings() {
         shop: shop
       });
       
-      return result?.data?.products?.edges?.length > 0;
+      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
+      console.log('[SETTINGS DEBUG] Products edges length:', result?.data?.products?.edges?.length);
+      
+      const hasProducts = result?.data?.products?.edges?.length > 0;
+      console.log('[SETTINGS DEBUG] Has products:', hasProducts);
+      console.log('[SETTINGS DEBUG] ===== PRODUCTS CHECK COMPLETE =====');
+      
+      return hasProducts;
     } catch (error) {
       console.error('[SETTINGS] Error checking products data:', error);
       return false;
@@ -217,6 +230,9 @@ export default function Settings() {
 
   const checkCollectionsData = useCallback(async () => {
     try {
+      console.log('[SETTINGS DEBUG] ===== CHECKING COLLECTIONS DATA =====');
+      console.log('[SETTINGS DEBUG] Shop:', shop);
+      
       const COLLECTIONS_CHECK_QUERY = `
         query CheckCollectionsData($shop: String!) {
           collections(shop: $shop, first: 1) {
@@ -230,6 +246,9 @@ export default function Settings() {
         }
       `;
       
+      console.log('[SETTINGS DEBUG] GraphQL Query:', COLLECTIONS_CHECK_QUERY);
+      console.log('[SETTINGS DEBUG] Variables:', { shop });
+      
       const result = await api('/graphql', {
         method: 'POST',
         body: JSON.stringify({
@@ -239,7 +258,14 @@ export default function Settings() {
         shop: shop
       });
       
-      return result?.data?.collections?.edges?.length > 0;
+      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
+      console.log('[SETTINGS DEBUG] Collections edges length:', result?.data?.collections?.edges?.length);
+      
+      const hasCollections = result?.data?.collections?.edges?.length > 0;
+      console.log('[SETTINGS DEBUG] Has collections:', hasCollections);
+      console.log('[SETTINGS DEBUG] ===== COLLECTIONS CHECK COMPLETE =====');
+      
+      return hasCollections;
     } catch (error) {
       console.error('[SETTINGS] Error checking collections data:', error);
       return false;
@@ -307,18 +333,26 @@ export default function Settings() {
       
       // Check Products JSON Feed
       if (settings?.features?.productsJson) {
-        console.log('[SETTINGS] Checking Products JSON data...');
+        console.log('[SETTINGS] ===== CHECKING PRODUCTS JSON FEATURE =====');
+        console.log('[SETTINGS] Products JSON feature is enabled:', settings?.features?.productsJson);
         const hasProductsData = await checkProductsData();
+        console.log('[SETTINGS] Setting showProductsJsonView to:', hasProductsData);
         setShowProductsJsonView(hasProductsData);
         console.log('[SETTINGS] Products JSON data exists:', hasProductsData);
+      } else {
+        console.log('[SETTINGS] Products JSON feature is disabled');
       }
       
       // Check Collections JSON Feed  
       if (settings?.features?.collectionsJson) {
-        console.log('[SETTINGS] Checking Collections JSON data...');
+        console.log('[SETTINGS] ===== CHECKING COLLECTIONS JSON FEATURE =====');
+        console.log('[SETTINGS] Collections JSON feature is enabled:', settings?.features?.collectionsJson);
         const hasCollectionsData = await checkCollectionsData();
+        console.log('[SETTINGS] Setting showCollectionsJsonView to:', hasCollectionsData);
         setShowCollectionsJsonView(hasCollectionsData);
         console.log('[SETTINGS] Collections JSON data exists:', hasCollectionsData);
+      } else {
+        console.log('[SETTINGS] Collections JSON feature is disabled');
       }
       
       // Check Store Metadata
@@ -790,9 +824,20 @@ export default function Settings() {
 
   // Check generated data when settings change
   useEffect(() => {
+    console.log('[SETTINGS DEBUG] ===== useEffect TRIGGERED =====');
+    console.log('[SETTINGS DEBUG] Settings:', settings);
+    console.log('[SETTINGS DEBUG] Settings features:', settings?.features);
+    console.log('[SETTINGS DEBUG] Shop:', shop);
+    console.log('[SETTINGS DEBUG] Conditions check:');
+    console.log('[SETTINGS DEBUG] - settings?.features exists:', !!settings?.features);
+    console.log('[SETTINGS DEBUG] - shop exists:', !!shop);
+    console.log('[SETTINGS DEBUG] - Both conditions met:', !!(settings?.features && shop));
+    
     if (settings?.features && shop) {
       console.log('[SETTINGS] Checking for generated data...');
       checkGeneratedData();
+    } else {
+      console.log('[SETTINGS] Skipping checkGeneratedData - conditions not met');
     }
   }, [settings?.features, shop, checkGeneratedData]);
 
@@ -1244,7 +1289,13 @@ export default function Settings() {
                         )}
                         
                         {/* Products JSON View button */}
-                        {feature.key === 'productsJson' && showProductsJsonView && (
+                        {feature.key === 'productsJson' && (() => {
+                          console.log('[SETTINGS DEBUG] Products JSON button check:');
+                          console.log('[SETTINGS DEBUG] - feature.key === productsJson:', feature.key === 'productsJson');
+                          console.log('[SETTINGS DEBUG] - showProductsJsonView:', showProductsJsonView);
+                          console.log('[SETTINGS DEBUG] - Should show button:', feature.key === 'productsJson' && showProductsJsonView);
+                          return feature.key === 'productsJson' && showProductsJsonView;
+                        })() && (
                           <Button
                             size="slim"
                             onClick={() => viewJson(feature.key, feature.name)}
@@ -1254,7 +1305,13 @@ export default function Settings() {
                         )}
                         
                         {/* Collections JSON View button */}
-                        {feature.key === 'collectionsJson' && showCollectionsJsonView && (
+                        {feature.key === 'collectionsJson' && (() => {
+                          console.log('[SETTINGS DEBUG] Collections JSON button check:');
+                          console.log('[SETTINGS DEBUG] - feature.key === collectionsJson:', feature.key === 'collectionsJson');
+                          console.log('[SETTINGS DEBUG] - showCollectionsJsonView:', showCollectionsJsonView);
+                          console.log('[SETTINGS DEBUG] - Should show button:', feature.key === 'collectionsJson' && showCollectionsJsonView);
+                          return feature.key === 'collectionsJson' && showCollectionsJsonView;
+                        })() && (
                           <Button
                             size="slim"
                             onClick={() => viewJson(feature.key, feature.name)}
