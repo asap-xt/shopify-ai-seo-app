@@ -267,25 +267,20 @@ export default function Settings() {
 
   const checkWelcomePage = useCallback(async () => {
     try {
-      const WELCOME_PAGE_CHECK_QUERY = `
-        query CheckWelcomePage($shop: String!) {
-          welcomePage(shop: $shop) {
-            title
-            content
-          }
-        }
-      `;
+      console.log('[SETTINGS DEBUG] ===== CHECKING WELCOME PAGE =====');
+      console.log('[SETTINGS DEBUG] Shop:', shop);
       
-      const result = await api('/graphql', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: WELCOME_PAGE_CHECK_QUERY,
-          variables: { shop }
-        }),
-        shop: shop
-      });
+      // Check if welcome page endpoint is accessible
+      const result = await api(`/ai/welcome?shop=${shop}`);
       
-      return result?.data?.welcomePage?.title;
+      console.log('[SETTINGS DEBUG] Welcome page result:', result);
+      
+      // If we get HTML content, the page exists
+      const hasWelcomePage = typeof result === 'string' && result.includes('<!DOCTYPE html>');
+      console.log('[SETTINGS DEBUG] Has welcome page:', hasWelcomePage);
+      console.log('[SETTINGS DEBUG] ===== WELCOME PAGE CHECK COMPLETE =====');
+      
+      return hasWelcomePage;
     } catch (error) {
       console.error('[SETTINGS] Error checking welcome page:', error);
       return false;
