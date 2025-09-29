@@ -176,9 +176,47 @@ export default function StoreMetadata({ shop: shopProp }) {
       // First save the current data
       await handleSave();
       
-      // Then open preview in new tab
-      const publicUrl = `/api/store/public/${encodeURIComponent(shop)}`;
-      window.open(publicUrl, '_blank');
+      // Then fetch preview data using GraphQL
+      const query = `
+        query GetStoreMetadata($shop: String!) {
+          storeMetadata(shop: $shop) {
+            shopName
+            description
+            seoMetadata
+            aiMetadata
+            organizationSchema
+            localBusinessSchema
+          }
+        }
+      `;
+      
+      const result = await api('/graphql', {
+        method: 'POST',
+        headers: { 'X-Shop': shop },
+        body: { query, variables: { shop } }
+      });
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Show preview in modal or new tab
+      const previewData = result.data?.storeMetadata;
+      if (previewData) {
+        const previewWindow = window.open('', '_blank');
+        previewWindow.document.write(`
+          <html>
+            <head><title>Store Metadata Preview</title></head>
+            <body>
+              <h1>Store Metadata Preview</h1>
+              <pre>${JSON.stringify(previewData, null, 2)}</pre>
+            </body>
+          </html>
+        `);
+        previewWindow.document.close();
+      } else {
+        throw new Error('No preview data available');
+      }
       
     } catch (error) {
       setToast(`Preview failed: ${error?.message || 'Unknown error'}`);
