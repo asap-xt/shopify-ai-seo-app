@@ -65,15 +65,18 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     
     // Get saved settings
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
-    
-    console.log('[AI-DISCOVERY] DEBUG - savedSettings:', JSON.stringify(savedSettings, null, 2));
-    console.log('[AI-DISCOVERY] DEBUG - savedSettings.features:', JSON.stringify(savedSettings.features, null, 2));
-    console.log('[AI-DISCOVERY] DEBUG - savedSettings exists:', !!savedSettings);
-    console.log('[AI-DISCOVERY] DEBUG - savedSettings.features exists:', !!savedSettings.features);
-    
+
+    console.log('[AI-DISCOVERY] ===== DEBUG SETTINGS =====');
+    console.log('[AI-DISCOVERY] savedSettings:', JSON.stringify(savedSettings, null, 2));
+    console.log('[AI-DISCOVERY] savedSettings.features:', savedSettings.features);
+    console.log('[AI-DISCOVERY] typeof savedSettings.features:', typeof savedSettings.features);
+    console.log('[AI-DISCOVERY] savedSettings.features exists:', !!savedSettings.features);
+    console.log('[AI-DISCOVERY] Object.keys(savedSettings.features):', savedSettings.features ? Object.keys(savedSettings.features) : 'null');
+    console.log('[AI-DISCOVERY] Object.keys length:', savedSettings.features ? Object.keys(savedSettings.features).length : 0);
+
     // Get default structure for the plan
     const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
-    
+
     // IMPORTANT: For new shops, all features should be false by default
     const defaultFeatures = {
       productsJson: false,
@@ -84,25 +87,23 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       storeMetadata: false,
       schemaData: false
     };
-    
-    // Check if this is a "fresh" shop (no explicit user settings saved)
-    // A shop is "fresh" if:
-    // 1. No features object exists at all, OR
-    // 2. Features object is empty (no keys), OR  
-    // 3. All features are false (never explicitly saved as true)
-    const hasNoFeatures = !savedSettings.features || 
-                          Object.keys(savedSettings.features).length === 0;
 
+    // Check if this is a "fresh" shop
+    // Since getSettings() always returns defaultSettings when no saved settings exist,
+    // we need to check if this is the default state (all features false)
     const allFeaturesFalse = savedSettings.features && 
-                             Object.keys(savedSettings.features).length > 0 &&
                              Object.values(savedSettings.features).every(val => val === false);
 
-    const isFreshShop = hasNoFeatures || allFeaturesFalse;
+    // Also check if updatedAt is missing or very recent (indicating fresh default settings)
+    const hasRecentDefaultTimestamp = !savedSettings.updatedAt || 
+                                     (new Date(savedSettings.updatedAt) > new Date(Date.now() - 5 * 60 * 1000)); // 5 minutes ago
 
-    console.log('[AI-DISCOVERY] DEBUG - isFreshShop:', isFreshShop);
-    console.log('[AI-DISCOVERY] DEBUG - hasNoFeatures:', hasNoFeatures);
-    console.log('[AI-DISCOVERY] DEBUG - allFeaturesFalse:', allFeaturesFalse);
-    console.log('[AI-DISCOVERY] DEBUG - savedSettings.updatedAt:', savedSettings.updatedAt);
+    const isFreshShop = allFeaturesFalse && hasRecentDefaultTimestamp;
+
+    console.log('[AI-DISCOVERY] allFeaturesFalse:', allFeaturesFalse);
+    console.log('[AI-DISCOVERY] hasRecentDefaultTimestamp:', hasRecentDefaultTimestamp);
+    console.log('[AI-DISCOVERY] isFreshShop:', isFreshShop);
+    console.log('[AI-DISCOVERY] Will use features:', isFreshShop ? 'defaultFeatures (all false)' : 'savedSettings.features');
 
     const mergedSettings = {
       plan: rawPlan,
@@ -112,9 +113,10 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
-    
-    console.log('[AI-DISCOVERY] DEBUG - Final mergedSettings.features:', JSON.stringify(mergedSettings.features, null, 2));
-    
+
+    console.log('[AI-DISCOVERY] Final mergedSettings.features:', JSON.stringify(mergedSettings.features, null, 2));
+    console.log('[AI-DISCOVERY] ===== END DEBUG =====');
+
     res.json(mergedSettings);
   } catch (error) {
     console.error('Failed to get AI Discovery settings:', error);
