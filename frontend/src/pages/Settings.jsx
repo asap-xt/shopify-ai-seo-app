@@ -407,6 +407,10 @@ export default function Settings() {
   
 
   console.log('[SETTINGS] Creating loadSettings useEffect...');
+  console.log('[SETTINGS] Current shop value:', shop);
+  console.log('[SETTINGS] Shop type:', typeof shop);
+  console.log('[SETTINGS] Shop length:', shop?.length);
+  
   useEffect(() => {
     console.log('[SETTINGS] ===== LOAD SETTINGS useEffect =====');
     console.log('[SETTINGS] Shop:', shop);
@@ -831,6 +835,9 @@ export default function Settings() {
 
   // Check generated data when settings change
   console.log('[SETTINGS] Creating checkGeneratedData useEffect...');
+  console.log('[SETTINGS] Current settings:', settings);
+  console.log('[SETTINGS] Current settings features:', settings?.features);
+  
   useEffect(() => {
     console.log('[SETTINGS DEBUG] ===== useEffect TRIGGERED =====');
     console.log('[SETTINGS DEBUG] Settings:', settings);
