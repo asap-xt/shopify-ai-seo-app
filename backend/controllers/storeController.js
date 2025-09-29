@@ -190,7 +190,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
     
     console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
     console.log('[STORE-DEBUG] shopLocales:', shopLocales);
-    console.log('[STORE-DEBUG] markets:', markets);
     
     // Get markets separately (simplified query)
     const marketsQuery = `{
