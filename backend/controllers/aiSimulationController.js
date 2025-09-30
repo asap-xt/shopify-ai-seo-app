@@ -25,11 +25,14 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     
     // Check if Gemini API key is available
     if (!process.env.GEMINI_API_KEY) {
-      console.error('[AI-SIMULATION] GEMINI_API_KEY is not set.');
-      return res.status(500).json({ 
-        success: false, 
-        error: 'AI simulation service not configured.',
-        fallback: 'AI simulation temporarily unavailable'
+      console.warn('[AI-SIMULATION] GEMINI_API_KEY is not set. Falling back to basic simulation.');
+      // Instead of returning error, fall back to basic simulation
+      return res.json({
+        success: true,
+        aiResponse: 'AI simulation service not configured. Using basic simulation.',
+        questionType,
+        shop,
+        fallback: true
       });
     }
     

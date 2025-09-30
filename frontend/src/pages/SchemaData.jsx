@@ -15,7 +15,8 @@ import {
   Spinner,
   Badge,
   List,
-  Divider
+  Divider,
+  Modal
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
@@ -148,7 +149,13 @@ export default function SchemaData({ shop: shopProp }) {
         console.log('[SCHEMA-DATA] AI simulation response:', response);
         
         if (response && response.aiResponse) {
-          setAiSimulationResponse(response.aiResponse);
+          if (response.fallback) {
+            // If it's a fallback response, use basic simulation
+            console.log('[SCHEMA-DATA] AI simulation fallback, using basic simulation');
+            await runBasicSimulation(questionType);
+          } else {
+            setAiSimulationResponse(response.aiResponse);
+          }
         } else if (response && response.error) {
           console.error('[SCHEMA-DATA] AI simulation error:', response.error);
           setAiSimulationResponse(`AI simulation error: ${response.error}. Using basic simulation.`);
