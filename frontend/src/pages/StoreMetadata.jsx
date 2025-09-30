@@ -411,7 +411,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     Store name: <Text as="span" fontWeight="medium">{shopifyData.storeName || 'Not set'}</Text>
                   </Text>
                   <Text variant="bodySm" tone="subdued">
-                    Home page title: <Text as="span" fontWeight="medium">
+                    Short Store Description: <Text as="span" fontWeight="medium">
                       {shopifyData.homePageTitle ? 
                         (shopifyData.homePageTitle.substring(0, 50) + (shopifyData.homePageTitle.length > 50 ? '...' : ''))
                         : 'Not set'}

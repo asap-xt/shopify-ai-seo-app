@@ -168,6 +168,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
         email
         contactEmail
         url
+        myshopifyDomain
         primaryDomain {
           url
         }
@@ -277,7 +278,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
       },
       shopifyDefaults: {
         storeName: shopInfo.name || '',
-        homePageTitle: shopInfo.name || '', // Use shop name as home page title
+        homePageTitle: shopInfo.myshopifyDomain || shopInfo.name || '', // Use domain as home page title
         metaDescription: shopInfo.description || ''
       },
       existingMetadata: metafields,
