@@ -171,6 +171,10 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
+        seo {
+          title
+          description
+        }
       }
     }`;
     
@@ -276,8 +280,9 @@ router.get('/generate', validateRequest(), async (req, res) => {
         currencies: ['EUR'] // Default currency for now
       },
       shopifyDefaults: {
-        title: shopInfo.name || '',
-        description: shopInfo.description || ''
+        storeName: shopInfo.name || '',
+        homePageTitle: shopInfo.seo?.title || '',
+        metaDescription: shopInfo.seo?.description || shopInfo.description || ''
       },
       existingMetadata: metafields,
       plan: plan.plan,
@@ -421,8 +426,9 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     // SEO metadata - запиши само ако не е празно
     if (metadata.seo && options.updateSeo !== false) {
-      const hasCustomData = metadata.seo.title || 
-                            metadata.seo.metaDescription || 
+      const hasCustomData = metadata.seo.storeName || 
+                            metadata.seo.shortDescription || 
+                            metadata.seo.fullDescription || 
                             (metadata.seo.keywords && metadata.seo.keywords.length > 0);
       
       if (hasCustomData) {
@@ -433,8 +439,9 @@ router.post('/apply', validateRequest(), async (req, res) => {
           key: 'seo_metadata',
           type: 'json',
           value: JSON.stringify({
-            title: metadata.seo.title || null,
-            metaDescription: metadata.seo.metaDescription || null,
+            storeName: metadata.seo.storeName || null,
+            shortDescription: metadata.seo.shortDescription || null,
+            fullDescription: metadata.seo.fullDescription || null,
             keywords: Array.isArray(metadata.seo.keywords) 
               ? metadata.seo.keywords 
               : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)

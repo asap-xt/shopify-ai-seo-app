@@ -17,12 +17,13 @@ export default function StoreMetadata({ shop: shopProp }) {
   const api = useMemo(() => makeSessionFetch({ debug: true }), []);
   const [previewing, setPreviewing] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [shopifyData, setShopifyData] = useState({ title: '', description: '' });
+  const [shopifyData, setShopifyData] = useState({ storeName: '', homePageTitle: '', metaDescription: '' });
   const [hasShopifyChanges, setHasShopifyChanges] = useState(false);
   const [formData, setFormData] = useState({
     seo: {
-      title: '',
-      metaDescription: '',
+      storeName: '',
+      shortDescription: '',
+      fullDescription: '',
       keywords: ''
     },
     aiMetadata: {
@@ -67,27 +68,31 @@ export default function StoreMetadata({ shop: shopProp }) {
       
       // Запази Shopify defaults
       setShopifyData({
-        title: data.shopifyDefaults?.title || '',
-        description: data.shopifyDefaults?.description || ''
+        storeName: data.shopifyDefaults?.storeName || '',
+        homePageTitle: data.shopifyDefaults?.homePageTitle || '',
+        metaDescription: data.shopifyDefaults?.metaDescription || ''
       });
       
       const existing = data.existingMetadata || {};
       
       // Custom данни от MongoDB
-      const customTitle = existing.seo_metadata?.value?.title || '';
-      const customDescription = existing.seo_metadata?.value?.metaDescription || '';
+      const customStoreName = existing.seo_metadata?.value?.storeName || '';
+      const customShortDescription = existing.seo_metadata?.value?.shortDescription || '';
+      const customFullDescription = existing.seo_metadata?.value?.fullDescription || '';
       
       // Провери за разлики
-      const titleDifferent = customTitle && customTitle !== data.shopifyDefaults?.title;
-      const descDifferent = customDescription && customDescription !== data.shopifyDefaults?.description;
-      setHasShopifyChanges(titleDifferent || descDifferent);
+      const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
+      const shortDescDifferent = customShortDescription && customShortDescription !== data.shopifyDefaults?.homePageTitle;
+      const fullDescDifferent = customFullDescription && customFullDescription !== data.shopifyDefaults?.metaDescription;
+      setHasShopifyChanges(storeNameDifferent || shortDescDifferent || fullDescDifferent);
       
       setFormData(prev => ({
         ...prev,
         seo: {
           ...prev.seo,
-          title: customTitle,
-          metaDescription: customDescription,
+          storeName: customStoreName,
+          shortDescription: customShortDescription,
+          fullDescription: customFullDescription,
           keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
             ? existing.seo_metadata.value.keywords.join(', ')
             : existing.seo_metadata?.value?.keywords || ''
@@ -128,8 +133,9 @@ export default function StoreMetadata({ shop: shopProp }) {
       ...prev,
       seo: {
         ...prev.seo,
-        title: '',
-        metaDescription: ''
+        storeName: '',
+        shortDescription: '',
+        fullDescription: ''
       }
     }));
     setHasShopifyChanges(false);
@@ -402,12 +408,19 @@ export default function StoreMetadata({ shop: shopProp }) {
                 <Text variant="bodyMd" fontWeight="semibold">From Shopify Settings:</Text>
                 <Box paddingBlockStart="200">
                   <Text variant="bodySm" tone="subdued">
-                    Store name: <Text as="span" fontWeight="medium">{shopifyData.title || 'Not set'}</Text>
+                    Store name: <Text as="span" fontWeight="medium">{shopifyData.storeName || 'Not set'}</Text>
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Home page title: <Text as="span" fontWeight="medium">
+                      {shopifyData.homePageTitle ? 
+                        (shopifyData.homePageTitle.substring(0, 50) + (shopifyData.homePageTitle.length > 50 ? '...' : ''))
+                        : 'Not set'}
+                    </Text>
                   </Text>
                   <Text variant="bodySm" tone="subdued">
                     Meta description: <Text as="span" fontWeight="medium">
-                      {shopifyData.description ? 
-                        (shopifyData.description.substring(0, 100) + (shopifyData.description.length > 100 ? '...' : ''))
+                      {shopifyData.metaDescription ? 
+                        (shopifyData.metaDescription.substring(0, 100) + (shopifyData.metaDescription.length > 100 ? '...' : ''))
                         : 'Not set'}
                     </Text>
                   </Text>
@@ -425,25 +438,37 @@ export default function StoreMetadata({ shop: shopProp }) {
             <Box paddingBlockStart="400">
               <FormLayout>
                 <TextField
-                  label="Store Title (for AI/SEO)"
-                  value={formData.seo.title}
+                  label="Store Name"
+                  value={formData.seo.storeName}
                   onChange={(value) => setFormData(prev => ({
                     ...prev,
-                    seo: { ...prev.seo, title: value }
+                    seo: { ...prev.seo, storeName: value }
                   }))}
-                  placeholder={shopifyData.title}
+                  placeholder={shopifyData.storeName}
                   helpText="Leave empty to use Shopify store name"
                   maxLength={100}
                 />
                 
                 <TextField
-                  label="Store Description (for AI/SEO)"
-                  value={formData.seo.metaDescription}
+                  label="Short Store Description"
+                  value={formData.seo.shortDescription}
                   onChange={(value) => setFormData(prev => ({
                     ...prev,
-                    seo: { ...prev.seo, metaDescription: value }
+                    seo: { ...prev.seo, shortDescription: value }
                   }))}
-                  placeholder={shopifyData.description}
+                  placeholder={shopifyData.homePageTitle}
+                  helpText="Leave empty to use Shopify home page title"
+                  maxLength={200}
+                />
+                
+                <TextField
+                  label="Full Store Description"
+                  value={formData.seo.fullDescription}
+                  onChange={(value) => setFormData(prev => ({
+                    ...prev,
+                    seo: { ...prev.seo, fullDescription: value }
+                  }))}
+                  placeholder={shopifyData.metaDescription}
                   helpText="Leave empty to use Shopify meta description"
                   maxLength={300}
                   multiline={3}
