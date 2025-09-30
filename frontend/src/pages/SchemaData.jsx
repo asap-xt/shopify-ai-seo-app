@@ -36,7 +36,6 @@ export default function SchemaData({ shop: shopProp }) {
     website: null,
     products: []
   });
-  const [validationResults, setValidationResults] = useState(null);
   const [toastContent, setToastContent] = useState('');
   const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
@@ -88,24 +87,6 @@ ${JSON.stringify(allSchemas, null, 2)}
     setSchemaScript(script);
   };
 
-  const handleValidate = async () => {
-    setLoading(true);
-    try {
-      console.log('[SCHEMA-DATA] handleValidate - shop:', shop);
-      const url = `/api/schema/validate?shop=${encodeURIComponent(shop)}`;
-      console.log('[SCHEMA-DATA] handleValidate - url:', url);
-      const data = await api(url, { headers: { 'X-Shop': shop } });
-      console.log('[SCHEMA-DATA] handleValidate - response:', data);
-      setValidationResults(data);
-      setToastContent(data.ok ? 'Validation complete!' : 'Validation found issues');
-    } catch (err) {
-      console.error('[SCHEMA-DATA] handleValidate - error:', err);
-      setToastContent(`Validation failed: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRegenerate = async () => {
     setLoading(true);
     try {
@@ -135,7 +116,7 @@ ${JSON.stringify(allSchemas, null, 2)}
   const tabs = [
     { id: 'overview', content: 'Overview', accessibilityLabel: 'Overview' },
     { id: 'installation', content: 'Installation', accessibilityLabel: 'Installation' },
-    { id: 'validation', content: 'Validation', accessibilityLabel: 'Validation' }
+    { id: 'ai-testing', content: 'AI Testing', accessibilityLabel: 'AI Testing' }
   ];
 
   if (loading) {
@@ -317,161 +298,121 @@ ${schemaScript}
                     <Card>
                       <Box padding="300">
                         <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">Validation Tools</Text>
+                          <Text as="h4" variant="headingSm">AI Search Testing Tools</Text>
                           
                           <TextField
                             label="Test URL"
                             value={`https://${shop}`}
                             readOnly
-                            helpText="Use this URL to test your schemas in the tools below"
+                            helpText="Use this URL to test how AI bots understand your store"
                           />
 
                           <Divider />
 
                           <BlockStack gap="200">
                             <InlineStack align="space-between">
-                              <Text>Google Rich Results Test</Text>
+                              <Text>Perplexity AI Search</Text>
                               <Button
-                                url={`https://search.google.com/test/rich-results?url=${encodeURIComponent(`https://${shop}`)}`}
+                                url={`https://www.perplexity.ai/search?q=site:${shop}`}
                                 external
                                 variant="plain"
                               >
-                                Open Tool
+                                Test
                               </Button>
                             </InlineStack>
 
                             <InlineStack align="space-between">
-                              <Text>Schema Markup Validator</Text>
+                              <Text>ChatGPT Web Search</Text>
                               <Button
-                                url={`https://validator.schema.org/#url=${encodeURIComponent(`https://${shop}`)}`}
+                                url={`https://chat.openai.com/`}
                                 external
                                 variant="plain"
                               >
-                                Open Tool
+                                Test
                               </Button>
                             </InlineStack>
 
                             <InlineStack align="space-between">
-                              <Text>Google Search Console</Text>
+                              <Text>Claude AI Search</Text>
                               <Button
-                                url="https://search.google.com/search-console"
+                                url={`https://claude.ai/`}
                                 external
                                 variant="plain"
                               >
-                                Open Console
+                                Test
+                              </Button>
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>Gemini AI Search</Text>
+                              <Button
+                                url={`https://gemini.google.com/`}
+                                external
+                                variant="plain"
+                              >
+                                Test
                               </Button>
                             </InlineStack>
                           </BlockStack>
+                          
+                          <Banner tone="info">
+                            <Text>
+                              <strong>How to test:</strong> Ask AI bots questions like "What products does this store sell?" 
+                              or "Tell me about this business" using your store URL. They should be able to understand 
+                              your store structure from the structured data.
+                            </Text>
+                          </Banner>
                         </BlockStack>
                       </Box>
                     </Card>
 
-                    {validationResults && (
-                      <Card>
-                        <Box padding="300">
-                          <BlockStack gap="300">
-                            <Text as="h4" variant="headingSm">Internal Validation Results</Text>
-                            
-                            <Badge tone={validationResults.ok ? 'success' : 'warning'}>
-                              {validationResults.ok ? 'All checks passed' : 'Issues found'}
-                            </Badge>
-
-                            {validationResults.checks && (
-                              <BlockStack gap="200">
-                                <List>
-                                  <List.Item>
-                                    <InlineStack gap="200" align="space-between">
-                                      <InlineStack gap="200">
-                                        <Text>hasStoreMetadata:</Text>
-                                        <Badge tone={validationResults.checks.hasStoreMetadata ? 'success' : 'critical'}>
-                                          {validationResults.checks.hasStoreMetadata ? '✓' : '✗'}
-                                        </Badge>
-                                      </InlineStack>
-                                      {!validationResults.checks.hasStoreMetadata && (
-                                        <Button 
-                                          size="slim" 
-                                          variant="plain"
-                                          onClick={() => {
-                                            setSelectedTab(0);
-                                            setTimeout(() => {
-                                              const storeTab = document.querySelector('[id="store-metadata"]');
-                                              if (storeTab) storeTab.click();
-                                            }, 100);
-                                          }}
-                                        >
-                                          Add store metadata →
-                                        </Button>
-                                      )}
-                                    </InlineStack>
-                                  </List.Item>
-                                  
-                                  <List.Item>
-                                    <InlineStack gap="200" align="space-between">
-                                      <InlineStack gap="200">
-                                        <Text>hasProductsWithSEO:</Text>
-                                        <Badge tone={validationResults.checks.hasProductsWithSEO ? 'success' : 'critical'}>
-                                          {validationResults.checks.hasProductsWithSEO ? '✓' : '✗'}
-                                        </Badge>
-                                      </InlineStack>
-                                      {!validationResults.checks.hasProductsWithSEO && (
-                                        <Button 
-                                          size="slim" 
-                                          variant="plain"
-                                          onClick={() => {
-                                            setSelectedTab(0);
-                                            setTimeout(() => {
-                                              const productsTab = document.querySelector('[id="products"]');
-                                              if (productsTab) productsTab.click();
-                                            }, 100);
-                                          }}
-                                        >
-                                          Generate product SEO →
-                                        </Button>
-                                      )}
-                                    </InlineStack>
-                                  </List.Item>
-                                  
-                                  <List.Item>
-                                    <InlineStack gap="200">
-                                      <Text>hasThemeInstallation:</Text>
-                                      <Badge tone={validationResults.checks.hasThemeInstallation === 'manual_check_required' ? 'info' : 'success'}>
-                                        {validationResults.checks.hasThemeInstallation === 'manual_check_required' ? '?' : '✓'}
-                                      </Badge>
-                                      <Text tone="subdued" variant="bodySm">Manual check required</Text>
-                                    </InlineStack>
-                                  </List.Item>
-                                  
-                                  <List.Item>
-                                    <InlineStack gap="200">
-                                      <Text>hasValidSchemas:</Text>
-                                      <Badge tone={validationResults.checks.hasValidSchemas ? 'success' : 'critical'}>
-                                        {validationResults.checks.hasValidSchemas ? '✓' : '✗'}
-                                      </Badge>
-                                    </InlineStack>
-                                  </List.Item>
-                                </List>
-                                
-                                {!validationResults.checks.hasStoreMetadata && (
-                                  <Banner tone="warning">
-                                    <Text>Missing store metadata. This is needed for Organization schema.</Text>
-                                  </Banner>
-                                )}
-                                
-                                {!validationResults.checks.hasProductsWithSEO && (
-                                  <Banner tone="warning">
-                                    <Text>No products have Optimisation data. Generate AI Optimisation for products first.</Text>
-                                  </Banner>
-                                )}
-                              </BlockStack>
-                            )}
-                          </BlockStack>
-                        </Box>
-                      </Card>
-                    )}
-
-                    <Button onClick={handleValidate} loading={loading} variant="primary">
-                      Run Validation Check
-                    </Button>
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <Text as="h4" variant="headingSm">AI Bot Access Check</Text>
+                          
+                          <InlineStack align="space-between">
+                            <Text>Test AI Welcome Page</Text>
+                            <Button
+                              url={`https://${shop}/apps/new-ai-seo/ai/welcome`}
+                              external
+                              variant="plain"
+                            >
+                              View
+                            </Button>
+                          </InlineStack>
+                          
+                          <InlineStack align="space-between">
+                            <Text>Test Products JSON Feed</Text>
+                            <Button
+                              url={`https://${shop}/apps/new-ai-seo/ai/products.json`}
+                              external
+                              variant="plain"
+                            >
+                              View
+                            </Button>
+                          </InlineStack>
+                          
+                          <InlineStack align="space-between">
+                            <Text>Test Collections JSON Feed</Text>
+                            <Button
+                              url={`https://${shop}/apps/new-ai-seo/ai/collections.json`}
+                              external
+                              variant="plain"
+                            >
+                              View
+                            </Button>
+                          </InlineStack>
+                          
+                          <Banner tone="success">
+                            <Text>
+                              <strong>AI bots can access these endpoints</strong> to understand your store structure, 
+                              products, and business information. This helps them provide better answers about your business.
+                            </Text>
+                          </Banner>
+                        </BlockStack>
+                      </Box>
+                    </Card>
                   </BlockStack>
                 </Box>
               )}
