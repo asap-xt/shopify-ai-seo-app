@@ -121,67 +121,102 @@ export default function SchemaData({ shop: shopProp }) {
     setAiSimulationResponse('Loading simulation...');
     
     try {
-      let response = '';
+      // Check if user has Growth Extra+ plan for real AI simulation
+      const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+      const currentPlanIndex = planHierarchy.indexOf(currentPlan);
+      const hasRealAISimulation = currentPlanIndex >= 3; // Growth Extra+
       
-      switch (questionType) {
-        case 'products':
-          // Fetch real products data
-          const productsData = await api(`/api/products/list?shop=${shop}&limit=5&optimized=true`, { headers: { 'X-Shop': shop } });
-          if (productsData?.products && productsData.products.length > 0) {
-            const productTitles = productsData.products.slice(0, 3).map(p => p.title).join(', ');
-            response = `Based on the structured data, ${shop} sells ${productsData.products.length} optimized products including: ${productTitles}${productsData.products.length > 3 ? ' and more.' : '.'}`;
-          } else {
-            response = `I can see that ${shop} is a store, but I don't have detailed product information available in the structured data. The store may need to generate AI optimization data for their products.`;
-          }
-          break;
-          
-        case 'business':
-          if (schemas.organization) {
-            response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
-            if (schemas.organization.url) {
-              response += ` You can visit them at ${schemas.organization.url}.`;
+      if (hasRealAISimulation) {
+        // Real AI simulation with Gemini for Growth Extra+ plans
+        setAiSimulationResponse('Loading AI simulation with Gemini...');
+        
+        const response = await api('/api/ai/simulate-response', {
+          method: 'POST',
+          headers: { 'X-Shop': shop },
+          body: {
+            questionType,
+            shop,
+            context: {
+              organization: schemas.organization,
+              website: schemas.website
             }
-          } else {
-            response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their organization schema.`;
           }
-          break;
-          
-        case 'categories':
-          // Fetch real collections data
-          const collectionsData = await api(`/collections/list-graphql?shop=${shop}&limit=5`, { headers: { 'X-Shop': shop } });
-          if (collectionsData?.collections && collectionsData.collections.length > 0) {
-            const collectionNames = collectionsData.collections.slice(0, 3).map(c => c.title).join(', ');
-            response = `${shop} has ${collectionsData.collections.length} product categories including: ${collectionNames}${collectionsData.collections.length > 3 ? ' and more.' : '.'}`;
-          } else {
-            response = `I can see that ${shop} is a store, but I don't have detailed category information available in the structured data. The store may need to generate collections data.`;
-          }
-          break;
-          
-        case 'contact':
-          if (schemas.organization && schemas.organization.contactPoint) {
-            const contact = schemas.organization.contactPoint;
-            response = `For ${schemas.organization.name || shop}, you can contact them`;
-            if (contact.telephone) {
-              response += ` by phone at ${contact.telephone}`;
-            }
-            if (contact.email) {
-              response += ` or by email at ${contact.email}`;
-            }
-            response += '.';
-          } else {
-            response = `I can see that ${shop} is a store, but I don't have contact information available in the structured data. The store may need to configure their organization schema with contact details.`;
-          }
-          break;
-          
-        default:
-          response = 'I don\'t have enough information to provide a detailed response about this store.';
+        });
+        
+        if (response.aiResponse) {
+          setAiSimulationResponse(response.aiResponse);
+        } else {
+          setAiSimulationResponse('AI simulation temporarily unavailable. Using basic simulation.');
+          await runBasicSimulation(questionType);
+        }
+      } else {
+        // Basic simulation for Starter, Professional, Growth plans
+        await runBasicSimulation(questionType);
       }
-      
-      setAiSimulationResponse(response);
     } catch (error) {
       console.error('[SCHEMA-DATA] Error in AI simulation:', error);
       setAiSimulationResponse('Error loading simulation data. Please try again.');
     }
+  };
+
+  const runBasicSimulation = async (questionType) => {
+    let response = '';
+    
+    switch (questionType) {
+      case 'products':
+        // Fetch real products data
+        const productsData = await api(`/api/products/list?shop=${shop}&limit=5&optimized=true`, { headers: { 'X-Shop': shop } });
+        if (productsData?.products && productsData.products.length > 0) {
+          const productTitles = productsData.products.slice(0, 3).map(p => p.title).join(', ');
+          response = `Based on the structured data, ${shop} sells ${productsData.products.length} optimized products including: ${productTitles}${productsData.products.length > 3 ? ' and more.' : '.'}`;
+        } else {
+          response = `I can see that ${shop} is a store, but I don't have detailed product information available in the structured data. The store may need to generate AI optimization data for their products.`;
+        }
+        break;
+        
+      case 'business':
+        if (schemas.organization) {
+          response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
+          if (schemas.organization.url) {
+            response += ` You can visit them at ${schemas.organization.url}.`;
+          }
+        } else {
+          response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their organization schema.`;
+        }
+        break;
+        
+      case 'categories':
+        // Fetch real collections data
+        const collectionsData = await api(`/collections/list-graphql?shop=${shop}&limit=5`, { headers: { 'X-Shop': shop } });
+        if (collectionsData?.collections && collectionsData.collections.length > 0) {
+          const collectionNames = collectionsData.collections.slice(0, 3).map(c => c.title).join(', ');
+          response = `${shop} has ${collectionsData.collections.length} product categories including: ${collectionNames}${collectionsData.collections.length > 3 ? ' and more.' : '.'}`;
+        } else {
+          response = `I can see that ${shop} is a store, but I don't have detailed category information available in the structured data. The store may need to generate collections data.`;
+        }
+        break;
+        
+      case 'contact':
+        if (schemas.organization && schemas.organization.contactPoint) {
+          const contact = schemas.organization.contactPoint;
+          response = `For ${schemas.organization.name || shop}, you can contact them`;
+          if (contact.telephone) {
+            response += ` by phone at ${contact.telephone}`;
+          }
+          if (contact.email) {
+            response += ` or by email at ${contact.email}`;
+          }
+          response += '.';
+        } else {
+          response = `I can see that ${shop} is a store, but I don't have contact information available in the structured data. The store may need to configure their organization schema with contact details.`;
+        }
+        break;
+        
+      default:
+        response = 'I don\'t have enough information to provide a detailed response about this store.';
+    }
+    
+    setAiSimulationResponse(response);
   };
 
   const loadSchemas = async () => {

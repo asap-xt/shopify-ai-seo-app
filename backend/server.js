@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { buildSchema, graphql } from 'graphql';
 import { getPlansMeForShop } from './controllers/seoController.js';
+import aiSimulationController from './controllers/aiSimulationController.js';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
@@ -833,6 +834,7 @@ app.use('/api', aiDiscoveryRouter);
 app.use(aiEndpointsRouter);
 app.use('/ai-enhance', aiEnhanceRouter);
 app.use('/api/schema', advancedSchemaRouter);
+app.use('/api/ai', aiSimulationController);
 
 // Mount the new controllers with fixed authentication
 app.use('/collections', collectionsRouter);
