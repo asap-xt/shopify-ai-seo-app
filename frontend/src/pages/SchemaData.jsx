@@ -550,7 +550,7 @@ ${schemaScript}
                               <Text>Claude AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://claude.ai/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                                  url={`https://claude.ai/`}
                                   external
                                   size="slim"
                                 >
@@ -567,7 +567,7 @@ ${schemaScript}
                               <Text>Gemini AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://gemini.google.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                                  url={`https://gemini.google.com/`}
                                   external
                                   size="slim"
                                 >
@@ -584,7 +584,7 @@ ${schemaScript}
                               <Text>Meta AI Search</Text>
                               {isFeatureAvailable('aiSitemap') ? (
                                 <Button
-                                  url={`https://www.meta.ai/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                                  url={`https://www.meta.ai/`}
                                   external
                                   size="slim"
                                 >
@@ -601,7 +601,7 @@ ${schemaScript}
                               <Text>DeepSeek AI Search</Text>
                               {isFeatureAvailable('schemaData') ? (
                                 <Button
-                                  url={`https://chat.deepseek.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                                  url={`https://chat.deepseek.com/`}
                                   external
                                   size="slim"
                                 >

@@ -2,13 +2,18 @@
 import express from 'express';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GraphQLClient } from 'graphql-request';
 
 const router = express.Router();
 
 // POST /api/ai/simulate-response - Real AI simulation with Gemini
 router.post('/simulate-response', verifyRequest, async (req, res) => {
-  const { adminGraphql, shop } = res.locals;
-  if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
+  const shop = req.shopDomain;
+  const accessToken = req.shopAccessToken;
+  
+  if (!shop || !accessToken) {
+    return res.status(401).json({ error: 'No shop session. Reinstall app.' });
+  }
   
   try {
     const { questionType, context } = req.body;
@@ -26,6 +31,14 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
         fallback: 'AI simulation temporarily unavailable'
       });
     }
+    
+    // Initialize GraphQL client
+    const adminGraphql = new GraphQLClient(`https://${shop}/admin/api/2024-01/graphql.json`, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
     
     // Fetch additional data based on question type
     let additionalData = {};
@@ -54,7 +67,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       `;
       
       const productsResp = await adminGraphql.request(productsQuery);
-      additionalData.products = productsResp?.data?.products?.edges || [];
+      additionalData.products = productsResp?.products?.edges || [];
     }
     
     if (questionType === 'categories') {
@@ -73,7 +86,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       `;
       
       const collectionsResp = await adminGraphql.request(collectionsQuery);
-      additionalData.collections = collectionsResp?.data?.collections?.edges || [];
+      additionalData.collections = collectionsResp?.collections?.edges || [];
     }
     
     // Prepare context for AI
