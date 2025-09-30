@@ -39,12 +39,58 @@ export default function SchemaData({ shop: shopProp }) {
   const [toastContent, setToastContent] = useState('');
   const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
+  const [currentPlan, setCurrentPlan] = useState(null);
 
   useEffect(() => {
     if (shop) {
       loadSchemas();
+      loadPlan();
     }
   }, [shop, api]);
+
+  const loadPlan = async () => {
+    try {
+      const url = `/api/plans/me?shop=${encodeURIComponent(shop)}`;
+      const data = await api(url, { headers: { 'X-Shop': shop } });
+      setCurrentPlan(data.plan);
+    } catch (err) {
+      console.error('[SCHEMA-DATA] Error loading plan:', err);
+    }
+  };
+
+  // Plan-based feature availability
+  const isFeatureAvailable = (feature) => {
+    if (!currentPlan) return false;
+    
+    const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+    const currentPlanIndex = planHierarchy.indexOf(currentPlan);
+    
+    switch (feature) {
+      case 'productsJson':
+        return currentPlanIndex >= 0; // All plans
+      case 'welcomePage':
+        return currentPlanIndex >= 2; // Growth+
+      case 'collectionsJson':
+        return currentPlanIndex >= 2; // Growth+
+      case 'aiSitemap':
+        return currentPlanIndex >= 3; // Growth Extra+
+      case 'schemaData':
+        return currentPlanIndex >= 4; // Enterprise
+      default:
+        return false;
+    }
+  };
+
+  const getRequiredPlan = (feature) => {
+    switch (feature) {
+      case 'productsJson': return 'Starter';
+      case 'welcomePage': return 'Growth';
+      case 'collectionsJson': return 'Growth';
+      case 'aiSitemap': return 'Growth Extra';
+      case 'schemaData': return 'Enterprise';
+      default: return 'Starter';
+    }
+  };
 
   const loadSchemas = async () => {
     setLoading(true);
@@ -313,11 +359,11 @@ ${schemaScript}
                             <InlineStack align="space-between">
                               <Text>Perplexity AI Search</Text>
                               <Button
-                                url={`https://www.perplexity.ai/search?q=site:${shop}`}
+                                url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                 external
                                 variant="plain"
                               >
-                                Test
+                                Test with Prompt
                               </Button>
                             </InlineStack>
 
@@ -328,7 +374,7 @@ ${schemaScript}
                                 external
                                 variant="plain"
                               >
-                                Test
+                                Test with Prompt
                               </Button>
                             </InlineStack>
 
@@ -339,7 +385,7 @@ ${schemaScript}
                                 external
                                 variant="plain"
                               >
-                                Test
+                                Test with Prompt
                               </Button>
                             </InlineStack>
 
@@ -350,16 +396,15 @@ ${schemaScript}
                                 external
                                 variant="plain"
                               >
-                                Test
+                                Test with Prompt
                               </Button>
                             </InlineStack>
                           </BlockStack>
                           
                           <Banner tone="info">
                             <Text>
-                              <strong>How to test:</strong> Ask AI bots questions like "What products does this store sell?" 
-                              or "Tell me about this business" using your store URL. They should be able to understand 
-                              your store structure from the structured data.
+                              <strong>Pre-filled prompts:</strong> Click "Test with Prompt" to open AI tools with pre-filled questions about your store. 
+                              For ChatGPT, Claude, and Gemini, copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
                             </Text>
                           </Banner>
                         </BlockStack>
@@ -372,36 +417,54 @@ ${schemaScript}
                           <Text as="h4" variant="headingSm">AI Bot Access Check</Text>
                           
                           <InlineStack align="space-between">
-                            <Text>Test AI Welcome Page</Text>
-                            <Button
-                              url={`https://${shop}/apps/new-ai-seo/ai/welcome`}
-                              external
-                              variant="plain"
-                            >
-                              View
-                            </Button>
+                            <Text>Test Products JSON Feed</Text>
+                            {isFeatureAvailable('productsJson') ? (
+                              <Button
+                                url={`https://${shop}/apps/new-ai-seo/ai/products.json`}
+                                external
+                                variant="plain"
+                              >
+                                View
+                              </Button>
+                            ) : (
+                              <Button disabled variant="plain">
+                                {getRequiredPlan('productsJson')}+ Required
+                              </Button>
+                            )}
                           </InlineStack>
                           
                           <InlineStack align="space-between">
-                            <Text>Test Products JSON Feed</Text>
-                            <Button
-                              url={`https://${shop}/apps/new-ai-seo/ai/products.json`}
-                              external
-                              variant="plain"
-                            >
-                              View
-                            </Button>
+                            <Text>Test AI Welcome Page</Text>
+                            {isFeatureAvailable('welcomePage') ? (
+                              <Button
+                                url={`https://${shop}/apps/new-ai-seo/ai/welcome`}
+                                external
+                                variant="plain"
+                              >
+                                View
+                              </Button>
+                            ) : (
+                              <Button disabled variant="plain">
+                                {getRequiredPlan('welcomePage')}+ Required
+                              </Button>
+                            )}
                           </InlineStack>
                           
                           <InlineStack align="space-between">
                             <Text>Test Collections JSON Feed</Text>
-                            <Button
-                              url={`https://${shop}/apps/new-ai-seo/ai/collections.json`}
-                              external
-                              variant="plain"
-                            >
-                              View
-                            </Button>
+                            {isFeatureAvailable('collectionsJson') ? (
+                              <Button
+                                url={`https://${shop}/apps/new-ai-seo/ai/collections.json`}
+                                external
+                                variant="plain"
+                              >
+                                View
+                              </Button>
+                            ) : (
+                              <Button disabled variant="plain">
+                                {getRequiredPlan('collectionsJson')}+ Required
+                              </Button>
+                            )}
                           </InlineStack>
                           
                           <Banner tone="success">
