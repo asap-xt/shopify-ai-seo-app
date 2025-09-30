@@ -482,6 +482,10 @@ const AiSearchOptimisationPanel = React.memo(() => {
   const shop = qs('shop', '');
   const path = window.location.pathname;
   
+  console.log('[APP] AiSearchOptimisationPanel - shop:', shop);
+  console.log('[APP] AiSearchOptimisationPanel - path:', path);
+  console.log('[APP] AiSearchOptimisationPanel - window.location.search:', window.location.search);
+  
   // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
   const getActiveTab = () => {
     if (path === '/ai-seo' || path === '/ai-seo/products') return 'products';
