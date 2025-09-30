@@ -23,6 +23,12 @@ const qs = (k, d = '') => { try { return new URLSearchParams(window.location.sea
 
 export default function SchemaData({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
+  
+  console.log('[SCHEMA-DATA] shopProp:', shopProp);
+  console.log('[SCHEMA-DATA] qs("shop"):', qs('shop', ''));
+  console.log('[SCHEMA-DATA] final shop:', shop);
+  console.log('[SCHEMA-DATA] window.location.search:', window.location.search);
+  
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [schemas, setSchemas] = useState({
