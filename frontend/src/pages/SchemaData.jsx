@@ -40,6 +40,7 @@ export default function SchemaData({ shop: shopProp }) {
   const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
   const [currentPlan, setCurrentPlan] = useState(null);
+  const [aiSimulationResponse, setAiSimulationResponse] = useState('');
 
   useEffect(() => {
     if (shop) {
@@ -114,6 +115,65 @@ export default function SchemaData({ shop: shopProp }) {
       case 'schemaData': return 'Enterprise';
       default: return 'Starter';
     }
+  };
+
+  const simulateAIResponse = (questionType) => {
+    setAiSimulationResponse('Loading simulation...');
+    
+    // Simulate AI response based on available data
+    setTimeout(() => {
+      let response = '';
+      
+      switch (questionType) {
+        case 'products':
+          if (schemas.products && schemas.products.length > 0) {
+            response = `Based on the structured data, ${shop} sells ${schemas.products.length} products including: ${schemas.products.slice(0, 3).map(p => p.title).join(', ')}${schemas.products.length > 3 ? ' and more.' : '.'}`;
+          } else {
+            response = `I can see that ${shop} is a store, but I don't have detailed product information available in the structured data. The store may need to generate AI optimization data for their products.`;
+          }
+          break;
+          
+        case 'business':
+          if (schemas.organization) {
+            response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
+            if (schemas.organization.url) {
+              response += ` You can visit them at ${schemas.organization.url}.`;
+            }
+          } else {
+            response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their organization schema.`;
+          }
+          break;
+          
+        case 'categories':
+          if (schemas.website && schemas.website.potentialAction) {
+            response = `${shop} has a search functionality, indicating they likely have multiple product categories. However, I don't have specific category information available in the structured data. The store may need to generate collections data.`;
+          } else {
+            response = `I can see that ${shop} is a store, but I don't have detailed category information available in the structured data. The store may need to generate collections data.`;
+          }
+          break;
+          
+        case 'contact':
+          if (schemas.organization && schemas.organization.contactPoint) {
+            const contact = schemas.organization.contactPoint;
+            response = `For ${schemas.organization.name || shop}, you can contact them`;
+            if (contact.telephone) {
+              response += ` by phone at ${contact.telephone}`;
+            }
+            if (contact.email) {
+              response += ` or by email at ${contact.email}`;
+            }
+            response += '.';
+          } else {
+            response = `I can see that ${shop} is a store, but I don't have contact information available in the structured data. The store may need to configure their organization schema with contact details.`;
+          }
+          break;
+          
+        default:
+          response = 'I don\'t have enough information to provide a detailed response about this store.';
+      }
+      
+      setAiSimulationResponse(response);
+    }, 1000);
   };
 
   const loadSchemas = async () => {
@@ -438,65 +498,62 @@ ${schemaScript}
                     <Card>
                       <Box padding="300">
                         <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">AI Bot Access Check</Text>
+                          <Text as="h4" variant="headingSm">AI Search Simulation</Text>
                           
-                          <InlineStack align="space-between">
-                            <Text>Test Products JSON Feed</Text>
-                            {isFeatureAvailable('productsJson') ? (
+                          <Text variant="bodyMd" tone="subdued">
+                            Test how AI bots would respond to questions about your store based on your structured data.
+                          </Text>
+
+                          <BlockStack gap="200">
+                            <InlineStack align="space-between">
+                              <Text>What products does this store sell?</Text>
                               <Button
-                                url={`https://${shop}/apps/new-ai-seo/ai/products.json`}
-                                external
+                                onClick={() => simulateAIResponse('products')}
                                 variant="plain"
                               >
-                                View
+                                Simulate Response
                               </Button>
-                            ) : (
-                              <Button disabled variant="plain">
-                                {getRequiredPlan('productsJson')}+ Required
-                              </Button>
-                            )}
-                          </InlineStack>
-                          
-                          <InlineStack align="space-between">
-                            <Text>Test AI Welcome Page</Text>
-                            {isFeatureAvailable('welcomePage') ? (
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>Tell me about this business</Text>
                               <Button
-                                url={`https://${shop}/apps/new-ai-seo/ai/welcome`}
-                                external
+                                onClick={() => simulateAIResponse('business')}
                                 variant="plain"
                               >
-                                View
+                                Simulate Response
                               </Button>
-                            ) : (
-                              <Button disabled variant="plain">
-                                {getRequiredPlan('welcomePage')}+ Required
-                              </Button>
-                            )}
-                          </InlineStack>
-                          
-                          <InlineStack align="space-between">
-                            <Text>Test Collections JSON Feed</Text>
-                            {isFeatureAvailable('collectionsJson') ? (
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>What categories does this store have?</Text>
                               <Button
-                                url={`https://${shop}/apps/new-ai-seo/ai/collections.json`}
-                                external
+                                onClick={() => simulateAIResponse('categories')}
                                 variant="plain"
                               >
-                                View
+                                Simulate Response
                               </Button>
-                            ) : (
-                              <Button disabled variant="plain">
-                                {getRequiredPlan('collectionsJson')}+ Required
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>What is this store's contact information?</Text>
+                              <Button
+                                onClick={() => simulateAIResponse('contact')}
+                                variant="plain"
+                              >
+                                Simulate Response
                               </Button>
-                            )}
-                          </InlineStack>
-                          
-                          <Banner tone="success">
-                            <Text>
-                              <strong>AI bots can access these endpoints</strong> to understand your store structure, 
-                              products, and business information. This helps them provide better answers about your business.
-                            </Text>
-                          </Banner>
+                            </InlineStack>
+                          </BlockStack>
+
+                          {aiSimulationResponse && (
+                            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                              <Text variant="bodyMd" fontWeight="semibold">AI Bot Response:</Text>
+                              <Box paddingBlockStart="200">
+                                <Text variant="bodyMd">{aiSimulationResponse}</Text>
+                              </Box>
+                            </Box>
+                          )}
                         </BlockStack>
                       </Box>
                     </Card>
