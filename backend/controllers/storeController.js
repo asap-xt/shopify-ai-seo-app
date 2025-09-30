@@ -128,10 +128,10 @@ async function fetchPlan(shop) {
   
   // Default plan if no subscription found
   return {
-    plan: 'Growth',  // Changed from Starter to Growth as default
-    queryLimit: 1500,
+    plan: 'Starter',  // Changed back to Starter as default
+    queryLimit: 50,
     queryCount: 0,
-    productLimit: 1000
+    productLimit: 50
   };
 }
 

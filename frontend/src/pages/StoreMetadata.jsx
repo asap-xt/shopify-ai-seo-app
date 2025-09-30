@@ -453,7 +453,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, shortDescription: value }
                   }))}
-                  helpText="Въведи кратко описание на магазина - макс 100 знака"
+                  helpText="Enter a short store description - max 100 characters"
                   maxLength={100}
                 />
                 
