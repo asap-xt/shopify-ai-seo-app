@@ -95,7 +95,8 @@ export default function StoreMetadata({ shop: shopProp }) {
           ...prev,
           seo: {
             ...prev.seo,
-            title: prev.seo.title || data.shopInfo.name
+            title: prev.seo.title || data.shopInfo.name,
+            metaDescription: prev.seo.metaDescription || data.shopInfo.description
           },
           organizationSchema: {
             ...prev.organizationSchema,
@@ -390,7 +391,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                   ...prev,
                   seo: { ...prev.seo, title: value }
                 }))}
-                helpText="Short & appealing, max 100 characters"
+                helpText="Short & appealing, max 100 characters (auto-filled from shop name)"
                 maxLength={100}
               />
               
@@ -401,7 +402,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                   ...prev,
                   seo: { ...prev.seo, metaDescription: value }
                 }))}
-                helpText="Tell briefly what best describes your business, max 300 chars"
+                helpText="Tell briefly what best describes your business, max 300 chars (auto-filled from shop description)"
                 maxLength={300}
                 multiline={3}
               />
