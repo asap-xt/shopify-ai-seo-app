@@ -21,6 +21,12 @@ export async function getPlansMeForShop(app, shop) {
 
   // 1. First check Subscription (this is the truth)
   let subscription = await Subscription.findOne({ shop });
+  console.log('[PLANS-DEBUG] Found subscription:', subscription ? {
+    shop: subscription.shop,
+    plan: subscription.plan,
+    queryLimit: subscription.queryLimit,
+    productLimit: subscription.productLimit
+  } : 'No subscription found');
   
   // 2. If no subscription, create trial
   if (!subscription) {
@@ -32,9 +38,9 @@ export async function getPlansMeForShop(app, shop) {
     // Create trial subscription
     subscription = await Subscription.create({
       shop,
-      plan: 'growth', // trial plan
-      queryLimit: 1500,
-      productLimit: 1000,
+      plan: 'starter', // trial plan - start with Starter
+      queryLimit: 50,
+      productLimit: 50,
       trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
     });
   }
