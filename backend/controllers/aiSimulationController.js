@@ -21,6 +21,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Starting simulation for:', questionType);
     console.log('[AI-SIMULATION] Shop:', shop);
     console.log('[AI-SIMULATION] Context:', context);
+    console.log('[AI-SIMULATION] Access token available:', !!accessToken);
     
     // Check if Gemini API key is available
     if (!process.env.GEMINI_API_KEY) {
@@ -44,6 +45,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     let additionalData = {};
     
     if (questionType === 'products') {
+      console.log('[AI-SIMULATION] Fetching products data...');
       const productsQuery = `
         query {
           products(first: 10, query: "metafields.seo_ai.bullets:*") {
@@ -66,11 +68,19 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
         }
       `;
       
-      const productsResp = await adminGraphql.request(productsQuery);
-      additionalData.products = productsResp?.data?.products?.edges || [];
+      try {
+        const productsResp = await adminGraphql.request(productsQuery);
+        console.log('[AI-SIMULATION] Products response:', JSON.stringify(productsResp, null, 2));
+        additionalData.products = productsResp?.data?.products?.edges || [];
+        console.log('[AI-SIMULATION] Products count:', additionalData.products.length);
+      } catch (error) {
+        console.error('[AI-SIMULATION] Products query error:', error);
+        additionalData.products = [];
+      }
     }
     
     if (questionType === 'categories') {
+      console.log('[AI-SIMULATION] Fetching collections data...');
       const collectionsQuery = `
         query {
           collections(first: 10) {
@@ -85,8 +95,15 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
         }
       `;
       
-      const collectionsResp = await adminGraphql.request(collectionsQuery);
-      additionalData.collections = collectionsResp?.data?.collections?.edges || [];
+      try {
+        const collectionsResp = await adminGraphql.request(collectionsQuery);
+        console.log('[AI-SIMULATION] Collections response:', JSON.stringify(collectionsResp, null, 2));
+        additionalData.collections = collectionsResp?.data?.collections?.edges || [];
+        console.log('[AI-SIMULATION] Collections count:', additionalData.collections.length);
+      } catch (error) {
+        console.error('[AI-SIMULATION] Collections query error:', error);
+        additionalData.collections = [];
+      }
     }
     
     // Prepare context for AI
@@ -103,9 +120,11 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Prompt:', prompt);
     
     // Initialize Gemini
+    console.log('[AI-SIMULATION] Initializing Gemini...');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
     
+    console.log('[AI-SIMULATION] Generating AI response...');
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       systemInstruction: { 
