@@ -117,17 +117,19 @@ export default function SchemaData({ shop: shopProp }) {
     }
   };
 
-  const simulateAIResponse = (questionType) => {
+  const simulateAIResponse = async (questionType) => {
     setAiSimulationResponse('Loading simulation...');
     
-    // Simulate AI response based on available data
-    setTimeout(() => {
+    try {
       let response = '';
       
       switch (questionType) {
         case 'products':
-          if (schemas.products && schemas.products.length > 0) {
-            response = `Based on the structured data, ${shop} sells ${schemas.products.length} products including: ${schemas.products.slice(0, 3).map(p => p.title).join(', ')}${schemas.products.length > 3 ? ' and more.' : '.'}`;
+          // Fetch real products data
+          const productsData = await api(`/api/products/list?shop=${shop}&limit=5&optimized=true`, { headers: { 'X-Shop': shop } });
+          if (productsData?.products && productsData.products.length > 0) {
+            const productTitles = productsData.products.slice(0, 3).map(p => p.title).join(', ');
+            response = `Based on the structured data, ${shop} sells ${productsData.products.length} optimized products including: ${productTitles}${productsData.products.length > 3 ? ' and more.' : '.'}`;
           } else {
             response = `I can see that ${shop} is a store, but I don't have detailed product information available in the structured data. The store may need to generate AI optimization data for their products.`;
           }
@@ -145,8 +147,11 @@ export default function SchemaData({ shop: shopProp }) {
           break;
           
         case 'categories':
-          if (schemas.website && schemas.website.potentialAction) {
-            response = `${shop} has a search functionality, indicating they likely have multiple product categories. However, I don't have specific category information available in the structured data. The store may need to generate collections data.`;
+          // Fetch real collections data
+          const collectionsData = await api(`/collections/list-graphql?shop=${shop}&limit=5`, { headers: { 'X-Shop': shop } });
+          if (collectionsData?.collections && collectionsData.collections.length > 0) {
+            const collectionNames = collectionsData.collections.slice(0, 3).map(c => c.title).join(', ');
+            response = `${shop} has ${collectionsData.collections.length} product categories including: ${collectionNames}${collectionsData.collections.length > 3 ? ' and more.' : '.'}`;
           } else {
             response = `I can see that ${shop} is a store, but I don't have detailed category information available in the structured data. The store may need to generate collections data.`;
           }
@@ -173,7 +178,10 @@ export default function SchemaData({ shop: shopProp }) {
       }
       
       setAiSimulationResponse(response);
-    }, 1000);
+    } catch (error) {
+      console.error('[SCHEMA-DATA] Error in AI simulation:', error);
+      setAiSimulationResponse('Error loading simulation data. Please try again.');
+    }
   };
 
   const loadSchemas = async () => {
