@@ -617,8 +617,9 @@ ${schemaScript}
                           
                           <Banner tone="info">
                             <Text>
-                              <strong>Pre-filled prompts:</strong> Click "Test with Prompt" to open AI tools with pre-filled questions about your store. 
-                              For ChatGPT, Claude, Gemini, Meta AI, and DeepSeek, copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
+                              <strong>How to test with AI bots:</strong><br/>
+                              • <strong>Perplexity & ChatGPT:</strong> Click "Test with Prompt" - they support URL parameters<br/>
+                              • <strong>Claude, Gemini, Meta AI, DeepSeek:</strong> Click "Test with Prompt" then copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
                             </Text>
                           </Banner>
                         </BlockStack>

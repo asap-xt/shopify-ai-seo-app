@@ -32,27 +32,13 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       });
     }
     
-    // Initialize GraphQL client using fetch
-    const graphqlUrl = `https://${shop}/admin/api/2024-01/graphql.json`;
-    
-    // Helper function to make GraphQL requests
-    const makeGraphQLRequest = async (query, variables = {}) => {
-      const response = await fetch(graphqlUrl, {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query, variables })
-      });
-      
-      const json = await response.json();
-      if (!response.ok || json.errors) {
-        throw new Error(`GraphQL error: ${JSON.stringify(json.errors || json)}`);
+    // Initialize GraphQL client
+    const adminGraphql = new GraphQLClient(`https://${shop}/admin/api/2024-01/graphql.json`, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
       }
-      
-      return json.data;
-    };
+    });
     
     // Fetch additional data based on question type
     let additionalData = {};
@@ -81,7 +67,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       `;
       
       const productsResp = await adminGraphql.request(productsQuery);
-      additionalData.products = productsResp?.products?.edges || [];
+      additionalData.products = productsResp?.data?.products?.edges || [];
     }
     
     if (questionType === 'categories') {
@@ -100,7 +86,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       `;
       
       const collectionsResp = await adminGraphql.request(collectionsQuery);
-      additionalData.collections = collectionsResp?.collections?.edges || [];
+      additionalData.collections = collectionsResp?.data?.collections?.edges || [];
     }
     
     // Prepare context for AI
