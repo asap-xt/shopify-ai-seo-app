@@ -1,12 +1,52 @@
 // backend/controllers/aiSimulationController.js
-import express from 'express';
-import { verifyRequest } from '../middleware/verifyRequest.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GraphQLClient } from 'graphql-request';
+// Copy ONLY the OpenRouter connection from aiEnhanceController
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+
+async function openrouterChat(model, messages, response_format_json = true) {
+  console.log('🤖 [AI-SIMULATION] Starting OpenRouter request');
+  console.log('🤖 [AI-SIMULATION] Model:', model);
+  console.log('🤖 [AI-SIMULATION] Messages:', JSON.stringify(messages, null, 2));
+  
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OpenRouter API key missing');
+  }
+  
+  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...(process.env.OPENROUTER_SITE_URL ? { 'HTTP-Referer': process.env.OPENROUTER_SITE_URL } : {}),
+      ...(process.env.OPENROUTER_APP_NAME ? { 'X-Title': process.env.OPENROUTER_APP_NAME } : {}),
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.4,
+      ...(response_format_json ? { response_format: { type: 'json_object' } } : {}),
+      messages,
+    }),
+  });
+  
+  if (!rsp.ok) {
+    const text = await rsp.text().catch(() => '');
+    console.error('🤖 [AI-SIMULATION] OpenRouter error:', rsp.status, text);
+    throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
+  }
+  
+  const j = await rsp.json();
+  const content = j?.choices?.[0]?.message?.content || '';
+  
+  console.log('🤖 [AI-SIMULATION] Response received');
+  console.log('🤖 [AI-SIMULATION] Content:', content);
+  console.log('🤖 [AI-SIMULATION] Usage:', j?.usage);
+  
+  return { content, usage: j?.usage || {} };
+}
 
 const router = express.Router();
 
-// POST /api/ai/simulate-response - Real AI simulation with Gemini
+// POST /api/ai/simulate-response - Real AI simulation with OpenRouter
 router.post('/simulate-response', verifyRequest, async (req, res) => {
   const shop = req.shopDomain;
   const accessToken = req.shopAccessToken;
@@ -23,9 +63,9 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Context:', context);
     console.log('[AI-SIMULATION] Access token available:', !!accessToken);
     
-    // Check if Gemini API key is available
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn('[AI-SIMULATION] GEMINI_API_KEY is not set. Falling back to basic simulation.');
+    // Check if OpenRouter API key is available
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.warn('[AI-SIMULATION] OPENROUTER_API_KEY is not set. Falling back to basic simulation.');
       // Instead of returning error, fall back to basic simulation
       return res.json({
         success: true,
@@ -118,26 +158,26 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       ...additionalData
     };
     
-    // Generate AI response using Gemini
+    // Generate AI response using OpenRouter
     const prompt = generatePrompt(questionType, aiContext);
     console.log('[AI-SIMULATION] Prompt:', prompt);
     
-    // Initialize Gemini
-    console.log('[AI-SIMULATION] Initializing Gemini...');
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    // Initialize OpenRouter
+    console.log('[AI-SIMULATION] Initializing OpenRouter...');
     
     console.log('[AI-SIMULATION] Generating AI response...');
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      systemInstruction: { 
-        parts: [{ 
-          text: `You are an AI assistant providing information about an online Shopify store. Your responses should be concise, helpful, and based *only* on the provided structured data. If information is not available in the structured data, state that clearly.` 
-        }] 
+    const result = await openrouterChat('google/gemini-2.0-flash-exp', [
+      {
+        role: 'system',
+        content: `You are an AI assistant providing information about an online Shopify store. Your responses should be concise, helpful, and based *only* on the provided structured data. If information is not available in the structured data, state that clearly.`
+      },
+      {
+        role: 'user',
+        content: prompt
       }
-    });
+    ], false); // Don't use JSON format for simulation responses
     
-    const aiResponse = result.response.text();
+    const aiResponse = result.content;
     console.log('[AI-SIMULATION] AI Response:', aiResponse);
     
     res.json({
