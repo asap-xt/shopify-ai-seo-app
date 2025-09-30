@@ -627,7 +627,7 @@ export default function StoreMetadata({ shop: shopProp }) {
         </Card>
       </Layout.Section>
 
-      {storeData?.features?.organizationSchema && (
+      {storeData?.features?.organizationSchema ? (
         <Layout.Section>
           <Card title="Organization Schema">
             <Box padding="400">
@@ -697,6 +697,34 @@ export default function StoreMetadata({ shop: shopProp }) {
                   </FormLayout>
                 </Box>
               )}
+            </Box>
+          </Card>
+        </Layout.Section>
+      ) : (
+        <Layout.Section>
+          <Card title="Organization Schema">
+            <Box padding="400">
+              <Banner tone="info">
+                <Box>
+                  <Text variant="bodyMd" fontWeight="semibold">
+                    Upgrade to Professional+ to enable Organization Schema
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Organization Schema helps AI bots understand your business structure, contact information, and social media presence.
+                  </Text>
+                  <Box paddingBlockStart="300">
+                    <Button 
+                      primary 
+                      onClick={() => {
+                        // Navigate to billing or show upgrade modal
+                        window.open('/ai-seo/billing?shop=' + shop, '_blank');
+                      }}
+                    >
+                      Upgrade Plan
+                    </Button>
+                  </Box>
+                </Box>
+              </Banner>
             </Box>
           </Card>
         </Layout.Section>
