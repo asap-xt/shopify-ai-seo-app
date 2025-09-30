@@ -143,9 +143,16 @@ export default function SchemaData({ shop: shopProp }) {
           }
         });
         
-        if (response.aiResponse) {
+        console.log('[SCHEMA-DATA] AI simulation response:', response);
+        
+        if (response && response.aiResponse) {
           setAiSimulationResponse(response.aiResponse);
+        } else if (response && response.error) {
+          console.error('[SCHEMA-DATA] AI simulation error:', response.error);
+          setAiSimulationResponse(`AI simulation error: ${response.error}. Using basic simulation.`);
+          await runBasicSimulation(questionType);
         } else {
+          console.warn('[SCHEMA-DATA] Unexpected AI simulation response:', response);
           setAiSimulationResponse('AI simulation temporarily unavailable. Using basic simulation.');
           await runBasicSimulation(questionType);
         }
@@ -175,13 +182,47 @@ export default function SchemaData({ shop: shopProp }) {
         break;
         
       case 'business':
-        if (schemas.organization) {
-          response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
-          if (schemas.organization.url) {
-            response += ` You can visit them at ${schemas.organization.url}.`;
+        // Try to fetch Store Metadata first
+        try {
+          const storeMetadataData = await api(`/api/store/metadata?shop=${shop}`, { headers: { 'X-Shop': shop } });
+          if (storeMetadataData?.seoMetadata) {
+            const seoData = JSON.parse(storeMetadataData.seoMetadata);
+            const storeName = seoData.storeName || storeMetadataData.shopName || shop;
+            const description = seoData.fullDescription || storeMetadataData.description || 'an online store';
+            
+            response = `${storeName} is ${description.toLowerCase()}.`;
+            
+            if (seoData.keywords && seoData.keywords.length > 0) {
+              response += ` They specialize in: ${seoData.keywords.slice(0, 3).join(', ')}.`;
+            }
+            
+            if (storeMetadataData.aiMetadata) {
+              const aiData = JSON.parse(storeMetadataData.aiMetadata);
+              if (aiData.businessType) {
+                response += ` This is a ${aiData.businessType}.`;
+              }
+              if (aiData.shippingInfo) {
+                response += ` Shipping: ${aiData.shippingInfo}.`;
+              }
+            }
+          } else if (schemas.organization) {
+            response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
+            if (schemas.organization.url) {
+              response += ` You can visit them at ${schemas.organization.url}.`;
+            }
+          } else {
+            response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their store metadata or organization schema.`;
           }
-        } else {
-          response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their organization schema.`;
+        } catch (error) {
+          console.error('[SCHEMA-DATA] Error fetching store metadata:', error);
+          if (schemas.organization) {
+            response = `${schemas.organization.name || shop} is a business that ${schemas.organization.description ? `offers ${schemas.organization.description.toLowerCase()}` : 'operates an online store'}.`;
+            if (schemas.organization.url) {
+              response += ` You can visit them at ${schemas.organization.url}.`;
+            }
+          } else {
+            response = `${shop} appears to be an online store, but I don't have detailed business information available in the structured data. The store may need to configure their organization schema.`;
+          }
         }
         break;
         
@@ -488,7 +529,6 @@ ${schemaScript}
                               <Button
                                 url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                 external
-                                variant="primary"
                                 size="slim"
                               >
                                 Test with Prompt
@@ -498,9 +538,8 @@ ${schemaScript}
                             <InlineStack align="space-between">
                               <Text>ChatGPT Web Search</Text>
                               <Button
-                                url={`https://chat.openai.com/`}
+                                url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                 external
-                                variant="primary"
                                 size="slim"
                               >
                                 Test with Prompt
@@ -511,15 +550,14 @@ ${schemaScript}
                               <Text>Claude AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://claude.ai/`}
+                                  url={`https://claude.ai/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                   external
-                                  variant="primary"
                                   size="slim"
                                 >
                                   Test with Prompt
                                 </Button>
                               ) : (
-                                <Button disabled variant="primary" size="slim">
+                                <Button disabled size="slim">
                                   {getRequiredPlan('welcomePage')}+ Required
                                 </Button>
                               )}
@@ -529,15 +567,14 @@ ${schemaScript}
                               <Text>Gemini AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://gemini.google.com/`}
+                                  url={`https://gemini.google.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                   external
-                                  variant="primary"
                                   size="slim"
                                 >
                                   Test with Prompt
                                 </Button>
                               ) : (
-                                <Button disabled variant="primary" size="slim">
+                                <Button disabled size="slim">
                                   {getRequiredPlan('welcomePage')}+ Required
                                 </Button>
                               )}
@@ -547,15 +584,14 @@ ${schemaScript}
                               <Text>Meta AI Search</Text>
                               {isFeatureAvailable('aiSitemap') ? (
                                 <Button
-                                  url={`https://www.meta.ai/`}
+                                  url={`https://www.meta.ai/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                   external
-                                  variant="primary"
                                   size="slim"
                                 >
                                   Test with Prompt
                                 </Button>
                               ) : (
-                                <Button disabled variant="primary" size="slim">
+                                <Button disabled size="slim">
                                   {getRequiredPlan('aiSitemap')}+ Required
                                 </Button>
                               )}
@@ -565,15 +601,14 @@ ${schemaScript}
                               <Text>DeepSeek AI Search</Text>
                               {isFeatureAvailable('schemaData') ? (
                                 <Button
-                                  url={`https://chat.deepseek.com/`}
+                                  url={`https://chat.deepseek.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                   external
-                                  variant="primary"
                                   size="slim"
                                 >
                                   Test with Prompt
                                 </Button>
                               ) : (
-                                <Button disabled variant="primary" size="slim">
+                                <Button disabled size="slim">
                                   {getRequiredPlan('schemaData')}+ Required
                                 </Button>
                               )}
@@ -604,7 +639,6 @@ ${schemaScript}
                               <Text>What products does this store sell?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('products')}
-                                variant="primary"
                                 size="slim"
                               >
                                 Simulate Response
@@ -615,7 +649,6 @@ ${schemaScript}
                               <Text>Tell me about this business</Text>
                               <Button
                                 onClick={() => simulateAIResponse('business')}
-                                variant="primary"
                                 size="slim"
                               >
                                 Simulate Response
@@ -626,7 +659,6 @@ ${schemaScript}
                               <Text>What categories does this store have?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('categories')}
-                                variant="primary"
                                 size="slim"
                               >
                                 Simulate Response
@@ -637,7 +669,6 @@ ${schemaScript}
                               <Text>What is this store's contact information?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('contact')}
-                                variant="primary"
                                 size="slim"
                               >
                                 Simulate Response
