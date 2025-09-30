@@ -1,12 +1,12 @@
 // backend/controllers/aiSimulationController.js
 import express from 'express';
-import { validateRequest } from '../middleware/verifyRequest.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
 
 // POST /api/ai/simulate-response - Real AI simulation with Gemini
-router.post('/api/ai/simulate-response', validateRequest(), async (req, res) => {
+router.post('/api/ai/simulate-response', verifyRequest, async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
