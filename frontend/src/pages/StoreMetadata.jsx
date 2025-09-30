@@ -73,11 +73,18 @@ export default function StoreMetadata({ shop: shopProp }) {
       // Set existing metadata if any
       if (data.existingMetadata) {
         const existing = data.existingMetadata;
+        console.log('[StoreMeta] Found existing metadata:', existing);
+        console.log('[StoreMeta] existing.seo_metadata:', existing.seo_metadata);
+        console.log('[StoreMeta] existing.seo_metadata.value:', existing.seo_metadata?.value);
+        
         setFormData(prev => ({
           ...prev,
           seo: {
             ...prev.seo,
             ...(existing.seo_metadata?.value || {}),
+            // Use Shopify data as fallback if existing metadata is empty
+            title: existing.seo_metadata?.value?.title || prev.seo.title || data.shopInfo?.name || '',
+            metaDescription: existing.seo_metadata?.value?.metaDescription || prev.seo.metaDescription || data.shopInfo?.description || '',
             keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
               ? existing.seo_metadata.value.keywords.join(', ')
               : existing.seo_metadata?.value?.keywords || prev.seo.keywords || ''
