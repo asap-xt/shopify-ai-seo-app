@@ -41,6 +41,8 @@ export default function SchemaData({ shop: shopProp }) {
   const [schemaScript, setSchemaScript] = useState('');
   const [currentPlan, setCurrentPlan] = useState(null);
   const [aiSimulationResponse, setAiSimulationResponse] = useState('');
+  const [showAiBotModal, setShowAiBotModal] = useState(false);
+  const [selectedBot, setSelectedBot] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -163,6 +165,26 @@ export default function SchemaData({ shop: shopProp }) {
     } catch (error) {
       console.error('[SCHEMA-DATA] Error in AI simulation:', error);
       setAiSimulationResponse('Error loading simulation data. Please try again.');
+    }
+  };
+
+  const openAiBotModal = (botName, botUrl) => {
+    setSelectedBot({ name: botName, url: botUrl });
+    setShowAiBotModal(true);
+  };
+
+  const copyPromptToClipboard = () => {
+    const prompt = `What products does ${shop} sell? Tell me about this business and what they offer.`;
+    navigator.clipboard.writeText(prompt).then(() => {
+      setToastContent('Prompt copied to clipboard!');
+    }).catch(() => {
+      setToastContent('Failed to copy prompt');
+    });
+  };
+
+  const openBotUrl = () => {
+    if (selectedBot?.url) {
+      window.open(selectedBot.url, '_blank');
     }
   };
 
@@ -531,7 +553,7 @@ ${schemaScript}
                                 external
                                 size="slim"
                               >
-                                Test with Prompt
+                                Test
                               </Button>
                             </InlineStack>
 
@@ -542,7 +564,7 @@ ${schemaScript}
                                 external
                                 size="slim"
                               >
-                                Test with Prompt
+                                Test
                               </Button>
                             </InlineStack>
 
@@ -550,11 +572,10 @@ ${schemaScript}
                               <Text>Claude AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://claude.ai/`}
-                                  external
+                                  onClick={() => openAiBotModal('Claude AI', 'https://claude.ai/')}
                                   size="slim"
                                 >
-                                  Test with Prompt
+                                  Test
                                 </Button>
                               ) : (
                                 <Button disabled size="slim">
@@ -567,11 +588,10 @@ ${schemaScript}
                               <Text>Gemini AI Search</Text>
                               {isFeatureAvailable('welcomePage') ? (
                                 <Button
-                                  url={`https://gemini.google.com/`}
-                                  external
+                                  onClick={() => openAiBotModal('Gemini AI', 'https://gemini.google.com/')}
                                   size="slim"
                                 >
-                                  Test with Prompt
+                                  Test
                                 </Button>
                               ) : (
                                 <Button disabled size="slim">
@@ -584,11 +604,10 @@ ${schemaScript}
                               <Text>Meta AI Search</Text>
                               {isFeatureAvailable('aiSitemap') ? (
                                 <Button
-                                  url={`https://www.meta.ai/`}
-                                  external
+                                  onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
                                   size="slim"
                                 >
-                                  Test with Prompt
+                                  Test
                                 </Button>
                               ) : (
                                 <Button disabled size="slim">
@@ -601,11 +620,10 @@ ${schemaScript}
                               <Text>DeepSeek AI Search</Text>
                               {isFeatureAvailable('schemaData') ? (
                                 <Button
-                                  url={`https://chat.deepseek.com/`}
-                                  external
+                                  onClick={() => openAiBotModal('DeepSeek AI', 'https://chat.deepseek.com/')}
                                   size="slim"
                                 >
-                                  Test with Prompt
+                                  Test
                                 </Button>
                               ) : (
                                 <Button disabled size="slim">
@@ -618,8 +636,8 @@ ${schemaScript}
                           <Banner tone="info">
                             <Text>
                               <strong>How to test with AI bots:</strong><br/>
-                              • <strong>Perplexity & ChatGPT:</strong> Click "Test with Prompt" - they support URL parameters<br/>
-                              • <strong>Claude, Gemini, Meta AI, DeepSeek:</strong> Click "Test with Prompt" then copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
+                              • <strong>Perplexity & ChatGPT:</strong> Click "Test" - they support URL parameters<br/>
+                              • <strong>Claude, Gemini, Meta AI, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
                             </Text>
                           </Banner>
                         </BlockStack>
@@ -699,6 +717,41 @@ ${schemaScript}
       {toastContent && (
         <Toast content={toastContent} onDismiss={() => setToastContent('')} />
       )}
+      
+      {/* AI Bot Modal */}
+      <Modal
+        open={showAiBotModal}
+        onClose={() => setShowAiBotModal(false)}
+        title={`Test with ${selectedBot?.name}`}
+        primaryAction={{
+          content: `Open ${selectedBot?.name}`,
+          onAction: openBotUrl
+        }}
+        secondaryActions={[
+          {
+            content: 'Copy Prompt',
+            onAction: copyPromptToClipboard
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text>
+              Copy the prompt below and paste it into {selectedBot?.name} to test how it responds to questions about your store:
+            </Text>
+            
+            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+              <Text as="pre" variant="bodyMd">
+                What products does {shop} sell? Tell me about this business and what they offer.
+              </Text>
+            </Box>
+            
+            <Text variant="bodySm" tone="subdued">
+              This prompt will help you see how AI bots understand and respond to questions about your store's products and business information.
+            </Text>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
     </>
   );
 }
