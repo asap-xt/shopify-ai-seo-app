@@ -50,7 +50,11 @@ export default function SchemaData({ shop: shopProp }) {
   const loadSchemas = async () => {
     setLoading(true);
     try {
-      const data = await api(`/api/schema/preview`, { shop });
+      console.log('[SCHEMA-DATA] loadSchemas - shop:', shop);
+      const url = `/api/schema/preview?shop=${encodeURIComponent(shop)}`;
+      console.log('[SCHEMA-DATA] loadSchemas - url:', url);
+      const data = await api(url, { headers: { 'X-Shop': shop } });
+      console.log('[SCHEMA-DATA] loadSchemas - response:', data);
       if (data.ok) {
         setSchemas(data.schemas);
         generateSchemaScript(data.schemas);
@@ -58,6 +62,7 @@ export default function SchemaData({ shop: shopProp }) {
         setToastContent(`Error: ${data.error}`);
       }
     } catch (err) {
+      console.error('[SCHEMA-DATA] loadSchemas - error:', err);
       setToastContent(`Failed to load schemas: ${err.message}`);
     } finally {
       setLoading(false);
