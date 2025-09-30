@@ -730,9 +730,6 @@ const root = {
             aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
               value
             }
-            # localBusinessMetafield: metafield(namespace: "ai_seo_store", key: "local_business_schema") {
-            #   value
-            # } # DISABLED - not relevant for online stores
           }
         }
       `;
