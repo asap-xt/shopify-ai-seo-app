@@ -778,10 +778,10 @@ export default function Settings() {
     
     const availability = {
       productsJson: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
-      welcomePage: ['professional', 'growth', 'growth_extra', 'enterprise'],
+      storeMetadata: ['professional', 'growth', 'growth_extra', 'enterprise'],
+      welcomePage: ['growth', 'growth_extra', 'enterprise'],
       collectionsJson: ['growth', 'growth_extra', 'enterprise'],
       aiSitemap: ['growth_extra', 'enterprise'],
-      storeMetadata: ['growth_extra', 'enterprise'],
       schemaData: ['enterprise']
     };
     
@@ -1317,10 +1317,16 @@ export default function Settings() {
                   requiredPlan: 'Starter'
                 },
                 {
+                  key: 'storeMetadata',
+                  name: 'Store Metadata for AI Search',
+                  description: 'Organization schema & AI metadata',
+                  requiredPlan: 'Professional'
+                },
+                {
                   key: 'welcomePage',
                   name: 'AI Welcome Page',
                   description: 'Landing page for AI bots',
-                  requiredPlan: 'Professional'
+                  requiredPlan: 'Growth'
                 },
                 {
                   key: 'collectionsJson',
@@ -1332,12 +1338,6 @@ export default function Settings() {
                   key: 'aiSitemap',
                   name: 'AI-Optimized Sitemap',
                   description: 'Enhanced sitemap with AI hints',
-                  requiredPlan: 'Growth Extra'
-                },
-                {
-                  key: 'storeMetadata',
-                  name: 'Store Metadata for AI Search',
-                  description: 'Organization & LocalBusiness schema',
                   requiredPlan: 'Growth Extra'
                 },
                 {
