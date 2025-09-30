@@ -95,18 +95,21 @@ export default function StoreMetadata({ shop: shopProp }) {
       // Set shop info defaults
       if (data.shopInfo) {
         console.log('[StoreMeta] Setting shop info defaults...');
-        console.log('[StoreMeta] Current title:', formData.seo.title);
-        console.log('[StoreMeta] Current metaDescription:', formData.seo.metaDescription);
         console.log('[StoreMeta] Shop name:', data.shopInfo.name);
         console.log('[StoreMeta] Shop description:', data.shopInfo.description);
         
-        setFormData(prev => ({
-          ...prev,
-          seo: {
-            ...prev.seo,
-            title: prev.seo.title || data.shopInfo.name,
-            metaDescription: prev.seo.metaDescription || data.shopInfo.description
-          },
+        setFormData(prev => {
+          console.log('[StoreMeta] Previous formData:', prev);
+          console.log('[StoreMeta] Previous title:', prev.seo.title);
+          console.log('[StoreMeta] Previous metaDescription:', prev.seo.metaDescription);
+          
+          const newFormData = {
+            ...prev,
+            seo: {
+              ...prev.seo,
+              title: prev.seo.title || data.shopInfo.name,
+              metaDescription: prev.seo.metaDescription || data.shopInfo.description
+            },
           organizationSchema: {
             ...prev.organizationSchema,
             name: prev.organizationSchema.name || data.shopInfo.name,
@@ -122,7 +125,14 @@ export default function StoreMetadata({ shop: shopProp }) {
             shippingRegions: prev.aiMetadata.shippingRegions?.length > 0 ? prev.aiMetadata.shippingRegions : 
               (data.shopInfo.markets || []).map(market => market.name)
           }
-        }));
+        };
+        
+        console.log('[StoreMeta] New formData:', newFormData);
+        console.log('[StoreMeta] New title:', newFormData.seo.title);
+        console.log('[StoreMeta] New metaDescription:', newFormData.seo.metaDescription);
+        
+        return newFormData;
+        });
       }
     } catch (error) {
       console.error('[StoreMeta] GET error', error?.debug || error, error);
