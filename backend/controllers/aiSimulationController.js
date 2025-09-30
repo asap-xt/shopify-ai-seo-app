@@ -170,7 +170,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Initializing OpenRouter...');
     
     console.log('[AI-SIMULATION] Generating AI response...');
-    const result = await openrouterChat('google/gemini-2.0-flash-exp', [
+    const result = await openrouterChat('google/gemini-2.5-flash-lite', [
       {
         role: 'system',
         content: `You are an AI assistant providing information about an online Shopify store. Your responses should be concise, helpful, and based *only* on the provided structured data. If information is not available in the structured data, state that clearly.`
