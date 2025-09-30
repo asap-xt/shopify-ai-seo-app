@@ -64,6 +64,9 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] GET ok', { url, keys: Object.keys(data || {}) });
       console.log('[StoreMeta] storeData.features:', data.features);
       console.log('[StoreMeta] organizationSchema available:', data.features?.organizationSchema);
+      console.log('[StoreMeta] shopInfo:', data.shopInfo);
+      console.log('[StoreMeta] shopInfo.name:', data.shopInfo?.name);
+      console.log('[StoreMeta] shopInfo.description:', data.shopInfo?.description);
       
       setStoreData(data);
       
@@ -91,6 +94,12 @@ export default function StoreMetadata({ shop: shopProp }) {
       
       // Set shop info defaults
       if (data.shopInfo) {
+        console.log('[StoreMeta] Setting shop info defaults...');
+        console.log('[StoreMeta] Current title:', formData.seo.title);
+        console.log('[StoreMeta] Current metaDescription:', formData.seo.metaDescription);
+        console.log('[StoreMeta] Shop name:', data.shopInfo.name);
+        console.log('[StoreMeta] Shop description:', data.shopInfo.description);
+        
         setFormData(prev => ({
           ...prev,
           seo: {
