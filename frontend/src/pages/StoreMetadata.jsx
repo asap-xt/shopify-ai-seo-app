@@ -457,8 +457,8 @@ export default function StoreMetadata({ shop: shopProp }) {
                     seo: { ...prev.seo, shortDescription: value }
                   }))}
                   placeholder={shopifyData.homePageTitle}
-                  helpText="Leave empty to use Shopify home page title"
-                  maxLength={200}
+                  helpText="Custom home page title for AI/SEO, max 100 characters"
+                  maxLength={100}
                 />
                 
                 <TextField

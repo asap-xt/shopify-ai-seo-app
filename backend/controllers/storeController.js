@@ -168,7 +168,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
         email
         contactEmail
         url
-        myshopifyDomain
         primaryDomain {
           url
         }
@@ -278,7 +277,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
       },
       shopifyDefaults: {
         storeName: shopInfo.name || '',
-        homePageTitle: shopInfo.myshopifyDomain || shopInfo.name || '', // Use domain as home page title
+        homePageTitle: metafields.home_page_title?.value || shopInfo.description || '',
         metaDescription: shopInfo.description || ''
       },
       existingMetadata: metafields,
@@ -447,6 +446,18 @@ router.post('/apply', validateRequest(), async (req, res) => {
       } else {
         console.log('[STORE-APPLY] No custom SEO data - will use Shopify defaults');
       }
+    }
+
+    // Home page title - save as separate metafield
+    if (metadata.seo?.shortDescription && options.updateSeo !== false) {
+      console.log('[STORE-APPLY] Saving home page title');
+      metafieldsToSet.push({
+        ownerId: shopId,
+        namespace: 'ai_seo_store',
+        key: 'home_page_title',
+        type: 'single_line_text_field',
+        value: metadata.seo.shortDescription
+      });
     }
 
     // AI metadata
@@ -632,6 +643,14 @@ router.get('/public/:shop', async (req, res) => {
             key: 'ai_metadata',
             description: 'AI business metadata',
             type: 'json',
+            ownerType: 'SHOP'
+          },
+          {
+            name: 'Home Page Title',
+            namespace: 'ai_seo_store',
+            key: 'home_page_title',
+            description: 'Custom home page title for AI/SEO',
+            type: 'single_line_text_field',
             ownerType: 'SHOP'
           }
         ];
