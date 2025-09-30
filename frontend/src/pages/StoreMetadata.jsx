@@ -47,11 +47,11 @@ export default function StoreMetadata({ shop: shopProp }) {
       logo: '',
       sameAs: ''
     },
-    localBusinessSchema: {
-      enabled: false,
-      priceRange: '',
-      openingHours: ''
-    }
+    // localBusinessSchema: {
+    //   enabled: false,
+    //   priceRange: '',
+    //   openingHours: ''
+    // } // DISABLED - not relevant for online stores
   });
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function StoreMetadata({ shop: shopProp }) {
           name: existing.organization_schema?.value?.name || data.shopInfo?.name || '',
           email: existing.organization_schema?.value?.email || data.shopInfo?.email || ''
         },
-        localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema
+        // localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema // DISABLED
       }));
       
     } catch (error) {
@@ -190,7 +190,7 @@ export default function StoreMetadata({ shop: shopProp }) {
             updateSeo: true,
             updateAiMetadata: true,
             updateOrganization: formData.organizationSchema.enabled,
-            updateLocalBusiness: formData.localBusinessSchema.enabled
+            // updateLocalBusiness: formData.localBusinessSchema.enabled // DISABLED
           }
         }
       });
@@ -222,7 +222,7 @@ export default function StoreMetadata({ shop: shopProp }) {
             seoMetadata
             aiMetadata
             organizationSchema
-            localBusinessSchema
+            // localBusinessSchema // DISABLED
           }
         }
       `;
@@ -263,10 +263,10 @@ export default function StoreMetadata({ shop: shopProp }) {
             try { return JSON.parse(previewData.organizationSchema); } 
             catch (e) { console.error('Error parsing organizationSchema:', e); return previewData.organizationSchema; }
           })() : null,
-          localBusinessSchema: previewData.localBusinessSchema ? (() => {
-            try { return JSON.parse(previewData.localBusinessSchema); } 
-            catch (e) { console.error('Error parsing localBusinessSchema:', e); return previewData.localBusinessSchema; }
-          })() : null
+          // localBusinessSchema: previewData.localBusinessSchema ? (() => {
+          //   try { return JSON.parse(previewData.localBusinessSchema); } 
+          //   catch (e) { console.error('Error parsing localBusinessSchema:', e); return previewData.localBusinessSchema; }
+          // })() : null // DISABLED
         };
         
         previewWindow.document.write(`
@@ -304,10 +304,11 @@ export default function StoreMetadata({ shop: shopProp }) {
                 <pre>${JSON.stringify(formattedData.organizationSchema, null, 2)}</pre>
               </div>
               
-              <div class="section">
+              <!-- Local Business Schema - DISABLED -->
+              <!-- <div class="section">
                 <h2>Local Business Schema</h2>
                 <pre>${JSON.stringify(formattedData.localBusinessSchema, null, 2)}</pre>
-              </div>
+              </div> -->
               
               <div class="section">
                 <h2>Raw Data</h2>
@@ -360,11 +361,11 @@ export default function StoreMetadata({ shop: shopProp }) {
           logo: '',
           sameAs: ''
         },
-        localBusinessSchema: {
-          enabled: false,
-          priceRange: '',
-          openingHours: ''
-        }
+        // localBusinessSchema: {
+        //   enabled: false,
+        //   priceRange: '',
+        //   openingHours: ''
+        // } // DISABLED
       });
       
       // Save empty data to clear from backend/preview
@@ -701,6 +702,8 @@ export default function StoreMetadata({ shop: shopProp }) {
         </Layout.Section>
       )}
 
+      {/* Local Business Schema - DISABLED - not relevant for online stores */}
+      {/*
       {storeData?.features?.localBusinessSchema && (
         <Layout.Section>
           <Card title="Local Business Schema">
@@ -749,6 +752,7 @@ export default function StoreMetadata({ shop: shopProp }) {
           </Card>
         </Layout.Section>
       )}
+      */}
 
       <Layout.Section>
         <Card>

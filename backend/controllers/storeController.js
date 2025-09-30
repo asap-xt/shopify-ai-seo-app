@@ -211,7 +211,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
     console.log('[STORE-DEBUG] features:', {
       organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
-      localBusinessSchema: plan.plan.toLowerCase() === 'enterprise'
+      // localBusinessSchema: plan.plan.toLowerCase() === 'enterprise' // DISABLED - not relevant for online stores
     });
     
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
@@ -284,7 +284,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
       plan: plan.plan,
       features: {
         organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
-        localBusinessSchema: plan.plan.toLowerCase() === 'enterprise'
+        // localBusinessSchema: plan.plan.toLowerCase() === 'enterprise' // DISABLED - not relevant for online stores
       }
     });
   } catch (error) {
@@ -492,7 +492,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
       console.log('[STORE-APPLY] No organization schema in metadata');
     }
 
-    // Local business schema (Enterprise only)
+    // Local business schema (Enterprise only) - DISABLED - not relevant for online stores
+    /*
     if (metadata.localBusinessSchema && options.updateLocalBusiness !== false) {
       metafieldsToSet.push({
         ownerId: shopId,
@@ -502,6 +503,7 @@ router.post('/apply', validateRequest(), async (req, res) => {
         value: JSON.stringify(metadata.localBusinessSchema)
       });
     }
+    */
 
     if (metafieldsToSet.length === 0) {
       console.log('[STORE-APPLY] No metafields to update');
@@ -699,13 +701,15 @@ router.get('/public/:shop', async (req, res) => {
         }
       }),
       
-      // Include local business if available
+      // Include local business if available - DISABLED - not relevant for online stores
+      /*
       ...(metadata.local_business_schema?.enabled && {
         location: {
           "@type": "LocalBusiness",
           ...metadata.local_business_schema
         }
       })
+      */
     };
 
     res.json(aiResponse);
