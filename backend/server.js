@@ -518,7 +518,7 @@ const schema = buildSchema(`
     seoMetadata: String
     aiMetadata: String
     organizationSchema: String
-    # localBusinessSchema: String # DISABLED - not relevant for online stores
+    // localBusinessSchema: String // DISABLED - not relevant for online stores
   }
   
   type WelcomePage {
@@ -527,18 +527,18 @@ const schema = buildSchema(`
   }
   
   type Query {
-    # optional: ако решиш да четеш плана през GraphQL в бъдеще
+    // optional: ако решиш да четеш плана през GraphQL в бъдеще
     plansMe(shop: String!): PlansMe!
-    # check for generated data
+    // check for generated data
     products(shop: String!, first: Int): ProductConnection!
     collections(shop: String!, first: Int): CollectionConnection!
     storeMetadata(shop: String!): StoreMetadata
     welcomePage(shop: String!): WelcomePage
   }
   type Mutation {
-    # set plan override (null plan = clear override)
+    // set plan override (null plan = clear override)
     setPlanOverride(shop: String!, plan: PlanEnum): PlansMe!
-    # regenerate sitemap in background
+    // regenerate sitemap in background
     regenerateSitemap(shop: String!): SitemapResult!
   }
 `);
@@ -730,9 +730,9 @@ const root = {
             aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
               value
             }
-            # localBusinessMetafield: metafield(namespace: "ai_seo_store", key: "local_business_schema") {
-            #   value
-            # } # DISABLED - not relevant for online stores
+            // localBusinessMetafield: metafield(namespace: "ai_seo_store", key: "local_business_schema") {
+            //   value
+            // } // DISABLED - not relevant for online stores
           }
         }
       `;
@@ -761,7 +761,7 @@ const root = {
         seoMetadata: data.shop?.metafield?.value || null,
         aiMetadata: data.shop?.aiMetafield?.value || null,
         organizationSchema: data.shop?.organizationMetafield?.value || null
-        # localBusinessSchema: data.shop?.localBusinessMetafield?.value || null # DISABLED
+        // localBusinessSchema: data.shop?.localBusinessMetafield?.value || null // DISABLED - not relevant for online stores
       };
       
     } catch (error) {
