@@ -426,7 +426,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
         type: 'json',
         value: JSON.stringify({
           title: metadata.seo.title,
-          description: metadata.seo.metaDescription || metadata.seo.description || '',
           metaDescription: metadata.seo.metaDescription || metadata.seo.description || '',
           keywords: Array.isArray(metadata.seo.keywords) 
             ? metadata.seo.keywords 

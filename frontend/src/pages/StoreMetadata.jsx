@@ -81,8 +81,7 @@ export default function StoreMetadata({ shop: shopProp }) {
           ...prev,
           seo: {
             ...prev.seo,
-            ...(existing.seo_metadata?.value || {}),
-            // Use Shopify data as fallback if existing metadata is empty
+            // Only use specific fields from existing metadata, not all fields
             title: existing.seo_metadata?.value?.title || prev.seo.title || data.shopInfo?.name || '',
             metaDescription: existing.seo_metadata?.value?.metaDescription || prev.seo.metaDescription || data.shopInfo?.description || '',
             keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
