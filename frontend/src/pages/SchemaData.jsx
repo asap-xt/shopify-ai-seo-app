@@ -91,10 +91,15 @@ ${JSON.stringify(allSchemas, null, 2)}
   const handleValidate = async () => {
     setLoading(true);
     try {
-      const data = await api(`/api/schema/validate`, { shop });
+      console.log('[SCHEMA-DATA] handleValidate - shop:', shop);
+      const url = `/api/schema/validate?shop=${encodeURIComponent(shop)}`;
+      console.log('[SCHEMA-DATA] handleValidate - url:', url);
+      const data = await api(url, { headers: { 'X-Shop': shop } });
+      console.log('[SCHEMA-DATA] handleValidate - response:', data);
       setValidationResults(data);
       setToastContent(data.ok ? 'Validation complete!' : 'Validation found issues');
     } catch (err) {
+      console.error('[SCHEMA-DATA] handleValidate - error:', err);
       setToastContent(`Validation failed: ${err.message}`);
     } finally {
       setLoading(false);
@@ -104,11 +109,15 @@ ${JSON.stringify(allSchemas, null, 2)}
   const handleRegenerate = async () => {
     setLoading(true);
     try {
-      const data = await api('/api/schema/generate', {
+      console.log('[SCHEMA-DATA] handleRegenerate - shop:', shop);
+      const url = `/api/schema/generate?shop=${encodeURIComponent(shop)}`;
+      console.log('[SCHEMA-DATA] handleRegenerate - url:', url);
+      const data = await api(url, {
         method: 'POST',
-        shop,
+        headers: { 'X-Shop': shop },
         body: { shop }
       });
+      console.log('[SCHEMA-DATA] handleRegenerate - response:', data);
       if (data.ok) {
         setToastContent('Schemas regenerated successfully!');
         loadSchemas();
@@ -116,6 +125,7 @@ ${JSON.stringify(allSchemas, null, 2)}
         setToastContent(`Error: ${data.error}`);
       }
     } catch (err) {
+      console.error('[SCHEMA-DATA] handleRegenerate - error:', err);
       setToastContent(`Failed to regenerate: ${err.message}`);
     } finally {
       setLoading(false);
