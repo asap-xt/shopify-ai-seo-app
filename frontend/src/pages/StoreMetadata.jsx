@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card, Box, Text, Button, TextField, Checkbox, Toast, Form, FormLayout,
-  InlineStack, Select, Divider, Banner, Link, Badge, Layout
+  InlineStack, Select, Divider, Banner, Link, Badge, Layout, Tooltip
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
@@ -384,25 +384,25 @@ export default function StoreMetadata({ shop: shopProp }) {
           <Box padding="400">
             <FormLayout>
               <TextField
-                label="SEO Title"
+                label="Store Title"
                 value={formData.seo.title}
                 onChange={(value) => setFormData(prev => ({
                   ...prev,
                   seo: { ...prev.seo, title: value }
                 }))}
-                helpText="Title for search engines (max 70 chars)"
-                maxLength={70}
+                helpText="Short & appealing, max 100 characters"
+                maxLength={100}
               />
               
               <TextField
-                label="Meta Description"
+                label="Store Description"
                 value={formData.seo.metaDescription}
                 onChange={(value) => setFormData(prev => ({
                   ...prev,
                   seo: { ...prev.seo, metaDescription: value }
                 }))}
-                helpText="Description for search results (150-160 chars)"
-                maxLength={160}
+                helpText="Tell briefly what best describes your business, max 300 chars"
+                maxLength={300}
                 multiline={3}
               />
               
@@ -413,7 +413,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                   ...prev,
                   seo: { ...prev.seo, keywords: value }
                 }))}
-                helpText="Comma-separated keywords"
+                helpText="Comma-separated keywords, max 10 keywords, max 3 words each"
               />
             </FormLayout>
           </Box>
@@ -433,6 +433,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     aiMetadata: { ...prev.aiMetadata, businessType: value }
                   }))}
                   placeholder="e.g., Fashion Retailer, Electronics Store"
+                  helpText="Max 3 words"
                 />
                 
                 <TextField
@@ -484,6 +485,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                   ...prev,
                   aiMetadata: { ...prev.aiMetadata, shippingInfo: value }
                 }))}
+                helpText="Shipping costs, delivery times, free shipping thresholds (e.g., Free shipping over $50, 2-3 business days)"
                 multiline={2}
               />
               
@@ -514,7 +516,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     languages: value.split(',').map(lang => lang.trim()).filter(lang => lang)
                   }
                 }))}
-                helpText="Comma-separated language codes (e.g., en, bg, ro, de)"
+                helpText="Comma-separated language codes (e.g., en, de, es, fr)"
                 multiline={2}
               />
               
@@ -528,7 +530,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     supportedCurrencies: value.split(',').map(curr => curr.trim()).filter(curr => curr)
                   }
                 }))}
-                helpText="Comma-separated currency codes (e.g., EUR, BGN, RON)"
+                helpText="Comma-separated currency codes (e.g., EUR, USD, GBP)"
               />
               
               <TextField
@@ -541,7 +543,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     shippingRegions: value.split(',').map(region => region.trim()).filter(region => region)
                   }
                 }))}
-                helpText="Comma-separated regions (e.g., EU, Worldwide, Bulgaria, Romania)"
+                helpText="Comma-separated regions (e.g., EU, USA, UK, Canada)"
                 multiline={2}
               />
               
@@ -639,14 +641,19 @@ export default function StoreMetadata({ shop: shopProp }) {
         <Layout.Section>
           <Card title="Local Business Schema">
             <Box padding="400">
-              <Checkbox
-                label="Enable Local Business Schema"
-                checked={formData.localBusinessSchema.enabled}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  localBusinessSchema: { ...prev.localBusinessSchema, enabled: value }
-                }))}
-              />
+              <InlineStack align="start" gap="200">
+                <Checkbox
+                  label="Enable Local Business Schema"
+                  checked={formData.localBusinessSchema.enabled}
+                  onChange={(value) => setFormData(prev => ({
+                    ...prev,
+                    localBusinessSchema: { ...prev.localBusinessSchema, enabled: value }
+                  }))}
+                />
+                <Tooltip content="Optional - only enable if you have physical stores/locations">
+                  <Text variant="bodyMd" color="subdued">ℹ️</Text>
+                </Tooltip>
+              </InlineStack>
               
               {formData.localBusinessSchema.enabled && (
                 <Box paddingBlockStart="400">
