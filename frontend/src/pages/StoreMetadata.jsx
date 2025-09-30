@@ -411,12 +411,8 @@ export default function StoreMetadata({ shop: shopProp }) {
                     Store name: <Text as="span" fontWeight="medium">{shopifyData.storeName || 'Not set'}</Text>
                   </Text>
                   <Text variant="bodySm" tone="subdued">
-                    Short Store Description: <Text as="span" fontWeight="medium">
-                      {shopifyData.homePageTitle ? 
-                        (shopifyData.homePageTitle.substring(0, 50) + (shopifyData.homePageTitle.length > 50 ? '...' : ''))
-                        : 'Not set'}
-                    </Text>
-                  </Text>
+                  
+                </Text>
                   <Text variant="bodySm" tone="subdued">
                     Meta description: <Text as="span" fontWeight="medium">
                       {shopifyData.metaDescription ? 
@@ -456,8 +452,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, shortDescription: value }
                   }))}
-                  placeholder={shopifyData.homePageTitle}
-                  helpText="Custom home page title for AI/SEO, max 100 characters"
+                  helpText="Въведи кратко описание на магазина - макс 100 знака"
                   maxLength={100}
                 />
                 
