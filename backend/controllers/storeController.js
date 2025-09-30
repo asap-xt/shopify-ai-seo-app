@@ -171,10 +171,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
         primaryDomain {
           url
         }
-        seo {
-          title
-          description
-        }
       }
     }`;
     
@@ -281,8 +277,8 @@ router.get('/generate', validateRequest(), async (req, res) => {
       },
       shopifyDefaults: {
         storeName: shopInfo.name || '',
-        homePageTitle: shopInfo.seo?.title || '',
-        metaDescription: shopInfo.seo?.description || shopInfo.description || ''
+        homePageTitle: shopInfo.name || '', // Use shop name as home page title
+        metaDescription: shopInfo.description || ''
       },
       existingMetadata: metafields,
       plan: plan.plan,
