@@ -1,4 +1,8 @@
 // backend/controllers/aiSimulationController.js
+import express from 'express';
+import { verifyRequest } from '../middleware/verifyRequest.js';
+import { GraphQLClient } from 'graphql-request';
+
 // Copy ONLY the OpenRouter connection from aiEnhanceController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
