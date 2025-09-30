@@ -50,9 +50,24 @@ export default function SchemaData({ shop: shopProp }) {
 
   const loadPlan = async () => {
     try {
-      const url = `/api/plans/me?shop=${encodeURIComponent(shop)}`;
-      const data = await api(url, { headers: { 'X-Shop': shop } });
-      setCurrentPlan(data.plan);
+      const query = `
+        query PlansMe($shop:String!) {
+          plansMe(shop:$shop) {
+            shop
+            plan
+            planKey
+          }
+        }
+      `;
+      
+      const data = await api('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables: { shop } })
+      });
+      
+      console.log('[SCHEMA-DATA] Plan data:', data);
+      setCurrentPlan(data?.data?.plansMe?.plan);
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
     }
@@ -60,10 +75,19 @@ export default function SchemaData({ shop: shopProp }) {
 
   // Plan-based feature availability
   const isFeatureAvailable = (feature) => {
-    if (!currentPlan) return false;
+    console.log('[SCHEMA-DATA] isFeatureAvailable - currentPlan:', currentPlan);
+    console.log('[SCHEMA-DATA] isFeatureAvailable - feature:', feature);
+    
+    if (!currentPlan) {
+      console.log('[SCHEMA-DATA] No current plan, returning false');
+      return false;
+    }
     
     const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
     const currentPlanIndex = planHierarchy.indexOf(currentPlan);
+    
+    console.log('[SCHEMA-DATA] Plan hierarchy:', planHierarchy);
+    console.log('[SCHEMA-DATA] Current plan index:', currentPlanIndex);
     
     switch (feature) {
       case 'productsJson':
