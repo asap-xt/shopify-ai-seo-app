@@ -488,7 +488,8 @@ ${schemaScript}
                               <Button
                                 url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
                                 external
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Test with Prompt
                               </Button>
@@ -499,7 +500,8 @@ ${schemaScript}
                               <Button
                                 url={`https://chat.openai.com/`}
                                 external
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Test with Prompt
                               </Button>
@@ -507,31 +509,81 @@ ${schemaScript}
 
                             <InlineStack align="space-between">
                               <Text>Claude AI Search</Text>
-                              <Button
-                                url={`https://claude.ai/`}
-                                external
-                                variant="plain"
-                              >
-                                Test with Prompt
-                              </Button>
+                              {isFeatureAvailable('welcomePage') ? (
+                                <Button
+                                  url={`https://claude.ai/`}
+                                  external
+                                  variant="primary"
+                                  size="slim"
+                                >
+                                  Test with Prompt
+                                </Button>
+                              ) : (
+                                <Button disabled variant="primary" size="slim">
+                                  {getRequiredPlan('welcomePage')}+ Required
+                                </Button>
+                              )}
                             </InlineStack>
 
                             <InlineStack align="space-between">
                               <Text>Gemini AI Search</Text>
-                              <Button
-                                url={`https://gemini.google.com/`}
-                                external
-                                variant="plain"
-                              >
-                                Test with Prompt
-                              </Button>
+                              {isFeatureAvailable('welcomePage') ? (
+                                <Button
+                                  url={`https://gemini.google.com/`}
+                                  external
+                                  variant="primary"
+                                  size="slim"
+                                >
+                                  Test with Prompt
+                                </Button>
+                              ) : (
+                                <Button disabled variant="primary" size="slim">
+                                  {getRequiredPlan('welcomePage')}+ Required
+                                </Button>
+                              )}
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>Meta AI Search</Text>
+                              {isFeatureAvailable('aiSitemap') ? (
+                                <Button
+                                  url={`https://www.meta.ai/`}
+                                  external
+                                  variant="primary"
+                                  size="slim"
+                                >
+                                  Test with Prompt
+                                </Button>
+                              ) : (
+                                <Button disabled variant="primary" size="slim">
+                                  {getRequiredPlan('aiSitemap')}+ Required
+                                </Button>
+                              )}
+                            </InlineStack>
+
+                            <InlineStack align="space-between">
+                              <Text>DeepSeek AI Search</Text>
+                              {isFeatureAvailable('schemaData') ? (
+                                <Button
+                                  url={`https://chat.deepseek.com/`}
+                                  external
+                                  variant="primary"
+                                  size="slim"
+                                >
+                                  Test with Prompt
+                                </Button>
+                              ) : (
+                                <Button disabled variant="primary" size="slim">
+                                  {getRequiredPlan('schemaData')}+ Required
+                                </Button>
+                              )}
                             </InlineStack>
                           </BlockStack>
                           
                           <Banner tone="info">
                             <Text>
                               <strong>Pre-filled prompts:</strong> Click "Test with Prompt" to open AI tools with pre-filled questions about your store. 
-                              For ChatGPT, Claude, and Gemini, copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
+                              For ChatGPT, Claude, Gemini, Meta AI, and DeepSeek, copy this prompt: "What products does {shop} sell? Tell me about this business and what they offer."
                             </Text>
                           </Banner>
                         </BlockStack>
@@ -552,7 +604,8 @@ ${schemaScript}
                               <Text>What products does this store sell?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('products')}
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Simulate Response
                               </Button>
@@ -562,7 +615,8 @@ ${schemaScript}
                               <Text>Tell me about this business</Text>
                               <Button
                                 onClick={() => simulateAIResponse('business')}
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Simulate Response
                               </Button>
@@ -572,7 +626,8 @@ ${schemaScript}
                               <Text>What categories does this store have?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('categories')}
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Simulate Response
                               </Button>
@@ -582,7 +637,8 @@ ${schemaScript}
                               <Text>What is this store's contact information?</Text>
                               <Button
                                 onClick={() => simulateAIResponse('contact')}
-                                variant="plain"
+                                variant="primary"
+                                size="slim"
                               >
                                 Simulate Response
                               </Button>
