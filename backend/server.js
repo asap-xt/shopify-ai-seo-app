@@ -515,6 +515,7 @@ const schema = buildSchema(`
   type StoreMetadata {
     shopName: String
     description: String
+    shortDescription: String
     seoMetadata: String
     aiMetadata: String
     organizationSchema: String
@@ -755,6 +756,7 @@ const root = {
       return {
         shopName: hasAnyMetadata ? data.shop?.name : null,
         description: hasSeoMetadata ? JSON.parse(data.shop?.metafield?.value || '{}').metaDescription || data.shop?.description : null,
+        shortDescription: hasSeoMetadata ? JSON.parse(data.shop?.metafield?.value || '{}').shortDescription || null : null,
         seoMetadata: data.shop?.metafield?.value || null,
         aiMetadata: data.shop?.aiMetafield?.value || null,
         organizationSchema: data.shop?.organizationMetafield?.value || null

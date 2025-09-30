@@ -219,6 +219,7 @@ export default function StoreMetadata({ shop: shopProp }) {
           storeMetadata(shop: $shop) {
             shopName
             description
+            shortDescription
             seoMetadata
             aiMetadata
             organizationSchema
@@ -249,6 +250,7 @@ export default function StoreMetadata({ shop: shopProp }) {
         // Format the data for better readability
         const formattedData = {
           shopName: previewData.shopName,
+          shortDescription: previewData.shortDescription,
           description: previewData.description,
           seoMetadata: previewData.seoMetadata ? (() => {
             try { return JSON.parse(previewData.seoMetadata); } 
@@ -285,7 +287,8 @@ export default function StoreMetadata({ shop: shopProp }) {
               <div class="section">
                 <h2>Basic Info</h2>
                 <p><strong>Shop Name:</strong> ${formattedData.shopName || 'Not set'}</p>
-                <p><strong>Description:</strong> ${formattedData.description || 'Not set'}</p>
+                <p><strong>Short Description:</strong> ${previewData.shortDescription || 'Not set'}</p>
+                <p><strong>Full Description:</strong> ${formattedData.description || 'Not set'}</p>
               </div>
               
               <div class="section">
