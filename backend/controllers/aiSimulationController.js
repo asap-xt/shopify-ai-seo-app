@@ -1,7 +1,7 @@
 // backend/controllers/aiSimulationController.js
 import express from 'express';
 import { validateRequest } from '../middleware/verifyRequest.js';
-import { executeGemini } from '../ai/gemini.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
 
@@ -16,6 +16,16 @@ router.post('/api/ai/simulate-response', validateRequest(), async (req, res) => 
     console.log('[AI-SIMULATION] Starting simulation for:', questionType);
     console.log('[AI-SIMULATION] Shop:', shop);
     console.log('[AI-SIMULATION] Context:', context);
+    
+    // Check if Gemini API key is available
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('[AI-SIMULATION] GEMINI_API_KEY is not set.');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'AI simulation service not configured.',
+        fallback: 'AI simulation temporarily unavailable'
+      });
+    }
     
     // Fetch additional data based on question type
     let additionalData = {};
@@ -79,7 +89,20 @@ router.post('/api/ai/simulate-response', validateRequest(), async (req, res) => 
     const prompt = generatePrompt(questionType, aiContext);
     console.log('[AI-SIMULATION] Prompt:', prompt);
     
-    const aiResponse = await executeGemini(prompt);
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: { 
+        parts: [{ 
+          text: `You are an AI assistant providing information about an online Shopify store. Your responses should be concise, helpful, and based *only* on the provided structured data. If information is not available in the structured data, state that clearly.` 
+        }] 
+      }
+    });
+    
+    const aiResponse = result.response.text();
     console.log('[AI-SIMULATION] AI Response:', aiResponse);
     
     res.json({
