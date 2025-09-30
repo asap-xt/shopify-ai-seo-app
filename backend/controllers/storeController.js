@@ -275,6 +275,10 @@ router.get('/generate', validateRequest(), async (req, res) => {
         markets: markets,
         currencies: ['EUR'] // Default currency for now
       },
+      shopifyDefaults: {
+        title: shopInfo.name || '',
+        description: shopInfo.description || ''
+      },
       existingMetadata: metafields,
       plan: plan.plan,
       features: {
@@ -415,23 +419,30 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     const metafieldsToSet = [];
 
-    // SEO metadata
+    // SEO metadata - запиши само ако не е празно
     if (metadata.seo && options.updateSeo !== false) {
-      console.log('Received SEO metadata:', metadata.seo); // DEBUG
-  
-      metafieldsToSet.push({
-        ownerId: shopId,
-        namespace: 'ai_seo_store',
-        key: 'seo_metadata',
-        type: 'json',
-        value: JSON.stringify({
-          title: metadata.seo.title,
-          metaDescription: metadata.seo.metaDescription || metadata.seo.description || '',
-          keywords: Array.isArray(metadata.seo.keywords) 
-            ? metadata.seo.keywords 
-            : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
-        })
-      });
+      const hasCustomData = metadata.seo.title || 
+                            metadata.seo.metaDescription || 
+                            (metadata.seo.keywords && metadata.seo.keywords.length > 0);
+      
+      if (hasCustomData) {
+        console.log('[STORE-APPLY] Saving custom SEO metadata');
+        metafieldsToSet.push({
+          ownerId: shopId,
+          namespace: 'ai_seo_store',
+          key: 'seo_metadata',
+          type: 'json',
+          value: JSON.stringify({
+            title: metadata.seo.title || null,
+            metaDescription: metadata.seo.metaDescription || null,
+            keywords: Array.isArray(metadata.seo.keywords) 
+              ? metadata.seo.keywords 
+              : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
+          })
+        });
+      } else {
+        console.log('[STORE-APPLY] No custom SEO data - will use Shopify defaults');
+      }
     }
 
     // AI metadata

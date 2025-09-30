@@ -17,6 +17,8 @@ export default function StoreMetadata({ shop: shopProp }) {
   const api = useMemo(() => makeSessionFetch({ debug: true }), []);
   const [previewing, setPreviewing] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [shopifyData, setShopifyData] = useState({ title: '', description: '' });
+  const [hasShopifyChanges, setHasShopifyChanges] = useState(false);
   const [formData, setFormData] = useState({
     seo: {
       title: '',
@@ -59,93 +61,79 @@ export default function StoreMetadata({ shop: shopProp }) {
     setLoading(true);
     try {
       const url = `/api/store/generate?shop=${encodeURIComponent(shop)}`;
-      console.log('[StoreMeta] GET', url);
       const data = await api(url, { headers: { 'X-Shop': shop } });
-      console.log('[StoreMeta] GET ok', { url, keys: Object.keys(data || {}) });
-      console.log('[StoreMeta] storeData.features:', data.features);
-      console.log('[StoreMeta] organizationSchema available:', data.features?.organizationSchema);
-      console.log('[StoreMeta] shopInfo:', data.shopInfo);
-      console.log('[StoreMeta] shopInfo.name:', data.shopInfo?.name);
-      console.log('[StoreMeta] shopInfo.description:', data.shopInfo?.description);
       
       setStoreData(data);
       
-      // Set existing metadata if any
-      if (data.existingMetadata) {
-        const existing = data.existingMetadata;
-        console.log('[StoreMeta] Found existing metadata:', existing);
-        console.log('[StoreMeta] existing.seo_metadata:', existing.seo_metadata);
-        console.log('[StoreMeta] existing.seo_metadata.value:', existing.seo_metadata?.value);
-        
-        setFormData(prev => ({
-          ...prev,
-          seo: {
-            ...prev.seo,
-            // Only use specific fields from existing metadata, not all fields
-            title: existing.seo_metadata?.value?.title || prev.seo.title || data.shopInfo?.name || '',
-            metaDescription: existing.seo_metadata?.value?.metaDescription || prev.seo.metaDescription || data.shopInfo?.description || '',
-            keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
-              ? existing.seo_metadata.value.keywords.join(', ')
-              : existing.seo_metadata?.value?.keywords || prev.seo.keywords || ''
-          },
-          aiMetadata: existing.ai_metadata?.value || prev.aiMetadata,
-          organizationSchema: {
+      // Запази Shopify defaults
+      setShopifyData({
+        title: data.shopifyDefaults?.title || '',
+        description: data.shopifyDefaults?.description || ''
+      });
+      
+      const existing = data.existingMetadata || {};
+      
+      // Custom данни от MongoDB
+      const customTitle = existing.seo_metadata?.value?.title || '';
+      const customDescription = existing.seo_metadata?.value?.metaDescription || '';
+      
+      // Провери за разлики
+      const titleDifferent = customTitle && customTitle !== data.shopifyDefaults?.title;
+      const descDifferent = customDescription && customDescription !== data.shopifyDefaults?.description;
+      setHasShopifyChanges(titleDifferent || descDifferent);
+      
+      setFormData(prev => ({
+        ...prev,
+        seo: {
+          ...prev.seo,
+          title: customTitle,
+          metaDescription: customDescription,
+          keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
+            ? existing.seo_metadata.value.keywords.join(', ')
+            : existing.seo_metadata?.value?.keywords || ''
+        },
+        aiMetadata: {
+          ...prev.aiMetadata,
+          ...(existing.ai_metadata?.value || {}),
+          languages: existing.ai_metadata?.value?.languages?.length > 0 
+            ? existing.ai_metadata.value.languages 
+            : (data.shopInfo?.locales || []).filter(locale => locale.published).map(locale => locale.locale),
+          supportedCurrencies: existing.ai_metadata?.value?.supportedCurrencies?.length > 0 
+            ? existing.ai_metadata.value.supportedCurrencies 
+            : (data.shopInfo?.currencies || ['EUR']),
+          shippingRegions: existing.ai_metadata?.value?.shippingRegions?.length > 0 
+            ? existing.ai_metadata.value.shippingRegions 
+            : (data.shopInfo?.markets || []).map(market => market.name)
+        },
+        organizationSchema: {
           ...prev.organizationSchema,
           ...(existing.organization_schema?.value || {}),
-          enabled: existing.organization_schema?.value?.enabled === true
-          },
-          localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema
-        }));
-      }
+          enabled: existing.organization_schema?.value?.enabled === true,
+          name: existing.organization_schema?.value?.name || data.shopInfo?.name || '',
+          email: existing.organization_schema?.value?.email || data.shopInfo?.email || ''
+        },
+        localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema
+      }));
       
-      // Set shop info defaults
-      if (data.shopInfo) {
-        console.log('[StoreMeta] Setting shop info defaults...');
-        console.log('[StoreMeta] Shop name:', data.shopInfo.name);
-        console.log('[StoreMeta] Shop description:', data.shopInfo.description);
-        
-        setFormData(prev => {
-          console.log('[StoreMeta] Previous formData:', prev);
-          console.log('[StoreMeta] Previous title:', prev.seo.title);
-          console.log('[StoreMeta] Previous metaDescription:', prev.seo.metaDescription);
-          
-          const newFormData = {
-            ...prev,
-            seo: {
-              ...prev.seo,
-              title: prev.seo.title || data.shopInfo.name,
-              metaDescription: prev.seo.metaDescription || data.shopInfo.description
-            },
-          organizationSchema: {
-            ...prev.organizationSchema,
-            name: prev.organizationSchema.name || data.shopInfo.name,
-            email: prev.organizationSchema.email || data.shopInfo.email
-          },
-          aiMetadata: {
-            ...prev.aiMetadata,
-            // Auto-populate languages and markets from Shopify
-            languages: prev.aiMetadata.languages?.length > 0 ? prev.aiMetadata.languages : 
-              (data.shopInfo.locales || []).filter(locale => locale.published).map(locale => locale.locale),
-            supportedCurrencies: prev.aiMetadata.supportedCurrencies?.length > 0 ? prev.aiMetadata.supportedCurrencies : 
-              (data.shopInfo.currencies || ['EUR']),
-            shippingRegions: prev.aiMetadata.shippingRegions?.length > 0 ? prev.aiMetadata.shippingRegions : 
-              (data.shopInfo.markets || []).map(market => market.name)
-          }
-        };
-        
-        console.log('[StoreMeta] New formData:', newFormData);
-        console.log('[StoreMeta] New title:', newFormData.seo.title);
-        console.log('[StoreMeta] New metaDescription:', newFormData.seo.metaDescription);
-        
-        return newFormData;
-        });
-      }
     } catch (error) {
-      console.error('[StoreMeta] GET error', error?.debug || error, error);
+      console.error('[StoreMeta] Load error:', error);
       setToast(`Load failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
+  }
+
+  function syncFromShopify() {
+    setFormData(prev => ({
+      ...prev,
+      seo: {
+        ...prev.seo,
+        title: '',
+        metaDescription: ''
+      }
+    }));
+    setHasShopifyChanges(false);
+    setToast('Synced with Shopify store settings');
   }
 
   async function handleGenerate() {
@@ -203,6 +191,7 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] SAVE ok', { url, ok: data?.ok });
       
       setToast('Metadata saved successfully!');
+      await loadStoreData(); // Reload за да обновим hasShopifyChanges
     } catch (error) {
       console.error('[StoreMeta] SAVE error', error?.debug || error, error);
       setToast(`Save failed: ${error?.message || 'Unknown error'}`);
@@ -408,40 +397,69 @@ export default function StoreMetadata({ shop: shopProp }) {
       <Layout.Section>
         <Card title="Basic Store Information">
           <Box padding="400">
-            <FormLayout>
-              <TextField
-                label="Store Title"
-                value={formData.seo.title}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  seo: { ...prev.seo, title: value }
-                }))}
-                helpText="Short & appealing, max 100 characters (auto-filled from shop name)"
-                maxLength={100}
-              />
-              
-              <TextField
-                label="Store Description"
-                value={formData.seo.metaDescription}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  seo: { ...prev.seo, metaDescription: value }
-                }))}
-                helpText="Tell briefly what best describes your business, max 300 chars (auto-filled from shop description)"
-                maxLength={300}
-                multiline={3}
-              />
-              
-              <TextField
-                label="Keywords"
-                value={formData.seo.keywords}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  seo: { ...prev.seo, keywords: value }
-                }))}
-                helpText="Comma-separated keywords, max 10 keywords, max 3 words each"
-              />
-            </FormLayout>
+            <Banner tone="info">
+              <Box>
+                <Text variant="bodyMd" fontWeight="semibold">From Shopify Settings:</Text>
+                <Box paddingBlockStart="200">
+                  <Text variant="bodySm" tone="subdued">
+                    Store name: <Text as="span" fontWeight="medium">{shopifyData.title || 'Not set'}</Text>
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Meta description: <Text as="span" fontWeight="medium">
+                      {shopifyData.description ? 
+                        (shopifyData.description.substring(0, 100) + (shopifyData.description.length > 100 ? '...' : ''))
+                        : 'Not set'}
+                    </Text>
+                  </Text>
+                </Box>
+                {hasShopifyChanges && (
+                  <Box paddingBlockStart="300">
+                    <Button size="slim" onClick={syncFromShopify}>
+                      Sync from Shopify
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            </Banner>
+            
+            <Box paddingBlockStart="400">
+              <FormLayout>
+                <TextField
+                  label="Store Title (for AI/SEO)"
+                  value={formData.seo.title}
+                  onChange={(value) => setFormData(prev => ({
+                    ...prev,
+                    seo: { ...prev.seo, title: value }
+                  }))}
+                  placeholder={shopifyData.title}
+                  helpText="Leave empty to use Shopify store name"
+                  maxLength={100}
+                />
+                
+                <TextField
+                  label="Store Description (for AI/SEO)"
+                  value={formData.seo.metaDescription}
+                  onChange={(value) => setFormData(prev => ({
+                    ...prev,
+                    seo: { ...prev.seo, metaDescription: value }
+                  }))}
+                  placeholder={shopifyData.description}
+                  helpText="Leave empty to use Shopify meta description"
+                  maxLength={300}
+                  multiline={3}
+                />
+                
+                <TextField
+                  label="Keywords"
+                  value={formData.seo.keywords}
+                  onChange={(value) => setFormData(prev => ({
+                    ...prev,
+                    seo: { ...prev.seo, keywords: value }
+                  }))}
+                  helpText="Comma-separated keywords (optional)"
+                />
+              </FormLayout>
+            </Box>
           </Box>
         </Card>
       </Layout.Section>
