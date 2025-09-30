@@ -83,8 +83,8 @@ async function shopGraphQL(req, shop, query, variables = {}) {
 }
 
 // Load plan data for shop
-// Updated: Added read_markets scope support
-async function fetchPlan(shop) {
+// Updated: Added read_markets scope support and plan override support
+async function fetchPlan(shop, app = null) {
   
   // DEBUG
   console.log('ENV APP_PLAN:', process.env.APP_PLAN);
@@ -107,14 +107,15 @@ async function fetchPlan(shop) {
     }
   }
 
-  // Check if we have MongoDB and Subscription model
+  // SECOND: Check subscription in database
+  let plan = null;
   if (mongoose.connection.readyState === 1) {
     try {
       const Subscription = mongoose.models.Subscription || await import('../models/Subscription.js').then(m => m.default);
       const sub = await Subscription.findOne({ shop }).lean();
       
       if (sub) {
-        return {
+        plan = {
           plan: sub.plan || 'Starter',
           queryLimit: sub.queryLimit || 0,
           queryCount: sub.queryCount || 0,
@@ -125,14 +126,36 @@ async function fetchPlan(shop) {
       console.error('Error loading plan from DB:', err);
     }
   }
+
+  // THIRD: Apply in-memory test override if any (same logic as seoController.js)
+  if (app) {
+    try {
+      const override = app?.locals?.planOverrides?.get?.(shop);
+      if (override) {
+        console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
+        plan = {
+          plan: override,
+          queryLimit: 50,
+          queryCount: 0,
+          productLimit: 50
+        };
+      }
+    } catch (e) {
+      // no-op
+    }
+  }
   
-  // Default plan if no subscription found
-  return {
-    plan: 'Starter',  // Changed back to Starter as default
-    queryLimit: 50,
-    queryCount: 0,
-    productLimit: 50
-  };
+  // FOURTH: Default plan if no subscription found
+  if (!plan) {
+    plan = {
+      plan: 'Starter',  // Changed back to Starter as default
+      queryLimit: 50,
+      queryCount: 0,
+      productLimit: 50
+    };
+  }
+
+  return plan;
 }
 
 // ---- Routes ----
@@ -150,7 +173,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
   try {
 
     // Check plan access
-    const plan = await fetchPlan(shop);
+    const plan = await fetchPlan(shop, req.app);
     console.log('[STORE-DEBUG] fetchPlan result:', JSON.stringify(plan, null, 2));
     if (plan.plan === 'Starter') {
       return res.status(403).json({ 
@@ -321,7 +344,7 @@ router.post('/ai-generate', validateRequest(), async (req, res) => {
     const { shopInfo, businessType, targetAudience } = req.body;
 
     // Check plan
-    const plan = await fetchPlan(shop);
+    const plan = await fetchPlan(shop, req.app);
     if (plan.plan === 'Starter') {
       return res.status(403).json({ 
         error: 'Store metadata requires Professional plan or higher',
