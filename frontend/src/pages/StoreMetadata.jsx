@@ -222,7 +222,6 @@ export default function StoreMetadata({ shop: shopProp }) {
             seoMetadata
             aiMetadata
             organizationSchema
-            // localBusinessSchema // DISABLED
           }
         }
       `;
