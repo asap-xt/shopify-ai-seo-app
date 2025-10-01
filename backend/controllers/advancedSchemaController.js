@@ -68,6 +68,15 @@ async function syncProductsToMongoDB(shop) {
                 title
                 description
               }
+              metafields(first: 100, namespace: "seo_ai") {
+                edges {
+                  node {
+                    namespace
+                    key
+                    value
+                  }
+                }
+              }
             }
             cursor
           }
