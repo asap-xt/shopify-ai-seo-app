@@ -1577,43 +1577,54 @@ export default function Settings() {
                 <Button
                   primary
                   onClick={async () => {
-                    // First check if there's existing data
-                    const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
-                    
-                    if (existingData.schemas && existingData.schemas.length > 0) {
-                      // Has data - ask if to regenerate
-                      if (!confirm('This will replace existing schema data. Continue?')) {
-                        return;
-                      }
-                    }
-                    
-                    // Continue with generation
-                    setSchemaGenerating(true);
-                    setSchemaComplete(false);
-                    setSchemaProgress({
-                      current: 0,
-                      total: 0,
-                      percent: 0,
-                      currentProduct: 'Initializing...',
-                      stats: {
-                        siteFAQ: false,
-                        products: 0,
-                        totalSchemas: 0
-                      }
-                    });
+                    console.log('[SCHEMA-GEN] Button clicked!');
                     
                     try {
+                      // First check if there's existing data
+                      console.log('[SCHEMA-GEN] Checking for existing data...');
+                      const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
+                      console.log('[SCHEMA-GEN] Existing data:', existingData);
+                      
+                      if (existingData.schemas && existingData.schemas.length > 0) {
+                        // Has data - ask if to regenerate
+                        console.log('[SCHEMA-GEN] Found existing schemas, asking for confirmation...');
+                        if (!confirm('This will replace existing schema data. Continue?')) {
+                          console.log('[SCHEMA-GEN] User cancelled');
+                          return;
+                        }
+                      }
+                      
+                      // Continue with generation
+                      console.log('[SCHEMA-GEN] Starting generation...');
+                      setSchemaGenerating(true);
+                      setSchemaComplete(false);
+                      setSchemaProgress({
+                        current: 0,
+                        total: 0,
+                        percent: 0,
+                        currentProduct: 'Initializing...',
+                        stats: {
+                          siteFAQ: false,
+                          products: 0,
+                          totalSchemas: 0
+                        }
+                      });
+                      
+                      console.log('[SCHEMA-GEN] Calling POST /api/schema/generate-all...');
                       const data = await api(`/api/schema/generate-all?shop=${shop}`, {
                         method: 'POST',
                         shop,
                         body: { shop }
                       });
                       
+                      console.log('[SCHEMA-GEN] POST response:', data);
+                      console.log('[SCHEMA-GEN] Starting progress check...');
+                      
                       // Start checking progress after 2 seconds
                       setTimeout(checkGenerationProgress, 2000);
                     } catch (err) {
-                      console.error('Error:', err);
-                      setToast('Failed to generate schema');
+                      console.error('[SCHEMA-GEN] Error:', err);
+                      setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
                       setSchemaGenerating(false);
                     }
                   }}
