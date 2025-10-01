@@ -23,7 +23,7 @@ async function getAccessToken(shop) {
 
 // Helper function to sync products from Shopify to MongoDB
 // This function fetches all products and detects AI SEO metafields to mark them as optimized
-// Added debug logging to troubleshoot metafields detection
+// Added debug logging to troubleshoot metafields detection - force deploy
 async function syncProductsToMongoDB(shop) {
   console.log(`[SYNC] Starting product sync for ${shop}...`);
   
