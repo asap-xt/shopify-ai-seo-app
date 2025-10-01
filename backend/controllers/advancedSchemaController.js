@@ -1,7 +1,6 @@
 // backend/controllers/advancedSchemaController.js
 import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
-import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
@@ -742,7 +741,7 @@ async function generateAllSchemas(shop) {
 // Routes
 
 // POST /api/schema/generate-all - Start background generation
-router.post('/generate-all', verifyRequest, async (req, res) => {
+router.post('/generate-all', async (req, res) => {
   console.log('[SCHEMA] ============================================'); // DEBUG
   console.log('[SCHEMA] Generate-all endpoint called at:', new Date().toISOString()); // DEBUG
   console.log('[SCHEMA] Request headers:', req.headers); // DEBUG
