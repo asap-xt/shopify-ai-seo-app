@@ -741,14 +741,15 @@ async function generateAllSchemas(shop) {
 // Routes
 
 // POST /api/schema/generate-all - Start background generation
-router.post('/generate-all', async (req, res) => {
+router.post('/generate-all', verifyRequest, async (req, res) => {
   console.log('[SCHEMA] ============================================'); // DEBUG
   console.log('[SCHEMA] Generate-all endpoint called at:', new Date().toISOString()); // DEBUG
   console.log('[SCHEMA] Request headers:', req.headers); // DEBUG
   console.log('[SCHEMA] Request body:', req.body); // DEBUG
+  console.log('[SCHEMA] req.shopDomain:', req.shopDomain); // DEBUG
   
   try {
-    const shop = requireShop(req);
+    const shop = req.shopDomain || requireShop(req);
     console.log('[SCHEMA] Shop extracted:', shop); // DEBUG
     
     // Check Enterprise plan
