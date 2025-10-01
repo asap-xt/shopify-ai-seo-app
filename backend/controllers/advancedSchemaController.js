@@ -113,6 +113,14 @@ async function syncProductsToMongoDB(shop) {
     for (const product of allProducts) {
       const numericId = product.id.replace('gid://shopify/Product/', '');
       
+      // Check if product has AI SEO metafields (indicating it's been optimized)
+      const hasSeoMetafields = product.metafields?.edges?.some(edge => 
+        edge.node.namespace === 'seo_ai' && 
+        edge.node.key.startsWith('seo__')
+      ) || false;
+      
+      console.log(`[SYNC] Product ${product.title} has SEO metafields: ${hasSeoMetafields}`);
+      
       // Check if product already exists
       const existingProduct = await Product.findOne({ 
         shop, 
@@ -134,8 +142,12 @@ async function syncProductsToMongoDB(shop) {
               handle: product.handle,
               createdAt: new Date(product.createdAt),
               updatedAt: new Date(product.updatedAt),
-              // Keep existing seoStatus if it exists
-              ...(existingProduct.seoStatus ? {} : { seoStatus: { optimized: false } })
+              // Update seoStatus based on metafields
+              seoStatus: {
+                optimized: hasSeoMetafields,
+                languages: hasSeoMetafields ? [{ code: 'en', optimized: true, hasSeo: true }] : [],
+                lastCheckedAt: new Date()
+              }
             }
           },
           { upsert: true }
@@ -155,7 +167,11 @@ async function syncProductsToMongoDB(shop) {
           handle: product.handle,
           createdAt: new Date(product.createdAt),
           updatedAt: new Date(product.updatedAt),
-          seoStatus: { optimized: false },
+          seoStatus: {
+            optimized: hasSeoMetafields,
+            languages: hasSeoMetafields ? [{ code: 'en', optimized: true, hasSeo: true }] : [],
+            lastCheckedAt: new Date()
+          },
           available: product.variants?.edges?.some(v => v.node.availableForSale) || false
         });
       }
