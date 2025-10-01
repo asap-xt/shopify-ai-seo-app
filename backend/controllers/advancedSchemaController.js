@@ -23,6 +23,7 @@ async function getAccessToken(shop) {
 
 // Helper function to sync products from Shopify to MongoDB
 // This function fetches all products and detects AI SEO metafields to mark them as optimized
+// Added debug logging to troubleshoot metafields detection
 async function syncProductsToMongoDB(shop) {
   console.log(`[SYNC] Starting product sync for ${shop}...`);
   
@@ -124,7 +125,18 @@ async function syncProductsToMongoDB(shop) {
       const numericId = product.id.replace('gid://shopify/Product/', '');
       
       // Check if product has AI SEO metafields (indicating it's been optimized)
-      const hasSeoMetafields = product.metafields?.edges?.some(edge => 
+      const metafields = product.metafields?.edges || [];
+      console.log(`[SYNC] Product ${product.title} - metafields count: ${metafields.length}`);
+      
+      if (metafields.length > 0) {
+        console.log(`[SYNC] Product ${product.title} - metafields:`, metafields.map(mf => ({
+          namespace: mf.node.namespace,
+          key: mf.node.key,
+          value: mf.node.value?.substring(0, 50) + '...'
+        })));
+      }
+      
+      const hasSeoMetafields = metafields.some(edge => 
         edge.node.namespace === 'seo_ai' && 
         edge.node.key.startsWith('seo__')
       ) || false;
