@@ -222,6 +222,20 @@ app.get('/api/whoami', attachShop, async (req, res) => {
   }
 });
 
+// DEBUG: Log all incoming requests
+app.use((req, res, next) => {
+  if (req.url.includes('/api/schema/generate-all')) {
+    console.log('[SERVER] ============================================');
+    console.log('[SERVER] Incoming request to /api/schema/generate-all');
+    console.log('[SERVER] Method:', req.method);
+    console.log('[SERVER] URL:', req.url);
+    console.log('[SERVER] Headers:', req.headers);
+    console.log('[SERVER] Body (before parsing):', req.body);
+    console.log('[SERVER] ============================================');
+  }
+  next();
+});
+
 // Normalize shop domain for all requests
 app.use(attachShop);
 
