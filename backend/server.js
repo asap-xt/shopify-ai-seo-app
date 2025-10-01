@@ -1177,6 +1177,12 @@ app.get('/', async (req, res) => {
           const indexPath = path.join(distPath, 'index.html');
           let html = fs.readFileSync(indexPath, 'utf8');
       
+          // Inject version for cache busting
+          const appVersion = Date.now();
+          html = html.replace(/%BUILD_TIME%/g, appVersion);
+          html = html.replace(/%CACHE_BUST%/g, appVersion);
+          console.log('[SERVER] Cache bust version:', appVersion);
+          
           // Inject the Shopify API key and other data into the HTML
           const apiKey = process.env.SHOPIFY_API_KEY || '';
           console.log('[SERVER] API Key from env:', apiKey ? 'SET' : 'MISSING');
