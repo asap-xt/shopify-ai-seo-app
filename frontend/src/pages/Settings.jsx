@@ -486,12 +486,16 @@ export default function Settings() {
   };
 
   // Check generation progress
+  // Use ref to track if we should keep checking (avoids closure issues)
+  const isGeneratingRef = useRef(false);
+  
   const checkGenerationProgress = useCallback(async () => {
     console.log('[PROGRESS-CHECK] Starting check...');
+    console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
     
     // Safety: Don't check if we're not generating
-    if (!schemaGenerating) {
-      console.log('[PROGRESS-CHECK] Not generating, stopping check');
+    if (!isGeneratingRef.current) {
+      console.log('[PROGRESS-CHECK] Not generating (ref is false), stopping check');
       return;
     }
     
@@ -503,6 +507,7 @@ export default function Settings() {
       if (data.schemas && data.schemas.length > 0) {
         // Generation complete
         console.log('[PROGRESS-CHECK] ✅ Generation complete!');
+        isGeneratingRef.current = false;
         setSchemaComplete(true);
         setSchemaGenerating(false);
         
@@ -532,17 +537,18 @@ export default function Settings() {
         
         // Check again in 3 seconds ONLY if still generating
         setTimeout(() => {
-          if (schemaGenerating) {
+          if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
         }, 3000);
       }
     } catch (err) {
       console.error('[PROGRESS-CHECK] ❌ Error:', err);
+      isGeneratingRef.current = false;
       setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
       setSchemaGenerating(false); // Stop on error
     }
-  }, [api, shop, schemaGenerating]);
+  }, [api, shop]);
 
   const loadSettings = async () => {
     try {
@@ -1622,6 +1628,10 @@ export default function Settings() {
                       console.log('[SCHEMA-GEN] Starting generation...');
                       console.log('[SCHEMA-GEN] ⚠️ BEFORE setState - schemaGenerating:', schemaGenerating);
                       
+                      // Set ref FIRST (no closure issues)
+                      isGeneratingRef.current = true;
+                      console.log('[SCHEMA-GEN] 🔵 Set isGeneratingRef.current = true');
+                      
                       setSchemaGenerating(true);
                       setSchemaComplete(false);
                       setSchemaProgress({
@@ -1944,9 +1954,10 @@ export default function Settings() {
           title="Generating Advanced Schema Data"
           onClose={() => {
             console.log('[SCHEMA-MODAL] ❌ Close button clicked');
+            isGeneratingRef.current = false;
             setSchemaGenerating(false);
             setSchemaComplete(false);
-            console.log('[SCHEMA-MODAL] States reset to false');
+            console.log('[SCHEMA-MODAL] States and ref reset to false');
           }}
         >
           <Modal.Section>
