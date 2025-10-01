@@ -495,10 +495,19 @@ export default function Settings() {
     console.log('[PROGRESS-CHECK] Starting check...');
     console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
     console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
+    console.log('[PROGRESS-CHECK] schemaGenerating state:', schemaGenerating);
     
     // Safety: Don't check if we're not generating
     if (!isGeneratingRef.current) {
       console.log('[PROGRESS-CHECK] Not generating (ref is false), stopping check');
+      return;
+    }
+    
+    // Additional safety: Check if we're actually in a generating state
+    if (!schemaGenerating) {
+      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating, resetting...');
+      isGeneratingRef.current = false;
+      checkCountRef.current = 0;
       return;
     }
     
@@ -971,6 +980,14 @@ export default function Settings() {
     console.log('[SETTINGS] Settings:', settings);
     console.log('[SETTINGS] Settings features:', settings?.features);
     console.log('[SETTINGS] checkGeneratedData function:', typeof checkGeneratedData);
+    console.log('[SETTINGS] isGeneratingRef.current:', isGeneratingRef.current);
+    
+    // If we're in a generating state but there's no active generation, reset it
+    if (isGeneratingRef.current && !schemaGenerating) {
+      console.log('[SETTINGS] ⚠️ Found stale generating state, resetting...');
+      isGeneratingRef.current = false;
+      checkCountRef.current = 0;
+    }
     
     if (shop && settings?.features) {
       console.log('[SETTINGS] Both shop and settings available, calling checkGeneratedData...');
