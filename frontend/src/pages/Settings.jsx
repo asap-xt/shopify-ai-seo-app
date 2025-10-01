@@ -77,7 +77,11 @@ export default function Settings() {
     generated: false,
     progress: ''
   });
-  const [schemaGenerating, setSchemaGenerating] = useState(false);
+  // CRITICAL: Always start with false to prevent stuck modals
+  const [schemaGenerating, setSchemaGenerating] = useState(() => {
+    console.log('[SETTINGS] 🔴 Initializing schemaGenerating state');
+    return false; // ALWAYS start with false
+  });
   const [schemaProgress, setSchemaProgress] = useState({
     current: 0,
     total: 0,
@@ -89,7 +93,10 @@ export default function Settings() {
       totalSchemas: 0
     }
   });
-  const [schemaComplete, setSchemaComplete] = useState(false);
+  const [schemaComplete, setSchemaComplete] = useState(() => {
+    console.log('[SETTINGS] 🔴 Initializing schemaComplete state');
+    return false; // ALWAYS start with false
+  });
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
