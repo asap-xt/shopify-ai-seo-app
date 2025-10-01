@@ -504,13 +504,23 @@ export default function Settings() {
   };
 
   // Check generation progress
-  const checkGenerationProgress = async () => {
+  const checkGenerationProgress = useCallback(async () => {
+    console.log('[PROGRESS-CHECK] Starting check...');
+    
+    // Safety: Don't check if we're not generating
+    if (!schemaGenerating) {
+      console.log('[PROGRESS-CHECK] Not generating, stopping check');
+      return;
+    }
+    
     try {
       // Check directly in MongoDB for data
       const data = await api(`/ai/schema-data.json?shop=${shop}`);
+      console.log('[PROGRESS-CHECK] Got data:', data);
       
       if (data.schemas && data.schemas.length > 0) {
         // Generation complete
+        console.log('[PROGRESS-CHECK] ✅ Generation complete!');
         setSchemaComplete(true);
         setSchemaGenerating(false);
         
@@ -526,23 +536,31 @@ export default function Settings() {
             totalSchemas: data.schemas.length
           }
         }));
+        
+        // STOP checking - generation is done
+        return;
       } else {
         // Still generating, check again
+        console.log('[PROGRESS-CHECK] Still generating, will check again...');
         setSchemaProgress(prev => ({
           ...prev,
           percent: Math.min(prev.percent + 10, 90), // Simulate progress
           currentProduct: 'Processing products...'
         }));
         
-        // Check again in 3 seconds
-        setTimeout(checkGenerationProgress, 3000);
+        // Check again in 3 seconds ONLY if still generating
+        setTimeout(() => {
+          if (schemaGenerating) {
+            checkGenerationProgress();
+          }
+        }, 3000);
       }
     } catch (err) {
-      console.error('Progress check error:', err);
-      // Try again in 3 seconds
-      setTimeout(checkGenerationProgress, 3000);
+      console.error('[PROGRESS-CHECK] ❌ Error:', err);
+      setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
+      setSchemaGenerating(false); // Stop on error
     }
-  };
+  }, [api, shop, schemaGenerating]);
 
   const loadSettings = async () => {
     try {
