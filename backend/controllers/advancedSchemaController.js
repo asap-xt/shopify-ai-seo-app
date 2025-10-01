@@ -21,6 +21,156 @@ async function getAccessToken(shop) {
   return shopRecord?.accessToken;
 }
 
+// Helper function to sync products from Shopify to MongoDB
+async function syncProductsToMongoDB(shop) {
+  console.log(`[SYNC] Starting product sync for ${shop}...`);
+  
+  try {
+    // GraphQL query to fetch all products
+    const query = `
+      query GetProducts($first: Int!, $after: String) {
+        products(first: $first, after: $after) {
+          edges {
+            node {
+              id
+              handle
+              title
+              descriptionHtml
+              productType
+              vendor
+              tags
+              status
+              createdAt
+              updatedAt
+              variants(first: 50) {
+                edges {
+                  node {
+                    id
+                    title
+                    price
+                    compareAtPrice
+                    sku
+                    inventoryQuantity
+                    availableForSale
+                  }
+                }
+              }
+              images(first: 10) {
+                edges {
+                  node {
+                    id
+                    url
+                    altText
+                  }
+                }
+              }
+              seo {
+                title
+                description
+              }
+            }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    const allProducts = [];
+    let hasNextPage = true;
+    let cursor = null;
+    
+    // Fetch all products using pagination
+    while (hasNextPage) {
+      const variables = { first: 50 };
+      if (cursor) {
+        variables.after = cursor;
+      }
+      
+      const data = await executeShopifyGraphQL(shop, query, variables);
+      const productsData = data?.products;
+      
+      if (!productsData) break;
+      
+      const edges = productsData.edges || [];
+      console.log(`[SYNC] Fetched ${edges.length} products for ${shop}`);
+      
+      allProducts.push(...edges.map(edge => edge.node));
+      
+      hasNextPage = productsData.pageInfo?.hasNextPage || false;
+      cursor = productsData.pageInfo?.endCursor || null;
+      
+      if (edges.length === 0) break;
+    }
+
+    console.log(`[SYNC] Total products fetched for ${shop}: ${allProducts.length}`);
+
+    // Save products to MongoDB
+    let syncedCount = 0;
+    for (const product of allProducts) {
+      const numericId = product.id.replace('gid://shopify/Product/', '');
+      
+      // Check if product already exists
+      const existingProduct = await Product.findOne({ 
+        shop, 
+        shopifyProductId: numericId 
+      });
+      
+      if (existingProduct) {
+        // Update existing product
+        await Product.findOneAndUpdate(
+          { shop, shopifyProductId: numericId },
+          {
+            $set: {
+              title: product.title,
+              description: product.descriptionHtml,
+              productType: product.productType,
+              vendor: product.vendor,
+              tags: product.tags,
+              status: product.status,
+              handle: product.handle,
+              createdAt: new Date(product.createdAt),
+              updatedAt: new Date(product.updatedAt),
+              // Keep existing seoStatus if it exists
+              ...(existingProduct.seoStatus ? {} : { seoStatus: { optimized: false } })
+            }
+          },
+          { upsert: true }
+        );
+      } else {
+        // Create new product
+        await Product.create({
+          shop,
+          shopifyProductId: numericId,
+          productId: numericId,
+          title: product.title,
+          description: product.descriptionHtml,
+          productType: product.productType,
+          vendor: product.vendor,
+          tags: product.tags,
+          status: product.status,
+          handle: product.handle,
+          createdAt: new Date(product.createdAt),
+          updatedAt: new Date(product.updatedAt),
+          seoStatus: { optimized: false },
+          available: product.variants?.edges?.some(v => v.node.availableForSale) || false
+        });
+      }
+      syncedCount++;
+    }
+
+    console.log(`[SYNC] Successfully synced ${syncedCount} products to MongoDB for ${shop}`);
+    return { success: true, syncedCount, totalProducts: allProducts.length };
+    
+  } catch (error) {
+    console.error(`[SYNC] Error syncing products for ${shop}:`, error);
+    throw error;
+  }
+}
+
 // FAQ Fallbacks за липсваща информация
 const FAQ_FALLBACKS = {
   return_policy: "For detailed information about our return and refund policy, please visit our returns page or contact customer support.",
@@ -671,8 +821,29 @@ async function generateAllSchemas(shop) {
     console.log('[SCHEMA] Generating site FAQ...');
     const siteFAQ = await generateSiteFAQ(shop, shopContext);
     
+    // First, sync products from Shopify to MongoDB if needed
+    console.log('[SCHEMA] Checking if products need to be synced...');
+    const totalProductsInMongo = await Product.countDocuments({ shop });
+    console.log(`[SCHEMA] Products in MongoDB: ${totalProductsInMongo}`);
+    
+    if (totalProductsInMongo === 0) {
+      console.log('[SCHEMA] No products in MongoDB, syncing from Shopify...');
+      try {
+        const syncResult = await syncProductsToMongoDB(shop);
+        console.log(`[SCHEMA] Sync completed: ${syncResult.syncedCount} products synced`);
+      } catch (error) {
+        console.error('[SCHEMA] Failed to sync products:', error);
+        // Continue anyway, maybe some products exist
+      }
+    }
+    
     // Get all products with SEO
     console.log('[SCHEMA] Looking for products with optimized SEO...');
+    console.log('[SCHEMA] Query:', JSON.stringify({
+      shop,
+      'seoStatus.optimized': true
+    }));
+    
     const products = await Product.find({
       shop,
       'seoStatus.optimized': true
@@ -690,6 +861,15 @@ async function generateAllSchemas(shop) {
     console.log(`[SCHEMA] DEBUG - Total products: ${totalProducts}`);
     console.log(`[SCHEMA] DEBUG - Products with any SEO: ${productsWithAnySeo}`);
     console.log(`[SCHEMA] DEBUG - Products with optimized SEO: ${products.length}`);
+    
+    // DEBUG: Let's also check what the actual product documents look like
+    if (productsWithAnySeo > 0) {
+      const sampleProduct = await Product.findOne({ 
+        shop,
+        'seoStatus': { $exists: true }
+      });
+      console.log('[SCHEMA] DEBUG - Sample product with SEO:', JSON.stringify(sampleProduct, null, 2));
+    }
     
     if (products.length === 0) {
       console.log('[SCHEMA] ⚠️ No products with optimized SEO found!');
