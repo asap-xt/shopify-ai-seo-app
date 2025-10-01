@@ -886,6 +886,11 @@ export default function Settings() {
   useEffect(() => {
     console.log('[SETTINGS] Resetting showViewButtons on component mount');
     setShowViewButtons(false);
+    
+    // Also reset schema generation states
+    console.log('[SETTINGS] Resetting schema generation states on component mount');
+    setSchemaGenerating(false);
+    setSchemaComplete(false);
   }, []); // Run only on mount
 
   // Check generated data when settings change
