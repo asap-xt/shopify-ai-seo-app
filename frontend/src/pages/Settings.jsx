@@ -1,5 +1,5 @@
 // frontend/src/pages/Settings.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Card,
   Box,
@@ -90,6 +90,22 @@ export default function Settings() {
     }
   });
   const [schemaComplete, setSchemaComplete] = useState(false);
+  
+  // Force reset ref to prevent stuck modals
+  const hasResetSchema = useRef(false);
+  
+  // FORCE RESET on first render
+  if (!hasResetSchema.current) {
+    hasResetSchema.current = true;
+    // Direct state reset without useEffect
+    if (typeof setSchemaGenerating === 'function') {
+      setTimeout(() => {
+        setSchemaGenerating(false);
+        setSchemaComplete(false);
+        console.log('[SETTINGS] FORCED RESET of schema states');
+      }, 0);
+    }
+  }
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
