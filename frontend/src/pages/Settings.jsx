@@ -1648,12 +1648,26 @@ export default function Settings() {
                       
                       console.log('[SCHEMA-GEN] ✅ AFTER setState - should be true now');
                       
+                      console.log('[SCHEMA-GEN] About to call api() function...');
+                      console.log('[SCHEMA-GEN] api function exists:', typeof api);
+                      console.log('[SCHEMA-GEN] shop value:', shop);
+                      
                       console.log('[SCHEMA-GEN] Calling POST /api/schema/generate-all...');
-                      const data = await api(`/api/schema/generate-all?shop=${shop}`, {
-                        method: 'POST',
-                        shop,
-                        body: { shop }
-                      });
+                      
+                      let data;
+                      try {
+                        data = await api(`/api/schema/generate-all?shop=${shop}`, {
+                          method: 'POST',
+                          shop,
+                          body: { shop }
+                        });
+                        console.log('[SCHEMA-GEN] ✅ API call successful!');
+                      } catch (apiError) {
+                        console.error('[SCHEMA-GEN] ❌ API call failed:', apiError);
+                        console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
+                        console.error('[SCHEMA-GEN] ❌ API error stack:', apiError.stack);
+                        throw apiError; // Re-throw to be caught by outer catch
+                      }
                       
                       console.log('[SCHEMA-GEN] POST response:', data);
                       console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
