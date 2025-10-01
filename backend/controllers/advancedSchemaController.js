@@ -1,6 +1,7 @@
 // backend/controllers/advancedSchemaController.js
 import express from 'express';
 import { requireShop, shopGraphQL } from './seoController.js';
+import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
