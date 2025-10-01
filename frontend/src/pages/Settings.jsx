@@ -101,18 +101,6 @@ export default function Settings() {
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
   
-  // ===== 5. CRITICAL: Reset schema states on mount to prevent stuck modal =====
-  useEffect(() => {
-    console.log('[SETTINGS] 🔧 RESET useEffect triggered on component mount');
-    console.log('[SETTINGS] 🔧 Before reset - schemaGenerating:', schemaGenerating);
-    console.log('[SETTINGS] 🔧 Before reset - schemaComplete:', schemaComplete);
-    
-    setSchemaGenerating(false);
-    setSchemaComplete(false);
-    
-    console.log('[SETTINGS] 🔧 Reset complete - states should now be false');
-  }, []); // Empty deps = run ONLY on mount
-  
   console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
   console.log('[SETTINGS] Extracted shop:', shop);
   console.log('[SETTINGS] API function created:', typeof api);
@@ -1953,8 +1941,10 @@ export default function Settings() {
           open={schemaGenerating}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            debugLog('Modal close clicked');
+            console.log('[SCHEMA-MODAL] ❌ Close button clicked');
             setSchemaGenerating(false);
+            setSchemaComplete(false);
+            console.log('[SCHEMA-MODAL] States reset to false');
           }}
         >
           <Modal.Section>
