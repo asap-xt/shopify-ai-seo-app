@@ -1,6 +1,7 @@
 // backend/controllers/advancedSchemaController.js
 import express from 'express';
-import { requireShop, shopGraphQL } from './seoController.js';
+import { requireShop } from './seoController.js';
+import { executeShopifyGraphQL } from '../utils/tokenResolver.js';
 import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
@@ -109,7 +110,7 @@ async function loadShopContext(shop) {
   `;
   
   try {
-    const data = await shopGraphQL(shop, contextQuery);
+    const data = await executeShopifyGraphQL(shop, contextQuery);
     return {
       shop: data.shop
     };
@@ -222,7 +223,7 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
       }]
     };
     
-    const saveResult = await shopGraphQL(shop, mutation, variables);
+    const saveResult = await executeShopifyGraphQL(shop, mutation, variables);
     
     if (saveResult.metafieldsSet?.userErrors?.length > 0) {
       console.error('[SCHEMA] Failed to save FAQ:', saveResult.metafieldsSet.userErrors);
@@ -281,7 +282,7 @@ async function generateProductSchemas(shop, productDoc) {
     }
   `;
   
-  const productData = await shopGraphQL(shop, query, { id: productGid });
+  const productData = await executeShopifyGraphQL(shop, query, { id: productGid });
   const product = productData.product;
   
   if (!product) {
@@ -308,7 +309,7 @@ async function generateProductSchemas(shop, productDoc) {
       }
     `;
     
-    const mfData = await shopGraphQL(shop, metafieldQuery, { 
+    const mfData = await executeShopifyGraphQL(shop, metafieldQuery, { 
       productId: productGid, 
       key: `seo__${lang.code}` 
     });
@@ -352,7 +353,7 @@ async function generateProductSchemas(shop, productDoc) {
     };
     
     // Save to Shopify metafields
-    await shopGraphQL(shop, saveMutation, variables);
+    await executeShopifyGraphQL(shop, saveMutation, variables);
     
     // Also collect for MongoDB
     allSchemas.push(...langSchemas);
@@ -496,7 +497,7 @@ async function installScriptTag(shop) {
       }
     `;
     
-    const existing = await shopGraphQL(shop, checkQuery);
+    const existing = await executeShopifyGraphQL(shop, checkQuery);
     const ourScriptTag = existing.scriptTags?.edges?.find(edge => 
       edge.node.src.includes('/api/schema/auto-inject.js')
     );
@@ -529,7 +530,7 @@ async function installScriptTag(shop) {
       }
     };
     
-    const result = await shopGraphQL(shop, mutation, variables);
+    const result = await executeShopifyGraphQL(shop, mutation, variables);
     
     if (result.scriptTagCreate?.userErrors?.length > 0) {
       throw new Error(result.scriptTagCreate.userErrors[0].message);
@@ -561,7 +562,7 @@ async function installThemeSnippet(shop) {
       }
     }`;
     
-    const themesData = await shopGraphQL(shop, themesQuery);
+    const themesData = await executeShopifyGraphQL(shop, themesQuery);
     const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN')?.node;
     
     if (!mainTheme) {
@@ -802,7 +803,7 @@ router.get('/status', async (req, res) => {
       }
     `;
     
-    const faqData = await shopGraphQL(shop, faqQuery);
+    const faqData = await executeShopifyGraphQL(shop, faqQuery);
     const hasFAQ = !!faqData.shop?.metafield?.value;
     
     // Check product count
@@ -837,7 +838,7 @@ router.get('/site-faq', async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(shop, query);
+    const data = await executeShopifyGraphQL(shop, query);
     
     if (!data.shop?.metafield?.value) {
       return res.status(404).json({ error: 'FAQ not found' });
@@ -909,7 +910,7 @@ router.get('/product-schemas', async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(shop, query, { handle });
+    const data = await executeShopifyGraphQL(shop, query, { handle });
     
     if (!data.productByHandle?.metafield?.value) {
       return res.status(404).send('// Schema not found');
@@ -952,7 +953,7 @@ router.get('/site-faq-script', async (req, res) => {
       }
     `;
     
-    const data = await shopGraphQL(shop, query);
+    const data = await executeShopifyGraphQL(shop, query);
     
     if (data.shop?.metafield?.value) {
       const faq = data.shop.metafield.value;
