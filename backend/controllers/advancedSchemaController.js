@@ -672,12 +672,30 @@ async function generateAllSchemas(shop) {
     const siteFAQ = await generateSiteFAQ(shop, shopContext);
     
     // Get all products with SEO
+    console.log('[SCHEMA] Looking for products with optimized SEO...');
     const products = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
     
-    console.log(`[SCHEMA] Processing ${products.length} products...`);
+    console.log(`[SCHEMA] Found ${products.length} products with optimized SEO`);
+    
+    // DEBUG: Let's also check total products and products with any SEO
+    const totalProducts = await Product.countDocuments({ shop });
+    const productsWithAnySeo = await Product.countDocuments({ 
+      shop,
+      'seoStatus': { $exists: true }
+    });
+    
+    console.log(`[SCHEMA] DEBUG - Total products: ${totalProducts}`);
+    console.log(`[SCHEMA] DEBUG - Products with any SEO: ${productsWithAnySeo}`);
+    console.log(`[SCHEMA] DEBUG - Products with optimized SEO: ${products.length}`);
+    
+    if (products.length === 0) {
+      console.log('[SCHEMA] ⚠️ No products with optimized SEO found!');
+      console.log('[SCHEMA] This means product schemas cannot be generated.');
+      console.log('[SCHEMA] Users need to optimize products first in Bulk Edit.');
+    }
     
     // Collect all generated schemas
     const allProductSchemas = [];
