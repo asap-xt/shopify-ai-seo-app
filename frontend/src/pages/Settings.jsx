@@ -488,14 +488,27 @@ export default function Settings() {
   // Check generation progress
   // Use ref to track if we should keep checking (avoids closure issues)
   const isGeneratingRef = useRef(false);
+  const checkCountRef = useRef(0);
+  const maxChecks = 20; // Maximum 20 checks (60 seconds)
   
   const checkGenerationProgress = useCallback(async () => {
     console.log('[PROGRESS-CHECK] Starting check...');
     console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
+    console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
     
     // Safety: Don't check if we're not generating
     if (!isGeneratingRef.current) {
       console.log('[PROGRESS-CHECK] Not generating (ref is false), stopping check');
+      return;
+    }
+    
+    // Check if we've exceeded maximum checks
+    checkCountRef.current++;
+    if (checkCountRef.current > maxChecks) {
+      console.log('[PROGRESS-CHECK] ⏰ Timeout reached, stopping check');
+      isGeneratingRef.current = false;
+      setSchemaGenerating(false);
+      setToast('Schema generation timed out. Please try again.');
       return;
     }
     
@@ -508,6 +521,7 @@ export default function Settings() {
         // Generation complete
         console.log('[PROGRESS-CHECK] ✅ Generation complete!');
         isGeneratingRef.current = false;
+        checkCountRef.current = 0; // Reset counter
         setSchemaComplete(true);
         setSchemaGenerating(false);
         
@@ -531,8 +545,8 @@ export default function Settings() {
         console.log('[PROGRESS-CHECK] Still generating, will check again...');
         setSchemaProgress(prev => ({
           ...prev,
-          percent: Math.min(prev.percent + 10, 90), // Simulate progress
-          currentProduct: 'Processing products...'
+          percent: Math.min(prev.percent + 5, 90), // Simulate progress
+          currentProduct: `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
         // Check again in 3 seconds ONLY if still generating
@@ -545,6 +559,7 @@ export default function Settings() {
     } catch (err) {
       console.error('[PROGRESS-CHECK] ❌ Error:', err);
       isGeneratingRef.current = false;
+      checkCountRef.current = 0; // Reset counter
       setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
       setSchemaGenerating(false); // Stop on error
     }
@@ -1592,9 +1607,19 @@ export default function Settings() {
       )} */}
 
       {/* Advanced Schema Data Management - shows only for Enterprise plan AND if enabled */}
-      {normalizePlan(settings?.plan) === 'enterprise' && 
-       settings?.features?.schemaData && 
-       originalSettings?.features?.schemaData && (
+      {(() => {
+        const planCheck = normalizePlan(settings?.plan) === 'enterprise';
+        const settingsCheck = settings?.features?.schemaData;
+        const originalCheck = originalSettings?.features?.schemaData;
+        
+        console.log('[SCHEMA-DEBUG] Advanced Schema Management visibility check:');
+        console.log('[SCHEMA-DEBUG] - Plan check (enterprise):', planCheck);
+        console.log('[SCHEMA-DEBUG] - Settings schemaData:', settingsCheck);
+        console.log('[SCHEMA-DEBUG] - Original schemaData:', originalCheck);
+        console.log('[SCHEMA-DEBUG] - All conditions met:', planCheck && settingsCheck && originalCheck);
+        
+        return planCheck && settingsCheck && originalCheck;
+      })() && (
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
@@ -1630,6 +1655,7 @@ export default function Settings() {
                       
                       // Set ref FIRST (no closure issues)
                       isGeneratingRef.current = true;
+                      checkCountRef.current = 0; // Reset counter
                       console.log('[SCHEMA-GEN] 🔵 Set isGeneratingRef.current = true');
                       
                       setSchemaGenerating(true);
@@ -2051,7 +2077,13 @@ export default function Settings() {
         <Modal
           open={true}
           title="Generating Advanced Schema Data"
-          onClose={() => {}}
+          onClose={() => {
+            console.log('[SCHEMA-MODAL] Closing modal...');
+            isGeneratingRef.current = false;
+            checkCountRef.current = 0; // Reset counter
+            setSchemaGenerating(false);
+            setSchemaComplete(false);
+          }}
           noScroll
         >
           <Modal.Section>
