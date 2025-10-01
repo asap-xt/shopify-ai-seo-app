@@ -517,6 +517,7 @@ export default function Settings() {
       const data = await api(`/ai/schema-data.json?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Got data:', data);
       
+      // Check if we still have schemas (generation complete)
       if (data.schemas && data.schemas.length > 0) {
         // Generation complete
         console.log('[PROGRESS-CHECK] ✅ Generation complete!');
@@ -931,6 +932,11 @@ export default function Settings() {
     console.log('[SETTINGS] Resetting schema generation states on component mount');
     setSchemaGenerating(false);
     setSchemaComplete(false);
+    
+    // CRITICAL: Reset refs to prevent infinite loops from previous sessions
+    console.log('[SETTINGS] Resetting refs to prevent infinite loops');
+    isGeneratingRef.current = false;
+    checkCountRef.current = 0;
   }, []); // Run only on mount
 
   // Check generated data when settings change
@@ -1633,6 +1639,12 @@ export default function Settings() {
                   primary
                   onClick={async () => {
                     console.log('[SCHEMA-GEN] Button clicked!');
+                    
+                    // Prevent multiple simultaneous generations
+                    if (isGeneratingRef.current) {
+                      console.log('[SCHEMA-GEN] Already generating, ignoring click');
+                      return;
+                    }
                     
                     try {
                       // First check if there's existing data
