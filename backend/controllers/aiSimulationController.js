@@ -95,20 +95,15 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       console.log('[AI-SIMULATION] Fetching products data...');
       const productsQuery = `
         query {
-          products(first: 10, query: "metafields.seo_ai.bullets:*") {
+          products(first: 20) {
             edges {
               node {
                 id
                 title
                 description
-                metafields(first: 10, namespace: "seo_ai") {
-                  edges {
-                    node {
-                      key
-                      value
-                    }
-                  }
-                }
+                productType
+                vendor
+                tags
               }
             }
           }
@@ -118,7 +113,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       try {
         const productsResp = await adminGraphql.request(productsQuery);
         console.log('[AI-SIMULATION] Products response:', JSON.stringify(productsResp, null, 2));
-        additionalData.products = productsResp?.data?.products?.edges || [];
+        additionalData.products = productsResp?.products?.edges || [];
         console.log('[AI-SIMULATION] Products count:', additionalData.products.length);
       } catch (error) {
         console.error('[AI-SIMULATION] Products query error:', error);
@@ -130,7 +125,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       console.log('[AI-SIMULATION] Fetching collections data...');
       const collectionsQuery = `
         query {
-          collections(first: 10) {
+          collections(first: 20) {
             edges {
               node {
                 id
@@ -145,7 +140,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       try {
         const collectionsResp = await adminGraphql.request(collectionsQuery);
         console.log('[AI-SIMULATION] Collections response:', JSON.stringify(collectionsResp, null, 2));
-        additionalData.collections = collectionsResp?.data?.collections?.edges || [];
+        additionalData.collections = collectionsResp?.collections?.edges || [];
         console.log('[AI-SIMULATION] Collections count:', additionalData.collections.length);
       } catch (error) {
         console.error('[AI-SIMULATION] Collections query error:', error);
@@ -210,28 +205,48 @@ function generatePrompt(questionType, context) {
     case 'products':
       specificPrompt = `What products does this store sell?`;
       if (context.products && context.products.length > 0) {
-        specificPrompt += ` Here are the products with AI optimization: ${context.products.map(p => p.node.title).join(', ')}.`;
+        const productsInfo = context.products.map(p => {
+          const node = p.node;
+          let info = `${node.title}`;
+          if (node.description) info += ` - ${node.description.substring(0, 100)}`;
+          if (node.productType) info += ` (${node.productType})`;
+          if (node.vendor) info += ` by ${node.vendor}`;
+          return info;
+        }).join('\n- ');
+        specificPrompt += `\n\nProducts available:\n- ${productsInfo}`;
+      } else {
+        specificPrompt += `\n\nNo product data available.`;
       }
       break;
       
     case 'business':
       specificPrompt = `Tell me about this business.`;
       if (context.organization) {
-        specificPrompt += ` Organization info: ${JSON.stringify(context.organization)}.`;
+        specificPrompt += `\n\nOrganization info:\n${JSON.stringify(context.organization, null, 2)}`;
+      }
+      if (context.website) {
+        specificPrompt += `\n\nWebsite info:\n${JSON.stringify(context.website, null, 2)}`;
       }
       break;
       
     case 'categories':
       specificPrompt = `What categories does this store have?`;
       if (context.collections && context.collections.length > 0) {
-        specificPrompt += ` Here are the collections: ${context.collections.map(c => c.node.title).join(', ')}.`;
+        const collectionsInfo = context.collections.map(c => {
+          let info = `${c.node.title}`;
+          if (c.node.description) info += ` - ${c.node.description.substring(0, 100)}`;
+          return info;
+        }).join('\n- ');
+        specificPrompt += `\n\nCollections available:\n- ${collectionsInfo}`;
+      } else {
+        specificPrompt += `\n\nNo collection data available.`;
       }
       break;
       
     case 'contact':
       specificPrompt = `What is this store's contact information?`;
       if (context.organization && context.organization.contactPoint) {
-        specificPrompt += ` Contact info: ${JSON.stringify(context.organization.contactPoint)}.`;
+        specificPrompt += `\n\nContact info:\n${JSON.stringify(context.organization.contactPoint, null, 2)}`;
       }
       break;
       
