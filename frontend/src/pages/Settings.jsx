@@ -91,24 +91,20 @@ export default function Settings() {
   });
   const [schemaComplete, setSchemaComplete] = useState(false);
   
-  // Force reset ref to prevent stuck modals
-  const hasResetSchema = useRef(false);
-  
-  // FORCE RESET on first render
-  if (!hasResetSchema.current) {
-    hasResetSchema.current = true;
-    // Direct state reset without useEffect
-    if (typeof setSchemaGenerating === 'function') {
-      setTimeout(() => {
-        setSchemaGenerating(false);
-        setSchemaComplete(false);
-        console.log('[SETTINGS] FORCED RESET of schema states');
-      }, 0);
-    }
-  }
-  
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
+  
+  // ===== 5. CRITICAL: Reset schema states on mount to prevent stuck modal =====
+  useEffect(() => {
+    console.log('[SETTINGS] 🔧 RESET useEffect triggered on component mount');
+    console.log('[SETTINGS] 🔧 Before reset - schemaGenerating:', schemaGenerating);
+    console.log('[SETTINGS] 🔧 Before reset - schemaComplete:', schemaComplete);
+    
+    setSchemaGenerating(false);
+    setSchemaComplete(false);
+    
+    console.log('[SETTINGS] 🔧 Reset complete - states should now be false');
+  }, []); // Empty deps = run ONLY on mount
   
   console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
   console.log('[SETTINGS] Extracted shop:', shop);
