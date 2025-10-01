@@ -1177,6 +1177,11 @@ app.get('/', async (req, res) => {
           const indexPath = path.join(distPath, 'index.html');
           let html = fs.readFileSync(indexPath, 'utf8');
       
+          // CACHE BUSTING: Add timestamp to all asset URLs
+          const cacheBust = Date.now();
+          html = html.replace(/\/assets\//g, `/assets/?v=${cacheBust}&f=`);
+          console.log('[SERVER] Cache busting applied with timestamp:', cacheBust);
+          
           // Inject the Shopify API key and other data into the HTML
           const apiKey = process.env.SHOPIFY_API_KEY || '';
           console.log('[SERVER] API Key from env:', apiKey ? 'SET' : 'MISSING');
@@ -1334,6 +1339,10 @@ const spaRoutes = [
       res.set('Cache-Control', 'no-store');
       let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
       
+      // CACHE BUSTING: Add timestamp to all asset URLs
+      const cacheBust = Date.now();
+      html = html.replace(/\/assets\//g, `/assets/?v=${cacheBust}&f=`);
+      
       // Inject API key
       const apiKey = process.env.SHOPIFY_API_KEY || '';
       // First, replace the placeholder in the existing meta tag
@@ -1362,6 +1371,10 @@ app.get('/ai-seo*', (req, res, next) => {
   }
   res.set('Cache-Control', 'no-store');
   let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+  
+  // CACHE BUSTING: Add timestamp to all asset URLs
+  const cacheBust = Date.now();
+  html = html.replace(/\/assets\//g, `/assets/?v=${cacheBust}&f=`);
   
   // Inject API key
   const apiKey = process.env.SHOPIFY_API_KEY || '';
@@ -1739,6 +1752,10 @@ app.get('*', (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
     res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
     let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
+    
+    // CACHE BUSTING: Add timestamp to all asset URLs
+    const cacheBust = Date.now();
+    html = html.replace(/\/assets\//g, `/assets/?v=${cacheBust}&f=`);
     
     // Inject API key
     const apiKey = process.env.SHOPIFY_API_KEY || '';
