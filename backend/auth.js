@@ -299,11 +299,13 @@ router.get('/callback', async (req, res) => {
       { 
         shop, 
         accessToken: accessTokenString, 
+        appApiKey: SHOPIFY_API_KEY, // ВАЖНО: записваме API key за validation
         scopes, 
         installedAt: new Date(),
         updatedAt: new Date(),
         tokenType: accessTokenString.startsWith('shpat_') ? 'offline' : 'online',
-        isActive: true
+        isActive: true,
+        needsTokenExchange: false // Token exchange вече е завършен
       }, 
       { upsert: true, new: true }
     );
