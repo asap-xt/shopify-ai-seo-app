@@ -77,11 +77,8 @@ export default function Settings() {
     generated: false,
     progress: ''
   });
-  // CRITICAL: Always start with false to prevent stuck modals
-  const [schemaGenerating, setSchemaGenerating] = useState(() => {
-    console.log('[SETTINGS] 🔴 Initializing schemaGenerating state');
-    return false; // ALWAYS start with false
-  });
+  // Schema generation states - start with false
+  const [schemaGenerating, setSchemaGenerating] = useState(false);
   const [schemaProgress, setSchemaProgress] = useState({
     current: 0,
     total: 0,
@@ -93,10 +90,7 @@ export default function Settings() {
       totalSchemas: 0
     }
   });
-  const [schemaComplete, setSchemaComplete] = useState(() => {
-    console.log('[SETTINGS] 🔴 Initializing schemaComplete state');
-    return false; // ALWAYS start with false
-  });
+  const [schemaComplete, setSchemaComplete] = useState(false);
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
@@ -1626,6 +1620,8 @@ export default function Settings() {
                       
                       // Continue with generation
                       console.log('[SCHEMA-GEN] Starting generation...');
+                      console.log('[SCHEMA-GEN] ⚠️ BEFORE setState - schemaGenerating:', schemaGenerating);
+                      
                       setSchemaGenerating(true);
                       setSchemaComplete(false);
                       setSchemaProgress({
@@ -1640,6 +1636,8 @@ export default function Settings() {
                         }
                       });
                       
+                      console.log('[SCHEMA-GEN] ✅ AFTER setState - should be true now');
+                      
                       console.log('[SCHEMA-GEN] Calling POST /api/schema/generate-all...');
                       const data = await api(`/api/schema/generate-all?shop=${shop}`, {
                         method: 'POST',
@@ -1648,10 +1646,14 @@ export default function Settings() {
                       });
                       
                       console.log('[SCHEMA-GEN] POST response:', data);
-                      console.log('[SCHEMA-GEN] Starting progress check...');
+                      console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
+                      console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
                       
                       // Start checking progress after 2 seconds
-                      setTimeout(checkGenerationProgress, 2000);
+                      setTimeout(() => {
+                        console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
+                        checkGenerationProgress();
+                      }, 2000);
                     } catch (err) {
                       console.error('[SCHEMA-GEN] Error:', err);
                       setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
