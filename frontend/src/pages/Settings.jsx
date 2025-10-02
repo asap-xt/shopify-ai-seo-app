@@ -506,7 +506,7 @@ export default function Settings() {
     
     // Additional safety: Check if we're actually in a generating state
     // But give some time for state to sync (first few checks)
-    if (!schemaGenerating && checkCountRef.current > 5) {
+    if (!schemaGenerating && checkCountRef.current > 3) {
       console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, resetting...');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
@@ -547,12 +547,12 @@ export default function Settings() {
           currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
-        // Check again in 3 seconds ONLY if still generating (longer interval to reduce load)
+        // Check again in 2 seconds ONLY if still generating
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 3000);
+        }, 2000);
       } else {
         // Generation complete - check final data
         console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
