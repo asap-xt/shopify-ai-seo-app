@@ -285,15 +285,15 @@ function sanitizeAIResponse(response, knownFacts) {
 // Load rich attributes settings
 async function loadRichAttributesSettings(shop) {
   try {
-    // console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
+    console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
     // Try to get settings from AI Discovery settings
     const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://shopify-ai-seo-app.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
-    // console.log(`[SCHEMA-DEBUG] API response status:`, response.status);
+    console.log(`[SCHEMA-DEBUG] API response status:`, response.status);
     
     if (response.ok) {
       const data = await response.json();
-      // console.log(`[SCHEMA-DEBUG] API response data:`, data);
-      // console.log(`[SCHEMA-DEBUG] richAttributes from API:`, data.richAttributes);
+      console.log(`[SCHEMA-DEBUG] API response data:`, data);
+      console.log(`[SCHEMA-DEBUG] richAttributes from API:`, data.richAttributes);
       return data.richAttributes || {};
     } else {
       console.log(`[SCHEMA-DEBUG] API request failed with status:`, response.status);
@@ -867,7 +867,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
-  // console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
+  console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
   
   // Extract factual attributes if any are enabled
   const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
@@ -1001,12 +1001,12 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add enhanced description if enabled
-  // console.log(`[SCHEMA-DEBUG] enhancedDescription enabled:`, richAttributesSettings.enhancedDescription);
+  console.log(`[SCHEMA-DEBUG] enhancedDescription enabled:`, richAttributesSettings.enhancedDescription);
   if (richAttributesSettings.enhancedDescription) {
-    // console.log(`[SCHEMA-DEBUG] Generating enhanced description for product: ${product.title}`);
+    console.log(`[SCHEMA-DEBUG] Generating enhanced description for product: ${product.title}`);
     try {
       const enhancedDesc = await generateEnhancedDescription(product, seoData, language);
-      // console.log(`[SCHEMA-DEBUG] Enhanced description result:`, enhancedDesc ? 'Generated' : 'Failed');
+      console.log(`[SCHEMA-DEBUG] Enhanced description result:`, enhancedDesc ? 'Generated' : 'Failed');
       if (enhancedDesc) {
         productSchema.description = enhancedDesc;
       }
@@ -1022,12 +1022,12 @@ async function generateLangSchemas(product, seoData, shop, language) {
   baseSchemas.push(productSchema);
 
   // Add Review schemas if enabled
-  // console.log(`[SCHEMA-DEBUG] reviews enabled:`, richAttributesSettings.reviews);
+  console.log(`[SCHEMA-DEBUG] reviews enabled:`, richAttributesSettings.reviews);
   if (richAttributesSettings.reviews) {
-    // console.log(`[SCHEMA-DEBUG] Generating review schemas for product: ${product.title}`);
+    console.log(`[SCHEMA-DEBUG] Generating review schemas for product: ${product.title}`);
     try {
       const reviewSchemas = await generateReviewSchemas(product, seoData, language);
-      // console.log(`[SCHEMA-DEBUG] Review schemas generated:`, reviewSchemas.length);
+      console.log(`[SCHEMA-DEBUG] Review schemas generated:`, reviewSchemas.length);
       baseSchemas.push(...reviewSchemas);
     } catch (error) {
       console.error('[SCHEMA] Failed to generate review schemas:', error);
@@ -1035,12 +1035,12 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add Rating schemas if enabled
-  // console.log(`[SCHEMA-DEBUG] ratings enabled:`, richAttributesSettings.ratings);
+  console.log(`[SCHEMA-DEBUG] ratings enabled:`, richAttributesSettings.ratings);
   if (richAttributesSettings.ratings) {
-    // console.log(`[SCHEMA-DEBUG] Generating rating schemas for product: ${product.title}`);
+    console.log(`[SCHEMA-DEBUG] Generating rating schemas for product: ${product.title}`);
     try {
       const ratingSchemas = await generateRatingSchemas(product, seoData, language);
-      // console.log(`[SCHEMA-DEBUG] Rating schemas generated:`, ratingSchemas.length);
+      console.log(`[SCHEMA-DEBUG] Rating schemas generated:`, ratingSchemas.length);
       baseSchemas.push(...ratingSchemas);
     } catch (error) {
       console.error('[SCHEMA] Failed to generate rating schemas:', error);
@@ -1048,12 +1048,12 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add Organization schema if enabled
-  // console.log(`[SCHEMA-DEBUG] organization enabled:`, richAttributesSettings.organization);
+  console.log(`[SCHEMA-DEBUG] organization enabled:`, richAttributesSettings.organization);
   if (richAttributesSettings.organization) {
-    // console.log(`[SCHEMA-DEBUG] Generating organization schema for product: ${product.title}`);
+    console.log(`[SCHEMA-DEBUG] Generating organization schema for product: ${product.title}`);
     try {
       const organizationSchema = await generateOrganizationSchema(product, shop, language);
-      // console.log(`[SCHEMA-DEBUG] Organization schema generated:`, organizationSchema ? 'Yes' : 'No');
+      console.log(`[SCHEMA-DEBUG] Organization schema generated:`, organizationSchema ? 'Yes' : 'No');
       if (organizationSchema) {
         baseSchemas.push(organizationSchema);
       }
