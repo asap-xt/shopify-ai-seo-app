@@ -110,11 +110,13 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
       features: isFreshShop ? defaultFeatures : savedSettings.features,
+      richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
 
     console.log('[AI-DISCOVERY] Final mergedSettings.features:', JSON.stringify(mergedSettings.features, null, 2));
+    console.log('[AI-DISCOVERY] Final mergedSettings.richAttributes:', JSON.stringify(mergedSettings.richAttributes, null, 2));
     console.log('[AI-DISCOVERY] ===== END DEBUG =====');
 
     res.json(mergedSettings);
