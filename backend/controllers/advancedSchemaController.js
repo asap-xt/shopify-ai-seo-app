@@ -8,6 +8,7 @@ import AdvancedSchema from '../db/AdvancedSchema.js';
 import Shop from '../db/Shop.js'; // За access token
 import fetch from 'node-fetch';
 import { validateAIResponse } from '../utils/aiValidator.js';
+import { extractFactualAttributes } from '../utils/factualExtractor.js';
 
 const router = express.Router();
 
@@ -279,6 +280,31 @@ function sanitizeAIResponse(response, knownFacts) {
   }
   
   return validated;
+}
+
+// Load rich attributes settings
+async function loadRichAttributesSettings(shop) {
+  try {
+    // Try to get settings from AI Discovery settings
+    const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://shopify-ai-seo-app.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.richAttributes || {};
+    }
+  } catch (error) {
+    console.log('[SCHEMA] Could not load rich attributes settings:', error.message);
+  }
+  
+  // Default settings if not found
+  return {
+    material: false,
+    color: false,
+    size: false,
+    weight: false,
+    dimensions: false,
+    category: false,
+    audience: false
+  };
 }
 
 // Load shop context
@@ -575,6 +601,20 @@ async function generateLangSchemas(product, seoData, shop, language) {
   const shopUrl = `https://${shop}`;
   const productUrl = `${shopUrl}/products/${product.handle}`;
   
+  // Load rich attributes settings
+  const richAttributesSettings = await loadRichAttributesSettings(shop);
+  console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
+  
+  // Extract factual attributes if any are enabled
+  const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
+  let richAttributes = {};
+  
+  if (enabledAttributes.length > 0) {
+    console.log(`[SCHEMA] Extracting factual attributes: ${enabledAttributes.join(', ')}`);
+    richAttributes = extractFactualAttributes(product, enabledAttributes);
+    console.log(`[SCHEMA] Extracted rich attributes:`, richAttributes);
+  }
+  
   const baseSchemas = [
     // BreadcrumbList
     {
@@ -672,12 +712,32 @@ async function generateLangSchemas(product, seoData, shop, language) {
     }
   };
   
+  // Add bullets as additionalProperty
+  const additionalProperties = [];
+  
   if (seoData.bullets && seoData.bullets.length > 0) {
-    productSchema.additionalProperty = seoData.bullets.map((bullet, i) => ({
+    additionalProperties.push(...seoData.bullets.map((bullet, i) => ({
       "@type": "PropertyValue",
       "name": `Feature ${i + 1}`,
       "value": bullet
-    }));
+    })));
+  }
+  
+  // Add rich attributes as additionalProperty
+  if (Object.keys(richAttributes).length > 0) {
+    Object.entries(richAttributes).forEach(([key, value]) => {
+      if (value && richAttributesSettings[key]) {
+        additionalProperties.push({
+          "@type": "PropertyValue",
+          "name": key.charAt(0).toUpperCase() + key.slice(1),
+          "value": value
+        });
+      }
+    });
+  }
+  
+  if (additionalProperties.length > 0) {
+    productSchema.additionalProperty = additionalProperties;
   }
   
   baseSchemas.push(productSchema);
