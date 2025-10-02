@@ -506,7 +506,7 @@ export default function Settings() {
     
     // Additional safety: Check if we're actually in a generating state
     // But give some time for state to sync (first few checks)
-    if (!schemaGenerating && checkCountRef.current > 3) {
+    if (!schemaGenerating && checkCountRef.current > 5) {
       console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, checking final data...');
       
       // Try to get final data directly to see if generation completed
@@ -584,12 +584,12 @@ export default function Settings() {
           currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
-        // Check again in 2 seconds ONLY if still generating
+        // Check again in 3 seconds ONLY if still generating
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 2000);
+        }, 3000);
       } else {
         // Generation complete - check final data
         console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
@@ -640,7 +640,7 @@ export default function Settings() {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 5000);
+        }, 8000);
         return;
       }
       
@@ -1808,11 +1808,11 @@ export default function Settings() {
                       console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
                       console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
                       
-                      // Start checking progress after 2 seconds (longer delay to reduce load)
+                      // Start checking progress after 3 seconds (longer delay to reduce load)
                       setTimeout(() => {
                         console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
                         checkGenerationProgress();
-                      }, 2000);
+                      }, 3000);
                     } catch (err) {
                       console.error('[SCHEMA-GEN] Error:', err);
                       setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
