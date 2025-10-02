@@ -485,7 +485,7 @@ export default function Settings() {
     }
   };
 
-  // Check generation progress
+  // Check generation progress - Fixed infinite loop issue with state sync
   // Use ref to track if we should keep checking (avoids closure issues)
   const isGeneratingRef = useRef(false);
   const checkCountRef = useRef(0);
