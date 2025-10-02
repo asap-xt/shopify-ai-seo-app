@@ -1391,6 +1391,9 @@ async function generateAllSchemas(shop) {
       currentProduct: 'Generation complete!' 
     });
     
+    console.log(`[SCHEMA] ✅ Generation status updated to complete for ${shop}`);
+    console.log(`[SCHEMA] Final status:`, generationStatus.get(shop));
+    
   } catch (error) {
     console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
     
@@ -1400,6 +1403,9 @@ async function generateAllSchemas(shop) {
       progress: '0%', 
       currentProduct: 'Generation failed' 
     });
+    
+    console.log(`[SCHEMA] ❌ Generation status updated to failed for ${shop}`);
+    console.log(`[SCHEMA] Final status:`, generationStatus.get(shop));
     
     throw error;
   }
@@ -1460,6 +1466,8 @@ router.get('/status', async (req, res) => {
     
     // Get current generation status
     const currentStatus = generationStatus.get(shop) || { generating: false, progress: '0%', currentProduct: '' };
+    
+    console.log(`[SCHEMA-STATUS] Status check for ${shop}:`, currentStatus);
     
     // Check if FAQ exists
     const faqQuery = `
