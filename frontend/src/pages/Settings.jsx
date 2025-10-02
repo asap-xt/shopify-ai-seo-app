@@ -17,7 +17,8 @@ import {
   Badge,
   Toast,
   Spinner,
-  ProgressBar
+  ProgressBar,
+  InlineGrid
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
@@ -1801,7 +1802,7 @@ export default function Settings() {
                       Select which AI-generated attributes to include in product schemas
                     </Text>
                     
-                    <BlockStack gap="200">
+                    <InlineGrid columns={2} gap="400">
                       {[
                         { key: 'material', label: 'Material', description: 'Product material (cotton, leather, metal, etc.)' },
                         { key: 'color', label: 'Color', description: 'Product color information' },
@@ -1811,26 +1812,23 @@ export default function Settings() {
                         { key: 'category', label: 'Category', description: 'Product category classification' },
                         { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' }
                       ].map(attr => (
-                        <InlineStack key={attr.key} gap="300" align="space-between">
-                          <BlockStack gap="100">
-                            <Text variant="bodyMd" fontWeight="medium">{attr.label}</Text>
-                            <Text variant="bodySm" tone="subdued">{attr.description}</Text>
-                          </BlockStack>
-                          <Checkbox
-                            checked={settings?.richAttributes?.[attr.key] || false}
-                            onChange={(checked) => {
-                              setSettings(prev => ({
-                                ...prev,
-                                richAttributes: {
-                                  ...prev.richAttributes,
-                                  [attr.key]: checked
-                                }
-                              }));
-                            }}
-                          />
-                        </InlineStack>
+                        <Checkbox
+                          key={attr.key}
+                          label={attr.label}
+                          helpText={attr.description}
+                          checked={settings?.richAttributes?.[attr.key] || false}
+                          onChange={(checked) => {
+                            setSettings(prev => ({
+                              ...prev,
+                              richAttributes: {
+                                ...prev.richAttributes,
+                                [attr.key]: checked
+                              }
+                            }));
+                          }}
+                        />
                       ))}
-                    </BlockStack>
+                    </InlineGrid>
                   </BlockStack>
                 </Box>
               </Card>
