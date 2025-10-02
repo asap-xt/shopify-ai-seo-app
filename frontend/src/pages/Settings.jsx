@@ -1792,6 +1792,49 @@ export default function Settings() {
                 </Button>
               </InlineStack>
               
+              {/* Rich Attributes Options */}
+              <Card>
+                <Box padding="300">
+                  <BlockStack gap="300">
+                    <Text as="h3" variant="headingSm">Rich Product Attributes</Text>
+                    <Text variant="bodyMd" tone="subdued">
+                      Select which AI-generated attributes to include in product schemas
+                    </Text>
+                    
+                    <BlockStack gap="200">
+                      {[
+                        { key: 'material', label: 'Material', description: 'Product material (cotton, leather, metal, etc.)' },
+                        { key: 'color', label: 'Color', description: 'Product color information' },
+                        { key: 'size', label: 'Size', description: 'Product size or dimensions' },
+                        { key: 'weight', label: 'Weight', description: 'Product weight information' },
+                        { key: 'dimensions', label: 'Dimensions', description: 'Product measurements' },
+                        { key: 'category', label: 'Category', description: 'Product category classification' },
+                        { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' }
+                      ].map(attr => (
+                        <InlineStack key={attr.key} gap="300" align="space-between">
+                          <BlockStack gap="100">
+                            <Text variant="bodyMd" fontWeight="medium">{attr.label}</Text>
+                            <Text variant="bodySm" tone="subdued">{attr.description}</Text>
+                          </BlockStack>
+                          <Checkbox
+                            checked={settings?.richAttributes?.[attr.key] || false}
+                            onChange={(checked) => {
+                              setSettings(prev => ({
+                                ...prev,
+                                richAttributes: {
+                                  ...prev.richAttributes,
+                                  [attr.key]: checked
+                                }
+                              }));
+                            }}
+                          />
+                        </InlineStack>
+                      ))}
+                    </BlockStack>
+                  </BlockStack>
+                </Box>
+              </Card>
+              
               <Banner status="info" tone="subdued">
                 <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. 
                 AI can access them at <code>/ai/product/[handle]/schemas.json</code></p>
