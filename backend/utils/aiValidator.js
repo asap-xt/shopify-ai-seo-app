@@ -39,11 +39,11 @@ export function validateAIResponse(aiResponse, productData, allowedFields = []) 
 function validateBullets(bullets, productData) {
   const suspiciousPatterns = [
     // Specific claims that might be hallucinations
-    { pattern: /\d+\s*(year|month|day)s?\s*(warranty|guarantee)/i, reason: 'Specific timeframes not in product data' },
-    { pattern: /made in (italy|france|germany|japan)/i, reason: 'Country of origin not specified' },
+    { pattern: /\d+\s*(year|month|day)s?\s*(warranty|guarantee|money back)/i, reason: 'Specific timeframes not in product data' },
+    { pattern: /made in (italy|france|germany|japan|china|usa)/i, reason: 'Country of origin not specified' },
     { pattern: /(iso|ce|fda|organic|certified)/i, reason: 'Certifications not mentioned' },
     { pattern: /\d+%\s*(cotton|wool|silk|organic)/i, reason: 'Material percentages not specified' },
-    { pattern: /(free shipping|free returns)/i, reason: 'Store policies, not product features' }
+    { pattern: /(free shipping|free returns|money back guarantee)/i, reason: 'Store policies, not product features' }
   ];
   
   return bullets.filter(bullet => {
@@ -55,8 +55,8 @@ function validateBullets(bullets, productData) {
       }
     }
     
-    // Check if bullet is too generic
-    if (bullet.length < 20 || bullet.length > 200) {
+    // Check if bullet is too generic (but allow short valid ones)
+    if (bullet.length < 10 || bullet.length > 200) {
       console.log(`[AI-VALIDATOR] Rejected bullet (length): "${bullet}"`);
       return false;
     }
@@ -78,9 +78,10 @@ function validateFAQ(faq, productData) {
     
     // Check for specific claims in answers
     const suspiciousAnswers = [
-      /\d+\s*(day|week|month|year)s?\s*(money\s*back|return|warranty)/i,
-      /made in (italy|france|germany|japan)/i,
-      /(iso|ce|fda|organic|certified)/i
+      /\d+\s*(day|week|month|year)s?\s*(money\s*back|return|warranty|guarantee)/i,
+      /made in (italy|france|germany|japan|china|usa)/i,
+      /(iso|ce|fda|organic|certified)/i,
+      /(money back guarantee|free shipping|free returns)/i
     ];
     
     for (const pattern of suspiciousAnswers) {

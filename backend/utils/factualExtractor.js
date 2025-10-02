@@ -50,7 +50,7 @@ function extractMaterial(productData) {
     productData.tags || [],
     productData.description || '',
     productData.productType || '',
-    productData.variants?.map(v => v.title).join(' ') || ''
+    productData.variants?.edges?.map(e => e.node.title).join(' ') || productData.variants?.map(v => v.title).join(' ') || ''
   ];
   
   const materialKeywords = {
@@ -86,7 +86,7 @@ function extractMaterial(productData) {
 function extractColor(productData) {
   const sources = [
     productData.tags || [],
-    productData.variants?.map(v => v.title).join(' ') || '',
+    productData.variants?.edges?.map(e => e.node.title).join(' ') || productData.variants?.map(v => v.title).join(' ') || '',
     productData.description || ''
   ];
   
@@ -111,7 +111,7 @@ function extractColor(productData) {
  * Extract size information from product data
  */
 function extractSize(productData) {
-  const variantTitles = productData.variants?.map(v => v.title) || [];
+  const variantTitles = productData.variants?.edges?.map(e => e.node.title) || productData.variants?.map(v => v.title) || [];
   
   const sizeKeywords = [
     'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl',
