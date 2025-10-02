@@ -303,7 +303,164 @@ async function loadRichAttributesSettings(shop) {
     weight: false,
     dimensions: false,
     category: false,
-    audience: false
+    audience: false,
+    reviews: false,
+    ratings: false,
+    enhancedDescription: false,
+    organization: false
+  };
+}
+
+// Generate enhanced product description using AI
+async function generateEnhancedDescription(product, seoData, language) {
+  const systemPrompt = `You are an expert e-commerce copywriter. Generate an enhanced, SEO-optimized product description that is factual, engaging, and includes relevant keywords. Keep it between 150-300 words.`;
+
+  const prompt = `Product: ${product.title}
+Current Description: ${seoData.metaDescription || product.description || 'No description available'}
+Product Type: ${product.productType || 'General product'}
+Vendor: ${product.vendor || 'Unknown'}
+Language: ${language}
+
+Generate an enhanced product description that:
+1. Is factual and based on the product information provided
+2. Includes relevant keywords naturally
+3. Is engaging and persuasive
+4. Maintains the original meaning while improving clarity
+5. Is appropriate for the target language
+
+Return only the enhanced description text, no additional formatting.`;
+
+  try {
+    const result = await generateWithAI(prompt, systemPrompt);
+    return result.description || result;
+  } catch (error) {
+    console.error('[SCHEMA] Enhanced description generation failed:', error);
+    return null;
+  }
+}
+
+// Generate Review schemas using AI
+async function generateReviewSchemas(product, seoData, language) {
+  const systemPrompt = `You are an expert at generating realistic, helpful product reviews for e-commerce. Generate 3-5 diverse, authentic-sounding reviews that would be typical for this product. Each review should be different in tone and perspective.`;
+
+  const prompt = `Product: ${product.title}
+Description: ${seoData.metaDescription || product.description || 'No description available'}
+Product Type: ${product.productType || 'General product'}
+Language: ${language}
+
+Generate 3-5 realistic product reviews. Each review should include:
+1. A realistic customer name
+2. A star rating (3-5 stars)
+3. A helpful, authentic review text
+4. Different perspectives (first-time buyer, repeat customer, etc.)
+
+Return as JSON array with format:
+[
+  {
+    "author": "Customer Name",
+    "rating": 4,
+    "reviewBody": "Review text here",
+    "datePublished": "2024-01-15"
+  }
+]`;
+
+  try {
+    const result = await generateWithAI(prompt, systemPrompt);
+    const reviews = Array.isArray(result) ? result : result.reviews || [];
+    
+    return reviews.map(review => ({
+      "@context": "https://schema.org",
+      "@type": "Review",
+      "itemReviewed": {
+        "@type": "Product",
+        "name": product.title
+      },
+      "author": {
+        "@type": "Person",
+        "name": review.author || "Customer"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": review.rating || 4,
+        "bestRating": 5
+      },
+      "reviewBody": review.reviewBody || "Great product!",
+      "datePublished": review.datePublished || new Date().toISOString().split('T')[0]
+    }));
+  } catch (error) {
+    console.error('[SCHEMA] Review generation failed:', error);
+    return [];
+  }
+}
+
+// Generate Rating schemas using AI
+async function generateRatingSchemas(product, seoData, language) {
+  const systemPrompt = `You are an expert at generating realistic product ratings and aggregate rating data for e-commerce. Generate realistic rating statistics that would be typical for this type of product.`;
+
+  const prompt = `Product: ${product.title}
+Description: ${seoData.metaDescription || product.description || 'No description available'}
+Product Type: ${product.productType || 'General product'}
+Language: ${language}
+
+Generate realistic rating statistics including:
+1. Average rating (3.5-4.8)
+2. Total number of reviews (50-500)
+3. Rating distribution (how many 1-star, 2-star, etc.)
+
+Return as JSON:
+{
+  "ratingValue": 4.2,
+  "reviewCount": 127,
+  "ratingDistribution": {
+    "5": 45,
+    "4": 38,
+    "3": 25,
+    "2": 12,
+    "1": 7
+  }
+}`;
+
+  try {
+    const result = await generateWithAI(prompt, systemPrompt);
+    const ratingData = result.ratingValue ? result : result.rating || {};
+    
+    return [{
+      "@context": "https://schema.org",
+      "@type": "AggregateRating",
+      "itemReviewed": {
+        "@type": "Product",
+        "name": product.title
+      },
+      "ratingValue": ratingData.ratingValue || 4.2,
+      "reviewCount": ratingData.reviewCount || 100,
+      "bestRating": 5,
+      "worstRating": 1
+    }];
+  } catch (error) {
+    console.error('[SCHEMA] Rating generation failed:', error);
+    return [];
+  }
+}
+
+// Generate Organization schema
+async function generateOrganizationSchema(product, shop, language) {
+  const shopName = shop.split('.')[0];
+  const shopUrl = `https://${shop}`;
+  
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": shopName,
+    "url": shopUrl,
+    "logo": `${shopUrl}/logo.png`, // Default logo path
+    "sameAs": [
+      // Add social media links if available
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer service",
+      "url": shopUrl
+    }
   };
 }
 
@@ -735,12 +892,56 @@ async function generateLangSchemas(product, seoData, shop, language) {
       }
     });
   }
+
+  // Add enhanced description if enabled
+  if (richAttributesSettings.enhancedDescription) {
+    try {
+      const enhancedDesc = await generateEnhancedDescription(product, seoData, language);
+      if (enhancedDesc) {
+        productSchema.description = enhancedDesc;
+      }
+    } catch (error) {
+      console.error('[SCHEMA] Failed to generate enhanced description:', error);
+    }
+  }
   
   if (additionalProperties.length > 0) {
     productSchema.additionalProperty = additionalProperties;
   }
   
   baseSchemas.push(productSchema);
+
+  // Add Review schemas if enabled
+  if (richAttributesSettings.reviews) {
+    try {
+      const reviewSchemas = await generateReviewSchemas(product, seoData, language);
+      baseSchemas.push(...reviewSchemas);
+    } catch (error) {
+      console.error('[SCHEMA] Failed to generate review schemas:', error);
+    }
+  }
+
+  // Add Rating schemas if enabled
+  if (richAttributesSettings.ratings) {
+    try {
+      const ratingSchemas = await generateRatingSchemas(product, seoData, language);
+      baseSchemas.push(...ratingSchemas);
+    } catch (error) {
+      console.error('[SCHEMA] Failed to generate rating schemas:', error);
+    }
+  }
+
+  // Add Organization schema if enabled
+  if (richAttributesSettings.organization) {
+    try {
+      const organizationSchema = await generateOrganizationSchema(product, shop, language);
+      if (organizationSchema) {
+        baseSchemas.push(organizationSchema);
+      }
+    } catch (error) {
+      console.error('[SCHEMA] Failed to generate organization schema:', error);
+    }
+  }
   
   console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
   return baseSchemas;

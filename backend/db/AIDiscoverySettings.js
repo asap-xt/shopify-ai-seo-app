@@ -52,7 +52,11 @@ const AIDiscoverySettingsSchema = new mongoose.Schema({
     weight: { type: Boolean, default: false },
     dimensions: { type: Boolean, default: false },
     category: { type: Boolean, default: false },
-    audience: { type: Boolean, default: false }
+    audience: { type: Boolean, default: false },
+    reviews: { type: Boolean, default: false },
+    ratings: { type: Boolean, default: false },
+    enhancedDescription: { type: Boolean, default: false },
+    organization: { type: Boolean, default: false }
   },
   createdAt: {
     type: Date,

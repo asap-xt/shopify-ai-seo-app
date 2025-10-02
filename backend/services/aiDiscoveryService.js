@@ -280,7 +280,11 @@ class AIDiscoveryService {
         weight: false,
         dimensions: false,
         category: false,
-        audience: false
+        audience: false,
+        reviews: false,
+        ratings: false,
+        enhancedDescription: false,
+        organization: false
       },
       plan: normalizedPlan, // Important - add the normalized plan here
       updatedAt: new Date().toISOString()

@@ -1811,7 +1811,11 @@ export default function Settings() {
                         { key: 'weight', label: 'Weight', description: 'Product weight information' },
                         { key: 'dimensions', label: 'Dimensions', description: 'Product measurements' },
                         { key: 'category', label: 'Category', description: 'Product category classification' },
-                        { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' }
+                        { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' },
+                        { key: 'reviews', label: 'Review Schemas', description: 'AI-generated product reviews for schema.org' },
+                        { key: 'ratings', label: 'Rating Schemas', description: 'AI-generated ratings and aggregate ratings' },
+                        { key: 'enhancedDescription', label: 'Enhanced Descriptions', description: 'AI-enhanced product descriptions' },
+                        { key: 'organization', label: 'Organization Schema', description: 'Brand organization information' }
                       ].map(attr => (
                         <Checkbox
                           key={attr.key}
