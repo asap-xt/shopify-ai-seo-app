@@ -130,7 +130,7 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
 router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { bots, features, advancedSchemaEnabled } = req.body;
+    const { bots, features, advancedSchemaEnabled, richAttributes } = req.body;
     
     console.log('[AI-DISCOVERY] Saving settings for shop:', shop);
     
@@ -161,6 +161,7 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
         shop,
         bots: bots || {},
         features: features || {},
+        richAttributes: richAttributes || {},
         enabled,
         advancedSchemaEnabled: advancedSchemaEnabled || false,
         updatedAt: Date.now()
@@ -172,6 +173,7 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
     await aiDiscoveryService.updateSettings(shop, session, {
       bots,
       features,
+      richAttributes,
       advancedSchemaEnabled
     });
     

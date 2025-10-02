@@ -722,7 +722,8 @@ export default function Settings() {
         body: {
           shop,
           bots: settings.bots,
-          features: settings.features
+          features: settings.features,
+          richAttributes: settings.richAttributes
         }
       });
       

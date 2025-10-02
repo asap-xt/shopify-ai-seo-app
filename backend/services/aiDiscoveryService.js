@@ -273,6 +273,15 @@ class AIDiscoveryService {
         storeMetadata: false,
         schemaData: false
       },
+      richAttributes: {
+        material: false,
+        color: false,
+        size: false,
+        weight: false,
+        dimensions: false,
+        category: false,
+        audience: false
+      },
       plan: normalizedPlan, // Important - add the normalized plan here
       updatedAt: new Date().toISOString()
     };

@@ -45,6 +45,15 @@ const AIDiscoverySettingsSchema = new mongoose.Schema({
     storeMetadata: { type: Boolean, default: false },
     schemaData: { type: Boolean, default: false }
   },
+  richAttributes: {
+    material: { type: Boolean, default: false },
+    color: { type: Boolean, default: false },
+    size: { type: Boolean, default: false },
+    weight: { type: Boolean, default: false },
+    dimensions: { type: Boolean, default: false },
+    category: { type: Boolean, default: false },
+    audience: { type: Boolean, default: false }
+  },
   createdAt: {
     type: Date,
     default: Date.now
