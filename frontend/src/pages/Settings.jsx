@@ -490,7 +490,7 @@ export default function Settings() {
   // Use ref to track if we should keep checking (avoids closure issues)
   const isGeneratingRef = useRef(false);
   const checkCountRef = useRef(0);
-  const maxChecks = 20; // Maximum 20 checks (60 seconds)
+  const maxChecks = 30; // Maximum 30 checks (90 seconds)
   
   const checkGenerationProgress = useCallback(async () => {
     console.log('[PROGRESS-CHECK] Starting check...');
@@ -506,8 +506,8 @@ export default function Settings() {
     
     // Additional safety: Check if we're actually in a generating state
     // But give some time for state to sync (first few checks)
-    if (!schemaGenerating && checkCountRef.current > 5) {
-      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, checking final data...');
+    if (!schemaGenerating && checkCountRef.current > 10) {
+      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after many checks, checking final data...');
       
       // Try to get final data directly to see if generation completed
       try {
