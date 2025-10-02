@@ -538,18 +538,20 @@ export default function Settings() {
           90
         );
         
+        console.log('[PROGRESS-CHECK] Updating progress to:', progressPercent + '%');
+        
         setSchemaProgress(prev => ({
           ...prev,
           percent: progressPercent,
           currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
-        // Check again in 3 seconds ONLY if still generating
+        // Check again in 2 seconds ONLY if still generating (shorter interval for better UX)
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 3000);
+        }, 2000);
       } else {
         // Generation complete - check final data
         console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
@@ -1709,7 +1711,7 @@ export default function Settings() {
                       setSchemaProgress({
                         current: 0,
                         total: 0,
-                        percent: 0,
+                        percent: 10, // Start with 10% to show progress immediately
                         currentProduct: 'Initializing...',
                         stats: {
                           siteFAQ: false,
@@ -1745,11 +1747,11 @@ export default function Settings() {
                       console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
                       console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
                       
-                      // Start checking progress after 2 seconds
+                      // Start checking progress after 1 second (shorter delay for better UX)
                       setTimeout(() => {
                         console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
                         checkGenerationProgress();
-                      }, 2000);
+                      }, 1000);
                     } catch (err) {
                       console.error('[SCHEMA-GEN] Error:', err);
                       setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
@@ -2089,7 +2091,7 @@ export default function Settings() {
                 <Box>
                   <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
                   <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? 'âœ“' : 'â€”'}
+                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
                   </Text>
                 </Box>
                 
@@ -2183,7 +2185,7 @@ export default function Settings() {
                 <Box>
                   <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
                   <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? 'âœ“' : 'â€”'}
+                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
                   </Text>
                 </Box>
                 
