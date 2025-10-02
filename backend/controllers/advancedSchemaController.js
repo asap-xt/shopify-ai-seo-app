@@ -282,7 +282,7 @@ function sanitizeAIResponse(response, knownFacts) {
   return validated;
 }
 
-// Load rich attributes settings
+// Load rich attributes settings - fetches user preferences for AI-generated schema features
 async function loadRichAttributesSettings(shop) {
   try {
     // console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
