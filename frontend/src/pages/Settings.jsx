@@ -506,7 +506,7 @@ export default function Settings() {
     
     // Additional safety: Check if we're actually in a generating state
     // But give some time for state to sync (first few checks)
-    if (!schemaGenerating && checkCountRef.current > 2) {
+    if (!schemaGenerating && checkCountRef.current > 5) {
       console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, resetting...');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
@@ -547,12 +547,12 @@ export default function Settings() {
           currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
-        // Check again in 2 seconds ONLY if still generating (shorter interval for better UX)
+        // Check again in 3 seconds ONLY if still generating (longer interval to reduce load)
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 2000);
+        }, 3000);
       } else {
         // Generation complete - check final data
         console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
@@ -1749,11 +1749,11 @@ export default function Settings() {
                       console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
                       console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
                       
-                      // Start checking progress after 1 second (shorter delay for better UX)
+                      // Start checking progress after 2 seconds (longer delay to reduce load)
                       setTimeout(() => {
                         console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
                         checkGenerationProgress();
-                      }, 1000);
+                      }, 2000);
                     } catch (err) {
                       console.error('[SCHEMA-GEN] Error:', err);
                       setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));

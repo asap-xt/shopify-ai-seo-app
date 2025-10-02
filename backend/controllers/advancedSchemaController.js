@@ -603,16 +603,16 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
-  console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
+  // console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
   
   // Extract factual attributes if any are enabled
   const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
   let richAttributes = {};
   
   if (enabledAttributes.length > 0) {
-    console.log(`[SCHEMA] Extracting factual attributes: ${enabledAttributes.join(', ')}`);
+    // console.log(`[SCHEMA] Extracting factual attributes: ${enabledAttributes.join(', ')}`);
     richAttributes = extractFactualAttributes(product, enabledAttributes);
-    console.log(`[SCHEMA] Extracted rich attributes:`, richAttributes);
+    // console.log(`[SCHEMA] Extracted rich attributes:`, richAttributes);
   }
   
   const baseSchemas = [
@@ -1010,7 +1010,7 @@ async function generateAllSchemas(shop) {
       
       await Promise.all(batch.map(async (product) => {
         try {
-          console.log(`[SCHEMA] Processing product ${product.productId}...`);
+          // console.log(`[SCHEMA] Processing product ${product.productId}...`);
           
           // Update progress
           const progressPercent = Math.round(((i + 1) / products.length) * 100);
@@ -1021,10 +1021,10 @@ async function generateAllSchemas(shop) {
           });
           
           const productSchemas = await generateProductSchemas(shop, product);
-          console.log(`[SCHEMA] Product ${product.productId} returned ${productSchemas ? productSchemas.length : 0} schemas`);
+          // console.log(`[SCHEMA] Product ${product.productId} returned ${productSchemas ? productSchemas.length : 0} schemas`);
           if (productSchemas && productSchemas.length > 0) {
             allProductSchemas.push(...productSchemas);
-            console.log(`[SCHEMA] Added ${productSchemas.length} schemas to collection. Total: ${allProductSchemas.length}`);
+            // console.log(`[SCHEMA] Added ${productSchemas.length} schemas to collection. Total: ${allProductSchemas.length}`);
           } else {
             console.log(`[SCHEMA] No schemas generated for product ${product.productId}`);
           }
@@ -1033,7 +1033,7 @@ async function generateAllSchemas(shop) {
         }
       }));
       
-      console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
+      // console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
     }
     
     // Save to MongoDB
@@ -1053,9 +1053,9 @@ async function generateAllSchemas(shop) {
       
       // Verification - check if data was actually saved
       const saved = await AdvancedSchema.findOne({ shop });
-      console.log('[SCHEMA] Verification - saved document exists:', !!saved);
-      console.log('[SCHEMA] Verification - schemas count:', saved?.schemas?.length);
-      console.log('[SCHEMA] Verification - first schema:', saved?.schemas?.[0]);
+      // console.log('[SCHEMA] Verification - saved document exists:', !!saved);
+      // console.log('[SCHEMA] Verification - schemas count:', saved?.schemas?.length);
+      // console.log('[SCHEMA] Verification - first schema:', saved?.schemas?.[0]);
     } catch (err) {
       console.error('[SCHEMA] Failed to save to MongoDB:', err);
       throw err;
