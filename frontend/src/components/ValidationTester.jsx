@@ -1,5 +1,5 @@
 // Validation Tester Component for testing AI validation in real conditions
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Card,
   FormLayout,
@@ -14,8 +14,12 @@ import {
   BlockStack,
   InlineStack
 } from '@shopify/polaris';
+import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const ValidationTester = ({ shop }) => {
+  // API helper
+  const api = useMemo(() => makeSessionFetch(), []);
+  
   const [productData, setProductData] = useState({
     title: "Premium Wireless Headphones",
     description: "High-quality wireless headphones with noise cancellation, perfect for music lovers and professionals. Features Bluetooth connectivity and long battery life.",
@@ -63,17 +67,15 @@ const ValidationTester = ({ shop }) => {
   const handleTestValidation = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/test/test-validation', {
+      const data = await api('/test/test-validation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           productData,
           aiResponse,
           requestedAttributes: ['bullets', 'faq', 'attributes']
-        })
+        }
       });
       
-      const data = await response.json();
       setResults(data);
       setShowResults(true);
     } catch (error) {
@@ -86,16 +88,14 @@ const ValidationTester = ({ shop }) => {
   const handleTestExtraction = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/test/test-extraction', {
+      const data = await api('/test/test-extraction', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           productData,
           requestedAttributes: ['material', 'color', 'size', 'category', 'audience']
-        })
+        }
       });
       
-      const data = await response.json();
       setResults({ ...results, extraction: data });
     } catch (error) {
       console.error('Extraction test failed:', error);
