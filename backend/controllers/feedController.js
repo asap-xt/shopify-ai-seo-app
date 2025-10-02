@@ -171,7 +171,7 @@ router.get('/schema-data.json', async (req, res) => {
       generated_at: schemaData.generatedAt,
       total_schemas: schemaData.schemas.length,
       schemas: schemaData.schemas,
-      site_faq: schemaData.siteFAQ
+      siteFAQ: schemaData.siteFAQ
     });
     
   } catch (error) {

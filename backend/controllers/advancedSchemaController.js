@@ -313,20 +313,31 @@ async function loadRichAttributesSettings(shop) {
 
 // Generate enhanced product description using AI
 async function generateEnhancedDescription(product, seoData, language) {
-  const systemPrompt = `You are an expert e-commerce copywriter. Generate an enhanced, SEO-optimized product description that is factual, engaging, and includes relevant keywords. Keep it between 150-300 words.`;
+  const systemPrompt = `You are an expert e-commerce copywriter specializing in SEO-optimized product descriptions. Generate compelling, factual descriptions that convert browsers into buyers while maintaining authenticity and avoiding AI detection patterns.`;
 
   const prompt = `Product: ${product.title}
 Current Description: ${seoData.metaDescription || product.description || 'No description available'}
 Product Type: ${product.productType || 'General product'}
 Vendor: ${product.vendor || 'Unknown'}
 Language: ${language}
+Key Features: ${seoData.bullets ? seoData.bullets.join(', ') : 'Standard features'}
 
-Generate an enhanced product description that:
-1. Is factual and based on the product information provided
-2. Includes relevant keywords naturally
-3. Is engaging and persuasive
-4. Maintains the original meaning while improving clarity
-5. Is appropriate for the target language
+Generate an enhanced product description (150-300 words) that:
+1. Uses natural, conversational language with varied sentence structures
+2. Incorporates key features and benefits naturally
+3. Includes relevant keywords without over-optimization
+4. Maintains authenticity and avoids AI detection patterns
+5. Appeals to the target audience for this product type
+6. Uses emotional triggers and benefit-focused language
+7. Includes specific details and use cases
+
+Writing style guidelines:
+- Use contractions and natural speech patterns
+- Vary sentence length and structure
+- Include specific product details and scenarios
+- Avoid repetitive phrases or perfect grammar
+- Use benefit-focused language over feature lists
+- Include emotional appeals and lifestyle connections
 
 Return only the enhanced description text, no additional formatting.`;
 
@@ -341,25 +352,36 @@ Return only the enhanced description text, no additional formatting.`;
 
 // Generate Review schemas using AI
 async function generateReviewSchemas(product, seoData, language) {
-  const systemPrompt = `You are an expert at generating realistic, helpful product reviews for e-commerce. Generate 3-5 diverse, authentic-sounding reviews that would be typical for this product. Each review should be different in tone and perspective.`;
+  const systemPrompt = `You are an expert at generating realistic, human-like product reviews for e-commerce. Generate 3-5 diverse, authentic-sounding reviews that feel like real customer experiences. Each review should have natural language patterns, minor imperfections, and genuine emotions.`;
 
   const prompt = `Product: ${product.title}
 Description: ${seoData.metaDescription || product.description || 'No description available'}
 Product Type: ${product.productType || 'General product'}
 Language: ${language}
+Key Features: ${seoData.bullets ? seoData.bullets.join(', ') : 'Standard features'}
 
-Generate 3-5 realistic product reviews. Each review should include:
-1. A realistic customer name
-2. A star rating (3-5 stars)
-3. A helpful, authentic review text
-4. Different perspectives (first-time buyer, repeat customer, etc.)
+Generate 3-5 realistic product reviews that feel human and authentic. Each review should:
+1. Use natural, conversational language with minor imperfections
+2. Include specific details about the product experience
+3. Have varied lengths and writing styles
+4. Include both positive and minor negative aspects
+5. Use realistic customer names from the target language region
+6. Have star ratings between 3-5 (mostly 4-5 stars)
+7. Include dates from the past 6 months
+
+Make the reviews feel genuine with:
+- Natural speech patterns and contractions
+- Specific product details and usage scenarios
+- Emotional responses and personal experiences
+- Minor complaints or suggestions for improvement
+- Varied sentence structures and vocabulary
 
 Return as JSON array with format:
 [
   {
-    "author": "Customer Name",
+    "author": "Realistic Customer Name",
     "rating": 4,
-    "reviewBody": "Review text here",
+    "reviewBody": "Natural, conversational review text with specific details and emotions",
     "datePublished": "2024-01-15"
   }
 ]`;
@@ -395,17 +417,30 @@ Return as JSON array with format:
 
 // Generate Rating schemas using AI
 async function generateRatingSchemas(product, seoData, language) {
-  const systemPrompt = `You are an expert at generating realistic product ratings and aggregate rating data for e-commerce. Generate realistic rating statistics that would be typical for this type of product.`;
+  const systemPrompt = `You are an expert at generating realistic product ratings and aggregate rating data for e-commerce. Generate authentic rating statistics that would be typical for this type of product, considering its features, price point, and target market.`;
 
   const prompt = `Product: ${product.title}
 Description: ${seoData.metaDescription || product.description || 'No description available'}
 Product Type: ${product.productType || 'General product'}
 Language: ${language}
+Key Features: ${seoData.bullets ? seoData.bullets.join(', ') : 'Standard features'}
+
+Generate realistic rating statistics that feel authentic for this product type. Consider:
+1. Product quality and features mentioned
+2. Typical customer satisfaction for this product category
+3. Price point and value perception
+4. Target market and user expectations
 
 Generate realistic rating statistics including:
-1. Average rating (3.5-4.8)
-2. Total number of reviews (50-500)
-3. Rating distribution (how many 1-star, 2-star, etc.)
+1. Average rating (3.2-4.8, with most products being 3.8-4.5)
+2. Total number of reviews (20-300, depending on product popularity)
+3. Natural rating distribution (not too perfect, include some variation)
+
+Make the statistics feel realistic:
+- Avoid perfect distributions (like 100% 5-star reviews)
+- Include some 1-2 star reviews for authenticity
+- Consider product type (electronics vs clothing vs accessories)
+- Vary review counts based on product popularity
 
 Return as JSON:
 {
@@ -442,26 +477,81 @@ Return as JSON:
   }
 }
 
-// Generate Organization schema
+// Generate Organization schema using Store Metadata
 async function generateOrganizationSchema(product, shop, language) {
-  const shopName = shop.split('.')[0];
-  const shopUrl = `https://${shop}`;
-  
-  return {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": shopName,
-    "url": shopUrl,
-    "logo": `${shopUrl}/logo.png`, // Default logo path
-    "sameAs": [
-      // Add social media links if available
-    ],
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "customer service",
-      "url": shopUrl
+  try {
+    // Get store metadata from metafields
+    const storeMetaQuery = `
+      query {
+        shop {
+          name
+          description
+          email
+          primaryDomain { url }
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
+        }
+      }
+    `;
+    
+    const data = await executeShopifyGraphQL(shop, storeMetaQuery);
+    const shopData = data.shop;
+    
+    // Parse organization schema if available
+    let organizationData = {};
+    if (shopData.organizationMetafield?.value) {
+      try {
+        organizationData = JSON.parse(shopData.organizationMetafield.value);
+      } catch (e) {
+        console.error('[SCHEMA] Failed to parse organization schema:', e);
+      }
     }
-  };
+    
+    // Parse SEO metadata if available
+    let seoData = {};
+    if (shopData.seoMetafield?.value) {
+      try {
+        seoData = JSON.parse(shopData.seoMetafield.value);
+      } catch (e) {
+        console.error('[SCHEMA] Failed to parse SEO metadata:', e);
+      }
+    }
+    
+    const shopUrl = shopData.primaryDomain?.url || `https://${shop}`;
+    
+    return {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": organizationData.name || seoData.storeName || shopData.name,
+      "url": shopUrl,
+      "description": organizationData.description || seoData.shortDescription || shopData.description,
+      "email": organizationData.email || shopData.email,
+      "telephone": organizationData.phone,
+      "logo": organizationData.logo || `${shopUrl}/logo.png`,
+      "sameAs": organizationData.sameAs ? 
+        organizationData.sameAs.split(',').map(s => s.trim()).filter(Boolean) : [],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer service",
+        "url": shopUrl,
+        "email": organizationData.email || shopData.email
+      }
+    };
+  } catch (error) {
+    console.error('[SCHEMA] Failed to generate organization schema:', error);
+    
+    // Fallback to basic organization schema
+    const shopName = shop.split('.')[0];
+    const shopUrl = `https://${shop}`;
+    
+    return {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": shopName,
+      "url": shopUrl,
+      "logo": `${shopUrl}/logo.png`
+    };
+  }
 }
 
 // Load shop context
@@ -760,16 +850,16 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
-  // console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
+  console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
   
   // Extract factual attributes if any are enabled
   const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
   let richAttributes = {};
   
   if (enabledAttributes.length > 0) {
-    // console.log(`[SCHEMA] Extracting factual attributes: ${enabledAttributes.join(', ')}`);
+    console.log(`[SCHEMA] Extracting factual attributes: ${enabledAttributes.join(', ')}`);
     richAttributes = extractFactualAttributes(product, enabledAttributes);
-    // console.log(`[SCHEMA] Extracted rich attributes:`, richAttributes);
+    console.log(`[SCHEMA] Extracted rich attributes:`, richAttributes);
   }
   
   const baseSchemas = [
