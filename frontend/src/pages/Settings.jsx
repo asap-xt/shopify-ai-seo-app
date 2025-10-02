@@ -522,41 +522,25 @@ export default function Settings() {
     }
     
     try {
-      // Check directly in MongoDB for data
-      const data = await api(`/ai/schema-data.json?shop=${shop}`);
-      console.log('[PROGRESS-CHECK] Got data:', data);
+      // Check generation status from backend instead of checking data directly
+      const statusData = await api(`/api/schema/status?shop=${shop}`);
+      console.log('[PROGRESS-CHECK] Status data:', statusData);
       
-      // Check if we still have schemas (generation complete)
-      if (data.schemas && data.schemas.length > 0) {
-        // Generation complete
-        console.log('[PROGRESS-CHECK] ✅ Generation complete!');
-        isGeneratingRef.current = false;
-        checkCountRef.current = 0; // Reset counter
-        setSchemaComplete(true);
-        setSchemaGenerating(false);
-        
-        // Calculate statistics
-        const products = [...new Set(data.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
-        
-        setSchemaProgress(prev => ({
-          ...prev,
-          percent: 100,
-          stats: {
-            siteFAQ: data.site_faq ? true : false,
-            products: products.length,
-            totalSchemas: data.schemas.length
-          }
-        }));
-        
-        // STOP checking - generation is done
-        return;
-      } else {
-        // Still generating, check again
+      // Check if generation is still in progress
+      if (statusData.generating) {
+        // Still generating, update progress
         console.log('[PROGRESS-CHECK] Still generating, will check again...');
+        
+        // Update progress based on backend status
+        const progressPercent = Math.min(
+          statusData.progress ? parseInt(statusData.progress.replace('%', '')) : (checkCountRef.current * 5),
+          90
+        );
+        
         setSchemaProgress(prev => ({
           ...prev,
-          percent: Math.min(prev.percent + 5, 90), // Simulate progress
-          currentProduct: `Processing products... (${checkCountRef.current}/${maxChecks})`
+          percent: progressPercent,
+          currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
         }));
         
         // Check again in 3 seconds ONLY if still generating
@@ -565,6 +549,35 @@ export default function Settings() {
             checkGenerationProgress();
           }
         }, 3000);
+      } else {
+        // Generation complete - check final data
+        console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
+        
+        const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
+        console.log('[PROGRESS-CHECK] Final data:', finalData);
+        
+        // Generation complete
+        console.log('[PROGRESS-CHECK] ✅ Generation complete!');
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0; // Reset counter
+        setSchemaComplete(true);
+        setSchemaGenerating(false);
+        
+        // Calculate statistics
+        const products = [...new Set(finalData.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
+        
+        setSchemaProgress(prev => ({
+          ...prev,
+          percent: 100,
+          stats: {
+            siteFAQ: finalData.siteFAQ ? true : false,
+            products: products.length,
+            totalSchemas: finalData.schemas.length
+          }
+        }));
+        
+        // STOP checking - generation is done
+        return;
       }
     } catch (err) {
       console.error('[PROGRESS-CHECK] ❌ Error:', err);
@@ -573,7 +586,7 @@ export default function Settings() {
       setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
       setSchemaGenerating(false); // Stop on error
     }
-  }, [api, shop]);
+  }, [api, shop, schemaGenerating]);
 
   const loadSettings = async () => {
     try {

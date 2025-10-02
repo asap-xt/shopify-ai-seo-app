@@ -15,6 +15,9 @@ const AI_MODEL = 'google/gemini-2.5-flash-lite'; // Важно: flash-lite, не
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
+// Global state tracking for schema generation
+const generationStatus = new Map(); // shop -> { generating: boolean, progress: string, currentProduct: string }
+
 // Helper function to get access token
 async function getAccessToken(shop) {
   const shopRecord = await Shop.findOne({ shop });
@@ -844,6 +847,13 @@ async function installThemeSnippet(shop) {
 async function generateAllSchemas(shop) {
   console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
   
+  // Set generation status
+  generationStatus.set(shop, { 
+    generating: true, 
+    progress: '0%', 
+    currentProduct: 'Initializing...' 
+  });
+  
   try {
     // ПРЕМАХВАМЕ script tag частта напълно
     // await installScriptTag(shop); // ПРЕМАХВАМЕ ТОВА
@@ -926,6 +936,15 @@ async function generateAllSchemas(shop) {
       await Promise.all(batch.map(async (product) => {
         try {
           console.log(`[SCHEMA] Processing product ${product.productId}...`);
+          
+          // Update progress
+          const progressPercent = Math.round(((i + 1) / products.length) * 100);
+          generationStatus.set(shop, {
+            generating: true,
+            progress: `${progressPercent}%`,
+            currentProduct: `Processing ${product.title || product.productId}...`
+          });
+          
           const productSchemas = await generateProductSchemas(shop, product);
           console.log(`[SCHEMA] Product ${product.productId} returned ${productSchemas ? productSchemas.length : 0} schemas`);
           if (productSchemas && productSchemas.length > 0) {
@@ -969,8 +988,23 @@ async function generateAllSchemas(shop) {
     
     console.log(`[SCHEMA] Completed schema generation for ${shop}`);
     
+    // Mark generation as complete
+    generationStatus.set(shop, { 
+      generating: false, 
+      progress: '100%', 
+      currentProduct: 'Generation complete!' 
+    });
+    
   } catch (error) {
     console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
+    
+    // Mark generation as failed
+    generationStatus.set(shop, { 
+      generating: false, 
+      progress: '0%', 
+      currentProduct: 'Generation failed' 
+    });
+    
     throw error;
   }
 }
@@ -1028,6 +1062,9 @@ router.get('/status', async (req, res) => {
   try {
     const shop = requireShop(req);
     
+    // Get current generation status
+    const currentStatus = generationStatus.get(shop) || { generating: false, progress: '0%', currentProduct: '' };
+    
     // Check if FAQ exists
     const faqQuery = `
       query {
@@ -1050,6 +1087,9 @@ router.get('/status', async (req, res) => {
     
     res.json({
       enabled: true,
+      generating: currentStatus.generating,
+      progress: currentStatus.progress,
+      currentProduct: currentStatus.currentProduct,
       hasSiteFAQ: hasFAQ,
       productsWithSchema
     });
