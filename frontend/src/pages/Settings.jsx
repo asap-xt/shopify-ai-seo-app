@@ -1,5 +1,6 @@
 // frontend/src/pages/Settings.jsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import ValidationTester from '../components/ValidationTester.jsx';
 import {
   Card,
   Box,
@@ -2216,6 +2217,13 @@ export default function Settings() {
 
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
+      
+      {/* AI Validation Tester - Development Only */}
+      {process.env.NODE_ENV !== 'production' && (
+        <Box paddingBlockStart="400">
+          <ValidationTester shop={shop} />
+        </Box>
+      )}
     </BlockStack>
     );
   } catch (error) {
