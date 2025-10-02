@@ -507,7 +507,38 @@ export default function Settings() {
     // Additional safety: Check if we're actually in a generating state
     // But give some time for state to sync (first few checks)
     if (!schemaGenerating && checkCountRef.current > 3) {
-      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, resetting...');
+      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, checking final data...');
+      
+      // Try to get final data directly to see if generation completed
+      try {
+        const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
+        if (finalData && finalData.schemas && finalData.schemas.length > 0) {
+          console.log('[PROGRESS-CHECK] ✅ Found final data, generation completed!');
+          isGeneratingRef.current = false;
+          checkCountRef.current = 0;
+          setSchemaComplete(true);
+          setSchemaGenerating(false);
+          
+          // Calculate statistics
+          const products = [...new Set(finalData.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
+          
+          setSchemaProgress(prev => ({
+            ...prev,
+            percent: 100,
+            stats: {
+              siteFAQ: finalData.siteFAQ ? true : false,
+              products: products.length,
+              totalSchemas: finalData.schemas.length
+            }
+          }));
+          return;
+        }
+      } catch (err) {
+        console.log('[PROGRESS-CHECK] Could not fetch final data:', err.message);
+      }
+      
+      // If no final data found, reset
+      console.log('[PROGRESS-CHECK] No final data found, resetting...');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
       return;
