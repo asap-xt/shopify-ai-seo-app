@@ -258,8 +258,8 @@ async function generateWithAI(prompt, systemPrompt) {
   }
 }
 
-// Валидация на AI отговори
-function validateAIResponse(response, knownFacts) {
+// Sanitize AI response by replacing suspicious patterns with safer alternatives
+function sanitizeAIResponse(response, knownFacts) {
   // Проверяваме за често срещани "hallucinations"
   const suspiciousPatterns = [
     { pattern: /\d+\s*day[s]?\s*(money\s*back|return)/i, replacement: 'our return policy' },
@@ -384,7 +384,8 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
       if (faq.q.toLowerCase().includes('languages')) {
         faq.a = `Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website.`;
       } else {
-        faq.a = validateAIResponse(faq.a, { shopUrl, languages });
+        // Sanitize FAQ answer to replace suspicious patterns
+        faq.a = sanitizeAIResponse(faq.a, { shopUrl, languages });
       }
       return faq;
     });
