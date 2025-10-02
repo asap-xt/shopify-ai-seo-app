@@ -7,6 +7,7 @@ import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import Shop from '../db/Shop.js'; // За access token
 import fetch from 'node-fetch';
+import { validateAIResponse } from '../utils/aiValidator.js';
 
 const router = express.Router();
 
@@ -365,8 +366,21 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
   try {
     const result = await generateWithAI(prompt, systemPrompt);
     
+    // Validate AI response to prevent hallucinations
+    const validatedResponse = validateAIResponse(
+      { faq: result.faqs }, 
+      {
+        shopName: shopContext.shop.name,
+        shopUrl: shopUrl,
+        languages: languages,
+        currency: shopContext.shop.currencyCode,
+        description: shopContext.shop.description
+      }, 
+      ['faq']
+    );
+    
     // Validate and fix language answer
-    const validated = result.faqs.map(faq => {
+    const validated = (validatedResponse.faq || result.faqs).map(faq => {
       if (faq.q.toLowerCase().includes('languages')) {
         faq.a = `Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website.`;
       } else {

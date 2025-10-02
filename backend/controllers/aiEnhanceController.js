@@ -4,6 +4,7 @@ import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
+import { validateAIResponse, createFactualPrompt } from '../utils/aiValidator.js';
 
 const router = express.Router();
 
@@ -99,22 +100,25 @@ async function openrouterChat(model, messages, response_format_json = true) {
 async function generateEnhancedBulletsFAQ(data) {
   const { shop, productId, model, language, product, existingSeo } = data;
   
-  const prompt = {
-    instruction: "Generate ONLY enhanced bullets and FAQ. Keep response minimal.",
-    language: language,
-    existingSeo: existingSeo,  // Подаваме цялото съществуващо SEO
-    task: "Create 3-5 compelling bullet points and 2-3 FAQ items based on the existing SEO content"
-  };
+  // Create factual prompt to prevent hallucinations
+  const factualPrompt = createFactualPrompt(
+    {
+      title: product.title,
+      description: existingSeo?.metaDescription || '',
+      tags: [], // Will be populated from product data if needed
+      existingSeo: existingSeo
+    },
+    ['bullets', 'faq']
+  );
   
-  // Изпращаме минимален prompt за икономия на токени
   const messages = [
     {
       role: 'system',
-      content: `Language: ${language}. Return ONLY JSON with bullets array and faq array. Nothing else.`
+      content: `Language: ${language}. Generate ONLY factual bullets and FAQ based on provided product data. Return ONLY JSON with bullets array and faq array. Nothing else.`
     },
     {
       role: 'user',
-      content: JSON.stringify(prompt)
+      content: factualPrompt
     }
   ];
   
@@ -128,9 +132,17 @@ async function generateEnhancedBulletsFAQ(data) {
     throw new Error('Invalid JSON from AI');
   }
   
+  // Validate AI response to prevent hallucinations
+  const validated = validateAIResponse(enhanced, {
+    title: product.title,
+    description: existingSeo?.metaDescription || '',
+    tags: [],
+    existingSeo: existingSeo
+  }, ['bullets', 'faq']);
+  
   return {
-    bullets: enhanced.bullets || [],
-    faq: enhanced.faq || [],
+    bullets: validated.bullets || [],
+    faq: validated.faq || [],
     usage
   };
 }
