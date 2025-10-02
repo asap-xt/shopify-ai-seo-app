@@ -7,8 +7,8 @@
  * @returns {Object} Extracted factual attributes
  */
 export function extractFactualAttributes(productData, requestedAttributes = []) {
-  console.log('[FACTUAL-EXTRACTOR] Extracting attributes:', requestedAttributes);
-  console.log('[FACTUAL-EXTRACTOR] Product data:', JSON.stringify(productData, null, 2));
+  // console.log('[FACTUAL-EXTRACTOR] Extracting attributes:', requestedAttributes);
+  // console.log('[FACTUAL-EXTRACTOR] Product data:', JSON.stringify(productData, null, 2));
   
   const extracted = {};
   
@@ -38,7 +38,7 @@ export function extractFactualAttributes(productData, requestedAttributes = []) 
     }
   }
   
-  console.log('[FACTUAL-EXTRACTOR] Extracted attributes:', JSON.stringify(extracted, null, 2));
+  // console.log('[FACTUAL-EXTRACTOR] Extracted attributes:', JSON.stringify(extracted, null, 2));
   return extracted;
 }
 

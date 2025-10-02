@@ -296,7 +296,7 @@ async function loadRichAttributesSettings(shop) {
       // console.log(`[SCHEMA-DEBUG] richAttributes from API:`, data.richAttributes);
       return data.richAttributes || {};
     } else {
-      console.log(`[SCHEMA-DEBUG] API request failed with status:`, response.status);
+      // console.log(`[SCHEMA-DEBUG] API request failed with status:`, response.status);
     }
   } catch (error) {
     console.log('[SCHEMA] Could not load rich attributes settings:', error.message);
@@ -783,7 +783,7 @@ async function generateProductSchemas(shop, productDoc) {
   
   if (!product) {
     console.error(`[SCHEMA] Product not found: ${productGid}`);
-    console.log(`[SCHEMA] generateProductSchemas returning undefined for product ${productDoc.productId}`);
+    // console.log(`[SCHEMA] generateProductSchemas returning undefined for product ${productDoc.productId}`);
     return;
   }
   
@@ -856,7 +856,7 @@ async function generateProductSchemas(shop, productDoc) {
   }
   
   // Return schemas for MongoDB storage
-  console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
+  // console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
   return allSchemas;
 }
 
@@ -1062,7 +1062,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
     }
   }
   
-  console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
+  // console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
   return baseSchemas;
 }
 

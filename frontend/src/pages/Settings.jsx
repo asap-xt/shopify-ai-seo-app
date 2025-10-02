@@ -525,7 +525,13 @@ export default function Settings() {
     
     try {
       // Check generation status from backend instead of checking data directly
-      const statusData = await api(`/api/schema/status?shop=${shop}`);
+      // Add timeout to prevent hanging requests
+      const statusPromise = api(`/api/schema/status?shop=${shop}`);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      const statusData = await Promise.race([statusPromise, timeoutPromise]);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
       
       // Check if generation is still in progress
@@ -557,7 +563,13 @@ export default function Settings() {
         // Generation complete - check final data
         console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
         
-        const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
+        // Add timeout for final data request
+        const finalDataPromise = api(`/ai/schema-data.json?shop=${shop}`);
+        const finalTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Final data request timeout')), 15000)
+        );
+        
+        const finalData = await Promise.race([finalDataPromise, finalTimeoutPromise]);
         console.log('[PROGRESS-CHECK] Final data:', finalData);
         
         // Generation complete
@@ -586,6 +598,22 @@ export default function Settings() {
       }
     } catch (err) {
       console.error('[PROGRESS-CHECK] ❌ Error:', err);
+      
+      // Handle timeout specifically
+      if (err.message && err.message.includes('timeout')) {
+        console.log('[PROGRESS-CHECK] ⏰ Request timeout, will retry...');
+        setToast('Request timeout - retrying...');
+        
+        // Retry after a delay
+        setTimeout(() => {
+          if (isGeneratingRef.current) {
+            checkGenerationProgress();
+          }
+        }, 5000);
+        return;
+      }
+      
+      // For other errors, stop checking
       isGeneratingRef.current = false;
       checkCountRef.current = 0; // Reset counter
       setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
