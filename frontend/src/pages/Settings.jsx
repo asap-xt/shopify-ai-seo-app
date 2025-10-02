@@ -504,8 +504,9 @@ export default function Settings() {
     }
     
     // Additional safety: Check if we're actually in a generating state
-    if (!schemaGenerating) {
-      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating, resetting...');
+    // But give some time for state to sync (first few checks)
+    if (!schemaGenerating && checkCountRef.current > 2) {
+      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after multiple checks, resetting...');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
       return;
@@ -562,6 +563,7 @@ export default function Settings() {
         checkCountRef.current = 0; // Reset counter
         setSchemaComplete(true);
         setSchemaGenerating(false);
+        console.log('[PROGRESS-CHECK] 🔵 Set schemaGenerating state = false');
         
         // Calculate statistics
         const products = [...new Set(finalData.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
@@ -1700,7 +1702,9 @@ export default function Settings() {
                       checkCountRef.current = 0; // Reset counter
                       console.log('[SCHEMA-GEN] 🔵 Set isGeneratingRef.current = true');
                       
+                      // Set state immediately after ref to avoid sync issues
                       setSchemaGenerating(true);
+                      console.log('[SCHEMA-GEN] 🔵 Set schemaGenerating state = true');
                       setSchemaComplete(false);
                       setSchemaProgress({
                         current: 0,
