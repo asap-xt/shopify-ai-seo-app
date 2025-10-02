@@ -67,12 +67,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
 
     console.log('[AI-DISCOVERY] ===== DEBUG SETTINGS =====');
-    console.log('[AI-DISCOVERY] savedSettings:', JSON.stringify(savedSettings, null, 2));
-    console.log('[AI-DISCOVERY] savedSettings.features:', savedSettings.features);
-    console.log('[AI-DISCOVERY] typeof savedSettings.features:', typeof savedSettings.features);
-    console.log('[AI-DISCOVERY] savedSettings.features exists:', !!savedSettings.features);
-    console.log('[AI-DISCOVERY] Object.keys(savedSettings.features):', savedSettings.features ? Object.keys(savedSettings.features) : 'null');
-    console.log('[AI-DISCOVERY] Object.keys length:', savedSettings.features ? Object.keys(savedSettings.features).length : 0);
+    console.log('[AI-DISCOVERY] savedSettings.richAttributes:', savedSettings.richAttributes);
+    console.log('[AI-DISCOVERY] defaultSettings.richAttributes:', defaultSettings.richAttributes);
 
     // Get default structure for the plan
     const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
