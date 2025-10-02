@@ -66,12 +66,12 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // Get saved settings
     const savedSettings = await aiDiscoveryService.getSettings(shop, session);
 
+    // Get default structure for the plan
+    const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
+
     console.log('[AI-DISCOVERY] ===== DEBUG SETTINGS =====');
     console.log('[AI-DISCOVERY] savedSettings.richAttributes:', savedSettings.richAttributes);
     console.log('[AI-DISCOVERY] defaultSettings.richAttributes:', defaultSettings.richAttributes);
-
-    // Get default structure for the plan
-    const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
 
     // IMPORTANT: For new shops, all features should be false by default
     const defaultFeatures = {
