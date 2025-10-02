@@ -12,7 +12,7 @@ import {
   Divider,
   Collapsible,
   BlockStack,
-  InlineBlockStack
+  InlineStack
 } from '@shopify/polaris';
 
 const ValidationTester = ({ shop }) => {

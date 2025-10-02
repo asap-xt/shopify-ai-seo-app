@@ -2218,12 +2218,10 @@ export default function Settings() {
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
       
-      {/* AI Validation Tester - Development Only */}
-      {process.env.NODE_ENV !== 'production' && (
-        <Box paddingBlockStart="400">
-          <ValidationTester shop={shop} />
-        </Box>
-      )}
+      {/* AI Validation Tester - For Testing AI Validation System */}
+      <Box paddingBlockStart="400">
+        <ValidationTester shop={shop} />
+      </Box>
     </BlockStack>
     );
   } catch (error) {
