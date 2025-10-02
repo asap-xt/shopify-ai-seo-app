@@ -850,10 +850,6 @@ app.use('/ai-enhance', aiEnhanceRouter);
 app.use('/api/schema', advancedSchemaRouter);
 app.use('/api/ai', aiSimulationController);
 
-// Test validation endpoints (for AI validation testing)
-const { default: testValidationRouter } = await import('./test/testValidationEndpoint.js');
-app.use('/test', testValidationRouter);
-console.log('✔ Test validation endpoints mounted at /test');
 
 // Mount the new controllers with fixed authentication
 app.use('/collections', collectionsRouter);
