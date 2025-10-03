@@ -141,11 +141,28 @@ async function syncProductsToMongoDB(shop) {
         })));
       }
       
-      const hasSeoMetafields = metafields.some(edge => 
-        edge.node.namespace === 'seo_ai' && 
-        edge.node.key.startsWith('seo__')
-      ) || false;
+      // Extract SEO languages from metafield keys (seo__en__title, seo__bg__description, etc.)
+      const seoLanguages = [];
+      metafields.forEach(edge => {
+        const mf = edge.node;
+        if (mf.namespace === 'seo_ai' && mf.key.startsWith('seo__')) {
+          // Extract language from key like "seo__en__title" or "seo__bg__description"
+          const keyParts = mf.key.split('__');
+          if (keyParts.length >= 2) {
+            const langCode = keyParts[1];
+            if (!seoLanguages.includes(langCode)) {
+              seoLanguages.push(langCode);
+            }
+          }
+        }
+      });
       
+      // Always include 'en' as default if no languages found
+      const detectedLanguages = seoLanguages.length > 0 ? [...new Set(['en', ...seoLanguages])] : ['en'];
+      
+      const hasSeoMetafields = seoLanguages.length > 0;
+      
+      console.log(`[SYNC] Product ${product.title} - detected SEO languages:`, detectedLanguages);
       console.log(`[SYNC] Product ${product.title} has SEO metafields: ${hasSeoMetafields}`);
       
       // Check if product already exists
@@ -172,7 +189,11 @@ async function syncProductsToMongoDB(shop) {
               // Update seoStatus based on metafields
               seoStatus: {
                 optimized: hasSeoMetafields,
-                languages: hasSeoMetafields ? [{ code: 'en', optimized: true, hasSeo: true }] : [],
+                languages: detectedLanguages.map(lang => ({ 
+                  code: lang, 
+                  optimized: true, 
+                  hasSeo: true 
+                })),
                 lastCheckedAt: new Date()
               }
             }
@@ -196,7 +217,11 @@ async function syncProductsToMongoDB(shop) {
           updatedAt: new Date(product.updatedAt),
           seoStatus: {
             optimized: hasSeoMetafields,
-            languages: hasSeoMetafields ? [{ code: 'en', optimized: true, hasSeo: true }] : [],
+            languages: detectedLanguages.map(lang => ({ 
+              code: lang, 
+              optimized: true, 
+              hasSeo: true 
+            })),
             lastCheckedAt: new Date()
           },
           available: product.variants?.edges?.some(v => v.node.availableForSale) || false
@@ -1485,11 +1510,24 @@ router.get('/status', async (req, res) => {
       
       if (savedSchema && savedSchema.schemas && savedSchema.schemas.length > 0) {
         actualDataExists = true;
-        productsWithSchema = savedSchema.schemas.length;
+        
+        // Count unique products by extracting product handles from schema URLs
+        const uniqueProducts = new Set();
+        savedSchema.schemas.forEach(schema => {
+          if (schema.url && schema.url.includes('/products/')) {
+            const handle = schema.url.split('/products/')[1]?.split('#')[0];
+            if (handle) {
+              uniqueProducts.add(handle);
+            }
+          }
+        });
+        productsWithSchema = uniqueProducts.size;
+        
         hasFAQ = !!savedSchema.siteFAQ;
         
         console.log(`[SCHEMA-STATUS] Found saved data in MongoDB:`, {
-          schemas: savedSchema.schemas.length,
+          totalSchemas: savedSchema.schemas.length,
+          uniqueProducts: productsWithSchema,
           hasFAQ: hasFAQ,
           generatedAt: savedSchema.generatedAt
         });
