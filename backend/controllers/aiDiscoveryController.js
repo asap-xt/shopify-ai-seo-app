@@ -2,6 +2,7 @@
 import express from 'express';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
+import Shop from '../db/Shop.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
@@ -420,58 +421,49 @@ async function applyRobotsTxt(shop, robotsTxt) {
   }
   
   try {
-    // Директно използвайте originalShopGraphQL - тя вече има логика за токен
-    const themesQuery = `{
-      themes(first: 10) {
-        edges {
-          node {
-            id
-            name
-            role
-          }
-        }
-      }
-    }`;
+    // Get shop record for access token
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord || !shopRecord.accessToken) {
+      throw new Error('No access token available for shop');
+    }
     
-    const themesData = await originalShopGraphQL(null, shop, themesQuery);
-    const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN');
+    // Use REST API to get themes
+    const themesResponse = await fetch(`https://${shop}/admin/api/2024-07/themes.json`, {
+      headers: {
+        'X-Shopify-Access-Token': shopRecord.accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!themesResponse.ok) {
+      throw new Error(`Failed to fetch themes: ${themesResponse.status}`);
+    }
+    
+    const themesData = await themesResponse.json();
+    const mainTheme = themesData.themes.find(t => t.role === 'main');
     
     if (!mainTheme) {
       throw new Error('Main theme not found');
     }
     
-    const mutation = `
-      mutation createOrUpdateFile($themeId: ID!, $files: [OnlineStoreThemeFileInput!]!) {
-        themeFilesUpsert(themeId: $themeId, files: $files) {
-          upsertedThemeFiles {
-            filename
-            size
-          }
-          userErrors {
-            field
-            message
-            code
-          }
-        }
-      }
-    `;
-    
-    const variables = {
-      themeId: mainTheme.node.id,
-      files: [{
-        filename: "templates/robots.txt.liquid",
-        body: {
-          type: "TEXT",
+    // Use REST API to create/update robots.txt file
+    const fileResponse = await fetch(`https://${shop}/admin/api/2024-07/themes/${mainTheme.id}/assets.json`, {
+      method: 'PUT',
+      headers: {
+        'X-Shopify-Access-Token': shopRecord.accessToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        asset: {
+          key: 'templates/robots.txt.liquid',
           value: robotsTxt
         }
-      }]
-    };
+      })
+    });
     
-    const result = await originalShopGraphQL(null, shop, mutation, variables);
-    
-    if (result.themeFilesUpsert?.userErrors?.length > 0) {
-      const error = result.themeFilesUpsert.userErrors[0];
-      throw new Error(`Failed to update robots.txt: ${error.message}`);
+    if (!fileResponse.ok) {
+      const errorData = await fileResponse.json();
+      throw new Error(`Failed to update robots.txt: ${errorData.errors || fileResponse.statusText}`);
     }
     
     return { success: true, message: 'robots.txt applied successfully' };
