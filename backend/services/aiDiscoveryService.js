@@ -12,7 +12,7 @@ const normalizePlan = (plan) => {
 const BOT_USER_AGENTS = {
   openai: {
     name: 'OpenAI',
-    agents: ['GPTBot', 'ChatGPT-User']
+    agents: ['GPTBot', 'ChatGPT-User', 'CCBot']
   },
   anthropic: {
     name: 'Anthropic',
@@ -28,11 +28,31 @@ const BOT_USER_AGENTS = {
   },
   meta: {
     name: 'Meta AI',
-    agents: ['Meta-ExternalAgent']
+    agents: ['Meta-ExternalAgent', 'MetaBot', 'MetaAI']
+  },
+  microsoft: {
+    name: 'Microsoft AI',
+    agents: ['BingBot', 'MicrosoftBot', 'CopilotBot']
+  },
+  you: {
+    name: 'You.com AI',
+    agents: ['YouBot', 'YouAI']
+  },
+  brave: {
+    name: 'Brave AI',
+    agents: ['BraveBot', 'BraveAI']
+  },
+  duckduckgo: {
+    name: 'DuckDuckGo AI',
+    agents: ['DuckDuckBot', 'DuckDuckGoBot']
+  },
+  yandex: {
+    name: 'Yandex AI',
+    agents: ['YandexBot', 'YandexAI']
   },
   others: {
     name: 'Other AI Bots',
-    agents: ['Bytespider', 'DeepSeekBot']
+    agents: ['Bytespider', 'DeepSeekBot', 'DeepSeek', 'Bard', 'AI2Bot', 'ChatGPT-User']
   }
 };
 
@@ -414,6 +434,23 @@ class AIDiscoveryService {
           robotsTxt += 'Allow: /ai/product/*/schemas.json\n';
         }
         
+        // Always allow robots.txt endpoint
+        robotsTxt += 'Allow: /ai/robots-dynamic\n';
+        
+        // Allow important store pages for context
+        robotsTxt += 'Allow: /products/\n';
+        robotsTxt += 'Allow: /collections/\n';
+        robotsTxt += 'Allow: /pages/\n';
+        
+        // Crawl delay for better performance
+        if (bot === 'openai' || bot === 'anthropic' || bot === 'google') {
+          robotsTxt += 'Crawl-delay: 1\n';
+        } else if (bot === 'perplexity' || bot === 'meta') {
+          robotsTxt += 'Crawl-delay: 2\n';
+        } else {
+          robotsTxt += 'Crawl-delay: 3\n';
+        }
+        
         robotsTxt += '\n';
       }
       
@@ -446,6 +483,10 @@ class AIDiscoveryService {
         robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}\n`;
       }
       
+      // Always include robots.txt endpoint as sitemap
+      robotsTxt += '\n# Dynamic robots.txt\n';
+      robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}\n`;
+      
       // Default deny
       robotsTxt += '\n# Block all other crawlers\n';
       robotsTxt += 'User-agent: *\n';
@@ -462,9 +503,9 @@ class AIDiscoveryService {
     const planBots = {
       'starter': ['openai', 'perplexity'],
       'professional': ['openai', 'anthropic', 'perplexity', 'google'],
-      'growth': ['openai', 'anthropic', 'perplexity', 'google'],
-      'growth extra': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'other'],
-      'enterprise': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'other']
+      'growth': ['openai', 'anthropic', 'perplexity', 'google', 'microsoft'],
+      'growth extra': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'microsoft', 'you', 'brave'],
+      'enterprise': ['openai', 'anthropic', 'perplexity', 'google', 'meta', 'microsoft', 'you', 'brave', 'duckduckgo', 'yandex', 'others']
     };
     
     return planBots[planKey] || ['openai', 'perplexity'];
