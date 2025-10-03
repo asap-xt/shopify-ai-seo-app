@@ -496,7 +496,6 @@ export default function Settings() {
     console.log('[PROGRESS-CHECK] Starting check...');
     console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
     console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
-    console.log('[PROGRESS-CHECK] schemaGenerating state:', schemaGenerating);
     
     // Safety: Don't check if we're not generating
     if (!isGeneratingRef.current) {
@@ -504,153 +503,147 @@ export default function Settings() {
       return;
     }
     
-    // Additional safety: Check if we're actually in a generating state
-    // But give some time for state to sync (first few checks)
-    if (!schemaGenerating && checkCountRef.current > 10) {
-      console.log('[PROGRESS-CHECK] ⚠️ Ref says generating but state says not generating after many checks, checking final data...');
-      
-      // Try to get final data directly to see if generation completed
-      try {
-        const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
-        if (finalData && finalData.schemas && finalData.schemas.length > 0) {
-          console.log('[PROGRESS-CHECK] ✅ Found final data, generation completed!');
-          isGeneratingRef.current = false;
-          checkCountRef.current = 0;
-          setSchemaComplete(true);
-          setSchemaGenerating(false);
-          
-          // Calculate statistics
-          const products = [...new Set(finalData.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
-          
-          setSchemaProgress(prev => ({
-            ...prev,
-            percent: 100,
-            stats: {
-              siteFAQ: finalData.siteFAQ ? true : false,
-              products: products.length,
-              totalSchemas: finalData.schemas.length
-            }
-          }));
-          return;
-        }
-      } catch (err) {
-        console.log('[PROGRESS-CHECK] Could not fetch final data:', err.message);
-      }
-      
-      // If no final data found, reset
-      console.log('[PROGRESS-CHECK] No final data found, resetting...');
+    // Increment check counter
+    checkCountRef.current++;
+    
+    // Check if we've exceeded maximum checks (90 seconds)
+    if (checkCountRef.current > 30) {
+      console.log('[PROGRESS-CHECK] ⏰ Maximum checks reached, stopping');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
-      return;
-    }
-    
-    // Check if we've exceeded maximum checks
-    checkCountRef.current++;
-    if (checkCountRef.current > maxChecks) {
-      console.log('[PROGRESS-CHECK] ⏰ Timeout reached, stopping check');
-      isGeneratingRef.current = false;
       setSchemaGenerating(false);
-      setToast('Schema generation timed out. Please try again.');
+      setToast('Schema generation timed out. Please check if data was generated.');
       return;
     }
     
     try {
-      // Check generation status from backend instead of checking data directly
-      // Add timeout to prevent hanging requests
-      const statusPromise = api(`/api/schema/status?shop=${shop}`);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
-      
-      const statusData = await Promise.race([statusPromise, timeoutPromise]);
+      // Check generation status from backend
+      const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
       
-      // Check if generation is still in progress
-      if (statusData.generating) {
-        // Still generating, update progress
-        console.log('[PROGRESS-CHECK] Still generating, will check again...');
+      // Check the new dataReady flag - this is the source of truth
+      if (statusData.dataReady) {
+        // Data is ready, generation is complete
+        console.log('[PROGRESS-CHECK] ✅ Data is ready! Generation complete!');
         
-        // Update progress based on backend status
-        const progressPercent = Math.min(
-          statusData.progress ? parseInt(statusData.progress.replace('%', '')) : (checkCountRef.current * 5),
-          90
-        );
+        // Stop checking
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0;
+        setSchemaGenerating(false);
+        setSchemaComplete(true);
         
-        console.log('[PROGRESS-CHECK] Updating progress to:', progressPercent + '%');
-        
+        // Update progress to 100%
         setSchemaProgress(prev => ({
           ...prev,
-          percent: progressPercent,
-          currentProduct: statusData.currentProduct || `Processing products... (${checkCountRef.current}/${maxChecks})`
+          percent: 100,
+          currentProduct: 'Complete!',
+          stats: {
+            siteFAQ: statusData.hasSiteFAQ || false,
+            products: statusData.productsWithSchema || 0,
+            totalSchemas: statusData.productsWithSchema || 0
+          }
         }));
         
-        // Check again in 3 seconds ONLY if still generating
+        return; // Stop checking
+      }
+      
+      // Check if still generating
+      if (statusData.generating) {
+        console.log('[PROGRESS-CHECK] Still generating, updating progress...');
+        
+        // Parse progress percentage
+        let progressPercent = 0;
+        if (statusData.progress) {
+          const match = statusData.progress.match(/(\d+)%/);
+          if (match) {
+            progressPercent = parseInt(match[1]);
+          }
+        }
+        
+        // Ensure progress doesn't go backwards
+        setSchemaProgress(prev => ({
+          ...prev,
+          percent: Math.max(prev.percent, progressPercent),
+          currentProduct: statusData.currentProduct || `Processing... (${checkCountRef.current}/30)`
+        }));
+        
+        // Check again in 3 seconds
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
         }, 3000);
+        
       } else {
-        // Generation complete - check final data
-        console.log('[PROGRESS-CHECK] Backend says generation complete, checking final data...');
+        // Not generating and no data ready - might be an error state
+        console.log('[PROGRESS-CHECK] ⚠️ Not generating but no data ready');
         
-        // Add timeout for final data request
-        const finalDataPromise = api(`/ai/schema-data.json?shop=${shop}`);
-        const finalTimeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Final data request timeout')), 15000)
-        );
-        
-        const finalData = await Promise.race([finalDataPromise, finalTimeoutPromise]);
-        console.log('[PROGRESS-CHECK] Final data:', finalData);
-        
-        // Generation complete
-        console.log('[PROGRESS-CHECK] ✅ Generation complete!');
-        isGeneratingRef.current = false;
-        checkCountRef.current = 0; // Reset counter
-        setSchemaComplete(true);
-        setSchemaGenerating(false);
-        console.log('[PROGRESS-CHECK] 🔵 Set schemaGenerating state = false');
-        
-        // Calculate statistics
-        const products = [...new Set(finalData.schemas.map(s => s.url?.split('/products/')[1]?.split('#')[0]))].filter(Boolean);
-        
-        setSchemaProgress(prev => ({
-          ...prev,
-          percent: 100,
-          stats: {
-            siteFAQ: finalData.siteFAQ ? true : false,
-            products: products.length,
-            totalSchemas: finalData.schemas.length
+        // Try one more time to check for data directly
+        try {
+          const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
+          
+          if (finalData && finalData.schemas && finalData.schemas.length > 0) {
+            console.log('[PROGRESS-CHECK] Found data on direct check!');
+            
+            // Mark as complete
+            isGeneratingRef.current = false;
+            checkCountRef.current = 0;
+            setSchemaGenerating(false);
+            setSchemaComplete(true);
+            
+            // Calculate statistics
+            const products = [...new Set(finalData.schemas.map(s => 
+              s.url?.split('/products/')[1]?.split('#')[0]
+            ))].filter(Boolean);
+            
+            setSchemaProgress(prev => ({
+              ...prev,
+              percent: 100,
+              currentProduct: 'Complete!',
+              stats: {
+                siteFAQ: finalData.siteFAQ ? true : false,
+                products: products.length,
+                totalSchemas: finalData.schemas.length
+              }
+            }));
+            
+          } else {
+            // No data found - generation might have failed
+            console.log('[PROGRESS-CHECK] No data found, generation may have failed');
+            isGeneratingRef.current = false;
+            checkCountRef.current = 0;
+            setSchemaGenerating(false);
+            setToast('Schema generation may have failed. Please try again.');
           }
-        }));
-        
-        // STOP checking - generation is done
-        return;
+        } catch (err) {
+          console.error('[PROGRESS-CHECK] Error checking for final data:', err);
+          isGeneratingRef.current = false;
+          checkCountRef.current = 0;
+          setSchemaGenerating(false);
+          setToast('Unable to verify schema generation status.');
+        }
       }
+      
     } catch (err) {
       console.error('[PROGRESS-CHECK] ❌ Error:', err);
       
-      // Handle timeout specifically
-      if (err.message && err.message.includes('timeout')) {
-        console.log('[PROGRESS-CHECK] ⏰ Request timeout, will retry...');
-        setToast('Request timeout - retrying...');
-        
-        // Retry after a delay
+      // On error, retry a few times before giving up
+      if (checkCountRef.current < 5) {
+        console.log('[PROGRESS-CHECK] Retrying after error...');
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
           }
-        }, 8000);
-        return;
+        }, 5000);
+      } else {
+        // Too many errors, stop checking
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0;
+        setSchemaGenerating(false);
+        setToast('Error checking generation status. Please refresh and try again.');
       }
-      
-      // For other errors, stop checking
-      isGeneratingRef.current = false;
-      checkCountRef.current = 0; // Reset counter
-      setToast('Schema generation check failed: ' + (err.message || 'Unknown error'));
-      setSchemaGenerating(false); // Stop on error
     }
-  }, [api, shop, schemaGenerating]);
+  }, [api, shop]);
 
   const loadSettings = async () => {
     try {

@@ -1464,42 +1464,95 @@ router.get('/status', async (req, res) => {
   try {
     const shop = requireShop(req);
     
-    // Get current generation status
-    const currentStatus = generationStatus.get(shop) || { generating: false, progress: '0%', currentProduct: '' };
+    // Get current generation status from memory
+    const currentStatus = generationStatus.get(shop) || { 
+      generating: false, 
+      progress: '0%', 
+      currentProduct: '' 
+    };
     
     console.log(`[SCHEMA-STATUS] Status check for ${shop}:`, currentStatus);
     
-    // Check if FAQ exists
-    const faqQuery = `
-      query {
-        shop {
-          metafield(namespace: "advanced_schema", key: "site_faq") {
-            value
-          }
-        }
+    // IMPORTANT: Check if data actually exists in MongoDB
+    // This is the source of truth, not the in-memory status
+    let actualDataExists = false;
+    let productsWithSchema = 0;
+    let hasFAQ = false;
+    
+    try {
+      // Check MongoDB for actual saved data
+      const savedSchema = await AdvancedSchema.findOne({ shop });
+      
+      if (savedSchema && savedSchema.schemas && savedSchema.schemas.length > 0) {
+        actualDataExists = true;
+        productsWithSchema = savedSchema.schemas.length;
+        hasFAQ = !!savedSchema.siteFAQ;
+        
+        console.log(`[SCHEMA-STATUS] Found saved data in MongoDB:`, {
+          schemas: savedSchema.schemas.length,
+          hasFAQ: hasFAQ,
+          generatedAt: savedSchema.generatedAt
+        });
       }
-    `;
+      
+      // Also check FAQ in metafields as backup
+      if (!hasFAQ) {
+        const faqQuery = `
+          query {
+            shop {
+              metafield(namespace: "advanced_schema", key: "site_faq") {
+                value
+              }
+            }
+          }
+        `;
+        
+        const faqData = await executeShopifyGraphQL(shop, faqQuery);
+        hasFAQ = !!faqData.shop?.metafield?.value;
+      }
+    } catch (dbError) {
+      console.error(`[SCHEMA-STATUS] Error checking MongoDB:`, dbError);
+    }
     
-    const faqData = await executeShopifyGraphQL(shop, faqQuery);
-    const hasFAQ = !!faqData.shop?.metafield?.value;
+    // Determine actual generation status
+    let isActuallyGenerating = currentStatus.generating;
     
-    // Check product count
-    const productsWithSchema = await Product.countDocuments({
-      shop,
-      'advancedSchema.generated': true
-    });
+    // If memory says generating but we found complete data, generation is done
+    if (isActuallyGenerating && actualDataExists) {
+      console.log(`[SCHEMA-STATUS] Memory says generating but data exists - marking as complete`);
+      isActuallyGenerating = false;
+      
+      // Clear the in-memory status since generation is complete
+      generationStatus.set(shop, {
+        generating: false,
+        progress: '100%',
+        currentProduct: 'Complete'
+      });
+    }
     
     res.json({
       enabled: true,
-      generating: currentStatus.generating,
-      progress: currentStatus.progress,
+      generating: isActuallyGenerating,
+      progress: isActuallyGenerating ? currentStatus.progress : '100%',
       currentProduct: currentStatus.currentProduct,
       hasSiteFAQ: hasFAQ,
-      productsWithSchema
+      productsWithSchema: productsWithSchema,
+      // Add this flag to help frontend know data is ready
+      dataReady: actualDataExists
     });
     
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[SCHEMA-STATUS] Error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      enabled: false,
+      generating: false,
+      progress: '0%',
+      currentProduct: '',
+      hasSiteFAQ: false,
+      productsWithSchema: 0,
+      dataReady: false
+    });
   }
 });
 
