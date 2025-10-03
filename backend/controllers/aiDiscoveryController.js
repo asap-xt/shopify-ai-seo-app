@@ -387,10 +387,13 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
 /**
  * Apply robots.txt to theme
  */
+/**
+ * Apply robots.txt to theme - Fixed version
+ */
 async function applyRobotsTxt(shop, robotsTxt) {
   console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
   
-  // Просто проверете дали плана поддържа auto robots
+  // Check if plan supports auto robots
   try {
     const Q = `
       query PlansMe($shop:String!) {
@@ -420,7 +423,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
   }
   
   try {
-    // Директно използвайте originalShopGraphQL - тя вече има логика за токен
+    // Get the main theme
     const themesQuery = `{
       themes(first: 10) {
         edges {
@@ -440,38 +443,52 @@ async function applyRobotsTxt(shop, robotsTxt) {
       throw new Error('Main theme not found');
     }
     
+    // Correct mutation structure for themeFilesUpsert
     const mutation = `
-      mutation createOrUpdateFile($themeId: ID!, $key: String!, $content: String!) {
-        themeFileCreate(input: {
-          themeId: $themeId,
-          key: $key,
-          content: $content
-        }) {
-          themeFile {
-            key
+      mutation CreateOrUpdateRobotsTxt($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) {
+        themeFilesUpsert(themeId: $themeId, files: $files) {
+          upsertedThemeFiles {
+            filename
+            size
           }
           userErrors {
             field
             message
+            code
           }
         }
       }
     `;
     
+    // Correct variables structure
     const variables = {
       themeId: mainTheme.node.id,
-      key: "templates/robots.txt.liquid",
-      content: robotsTxt
+      files: [{
+        filename: "templates/robots.txt.liquid",
+        body: robotsTxt  // Just the string content, no wrapper object
+      }]
     };
+    
+    console.log('[ROBOTS DEBUG] Mutation variables:', JSON.stringify(variables, null, 2));
     
     const result = await originalShopGraphQL(null, shop, mutation, variables);
     
-    if (result.themeFileCreate?.userErrors?.length > 0) {
-      const error = result.themeFileCreate.userErrors[0];
-      throw new Error(`Failed to create robots.txt: ${error.message}`);
+    console.log('[ROBOTS DEBUG] Mutation result:', JSON.stringify(result, null, 2));
+    
+    if (result.themeFilesUpsert?.userErrors?.length > 0) {
+      const error = result.themeFilesUpsert.userErrors[0];
+      throw new Error(`Failed to update robots.txt: ${error.message} (${error.code})`);
     }
     
-    return { success: true, message: 'robots.txt applied successfully' };
+    if (!result.themeFilesUpsert?.upsertedThemeFiles?.length) {
+      throw new Error('No files were created or updated');
+    }
+    
+    return { 
+      success: true, 
+      message: 'robots.txt applied successfully',
+      file: result.themeFilesUpsert.upsertedThemeFiles[0]
+    };
     
   } catch (error) {
     console.error('[ROBOTS DEBUG] Error:', error);
