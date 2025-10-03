@@ -441,16 +441,18 @@ async function applyRobotsTxt(shop, robotsTxt) {
     }
     
     const mutation = `
-      mutation createOrUpdateFile($themeId: ID!, $files: [ThemeFileInput!]!) {
-        themeFilesUpsert(themeId: $themeId, files: $files) {
-          upsertedThemeFiles {
-            filename
-            size
+      mutation createOrUpdateFile($themeId: ID!, $key: String!, $content: String!) {
+        themeFileCreate(input: {
+          themeId: $themeId,
+          key: $key,
+          content: $content
+        }) {
+          themeFile {
+            key
           }
           userErrors {
             field
             message
-            code
           }
         }
       }
@@ -458,20 +460,15 @@ async function applyRobotsTxt(shop, robotsTxt) {
     
     const variables = {
       themeId: mainTheme.node.id,
-      files: [{
-        filename: "templates/robots.txt.liquid",
-        body: {
-          type: "TEXT",
-          value: robotsTxt
-        }
-      }]
+      key: "templates/robots.txt.liquid",
+      content: robotsTxt
     };
     
     const result = await originalShopGraphQL(null, shop, mutation, variables);
     
-    if (result.themeFilesUpsert?.userErrors?.length > 0) {
-      const error = result.themeFilesUpsert.userErrors[0];
-      throw new Error(`Failed to update robots.txt: ${error.message}`);
+    if (result.themeFileCreate?.userErrors?.length > 0) {
+      const error = result.themeFileCreate.userErrors[0];
+      throw new Error(`Failed to create robots.txt: ${error.message}`);
     }
     
     return { success: true, message: 'robots.txt applied successfully' };
