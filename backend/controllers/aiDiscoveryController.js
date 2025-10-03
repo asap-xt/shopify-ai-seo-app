@@ -433,7 +433,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
       }
     }`;
     
-    const themesData = await originalShopGraphQL(shop, themesQuery);
+    const themesData = await originalShopGraphQL(null, shop, themesQuery);
     const mainTheme = themesData.themes.edges.find(t => t.node.role === 'MAIN');
     
     if (!mainTheme) {
@@ -467,7 +467,7 @@ async function applyRobotsTxt(shop, robotsTxt) {
       }]
     };
     
-    const result = await originalShopGraphQL(shop, mutation, variables);
+    const result = await originalShopGraphQL(null, shop, mutation, variables);
     
     if (result.themeFilesUpsert?.userErrors?.length > 0) {
       const error = result.themeFilesUpsert.userErrors[0];
