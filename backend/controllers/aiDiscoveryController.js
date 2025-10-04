@@ -389,6 +389,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
  */
 /**
  * Apply robots.txt to theme - Fixed version
+ * Using only GraphQL with OnlineStoreThemeFilesUpsertFileInput
  */
 async function applyRobotsTxt(shop, robotsTxt) {
   console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
