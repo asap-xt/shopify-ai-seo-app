@@ -21,6 +21,7 @@ const Settings = React.lazy(() => {
   console.log('[APP] ===== LOADING SETTINGS COMPONENT =====');
   return import('./pages/Settings.jsx');
 });
+const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -75,6 +76,7 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/dashboard${paramString}`}>Dashboard</a>
       <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
       <a href={`/settings${paramString}`}>Settings</a>
+      <a href={`/ai-testing${paramString}`}>AI Testing</a>
       <a href={`/billing${paramString}`}>Billing</a>
     </ui-nav-menu>
   );
@@ -745,6 +747,7 @@ export default function App() {
     if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
     if (path.startsWith('/billing')) return 'Billing';
     if (path.startsWith('/settings')) return 'Settings';
+    if (path.startsWith('/ai-testing')) return 'AI Testing';
     return 'Dashboard';
   }, [path]);
 
@@ -773,7 +776,11 @@ export default function App() {
     else if (path === '/settings') {
       console.log('[APP] ===== RENDERING SETTINGS PAGE =====');
       return <Settings shop={shop} />;
-    } 
+    }
+    // AI Testing
+    else if (path === '/ai-testing') {
+      return <AiTesting shop={shop} />;
+    }
     // 404
     else {
       return (

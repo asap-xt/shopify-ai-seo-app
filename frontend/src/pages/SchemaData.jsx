@@ -41,9 +41,6 @@ export default function SchemaData({ shop: shopProp }) {
   const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
   const [currentPlan, setCurrentPlan] = useState(null);
-  const [aiSimulationResponse, setAiSimulationResponse] = useState('');
-  const [showAiBotModal, setShowAiBotModal] = useState(false);
-  const [selectedBot, setSelectedBot] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -120,80 +117,7 @@ export default function SchemaData({ shop: shopProp }) {
     }
   };
 
-  const simulateAIResponse = async (questionType) => {
-    setAiSimulationResponse('Loading simulation...');
-    
-    try {
-      // Check if user has Growth Extra+ plan for real AI simulation
-      const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
-      const currentPlanIndex = planHierarchy.indexOf(currentPlan);
-      const hasRealAISimulation = currentPlanIndex >= 3; // Growth Extra+
-      
-      if (hasRealAISimulation) {
-        // Real AI simulation with Gemini for Growth Extra+ plans
-        setAiSimulationResponse('Loading AI simulation with Gemini...');
-        
-        const response = await api('/api/ai/simulate-response', {
-          method: 'POST',
-          headers: { 'X-Shop': shop },
-          body: {
-            questionType,
-            shop,
-            context: {
-              organization: schemas.organization,
-              website: schemas.website
-            }
-          }
-        });
-        
-        console.log('[SCHEMA-DATA] AI simulation response:', response);
-        
-        if (response && response.aiResponse) {
-          if (response.fallback) {
-            // If it's a fallback response, use basic simulation
-            console.log('[SCHEMA-DATA] AI simulation fallback, using basic simulation');
-            await runBasicSimulation(questionType);
-          } else {
-            setAiSimulationResponse(response.aiResponse);
-          }
-        } else if (response && response.error) {
-          console.error('[SCHEMA-DATA] AI simulation error:', response.error);
-          setAiSimulationResponse(`AI simulation error: ${response.error}. Using basic simulation.`);
-          await runBasicSimulation(questionType);
-        } else {
-          console.warn('[SCHEMA-DATA] Unexpected AI simulation response:', response);
-          setAiSimulationResponse('AI simulation temporarily unavailable. Using basic simulation.');
-          await runBasicSimulation(questionType);
-        }
-      } else {
-        // Basic simulation for Starter, Professional, Growth plans
-        await runBasicSimulation(questionType);
-      }
-    } catch (error) {
-      console.error('[SCHEMA-DATA] Error in AI simulation:', error);
-      setAiSimulationResponse('Error loading simulation data. Please try again.');
-    }
-  };
 
-  const openAiBotModal = (botName, botUrl) => {
-    setSelectedBot({ name: botName, url: botUrl });
-    setShowAiBotModal(true);
-  };
-
-  const copyPromptToClipboard = () => {
-    const prompt = `What products does ${shop} sell? Tell me about this business and what they offer.`;
-    navigator.clipboard.writeText(prompt).then(() => {
-      setToastContent('Prompt copied to clipboard!');
-    }).catch(() => {
-      setToastContent('Failed to copy prompt');
-    });
-  };
-
-  const openBotUrl = () => {
-    if (selectedBot?.url) {
-      window.open(selectedBot.url, '_blank');
-    }
-  };
 
   const runBasicSimulation = async (questionType) => {
     let response = '';
@@ -358,8 +282,7 @@ ${JSON.stringify(allSchemas, null, 2)}
 
   const tabs = [
     { id: 'overview', content: 'Overview', accessibilityLabel: 'Overview' },
-    { id: 'installation', content: 'Installation', accessibilityLabel: 'Installation' },
-    { id: 'ai-testing', content: 'AI Testing', accessibilityLabel: 'AI Testing' }
+    { id: 'installation', content: 'Installation', accessibilityLabel: 'Installation' }
   ];
 
   if (loading) {
@@ -535,187 +458,6 @@ ${schemaScript}
                 </Box>
               )}
 
-              {selectedTab === 2 && (
-                <Box paddingBlockStart="400">
-                  <BlockStack gap="400">
-                    <Card>
-                      <Box padding="300">
-                        <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">AI Search Testing Tools</Text>
-                          
-                          <TextField
-                            label="Test URL"
-                            value={`https://${shop}`}
-                            readOnly
-                            helpText="Use this URL to test how AI bots understand your store"
-                          />
-
-                          <Divider />
-
-                          <BlockStack gap="200">
-                            <InlineStack align="space-between">
-                              <Text>Perplexity AI Search</Text>
-                              <Button
-                                url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                                external
-                                size="slim"
-                              >
-                                Test
-                              </Button>
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>ChatGPT Web Search</Text>
-                              <Button
-                                url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                                external
-                                size="slim"
-                              >
-                                Test
-                              </Button>
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>Claude AI Search</Text>
-                              {isFeatureAvailable('welcomePage') ? (
-                                <Button
-                                  onClick={() => openAiBotModal('Claude AI', 'https://claude.ai/')}
-                                  size="slim"
-                                >
-                                  Test
-                                </Button>
-                              ) : (
-                                <Button disabled size="slim">
-                                  {getRequiredPlan('welcomePage')}+ Required
-                                </Button>
-                              )}
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>Gemini AI Search</Text>
-                              {isFeatureAvailable('welcomePage') ? (
-                                <Button
-                                  onClick={() => openAiBotModal('Gemini AI', 'https://gemini.google.com/')}
-                                  size="slim"
-                                >
-                                  Test
-                                </Button>
-                              ) : (
-                                <Button disabled size="slim">
-                                  {getRequiredPlan('welcomePage')}+ Required
-                                </Button>
-                              )}
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>Meta AI Search</Text>
-                              {isFeatureAvailable('aiSitemap') ? (
-                                <Button
-                                  onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
-                                  size="slim"
-                                >
-                                  Test
-                                </Button>
-                              ) : (
-                                <Button disabled size="slim">
-                                  {getRequiredPlan('aiSitemap')}+ Required
-                                </Button>
-                              )}
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>DeepSeek AI Search</Text>
-                              {isFeatureAvailable('schemaData') ? (
-                                <Button
-                                  onClick={() => openAiBotModal('DeepSeek AI', 'https://chat.deepseek.com/')}
-                                  size="slim"
-                                >
-                                  Test
-                                </Button>
-                              ) : (
-                                <Button disabled size="slim">
-                                  {getRequiredPlan('schemaData')}+ Required
-                                </Button>
-                              )}
-                            </InlineStack>
-                          </BlockStack>
-                          
-                          <Banner tone="info">
-                            <Text>
-                              <strong>How to test with AI bots:</strong><br/>
-                              • <strong>Perplexity & ChatGPT:</strong> Click "Test" - they support URL parameters<br/>
-                              • <strong>Claude, Gemini, Meta AI, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
-                            </Text>
-                          </Banner>
-                        </BlockStack>
-                      </Box>
-                    </Card>
-
-                    <Card>
-                      <Box padding="300">
-                        <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">AI Search Simulation</Text>
-                          
-                          <Text variant="bodyMd" tone="subdued">
-                            Test how AI bots would respond to questions about your store based on your structured data.
-                          </Text>
-
-                          <BlockStack gap="200">
-                            <InlineStack align="space-between">
-                              <Text>What products does this store sell?</Text>
-                              <Button
-                                onClick={() => simulateAIResponse('products')}
-                                size="slim"
-                              >
-                                Simulate Response
-                              </Button>
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>Tell me about this business</Text>
-                              <Button
-                                onClick={() => simulateAIResponse('business')}
-                                size="slim"
-                              >
-                                Simulate Response
-                              </Button>
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>What categories does this store have?</Text>
-                              <Button
-                                onClick={() => simulateAIResponse('categories')}
-                                size="slim"
-                              >
-                                Simulate Response
-                              </Button>
-                            </InlineStack>
-
-                            <InlineStack align="space-between">
-                              <Text>What is this store's contact information?</Text>
-                              <Button
-                                onClick={() => simulateAIResponse('contact')}
-                                size="slim"
-                              >
-                                Simulate Response
-                              </Button>
-                            </InlineStack>
-                          </BlockStack>
-
-                          {aiSimulationResponse && (
-                            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                              <Text variant="bodyMd" fontWeight="semibold">AI Bot Response:</Text>
-                              <Box paddingBlockStart="200">
-                                <Text variant="bodyMd">{aiSimulationResponse}</Text>
-                              </Box>
-                            </Box>
-                          )}
-                        </BlockStack>
-                      </Box>
-                    </Card>
-                  </BlockStack>
-                </Box>
-              )}
             </Tabs>
           </BlockStack>
         </Box>
@@ -725,40 +467,6 @@ ${schemaScript}
         <Toast content={toastContent} onDismiss={() => setToastContent('')} />
       )}
       
-      {/* AI Bot Modal */}
-      <Modal
-        open={showAiBotModal}
-        onClose={() => setShowAiBotModal(false)}
-        title={`Test with ${selectedBot?.name}`}
-        primaryAction={{
-          content: `Open ${selectedBot?.name}`,
-          onAction: openBotUrl
-        }}
-        secondaryActions={[
-          {
-            content: 'Copy Prompt',
-            onAction: copyPromptToClipboard
-          }
-        ]}
-      >
-        <Modal.Section>
-          <BlockStack gap="400">
-            <Text>
-              Copy the prompt below and paste it into {selectedBot?.name} to test how it responds to questions about your store:
-            </Text>
-            
-            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-              <Text as="pre" variant="bodyMd">
-                What products does {shop} sell? Tell me about this business and what they offer.
-              </Text>
-            </Box>
-            
-            <Text variant="bodySm" tone="subdued">
-              This prompt will help you see how AI bots understand and respond to questions about your store's products and business information.
-            </Text>
-          </BlockStack>
-        </Modal.Section>
-      </Modal>
     </>
   );
 }
