@@ -1346,8 +1346,9 @@ const spaRoutes = [
   '/ai-seo/sitemap',
   '/ai-seo/store-metadata',
   '/ai-seo/schema-data',
-  '/billing', 
-  '/settings'
+  '/settings',
+  '/ai-testing',
+  '/billing'
 ];
 
   spaRoutes.forEach((route) => {

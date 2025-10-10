@@ -47,9 +47,29 @@ function useRoute() {
   const [path, setPath] = useState(window.location.pathname);
   
   useEffect(() => {
-    const handleLocationChange = () => setPath(window.location.pathname);
+    const handleLocationChange = () => {
+      console.log('[useRoute] Location changed to:', window.location.pathname);
+      setPath(window.location.pathname);
+    };
+    
+    // Listen for popstate (browser back/forward)
     window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
+    
+    // Listen for navigation link clicks
+    const handleClick = (e) => {
+      const target = e.target.closest('a');
+      if (target && target.href && target.href.startsWith(window.location.origin)) {
+        const newPath = new URL(target.href).pathname;
+        console.log('[useRoute] Navigation click detected, new path:', newPath);
+        setTimeout(() => handleLocationChange(), 0);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      document.removeEventListener('click', handleClick);
+    };
   }, []);
   
   return { path };
@@ -779,6 +799,9 @@ export default function App() {
     }
     // AI Testing
     else if (path === '/ai-testing') {
+      console.log('[APP] ===== RENDERING AI TESTING PAGE =====');
+      console.log('[APP] Path:', path);
+      console.log('[APP] Shop:', shop);
       return <AiTesting shop={shop} />;
     }
     // 404
