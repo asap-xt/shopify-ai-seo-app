@@ -74,8 +74,8 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/${paramString}`} rel="home">Home</a>
       <a href={`/dashboard${paramString}`}>Dashboard</a>
       <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
-      <a href={`/billing${paramString}`}>Billing</a>
       <a href={`/settings${paramString}`}>Settings</a>
+      <a href={`/billing${paramString}`}>Billing</a>
     </ui-nav-menu>
   );
 }
