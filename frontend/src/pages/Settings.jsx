@@ -860,7 +860,13 @@ export default function Settings() {
         
         // Set basic success toast after a short delay
         setTimeout(() => {
-          setToast('Settings saved successfully');
+          // Check if any bots are enabled to show robots.txt reminder
+          const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+          if (hasEnabledBots) {
+            setToast('Settings saved! robots.txt generated. Click "Generate robots.txt" below to configure.');
+          } else {
+            setToast('Settings saved successfully');
+          }
           console.log('[SETTINGS] Basic success toast set after delay');
           
           // Don't show View buttons for basic save - only for AI features
@@ -1336,43 +1342,52 @@ export default function Settings() {
               </Banner>
             )}
             
-            <Banner>
-              <p>
-                {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) ? 
-                  "With your plan, you can apply robots.txt changes directly to your theme!" :
-                  "Copy the generated rules and add them to your theme's robots.txt.liquid file."
-                }
-              </p>
-            </Banner>
+            {!hasUnsavedChanges && Object.values(settings?.bots || {}).some(bot => bot.enabled) && (
+              <Banner status="critical" title="⚠️ REQUIRED: Configure robots.txt">
+                <BlockStack gap="300">
+                  <p><strong>AI Discovery will NOT work without robots.txt configuration!</strong></p>
+                  <p>Your AI bots are configured, but they can't access your store without robots.txt.</p>
+                  <p>Click "Generate robots.txt" below to get your custom configuration and installation instructions.</p>
+                </BlockStack>
+              </Banner>
+            )}
+            
+            {!Object.values(settings?.bots || {}).some(bot => bot.enabled) && (
+              <Banner>
+                <p>Select AI bots above and save settings to generate robots.txt configuration.</p>
+              </Banner>
+            )}
             
             <InlineStack gap="200">
               <Button 
-                onClick={async () => { // <-- Ð”Ð¾Ð±Ð°Ð²ÐµÑ‚Ðµ async
-                  console.log('[ADD MANUAL] Starting...');
-                  console.log('[ADD MANUAL] Settings:', settings);
+                primary
+                onClick={async () => {
+                  console.log('[GENERATE ROBOTS] Starting...');
+                  console.log('[GENERATE ROBOTS] Settings:', settings);
                   
                   try {
                     const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    console.log('[ADD MANUAL] Has selected bots:', hasSelectedBots);
+                    console.log('[GENERATE ROBOTS] Has selected bots:', hasSelectedBots);
                     
                     if (!hasSelectedBots) {
-                      console.log('[ADD MANUAL] No bots, showing modal');
+                      console.log('[GENERATE ROBOTS] No bots, showing modal');
                       setShowNoBotsModal(true);
                     } else {
-                      console.log('[ADD MANUAL] Calling generateRobotsTxt...');
-                      await generateRobotsTxt(); // <-- Ð”Ð¾Ð±Ð°Ð²ÐµÑ‚Ðµ await
-                      console.log('[ADD MANUAL] Robots.txt generated, showing instructions');
+                      console.log('[GENERATE ROBOTS] Calling generateRobotsTxt...');
+                      await generateRobotsTxt();
+                      console.log('[GENERATE ROBOTS] Robots.txt generated, showing instructions');
                       setShowManualInstructions(true);
                     }
                   } catch (error) {
-                    console.error('[ADD MANUAL] Error:', error);
+                    console.error('[GENERATE ROBOTS] Error:', error);
                     setToast('Error generating robots.txt: ' + error.message);
                   }
                 }}
               >
-                Add manually
+                📋 Generate robots.txt
               </Button>
               
+              {/* COMMENTED OUT - Auto apply for Growth+ plans (future feature)
               {['growth', 'growth_extra', 'enterprise'].includes(normalizePlan(settings?.plan)) && (
                 <Button 
                   primary 
@@ -1411,6 +1426,7 @@ export default function Settings() {
                   Apply Automatically
                 </Button>
               )}
+              */}
             </InlineStack>
           </BlockStack>
         </Box>
@@ -2011,7 +2027,7 @@ export default function Settings() {
               <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
                 <li>Select AI bots from the "AI Bot Access Control" section above</li>
                 <li>Click "Save Settings" to save your selections</li>
-                <li>Then click "Apply Automatically" to configure robots.txt</li>
+                <li>Then click "Generate robots.txt" to configure</li>
               </ol>
             </BlockStack>
           </Modal.Section>
@@ -2038,19 +2054,26 @@ export default function Settings() {
         >
           <Modal.Section>
             <BlockStack gap="400">
+              <Banner status="critical">
+                <BlockStack gap="200">
+                  <p><strong>⚠️ IMPORTANT: AI Discovery will NOT work without this step!</strong></p>
+                  <p>You must manually add robots.txt to your theme for AI bots to access your store.</p>
+                </BlockStack>
+              </Banner>
+              
               <Text variant="headingMd">How to add robots.txt manually:</Text>
               
-              <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
+              <ol style={{ marginLeft: '20px', marginTop: '10px', marginBottom: '20px' }}>
                 <li>Click "Continue" to see your custom robots.txt content</li>
                 <li>Copy the generated content</li>
-                  <li>Go to <strong>Online Store → Themes</strong></li>
-                  <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
-                <li>Find or create <strong>robots.txt.liquid</strong> file</li>
-                <li>Paste the content and save</li>
+                <li>Go to <strong>Online Store → Themes</strong></li>
+                <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
+                <li>Find or create <strong>robots.txt.liquid</strong> file in templates folder</li>
+                <li>Paste the content and click <strong>Save</strong></li>
               </ol>
               
               <Banner status="info">
-                <p>This allows AI bots to discover and properly index your products.</p>
+                <p>💡 <strong>Why this matters:</strong> This file tells AI bots (OpenAI, Anthropic, Google, etc.) which pages they can access to properly understand and index your products for AI search results.</p>
               </Banner>
             </BlockStack>
           </Modal.Section>
