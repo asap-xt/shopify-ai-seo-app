@@ -44,12 +44,21 @@ async function readJson(response) {
 
 // -------- Simple routing hook
 function useRoute() {
-  const [path, setPath] = useState(window.location.pathname);
+  // Normalize path - remove /apps/new-ai-seo prefix for embedded apps
+  const normalizePath = (pathname) => {
+    // Remove /apps/new-ai-seo or /apps/2749a2f6d38ff5796ed256b5c9dc70a1 prefix
+    const normalized = pathname.replace(/^\/apps\/[^/]+/, '') || '/';
+    console.log('[useRoute] Normalized path:', pathname, '→', normalized);
+    return normalized;
+  };
+  
+  const [path, setPath] = useState(normalizePath(window.location.pathname));
   
   useEffect(() => {
     const handleLocationChange = () => {
-      console.log('[useRoute] Location changed to:', window.location.pathname);
-      setPath(window.location.pathname);
+      const normalized = normalizePath(window.location.pathname);
+      console.log('[useRoute] Location changed to:', normalized);
+      setPath(normalized);
     };
     
     // Listen for popstate (browser back/forward)
