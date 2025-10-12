@@ -29,6 +29,7 @@ import {
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -150,6 +151,8 @@ export default function BulkEdit({ shop: shopProp }) {
     localStorage.getItem('hasVisitedProducts') === 'true'
   );
   const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
+  const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   
   // Load models and plan on mount
@@ -363,13 +366,7 @@ export default function BulkEdit({ shop: shopProp }) {
     const handleStartEnhancement = async () => {
       // console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
       
-      // Check if plan allows AI enhancement
-      if (plan && !['Growth Extra', 'Enterprise'].includes(plan)) {
-        setCurrentPlan(plan);
-        setShowAIEnhanceModal(false);
-        setShowPlanUpgradeModal(true);
-        return;
-      }
+      // REMOVED: Plan check - now handled by token checking in backend
       
       // Не затваряме модала - ще покажем progress модала
       setAIEnhanceProgress({
@@ -380,7 +377,7 @@ export default function BulkEdit({ shop: shopProp }) {
         results: null
       });
       
-      const results = { successful: 0, failed: 0, skipped: 0, skippedDueToPlan: 0 };
+      const results = { successful: 0, failed: 0, skipped: 0 };
       
       for (let i = 0; i < selectedWithSEO.length; i++) {
         const product = selectedWithSEO[i];
@@ -392,16 +389,7 @@ export default function BulkEdit({ shop: shopProp }) {
         }));
         
         try {
-          const eligibility = await api('/ai-enhance/check-eligibility', {
-            method: 'POST',
-            shop,
-            body: { shop },
-          });
-          if (!eligibility.eligible) {
-            results.skipped++;
-            results.skippedDueToPlan++;
-            continue;
-          }
+          // REMOVED: check-eligibility - token checking happens in enhancement endpoint
           
           const enhanceData = await api('/ai-enhance/product', {
             method: 'POST',
@@ -458,6 +446,33 @@ export default function BulkEdit({ shop: shopProp }) {
           }
         } catch (error) {
           console.error('Enhancement error:', error);
+          
+          // Check if it's a 402 error (insufficient tokens or trial restriction)
+          if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+            // Stop processing and show appropriate modal
+            setAIEnhanceProgress({
+              processing: false,
+              current: 0,
+              total: 0,
+              currentItem: '',
+              results: null
+            });
+            
+            setTokenError(error);
+            setCurrentPlan(error.currentPlan || plan || 'starter');
+            
+            // Show appropriate modal based on needsUpgrade flag
+            if (error.needsUpgrade) {
+              setShowPlanUpgradeModal(true);
+            } else if (error.trialRestriction) {
+              // Trial restriction - could show a different modal or same upgrade modal
+              setShowPlanUpgradeModal(true);
+            } else {
+              setShowInsufficientTokensModal(true);
+            }
+            return; // Stop processing other products
+          }
+          
           results.failed++;
         }
         
@@ -1852,10 +1867,30 @@ export default function BulkEdit({ shop: shopProp }) {
       
       <UpgradeModal
         open={showPlanUpgradeModal}
-        onClose={() => setShowPlanUpgradeModal(false)}
+        onClose={() => {
+          setShowPlanUpgradeModal(false);
+          setTokenError(null);
+        }}
         featureName="AI Enhancement"
         currentPlan={currentPlan}
       />
+      
+      {tokenError && (
+        <InsufficientTokensModal
+          open={showInsufficientTokensModal}
+          onClose={() => {
+            setShowInsufficientTokensModal(false);
+            setTokenError(null);
+          }}
+          tokensRequired={tokenError.tokensRequired}
+          tokensAvailable={tokenError.tokensAvailable}
+          feature="AI-Enhanced Products"
+          shop={shop}
+          needsUpgrade={tokenError.needsUpgrade}
+          minimumPlan={tokenError.minimumPlanForFeature}
+          currentPlan={tokenError.currentPlan}
+        />
+      )}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

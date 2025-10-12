@@ -39,16 +39,13 @@ router.post('/check-eligibility', validateRequest(), async (req, res) => {
     
     console.log('🔍 [CHECK-ELIGIBILITY] Shop:', shop, 'Plan:', planKey);
     
-    // Normalize plan names for comparison
-    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const isEligible = ['growth_extra', 'enterprise'].includes(normalizedPlan) || 
-                      planKey === 'growth extra';
-    
+    // CHANGED: Always return eligible=true
+    // Token checking will happen in actual enhancement endpoints
+    // This endpoint now only returns plan info for display purposes
     res.json({ 
-      eligible: isEligible, 
+      eligible: true, 
       plan: planKey,
-      normalizedPlan,
-      message: isEligible ? 'AI enhancement available' : 'Upgrade to Growth Extra or Enterprise for AI enhancement'
+      message: 'AI enhancement available with tokens'
     });
   } catch (error) {
     console.error('🔍 [CHECK-ELIGIBILITY] Error:', error);
