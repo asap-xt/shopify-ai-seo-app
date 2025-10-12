@@ -162,26 +162,16 @@ router.post('/product', validateRequest(), async (req, res) => {
     console.log('🔍 [AI-ENHANCE/DEBUG] Starting AI enhance for product:', productId);
     console.log('🔍 [AI-ENHANCE/DEBUG] Languages:', languages);
     
-    // Check plan
+    // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
     console.log('🔍 [AI-ENHANCE/DEBUG] Shop plan:', planKey);
     console.log('🔍 [AI-ENHANCE/DEBUG] Subscription found:', !!subscription);
     
-    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    console.log('🔍 [AI-ENHANCE/DEBUG] Normalized plan:', normalizedPlan);
-    console.log('🔍 [AI-ENHANCE/DEBUG] Plan check:', ['growth_extra', 'enterprise'].includes(normalizedPlan) || planKey === 'growth extra');
-    
-    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
-      console.log('🔍 [AI-ENHANCE/DEBUG] ===== PLAN CHECK FAILED =====');
-      return res.status(403).json({ 
-        error: 'AI enhancement requires Growth Extra or Enterprise plan',
-        currentPlan: planKey 
-      });
-    }
-    
     // === TOKEN CHECKING ===
+    // NOTE: We allow any plan IF they have tokens purchased
+    // Growth Extra+ plans get included tokens, others must purchase
     const feature = 'ai-seo-product-enhanced';
     
     // Check if feature requires tokens
@@ -214,14 +204,23 @@ router.post('/product', validateRequest(), async (req, res) => {
       
       // If sufficient tokens → Allow (even in trial, if tokens were purchased)
       if (!tokenBalance.hasBalance(requiredTokens)) {
+        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        
         return res.status(402).json({
           error: 'Insufficient token balance',
           requiresPurchase: true,
+          needsUpgrade: needsUpgrade,
+          minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+          currentPlan: planKey,
           tokensRequired: requiredTokens,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: requiredTokens - tokenBalance.balance,
           feature,
-          message: 'You need more tokens to use this feature'
+          message: needsUpgrade 
+            ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced product features'
+            : 'You need more tokens to use this feature'
         });
       }
       
@@ -355,19 +354,13 @@ router.post('/collection', validateRequest(), async (req, res) => {
     
     console.log('🔍 [DEBUG] Starting AI enhance for collection:', collectionId);
     
-    // Check plan
+    // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
-      return res.status(403).json({ 
-        error: 'AI enhancement requires Growth Extra or Enterprise plan',
-        currentPlan: planKey
-      });
-    }
-    
     // === TOKEN CHECKING ===
+    // NOTE: We allow any plan IF they have tokens purchased
+    // Growth Extra+ plans get included tokens, others must purchase
     const feature = 'ai-seo-collection';
     
     // Check if feature requires tokens
@@ -389,7 +382,7 @@ router.post('/collection', validateRequest(), async (req, res) => {
           trialRestriction: true,
           requiresActivation: true,
           trialEndsAt: subscription.trialEndsAt,
-          currentPlan: subscription.plan,
+          currentPlan: planKey,
           feature,
           tokensRequired: requiredTokens,
           tokensAvailable: tokenBalance.balance,
@@ -400,14 +393,23 @@ router.post('/collection', validateRequest(), async (req, res) => {
       
       // If sufficient tokens → Allow (even in trial, if tokens were purchased)
       if (!tokenBalance.hasBalance(requiredTokens)) {
+        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        
         return res.status(402).json({
           error: 'Insufficient token balance',
           requiresPurchase: true,
+          needsUpgrade: needsUpgrade,
+          minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+          currentPlan: planKey,
           tokensRequired: requiredTokens,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: requiredTokens - tokenBalance.balance,
           feature,
-          message: 'You need more tokens to use this feature'
+          message: needsUpgrade 
+            ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced collection features'
+            : 'You need more tokens to use this feature'
         });
       }
       
