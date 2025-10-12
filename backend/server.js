@@ -322,6 +322,41 @@ app.use((req, res, next) => {
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 
+// TEST ENDPOINT - Set token balance for testing (DEV ONLY)
+app.post('/test/set-token-balance', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Not allowed in production' });
+  }
+  
+  try {
+    const { shop, balance } = req.body;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+    
+    const TokenBalance = (await import('./db/TokenBalance.js')).default;
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    const oldBalance = tokenBalance.balance;
+    tokenBalance.balance = balance !== undefined ? balance : 0;
+    await tokenBalance.save();
+    
+    console.log(`[TEST] Token balance updated for ${shop}: ${oldBalance} → ${tokenBalance.balance}`);
+    
+    res.json({ 
+      success: true, 
+      shop,
+      oldBalance,
+      newBalance: tokenBalance.balance,
+      message: `Balance updated: ${oldBalance} → ${tokenBalance.balance}`
+    });
+  } catch (error) {
+    console.error('[TEST] Error setting token balance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Test sitemap endpoint
 app.get('/test-sitemap.xml', (req, res) => {
   console.log('[TEST_SITEMAP] Test sitemap endpoint called!');
