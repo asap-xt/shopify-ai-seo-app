@@ -23,6 +23,43 @@ import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 
+// Helper: Get features for a plan
+function getPlanFeatures(planKey) {
+  const features = [];
+  
+  // Basic features (all plans)
+  features.push('Basic SEO optimization');
+  features.push('AI Bot Access Control');
+  features.push('Sitemap generation');
+  
+  // Professional+
+  if (['professional', 'growth', 'growth extra', 'enterprise'].includes(planKey)) {
+    features.push('Multi-language support');
+    features.push('Collections optimization');
+  }
+  
+  // Growth+
+  if (['growth', 'growth extra', 'enterprise'].includes(planKey)) {
+    features.push('Automated syncing');
+    features.push('robots.txt auto-generation');
+  }
+  
+  // Growth Extra+
+  if (['growth extra', 'enterprise'].includes(planKey)) {
+    features.push('AI-Optimized Sitemap');
+    features.push('Advanced Schema Data');
+    features.push('Priority support');
+  }
+  
+  // Enterprise
+  if (planKey === 'enterprise') {
+    features.push('Dedicated account manager');
+    features.push('Custom integration');
+  }
+  
+  return features;
+}
+
 /**
  * Get billing info for current shop
  * GET /api/billing/info?shop={shop}
@@ -56,7 +93,11 @@ router.get('/info', verifyRequest, async (req, res) => {
         key,
         name: PLANS[key].name,
         price: PLANS[key].priceUsd,
-        includedTokens: getIncludedTokens(key)
+        productLimit: PLANS[key].productLimit,
+        queryLimit: PLANS[key].queryLimit,
+        providersAllowed: PLANS[key].providersAllowed,
+        includedTokens: getIncludedTokens(key),
+        features: getPlanFeatures(key)
       }))
     });
   } catch (error) {

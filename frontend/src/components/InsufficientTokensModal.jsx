@@ -32,9 +32,12 @@ export default function InsufficientTokensModal({
   const [purchasing, setPurchasing] = useState(false);
 
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens
-    const tokensPerDollar = 10000; // Simplified estimation
-    return Math.floor(tokenBudget * tokensPerDollar);
+    // Backend calculates: $10 → $6 for tokens → 60M tokens at $0.10/1M rate
+    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens (internal)
+    const geminiRate = 0.10; // $0.10 per 1M tokens
+    const tokensPerMillion = 1000000;
+    const tokens = Math.floor((tokenBudget / geminiRate) * tokensPerMillion);
+    return tokens;
   };
 
   const handlePurchase = async () => {
@@ -215,7 +218,7 @@ export default function InsufficientTokensModal({
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <BlockStack gap="100">
               <Text variant="bodySm" tone="subdued">
-                💡 60% of your payment goes to tokens, 40% to app maintenance
+                💡 Tokens are used for AI-powered features
               </Text>
               <Text variant="bodySm" tone="subdued">
                 ♻️ Tokens never expire and roll over indefinitely

@@ -6,8 +6,8 @@
 // Output: $0.30 per 1M tokens
 // Average for our use case: ~$0.10 per 1M tokens (mostly input)
 
-const GEMINI_RATE_PER_1M_TOKENS = 0.10; // USD
-const GEMINI_RATE_PER_TOKEN = GEMINI_RATE_PER_1M_TOKENS / 1_000_000;
+const GEMINI_RATE_PER_1M_TOKENS = 0.10; // USD per 1M tokens
+const GEMINI_RATE_PER_TOKEN = GEMINI_RATE_PER_1M_TOKENS / 1_000_000; // $0.0000001 per token
 
 export const TOKEN_CONFIG = {
   // Purchase settings
@@ -17,21 +17,22 @@ export const TOKEN_CONFIG = {
   maximumPurchase: 1000,             // Safety limit
   customAllowed: true,               // User can enter custom amount
   
-  // Revenue split
+  // Revenue split (INTERNAL ONLY - not shown to users)
   appRevenuePercent: 0.40,           // 40% to app
   tokenBudgetPercent: 0.60,          // 60% for Gemini tokens
   
   // Provider (internal only)
   provider: 'gemini-2.5-flash-lite',
-  providerRate: GEMINI_RATE_PER_TOKEN,
+  providerRate: GEMINI_RATE_PER_TOKEN, // $0.0000001 per token
   
   // Token expiration
   tokensExpire: false,
   rollover: true,
   
   // Calculate tokens from USD amount
+  // Example: $10 → $6 for tokens → 60,000,000 tokens at $0.10/1M
   calculateTokens(usdAmount) {
-    const tokenBudget = usdAmount * this.tokenBudgetPercent;
+    const tokenBudget = usdAmount * this.tokenBudgetPercent; // 60% goes to tokens
     const tokens = Math.floor(tokenBudget / this.providerRate);
     return tokens;
   },
@@ -52,7 +53,7 @@ export const TOKEN_CONFIG = {
   }
 };
 
-// Token costs for different features
+// Token costs for different features (in tokens)
 export const TOKEN_COSTS = {
   'ai-seo-product-basic': {
     base: 1000,           // ~1000 tokens per product (title, description, meta)
@@ -174,4 +175,3 @@ export function requiresTokens(feature) {
 export function isBlockedInTrial(feature) {
   return TRIAL_BLOCKED_FEATURES.includes(feature);
 }
-

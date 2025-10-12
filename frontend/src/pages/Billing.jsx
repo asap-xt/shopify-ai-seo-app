@@ -145,10 +145,13 @@ export default function Billing({ shop }) {
   };
 
   // Calculate token value
+  // Backend calculates: $10 → $6 for tokens → 60M tokens at $0.10/1M rate
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens
-    const tokensPerDollar = 10000; // Simplified (adjust based on actual rate)
-    return Math.floor(tokenBudget * tokensPerDollar);
+    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens (internal)
+    const geminiRate = 0.10; // $0.10 per 1M tokens
+    const tokensPerMillion = 1000000;
+    const tokens = Math.floor((tokenBudget / geminiRate) * tokensPerMillion);
+    return tokens;
   };
 
   // Render loading state
@@ -360,10 +363,48 @@ export default function Billing({ shop }) {
                       <Text variant="heading2xl">${plan.price}</Text>
                       <Text variant="bodySm" tone="subdued">per month</Text>
                       
+                      <Divider />
+                      
+                      {/* Product Limit */}
+                      <InlineStack align="space-between">
+                        <Text variant="bodySm" tone="subdued">Products</Text>
+                        <Text variant="bodySm" fontWeight="semibold">
+                          {plan.productLimit?.toLocaleString() || 'N/A'}
+                        </Text>
+                      </InlineStack>
+                      
+                      {/* AI Queries */}
+                      <InlineStack align="space-between">
+                        <Text variant="bodySm" tone="subdued">AI Queries</Text>
+                        <Text variant="bodySm" fontWeight="semibold">
+                          {plan.queryLimit?.toLocaleString() || 'N/A'}
+                        </Text>
+                      </InlineStack>
+                      
+                      {/* Included Tokens */}
                       {plan.includedTokens > 0 && (
                         <Badge tone="info">
                           +{plan.includedTokens.toLocaleString()} tokens/month
                         </Badge>
+                      )}
+                      
+                      {/* Features List */}
+                      {plan.features && plan.features.length > 0 && (
+                        <Box>
+                          <Text variant="bodySm" fontWeight="semibold">Features:</Text>
+                          <BlockStack gap="100">
+                            {plan.features.slice(0, 5).map((feature, idx) => (
+                              <Text key={idx} variant="bodySm" tone="subdued">
+                                ✓ {feature}
+                              </Text>
+                            ))}
+                            {plan.features.length > 5 && (
+                              <Text variant="bodySm" tone="subdued">
+                                + {plan.features.length - 5} more...
+                              </Text>
+                            )}
+                          </BlockStack>
+                        </Box>
                       )}
                       
                       <Button
@@ -502,7 +543,7 @@ export default function Billing({ shop }) {
                 <Divider />
                 
                 <Text variant="bodySm" tone="subdued">
-                  60% goes to tokens, 40% to app maintenance
+                  Tokens never expire and roll over indefinitely
                 </Text>
               </BlockStack>
             </Box>
