@@ -25,7 +25,10 @@ export default function InsufficientTokensModal({
   tokensRequired,
   tokensAvailable,
   tokensNeeded,
-  onPurchaseTokens
+  onPurchaseTokens,
+  needsUpgrade = false,
+  minimumPlan = null,
+  currentPlan = null
 }) {
   const [customAmount, setCustomAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState(PRESET_AMOUNTS[0]);
@@ -114,6 +117,33 @@ export default function InsufficientTokensModal({
               </InlineStack>
             </BlockStack>
           </Banner>
+
+          {/* Upgrade Suggestion (for Starter/Professional/Growth plans) */}
+          {needsUpgrade && minimumPlan && (
+            <Banner tone="info">
+              <BlockStack gap="200">
+                <Text variant="bodyMd" fontWeight="semibold">
+                  💡 Upgrade to {minimumPlan}+
+                </Text>
+                <Text variant="bodySm">
+                  Current plan: <strong>{currentPlan}</strong>
+                </Text>
+                <Text variant="bodySm" tone="subdued">
+                  {minimumPlan} plans include AI tokens and unlock advanced AI features. 
+                  You can also purchase tokens separately while staying on your current plan.
+                </Text>
+                <Box paddingBlockStart="200">
+                  <Button 
+                    url="/billing" 
+                    variant="primary"
+                    size="slim"
+                  >
+                    View Plans & Upgrade
+                  </Button>
+                </Box>
+              </BlockStack>
+            </Banner>
+          )}
 
           <Divider />
 

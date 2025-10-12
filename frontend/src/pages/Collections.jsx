@@ -25,6 +25,7 @@ import {
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
@@ -100,6 +101,8 @@ export default function CollectionsPage({ shop: shopProp }) {
   // AI Enhancement Modal state
   const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,
@@ -353,6 +356,22 @@ export default function CollectionsPage({ shop: shopProp }) {
           
         } catch (error) {
           console.error('Error enhancing collection:', collection.id, error);
+          
+          // Check if it's a 402 error (insufficient tokens or trial restriction)
+          if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+            setIsProcessing(false);
+            setTokenError(error);
+            setCurrentPlan(error.currentPlan || 'starter');
+            
+            // Show appropriate modal
+            if (error.needsUpgrade) {
+              setShowUpgradeModal(true);
+            } else {
+              setShowInsufficientTokensModal(true);
+            }
+            return; // Stop processing
+          }
+          
           results[collection.id] = {
             success: false,
             skipped: false,
@@ -1502,6 +1521,23 @@ export default function CollectionsPage({ shop: shopProp }) {
         featureName="AI Enhancement"
         currentPlan={currentPlan}
       />
+      
+      {tokenError && (
+        <InsufficientTokensModal
+          open={showInsufficientTokensModal}
+          onClose={() => {
+            setShowInsufficientTokensModal(false);
+            setTokenError(null);
+          }}
+          tokensRequired={tokenError.tokensRequired}
+          tokensAvailable={tokenError.tokensAvailable}
+          feature="AI-Enhanced Collection"
+          shop={shop}
+          needsUpgrade={tokenError.needsUpgrade}
+          minimumPlan={tokenError.minimumPlanForFeature}
+          currentPlan={tokenError.currentPlan}
+        />
+      )}
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
