@@ -22,6 +22,7 @@ const Settings = React.lazy(() => {
   return import('./pages/Settings.jsx');
 });
 const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
+const Billing = React.lazy(() => import('./pages/Billing.jsx'));
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -793,13 +794,7 @@ export default function App() {
     } 
     // Billing
     else if (path === '/billing') {
-      return (
-        <Card>
-          <Box padding="400">
-            <Text>Billing page</Text>
-          </Box>
-        </Card>
-      );
+      return <Billing shop={shop} />;
     } 
     // Settings
     else if (path === '/settings') {
