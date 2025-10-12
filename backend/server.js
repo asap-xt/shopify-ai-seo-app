@@ -420,7 +420,7 @@ app.get('/simple-test', (req, res) => {
 // ---------------------------------------------------------------------------
 import authRouter from './auth.js';                      // mounts /auth
 import tokenExchangeRouter from './token-exchange.js';   // mounts /token-exchange
-import billingRouter from './billing.js';                // mounts /billing/*
+import billingRouter from './billing/billingRoutes.js';  // mounts /billing/* (NEW: GraphQL-based)
 import seoRouter from './controllers/seoController.js';  // mounts /seo/* (plans/me е премахнат)
 import languageRouter from './controllers/languageController.js';  // mounts /api/languages/*
 import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
@@ -460,7 +460,8 @@ app.post('/api/auth/session', validateRequest(), async (req, res) => {
 // Mount core routers
 app.use('/auth', authRouter);
 app.use('/token-exchange', tokenExchangeRouter);
-app.use('/billing', billingRouter);
+app.use('/billing', billingRouter);  // Handles both /billing/* and /api/billing/*
+app.use('/api/billing', billingRouter);  // API routes for billing
 app.use(seoRouter);
 app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
 app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
