@@ -912,25 +912,12 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     // Determine feature type
     const feature = enhanced ? 'ai-seo-product-enhanced' : 'ai-seo-product-basic';
     
-    // Check if feature requires tokens
+    // Check if feature requires tokens (basic SEO does NOT require tokens)
     if (requiresTokens(feature)) {
       // Get subscription and check trial status
       const subscription = await Subscription.findOne({ shop });
       const now = new Date();
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
-      
-      // Block if in trial
-      if (inTrial && isBlockedInTrial(feature)) {
-        return res.status(402).json({
-          error: 'Feature not available during trial',
-          trialRestriction: true,
-          requiresActivation: true,
-          trialEndsAt: subscription.trialEndsAt,
-          currentPlan: subscription.plan,
-          feature,
-          message: 'This AI-enhanced feature requires plan activation or token purchase'
-        });
-      }
       
       // Calculate required tokens (accounting for languages if "all")
       const isAll = String(language || '').toLowerCase() === 'all';
@@ -952,6 +939,24 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // If in trial AND insufficient tokens → Block with trial activation modal
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(requiredTokens)) {
+        return res.status(402).json({
+          error: 'Feature not available during trial without tokens',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          message: 'This AI-enhanced feature requires plan activation or token purchase'
+        });
+      }
+      
+      // If sufficient tokens → Allow (even in trial, if tokens were purchased)
       if (!tokenBalance.hasBalance(requiredTokens)) {
         return res.status(402).json({
           error: 'Insufficient token balance',

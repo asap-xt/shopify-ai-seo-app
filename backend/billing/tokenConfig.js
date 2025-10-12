@@ -147,23 +147,23 @@ export function getIncludedTokens(plan) {
 }
 
 // Features that require tokens
+// NOTE: Basic SEO does NOT require tokens! Only AI-Enhanced features.
 export const TOKEN_REQUIRED_FEATURES = [
-  'ai-seo-product-basic',
-  'ai-seo-product-enhanced',
-  'ai-seo-collection',
-  'ai-testing-simulation',
-  'ai-schema-advanced',
-  'ai-sitemap-optimized'
+  'ai-seo-product-enhanced',   // Requires tokens (bullets/FAQ)
+  'ai-seo-collection',          // Requires tokens
+  'ai-testing-simulation',      // Requires tokens
+  'ai-schema-advanced',         // Requires tokens
+  'ai-sitemap-optimized'        // Requires tokens
 ];
 
 // Features blocked during trial
+// NOTE: Basic SEO is allowed in trial! Only AI-Enhanced features are blocked.
 export const TRIAL_BLOCKED_FEATURES = [
-  'ai-seo-product-basic',
-  'ai-seo-product-enhanced',
-  'ai-seo-collection',
-  'ai-testing-simulation',
-  'ai-schema-advanced',
-  'ai-sitemap-optimized'
+  'ai-seo-product-enhanced',   // Blocked in trial
+  'ai-seo-collection',          // Blocked in trial
+  'ai-testing-simulation',      // Blocked in trial
+  'ai-schema-advanced',         // Blocked in trial
+  'ai-sitemap-optimized'        // Blocked in trial
 ];
 
 // Check if feature requires tokens
