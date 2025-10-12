@@ -2,6 +2,9 @@
 import express from 'express';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import { GraphQLClient } from 'graphql-request';
+import Subscription from '../db/Subscription.js';
+import TokenBalance from '../db/TokenBalance.js';
+import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
 
 // Copy ONLY the OpenRouter connection from aiEnhanceController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -66,6 +69,66 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Shop:', shop);
     console.log('[AI-SIMULATION] Context:', context);
     console.log('[AI-SIMULATION] Access token available:', !!accessToken);
+    
+    // === TOKEN CHECKING ===
+    // AI Testing/Simulation requires tokens for all plans
+    const feature = 'ai-testing-simulation';
+    
+    if (requiresTokens(feature)) {
+      // Get subscription and check trial status
+      const subscription = await Subscription.findOne({ shop });
+      const planKey = subscription?.plan || 'starter';
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      
+      // Calculate required tokens
+      const requiredTokens = calculateFeatureCost(feature);
+      
+      // Check token balance
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // If in trial AND insufficient tokens → Block with trial activation modal
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(requiredTokens)) {
+        return res.status(402).json({
+          error: 'Feature not available during trial without tokens',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: planKey,
+          feature,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          message: 'AI Testing requires plan activation or token purchase'
+        });
+      }
+      
+      // If insufficient tokens → Request token purchase
+      if (!tokenBalance.hasBalance(requiredTokens)) {
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        
+        return res.status(402).json({
+          error: 'Insufficient token balance',
+          requiresPurchase: true,
+          needsUpgrade: needsUpgrade,
+          minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+          currentPlan: planKey,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          feature,
+          message: needsUpgrade 
+            ? 'Purchase more tokens or upgrade to Growth Extra plan for AI Testing'
+            : 'You need more tokens to use AI Testing'
+        });
+      }
+      
+      // Deduct tokens immediately
+      await tokenBalance.deductTokens(requiredTokens, feature, { questionType });
+      console.log(`[AI-SIMULATION] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN CHECKING ===
     
     // Check if OpenRouter API key is available
     if (!process.env.OPENROUTER_API_KEY) {
