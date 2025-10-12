@@ -993,7 +993,7 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     }
     // === END TOKEN CHECKING ===
 
-    const isAll = String(language || '').toLowerCase() === 'all';
+    // isAll and validLangs were already defined in language limit check above
     if (isAll) {
       // 1) Get published shop locales
       const shopLocales = await getShopPublishedLocales(req, shop);
