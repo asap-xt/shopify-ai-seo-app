@@ -7,6 +7,7 @@ import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import { validateAIResponse, createFactualPrompt } from '../utils/aiValidator.js';
 import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
+import { getPlanConfig } from '../plans.js';
 
 const router = express.Router();
 
@@ -165,6 +166,20 @@ router.post('/product', validateRequest(), async (req, res) => {
     
     console.log('🔍 [AI-ENHANCE/DEBUG] Shop plan:', planKey);
     console.log('🔍 [AI-ENHANCE/DEBUG] Subscription found:', !!subscription);
+    
+    // === LANGUAGE LIMIT CHECK ===
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+    
+    if (languages.length > languageLimit) {
+      return res.status(403).json({
+        error: `Your plan supports up to ${languageLimit} language(s)`,
+        currentPlan: planKey,
+        languageLimit: languageLimit,
+        requestedLanguages: languages.length,
+        message: `Upgrade your plan to optimize ${languages.length} languages. Your ${planConfig.name} plan supports ${languageLimit} language(s).`
+      });
+    }
     
     // === TOKEN CHECKING ===
     // NOTE: We allow any plan IF they have tokens purchased
@@ -369,6 +384,20 @@ router.post('/collection', validateRequest(), async (req, res) => {
       });
     }
     
+    // === LANGUAGE LIMIT CHECK ===
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+    
+    if (languages.length > languageLimit) {
+      return res.status(403).json({
+        error: `Your plan supports up to ${languageLimit} language(s)`,
+        currentPlan: planKey,
+        languageLimit: languageLimit,
+        requestedLanguages: languages.length,
+        message: `Upgrade your plan to optimize ${languages.length} languages. Your ${planConfig.name} plan supports ${languageLimit} language(s).`
+      });
+    }
+    
     // === TOKEN CHECKING FOR AI ENHANCEMENT ===
     // NOTE: After plan check passes, AI Enhancement requires tokens
     // Growth Extra+ plans get included tokens, Professional/Growth must purchase
@@ -545,6 +574,20 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         currentPlan: planKey,
         minimumPlanRequired: 'Professional',
         message: 'Upgrade to Professional plan to access Collections optimization'
+      });
+    }
+    
+    // === LANGUAGE LIMIT CHECK ===
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+    
+    if (languages.length > languageLimit) {
+      return res.status(403).json({
+        error: `Your plan supports up to ${languageLimit} language(s)`,
+        currentPlan: planKey,
+        languageLimit: languageLimit,
+        requestedLanguages: languages.length,
+        message: `Upgrade your plan to optimize ${languages.length} languages. Your ${planConfig.name} plan supports ${languageLimit} language(s).`
       });
     }
     

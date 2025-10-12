@@ -908,32 +908,50 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
 
+    // === GET SUBSCRIPTION AND PLAN ===
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || 'starter';
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+    
+    // === LANGUAGE LIMIT CHECK ===
+    const isAll = String(language || '').toLowerCase() === 'all';
+    let languageCount = 1;
+    let validLangs = [language];
+    
+    if (isAll) {
+      // Get published shop locales to count languages
+      const shopLocales = await getShopPublishedLocales(req, shop);
+      validLangs = [];
+      for (const loc of shopLocales) {
+        if (await hasProductTranslation(req, shop, productId, loc)) {
+          const short = canonLang(loc);
+          if (!validLangs.includes(short)) validLangs.push(short);
+        }
+      }
+      languageCount = validLangs.length || 1;
+      
+      // Check if language count exceeds plan limit
+      if (languageCount > languageLimit) {
+        return res.status(403).json({
+          error: `Your plan supports up to ${languageLimit} language(s)`,
+          currentPlan: planKey,
+          languageLimit: languageLimit,
+          requestedLanguages: languageCount,
+          message: `Upgrade your plan to optimize ${languageCount} languages. Your ${planConfig.name} plan supports ${languageLimit} language(s).`
+        });
+      }
+    }
+    
     // === TOKEN CHECKING ===
     // Determine feature type
     const feature = enhanced ? 'ai-seo-product-enhanced' : 'ai-seo-product-basic';
     
     // Check if feature requires tokens (basic SEO does NOT require tokens)
     if (requiresTokens(feature)) {
-      // Get subscription and check trial status
-      const subscription = await Subscription.findOne({ shop });
+      // Check trial status
       const now = new Date();
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
-      
-      // Calculate required tokens (accounting for languages if "all")
-      const isAll = String(language || '').toLowerCase() === 'all';
-      let languageCount = 1;
-      if (isAll) {
-        // Get published shop locales to count languages
-        const shopLocales = await getShopPublishedLocales(req, shop);
-        const validLangs = [];
-        for (const loc of shopLocales) {
-          if (await hasProductTranslation(req, shop, productId, loc)) {
-            const short = canonLang(loc);
-            if (!validLangs.includes(short)) validLangs.push(short);
-          }
-        }
-        languageCount = validLangs.length || 1;
-      }
       
       const requiredTokens = calculateFeatureCost(feature, { languages: languageCount });
       

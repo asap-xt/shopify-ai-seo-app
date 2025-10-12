@@ -9,6 +9,7 @@ export const PLANS = {
     priceUsd: 10,
     queryLimit: 50,
     productLimit: 150,
+    languageLimit: 1, // Only default language
     providersAllowed: ["deepseek", "llama"],
     autosyncCron: "0 0 */14 * *", // every 14 days
   },
@@ -17,6 +18,7 @@ export const PLANS = {
     priceUsd: 39,
     queryLimit: 600,
     productLimit: 300,
+    languageLimit: 2, // Max 2 languages
     providersAllowed: ["openai", "llama", "deepseek"],
     autosyncCron: "0 */48 * * *", // every 48 hours (minute 0)
   },
@@ -25,6 +27,7 @@ export const PLANS = {
     priceUsd: 59,
     queryLimit: 1500,
     productLimit: 1000,
+    languageLimit: 3, // Max 3 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
     autosyncCron: "0 */24 * * *", // every 24 hours
   },
@@ -33,6 +36,7 @@ export const PLANS = {
     priceUsd: 119,
     queryLimit: 4000,
     productLimit: 2000,
+    languageLimit: 6, // Max 6 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,4),
     autosyncCron: "0 */12 * * *", // every 12 hours
   },
@@ -41,6 +45,7 @@ export const PLANS = {
     priceUsd: 299,
     queryLimit: 10000,
     productLimit: 10000,
+    languageLimit: 10, // Max 10 languages
     providersAllowed: ["claude", "openai", "gemini", "deepseek", "llama"],
     autosyncCron: "0 */2 * * *", // every 2 hours
   },
