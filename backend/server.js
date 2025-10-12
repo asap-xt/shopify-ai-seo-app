@@ -322,10 +322,17 @@ app.use((req, res, next) => {
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 
-// TEST ENDPOINT - Set token balance for testing (DEV ONLY)
+// TEST ENDPOINT - Set token balance for testing
+// Requires TEST_SECRET for security (works in production with secret)
 app.post('/test/set-token-balance', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Not allowed in production' });
+  // Security check: require test secret
+  const testSecret = req.headers['x-test-secret'] || req.body.testSecret;
+  const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
+  
+  if (testSecret !== expectedSecret) {
+    return res.status(403).json({ 
+      error: 'Unauthorized. Requires X-Test-Secret header or testSecret in body.' 
+    });
   }
   
   try {
@@ -353,6 +360,51 @@ app.post('/test/set-token-balance', async (req, res) => {
     });
   } catch (error) {
     console.error('[TEST] Error setting token balance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// TEST ENDPOINT - Get token balance for testing
+app.get('/test/get-token-balance', async (req, res) => {
+  const testSecret = req.headers['x-test-secret'] || req.query.testSecret;
+  const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
+  
+  if (testSecret !== expectedSecret) {
+    return res.status(403).json({ 
+      error: 'Unauthorized. Requires X-Test-Secret header or testSecret query param.' 
+    });
+  }
+  
+  try {
+    const shop = req.query.shop;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+    
+    const TokenBalance = (await import('./db/TokenBalance.js')).default;
+    const tokenBalance = await TokenBalance.findOne({ shop });
+    
+    if (!tokenBalance) {
+      return res.json({ 
+        success: true,
+        shop,
+        exists: false,
+        message: 'No token balance found for this shop'
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      shop,
+      exists: true,
+      balance: tokenBalance.balance,
+      totalPurchased: tokenBalance.totalPurchased,
+      totalUsed: tokenBalance.totalUsed,
+      lastPurchase: tokenBalance.lastPurchase
+    });
+  } catch (error) {
+    console.error('[TEST] Error getting token balance:', error);
     res.status(500).json({ error: error.message });
   }
 });
