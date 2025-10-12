@@ -4,7 +4,9 @@ import { requireShop, shopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
+import TokenBalance from '../db/TokenBalance.js';
 import { validateAIResponse, createFactualPrompt } from '../utils/aiValidator.js';
+import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
 
 const router = express.Router();
 
@@ -178,6 +180,51 @@ router.post('/product', validateRequest(), async (req, res) => {
         currentPlan: planKey 
       });
     }
+    
+    // === TOKEN CHECKING ===
+    const feature = 'ai-seo-product-enhanced';
+    
+    // Check if feature requires tokens
+    if (requiresTokens(feature)) {
+      // Check trial status
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      
+      // Block if in trial
+      if (inTrial && isBlockedInTrial(feature)) {
+        return res.status(402).json({
+          error: 'Feature not available during trial',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature,
+          message: 'This AI-enhanced feature requires plan activation or token purchase'
+        });
+      }
+      
+      // Calculate required tokens (for all languages)
+      const requiredTokens = calculateFeatureCost(feature, { languages: languages.length });
+      
+      // Check token balance
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      if (!tokenBalance.hasBalance(requiredTokens)) {
+        return res.status(402).json({
+          error: 'Insufficient token balance',
+          requiresPurchase: true,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          feature,
+          message: 'You need more tokens to use this feature'
+        });
+      }
+      
+      // Deduct tokens immediately
+      await tokenBalance.deductTokens(requiredTokens, feature, { productId });
+      console.log(`[AI-ENHANCE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN CHECKING ===
     
     const results = [];
     const model = 'google/gemini-2.5-flash-lite';

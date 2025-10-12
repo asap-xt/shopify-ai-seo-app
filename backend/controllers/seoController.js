@@ -8,8 +8,10 @@ import addFormats from 'ajv-formats';
 import mongoose from 'mongoose';
 import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
+import TokenBalance from '../db/TokenBalance.js';
 import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
 
 const router = express.Router();
 
@@ -901,10 +903,72 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     console.log('[SEO/GENERATE] req.shopDomain:', req.shopDomain);
     console.log('[SEO/GENERATE] req.body:', req.body);
     const shop = req.shopDomain;
-    const { productId, model, language = 'en' } = req.body || {};
+    const { productId, model, language = 'en', enhanced = false } = req.body || {};
     if (!productId || !model) {
       return res.status(400).json({ error: 'Missing required fields: shop, model, productId' });
     }
+
+    // === TOKEN CHECKING ===
+    // Determine feature type
+    const feature = enhanced ? 'ai-seo-product-enhanced' : 'ai-seo-product-basic';
+    
+    // Check if feature requires tokens
+    if (requiresTokens(feature)) {
+      // Get subscription and check trial status
+      const subscription = await Subscription.findOne({ shop });
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      
+      // Block if in trial
+      if (inTrial && isBlockedInTrial(feature)) {
+        return res.status(402).json({
+          error: 'Feature not available during trial',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature,
+          message: 'This AI-enhanced feature requires plan activation or token purchase'
+        });
+      }
+      
+      // Calculate required tokens (accounting for languages if "all")
+      const isAll = String(language || '').toLowerCase() === 'all';
+      let languageCount = 1;
+      if (isAll) {
+        // Get published shop locales to count languages
+        const shopLocales = await getShopPublishedLocales(req, shop);
+        const validLangs = [];
+        for (const loc of shopLocales) {
+          if (await hasProductTranslation(req, shop, productId, loc)) {
+            const short = canonLang(loc);
+            if (!validLangs.includes(short)) validLangs.push(short);
+          }
+        }
+        languageCount = validLangs.length || 1;
+      }
+      
+      const requiredTokens = calculateFeatureCost(feature, { languages: languageCount });
+      
+      // Check token balance
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      if (!tokenBalance.hasBalance(requiredTokens)) {
+        return res.status(402).json({
+          error: 'Insufficient token balance',
+          requiresPurchase: true,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          feature,
+          message: 'You need more tokens to use this feature'
+        });
+      }
+      
+      // Deduct tokens immediately (will be rolled back if generation fails)
+      await tokenBalance.deductTokens(requiredTokens, feature, { productId });
+      console.log(`[SEO/GENERATE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN CHECKING ===
 
     const isAll = String(language || '').toLowerCase() === 'all';
     if (isAll) {
