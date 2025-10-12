@@ -6,7 +6,13 @@ import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import { PLANS, TRIAL_DAYS } from '../plans.js';
-import { TOKEN_CONFIG, getIncludedTokens } from './tokenConfig.js';
+import { 
+  TOKEN_CONFIG, 
+  getIncludedTokens,
+  calculateFeatureCost,
+  requiresTokens,
+  TRIAL_BLOCKED_FEATURES
+} from './tokenConfig.js';
 import { 
   createSubscription, 
   purchaseTokens, 
@@ -301,6 +307,73 @@ router.get('/history', verifyRequest, async (req, res) => {
   } catch (error) {
     console.error('[Billing] Error getting history:', error);
     res.status(500).json({ error: 'Failed to get billing history' });
+  }
+});
+
+/**
+ * Check feature access (trial + token validation)
+ * POST /api/billing/check-feature-access
+ * Body: { feature: 'ai-seo-product-basic', options: {} }
+ */
+router.post('/check-feature-access', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { feature, options = {} } = req.body;
+    
+    if (!feature) {
+      return res.status(400).json({ error: 'Feature parameter required' });
+    }
+    
+    // Get subscription and check trial status
+    const subscription = await Subscription.findOne({ shop });
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    
+    // If in trial and feature is blocked, return restriction
+    if (inTrial && TRIAL_BLOCKED_FEATURES.includes(feature)) {
+      return res.status(402).json({
+        error: 'Feature not available during trial',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        message: 'This AI-enhanced feature requires plan activation or token purchase'
+      });
+    }
+    
+    // Check if feature requires tokens
+    if (!requiresTokens(feature)) {
+      return res.json({ allowed: true, message: 'Feature does not require tokens' });
+    }
+    
+    // Get token balance and calculate required tokens
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    const requiredTokens = calculateFeatureCost(feature, options);
+    
+    // Check if sufficient balance
+    if (!tokenBalance.hasBalance(requiredTokens)) {
+      return res.status(402).json({
+        error: 'Insufficient token balance',
+        requiresPurchase: true,
+        tokensRequired: requiredTokens,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: requiredTokens - tokenBalance.balance,
+        feature,
+        message: 'You need more tokens to use this feature'
+      });
+    }
+    
+    // All checks passed
+    res.json({
+      allowed: true,
+      tokensRequired: requiredTokens,
+      tokensAvailable: tokenBalance.balance,
+      message: 'Feature access granted'
+    });
+  } catch (error) {
+    console.error('[Billing] Error checking feature access:', error);
+    res.status(500).json({ error: 'Failed to check feature access' });
   }
 });
 
