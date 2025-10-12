@@ -355,10 +355,23 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    // === TOKEN CHECKING ===
-    // NOTE: Collections as a feature have no plan restrictions (all plans can use collections)
-    // Only AI Enhancement requires tokens. Growth Extra+ plans get included tokens, others must purchase
-    // Product/query limits are enforced elsewhere (not here)
+    // === PLAN CHECK FOR COLLECTIONS ACCESS ===
+    // Collections are only available for Professional+ plans
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+      return res.status(403).json({
+        error: 'Collections optimization requires Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access Collections optimization'
+      });
+    }
+    
+    // === TOKEN CHECKING FOR AI ENHANCEMENT ===
+    // NOTE: After plan check passes, AI Enhancement requires tokens
+    // Growth Extra+ plans get included tokens, Professional/Growth must purchase
     const feature = 'ai-seo-collection';
     
     // Check if feature requires tokens
@@ -517,12 +530,27 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     console.log('[AI-ENHANCE] Starting for collection:', collectionId);
     console.log('[AI-ENHANCE] Languages to process:', languages);
     
-    // === TOKEN CHECKING ===
-    // NOTE: Collections as a feature have no plan restrictions (all plans can use collections)
-    // Only AI Enhancement requires tokens, which is checked below
-    // Product/query limits are enforced elsewhere (not here)
+    // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
+    
+    // === PLAN CHECK FOR COLLECTIONS ACCESS ===
+    // Collections are only available for Professional+ plans
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+      return res.status(403).json({
+        error: 'Collections optimization requires Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access Collections optimization'
+      });
+    }
+    
+    // === TOKEN CHECKING FOR AI ENHANCEMENT ===
+    // NOTE: After plan check passes, AI Enhancement requires tokens
+    // Growth Extra+ plans get included tokens, Professional/Growth must purchase
     const feature = 'ai-seo-collection';
     
     // Check if feature requires tokens
