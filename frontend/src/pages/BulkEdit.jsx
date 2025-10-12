@@ -461,13 +461,13 @@ export default function BulkEdit({ shop: shopProp }) {
             setTokenError(error);
             setCurrentPlan(error.currentPlan || plan || 'starter');
             
-            // Show appropriate modal based on needsUpgrade flag
-            if (error.needsUpgrade) {
-              setShowPlanUpgradeModal(true);
-            } else if (error.trialRestriction) {
-              // Trial restriction - could show a different modal or same upgrade modal
+            // Show appropriate modal based on error type
+            if (error.trialRestriction) {
+              // Trial user trying to use token feature → Show upgrade modal
               setShowPlanUpgradeModal(true);
             } else {
+              // Insufficient tokens (with or without upgrade suggestion)
+              // InsufficientTokensModal handles both cases via needsUpgrade prop
               setShowInsufficientTokensModal(true);
             }
             return; // Stop processing other products

@@ -363,10 +363,13 @@ export default function CollectionsPage({ shop: shopProp }) {
             setTokenError(error);
             setCurrentPlan(error.currentPlan || 'starter');
             
-            // Show appropriate modal
-            if (error.needsUpgrade) {
+            // Show appropriate modal based on error type
+            if (error.trialRestriction) {
+              // Trial user trying to use token feature → Show upgrade modal
               setShowUpgradeModal(true);
             } else {
+              // Insufficient tokens (with or without upgrade suggestion)
+              // InsufficientTokensModal handles both cases via needsUpgrade prop
               setShowInsufficientTokensModal(true);
             }
             return; // Stop processing

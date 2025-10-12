@@ -67,8 +67,20 @@ export function makeSessionFetch(debug = true) {
     }
 
     if (!response.ok) {
+      // For 402 errors (insufficient tokens), preserve all response data
+      if (response.status === 402 && data) {
+        const error = new Error(data.error || data.message || 'Payment Required');
+        error.status = 402;
+        // Copy all fields from data to error object
+        Object.assign(error, data);
+        throw error;
+      }
+      
+      // For other errors, throw simple message
       const msg = data?.error || data?.message || `HTTP ${response.status}`;
-      throw new Error(msg);
+      const error = new Error(msg);
+      error.status = response.status;
+      throw error;
     }
     
     return data; // ВЪРНИ data, НЕ response!

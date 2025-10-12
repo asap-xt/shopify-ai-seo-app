@@ -356,8 +356,9 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const planKey = subscription?.plan || '';
     
     // === TOKEN CHECKING ===
-    // NOTE: We allow any plan IF they have tokens purchased
-    // Growth Extra+ plans get included tokens, others must purchase
+    // NOTE: Collections as a feature have no plan restrictions (all plans can use collections)
+    // Only AI Enhancement requires tokens. Growth Extra+ plans get included tokens, others must purchase
+    // Product/query limits are enforced elsewhere (not here)
     const feature = 'ai-seo-collection';
     
     // Check if feature requires tokens
@@ -516,17 +517,69 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     console.log('[AI-ENHANCE] Starting for collection:', collectionId);
     console.log('[AI-ENHANCE] Languages to process:', languages);
     
-    // Check plan
+    // === TOKEN CHECKING ===
+    // NOTE: Collections as a feature have no plan restrictions (all plans can use collections)
+    // Only AI Enhancement requires tokens, which is checked below
+    // Product/query limits are enforced elsewhere (not here)
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
-    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const feature = 'ai-seo-collection';
     
-    if (!['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra') {
-      return res.status(403).json({ 
-        error: 'AI enhancement requires Growth Extra or Enterprise plan',
-        currentPlan: planKey
-      });
+    // Check if feature requires tokens
+    if (requiresTokens(feature)) {
+      // Check trial status
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      
+      // Calculate required tokens for all languages
+      const requiredTokens = calculateFeatureCost(feature, { languages: languages.length });
+      
+      // Check token balance
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // If in trial AND insufficient tokens → Block with trial activation modal
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(requiredTokens)) {
+        return res.status(402).json({
+          error: 'Feature not available during trial without tokens',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: planKey,
+          feature,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          message: 'This AI-enhanced feature requires plan activation or token purchase'
+        });
+      }
+      
+      // If sufficient tokens → Allow (even in trial, if tokens were purchased)
+      if (!tokenBalance.hasBalance(requiredTokens)) {
+        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        
+        return res.status(402).json({
+          error: 'Insufficient token balance',
+          requiresPurchase: true,
+          needsUpgrade: needsUpgrade,
+          minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+          currentPlan: planKey,
+          tokensRequired: requiredTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: requiredTokens - tokenBalance.balance,
+          feature,
+          message: needsUpgrade 
+            ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced collection features'
+            : 'You need more tokens to use this feature'
+        });
+      }
+      
+      // Deduct tokens immediately
+      await tokenBalance.deductTokens(requiredTokens, feature, { collectionId });
+      console.log(`[AI-ENHANCE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
     }
+    // === END TOKEN CHECKING ===
     
     const results = { enhanced: 0, failed: 0, errors: [] };
     const model = 'google/gemini-2.5-flash-lite';
