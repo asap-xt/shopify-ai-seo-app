@@ -1934,13 +1934,14 @@ export default function BulkEdit({ shop: shopProp }) {
             setShowInsufficientTokensModal(false);
             setTokenError(null);
           }}
-          tokensRequired={tokenError.tokensRequired}
-          tokensAvailable={tokenError.tokensAvailable}
-          feature="AI-Enhanced Products"
+          tokensRequired={tokenError.tokensRequired || 0}
+          tokensAvailable={tokenError.tokensAvailable || 0}
+          tokensNeeded={tokenError.tokensNeeded || 0}
+          feature="ai-seo-product-enhanced"
           shop={shop}
-          needsUpgrade={tokenError.needsUpgrade}
-          minimumPlan={tokenError.minimumPlanForFeature}
-          currentPlan={tokenError.currentPlan}
+          needsUpgrade={tokenError.needsUpgrade || false}
+          minimumPlan={tokenError.minimumPlanForFeature || null}
+          currentPlan={tokenError.currentPlan || currentPlan}
         />
       )}
       

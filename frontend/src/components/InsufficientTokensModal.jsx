@@ -25,38 +25,23 @@ export default function InsufficientTokensModal({
   tokensRequired,
   tokensAvailable,
   tokensNeeded,
-  onPurchaseTokens,
+  shop,
   needsUpgrade = false,
   minimumPlan = null,
   currentPlan = null
 }) {
-  const [customAmount, setCustomAmount] = useState('');
-  const [selectedAmount, setSelectedAmount] = useState(PRESET_AMOUNTS[0]);
-  const [purchasing, setPurchasing] = useState(false);
-
-  const calculateTokens = (usdAmount) => {
-    // Backend calculates: $10 → $6 for tokens → 60M tokens at $0.10/1M rate
-    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens (internal)
-    const geminiRate = 0.10; // $0.10 per 1M tokens
-    const tokensPerMillion = 1000000;
-    const tokens = Math.floor((tokenBudget / geminiRate) * tokensPerMillion);
-    return tokens;
+  // Navigate to billing page within Shopify iframe
+  const handleBuyTokens = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const host = searchParams.get('host') || '';
+    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
   };
 
-  const handlePurchase = async () => {
-    setPurchasing(true);
-    try {
-      await onPurchaseTokens(parseFloat(customAmount || selectedAmount));
-    } catch (error) {
-      console.error('[Insufficient Tokens Modal] Purchase failed:', error);
-    } finally {
-      setPurchasing(false);
-    }
+  const handleUpgradePlan = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const host = searchParams.get('host') || '';
+    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
   };
-
-  const selectedAmountValue = parseFloat(customAmount || selectedAmount);
-  const tokensFromPurchase = calculateTokens(selectedAmountValue);
-  const willBeEnough = tokensFromPurchase >= tokensNeeded;
 
   const featureNames = {
     'ai-seo-product-basic': 'AI SEO Optimization (Products)',
@@ -75,15 +60,22 @@ export default function InsufficientTokensModal({
       onClose={onClose}
       title="💳 Insufficient Tokens"
       primaryAction={{
-        content: purchasing ? 'Processing...' : 'Purchase Tokens',
-        loading: purchasing,
-        onAction: handlePurchase
+        content: 'Buy Tokens',
+        onAction: handleBuyTokens
       }}
-      secondaryActions={[
+      secondaryActions={needsUpgrade && minimumPlan ? [
+        {
+          content: `Upgrade to ${minimumPlan}`,
+          onAction: handleUpgradePlan
+        },
         {
           content: 'Cancel',
-          onAction: onClose,
-          disabled: purchasing
+          onAction: onClose
+        }
+      ] : [
+        {
+          content: 'Cancel',
+          onAction: onClose
         }
       ]}
     >
@@ -91,39 +83,27 @@ export default function InsufficientTokensModal({
         <BlockStack gap="400">
           {/* Current Balance */}
           <Banner tone="warning">
-            <BlockStack gap="200">
-              <Text variant="bodyMd" fontWeight="semibold">
-                You don't have enough tokens
-              </Text>
-              <InlineStack gap="400">
-                <Box>
-                  <Text variant="bodySm" tone="subdued">Required:</Text>
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    {tokensRequired.toLocaleString()} tokens
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodySm" tone="subdued">Available:</Text>
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    {tokensAvailable.toLocaleString()} tokens
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodySm" tone="subdued">Needed:</Text>
-                  <Text variant="bodyMd" fontWeight="semibold" tone="critical">
-                    {tokensNeeded.toLocaleString()} tokens
-                  </Text>
-                </Box>
-              </InlineStack>
-            </BlockStack>
+            <Text variant="bodyMd" fontWeight="semibold">
+              You don't have enough tokens for this feature
+            </Text>
           </Banner>
+
+          {/* Feature Info */}
+          <Box background="bg-surface-secondary" padding="400" borderRadius="200">
+            <BlockStack gap="200">
+              <Text variant="headingMd">{featureName}</Text>
+              <Text variant="bodySm" tone="subdued">
+                This AI-enhanced feature requires tokens to use
+              </Text>
+            </BlockStack>
+          </Box>
 
           {/* Upgrade Suggestion (for Starter/Professional/Growth plans) */}
           {needsUpgrade && minimumPlan && (
             <Banner tone="info">
               <BlockStack gap="200">
                 <Text variant="bodyMd" fontWeight="semibold">
-                  💡 Upgrade to {minimumPlan}+
+                  💡 Recommended: Upgrade to {minimumPlan}
                 </Text>
                 <Text variant="bodySm">
                   Current plan: <strong>{currentPlan}</strong>
@@ -132,120 +112,9 @@ export default function InsufficientTokensModal({
                   {minimumPlan} plans include AI tokens and unlock advanced AI features. 
                   You can also purchase tokens separately while staying on your current plan.
                 </Text>
-                <Box paddingBlockStart="200">
-                <Button
-                    onClick={() => {
-                      // Navigate within the same iframe
-                      window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(window.location.search.split('host=')[1]?.split('&')[0] || '')}`;
-                    }}
-                    variant="primary"
-                    size="slim"
-                  >
-                    View Plans & Upgrade
-                </Button>
-                </Box>
               </BlockStack>
             </Banner>
           )}
-
-          <Divider />
-
-          {/* Feature Info */}
-          <Box background="bg-surface-secondary" padding="400" borderRadius="200">
-            <BlockStack gap="200">
-              <Text variant="headingMd">{featureName}</Text>
-              <Text variant="bodySm" tone="subdued">
-                Purchase tokens to unlock this AI-enhanced feature
-              </Text>
-            </BlockStack>
-          </Box>
-
-          {/* Amount Selection */}
-          <BlockStack gap="300">
-            <Text variant="headingMd">Select Amount</Text>
-            
-            <ButtonGroup variant="segmented" fullWidth>
-              {PRESET_AMOUNTS.map((amount) => (
-                <Button
-                  key={amount}
-                  pressed={selectedAmount === amount && !customAmount}
-                  onClick={() => {
-                    setSelectedAmount(amount);
-                    setCustomAmount('');
-                  }}
-                  size="large"
-                >
-                  ${amount}
-                </Button>
-              ))}
-            </ButtonGroup>
-            
-            <Text variant="bodySm" tone="subdued">
-              Or enter a custom amount (multiples of $5)
-            </Text>
-            
-            <TextField
-              type="number"
-              value={customAmount}
-              onChange={(value) => {
-                setCustomAmount(value);
-                setSelectedAmount(null);
-              }}
-              placeholder="Enter amount"
-              prefix="$"
-              min={5}
-              step={5}
-              autoComplete="off"
-            />
-          </BlockStack>
-
-          <Divider />
-
-          {/* Purchase Summary */}
-          <Box 
-            background={willBeEnough ? 'bg-surface-success' : 'bg-surface-secondary'} 
-            padding="400" 
-            borderRadius="200"
-          >
-            <BlockStack gap="200">
-              <InlineStack align="space-between">
-                <Text variant="bodyMd">Amount</Text>
-                <Text variant="bodyMd" fontWeight="semibold">
-                  ${selectedAmountValue.toFixed(2)}
-                </Text>
-              </InlineStack>
-              
-              <InlineStack align="space-between">
-                <Text variant="bodyMd">You'll receive</Text>
-                <Text variant="bodyMd" fontWeight="semibold">
-                  {tokensFromPurchase.toLocaleString()} tokens
-                </Text>
-              </InlineStack>
-              
-              <InlineStack align="space-between">
-                <Text variant="bodyMd">New balance</Text>
-                <Text variant="bodyMd" fontWeight="semibold">
-                  {(tokensAvailable + tokensFromPurchase).toLocaleString()} tokens
-                </Text>
-              </InlineStack>
-              
-              <Divider />
-              
-              {willBeEnough ? (
-                <InlineStack align="center" blockAlign="center" gap="200">
-                  <Text variant="bodySm" tone="success" fontWeight="semibold">
-                    ✓ Enough to use this feature
-                  </Text>
-                </InlineStack>
-              ) : (
-                <InlineStack align="center" blockAlign="center" gap="200">
-                  <Text variant="bodySm" tone="critical" fontWeight="semibold">
-                    ⚠ Still not enough (need {(tokensNeeded - tokensFromPurchase).toLocaleString()} more)
-                  </Text>
-                </InlineStack>
-              )}
-            </BlockStack>
-          </Box>
 
           {/* Info */}
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
@@ -255,6 +124,9 @@ export default function InsufficientTokensModal({
               </Text>
               <Text variant="bodySm" tone="subdued">
                 ♻️ Tokens never expire and roll over indefinitely
+              </Text>
+              <Text variant="bodySm" tone="subdued">
+                🛒 Purchase tokens or upgrade your plan from the Billing page
               </Text>
             </BlockStack>
           </Box>
