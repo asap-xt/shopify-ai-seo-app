@@ -206,6 +206,7 @@ router.get('/check-definitions', async (req, res) => {
     return res.json({
       success: true,
       hasCollections,
+      definitions: [], // Frontend expects this array
       shop: req.auth.shop,
       message: hasCollections ? 'Collections accessible' : 'No collections found',
       auth: {
@@ -219,7 +220,8 @@ router.get('/check-definitions', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to check collections access',
-      message: error.message
+      message: error.message,
+      definitions: [] // Frontend expects this even on error
     });
   }
 });
