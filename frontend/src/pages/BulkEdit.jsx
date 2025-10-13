@@ -280,6 +280,15 @@ export default function BulkEdit({ shop: shopProp }) {
       }
       
       
+      // DEBUG: Log product IDs before setting state
+      console.log('[LOAD-PRODUCTS] ===== PRODUCTS LOADED =====');
+      console.log('[LOAD-PRODUCTS] Total products:', data.products?.length);
+      if (data.products?.length > 0) {
+        data.products.forEach((p, idx) => {
+          console.log(`[LOAD-PRODUCTS] Product ${idx}: ID=${p.id} (type: ${typeof p.id}), _id=${p._id}, title="${p.title}", has SEO: ${!!p.optimizationSummary?.optimizedLanguages?.length}`);
+        });
+      }
+      
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
       } else {
@@ -320,6 +329,15 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   }, [products.length, loading, shop, hasVisitedProducts]);
   
+  // DEBUG: Monitor products and selectedItems changes
+  useEffect(() => {
+    console.log('[DEBUG-MONITOR] ===== STATE CHANGED =====');
+    console.log('[DEBUG-MONITOR] Products count:', products.length);
+    console.log('[DEBUG-MONITOR] Selected items count:', selectedItems.length);
+    console.log('[DEBUG-MONITOR] Products:', products.map(p => ({ id: p.id, title: p.title })));
+    console.log('[DEBUG-MONITOR] Selected items:', selectedItems);
+  }, [products, selectedItems]);
+  
   // Unified search function
   const handleSearch = useCallback((value) => {
     setSearchValue(value);
@@ -338,11 +356,18 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
+    console.log('[SELECTION-CHANGE] ===== SELECTION CHANGED =====');
+    console.log('[SELECTION-CHANGE] New selected items:', items);
+    console.log('[SELECTION-CHANGE] Item count:', items.length);
+    console.log('[SELECTION-CHANGE] Item types:', items.map(id => typeof id));
+    console.log('[SELECTION-CHANGE] Current products count:', products.length);
+    console.log('[SELECTION-CHANGE] Current products IDs:', products.map(p => p.id));
+    
     setSelectedItems(items);
     if (items.length === 0) {
       setSelectAllPages(false);
     }
-  }, []);
+  }, [products]);
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
@@ -801,15 +826,18 @@ export default function BulkEdit({ shop: shopProp }) {
       setShowResultsModal(false);
       
       // Clear selected items
+      console.log('[APPLY-SEO] ===== CLEARING SELECTION =====');
+      console.log('[APPLY-SEO] Selected items BEFORE clear:', selectedItems);
       setSelectedItems([]);
       setSelectAllPages(false);
+      console.log('[APPLY-SEO] Selected items cleared');
       
       // Add delay to ensure MongoDB writes are propagated
-      // console.log('[BULK-EDIT] Waiting for database propagation...');
+      console.log('[APPLY-SEO] Waiting for database propagation...');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Force a complete refresh of the products list
-      // console.log('[BULK-EDIT] Clearing products state before reload...');
+      console.log('[APPLY-SEO] Clearing products state before reload...');
       setProducts([]); // Clear current products to force re-render
       
       // Load products with cache bypass
@@ -1006,18 +1034,19 @@ export default function BulkEdit({ shop: shopProp }) {
   
   // Resource list items
   const renderItem = (item) => {
-    const product = item;
-    const numericId = extractNumericId(product.productId || product.id);
-    const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
-    
-    // console.log(`[BULK-EDIT] Rendering product: "${product.title}"`);
-    // console.log(`[BULK-EDIT] optimizationSummary:`, product.optimizationSummary);
-    // console.log(`[BULK-EDIT] optimizedLanguages:`, optimizedLanguages);
-    // console.log(`[BULK-EDIT] availableLanguages:`, availableLanguages);
-    
+    try {
+      const product = item;
+      const numericId = extractNumericId(product.productId || product.id);
+      const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+      
+      console.log(`[BULK-EDIT-RENDER] Product: "${product.title}", ID: ${product.id}, Type: ${typeof product.id}`);
+      console.log(`[BULK-EDIT-RENDER] Optimized Languages:`, optimizedLanguages);
+      console.log(`[BULK-EDIT-RENDER] Selected Items:`, selectedItems);
+      console.log(`[BULK-EDIT-RENDER] Is Selected:`, selectedItems.includes(product.id));
+      
 
-    
-    const media = product.images?.[0] ? (
+      
+      const media = product.images?.[0] ? (
       <Thumbnail
         source={product.images[0].url || product.images[0].src || product.images[0]}
         alt={product.title}
@@ -1091,6 +1120,11 @@ export default function BulkEdit({ shop: shopProp }) {
         </InlineStack>
       </ResourceItem>
     );
+    } catch (error) {
+      console.error('[BULK-EDIT-RENDER] ERROR rendering product:', error);
+      console.error('[BULK-EDIT-RENDER] Product data:', item);
+      return null;
+    }
   };
   
   // Progress modal
