@@ -527,10 +527,6 @@ const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
   const shop = shopProp || qs('shop', '');
   const path = window.location.pathname;
   
-  console.log('[AI-PANEL] Received props - shop:', shop, 'plan:', plan);
-  console.log('[AI-PANEL] path:', path);
-  console.log('[AI-PANEL] window.location.search:', window.location.search);
-  
   // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
   const getActiveTab = () => {
     if (path === '/ai-seo' || path === '/ai-seo/products') return 'products';
@@ -792,11 +788,7 @@ export default function App() {
         const plansData = await plansResponse.json();
         const pm = plansData?.data?.plansMe;
         if (pm) {
-          console.log('[APP] Plans loaded successfully via GraphQL:', pm);
-          console.log('[APP] Plan key:', pm.planKey, 'Plan name:', pm.plan);
           setPlan(pm);
-        } else {
-          console.error('[APP] No plan data in response:', plansData);
         }
         
       } catch (error) {
@@ -824,7 +816,6 @@ export default function App() {
     } 
     // Search Optimization for AI и под-страници
     else if (path.startsWith('/ai-seo')) {
-      console.log('[APP-RENDER] Rendering AiSearchOptimisationPanel with plan:', plan);
       return <AiSearchOptimisationPanel shop={shop} plan={plan} />;
     } 
     // Billing

@@ -109,16 +109,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   useEffect(() => {
-    console.log('[COLLECTIONS] globalPlan changed:', globalPlan);
-    
     // Only update if globalPlan has valid data (not empty strings)
     if (!globalPlan || typeof globalPlan !== 'object') {
-      console.log('[COLLECTIONS] globalPlan is null/undefined, will use local GraphQL fetch');
       return;
     }
     
     if (globalPlan.planKey && globalPlan.planKey !== '') {
-      console.log('[COLLECTIONS] Updating currentPlan from globalPlan.planKey:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
       
       // Also update languageLimit based on plan
@@ -131,12 +127,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         'enterprise': 10
       };
       const newLimit = limits[globalPlan.planKey.toLowerCase()] || 1;
-      console.log('[COLLECTIONS] Setting languageLimit from globalPlan:', newLimit);
       setLanguageLimit(newLimit);
     } else if (globalPlan.plan && globalPlan.plan !== '') {
       // Fallback: if planKey is missing, try to derive it from plan name
       const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
-      console.log('[COLLECTIONS] planKey missing, deriving from plan name:', planKey);
       setCurrentPlan(planKey);
       
       const limits = {
@@ -149,9 +143,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       };
       const newLimit = limits[planKey] || 1;
       setLanguageLimit(newLimit);
-    } else {
-      console.log('[COLLECTIONS] globalPlan has empty fields, ignoring and using local fetch');
-      // Do nothing - let the local GraphQL query handle it
     }
   }, [globalPlan]);
   
@@ -363,8 +354,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       
       // Total languages after adding new ones
       const totalLanguages = existingLanguages.length + newLanguages.length;
-      
-      console.log(`[LANGUAGE-LIMIT] Collection ${collection.id}: existing ${existingLanguages.length}, new ${newLanguages.length}, total ${totalLanguages}, limit ${languageLimit}`);
       
       if (totalLanguages > languageLimit) {
         return true; // Exceeds limit

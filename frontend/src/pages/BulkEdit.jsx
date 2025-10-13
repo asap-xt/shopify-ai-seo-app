@@ -158,16 +158,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   useEffect(() => {
-    console.log('[BULK-EDIT] globalPlan changed:', globalPlan);
-    
     // Only update if globalPlan has valid data (not empty strings)
     if (!globalPlan || typeof globalPlan !== 'object') {
-      console.log('[BULK-EDIT] globalPlan is null/undefined, will use local GraphQL fetch');
       return;
     }
     
     if (globalPlan.planKey && globalPlan.planKey !== '') {
-      console.log('[BULK-EDIT] Updating currentPlan from globalPlan.planKey:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
       
       // Also update languageLimit based on plan
@@ -180,12 +176,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         'enterprise': 10
       };
       const newLimit = limits[globalPlan.planKey.toLowerCase()] || 1;
-      console.log('[BULK-EDIT] Setting languageLimit from globalPlan:', newLimit);
       setLanguageLimit(newLimit);
     } else if (globalPlan.plan && globalPlan.plan !== '') {
       // Fallback: if planKey is missing, try to derive it from plan name
       const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
-      console.log('[BULK-EDIT] planKey missing, deriving from plan name:', planKey);
       setCurrentPlan(planKey);
       
       const limits = {
@@ -198,9 +192,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       };
       const newLimit = limits[planKey] || 1;
       setLanguageLimit(newLimit);
-    } else {
-      console.log('[BULK-EDIT] globalPlan has empty fields, ignoring and using local fetch');
-      // Do nothing - let the local GraphQL query handle it
     }
   }, [globalPlan]);
   
@@ -450,8 +441,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       // Total languages after adding new ones
       const totalLanguages = existingLanguages.length + newLanguages.length;
-      
-      console.log(`[LANGUAGE-LIMIT] Product ${product.id}: existing ${existingLanguages.length}, new ${newLanguages.length}, total ${totalLanguages}, limit ${languageLimit}`);
       
       if (totalLanguages > languageLimit) {
         return true; // Exceeds limit
@@ -1270,19 +1259,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           
           {/* Language Limit Warning Banner */}
-          {checkLanguageLimitExceeded && (() => {
-            console.log('[BANNER-RENDER] currentPlan:', currentPlan, 'languageLimit:', languageLimit, 'globalPlan:', globalPlan);
-            return (
-              <Banner tone="warning" title={`Language limit exceeded`}>
-                <BlockStack gap="200">
-                  <Text variant="bodyMd">
-                    Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per product. 
+          {checkLanguageLimitExceeded && (
+            <Banner tone="warning" title={`Language limit exceeded`}>
+              <BlockStack gap="200">
+                <Text variant="bodyMd">
+                  Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per product. 
                   {selectedItems.length === 1 && products.find(p => p.id === selectedItems[0])?.optimizationSummary?.optimizedLanguages?.length > 0 && (
                     <> This product already has {products.find(p => p.id === selectedItems[0]).optimizationSummary.optimizedLanguages.length} optimized language(s).</>
                   )}
-                </Text>
-                <Text variant="bodyMd" tone="subdued">
-                  DEBUG: currentPlan="{currentPlan}", languageLimit={languageLimit}, globalPlan.planKey="{globalPlan?.planKey}", globalPlan.plan="{globalPlan?.plan}"
                 </Text>
                 <Text variant="bodyMd">
                   Please deselect some languages or upgrade your plan to add more:
@@ -1300,8 +1284,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 </Button>
               </BlockStack>
             </Banner>
-            );
-          })()}
+          )}
           
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
