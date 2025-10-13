@@ -1199,8 +1199,10 @@ export default function BulkEdit({ shop: shopProp }) {
                 <Button
                   variant="primary"
                   onClick={() => {
-                    // Navigate within the same iframe
-                    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(window.location.search.split('host=')[1]?.split('&')[0] || '')}`;
+                    // Navigate within the same iframe - copy ALL URL parameters
+                    const currentParams = new URLSearchParams(window.location.search);
+                    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+                    window.location.href = `/billing${paramString}`;
                   }}
                 >
                   Upgrade Plan

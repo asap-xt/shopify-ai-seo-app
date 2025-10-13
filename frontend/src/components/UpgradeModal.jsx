@@ -9,12 +9,10 @@ export default function UpgradeModal({
 }) {
   const handleUpgrade = () => {
     onClose();
-    // Navigate to billing page using window.location with both shop and host params
+    // Navigate to billing page - copy ALL current URL parameters (including embedded=1)
     const currentParams = new URLSearchParams(window.location.search);
-    const shop = currentParams.get('shop') || '';
-    const host = currentParams.get('host') || '';
-    const newUrl = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
-    window.location.href = newUrl;
+    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    window.location.href = `/billing${paramString}`;
   };
 
   return (

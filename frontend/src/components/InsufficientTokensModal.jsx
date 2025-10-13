@@ -32,15 +32,10 @@ export default function InsufficientTokensModal({
 }) {
   // Navigate to billing page within Shopify iframe
   const handleBuyTokens = () => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const host = searchParams.get('host') || '';
-    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
-  };
-
-  const handleUpgradePlan = () => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const host = searchParams.get('host') || '';
-    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
+    // Copy ALL current URL parameters (including embedded=1, shop, host, etc.)
+    const currentParams = new URLSearchParams(window.location.search);
+    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    window.location.href = `/billing${paramString}`;
   };
 
   const featureNames = {
