@@ -113,7 +113,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       console.log('[COLLECTIONS] Updating currentPlan from globalPlan:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
     }
-  }, [globalPlan]);
+  }, [globalPlan?.planKey]);
   
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,

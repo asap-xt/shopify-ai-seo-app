@@ -523,8 +523,8 @@ function SingleProductPanel({ shop }) {
 */
 
 // -------- AI Search Optimisation Panel with Tabs
-const AiSearchOptimisationPanel = React.memo(() => {
-  const shop = qs('shop', '');
+const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
+  const shop = shopProp || qs('shop', '');
   const path = window.location.pathname;
   
   console.log('[APP] AiSearchOptimisationPanel - shop:', shop);
@@ -803,7 +803,7 @@ export default function App() {
     } 
     // Search Optimization for AI и под-страници
     else if (path.startsWith('/ai-seo')) {
-      return <AiSearchOptimisationPanel shop={shop} />;
+      return <AiSearchOptimisationPanel shop={shop} plan={plan} />;
     } 
     // Billing
     else if (path === '/billing') {

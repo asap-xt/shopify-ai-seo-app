@@ -162,7 +162,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       console.log('[BULK-EDIT] Updating currentPlan from globalPlan:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
     }
-  }, [globalPlan]);
+  }, [globalPlan?.planKey]);
   
   // Load models and plan on mount
   useEffect(() => {
