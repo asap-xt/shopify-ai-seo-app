@@ -378,6 +378,30 @@ export default function BulkEdit({ shop: shopProp }) {
     }
   }, [products]);
 
+  // Calculate maximum NEW languages that can be added
+  // Takes into account already optimized languages across selected products
+  const getMaxNewLanguages = useMemo(() => {
+    if (selectAllPages) {
+      // For "select all", we don't know all products, so be conservative
+      return languageLimit;
+    }
+    
+    const selectedProducts = products.filter(p => selectedItems.includes(p.id));
+    if (selectedProducts.length === 0) return languageLimit;
+    
+    // Find the maximum number of already optimized languages across selected products
+    const maxOptimized = Math.max(
+      ...selectedProducts.map(p => (p.optimizationSummary?.optimizedLanguages?.length || 0))
+    );
+    
+    // Max new languages = plan limit - max already optimized
+    const maxNew = Math.max(0, languageLimit - maxOptimized);
+    
+    console.log(`[LANGUAGE-LIMIT] Plan limit: ${languageLimit}, Max optimized: ${maxOptimized}, Max new: ${maxNew}`);
+    
+    return maxNew;
+  }, [products, selectedItems, selectAllPages, languageLimit]);
+
   // Open language selection modal
   const openLanguageModal = () => {
     if (selectedItems.length === 0 && !selectAllPages) {
@@ -1170,7 +1194,7 @@ export default function BulkEdit({ shop: shopProp }) {
       primaryAction={{
         content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
-        disabled: selectedLanguages.length === 0 || selectedLanguages.length > languageLimit,
+        disabled: selectedLanguages.length === 0 || selectedLanguages.length > getMaxNewLanguages,
       }}
       secondaryActions={[
         {
@@ -1187,14 +1211,14 @@ export default function BulkEdit({ shop: shopProp }) {
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           
           {/* Language Limit Warning Banner */}
-          {selectedLanguages.length > languageLimit && (
+          {selectedLanguages.length > getMaxNewLanguages && (
             <Banner tone="warning" title={`Language limit exceeded`}>
               <BlockStack gap="200">
                 <Text variant="bodyMd">
-                  Your {currentPlan} plan supports only {languageLimit} language(s), but you selected {selectedLanguages.length}.
+                  You can add up to {getMaxNewLanguages} new language(s) (your plan supports {languageLimit} total, and some products already have optimizations).
                 </Text>
                 <Text variant="bodyMd">
-                  Please deselect some languages or upgrade your plan:
+                  You selected {selectedLanguages.length} new language(s). Please deselect some or upgrade your plan:
                 </Text>
                 <Button
                   variant="primary"
