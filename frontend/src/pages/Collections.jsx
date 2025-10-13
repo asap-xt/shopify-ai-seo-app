@@ -997,7 +997,8 @@ export default function CollectionsPage({ shop: shopProp }) {
                 <Button
                   variant="primary"
                   onClick={() => {
-                    window.open('/billing', '_blank');
+                    // Navigate within the same iframe
+                    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(window.location.search.split('host=')[1]?.split('&')[0] || '')}`;
                   }}
                 >
                   Upgrade Plan
@@ -1028,16 +1029,18 @@ export default function CollectionsPage({ shop: shopProp }) {
             <Button
               plain
               onClick={() => {
-                // Limit "Select all" to languageLimit
+                // Deselect all if all are selected
                 if (selectedLanguages.length === availableLanguages.length) {
                   setSelectedLanguages([]);
                 } else {
-                  const limitedLanguages = availableLanguages.slice(0, languageLimit);
-                  setSelectedLanguages(limitedLanguages);
-                  
-                  // Show toast if we limited the selection
+                  // Select all, but limit to languageLimit to trigger warning banner
                   if (availableLanguages.length > languageLimit) {
-                    setToast(`Selected ${languageLimit} language(s) based on your ${currentPlan} plan. Upgrade for more languages.`);
+                    // Select MORE than the limit to show warning banner
+                    setSelectedLanguages([...availableLanguages]);
+                    setToast(`You selected ${availableLanguages.length} languages. Your ${currentPlan} plan supports ${languageLimit}. Please deselect or upgrade.`);
+                  } else {
+                    // Within limit, select all normally
+                    setSelectedLanguages([...availableLanguages]);
                   }
                 }
               }}
@@ -1474,6 +1477,7 @@ export default function CollectionsPage({ shop: shopProp }) {
           </Box>
 
           <ResourceList
+            key={`collections-${collections.length}-${selectedItems.length}`}
             resourceName={{ singular: 'collection', plural: 'collections' }}
             items={collections}
             renderItem={renderItem}
