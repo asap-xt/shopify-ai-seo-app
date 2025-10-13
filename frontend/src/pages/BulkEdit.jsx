@@ -388,27 +388,38 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
   // Calculate maximum NEW languages that can be added
   // Takes into account already optimized languages across selected products
-  const getMaxNewLanguages = useMemo(() => {
+  // Check if the selected languages would exceed the plan limit for any selected product
+  const checkLanguageLimitExceeded = useMemo(() => {
     if (selectAllPages) {
-      // For "select all", we don't know all products, so be conservative
-      return languageLimit;
+      // For "select all", just check if we're selecting more than the plan allows
+      return selectedLanguages.length > languageLimit;
     }
     
     const selectedProducts = products.filter(p => selectedItems.includes(p.id));
-    if (selectedProducts.length === 0) return languageLimit;
+    if (selectedProducts.length === 0) {
+      // No products selected - just check total selected languages
+      return selectedLanguages.length > languageLimit;
+    }
     
-    // Find the maximum number of already optimized languages across selected products
-    const maxOptimized = Math.max(
-      ...selectedProducts.map(p => (p.optimizationSummary?.optimizedLanguages?.length || 0))
-    );
+    // For each selected product, check if adding the new languages would exceed the limit
+    for (const product of selectedProducts) {
+      const existingLanguages = product.optimizationSummary?.optimizedLanguages || [];
+      
+      // Find which of the selected languages are actually NEW (not already optimized)
+      const newLanguages = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
+      
+      // Total languages after adding new ones
+      const totalLanguages = existingLanguages.length + newLanguages.length;
+      
+      console.log(`[LANGUAGE-LIMIT] Product ${product.id}: existing ${existingLanguages.length}, new ${newLanguages.length}, total ${totalLanguages}, limit ${languageLimit}`);
+      
+      if (totalLanguages > languageLimit) {
+        return true; // Exceeds limit
+      }
+    }
     
-    // Max new languages = plan limit - max already optimized
-    const maxNew = Math.max(0, languageLimit - maxOptimized);
-    
-    console.log(`[LANGUAGE-LIMIT] Plan limit: ${languageLimit}, Max optimized: ${maxOptimized}, Max new: ${maxNew}`);
-    
-    return maxNew;
-  }, [products, selectedItems, selectAllPages, languageLimit]);
+    return false; // All products are within limit
+  }, [products, selectedItems, selectAllPages, languageLimit, selectedLanguages]);
 
   // Open language selection modal
   const openLanguageModal = () => {
@@ -1202,7 +1213,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       primaryAction={{
         content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
-        disabled: selectedLanguages.length === 0 || selectedLanguages.length > getMaxNewLanguages,
+        disabled: selectedLanguages.length === 0 || checkLanguageLimitExceeded,
       }}
       secondaryActions={[
         {
@@ -1219,14 +1230,17 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           
           {/* Language Limit Warning Banner */}
-          {selectedLanguages.length > getMaxNewLanguages && (
+          {checkLanguageLimitExceeded && (
             <Banner tone="warning" title={`Language limit exceeded`}>
               <BlockStack gap="200">
                 <Text variant="bodyMd">
-                  You can add up to {getMaxNewLanguages} new language(s) (your plan supports {languageLimit} total, and some products already have optimizations).
+                  Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per product. 
+                  {selectedItems.length === 1 && products.find(p => p.id === selectedItems[0])?.optimizationSummary?.optimizedLanguages?.length > 0 && (
+                    <> This product already has {products.find(p => p.id === selectedItems[0]).optimizationSummary.optimizedLanguages.length} optimized language(s).</>
+                  )}
                 </Text>
                 <Text variant="bodyMd">
-                  You selected {selectedLanguages.length} new language(s). Please deselect some or upgrade your plan:
+                  Please deselect some languages or upgrade your plan to add more:
                 </Text>
                 <Button
                   variant="primary"

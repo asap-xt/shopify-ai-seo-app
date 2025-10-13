@@ -301,27 +301,38 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
 
   // Calculate maximum NEW languages that can be added
   // Takes into account already optimized languages across selected collections
-  const getMaxNewLanguages = useMemo(() => {
+  // Check if the selected languages would exceed the plan limit for any selected collection
+  const checkLanguageLimitExceeded = useMemo(() => {
     if (selectAllPages) {
-      // For "select all", we don't know all collections, so be conservative
-      return languageLimit;
+      // For "select all", just check if we're selecting more than the plan allows
+      return selectedLanguages.length > languageLimit;
     }
     
     const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
-    if (selectedCollections.length === 0) return languageLimit;
+    if (selectedCollections.length === 0) {
+      // No collections selected - just check total selected languages
+      return selectedLanguages.length > languageLimit;
+    }
     
-    // Find the maximum number of already optimized languages across selected collections
-    const maxOptimized = Math.max(
-      ...selectedCollections.map(c => (c.optimizationSummary?.optimizedLanguages?.length || 0))
-    );
+    // For each selected collection, check if adding the new languages would exceed the limit
+    for (const collection of selectedCollections) {
+      const existingLanguages = collection.optimizationSummary?.optimizedLanguages || [];
+      
+      // Find which of the selected languages are actually NEW (not already optimized)
+      const newLanguages = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
+      
+      // Total languages after adding new ones
+      const totalLanguages = existingLanguages.length + newLanguages.length;
+      
+      console.log(`[LANGUAGE-LIMIT] Collection ${collection.id}: existing ${existingLanguages.length}, new ${newLanguages.length}, total ${totalLanguages}, limit ${languageLimit}`);
+      
+      if (totalLanguages > languageLimit) {
+        return true; // Exceeds limit
+      }
+    }
     
-    // Max new languages = plan limit - max already optimized
-    const maxNew = Math.max(0, languageLimit - maxOptimized);
-    
-    console.log(`[LANGUAGE-LIMIT] Plan limit: ${languageLimit}, Max optimized: ${maxOptimized}, Max new: ${maxNew}`);
-    
-    return maxNew;
-  }, [collections, selectedItems, selectAllPages, languageLimit]);
+    return false; // All collections are within limit
+  }, [collections, selectedItems, selectAllPages, languageLimit, selectedLanguages]);
 
   // Open language selection modal
   const openLanguageModal = () => {
@@ -1024,7 +1035,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       primaryAction={{
         content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
-        disabled: selectedLanguages.length === 0 || selectedLanguages.length > getMaxNewLanguages,
+        disabled: selectedLanguages.length === 0 || checkLanguageLimitExceeded,
       }}
       secondaryActions={[
         {
@@ -1038,14 +1049,17 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected collections:</Text>
           
           {/* Language Limit Warning Banner */}
-          {selectedLanguages.length > getMaxNewLanguages && (
+          {checkLanguageLimitExceeded && (
             <Banner tone="warning" title="Language limit exceeded">
               <BlockStack gap="200">
                 <Text variant="bodyMd">
-                  You can add up to {getMaxNewLanguages} new language(s) (your plan supports {languageLimit} total, and some collections already have optimizations).
+                  Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per collection. 
+                  {selectedItems.length === 1 && collections.find(c => c.id === selectedItems[0])?.optimizationSummary?.optimizedLanguages?.length > 0 && (
+                    <> This collection already has {collections.find(c => c.id === selectedItems[0]).optimizationSummary.optimizedLanguages.length} optimized language(s).</>
+                  )}
                 </Text>
                 <Text variant="bodyMd">
-                  You selected {selectedLanguages.length} new language(s). Please deselect some or upgrade your plan:
+                  Please deselect some languages or upgrade your plan to add more:
                 </Text>
                 <Button
                   variant="primary"
