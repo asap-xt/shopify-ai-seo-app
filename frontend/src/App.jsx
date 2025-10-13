@@ -67,6 +67,11 @@ function useRoute() {
     
     // Listen for navigation link clicks
     const handleClick = (e) => {
+      // Ignore clicks on form elements (checkbox, button, input, etc.)
+      if (e.target.matches('input, button, select, textarea, label')) {
+        return;
+      }
+      
       const target = e.target.closest('a');
       if (target && target.href && target.href.startsWith(window.location.origin)) {
         const newPath = new URL(target.href).pathname;
