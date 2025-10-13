@@ -95,7 +95,8 @@ router.get('/info', verifyRequest, async (req, res) => {
         price: PLANS[key].priceUsd,
         productLimit: PLANS[key].productLimit,
         queryLimit: PLANS[key].queryLimit,
-        providersAllowed: PLANS[key].providersAllowed,
+        providersAllowed: PLANS[key].providersAllowed?.length || 0,
+        languageLimit: PLANS[key].languageLimit || 1,
         includedTokens: getIncludedTokens(key),
         features: getPlanFeatures(key)
       }))
