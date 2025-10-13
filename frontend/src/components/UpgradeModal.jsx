@@ -9,10 +9,11 @@ export default function UpgradeModal({
 }) {
   const handleUpgrade = () => {
     onClose();
-    // Navigate to billing page using window.location
+    // Navigate to billing page using window.location with both shop and host params
     const currentParams = new URLSearchParams(window.location.search);
-    const shop = currentParams.get('shop');
-    const newUrl = `/billing${shop ? `?shop=${encodeURIComponent(shop)}` : ''}`;
+    const shop = currentParams.get('shop') || '';
+    const host = currentParams.get('host') || '';
+    const newUrl = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}`;
     window.location.href = newUrl;
   };
 
@@ -35,21 +36,21 @@ export default function UpgradeModal({
       <Modal.Section>
         <BlockStack gap="400">
           <Text variant="bodyMd">
-            This feature is available for Growth Extra and Enterprise plans only.
+            {featureName} requires tokens. Activate your plan or purchase tokens to use this feature.
           </Text>
           
           <Text variant="bodyMd">
-            <strong>Current plan: {currentPlan}</strong>
+            <strong>Current status: {currentPlan} (Trial)</strong>
           </Text>
           
           <BlockStack gap="200">
             <Text variant="bodyMd">
-              <strong>Upgrade now to get:</strong>
+              <strong>Activate a plan to get:</strong>
             </Text>
             <BlockStack gap="100">
-              <Text variant="bodyMd">✓ AI-optimized bullets and FAQs</Text>
-              <Text variant="bodyMd">✓ Enhanced collection descriptions</Text>
-              <Text variant="bodyMd">✓ Other AI-enhanced features</Text>
+              <Text variant="bodyMd">✓ Purchase tokens to unlock AI features</Text>
+              <Text variant="bodyMd">✓ Growth Extra & Enterprise plans include tokens</Text>
+              <Text variant="bodyMd">✓ All AI-enhanced features available</Text>
             </BlockStack>
           </BlockStack>
         </BlockStack>

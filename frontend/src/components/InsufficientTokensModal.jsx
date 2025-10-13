@@ -60,19 +60,10 @@ export default function InsufficientTokensModal({
       onClose={onClose}
       title="💳 Insufficient Tokens"
       primaryAction={{
-        content: 'Buy Tokens',
+        content: 'Go to Billing',
         onAction: handleBuyTokens
       }}
-      secondaryActions={needsUpgrade && minimumPlan ? [
-        {
-          content: `Upgrade to ${minimumPlan}`,
-          onAction: handleUpgradePlan
-        },
-        {
-          content: 'Cancel',
-          onAction: onClose
-        }
-      ] : [
+      secondaryActions={[
         {
           content: 'Cancel',
           onAction: onClose
@@ -83,9 +74,14 @@ export default function InsufficientTokensModal({
         <BlockStack gap="400">
           {/* Current Balance */}
           <Banner tone="warning">
-            <Text variant="bodyMd" fontWeight="semibold">
-              You don't have enough tokens for this feature
-            </Text>
+            <BlockStack gap="200">
+              <Text variant="bodyMd" fontWeight="semibold">
+                You don't have enough tokens to use AI Enhancement
+              </Text>
+              <Text variant="bodySm">
+                Purchase tokens to unlock this feature and continue using AI-enhanced SEO optimization.
+              </Text>
+            </BlockStack>
           </Banner>
 
           {/* Feature Info */}
@@ -93,8 +89,13 @@ export default function InsufficientTokensModal({
             <BlockStack gap="200">
               <Text variant="headingMd">{featureName}</Text>
               <Text variant="bodySm" tone="subdued">
-                This AI-enhanced feature requires tokens to use
+                ✅ Buy tokens to use this AI-enhanced feature
               </Text>
+              {needsUpgrade && minimumPlan && (
+                <Text variant="bodySm" tone="subdued">
+                  ✨ Or upgrade to {minimumPlan} plan to get tokens included
+                </Text>
+              )}
             </BlockStack>
           </Box>
 
@@ -103,14 +104,14 @@ export default function InsufficientTokensModal({
             <Banner tone="info">
               <BlockStack gap="200">
                 <Text variant="bodyMd" fontWeight="semibold">
-                  💡 Recommended: Upgrade to {minimumPlan}
+                  💡 Upgrade to {minimumPlan} to get tokens included
                 </Text>
                 <Text variant="bodySm">
                   Current plan: <strong>{currentPlan}</strong>
                 </Text>
                 <Text variant="bodySm" tone="subdued">
-                  {minimumPlan} plans include AI tokens and unlock advanced AI features. 
-                  You can also purchase tokens separately while staying on your current plan.
+                  {minimumPlan} plans include AI tokens every month. 
+                  Or you can purchase tokens separately while staying on your current plan.
                 </Text>
               </BlockStack>
             </Banner>
@@ -120,7 +121,7 @@ export default function InsufficientTokensModal({
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <BlockStack gap="100">
               <Text variant="bodySm" tone="subdued">
-                💡 Tokens are used for AI-powered features
+                💡 Tokens enable AI-powered features like AI Enhancement and AI Testing
               </Text>
               <Text variant="bodySm" tone="subdued">
                 ♻️ Tokens never expire and roll over indefinitely
