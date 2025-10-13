@@ -64,15 +64,15 @@ function useRoute() {
     
     // Listen for popstate (browser back/forward)
     window.addEventListener('popstate', handleLocationChange);
-    
-    // Listen for navigation link clicks
+
+    // Listen for navigation link clicks - ONLY on <a> tags, not on buttons/checkboxes
     const handleClick = (e) => {
-      // Ignore clicks on form elements (checkbox, button, input, etc.)
-      if (e.target.matches('input, button, select, textarea, label')) {
+      // Only handle clicks directly on <a> tags, not child elements
+      if (e.target.tagName !== 'A') {
         return;
       }
-      
-      const target = e.target.closest('a');
+
+      const target = e.target;
       if (target && target.href && target.href.startsWith(window.location.origin)) {
         const newPath = new URL(target.href).pathname;
         console.log('[useRoute] Navigation click detected, new path:', newPath);
@@ -80,7 +80,7 @@ function useRoute() {
       }
     };
     document.addEventListener('click', handleClick);
-    
+
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
       document.removeEventListener('click', handleClick);
