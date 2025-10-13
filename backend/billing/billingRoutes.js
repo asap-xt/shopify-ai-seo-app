@@ -27,34 +27,44 @@ const router = express.Router();
 function getPlanFeatures(planKey) {
   const features = [];
   
-  // Basic features (all plans)
-  features.push('Basic SEO optimization');
-  features.push('AI Bot Access Control');
-  features.push('Sitemap generation');
-  
-  // Professional+
-  if (['professional', 'growth', 'growth extra', 'enterprise'].includes(planKey)) {
-    features.push('Multi-language support');
-    features.push('Collections optimization');
+  // Starter plan - base features
+  if (planKey === 'starter') {
+    features.push('Optimization for AI');
+    features.push('AI Bot Access Control');
+    features.push('Sitemap generation');
+    return features;
   }
   
-  // Growth+
-  if (['growth', 'growth extra', 'enterprise'].includes(planKey)) {
+  // Professional - all from Starter plus:
+  if (planKey === 'professional') {
+    features.push('All from Starter plus:');
+    features.push('Collections optimization');
+    return features;
+  }
+  
+  // Growth - all from Professional plus:
+  if (planKey === 'growth') {
+    features.push('All from Professional plus:');
     features.push('Automated syncing');
     features.push('robots.txt auto-generation');
+    return features;
   }
   
-  // Growth Extra+
-  if (['growth extra', 'enterprise'].includes(planKey)) {
+  // Growth Extra - all from Growth plus:
+  if (planKey === 'growth extra') {
+    features.push('All from Growth plus:');
     features.push('AI-Optimized Sitemap');
     features.push('Advanced Schema Data');
     features.push('Priority support');
+    return features;
   }
   
-  // Enterprise
+  // Enterprise - all from Growth Extra plus:
   if (planKey === 'enterprise') {
+    features.push('All from Growth Extra plus:');
     features.push('Dedicated account manager');
     features.push('Custom integration');
+    return features;
   }
   
   return features;

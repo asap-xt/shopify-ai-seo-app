@@ -239,20 +239,20 @@ export default function Billing({ shop }) {
                       <InlineStack align="space-between">
                         <Text variant="bodySm" tone="subdued">Products</Text>
                         <Text variant="bodySm" fontWeight="semibold">
-                          {plan.productLimit?.toLocaleString() || 'N/A'}
+                          up to {plan.productLimit?.toLocaleString() || 'N/A'}
                         </Text>
                       </InlineStack>
                       
-                      {/* AI Queries */}
+                      {/* Language Support */}
                       <InlineStack align="space-between">
-                        <Text variant="bodySm" tone="subdued">AI Queries</Text>
+                        <Text variant="bodySm" tone="subdued">Supported languages</Text>
                         <Text variant="bodySm" fontWeight="semibold">
-                          {plan.queryLimit?.toLocaleString() || 'N/A'}
+                          {plan.languageLimit || 1}
                         </Text>
                       </InlineStack>
                       
-                      {/* Included Tokens */}
-                      {plan.includedTokens > 0 && (
+                      {/* Included Tokens - only for plans without them (Starter, Professional, Growth) */}
+                      {plan.includedTokens > 0 && !['growth extra', 'enterprise'].includes(plan.key) && (
                         <Badge tone="info">
                           +{plan.includedTokens.toLocaleString()} tokens/month
                         </Badge>
