@@ -109,11 +109,17 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   useEffect(() => {
+    console.log('[COLLECTIONS] globalPlan changed:', globalPlan);
     if (globalPlan?.planKey) {
-      console.log('[COLLECTIONS] Updating currentPlan from globalPlan:', globalPlan.planKey);
+      console.log('[COLLECTIONS] Updating currentPlan from globalPlan.planKey:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
+    } else if (globalPlan?.plan) {
+      // Fallback: if planKey is missing, try to derive it from plan name
+      const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
+      console.log('[COLLECTIONS] planKey missing, deriving from plan name:', planKey);
+      setCurrentPlan(planKey);
     }
-  }, [globalPlan?.planKey]);
+  }, [globalPlan?.planKey, globalPlan?.plan]);
   
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,

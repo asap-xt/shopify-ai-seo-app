@@ -158,11 +158,17 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   useEffect(() => {
+    console.log('[BULK-EDIT] globalPlan changed:', globalPlan);
     if (globalPlan?.planKey) {
-      console.log('[BULK-EDIT] Updating currentPlan from globalPlan:', globalPlan.planKey);
+      console.log('[BULK-EDIT] Updating currentPlan from globalPlan.planKey:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
+    } else if (globalPlan?.plan) {
+      // Fallback: if planKey is missing, try to derive it from plan name
+      const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
+      console.log('[BULK-EDIT] planKey missing, deriving from plan name:', planKey);
+      setCurrentPlan(planKey);
     }
-  }, [globalPlan?.planKey]);
+  }, [globalPlan?.planKey, globalPlan?.plan]);
   
   // Load models and plan on mount
   useEffect(() => {

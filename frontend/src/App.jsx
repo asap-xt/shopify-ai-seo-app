@@ -751,6 +751,13 @@ export default function App() {
             plansMe(shop:$shop) {
               shop
               plan
+              planKey
+              priceUsd
+              ai_queries_used
+              ai_queries_limit
+              product_limit
+              providersAllowed
+              trial_ends_at
             }
           }
         `;
@@ -781,7 +788,10 @@ export default function App() {
         const pm = plansData?.data?.plansMe;
         if (pm) {
           console.log('[APP] Plans loaded successfully via GraphQL:', pm);
+          console.log('[APP] Plan key:', pm.planKey, 'Plan name:', pm.plan);
           setPlan(pm);
+        } else {
+          console.error('[APP] No plan data in response:', plansData);
         }
         
       } catch (error) {
