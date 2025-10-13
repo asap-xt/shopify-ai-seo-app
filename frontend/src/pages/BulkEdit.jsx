@@ -521,39 +521,7 @@ export default function BulkEdit({ shop: shopProp }) {
       }
     };
     
-    // Първи модал - за потвърждение
-    if (!aiEnhanceProgress.processing && !aiEnhanceProgress.results) {
-      return (
-        <Modal
-          open={showAIEnhanceModal}
-          title="AI Enhanced add-ons for AI Search"
-          onClose={handleClose}
-          primaryAction={{
-            content: 'Start AI Enhancement',
-            onAction: handleStartEnhancement,
-          }}
-          secondaryActions={[
-            {
-              content: 'Cancel',
-              onAction: handleClose,
-            },
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="300">
-              <Text variant="bodyMd">
-                AI enhancement will improve bullets and FAQ for {selectedWithSEO.length} products.
-              </Text>
-              <Text variant="bodySm" tone="subdued">
-                Note: AI enhancement is only available for Growth Extra and Enterprise plans.
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      );
-    }
-    
-    // Втори модал - прогрес
+    // Progress modal
     if (aiEnhanceProgress.processing) {
       return (
         <Modal
@@ -578,7 +546,7 @@ export default function BulkEdit({ shop: shopProp }) {
       );
     }
     
-    // Трети модал - резултати
+    // Results modal
     if (aiEnhanceProgress.results !== null) {
       return (
         <Modal
@@ -612,15 +580,6 @@ export default function BulkEdit({ shop: shopProp }) {
                   </Text>
                 </Box>
               </InlineStack>
-              
-              {/* Показваме съобщението само ако има skip заради план */}
-              {aiEnhanceProgress.results.skippedDueToPlan > 0 && (
-                <Box paddingBlockStart="300">
-                  <Text variant="bodySm" tone="subdued">
-                    AI enhancement is only available for Growth Extra and Enterprise plans.
-                  </Text>
-                </Box>
-              )}
             </BlockStack>
           </Modal.Section>
         </Modal>
@@ -1591,7 +1550,7 @@ export default function BulkEdit({ shop: shopProp }) {
                     
                     return (
                       <Button
-                        onClick={() => setShowAIEnhanceModal(true)}
+                        onClick={handleStartEnhancement}
                         disabled={selectedItems.length === 0 && !selectAllPages}
                         size="medium"
                         fullWidth
