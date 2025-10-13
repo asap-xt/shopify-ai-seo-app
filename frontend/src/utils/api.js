@@ -44,7 +44,37 @@ export function createApiClient() {
       headers: h,
       body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+    
+    if (!res.ok) {
+      // Try to parse error response
+      let errorData;
+      const contentType = res.headers.get('content-type') || '';
+      
+      if (contentType.includes('application/json')) {
+        try {
+          errorData = await res.json();
+        } catch {
+          errorData = { error: await res.text().catch(() => res.statusText) };
+        }
+      } else {
+        errorData = { error: await res.text().catch(() => res.statusText) };
+      }
+      
+      // For 402 errors, preserve all response data
+      if (res.status === 402 && errorData) {
+        const error = new Error(errorData.error || errorData.message || 'Payment Required');
+        error.status = 402;
+        // Copy all fields from errorData to error object
+        Object.assign(error, errorData);
+        throw error;
+      }
+      
+      // For other errors, throw simple message
+      const error = new Error(errorData.error || errorData.message || res.statusText);
+      error.status = res.status;
+      throw error;
+    }
+    
     const ct = res.headers.get('content-type') || '';
     return ct.includes('application/json') ? res.json() : res.text();
   };
