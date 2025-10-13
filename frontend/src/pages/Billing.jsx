@@ -22,10 +22,7 @@ import {
   Divider
 } from '@shopify/polaris';
 import { 
-  CreditCardIcon, 
-  RefreshIcon,
-  CircleTickIcon,
-  CircleAlertIcon
+  CreditCardIcon
 } from '@shopify/polaris-icons';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100];
@@ -180,19 +177,7 @@ export default function Billing({ shop }) {
 
   return (
     <Page
-      title="Billing & Subscriptions"
-      primaryAction={{
-        content: 'Purchase Tokens',
-        icon: CreditCardIcon,
-        onAction: () => setShowTokenModal(true)
-      }}
-      secondaryActions={[
-        {
-          content: 'Refresh',
-          icon: RefreshIcon,
-          onAction: fetchBillingInfo
-        }
-      ]}
+      title="Billing & Plans"
     >
       <Layout>
         {/* Error Banner */}
@@ -208,31 +193,31 @@ export default function Billing({ shop }) {
           </Layout.Section>
         )}
 
-        {/* Trial Warning */}
+        {/* Trial Info Banner - ONLY if in trial */}
         {subscription?.inTrial && (
           <Layout.Section>
             <Banner
-              title="You are in trial period"
+              title="Trial Period Active"
               tone="info"
               action={{
-                content: 'Activate Plan',
+                content: 'Choose Plan',
                 onAction: () => setShowPlanModal(true)
               }}
             >
               <p>
-                Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}.
-                AI-enhanced features require plan activation or token purchase.
+                Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. 
+                Choose a plan to continue using all features after your trial.
               </p>
             </Banner>
           </Layout.Section>
         )}
 
-        {/* Current Subscription */}
-        <Layout.Section variant="oneThird">
+        {/* Current Subscription - 2/3 width */}
+        <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd">Current Plan</Text>
+                <Text variant="headingMd">Your Plan</Text>
                 {subscription && (
                   <Badge tone={subscription.inTrial ? 'attention' : 'success'}>
                     {subscription.inTrial ? 'Trial' : 'Active'}
@@ -267,12 +252,14 @@ export default function Billing({ shop }) {
                     </InlineStack>
                   )}
                   
+                  <Divider />
+                  
                   <Button
                     variant="primary"
                     fullWidth
                     onClick={() => setShowPlanModal(true)}
                   >
-                    Change Plan
+                    {subscription.inTrial ? 'Choose Plan' : 'Change Plan'}
                   </Button>
                 </BlockStack>
               ) : (
@@ -293,7 +280,7 @@ export default function Billing({ shop }) {
           </Card>
         </Layout.Section>
 
-        {/* Token Balance */}
+        {/* Token Balance - 1/3 width */}
         <Layout.Section variant="oneThird">
           <Card>
             <BlockStack gap="400">
@@ -314,12 +301,6 @@ export default function Billing({ shop }) {
                   </Text>
                 </Box>
                 
-                <ProgressBar
-                  progress={Math.min(100, (tokens?.balance / 10000) * 100)}
-                  size="small"
-                  tone="primary"
-                />
-                
                 <InlineStack align="space-between">
                   <Text variant="bodySm" tone="subdued">Purchased</Text>
                   <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
@@ -330,13 +311,26 @@ export default function Billing({ shop }) {
                   <Text variant="bodySm">{tokens?.totalUsed?.toLocaleString() || 0}</Text>
                 </InlineStack>
                 
+                <Divider />
+                
                 <Button
                   variant="primary"
                   fullWidth
                   onClick={() => setShowTokenModal(true)}
                 >
-                  Buy More Tokens
+                  Buy Tokens
                 </Button>
+                
+                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                  <BlockStack gap="100">
+                    <Text variant="bodySm" tone="subdued">
+                      💡 Tokens enable AI features
+                    </Text>
+                    <Text variant="bodySm" tone="subdued">
+                      ♻️ Never expire, roll over monthly
+                    </Text>
+                  </BlockStack>
+                </Box>
               </BlockStack>
             </BlockStack>
           </Card>
