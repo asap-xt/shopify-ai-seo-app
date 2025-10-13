@@ -757,7 +757,12 @@ export default function App() {
               ai_queries_limit
               product_limit
               providersAllowed
-              trial_ends_at
+              modelsSuggested
+              trial {
+                active
+                ends_at
+                days_left
+              }
             }
           }
         `;

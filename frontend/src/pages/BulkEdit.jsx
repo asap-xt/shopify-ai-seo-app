@@ -159,16 +159,50 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   useEffect(() => {
     console.log('[BULK-EDIT] globalPlan changed:', globalPlan);
-    if (globalPlan?.planKey) {
+    
+    // Only update if globalPlan has valid data (not empty strings)
+    if (!globalPlan || typeof globalPlan !== 'object') {
+      console.log('[BULK-EDIT] globalPlan is null/undefined, will use local GraphQL fetch');
+      return;
+    }
+    
+    if (globalPlan.planKey && globalPlan.planKey !== '') {
       console.log('[BULK-EDIT] Updating currentPlan from globalPlan.planKey:', globalPlan.planKey);
       setCurrentPlan(globalPlan.planKey);
-    } else if (globalPlan?.plan) {
+      
+      // Also update languageLimit based on plan
+      const limits = {
+        'starter': 1,
+        'professional': 2,
+        'growth': 3,
+        'growth extra': 6,
+        'growth_extra': 6,
+        'enterprise': 10
+      };
+      const newLimit = limits[globalPlan.planKey.toLowerCase()] || 1;
+      console.log('[BULK-EDIT] Setting languageLimit from globalPlan:', newLimit);
+      setLanguageLimit(newLimit);
+    } else if (globalPlan.plan && globalPlan.plan !== '') {
       // Fallback: if planKey is missing, try to derive it from plan name
       const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
       console.log('[BULK-EDIT] planKey missing, deriving from plan name:', planKey);
       setCurrentPlan(planKey);
+      
+      const limits = {
+        'starter': 1,
+        'professional': 2,
+        'growth': 3,
+        'growth extra': 6,
+        'growth_extra': 6,
+        'enterprise': 10
+      };
+      const newLimit = limits[planKey] || 1;
+      setLanguageLimit(newLimit);
+    } else {
+      console.log('[BULK-EDIT] globalPlan has empty fields, ignoring and using local fetch');
+      // Do nothing - let the local GraphQL query handle it
     }
-  }, [globalPlan?.planKey, globalPlan?.plan]);
+  }, [globalPlan]);
   
   // Load models and plan on mount
   useEffect(() => {
