@@ -531,6 +531,21 @@ export default function BulkEdit({ shop: shopProp }) {
       setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
     };
 
+  // Close AI Enhancement modal
+  const handleCloseAIEnhancement = () => {
+    setShowAIEnhanceModal(false);
+    setAIEnhanceProgress({
+      processing: false,
+      current: 0,
+      total: 0,
+      currentItem: '',
+      results: null
+    });
+    if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
+      loadProducts(1, false, null);
+    }
+  };
+
   // AI Enhancement Modal - използва Polaris компоненти като другите модали
   const AIEnhanceModal = () => {
     // Progress modal

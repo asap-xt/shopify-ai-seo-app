@@ -385,8 +385,8 @@ export default function CollectionsPage({ shop: shopProp }) {
               // Trial user trying to use token feature → Show upgrade modal
               setShowUpgradeModal(true);
             } else {
-              // Insufficient tokens (with or without upgrade suggestion)
-              // InsufficientTokensModal handles both cases via needsUpgrade prop
+              // Insufficient tokens - show InsufficientTokensModal
+              // This will show upgrade suggestion if needsUpgrade=true
               setShowInsufficientTokensModal(true);
             }
             return; // Stop processing

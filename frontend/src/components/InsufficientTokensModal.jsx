@@ -133,13 +133,16 @@ export default function InsufficientTokensModal({
                   You can also purchase tokens separately while staying on your current plan.
                 </Text>
                 <Box paddingBlockStart="200">
-                  <Button 
-                    url="/billing" 
+                <Button
+                    onClick={() => {
+                      // Navigate within the same iframe
+                      window.location.href = `/billing?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(window.location.search.split('host=')[1]?.split('&')[0] || '')}`;
+                    }}
                     variant="primary"
                     size="slim"
                   >
                     View Plans & Upgrade
-                  </Button>
+                </Button>
                 </Box>
               </BlockStack>
             </Banner>
