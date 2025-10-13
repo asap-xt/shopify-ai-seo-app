@@ -1236,14 +1236,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
           
           {/* Language Limit Warning Banner */}
-          {checkLanguageLimitExceeded && (
-            <Banner tone="warning" title={`Language limit exceeded`}>
-              <BlockStack gap="200">
-                <Text variant="bodyMd">
-                  Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per product. 
+          {checkLanguageLimitExceeded && (() => {
+            console.log('[BANNER-RENDER] currentPlan:', currentPlan, 'languageLimit:', languageLimit, 'globalPlan:', globalPlan);
+            return (
+              <Banner tone="warning" title={`Language limit exceeded`}>
+                <BlockStack gap="200">
+                  <Text variant="bodyMd">
+                    Your {currentPlan} plan supports up to {languageLimit} language{languageLimit > 1 ? 's' : ''} per product. 
                   {selectedItems.length === 1 && products.find(p => p.id === selectedItems[0])?.optimizationSummary?.optimizedLanguages?.length > 0 && (
                     <> This product already has {products.find(p => p.id === selectedItems[0]).optimizationSummary.optimizedLanguages.length} optimized language(s).</>
                   )}
+                </Text>
+                <Text variant="bodyMd" tone="subdued">
+                  DEBUG: currentPlan="{currentPlan}", languageLimit={languageLimit}, globalPlan.planKey="{globalPlan?.planKey}", globalPlan.plan="{globalPlan?.plan}"
                 </Text>
                 <Text variant="bodyMd">
                   Please deselect some languages or upgrade your plan to add more:
@@ -1261,7 +1266,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 </Button>
               </BlockStack>
             </Banner>
-          )}
+            );
+          })()}
           
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
