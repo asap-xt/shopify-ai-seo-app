@@ -200,143 +200,19 @@ export default function Billing({ shop }) {
               title="Trial Period Active"
               tone="info"
               action={{
-                content: 'Choose Plan',
+                content: 'Activate Plan',
                 onAction: () => setShowPlanModal(true)
               }}
             >
               <p>
                 Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. 
-                Choose a plan to continue using all features after your trial.
+                Activate a plan to continue using all features after {new Date(subscription.trialEndsAt).toLocaleDateString()}.
               </p>
             </Banner>
           </Layout.Section>
         )}
 
-        {/* Current Subscription - 2/3 width */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd">Your Plan</Text>
-                {subscription && (
-                  <Badge tone={subscription.inTrial ? 'attention' : 'success'}>
-                    {subscription.inTrial ? 'Trial' : 'Active'}
-                  </Badge>
-                )}
-              </InlineStack>
-              
-              <Divider />
-              
-              {subscription ? (
-                <BlockStack gap="300">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd" tone="subdued">Plan</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      {subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)}
-                    </Text>
-                  </InlineStack>
-                  
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd" tone="subdued">Price</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      ${subscription.price}/month
-                    </Text>
-                  </InlineStack>
-                  
-                  {subscription.inTrial && (
-                    <InlineStack align="space-between">
-                      <Text variant="bodyMd" tone="subdued">Trial ends</Text>
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        {new Date(subscription.trialEndsAt).toLocaleDateString()}
-                      </Text>
-                    </InlineStack>
-                  )}
-                  
-                  <Divider />
-                  
-                  <Button
-                    variant="primary"
-                    fullWidth
-                    onClick={() => setShowPlanModal(true)}
-                  >
-                    {subscription.inTrial ? 'Choose Plan' : 'Change Plan'}
-                  </Button>
-                </BlockStack>
-              ) : (
-                <BlockStack gap="300">
-                  <Text variant="bodyMd" tone="subdued">
-                    No active subscription
-                  </Text>
-                  <Button
-                    variant="primary"
-                    fullWidth
-                    onClick={() => setShowPlanModal(true)}
-                  >
-                    Choose a Plan
-                  </Button>
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Token Balance - 1/3 width */}
-        <Layout.Section variant="oneThird">
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd">Token Balance</Text>
-                <Icon source={CreditCardIcon} tone="base" />
-              </InlineStack>
-              
-              <Divider />
-              
-              <BlockStack gap="300">
-                <Box>
-                  <Text variant="heading2xl" alignment="center">
-                    {tokens?.balance?.toLocaleString() || 0}
-                  </Text>
-                  <Text variant="bodySm" tone="subdued" alignment="center">
-                    tokens available
-                  </Text>
-                </Box>
-                
-                <InlineStack align="space-between">
-                  <Text variant="bodySm" tone="subdued">Purchased</Text>
-                  <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
-                </InlineStack>
-                
-                <InlineStack align="space-between">
-                  <Text variant="bodySm" tone="subdued">Used</Text>
-                  <Text variant="bodySm">{tokens?.totalUsed?.toLocaleString() || 0}</Text>
-                </InlineStack>
-                
-                <Divider />
-                
-                <Button
-                  variant="primary"
-                  fullWidth
-                  onClick={() => setShowTokenModal(true)}
-                >
-                  Buy Tokens
-                </Button>
-                
-                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                  <BlockStack gap="100">
-                    <Text variant="bodySm" tone="subdued">
-                      💡 Tokens enable AI features
-                    </Text>
-                    <Text variant="bodySm" tone="subdued">
-                      ♻️ Never expire, roll over monthly
-                    </Text>
-                  </BlockStack>
-                </Box>
-              </BlockStack>
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Available Plans */}
+        {/* Available Plans - 2/3 width */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
@@ -402,11 +278,11 @@ export default function Billing({ shop }) {
                       )}
                       
                       <Button
-                        variant={subscription?.plan === plan.key ? 'secondary' : 'primary'}
+                        variant={subscription?.plan === plan.key ? 'plain' : 'primary'}
                         fullWidth
                         disabled={subscription?.plan === plan.key}
                         onClick={() => {
-                          setSelectedPlan(plan.key);
+                          setSelectedPlan(plan);
                           setShowPlanModal(true);
                         }}
                       >
@@ -419,6 +295,63 @@ export default function Billing({ shop }) {
             </BlockStack>
           </Card>
         </Layout.Section>
+
+        {/* Token Balance - 1/3 width */}
+        <Layout.Section variant="oneThird">
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text variant="headingMd">Token Balance</Text>
+                <Icon source={CreditCardIcon} tone="base" />
+              </InlineStack>
+              
+              <Divider />
+              
+              <BlockStack gap="300">
+                <Box>
+                  <Text variant="heading2xl" alignment="center">
+                    {tokens?.balance?.toLocaleString() || 0}
+                  </Text>
+                  <Text variant="bodySm" tone="subdued" alignment="center">
+                    tokens available
+                  </Text>
+                </Box>
+                
+                <InlineStack align="space-between">
+                  <Text variant="bodySm" tone="subdued">Purchased</Text>
+                  <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
+                </InlineStack>
+                
+                <InlineStack align="space-between">
+                  <Text variant="bodySm" tone="subdued">Used</Text>
+                  <Text variant="bodySm">{tokens?.totalUsed?.toLocaleString() || 0}</Text>
+                </InlineStack>
+                
+                <Divider />
+                
+                <Button
+                  variant="primary"
+                  fullWidth
+                  onClick={() => setShowTokenModal(true)}
+                >
+                  Buy Tokens
+                </Button>
+                
+                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                  <BlockStack gap="100">
+                    <Text variant="bodySm" tone="subdued">
+                      💡 Tokens enable AI features
+                    </Text>
+                    <Text variant="bodySm" tone="subdued">
+                      ♻️ Never expire, roll over monthly
+                    </Text>
+                  </BlockStack>
+                </Box>
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
       </Layout>
 
       {/* Plan Selection Modal */}
