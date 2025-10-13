@@ -1,11 +1,13 @@
 import React from 'react';
-import { Modal, BlockStack, Text } from '@shopify/polaris';
+import { Modal, BlockStack, Text, Banner } from '@shopify/polaris';
 
 export default function UpgradeModal({ 
   open, 
   onClose, 
   featureName = "AI Enhancement", 
-  currentPlan = "starter" 
+  currentPlan = "starter",
+  errorMessage = null,
+  minimumPlanRequired = null
 }) {
   const handleUpgrade = () => {
     onClose();
@@ -19,7 +21,7 @@ export default function UpgradeModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Unlock ${featureName} Features`}
+      title={`Upgrade Required`}
       primaryAction={{
         content: 'Upgrade Plan',
         onAction: handleUpgrade,
@@ -33,22 +35,31 @@ export default function UpgradeModal({
     >
       <Modal.Section>
         <BlockStack gap="400">
-          <Text variant="bodyMd">
-            {featureName} requires tokens. Activate your plan or purchase tokens to use this feature.
-          </Text>
+          <Banner tone="warning">
+            <Text variant="bodyMd" fontWeight="semibold">
+              {errorMessage || `${featureName} requires a higher plan`}
+            </Text>
+          </Banner>
           
           <Text variant="bodyMd">
-            <strong>Current status: {currentPlan} (Trial)</strong>
+            <strong>Current plan: {currentPlan}</strong>
           </Text>
+          
+          {minimumPlanRequired && (
+            <Text variant="bodyMd">
+              <strong>Required plan: {minimumPlanRequired} or higher</strong>
+            </Text>
+          )}
           
           <BlockStack gap="200">
             <Text variant="bodyMd">
-              <strong>Activate a plan to get:</strong>
+              <strong>Upgrade to unlock:</strong>
             </Text>
             <BlockStack gap="100">
-              <Text variant="bodyMd">✓ Purchase tokens to unlock AI features</Text>
-              <Text variant="bodyMd">✓ Growth Extra & Enterprise plans include tokens</Text>
-              <Text variant="bodyMd">✓ All AI-enhanced features available</Text>
+              <Text variant="bodyMd">✓ Collections optimization (Professional+)</Text>
+              <Text variant="bodyMd">✓ AI Enhancement with tokens</Text>
+              <Text variant="bodyMd">✓ Advanced AI features</Text>
+              <Text variant="bodyMd">✓ Growth Extra & Enterprise include monthly tokens</Text>
             </BlockStack>
           </BlockStack>
         </BlockStack>

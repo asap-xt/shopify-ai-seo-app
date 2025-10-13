@@ -369,6 +369,23 @@ export default function CollectionsPage({ shop: shopProp }) {
       } catch (error) {
         console.error('[AI-ENHANCE] Error:', error);
         
+        // Check if it's a 403 error (plan restriction - Collections require Professional+)
+        if (error.status === 403) {
+          // Stop processing and show upgrade modal
+          setAIEnhanceProgress({
+            processing: false,
+            current: 0,
+            total: 0,
+            currentItem: '',
+            results: null
+          });
+          
+          setTokenError(error);
+          setCurrentPlan(error.currentPlan || plan || 'starter');
+          setShowUpgradeModal(true);
+          return; // Stop processing
+        }
+        
         // Check if it's a 402 error (insufficient tokens or trial restriction)
         if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
           // Stop processing and show appropriate modal
@@ -1508,8 +1525,10 @@ export default function CollectionsPage({ shop: shopProp }) {
       <UpgradeModal
         open={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
-        featureName="AI Enhancement"
+        featureName="Collections AI Enhancement"
         currentPlan={currentPlan}
+        errorMessage={tokenError?.error || tokenError?.message}
+        minimumPlanRequired={tokenError?.minimumPlanRequired}
       />
       
       {tokenError && (
