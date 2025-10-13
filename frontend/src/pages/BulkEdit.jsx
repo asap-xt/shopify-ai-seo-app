@@ -1067,6 +1067,14 @@ export default function BulkEdit({ shop: shopProp }) {
         id={product.id}
         media={media}
         accessibilityLabel={`View details for ${product.title}`}
+        onClick={(e) => {
+          console.log('[ResourceItem] ===== CLICK ON RESOURCE ITEM =====');
+          console.log('[ResourceItem] e.target:', e.target);
+          console.log('[ResourceItem] e.target.tagName:', e.target.tagName);
+          console.log('[ResourceItem] e.target.closest("input"):', e.target.closest('input'));
+          console.log('[ResourceItem] e.target.closest("a"):', e.target.closest('a'));
+          console.log('[ResourceItem] Event bubbling up...');
+        }}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
           <Box style={{ flex: '1 1 40%', minWidth: '250px' }}>

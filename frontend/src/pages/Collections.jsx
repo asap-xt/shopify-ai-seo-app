@@ -884,6 +884,14 @@ export default function CollectionsPage({ shop: shopProp }) {
         id={collection.id}
         media={media}
         accessibilityLabel={`View details for ${collection.title}`}
+        onClick={(e) => {
+          console.log('[Collections-ResourceItem] ===== CLICK ON RESOURCE ITEM =====');
+          console.log('[Collections-ResourceItem] e.target:', e.target);
+          console.log('[Collections-ResourceItem] e.target.tagName:', e.target.tagName);
+          console.log('[Collections-ResourceItem] e.target.closest("input"):', e.target.closest('input'));
+          console.log('[Collections-ResourceItem] e.target.closest("a"):', e.target.closest('a'));
+          console.log('[Collections-ResourceItem] Event bubbling up...');
+        }}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
           <Box style={{ flex: '1 1 30%', minWidth: '200px' }}>

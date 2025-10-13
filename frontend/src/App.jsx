@@ -67,8 +67,16 @@ function useRoute() {
 
     // Listen for navigation link clicks - ONLY on <a> tags, not on buttons/checkboxes
     const handleClick = (e) => {
+      console.log('[useRoute] ===== CLICK DETECTED =====');
+      console.log('[useRoute] e.target:', e.target);
+      console.log('[useRoute] e.target.tagName:', e.target.tagName);
+      console.log('[useRoute] e.target.closest("input"):', e.target.closest('input'));
+      console.log('[useRoute] e.target.closest("button"):', e.target.closest('button'));
+      console.log('[useRoute] e.target.closest("a"):', e.target.closest('a'));
+
       // Only handle clicks directly on <a> tags, not child elements
       if (e.target.tagName !== 'A') {
+        console.log('[useRoute] Ignoring non-A click');
         return;
       }
 
