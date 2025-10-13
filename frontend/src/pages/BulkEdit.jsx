@@ -396,27 +396,26 @@ export default function BulkEdit({ shop: shopProp }) {
     setSelectedDeleteLanguages([]);
     setShowDeleteModal(true);
   };
-  
-  // AI Enhancement Modal - използва Polaris компоненти като другите модали
-  const AIEnhanceModal = () => {
+
+  // AI Enhancement handler
+  const handleStartEnhancement = async () => {
     const selectedProducts = products.filter(p => selectedItems.includes(p.id));
-    const selectedWithSEO = selectedProducts.filter(p => 
+    const selectedWithSEO = selectedProducts.filter(p =>
       p.optimizationSummary?.optimizedLanguages?.length > 0
     );
-    
-    const handleStartEnhancement = async () => {
-      // console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
-      
-      // REMOVED: Plan check - now handled by token checking in backend
-      
-      // Не затваряме модала - ще покажем progress модала
-      setAIEnhanceProgress({
-        processing: true,
-        current: 0,
-        total: selectedWithSEO.length,
-        currentItem: '',
-        results: null
-      });
+
+    // console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
+
+    // REMOVED: Plan check - now handled by token checking in backend
+
+    // Не затваряме модала - ще покажем progress модала
+    setAIEnhanceProgress({
+      processing: true,
+      current: 0,
+      total: selectedWithSEO.length,
+      currentItem: '',
+      results: null
+    });
       
       const results = { successful: 0, failed: 0, skipped: 0 };
       
@@ -531,28 +530,16 @@ export default function BulkEdit({ shop: shopProp }) {
       
       setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
     };
-    
-    const handleClose = () => {
-      setShowAIEnhanceModal(false);
-      setAIEnhanceProgress({
-        processing: false,
-        current: 0,
-        total: 0,
-        currentItem: '',
-        results: null
-      });
-      if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
-        loadProducts(1, false, null);
-      }
-    };
-    
+
+  // AI Enhancement Modal - използва Polaris компоненти като другите модали
+  const AIEnhanceModal = () => {
     // Progress modal
     if (aiEnhanceProgress.processing) {
       return (
         <Modal
           open={showAIEnhanceModal}
           title="Processing AI Enhancement"
-          onClose={() => {}}
+          onClose={handleCloseAIEnhancement}
           noScroll
         >
           <Modal.Section>
@@ -577,10 +564,10 @@ export default function BulkEdit({ shop: shopProp }) {
         <Modal
           open={showAIEnhanceModal}
           title="AI Enhancement Results"
-          onClose={handleClose}
+          onClose={handleCloseAIEnhancement}
           primaryAction={{
             content: 'Done',
-            onAction: handleClose,
+            onAction: handleCloseAIEnhancement,
           }}
         >
           <Modal.Section>
