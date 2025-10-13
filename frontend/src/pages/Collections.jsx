@@ -21,6 +21,7 @@ import {
   ChoiceList,
   Popover,
   Checkbox,
+  Banner,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
@@ -104,6 +105,7 @@ export default function CollectionsPage({ shop: shopProp }) {
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
+  const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,
     current: 0,
@@ -112,12 +114,14 @@ export default function CollectionsPage({ shop: shopProp }) {
     results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
   });
   
-  // Load models on mount
+  // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
     const Q = `
       query PlansMe($shop:String!) {
         plansMe(shop:$shop) {
+          plan
+          planKey
           modelsSuggested
         }
       }
@@ -133,6 +137,19 @@ export default function CollectionsPage({ shop: shopProp }) {
         const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
+        setCurrentPlan(data?.planKey || 'starter');
+        
+        // Set language limit based on plan
+        const planKey = (data?.planKey || 'starter').toLowerCase();
+        const limits = {
+          'starter': 1,
+          'professional': 2,
+          'growth': 3,
+          'growth extra': 6,
+          'growth_extra': 6,
+          'enterprise': 10
+        };
+        setLanguageLimit(limits[planKey] || 1);
       })
       .catch((err) => setToast(`Error loading models: ${err.message}`));
   }, [shop, api]);
@@ -995,7 +1012,7 @@ export default function CollectionsPage({ shop: shopProp }) {
       primaryAction={{
         content: 'Generate Optimization for AI Search',
         onAction: generateSEO,
-        disabled: selectedLanguages.length === 0,
+        disabled: selectedLanguages.length === 0 || selectedLanguages.length > languageLimit,
       }}
       secondaryActions={[
         {
@@ -1007,6 +1024,29 @@ export default function CollectionsPage({ shop: shopProp }) {
       <Modal.Section>
         <BlockStack gap="300">
           <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected collections:</Text>
+          
+          {/* Language Limit Warning Banner */}
+          {selectedLanguages.length > languageLimit && (
+            <Banner tone="warning" title="Language limit exceeded">
+              <BlockStack gap="200">
+                <Text variant="bodyMd">
+                  Your {currentPlan} plan supports only {languageLimit} language(s), but you selected {selectedLanguages.length}.
+                </Text>
+                <Text variant="bodyMd">
+                  Please deselect some languages or upgrade your plan:
+                </Text>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    window.open('/billing', '_blank');
+                  }}
+                >
+                  Upgrade Plan
+                </Button>
+              </BlockStack>
+            </Banner>
+          )}
+          
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
               {availableLanguages.map(lang => (
@@ -1029,11 +1069,18 @@ export default function CollectionsPage({ shop: shopProp }) {
             <Button
               plain
               onClick={() => {
-                setSelectedLanguages(
-                  selectedLanguages.length === availableLanguages.length
-                    ? []
-                    : [...availableLanguages]
-                );
+                // Limit "Select all" to languageLimit
+                if (selectedLanguages.length === availableLanguages.length) {
+                  setSelectedLanguages([]);
+                } else {
+                  const limitedLanguages = availableLanguages.slice(0, languageLimit);
+                  setSelectedLanguages(limitedLanguages);
+                  
+                  // Show toast if we limited the selection
+                  if (availableLanguages.length > languageLimit) {
+                    setToast(`Selected ${languageLimit} language(s) based on your ${currentPlan} plan. Upgrade for more languages.`);
+                  }
+                }
               }}
             >
               {selectedLanguages.length === availableLanguages.length ? 'Deselect all' : 'Select all'}
