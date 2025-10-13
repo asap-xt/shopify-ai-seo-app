@@ -381,7 +381,7 @@ export default function CollectionsPage({ shop: shopProp }) {
           });
           
           setTokenError(error);
-          setCurrentPlan(error.currentPlan || plan || 'starter');
+          setCurrentPlan(error.currentPlan || currentPlan || 'starter');
           setShowUpgradeModal(true);
           return; // Stop processing
         }
@@ -398,7 +398,7 @@ export default function CollectionsPage({ shop: shopProp }) {
           });
           
           setTokenError(error);
-          setCurrentPlan(error.currentPlan || plan || 'starter');
+          setCurrentPlan(error.currentPlan || currentPlan || 'starter');
           
           // Show appropriate modal based on error type
           if (error.trialRestriction) {
