@@ -669,8 +669,8 @@ const AiSearchOptimisationPanel = React.memo(() => {
       
       {/* Tab content */}
       <div>
-        {activeTab === 'products' && <BulkEdit shop={shop} />}
-        {activeTab === 'collections' && <Collections shop={shop} />}
+        {activeTab === 'products' && <BulkEdit shop={shop} globalPlan={plan} />}
+        {activeTab === 'collections' && <Collections shop={shop} globalPlan={plan} />}
         {activeTab === 'sitemap' && <Sitemap shop={shop} />}
         {activeTab === 'store-metadata' && <StoreMetadata shop={shop} />}
         {activeTab === 'schema-data' && <SchemaData shop={shop} />}

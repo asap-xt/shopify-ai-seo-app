@@ -33,7 +33,7 @@ const qs = (k, d = '') => {
   catch { return d; }
 };
 
-export default function CollectionsPage({ shop: shopProp }) {
+export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const shop = shopProp || qs('shop', '');
   console.log('[COLLECTIONS] Component initialized with shop:', shop, 'shopProp:', shopProp);
   // Единен session-aware fetch за компонента
@@ -106,6 +106,15 @@ export default function CollectionsPage({ shop: shopProp }) {
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
+  
+  // Update currentPlan when globalPlan changes (e.g., after upgrade)
+  useEffect(() => {
+    if (globalPlan?.planKey) {
+      console.log('[COLLECTIONS] Updating currentPlan from globalPlan:', globalPlan.planKey);
+      setCurrentPlan(globalPlan.planKey);
+    }
+  }, [globalPlan]);
+  
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,
     current: 0,

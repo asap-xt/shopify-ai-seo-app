@@ -76,7 +76,7 @@ const getProductLimitByPlan = (planName) => {
 };
 
 
-export default function BulkEdit({ shop: shopProp }) {
+export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const { api, shop: hookShop } = useShopApi();
   const shop = shopProp || hookShop || qs('shop', '');
   
@@ -155,6 +155,14 @@ export default function BulkEdit({ shop: shopProp }) {
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
+  
+  // Update currentPlan when globalPlan changes (e.g., after upgrade)
+  useEffect(() => {
+    if (globalPlan?.planKey) {
+      console.log('[BULK-EDIT] Updating currentPlan from globalPlan:', globalPlan.planKey);
+      setCurrentPlan(globalPlan.planKey);
+    }
+  }, [globalPlan]);
   
   // Load models and plan on mount
   useEffect(() => {
