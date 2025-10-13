@@ -299,126 +299,122 @@ export default function CollectionsPage({ shop: shopProp }) {
     setShowLanguageModal(true);
   };
   
-  // AI Enhancement function - extracted from modal
+  // AI Enhancement function - same logic as Products
   const handleStartEnhancement = async () => {
-    try {
-      setIsProcessing(true);
-      setProcessingMessage('Checking eligibility...');
+    console.log('[AI-ENHANCE] Starting enhancement...');
+    
+    // Get selected collections with Basic SEO
+    const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
+    const selectedWithSEO = selectedCollections.filter(c => 
+      c.optimizedLanguages?.length > 0
+    );
+    
+    if (selectedWithSEO.length === 0) {
+      setToast('Please select collections with Basic SEO optimization');
+      return;
+    }
 
-      // Check eligibility first
-      const eligibility = await api('/ai-enhance/check-eligibility', {
-        method: 'POST',
-        shop,
-        body: { shop },
-      });
+    console.log('[AI-ENHANCE] Collections to enhance:', selectedWithSEO.length);
 
-      if (!eligibility.eligible) {
-        // Show upgrade modal instead of toast
-        setCurrentPlan(eligibility.currentPlan || 'starter');
-        setShowAIEnhanceModal(false);
-        setShowUpgradeModal(true);
-        return;
-      }
-
-      // Затваряме AI Enhancement модала и започваме processing
-      setShowAIEnhanceModal(false);
-
-      // Process selected collections
-      const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
-      const selectedWithSEO = selectedCollections.filter(c => 
-        c.optimizedLanguages?.length > 0
-      );
+    // Start AI Enhancement with progress tracking
+    setAIEnhanceProgress({
+      processing: true,
+      current: 0,
+      total: selectedWithSEO.length,
+      currentItem: '',
+      results: null
+    });
+    
+    const results = { successful: 0, failed: 0, skipped: 0 };
+    
+    for (let i = 0; i < selectedWithSEO.length; i++) {
+      const collection = selectedWithSEO[i];
       
-      const total = selectedWithSEO.length;
-      setProgress({ current: 0, total, percent: 0 });
+      setAIEnhanceProgress(prev => ({
+        ...prev,
+        current: i,
+        currentItem: collection.title
+      }));
       
-      const results = {};
-      
-      for (let i = 0; i < selectedWithSEO.length; i++) {
-        const collection = selectedWithSEO[i];
-        setCurrentCollection(collection.title);
+      try {
+        // Get languages for this collection
+        const languagesToEnhance = collection.optimizedLanguages || [];
         
-        try {
-          // За всяка колекция вземи нейните оптимизирани езици
-          const languagesToEnhance = collection.optimizedLanguages || [];
-          
-          if (languagesToEnhance.length === 0) {
-            console.log(`No optimized languages for ${collection.title}, skipping`);
-            results[collection.id] = {
-              success: false,
-              skipped: true,
-              error: 'No optimized languages'
-            };
-            continue;
-          }
-          
-          console.log(`Enhancing ${collection.title} for languages:`, languagesToEnhance);
-          
-          // Call the enhance endpoint for each collection
-          const enhanceResult = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
-            method: 'POST',
+        if (languagesToEnhance.length === 0) {
+          console.log(`[AI-ENHANCE] No languages for ${collection.title}, skipping`);
+          results.skipped++;
+          continue;
+        }
+
+        console.log(`[AI-ENHANCE] Enhancing ${collection.title} for languages:`, languagesToEnhance);
+        
+        // Call AI Enhancement endpoint
+        const enhanceData = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
+          method: 'POST',
+          shop,
+          body: {
             shop,
-            body: {
-              shop,
-              languages: languagesToEnhance,
-            },
-          });
-          
-          results[collection.id] = {
-            success: enhanceResult.ok,
-            skipped: false,
-            data: enhanceResult,
-            error: enhanceResult.ok ? null : (enhanceResult.error || 'Enhancement failed')
-          };
-          
-        } catch (error) {
-          console.error('Error enhancing collection:', collection.id, error);
-          
-          // Check if it's a 402 error (insufficient tokens or trial restriction)
-          if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
-            setIsProcessing(false);
-            setTokenError(error);
-            setCurrentPlan(error.currentPlan || 'starter');
-            
-            // Show appropriate modal based on error type
-            if (error.trialRestriction) {
-              // Trial user trying to use token feature → Show upgrade modal
-              setShowUpgradeModal(true);
-            } else {
-              // Insufficient tokens - show InsufficientTokensModal
-              // This will show upgrade suggestion if needsUpgrade=true
-              setShowInsufficientTokensModal(true);
-            }
-            return; // Stop processing
-          }
-          
-          results[collection.id] = {
-            success: false,
-            skipped: false,
-            error: error.message
-          };
+            languages: languagesToEnhance,
+          },
+        });
+        
+        if (enhanceData && enhanceData.ok) {
+          results.successful++;
+          console.log(`[AI-ENHANCE] Success for ${collection.title}`);
+        } else {
+          results.failed++;
+          console.log(`[AI-ENHANCE] Failed for ${collection.title}`);
         }
         
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
+      } catch (error) {
+        console.error('[AI-ENHANCE] Error:', error);
+        
+        // Check if it's a 402 error (insufficient tokens or trial restriction)
+        if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+          // Stop processing and show appropriate modal
+          setAIEnhanceProgress({
+            processing: false,
+            current: 0,
+            total: 0,
+            currentItem: '',
+            results: null
+          });
+          
+          setTokenError(error);
+          setCurrentPlan(error.currentPlan || plan || 'starter');
+          
+          // Show appropriate modal based on error type
+          if (error.trialRestriction) {
+            // Trial user trying to use token feature → Show upgrade modal
+            setShowUpgradeModal(true);
+          } else {
+            // Insufficient tokens (with or without upgrade suggestion)
+            // InsufficientTokensModal handles both cases via needsUpgrade prop
+            setShowInsufficientTokensModal(true);
+          }
+          return; // Stop processing other collections
+        }
+        
+        results.failed++;
       }
-
-      setResults(results);
-      setShowResultsModal(true);
       
-      const successCount = Object.values(results).filter(r => r.success).length;
-      setToast(`Enhanced ${successCount} collections`);
-      
-      // Refresh collections list to show updated data
+      setAIEnhanceProgress(prev => ({
+        ...prev,
+        current: i + 1
+      }));
+    }
+    
+    setAIEnhanceProgress(prev => ({
+      ...prev,
+      processing: false,
+      results
+    }));
+    
+    setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
+    
+    // Reload collections if any were successful
+    if (results.successful > 0) {
       await loadCollections();
-      
-    } catch (error) {
-      console.error('AI Enhance error:', error);
-      setToast('Failed to enhance collections');
-    } finally {
-      setIsProcessing(false);
-      setCurrentCollection('');
     }
   };
   
