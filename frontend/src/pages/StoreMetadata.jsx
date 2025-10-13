@@ -718,8 +718,10 @@ export default function StoreMetadata({ shop: shopProp }) {
                     <Button 
                       primary 
                       onClick={() => {
-                        // Navigate to billing or show upgrade modal
-                        window.open('/ai-seo/billing?shop=' + shop, '_blank');
+                        // Navigate to billing within the same iframe - copy ALL URL parameters
+                        const currentParams = new URLSearchParams(window.location.search);
+                        const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+                        window.location.href = `/billing${paramString}`;
                       }}
                     >
                       Upgrade Plan
