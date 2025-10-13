@@ -1065,7 +1065,6 @@ export default function BulkEdit({ shop: shopProp }) {
     return (
       <ResourceItem
         id={product.id}
-        url=""
         media={media}
         accessibilityLabel={`View details for ${product.title}`}
       >

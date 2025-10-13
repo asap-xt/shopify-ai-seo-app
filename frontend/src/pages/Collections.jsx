@@ -882,7 +882,6 @@ export default function CollectionsPage({ shop: shopProp }) {
     return (
       <ResourceItem
         id={collection.id}
-        url=""
         media={media}
         accessibilityLabel={`View details for ${collection.title}`}
       >
