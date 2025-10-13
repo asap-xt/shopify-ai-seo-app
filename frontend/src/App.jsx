@@ -172,30 +172,30 @@ const DashboardCard = React.memo(({ shop }) => {
       .catch((e) => console.error('Failed to load plan via GraphQL:', e));
   }, [currentShop, apiSession]);
 
-  // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
-  useEffect(() => {
-    if (!currentShop) return;
-
-    // 1) Проверка на definitions със session token
-    api(`/collections/check-definitions?shop=${currentShop}`)
-      .then(data => {
-
-        // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
-        const existingKeys = (data.definitions || []).map(d => d.key);
-        const requiredLangs = ['en', 'bg', 'fr'];
-        const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
-        
-        if (missingLangs.length > 0) {
-          // 2) Създай липсващите definitions със session token
-          return api(`/collections/create-definitions?shop=${currentShop}`, {
-            method: 'POST',
-            body: { shop: currentShop, languages: missingLangs },
-          });
-        }
-      })
-
-      .catch(err => console.error('Definitions error:', err));
-  }, [currentShop, api]);
+//   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
+//   useEffect(() => {
+//     if (!currentShop) return;
+// 
+//     // 1) Проверка на definitions със session token
+//     api(`/collections/check-definitions?shop=${currentShop}`)
+//       .then(data => {
+// 
+//         // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
+//         const existingKeys = (data.definitions || []).map(d => d.key);
+//         const requiredLangs = ['en', 'bg', 'fr'];
+//         const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
+//         
+//         if (missingLangs.length > 0) {
+//           // 2) Създай липсващите definitions със session token
+//           return api(`/collections/create-definitions?shop=${currentShop}`, {
+//             method: 'POST',
+//             body: { shop: currentShop, languages: missingLangs },
+//           });
+//         }
+//       })
+// 
+//       .catch(err => console.error('Definitions error:', err));
+//   }, [currentShop, api]);
 
   if (!plan) {
     return (
@@ -669,8 +669,8 @@ const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
       
       {/* Tab content */}
       <div>
-        {activeTab === 'products' && <BulkEdit shop={shop} globalPlan={plan.planKey ? plan : null} />}
-        {activeTab === 'collections' && <Collections shop={shop} globalPlan={plan.planKey ? plan : null} />}
+        {activeTab === 'products' && <BulkEdit shop={shop} globalPlan={plan} />}
+        {activeTab === 'collections' && <Collections shop={shop} globalPlan={plan} />}
         {activeTab === 'sitemap' && <Sitemap shop={shop} />}
         {activeTab === 'store-metadata' && <StoreMetadata shop={shop} />}
         {activeTab === 'schema-data' && <SchemaData shop={shop} />}
@@ -691,6 +691,7 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
+  const [plan, setPlan] = useState(null);
   // App is installed via Shopify Install Modal, no frontend install button needed
 
   // Token exchange logic
@@ -775,8 +776,13 @@ export default function App() {
           return;
         }
         
-        // Заредени са плановете, продължи с други данни...
-        console.log('[APP] Plans loaded successfully via GraphQL');
+        // Заредени са плановете, запази ги в state
+        const plansData = await plansResponse.json();
+        const pm = plansData?.data?.plansMe;
+        if (pm) {
+          console.log('[APP] Plans loaded successfully via GraphQL:', pm);
+          setPlan(pm);
+        }
         
       } catch (error) {
         console.error('[APP] Error loading initial data:', error);
