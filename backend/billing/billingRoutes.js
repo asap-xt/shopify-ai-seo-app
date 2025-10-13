@@ -89,17 +89,20 @@ router.get('/info', verifyRequest, async (req, res) => {
         totalUsed: tokenBalance.totalUsed,
         lastPurchase: tokenBalance.lastPurchase
       },
-      plans: Object.keys(PLANS).map(key => ({
-        key,
-        name: PLANS[key].name,
-        price: PLANS[key].priceUsd,
-        productLimit: PLANS[key].productLimit,
-        queryLimit: PLANS[key].queryLimit,
-        providersAllowed: PLANS[key].providersAllowed?.length || 0,
-        languageLimit: PLANS[key].languageLimit || 1,
-        includedTokens: getIncludedTokens(key),
-        features: getPlanFeatures(key)
-      }))
+      plans: Object.keys(PLANS).map(key => {
+        const included = getIncludedTokens(key);
+        return {
+          key,
+          name: PLANS[key].name,
+          price: PLANS[key].priceUsd,
+          productLimit: PLANS[key].productLimit,
+          queryLimit: PLANS[key].queryLimit,
+          providersAllowed: PLANS[key].providersAllowed?.length || 0,
+          languageLimit: PLANS[key].languageLimit || 1,
+          includedTokens: included.tokens || 0,
+          features: getPlanFeatures(key)
+        };
+      })
     });
   } catch (error) {
     console.error('[Billing] Error getting info:', error);
