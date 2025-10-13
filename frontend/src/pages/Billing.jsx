@@ -365,7 +365,7 @@ export default function Billing({ shop }) {
         primaryAction={{
           content: purchasing ? 'Processing...' : 'Confirm',
           loading: purchasing,
-          onAction: () => handleSubscribe(selectedPlan || subscription?.plan)
+          onAction: () => handleSubscribe(selectedPlan?.key || subscription?.plan)
         }}
         secondaryActions={[
           {
@@ -380,7 +380,7 @@ export default function Billing({ shop }) {
         <Modal.Section>
           <BlockStack gap="400">
             <Text>
-              You are about to subscribe to the <strong>{selectedPlan || subscription?.plan}</strong> plan.
+              You are about to subscribe to the <strong>{selectedPlan?.name || subscription?.plan}</strong> plan.
             </Text>
             {subscription?.inTrial && (
               <Banner tone="warning">
