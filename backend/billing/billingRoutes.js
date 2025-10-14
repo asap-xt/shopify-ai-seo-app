@@ -29,8 +29,8 @@ function getPlanFeatures(planKey) {
   
   // Starter plan - base features
   if (planKey === 'starter') {
-    features.push('Optimization for AI');
-    features.push('AI Bot Access Control');
+    features.push('Product Optimization for AI');
+    features.push('AI Bot Access: Meta AI + Anthropic (Claude)');
     features.push('Sitemap generation');
     return features;
   }
@@ -38,15 +38,19 @@ function getPlanFeatures(planKey) {
   // Professional - all from Starter plus:
   if (planKey === 'professional') {
     features.push('All from Starter plus:');
-    features.push('Collections optimization');
+    features.push('AI Bot Access: + Gemini (Google)');
+    features.push('Store Metadata for AI Search');
+    features.push('AI-enhanced add ons for products (requires tokens)');
     return features;
   }
   
   // Growth - all from Professional plus:
   if (planKey === 'growth') {
     features.push('All from Professional plus:');
-    features.push('Automated syncing');
-    features.push('robots.txt auto-generation');
+    features.push('Collections optimization');
+    features.push('AI Bot Access: + ChatGPT');
+    features.push('AI Welcome Page');
+    features.push('AI-enhanced add ons for Collections (requires tokens)');
     return features;
   }
   
@@ -54,16 +58,16 @@ function getPlanFeatures(planKey) {
   if (planKey === 'growth extra') {
     features.push('All from Growth plus:');
     features.push('AI-Optimized Sitemap');
-    features.push('Advanced Schema Data');
-    features.push('Priority support');
+    features.push('AI Bot Access: + Perplexity');
+    features.push('AI-enhanced add ons (tokens included)');
     return features;
   }
   
   // Enterprise - all from Growth Extra plus:
   if (planKey === 'enterprise') {
     features.push('All from Growth Extra plus:');
-    features.push('Dedicated account manager');
-    features.push('Custom integration');
+    features.push('Advanced Schema Data');
+    features.push('AI Bot Access: + Deepseek, Bytespider & others');
     return features;
   }
   
