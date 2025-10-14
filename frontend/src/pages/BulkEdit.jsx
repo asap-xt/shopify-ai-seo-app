@@ -756,7 +756,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // console.log('[BULK-EDIT/DEBUG] Using fallback model:', finalModel);
     }
     
-    setShowLanguageModal(false);
     setIsProcessing(true);
     setProgress({ current: 0, total: 0, percent: 0 });
     setErrors([]);
@@ -780,6 +779,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       if (selectedCount > planLimit) {
         setIsProcessing(false);
         setProgress({ current: 0, total: 0, percent: 0 });
+        setShowLanguageModal(false); // Close language modal
         
         // Show upgrade modal instead of auto-processing
         setTokenError({
@@ -790,6 +790,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setShowPlanUpgradeModal(true);
         return;
       }
+      
+      // Close language modal only after passing limit check
+      setShowLanguageModal(false);
       
       const total = selectedCount;
       const skippedDueToPlan = 0;
