@@ -7,7 +7,8 @@ export default function UpgradeModal({
   featureName = "AI Enhancement", 
   currentPlan = "starter",
   errorMessage = null,
-  minimumPlanRequired = null
+  minimumPlanRequired = null,
+  features = null // Array of features to unlock, or null for default
 }) {
   const handleUpgrade = () => {
     onClose();
@@ -16,6 +17,16 @@ export default function UpgradeModal({
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
     window.location.href = `/billing${paramString}`;
   };
+  
+  // Default features if none provided
+  const defaultFeatures = [
+    'Collections optimization (Professional+)',
+    'AI Enhancement with tokens',
+    'Advanced AI features',
+    'Growth Extra & Enterprise include monthly tokens'
+  ];
+  
+  const featuresToShow = features || defaultFeatures;
 
   return (
     <Modal
@@ -56,10 +67,9 @@ export default function UpgradeModal({
               <strong>Upgrade to unlock:</strong>
             </Text>
             <BlockStack gap="100">
-              <Text variant="bodyMd">✓ Collections optimization (Professional+)</Text>
-              <Text variant="bodyMd">✓ AI Enhancement with tokens</Text>
-              <Text variant="bodyMd">✓ Advanced AI features</Text>
-              <Text variant="bodyMd">✓ Growth Extra & Enterprise include monthly tokens</Text>
+              {featuresToShow.map((feature, index) => (
+                <Text key={index} variant="bodyMd">✓ {feature}</Text>
+              ))}
             </BlockStack>
           </BlockStack>
         </BlockStack>

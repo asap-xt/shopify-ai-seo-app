@@ -214,6 +214,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   }, [globalPlan]);
   
+  // Auto-close upgrade modal if selection is now within limit
+  useEffect(() => {
+    if (showPlanUpgradeModal && plan) {
+      const planLimit = getProductLimitByPlan(plan);
+      const currentSelection = selectAllPages ? totalCount : selectedItems.length;
+      
+      if (currentSelection <= planLimit) {
+        setShowPlanUpgradeModal(false);
+        setTokenError(null);
+      }
+    }
+  }, [selectedItems.length, selectAllPages, totalCount, showPlanUpgradeModal, plan]);
+  
   // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
@@ -781,11 +794,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setProgress({ current: 0, total: 0, percent: 0 });
         setShowLanguageModal(false); // Close language modal
         
-        // Show upgrade modal instead of auto-processing
+        // Show upgrade modal with product limit specific message
+        const nextPlan = getNextPlanForLimit(selectedCount);
         setTokenError({
           error: `Product limit exceeded`,
-          message: `Your ${plan} plan supports up to ${planLimit} products. You have selected ${selectedCount} products. Please upgrade your plan or reduce your selection.`,
-          minimumPlanRequired: getNextPlanForLimit(selectedCount)
+          message: `Your ${plan} plan supports up to ${planLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
+          minimumPlanRequired: nextPlan,
+          currentPlan: plan,
+          features: [
+            `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
+            'All features from your current plan',
+            nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons with included tokens' : 'Access to AI-enhanced add-ons',
+            nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
+          ].filter(Boolean)
         });
         setShowPlanUpgradeModal(true);
         return;
@@ -2101,8 +2122,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           setShowPlanUpgradeModal(false);
           setTokenError(null);
         }}
-        featureName="AI Enhancement"
-        currentPlan={currentPlan}
+        featureName={tokenError?.error || "Feature"}
+        errorMessage={tokenError?.message}
+        currentPlan={tokenError?.currentPlan || currentPlan}
+        minimumPlanRequired={tokenError?.minimumPlanRequired}
+        features={tokenError?.features}
       />
       
       {tokenError && (
