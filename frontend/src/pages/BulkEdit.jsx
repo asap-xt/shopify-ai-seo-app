@@ -75,6 +75,25 @@ const getProductLimitByPlan = (planName) => {
   }
 };
 
+// Helper function to suggest next plan based on product count
+const getNextPlanForLimit = (count) => {
+  const isDebugMode = new URLSearchParams(window.location.search).get('debug_limits') === 'true';
+  
+  if (isDebugMode) {
+    if (count <= 5) return 'Starter';
+    if (count <= 10) return 'Growth';
+    if (count <= 12) return 'Professional';
+    if (count <= 15) return 'Growth Extra';
+    return 'Enterprise';
+  }
+  
+  if (count <= 100) return 'Starter';
+  if (count <= 350) return 'Professional';
+  if (count <= 1000) return 'Growth';
+  if (count <= 2500) return 'Growth Extra';
+  return 'Enterprise';
+};
+
 
 export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const { api, shop: hookShop } = useShopApi();
@@ -754,13 +773,26 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
-      // Apply plan limit - only process up to the plan's product limit
+      // Check if selection exceeds plan limit BEFORE processing
       const planLimit = getProductLimitByPlan(plan);
-      const originalTotal = productsToProcess.length;
-      productsToProcess = productsToProcess.slice(0, planLimit);
+      const selectedCount = productsToProcess.length;
       
-      const total = productsToProcess.length;
-      const skippedDueToPlan = originalTotal - total;
+      if (selectedCount > planLimit) {
+        setIsProcessing(false);
+        setProgress({ current: 0, total: 0, percent: 0 });
+        
+        // Show upgrade modal instead of auto-processing
+        setTokenError({
+          error: `Product limit exceeded`,
+          message: `Your ${plan} plan supports up to ${planLimit} products. You have selected ${selectedCount} products. Please upgrade your plan or reduce your selection.`,
+          minimumPlanRequired: getNextPlanForLimit(selectedCount)
+        });
+        setShowPlanUpgradeModal(true);
+        return;
+      }
+      
+      const total = selectedCount;
+      const skippedDueToPlan = 0;
       
       setProgress({ current: 0, total, percent: 0 });
       
@@ -1634,19 +1666,42 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             
             {/* Plan Limit Warning Banner */}
             {plan && (selectedItems.length > getProductLimitByPlan(plan) || (selectAllPages && totalCount > getProductLimitByPlan(plan))) && (
-              <Banner tone="warning">
-                <InlineStack gap="200" align="space-between">
-                  <Text>
-                    <strong>Plan Limit Exceeded:</strong> You've selected more products than your {plan} plan allows. 
-                    Only the first {getProductLimitByPlan(plan)} products will be processed.
+              <Banner tone="critical">
+                <BlockStack gap="200">
+                  <Text variant="bodyMd" fontWeight="semibold">
+                    Product limit exceeded
                   </Text>
-                  <Button
-                    size="micro"
-                    onClick={() => setShowPlanUpgradeModal(true)}
-                  >
-                    Upgrade Plan
-                  </Button>
-                </InlineStack>
+                  <Text>
+                    Your <strong>{plan}</strong> plan supports up to <strong>{getProductLimitByPlan(plan)}</strong> products. 
+                    You have selected <strong>{selectAllPages ? totalCount : selectedItems.length}</strong> products.
+                  </Text>
+                  <Text>
+                    Please deselect some products or upgrade your plan to continue.
+                  </Text>
+                  <InlineStack gap="200">
+                    <Button
+                      onClick={() => {
+                        setSelectedItems([]);
+                        setSelectAllPages(false);
+                      }}
+                    >
+                      Clear Selection
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setTokenError({
+                          error: `Product limit exceeded`,
+                          message: `Your ${plan} plan supports up to ${getProductLimitByPlan(plan)} products. Upgrade to ${getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)} to optimize more products.`,
+                          minimumPlanRequired: getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)
+                        });
+                        setShowPlanUpgradeModal(true);
+                      }}
+                    >
+                      Upgrade Plan
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
               </Banner>
             )}
             
