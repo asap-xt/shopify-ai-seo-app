@@ -558,6 +558,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           }
         } catch (error) {
           console.error('Enhancement error:', error);
+          console.error('🔍 [DEBUG] Error details:', {
+            status: error.status,
+            trialRestriction: error.trialRestriction,
+            needsUpgrade: error.needsUpgrade,
+            requiresPurchase: error.requiresPurchase,
+            message: error.message,
+            currentPlan: error.currentPlan
+          });
           
           // Check if it's a 403 error (plan restriction - Products require Professional+)
           if (error.status === 403) {
