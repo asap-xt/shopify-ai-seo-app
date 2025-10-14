@@ -1706,19 +1706,21 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     return (
                       <Button
                         onClick={isProfessionalPlus ? handleStartEnhancement : () => {
-                          // Navigate to billing for upgrade
-                          const currentParams = new URLSearchParams(window.location.search);
-                          const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-                          window.location.href = `/billing${paramString}`;
+                          // Show upgrade modal for Starter plans
+                          setTokenError({
+                            error: 'AI Enhancement requires a higher plan',
+                            message: 'Upgrade to Professional plan to access AI-enhanced optimization for Products',
+                            minimumPlanRequired: 'Professional'
+                          });
+                          setShowPlanUpgradeModal(true);
                         }}
                         disabled={selectedItems.length === 0 && !selectAllPages}
                         size="medium"
                         fullWidth
-                        tone={isProfessionalPlus ? undefined : 'success'}
                       >
                         {isProfessionalPlus 
                           ? 'AI Enhanced add-ons for AI Search' 
-                          : '✨ AI Enhanced add-ons (Upgrade to Professional)'}
+                          : '✨ AI Enhanced add-ons'}
                       </Button>
                     );
                   })()}

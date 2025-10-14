@@ -1487,17 +1487,19 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                 return (
                   <Button
                     onClick={isGrowthPlus ? handleStartEnhancement : () => {
-                      // Navigate to billing for upgrade
-                      const currentParams = new URLSearchParams(window.location.search);
-                      const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-                      window.location.href = `/billing${paramString}`;
+                      // Show upgrade modal for Starter/Professional plans
+                      setTokenError({
+                        error: 'AI Enhancement requires a higher plan',
+                        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections',
+                        minimumPlanRequired: 'Growth'
+                      });
+                      setShowUpgradeModal(true);
                     }}
                     disabled={selectedItems.length === 0 && !selectAllPages}
-                    tone={isGrowthPlus ? undefined : 'success'}
                   >
                     {isGrowthPlus 
                       ? 'AI Enhanced add-ons for AI Search' 
-                      : '✨ AI Enhanced add-ons (Upgrade to Growth)'}
+                      : '✨ AI Enhanced add-ons'}
                   </Button>
                 );
               })()}
