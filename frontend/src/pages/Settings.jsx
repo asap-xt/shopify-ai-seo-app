@@ -1200,12 +1200,12 @@ export default function Settings() {
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'meta' ? 'Meta AI platforms (Starter)' :
-                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
-                              key === 'google' ? 'Google Gemini (Professional+)' :
-                              key === 'openai' ? 'ChatGPT (Growth+)' :
-                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
-                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'openai' ? 'ChatGPT' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'others' ? 'Deepseek, Bytespider & others' :
                               ''
                           }
                         />
@@ -1261,12 +1261,12 @@ export default function Settings() {
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'meta' ? 'Meta AI platforms (Starter)' :
-                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
-                              key === 'google' ? 'Google Gemini (Professional+)' :
-                              key === 'openai' ? 'ChatGPT (Growth+)' :
-                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
-                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'openai' ? 'ChatGPT' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'others' ? 'Deepseek, Bytespider & others' :
                               ''
                           }
                         />
@@ -1322,12 +1322,12 @@ export default function Settings() {
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'meta' ? 'Meta AI platforms (Starter)' :
-                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
-                              key === 'google' ? 'Google Gemini (Professional+)' :
-                              key === 'openai' ? 'ChatGPT (Growth+)' :
-                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
-                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
+                              key === 'meta' ? 'Meta AI platforms' :
+                              key === 'anthropic' ? 'Claude AI assistant' :
+                              key === 'google' ? 'Google Gemini' :
+                              key === 'openai' ? 'ChatGPT' :
+                              key === 'perplexity' ? 'AI-powered search' :
+                              key === 'others' ? 'Deepseek, Bytespider & others' :
                               ''
                           }
                         />
