@@ -1142,23 +1142,23 @@ export default function Settings() {
             <Divider />
             
             <BlockStack gap="300">
-              {/* Row 1: OpenAI, Perplexity */}
+              {/* Row 1: Meta AI, Anthropic (Claude) */}
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(2, 1fr)', 
                 gap: '1rem' 
               }}>
-                {['openai', 'perplexity'].map(key => {
+                {['meta', 'anthropic'].map(key => {
                   const bot = settings?.bots?.[key];
                   if (!bot) return null;
                   
-                  // Use normalized plan for availableBots check
+                  // Available bots per plan based on billing descriptions
                   const availableBotsByPlan = {
-                    starter: ['openai', 'perplexity'],
-                    professional: ['openai', 'anthropic', 'perplexity'],
-                    growth: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
-                    growth_extra: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others'],
-                    enterprise: ['openai', 'anthropic', 'google', 'perplexity', 'meta', 'others']
+                    starter: ['meta', 'anthropic'],
+                    professional: ['meta', 'anthropic', 'google'],
+                    growth: ['meta', 'anthropic', 'google', 'openai'],
+                    growth_extra: ['meta', 'anthropic', 'google', 'openai', 'perplexity'],
+                    enterprise: ['meta', 'anthropic', 'google', 'openai', 'perplexity', 'others']
                   };
                   
                   const normalizedPlan = normalizePlan(settings?.plan);
@@ -1166,9 +1166,10 @@ export default function Settings() {
                   const isAvailable = availableBots.includes(key);
                   
                   const requiredPlan = 
-                    key === 'anthropic' ? 'Professional' :
-                    key === 'google' ? 'Growth' :
-                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
+                    key === 'google' ? 'Professional' :
+                    key === 'openai' ? 'Growth' :
+                    key === 'perplexity' ? 'Growth Extra' :
+                    key === 'others' ? 'Enterprise' :
                     null;
                   
                   return (
@@ -1199,12 +1200,12 @@ export default function Settings() {
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'openai' ? 'Most popular AI assistant' :
-                              key === 'anthropic' ? 'Claude AI assistant' :
-                              key === 'google' ? 'Google Gemini' :
-                              key === 'perplexity' ? 'AI-powered search' :
-                              key === 'meta' ? 'Meta AI platforms' :
-                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              key === 'meta' ? 'Meta AI platforms (Starter)' :
+                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
+                              key === 'google' ? 'Google Gemini (Professional+)' :
+                              key === 'openai' ? 'ChatGPT (Growth+)' :
+                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
+                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
                               ''
                           }
                         />
@@ -1214,21 +1215,22 @@ export default function Settings() {
                 })}
               </div>
 
-              {/* Row 2: Anthropic, Google */}
+              {/* Row 2: Google (Gemini), OpenAI (ChatGPT) */}
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(2, 1fr)', 
                 gap: '1rem' 
               }}>
-                {['anthropic', 'google'].map(key => {
+                {['google', 'openai'].map(key => {
                   const bot = settings?.bots?.[key];
                   if (!bot) return null;
                   
                   const isAvailable = settings?.availableBots?.includes(key);
                   const requiredPlan = 
-                    key === 'anthropic' ? 'Professional' :
-                    key === 'google' ? 'Growth' :
-                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
+                    key === 'google' ? 'Professional' :
+                    key === 'openai' ? 'Growth' :
+                    key === 'perplexity' ? 'Growth Extra' :
+                    key === 'others' ? 'Enterprise' :
                     null;
                   
                   return (
@@ -1259,12 +1261,12 @@ export default function Settings() {
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'openai' ? 'Most popular AI assistant' :
-                              key === 'anthropic' ? 'Claude AI assistant' :
-                              key === 'google' ? 'Google Gemini' :
-                              key === 'perplexity' ? 'AI-powered search' :
-                              key === 'meta' ? 'Meta AI platforms' :
-                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              key === 'meta' ? 'Meta AI platforms (Starter)' :
+                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
+                              key === 'google' ? 'Google Gemini (Professional+)' :
+                              key === 'openai' ? 'ChatGPT (Growth+)' :
+                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
+                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
                               ''
                           }
                         />
@@ -1274,21 +1276,22 @@ export default function Settings() {
                 })}
               </div>
 
-              {/* Row 3: Meta, Others */}
+              {/* Row 3: Perplexity, Others (Deepseek, Bytespider) */}
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(2, 1fr)', 
                 gap: '1rem' 
               }}>
-                {['meta', 'others'].map(key => {
+                {['perplexity', 'others'].map(key => {
                   const bot = settings?.bots?.[key];
                   if (!bot) return null;
                   
                   const isAvailable = settings?.availableBots?.includes(key);
                   const requiredPlan = 
-                    key === 'anthropic' ? 'Professional' :
-                    key === 'google' ? 'Growth' :
-                    ['meta', 'others'].includes(key) ? 'Growth Extra' : // Changed from 'Growth' to 'Growth Extra'
+                    key === 'google' ? 'Professional' :
+                    key === 'openai' ? 'Growth' :
+                    key === 'perplexity' ? 'Growth Extra' :
+                    key === 'others' ? 'Enterprise' :
                     null;
                   
                   return (
@@ -1314,17 +1317,17 @@ export default function Settings() {
                             </InlineStack>
                           }
                           checked={!!settings?.bots?.[key]?.enabled}
-                  onChange={() => toggleBot(key)}
+                          onChange={() => toggleBot(key)}
                           disabled={!isAvailable}
                           helpText={
                             !isAvailable ? 
                               `Upgrade to ${requiredPlan} plan to enable this AI bot` :
-                              key === 'openai' ? 'Most popular AI assistant' :
-                              key === 'anthropic' ? 'Claude AI assistant' :
-                              key === 'google' ? 'Google Gemini' :
-                              key === 'perplexity' ? 'AI-powered search' :
-                              key === 'meta' ? 'Meta AI platforms' :
-                              key === 'others' ? 'Bytespider, DeepSeek, etc.' :
+                              key === 'meta' ? 'Meta AI platforms (Starter)' :
+                              key === 'anthropic' ? 'Claude AI assistant (Starter)' :
+                              key === 'google' ? 'Google Gemini (Professional+)' :
+                              key === 'openai' ? 'ChatGPT (Growth+)' :
+                              key === 'perplexity' ? 'AI-powered search (Growth Extra+)' :
+                              key === 'others' ? 'Deepseek, Bytespider & others (Enterprise)' :
                               ''
                           }
                         />
