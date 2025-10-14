@@ -227,8 +227,34 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
 
 /**
  * POST /api/ai-discovery/apply-robots
+ * 
+ * ⚠️ CURRENTLY DISABLED - Requires Shopify Protected Scope Approval
+ * 
+ * This endpoint attempts to automatically write robots.txt.liquid to the store's theme.
+ * However, it requires the `write_themes_assets` protected scope which is NOT available
+ * without explicit approval from Shopify.
+ * 
+ * Status: NOT IN USE - Frontend UI does not expose this functionality
+ * Alternative: Users manually copy/paste robots.txt via theme editor (Settings page)
+ * 
+ * To enable in the future:
+ * 1. Submit "Online Store Protected Scope Exemption Request" via Shopify Partner Dashboard
+ * 2. Wait for Shopify approval for `write_themes_assets` scope
+ * 3. Add `write_themes_assets` to server.js scopes
+ * 4. Uncomment auto-apply UI in frontend/src/pages/Settings.jsx (line ~1907)
+ * 
+ * See: https://partners.shopify.com/ (search for protected scope exemption)
  */
 router.post('/ai-discovery/apply-robots', validateRequest(), async (req, res) => {
+  // Return 501 Not Implemented with clear explanation
+  return res.status(501).json({ 
+    error: 'Automatic robots.txt installation is temporarily disabled',
+    reason: 'Requires Shopify approval for write_themes_assets protected scope',
+    alternative: 'Please use manual copy/paste method from Settings page',
+    documentation: 'Contact support for manual installation instructions'
+  });
+  
+  /* ORIGINAL CODE - Keep for future use after Shopify approval
   console.log('[APPLY ENDPOINT] Called with body:', req.body);
   
   try {
@@ -255,6 +281,7 @@ router.post('/ai-discovery/apply-robots', validateRequest(), async (req, res) =>
       stack: error.stack 
     });
   }
+  */
 });
 
 /**
@@ -385,10 +412,23 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
 });
 
 /**
- * Apply robots.txt to theme
- */
-/**
- * Apply robots.txt to theme - GraphQL ONLY fix
+ * Apply robots.txt to theme - GraphQL ONLY
+ * 
+ * ⚠️ CURRENTLY NOT FUNCTIONAL - Requires Shopify Protected Scope Approval
+ * 
+ * This function attempts to write robots.txt.liquid to the store's theme using GraphQL API.
+ * It requires the `write_themes_assets` protected scope which Shopify only grants after
+ * explicit approval via "Online Store Protected Scope Exemption Request" form.
+ * 
+ * Without this scope, the GraphQL mutation `themeFilesUpsert` will return:
+ * "Access denied for themeFilesUpsert field. Required access: write_themes AND write_themes_assets"
+ * 
+ * Status: Code preserved for future use after Shopify approval
+ * Current approach: Manual copy/paste by users via Settings page UI
+ * 
+ * @param {string} shop - Shop domain
+ * @param {string} robotsTxt - Generated robots.txt content
+ * @returns {Promise<object>} Result object with success/error status
  */
 async function applyRobotsTxt(shop, robotsTxt) {
   console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);

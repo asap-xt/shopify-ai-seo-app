@@ -885,6 +885,14 @@ export default function Settings() {
     setToast('Copied to clipboard!');
   };
 
+  /**
+   * ⚠️ NOT IN USE - Requires Shopify Protected Scope Approval
+   * 
+   * This function is preserved for future use but is currently NOT called from the UI.
+   * The backend endpoint returns 501 Not Implemented until Shopify approves write_themes_assets scope.
+   * 
+   * See: backend/controllers/aiDiscoveryController.js (line ~248) for backend status
+   */
   const applyRobotsTxt = async () => {
     try {
       const data = await api(`/api/ai-discovery/apply-robots?shop=${shop}`, {
