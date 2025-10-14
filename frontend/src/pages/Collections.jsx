@@ -1612,6 +1612,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       {bulkDeleteModal}
       {confirmDeleteModal}
       {deleteProgressModal}
+      {AIEnhanceModal()}
       
       <UpgradeModal
         open={showUpgradeModal}
