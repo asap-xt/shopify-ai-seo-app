@@ -155,13 +155,13 @@ class AIDiscoveryService {
           // Fallback стойности
           settings.plan = 'Starter';
           settings.planKey = 'starter';
-          settings.availableBots = ['openai', 'perplexity'];
+          settings.availableBots = ['meta', 'anthropic']; // Starter default
         }
       } catch (error) {
         console.error('Failed to fetch plan in getSettings:', error);
         settings.plan = 'Starter';
         settings.planKey = 'starter';
-        settings.availableBots = ['openai', 'perplexity'];
+        settings.availableBots = ['meta', 'anthropic']; // Starter default
       }
       
       // Ensure advancedSchemaEnabled is included
@@ -272,13 +272,13 @@ class AIDiscoveryService {
       others: { name: 'Other AI Bots', enabled: false }
     };
 
-    // CORRECT bots according to your plans:
+    // AI Bot Access per plan (matches billing descriptions)
     const availableBotsByPlan = {
-      starter: ['openai', 'perplexity'], // 2 bots
-      professional: ['openai', 'perplexity', 'anthropic'], // 3 bots  
-      growth: ['openai', 'perplexity', 'anthropic', 'google'], // 4 bots (WITHOUT Meta & Others)
-      growth_extra: ['openai', 'perplexity', 'anthropic', 'google', 'meta', 'others'], // all 6
-      enterprise: ['openai', 'perplexity', 'anthropic', 'google', 'meta', 'others'] // all 6
+      starter: ['meta', 'anthropic'],                                           // Meta AI + Claude
+      professional: ['meta', 'anthropic', 'google'],                            // + Gemini
+      growth: ['meta', 'anthropic', 'google', 'openai'],                       // + ChatGPT
+      growth_extra: ['meta', 'anthropic', 'google', 'openai', 'perplexity'],  // + Perplexity
+      enterprise: ['meta', 'anthropic', 'google', 'openai', 'perplexity', 'others'] // + Others
     };
 
     const base = {
