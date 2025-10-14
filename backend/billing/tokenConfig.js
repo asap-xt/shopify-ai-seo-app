@@ -2,11 +2,13 @@
 // Token pricing and configuration
 
 // Gemini 2.5 Flash Lite pricing (as of 2025)
+// We fetch the actual rate dynamically from OpenRouter
+// This is a fallback/default estimate for UI display purposes
 // Input: $0.075 per 1M tokens
 // Output: $0.30 per 1M tokens
 // Average for our use case: ~$0.10 per 1M tokens (mostly input)
 
-const GEMINI_RATE_PER_1M_TOKENS = 0.10; // USD per 1M tokens
+const GEMINI_RATE_PER_1M_TOKENS = 0.10; // USD per 1M tokens (fallback estimate)
 const GEMINI_RATE_PER_TOKEN = GEMINI_RATE_PER_1M_TOKENS / 1_000_000; // $0.0000001 per token
 
 export const TOKEN_CONFIG = {
@@ -30,7 +32,8 @@ export const TOKEN_CONFIG = {
   rollover: true,
   
   // Calculate tokens from USD amount
-  // Example: $10 → $6 for tokens → 60,000,000 tokens at $0.10/1M
+  // Example: $10 → $6 for tokens (60% budget) → tokens based on actual OpenRouter rate
+  // With default rate $0.10/1M: $6 → 60,000,000 tokens
   calculateTokens(usdAmount) {
     const tokenBudget = usdAmount * this.tokenBudgetPercent; // 60% goes to tokens
     const tokens = Math.floor(tokenBudget / this.providerRate);
@@ -175,3 +178,37 @@ export function requiresTokens(feature) {
 export function isBlockedInTrial(feature) {
   return TRIAL_BLOCKED_FEATURES.includes(feature);
 }
+
+// ====================================================================
+// DYNAMIC TOKEN TRACKING (т.2)
+// ====================================================================
+
+// Safety margin for pre-deduction (10%)
+export const TOKEN_SAFETY_MARGIN = 0.10;
+
+// Estimate tokens needed for an operation (with safety margin)
+export function estimateTokensWithMargin(feature, options = {}) {
+  const baseEstimate = calculateFeatureCost(feature, options);
+  const withMargin = Math.ceil(baseEstimate * (1 + TOKEN_SAFETY_MARGIN));
+  return {
+    estimated: baseEstimate,
+    withMargin,
+    margin: withMargin - baseEstimate
+  };
+}
+
+// Calculate actual cost from OpenRouter response
+// OpenRouter returns: { prompt_tokens, completion_tokens, total_cost? }
+export function calculateActualTokens(usage = {}) {
+  const promptTokens = usage.prompt_tokens || 0;
+  const completionTokens = usage.completion_tokens || 0;
+  const totalTokens = promptTokens + completionTokens;
+  
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    costUsd: usage.total_cost || null // OpenRouter sometimes provides this
+  };
+}
+

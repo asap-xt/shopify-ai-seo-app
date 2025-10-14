@@ -33,10 +33,18 @@ export async function callOpenRouterJSON({ model, system, user }) {
   const json = await resp.json();
   const text = json?.choices?.[0]?.message?.content || '';
   const usage = json?.usage || {};
+  
   return {
     text,
     model: json?.model || model,
+    usage: {
+      prompt_tokens: usage.prompt_tokens || 0,
+      completion_tokens: usage.completion_tokens || 0,
+      total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+      total_cost: usage.total_cost || null // OpenRouter sometimes provides cost in USD
+    },
+    // Legacy field for backward compatibility
     tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-    costUsd: 0, // we can add price calc later if needed
+    costUsd: usage.total_cost || 0
   };
 }
