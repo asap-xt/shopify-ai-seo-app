@@ -21,7 +21,7 @@ export default function UpgradeModal({
   // Default features if none provided
   const defaultFeatures = [
     'Collections optimization (Professional+)',
-    'AI Enhancement with tokens',
+    'AI Enhancement features with pay-per-use tokens',
     'Advanced AI features',
     'Growth Extra & Enterprise include monthly tokens'
   ];

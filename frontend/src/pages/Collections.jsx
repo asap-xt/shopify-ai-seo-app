@@ -1498,9 +1498,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     }}
                     disabled={selectedItems.length === 0 && !selectAllPages}
                   >
-                    {isGrowthPlus 
-                      ? 'AI Enhanced add-ons for AI Search' 
-                      : '✨ AI Enhanced add-ons'}
+                    AI Enhanced add-ons
                   </Button>
                 );
               })()}

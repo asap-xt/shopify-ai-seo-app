@@ -528,7 +528,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         features: [
           `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
           'All features from your current plan',
-          nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons with included tokens' : 'Access to AI-enhanced add-ons',
+          nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons at no extra cost' : 'Access to AI-enhanced add-ons',
           nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
         ].filter(Boolean)
       });
@@ -836,13 +836,13 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const nextPlan = getNextPlanForLimit(selectedCount);
         setTokenError({
           error: `Product limit exceeded`,
-          message: `Your ${plan} plan supports up to ${planLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
+          message: `Your ${currentPlan} plan supports up to ${planLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
           minimumPlanRequired: nextPlan,
-          currentPlan: plan,
+          currentPlan: currentPlan,
           features: [
             `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
             'All features from your current plan',
-            nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons with included tokens' : 'Access to AI-enhanced add-ons',
+            nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons at no extra cost' : 'Access to AI-enhanced add-ons',
             nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
           ].filter(Boolean)
         });
@@ -1836,9 +1836,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         size="medium"
                         fullWidth
                       >
-                        {isProfessionalPlus 
-                          ? 'AI Enhanced add-ons for AI Search' 
-                          : '✨ AI Enhanced add-ons'}
+                        AI Enhanced add-ons
                       </Button>
                     );
                   })()}
