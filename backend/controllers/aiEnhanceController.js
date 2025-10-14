@@ -233,7 +233,7 @@ router.post('/product', validateRequest(), async (req, res) => {
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
         
-        return res.status(402).json({
+        const responseData = {
           error: 'Insufficient token balance',
           requiresPurchase: true,
           needsUpgrade: needsUpgrade,
@@ -246,7 +246,11 @@ router.post('/product', validateRequest(), async (req, res) => {
           message: needsUpgrade 
             ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced product features'
             : 'You need more tokens to use this feature'
-        });
+        };
+        
+        console.log('🔍 [AI-ENHANCE/402] Response data:', JSON.stringify(responseData, null, 2));
+        
+        return res.status(402).json(responseData);
       }
       
       // Deduct tokens immediately
