@@ -1480,12 +1480,24 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                 
                 if (!hasOptimizedCollections) return null;
                 
+                // Check if Growth+ plan
+                const isGrowthPlus = ['growth', 'growth_extra', 'growth extra', 'enterprise']
+                  .includes(currentPlan.toLowerCase().replace(/_/g, ' '));
+                
                 return (
                   <Button
-                    onClick={handleStartEnhancement}
+                    onClick={isGrowthPlus ? handleStartEnhancement : () => {
+                      // Navigate to billing for upgrade
+                      const currentParams = new URLSearchParams(window.location.search);
+                      const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+                      window.location.href = `/billing${paramString}`;
+                    }}
                     disabled={selectedItems.length === 0 && !selectAllPages}
+                    tone={isGrowthPlus ? undefined : 'success'}
                   >
-                    AI Enhanced add-ons for AI Search
+                    {isGrowthPlus 
+                      ? 'AI Enhanced add-ons for AI Search' 
+                      : '✨ AI Enhanced add-ons (Upgrade to Growth)'}
                   </Button>
                 );
               })()}

@@ -167,6 +167,19 @@ router.post('/product', validateRequest(), async (req, res) => {
     console.log('🔍 [AI-ENHANCE/DEBUG] Shop plan:', planKey);
     console.log('🔍 [AI-ENHANCE/DEBUG] Subscription found:', !!subscription);
     
+    // === PLAN CHECK: Professional+ required for Products AI enhancement ===
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const productsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    
+    if (!productsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+      return res.status(403).json({
+        error: 'AI-enhanced add-ons for Products require Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Products'
+      });
+    }
+    
     // === LANGUAGE LIMIT CHECK ===
     const planConfig = getPlanConfig(planKey);
     const languageLimit = planConfig?.languageLimit || 1;
@@ -370,17 +383,16 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    // === PLAN CHECK FOR COLLECTIONS ACCESS ===
-    // Collections are only available for Professional+ plans
+    // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['growth', 'growth_extra', 'enterprise'];
     
     if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({
-        error: 'Collections optimization requires Professional plan or higher',
+        error: 'AI-enhanced add-ons for Collections require Growth plan or higher',
         currentPlan: planKey,
-        minimumPlanRequired: 'Professional',
-        message: 'Upgrade to Professional plan to access Collections optimization'
+        minimumPlanRequired: 'Growth',
+        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections'
       });
     }
     
@@ -563,17 +575,16 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    // === PLAN CHECK FOR COLLECTIONS ACCESS ===
-    // Collections are only available for Professional+ plans
+    // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['growth', 'growth_extra', 'enterprise'];
     
     if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({
-        error: 'Collections optimization requires Professional plan or higher',
+        error: 'AI-enhanced add-ons for Collections require Growth plan or higher',
         currentPlan: planKey,
-        minimumPlanRequired: 'Professional',
-        message: 'Upgrade to Professional plan to access Collections optimization'
+        minimumPlanRequired: 'Growth',
+        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections'
       });
     }
     

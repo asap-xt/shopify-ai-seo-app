@@ -559,6 +559,26 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         } catch (error) {
           console.error('Enhancement error:', error);
           
+          // Check if it's a 403 error (plan restriction - Products require Professional+)
+          if (error.status === 403) {
+            // Stop processing and show upgrade modal
+            setAIEnhanceProgress({
+              processing: false,
+              current: 0,
+              total: 0,
+              currentItem: '',
+              results: null
+            });
+            
+            setTokenError({
+              ...error,
+              message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
+            });
+            setCurrentPlan(error.currentPlan || currentPlan);
+            setShowPlanUpgradeModal(true);
+            return; // Stop processing
+          }
+          
           // Check if it's a 402 error (insufficient tokens or trial restriction)
           if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
             // Stop processing and show appropriate modal
@@ -1671,14 +1691,26 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     
                     if (!hasOptimizedProducts) return null;
                     
+                    // Check if Professional+ plan
+                    const isProfessionalPlus = ['professional', 'growth', 'growth_extra', 'growth extra', 'enterprise']
+                      .includes(currentPlan.toLowerCase().replace(/_/g, ' '));
+                    
                     return (
                       <Button
-                        onClick={handleStartEnhancement}
+                        onClick={isProfessionalPlus ? handleStartEnhancement : () => {
+                          // Navigate to billing for upgrade
+                          const currentParams = new URLSearchParams(window.location.search);
+                          const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+                          window.location.href = `/billing${paramString}`;
+                        }}
                         disabled={selectedItems.length === 0 && !selectAllPages}
                         size="medium"
                         fullWidth
+                        tone={isProfessionalPlus ? undefined : 'success'}
                       >
-                        AI Enhanced add-ons for AI Search
+                        {isProfessionalPlus 
+                          ? 'AI Enhanced add-ons for AI Search' 
+                          : '✨ AI Enhanced add-ons (Upgrade to Professional)'}
                       </Button>
                     );
                   })()}
