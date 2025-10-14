@@ -480,7 +480,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
     // REMOVED: Plan check - now handled by token checking in backend
 
-    // Не затваряме модала - ще покажем progress модала
+    // Show progress modal
+    setShowAIEnhanceModal(true);
     setAIEnhanceProgress({
       processing: true,
       current: 0,

@@ -390,6 +390,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     console.log('[AI-ENHANCE] Collections to enhance:', selectedWithSEO.length);
 
     // Start AI Enhancement with progress tracking
+    setShowAIEnhanceModal(true);
     setAIEnhanceProgress({
       processing: true,
       current: 0,
