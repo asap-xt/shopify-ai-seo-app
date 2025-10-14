@@ -507,10 +507,34 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     const selectedWithSEO = selectedProducts.filter(p =>
       p.optimizationSummary?.optimizedLanguages?.length > 0
     );
+    const selectedWithoutSEO = selectedProducts.filter(p =>
+      !p.optimizationSummary?.optimizedLanguages?.length
+    );
 
     // console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
 
-    // REMOVED: Plan check - now handled by token checking in backend
+    // Check product limit before processing
+    const planLimit = getProductLimitByPlan(plan);
+    const selectedCount = selectedWithSEO.length;
+    
+    if (selectedCount > planLimit) {
+      // Show upgrade modal instead of processing
+      const nextPlan = getNextPlanForLimit(selectedCount);
+      setTokenError({
+        error: `Product limit exceeded`,
+        message: `Your ${plan} plan supports up to ${planLimit} products for AI Enhancement. You have selected ${selectedCount} products with Basic SEO.`,
+        minimumPlanRequired: nextPlan,
+        currentPlan: plan,
+        features: [
+          `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
+          'All features from your current plan',
+          nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons with included tokens' : 'Access to AI-enhanced add-ons',
+          nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
+        ].filter(Boolean)
+      });
+      setShowPlanUpgradeModal(true);
+      return;
+    }
 
     // Show progress modal
     setShowAIEnhanceModal(true);
@@ -522,7 +546,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       results: null
     });
       
-      const results = { successful: 0, failed: 0, skipped: 0 };
+      const results = { 
+        successful: 0, 
+        failed: 0, 
+        skipped: selectedWithoutSEO.length,
+        skipReasons: selectedWithoutSEO.length > 0 ? [`${selectedWithoutSEO.length} product(s): No Basic Optimization`] : []
+      };
       
       for (let i = 0; i < selectedWithSEO.length; i++) {
         const product = selectedWithSEO[i];
@@ -719,7 +748,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           }}
         >
           <Modal.Section>
-            <BlockStack gap="300">
+            <BlockStack gap="400">
               <InlineStack gap="400">
                 <Box>
                   <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
@@ -740,6 +769,15 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   </Text>
                 </Box>
               </InlineStack>
+              
+              {aiEnhanceProgress.results.skipReasons && aiEnhanceProgress.results.skipReasons.length > 0 && (
+                <BlockStack gap="200">
+                  <Text variant="bodyMd" fontWeight="semibold">Skipped products:</Text>
+                  {aiEnhanceProgress.results.skipReasons.map((reason, index) => (
+                    <Text key={index} variant="bodySm" tone="subdued">• {reason}</Text>
+                  ))}
+                </BlockStack>
+              )}
             </BlockStack>
           </Modal.Section>
         </Modal>
