@@ -156,22 +156,14 @@ async function generateEnhancedBulletsFAQ(data) {
 // POST /ai-enhance/product
 router.post('/product', validateRequest(), async (req, res) => {
   try {
-    console.log('🔍 [AI-ENHANCE/DEBUG] ===== REQUEST START =====');
-    console.log('🔍 [AI-ENHANCE/DEBUG] req.body:', JSON.stringify(req.body, null, 2));
-    console.log('🔍 [AI-ENHANCE/DEBUG] req.shopDomain:', req.shopDomain);
-    
     const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
     
-    console.log('🔍 [AI-ENHANCE/DEBUG] Starting AI enhance for product:', productId);
-    console.log('🔍 [AI-ENHANCE/DEBUG] Languages:', languages);
+    console.log(`[AI-ENHANCE] Starting for product ${productId}, ${languages.length} language(s)`);
     
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
-    
-    console.log('🔍 [AI-ENHANCE/DEBUG] Shop plan:', planKey);
-    console.log('🔍 [AI-ENHANCE/DEBUG] Subscription found:', !!subscription);
     
     // === PLAN CHECK: Professional+ required for Products AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
@@ -239,8 +231,6 @@ router.post('/product', validateRequest(), async (req, res) => {
             : 'You need more tokens to use this feature'
         };
         
-        console.log('🔍 [AI-ENHANCE/402] Response data:', JSON.stringify(responseData, null, 2));
-        
         return res.status(402).json(responseData);
       }
       
@@ -258,8 +248,6 @@ router.post('/product', validateRequest(), async (req, res) => {
     const model = 'google/gemini-2.5-flash-lite';
     
     for (const language of languages) {
-      console.log(`🔍 [DEBUG] Processing language: ${language}`);
-      
       try {
         // Get current SEO
         const metafieldKey = `seo__${language.toLowerCase()}`;
@@ -275,7 +263,6 @@ router.post('/product', validateRequest(), async (req, res) => {
         `;
         
         const data = await shopGraphQL(req, shop, query, { productId });
-        console.log(`🔍 [DEBUG] Current SEO found:`, !!data?.product?.metafield?.value);
         
         // Вземаме съществуващото SEO
         const metafield = data?.product?.metafield;
@@ -345,17 +332,13 @@ router.post('/product', validateRequest(), async (req, res) => {
           updatedSeo
         };
         
-        console.log(`🔍 [AI-ENHANCE] Successfully enhanced and saved ${language}`);
-        
         results.push(result);
         
       } catch (error) {
-        console.error(`🔍 [DEBUG] Error for ${language}:`, error.message);
+        console.error(`[AI-ENHANCE] Error for ${language}:`, error.message);
         results.push({ language, error: error.message });
       }
     }
-    
-    console.log('🔍 [DEBUG] All results:', results);
     
     // === FINALIZE TOKEN USAGE (т.2) ===
     // Calculate actual tokens used from all AI requests
@@ -391,7 +374,7 @@ router.post('/product', validateRequest(), async (req, res) => {
     });
     
   } catch (error) {
-    console.error('🔍 [DEBUG] Fatal error:', error);
+    console.error('[AI-ENHANCE] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
