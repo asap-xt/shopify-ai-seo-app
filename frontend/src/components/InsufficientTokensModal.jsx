@@ -73,9 +73,22 @@ export default function InsufficientTokensModal({
               <Text variant="bodyMd" fontWeight="semibold">
                 You don't have enough tokens to use AI Enhancement
               </Text>
-              <Text variant="bodySm">
-                Purchase tokens to unlock this feature and continue using AI-enhanced SEO optimization.
-              </Text>
+              <InlineStack gap="400" align="space-between" blockAlign="center">
+                <Box>
+                  <Text variant="bodySm" tone="subdued">Current balance:</Text>
+                  <Text variant="headingSm" fontWeight="bold">{tokensAvailable?.toLocaleString() || 0} tokens</Text>
+                </Box>
+                <Box>
+                  <Text variant="bodySm" tone="subdued">Required:</Text>
+                  <Text variant="headingSm" fontWeight="bold">{tokensRequired?.toLocaleString() || 0} tokens</Text>
+                </Box>
+                <Box>
+                  <Text variant="bodySm" tone="subdued">You need:</Text>
+                  <Text variant="headingSm" fontWeight="bold" as="span">
+                    <span style={{ color: '#D82C0D' }}>{tokensNeeded?.toLocaleString() || 0} more</span>
+                  </Text>
+                </Box>
+              </InlineStack>
             </BlockStack>
           </Banner>
 
