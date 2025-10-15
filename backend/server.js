@@ -1000,6 +1000,57 @@ app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
   }
 });
 
+// List registered webhooks (for debugging)
+app.get('/api/admin/list-webhooks', attachShop, async (req, res) => {
+  try {
+    const shop = req.shopDomain || req.query.shop;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    const { resolveAdminToken } = await import('./utils/tokenResolver.js');
+    const { makeShopifyGraphQLRequest } = await import('./utils/shopifyGraphQL.js');
+    
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No access token' });
+    }
+    
+    const query = `
+      query {
+        webhookSubscriptions(first: 50) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const result = await makeShopifyGraphQLRequest(shop, accessToken, query);
+    
+    res.json({
+      success: true,
+      shop,
+      webhooks: result?.webhookSubscriptions?.edges || []
+    });
+  } catch (error) {
+    console.error('[LIST-WEBHOOKS-ENDPOINT] Error:', error);
+    res.status(500).json({ 
+      error: error.message 
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
 // them conditionally without breaking the build if files are missing.
