@@ -120,7 +120,7 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
       <a href={`/settings${paramString}`}>Settings</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
-      <a href={`/billing${paramString}`}>Billing</a>
+      <a href={`/billing${paramString}`}>Plans & Billing</a>
     </ui-nav-menu>
   );
 }

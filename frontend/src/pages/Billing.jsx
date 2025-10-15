@@ -177,7 +177,7 @@ export default function Billing({ shop }) {
 
   return (
     <Page
-      title="Billing & Plans"
+      title="Plans & Billing"
     >
       <Layout>
         {/* Error Banner */}
@@ -216,9 +216,6 @@ export default function Billing({ shop }) {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingLg">Available Plans</Text>
-              <Divider />
-              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                 {plans.map((plan) => (
                   <Card key={plan.key}>
