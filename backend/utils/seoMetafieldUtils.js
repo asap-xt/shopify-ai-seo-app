@@ -1,7 +1,8 @@
 // backend/utils/seoMetafieldUtils.js
 // Utility functions for SEO metafield operations
 
-import { shopGraphQL } from '../shopify/shopGraphQL.js';
+import { makeShopifyGraphQLRequest } from './shopifyGraphQL.js';
+import { resolveAdminToken } from './tokenResolver.js';
 
 /**
  * Delete all SEO metafields for a product (all languages)
@@ -16,6 +17,12 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
   console.log(`[SEO-METAFIELD-UTILS] Deleting ALL SEO metafields for product: ${productGid}`);
   
   try {
+    // Resolve access token
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      throw new Error(`No access token found for shop: ${shop}`);
+    }
+    
     // 1. Fetch all metafields for the product in seo_ai namespace
     const fetchQuery = `
       query GetProductMetafields($id: ID!) {
@@ -34,7 +41,7 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
       }
     `;
     
-    const fetchResult = await shopGraphQL(req, shop, fetchQuery, { id: productGid });
+    const fetchResult = await makeShopifyGraphQLRequest(shop, accessToken, fetchQuery, { id: productGid });
     
     if (!fetchResult?.product?.metafields?.edges) {
       console.log(`[SEO-METAFIELD-UTILS] No metafields found for product ${productGid}`);
@@ -72,7 +79,7 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
     // Build metafield identifiers array
     const metafieldIdentifiers = metafieldIds.map(id => ({ id }));
     
-    const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+    const deleteResult = await makeShopifyGraphQLRequest(shop, accessToken, deleteMutation, {
       metafields: metafieldIdentifiers
     });
     
