@@ -6,9 +6,15 @@ import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import Shop from '../db/Shop.js'; // За access token
+import TokenBalance from '../db/TokenBalance.js';
 import fetch from 'node-fetch';
 import { validateAIResponse } from '../utils/aiValidator.js';
 import { extractFactualAttributes } from '../utils/factualExtractor.js';
+import { 
+  estimateTokensWithMargin, 
+  calculateActualTokens,
+  requiresTokens
+} from '../billing/tokenConfig.js';
 
 const router = express.Router();
 
@@ -388,13 +394,13 @@ Writing style guidelines:
 Return only the enhanced description text, no additional formatting.`;
 
   try {
-    // console.log(`[SCHEMA-DEBUG] Calling AI for enhanced description...`);
     const result = await generateWithAI(prompt, systemPrompt);
-    // console.log(`[SCHEMA-DEBUG] AI response received for enhanced description`);
-    return result.description || result;
+    const content = result.content;
+    const usage = result.usage;
+    return { description: content.description || content, usage };
   } catch (error) {
     console.error('[SCHEMA] Enhanced description generation failed:', error);
-    return null;
+    return { description: null, usage: null };
   }
 }
 
@@ -435,13 +441,12 @@ Return as JSON array with format:
 ]`;
 
   try {
-    // console.log(`[SCHEMA-DEBUG] Calling AI for review schemas...`);
     const result = await generateWithAI(prompt, systemPrompt);
-    // console.log(`[SCHEMA-DEBUG] AI response received for reviews:`, result);
-    const reviews = Array.isArray(result) ? result : result.reviews || [];
-    // console.log(`[SCHEMA-DEBUG] Parsed reviews count:`, reviews.length);
+    const content = result.content;
+    const usage = result.usage;
+    const reviews = Array.isArray(content) ? content : content.reviews || [];
     
-    return reviews.map(review => ({
+    const schemas = reviews.map(review => ({
       "@context": "https://schema.org",
       "@type": "Review",
       "itemReviewed": {
@@ -460,9 +465,11 @@ Return as JSON array with format:
       "reviewBody": review.reviewBody || "Great product!",
       "datePublished": review.datePublished || new Date().toISOString().split('T')[0]
     }));
+    
+    return { schemas, usage };
   } catch (error) {
     console.error('[SCHEMA] Review generation failed:', error);
-    return [];
+    return { schemas: [], usage: null };
   }
 }
 
@@ -507,13 +514,12 @@ Return as JSON:
 }`;
 
   try {
-    // console.log(`[SCHEMA-DEBUG] Calling AI for rating schemas...`);
     const result = await generateWithAI(prompt, systemPrompt);
-    // console.log(`[SCHEMA-DEBUG] AI response received for ratings:`, result);
-    const ratingData = result.ratingValue ? result : result.rating || {};
-    // console.log(`[SCHEMA-DEBUG] Parsed rating data:`, ratingData);
+    const content = result.content;
+    const usage = result.usage;
+    const ratingData = content.ratingValue ? content : content.rating || {};
     
-    return [{
+    const schemas = [{
       "@context": "https://schema.org",
       "@type": "AggregateRating",
       "itemReviewed": {
@@ -525,9 +531,11 @@ Return as JSON:
       "bestRating": 5,
       "worstRating": 1
     }];
+    
+    return { schemas, usage };
   } catch (error) {
     console.error('[SCHEMA] Rating generation failed:', error);
-    return [];
+    return { schemas: [], usage: null };
   }
 }
 
@@ -693,9 +701,15 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
   try {
     const result = await generateWithAI(prompt, systemPrompt);
     
+    // Extract content and usage
+    const content = result.content;
+    const usage = result.usage;
+    
+    console.log(`[SCHEMA] Site FAQ generated, tokens used: ${usage.total_tokens}`);
+    
     // Validate AI response to prevent hallucinations
     const validatedResponse = validateAIResponse(
-      { faq: result.faqs }, 
+      { faq: content.faqs }, 
       {
         shopName: shopContext.shop.name,
         shopUrl: shopUrl,
@@ -707,7 +721,7 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
     );
     
     // Validate and fix language answer
-    const validated = (validatedResponse.faq || result.faqs).map(faq => {
+    const validated = (validatedResponse.faq || content.faqs).map(faq => {
       if (faq.q.toLowerCase().includes('languages')) {
         faq.a = `Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website.`;
       } else {
@@ -762,11 +776,11 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
       console.error('[SCHEMA] Failed to save FAQ:', saveResult.metafieldsSet.userErrors);
     }
     
-    return faqSchema;
+    return { schema: faqSchema, usage };
     
   } catch (error) {
     console.error('[SCHEMA] FAQ generation failed:', error);
-    throw error;
+    return { schema: null, usage: null };
   }
 }
 
@@ -1299,7 +1313,9 @@ async function generateAllSchemas(shop) {
     
     // Generate site-wide FAQ
     console.log('[SCHEMA] Generating site FAQ...');
-    const siteFAQ = await generateSiteFAQ(shop, shopContext);
+    const faqResult = await generateSiteFAQ(shop, shopContext);
+    const siteFAQ = faqResult.schema;
+    const usageDetails = faqResult.usage ? [{ feature: 'site-faq', usage: faqResult.usage }] : [];
     
     // First, sync products from Shopify to MongoDB if needed
     console.log('[SCHEMA] Checking if products need to be synced...');
