@@ -385,7 +385,7 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const { collectionId, languages = [] } = req.body;
     
-    console.log('🔍 [DEBUG] Starting AI enhance for collection:', collectionId);
+    console.log(`[AI-ENHANCE] Starting for collection ${collectionId}, ${languages.length} language(s)`);
     
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
@@ -418,21 +418,25 @@ router.post('/collection', validateRequest(), async (req, res) => {
       });
     }
     
-    // === TOKEN CHECKING FOR AI ENHANCEMENT ===
+    // === TOKEN CHECKING WITH DYNAMIC TRACKING ===
     // NOTE: After plan check passes, AI Enhancement requires tokens
     // Growth Extra+ plans get included tokens, Professional/Growth must purchase
     const feature = 'ai-seo-collection';
+    let reservationId = null;
     
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
-      // Calculate required tokens for all languages
-      const requiredTokens = calculateFeatureCost(feature, { languages: languages.length });
+      // Estimate required tokens with 10% safety margin
+      const tokenEstimate = estimateTokensWithMargin(feature, { languages: languages.length });
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // Check if sufficient tokens are available
-      if (!tokenBalance.hasBalance(requiredTokens)) {
+      console.log(`[AI-ENHANCE] Token estimate:`, tokenEstimate);
+      console.log(`[AI-ENHANCE] Current balance: ${tokenBalance.balance}`);
+      
+      // Check if sufficient tokens are available (with margin)
+      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         // Determine if upgrade is needed (for Starter/Professional/Growth plans)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
@@ -443,9 +447,10 @@ router.post('/collection', validateRequest(), async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: requiredTokens,
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: requiredTokens - tokenBalance.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
           message: needsUpgrade 
             ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced collection features'
@@ -453,9 +458,13 @@ router.post('/collection', validateRequest(), async (req, res) => {
         });
       }
       
-      // Deduct tokens immediately
-      await tokenBalance.deductTokens(requiredTokens, feature, { collectionId });
-      console.log(`[AI-ENHANCE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+      // Reserve tokens (with 10% safety margin) - will be adjusted to actual usage later
+      const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { collectionId });
+      reservationId = reservation.reservationId;
+      await reservation.save();
+      
+      console.log(`[AI-ENHANCE] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
+      console.log(`[AI-ENHANCE] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -521,10 +530,36 @@ Output JSON with:
         });
         
       } catch (error) {
-        console.error(`🔍 [DEBUG] Collection error for ${language}:`, error.message);
+        console.error(`[AI-ENHANCE] Collection error for ${language}:`, error.message);
         results.push({ language, error: error.message });
       }
     }
+    
+    // === FINALIZE TOKEN USAGE ===
+    // Calculate actual tokens used from all AI requests
+    if (reservationId && requiresTokens(feature)) {
+      let totalActualTokens = 0;
+      
+      // Sum up actual tokens from all successful results
+      for (const result of results) {
+        if (result.usage) {
+          const actual = calculateActualTokens(result.usage);
+          totalActualTokens += actual.totalTokens;
+          
+          console.log(`[AI-ENHANCE] ${result.language}: ${actual.totalTokens} tokens (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
+        }
+      }
+      
+      console.log(`[AI-ENHANCE] Total actual tokens used: ${totalActualTokens}`);
+      
+      // Finalize the reservation with actual usage
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
+      
+      console.log(`[AI-ENHANCE] Finalized reservation ${reservationId}`);
+      console.log(`[AI-ENHANCE] New balance: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN FINALIZATION ===
     
     res.json({ 
       success: true,
@@ -556,8 +591,7 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     const { collectionId } = req.params;
     const { languages = [] } = req.body;
     
-    console.log('[AI-ENHANCE] Starting for collection:', collectionId);
-    console.log('[AI-ENHANCE] Languages to process:', languages);
+    console.log(`[AI-ENHANCE] Starting for collection ${collectionId}, ${languages.length} language(s)`);
     
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
@@ -590,21 +624,26 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       });
     }
     
-    // === TOKEN CHECKING FOR AI ENHANCEMENT ===
+    // === TOKEN CHECKING WITH DYNAMIC TRACKING ===
     // NOTE: After plan check passes, AI Enhancement requires tokens
     // Growth Extra+ plans get included tokens, Professional/Growth must purchase
     const feature = 'ai-seo-collection';
+    let reservationId = null;
+    const usageDetails = []; // Track usage for each language
     
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
-      // Calculate required tokens for all languages
-      const requiredTokens = calculateFeatureCost(feature, { languages: languages.length });
+      // Estimate required tokens with 10% safety margin
+      const tokenEstimate = estimateTokensWithMargin(feature, { languages: languages.length });
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // Check if sufficient tokens are available
-      if (!tokenBalance.hasBalance(requiredTokens)) {
+      console.log(`[AI-ENHANCE] Token estimate:`, tokenEstimate);
+      console.log(`[AI-ENHANCE] Current balance: ${tokenBalance.balance}`);
+      
+      // Check if sufficient tokens are available (with margin)
+      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         // Determine if upgrade is needed (for Starter/Professional/Growth plans)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
@@ -615,9 +654,10 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: requiredTokens,
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: requiredTokens - tokenBalance.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
           message: needsUpgrade 
             ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-enhanced collection features'
@@ -625,9 +665,13 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         });
       }
       
-      // Deduct tokens immediately
-      await tokenBalance.deductTokens(requiredTokens, feature, { collectionId });
-      console.log(`[AI-ENHANCE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+      // Reserve tokens (with 10% safety margin) - will be adjusted to actual usage later
+      const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { collectionId });
+      reservationId = reservation.reservationId;
+      await reservation.save();
+      
+      console.log(`[AI-ENHANCE] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
+      console.log(`[AI-ENHANCE] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -689,7 +733,12 @@ Guidelines:
         ];
         
         console.log(`[AI-ENHANCE] Calling OpenRouter for ${language}`);
-        const { content } = await openrouterChat(model, messages, true);
+        const { content, usage } = await openrouterChat(model, messages, true);
+        
+        // Track usage for finalization
+        if (usage) {
+          usageDetails.push({ language, usage });
+        }
         
         let enhanced;
         try {
@@ -741,6 +790,30 @@ Guidelines:
         results.failed++;
       }
     }
+    
+    // === FINALIZE TOKEN USAGE ===
+    // Calculate actual tokens used from all AI requests
+    if (reservationId && requiresTokens(feature) && usageDetails.length > 0) {
+      let totalActualTokens = 0;
+      
+      // Sum up actual tokens from all successful results
+      for (const detail of usageDetails) {
+        const actual = calculateActualTokens(detail.usage);
+        totalActualTokens += actual.totalTokens;
+        
+        console.log(`[AI-ENHANCE] ${detail.language}: ${actual.totalTokens} tokens (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
+      }
+      
+      console.log(`[AI-ENHANCE] Total actual tokens used: ${totalActualTokens}`);
+      
+      // Finalize the reservation with actual usage
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
+      
+      console.log(`[AI-ENHANCE] Finalized reservation ${reservationId}`);
+      console.log(`[AI-ENHANCE] New balance: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN FINALIZATION ===
     
     console.log('[AI-ENHANCE] Final results:', results);
     

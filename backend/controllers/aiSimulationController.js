@@ -4,7 +4,13 @@ import { verifyRequest } from '../middleware/verifyRequest.js';
 import { GraphQLClient } from 'graphql-request';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
-import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
+import { 
+  calculateFeatureCost, 
+  requiresTokens, 
+  isBlockedInTrial,
+  estimateTokensWithMargin,
+  calculateActualTokens
+} from '../billing/tokenConfig.js';
 
 // Copy ONLY the OpenRouter connection from aiEnhanceController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -43,12 +49,17 @@ async function openrouterChat(model, messages, response_format_json = true) {
   
   const j = await rsp.json();
   const content = j?.choices?.[0]?.message?.content || '';
+  const usage = j?.usage || {};
   
-  console.log('🤖 [AI-SIMULATION] Response received');
-  console.log('🤖 [AI-SIMULATION] Content:', content);
-  console.log('🤖 [AI-SIMULATION] Usage:', j?.usage);
-  
-  return { content, usage: j?.usage || {} };
+  return {
+    content,
+    usage: {
+      prompt_tokens: usage.prompt_tokens || 0,
+      completion_tokens: usage.completion_tokens || 0,
+      total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+      total_cost: usage.total_cost || null
+    }
+  };
 }
 
 const router = express.Router();
@@ -70,9 +81,10 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     console.log('[AI-SIMULATION] Context:', context);
     console.log('[AI-SIMULATION] Access token available:', !!accessToken);
     
-    // === TOKEN CHECKING ===
+    // === TOKEN CHECKING WITH DYNAMIC TRACKING ===
     // AI Testing/Simulation requires tokens for all plans
     const feature = 'ai-testing-simulation';
+    let reservationId = null;
     
     if (requiresTokens(feature)) {
       // Get subscription and check trial status
@@ -81,14 +93,17 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       const now = new Date();
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
       
-      // Calculate required tokens
-      const requiredTokens = calculateFeatureCost(feature);
+      // Estimate required tokens with 10% safety margin
+      const tokenEstimate = estimateTokensWithMargin(feature);
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
+      console.log(`[AI-SIMULATION] Token estimate:`, tokenEstimate);
+      console.log(`[AI-SIMULATION] Current balance: ${tokenBalance.balance}`);
+      
       // If in trial AND insufficient tokens → Block with trial activation modal
-      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(requiredTokens)) {
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         return res.status(402).json({
           error: 'Feature not available during trial without tokens',
           trialRestriction: true,
@@ -96,15 +111,16 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
           trialEndsAt: subscription.trialEndsAt,
           currentPlan: planKey,
           feature,
-          tokensRequired: requiredTokens,
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: requiredTokens - tokenBalance.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           message: 'AI Testing requires plan activation or token purchase'
         });
       }
       
       // If insufficient tokens → Request token purchase
-      if (!tokenBalance.hasBalance(requiredTokens)) {
+      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
         
@@ -114,9 +130,10 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: requiredTokens,
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: requiredTokens - tokenBalance.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
           message: needsUpgrade 
             ? 'Purchase more tokens or upgrade to Growth Extra plan for AI Testing'
@@ -124,9 +141,13 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
         });
       }
       
-      // Deduct tokens immediately
-      await tokenBalance.deductTokens(requiredTokens, feature, { questionType });
-      console.log(`[AI-SIMULATION] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
+      // Reserve tokens (with 10% safety margin) - will be adjusted to actual usage later
+      const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { questionType });
+      reservationId = reservation.reservationId;
+      await reservation.save();
+      
+      console.log(`[AI-SIMULATION] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
+      console.log(`[AI-SIMULATION] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -240,7 +261,22 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     ], false); // Don't use JSON format for simulation responses
     
     const aiResponse = result.content;
-    console.log('[AI-SIMULATION] AI Response:', aiResponse);
+    
+    // === FINALIZE TOKEN USAGE ===
+    // Calculate actual tokens used from AI request
+    if (reservationId && requiresTokens(feature) && result.usage) {
+      const actual = calculateActualTokens(result.usage);
+      
+      console.log(`[AI-SIMULATION] Actual tokens used: ${actual.totalTokens} (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
+      
+      // Finalize the reservation with actual usage
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      await tokenBalance.finalizeReservation(reservationId, actual.totalTokens);
+      
+      console.log(`[AI-SIMULATION] Finalized reservation ${reservationId}`);
+      console.log(`[AI-SIMULATION] New balance: ${tokenBalance.balance}`);
+    }
+    // === END TOKEN FINALIZATION ===
     
     res.json({
       success: true,
