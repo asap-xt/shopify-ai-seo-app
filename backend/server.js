@@ -524,7 +524,7 @@ import aiEnhanceRouter from './controllers/aiEnhanceController.js';
 import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 
 // Import new middleware and controllers
-import { attachShop as attachShopFromApiResolver } from './middleware/apiResolver.js';
+import { attachShop as attachShopFromApiResolver, apiResolver } from './middleware/apiResolver.js';
 import collectionsRouter from './controllers/collectionsController.js';
 
 // Session validation endpoint (replaces old /api/auth)
