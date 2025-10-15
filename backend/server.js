@@ -962,9 +962,21 @@ app.use('/api/store', (req, res, next) => {
 // ---------------------------------------------------------------------------
 app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
   try {
-    const shop = req.shop;
+    const shop = req.shopDomain || req.query.shop;
+    
+    console.log('[WEBHOOK-REGISTER-ENDPOINT] Shop from req.shopDomain:', req.shopDomain);
+    console.log('[WEBHOOK-REGISTER-ENDPOINT] Shop from req.query.shop:', req.query.shop);
+    console.log('[WEBHOOK-REGISTER-ENDPOINT] Final shop:', shop);
+    
     if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
+      return res.status(400).json({ 
+        error: 'Missing shop parameter',
+        debug: {
+          shopDomain: req.shopDomain,
+          queryShop: req.query.shop,
+          bodyShop: req.body?.shop
+        }
+      });
     }
     
     const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
@@ -982,6 +994,7 @@ app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
     console.error('[WEBHOOK-REGISTER-ENDPOINT] Error:', error);
     res.status(500).json({ 
       error: error.message,
+      stack: error.stack,
       success: false 
     });
   }
