@@ -302,11 +302,13 @@ router.post('/product', validateRequest(), async (req, res) => {
         
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        // ВАЖНО: Единственият критерий е enhancedAt timestamp (bullets/faq винаги ще има от Basic SEO)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt (това е за apply)
         
-        if (shouldSkipEnhanced && existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
+        if (shouldSkipEnhanced && hasAIEnhanced) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${existingSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: existingSeo.bullets,
@@ -333,7 +335,7 @@ router.post('/product', validateRequest(), async (req, res) => {
           ...existingSeo,  // Запазва title, metaDescription, bodyHtml, jsonLd и всичко друго
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
-          updatedAt: new Date().toISOString()
+          enhancedAt: new Date().toISOString() // Маркираме че това е AI Enhanced, не само Basic SEO
         };
 
         // Записваме обратно в СЪЩИЯ metafield
@@ -577,11 +579,13 @@ router.post('/collection', validateRequest(), async (req, res) => {
         
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        // ВАЖНО: Единственият критерий е enhancedAt timestamp (bullets/faq винаги ще има от Basic SEO)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        const hasAIEnhanced = currentSeo.enhancedAt; // Само enhancedAt, не updatedAt
         
-        if (shouldSkipEnhanced && currentSeo.bullets?.length > 0 && currentSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
+        if (shouldSkipEnhanced && hasAIEnhanced) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${currentSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: currentSeo.bullets,
@@ -845,11 +849,13 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        // ВАЖНО: Единственият критерий е enhancedAt timestamp (bullets/faq винаги ще има от Basic SEO)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt
         
-        if (shouldSkipEnhanced && existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
+        if (shouldSkipEnhanced && hasAIEnhanced) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${existingSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.enhanced++; // Броим като enhanced защото вече е enhanced
           continue;
         }
