@@ -619,8 +619,13 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             results.failed++;
           }
         } catch (error) {
-          console.error('Enhancement error:', error);
-          console.error('🔍 [DEBUG] Error details:', {
+          console.error('❌ [AI-ENHANCE] Enhancement error:', error);
+          console.error('🔍 [AI-ENHANCE DEBUG] Error type:', typeof error);
+          console.error('🔍 [AI-ENHANCE DEBUG] Error.status:', error.status, 'Type:', typeof error.status);
+          console.error('🔍 [AI-ENHANCE DEBUG] Error.requiresPurchase:', error.requiresPurchase);
+          console.error('🔍 [AI-ENHANCE DEBUG] Error.trialRestriction:', error.trialRestriction);
+          console.error('🔍 [AI-ENHANCE DEBUG] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+          console.error('🔍 [AI-ENHANCE DEBUG] Error details:', {
             status: error.status,
             trialRestriction: error.trialRestriction,
             needsUpgrade: error.needsUpgrade,
