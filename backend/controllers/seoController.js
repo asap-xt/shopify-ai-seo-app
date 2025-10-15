@@ -647,7 +647,7 @@ const seoSchema = {
     language: { type: 'string', minLength: 1, maxLength: 32 }, // no enum
     seo: {
       type: 'object',
-      required: ['title', 'metaDescription', 'slug', 'bodyHtml'], // bullets & faq are optional (for higher plans)
+      required: ['title', 'metaDescription', 'slug', 'bodyHtml'], // Validation requires these fields
       additionalProperties: true,
       properties: {
         title: { type: 'string', minLength: 1, maxLength: 200 },
@@ -806,13 +806,19 @@ function fixupAndValidate(payload) {
   // title
   if (p.seo.title) p.seo.title = clamp(p.seo.title.trim(), TITLE_LIMIT);
 
-  // bodyHtml sanitize - NO fallback to prevent overwriting real product data
+  // bodyHtml sanitize + minimal safe fallback
   if (p.seo.bodyHtml) {
     p.seo.bodyHtml = sanitizeHtmlSafe(p.seo.bodyHtml);
   }
-  // 🚨 DO NOT add fallback values! They would overwrite the real product description!
+  // If bodyHtml is missing or empty, use title as minimal fallback
+  // This is ONLY for metafield storage, NOT for updating product fields
+  if (!p.seo.bodyHtml || String(p.seo.bodyHtml).trim().length === 0) {
+    if (p.seo.title) {
+      p.seo.bodyHtml = `<p>${clamp(p.seo.title, 120)}</p>`;
+    }
+  }
 
-  // metaDescription clamp - only process if provided
+  // metaDescription clamp + minimal safe fallback
   if (p.seo.metaDescription) {
     let md = p.seo.metaDescription.trim();
     md = clamp(md, META_MAX);
@@ -821,8 +827,14 @@ function fixupAndValidate(payload) {
       md = clamp(`${md} ${plain}`.trim(), META_MAX);
     }
     p.seo.metaDescription = md;
+  } else if (p.seo.bodyHtml) {
+    // Extract from bodyHtml if metaDescription is missing
+    const plain = String(p.seo.bodyHtml).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    p.seo.metaDescription = clamp(plain || p.seo.title || '', META_MAX);
+  } else if (p.seo.title) {
+    // Last resort: use title
+    p.seo.metaDescription = clamp(p.seo.title, META_MAX);
   }
-  // 🚨 DO NOT add fallback metaDescription! Let it be empty if not provided.
 
   // slug normalize; ensure pattern-safe
   if (p.seo.slug) {
