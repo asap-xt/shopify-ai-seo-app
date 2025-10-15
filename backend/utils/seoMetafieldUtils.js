@@ -48,18 +48,22 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
       return { success: true, deletedCount: 0, errors: [] };
     }
     
-    const metafieldIds = fetchResult.product.metafields.edges
-      .map(edge => edge.node.id)
-      .filter(id => id); // Remove any nulls
+    const metafields = fetchResult.product.metafields.edges
+      .map(edge => ({
+        ownerId: productGid,
+        namespace: edge.node.namespace,
+        key: edge.node.key
+      }))
+      .filter(mf => mf.key); // Remove any nulls
     
-    if (metafieldIds.length === 0) {
+    if (metafields.length === 0) {
       console.log(`[SEO-METAFIELD-UTILS] No SEO metafields to delete for ${productGid}`);
       return { success: true, deletedCount: 0, errors: [] };
     }
     
-    console.log(`[SEO-METAFIELD-UTILS] Found ${metafieldIds.length} metafields to delete`);
+    console.log(`[SEO-METAFIELD-UTILS] Found ${metafields.length} metafields to delete`);
     
-    // 2. Delete all metafields using their IDs
+    // 2. Delete all metafields using ownerId, namespace, key
     const deleteMutation = `
       mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
         metafieldsDelete(metafields: $metafields) {
@@ -76,8 +80,8 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
       }
     `;
     
-    // Build metafield identifiers array
-    const metafieldIdentifiers = metafieldIds.map(id => ({ id }));
+    // Metafield identifiers are already built correctly
+    const metafieldIdentifiers = metafields;
     
     const deleteResult = await makeShopifyGraphQLRequest(shop, accessToken, deleteMutation, {
       metafields: metafieldIdentifiers
