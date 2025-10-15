@@ -300,6 +300,20 @@ router.post('/product', validateRequest(), async (req, res) => {
           continue;
         }
         
+        // Ако вече има AI Enhanced съдържание, пропускаме
+        if (existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+          results.push({ 
+            language, 
+            bullets: existingSeo.bullets,
+            faq: existingSeo.faq,
+            skipped: true,
+            reason: 'Already enhanced',
+            message: 'This language already has AI Enhanced content'
+          });
+          continue;
+        }
+        
         // Генерираме САМО bullets и FAQ
         const enhancedResult = await generateEnhancedBulletsFAQ({
           shop,
@@ -391,9 +405,11 @@ router.post('/product', validateRequest(), async (req, res) => {
     // Prepare response summary
     const successfulLanguages = results.filter(r => !r.error && !r.skipped).length;
     const failedLanguages = results.filter(r => r.error && !r.skipped).length;
+    const alreadyEnhanced = results.filter(r => r.skipped && r.reason === 'Already enhanced').length;
+    const noBasicSeo = results.filter(r => r.skipped && !r.reason).length;
     
     res.json({ 
-      success: successfulLanguages > 0,
+      success: successfulLanguages > 0 || alreadyEnhanced > 0,
       productId,
       model,
       results,
@@ -401,9 +417,14 @@ router.post('/product', validateRequest(), async (req, res) => {
         total: languages.length,
         successful: successfulLanguages,
         failed: failedLanguages,
+        alreadyEnhanced: alreadyEnhanced,
+        noBasicSeo: noBasicSeo,
         skippedDueToTokens: skippedDueToTokens.length,
         tokensExhausted: tokensExhausted
       },
+      ...(alreadyEnhanced > 0 && {
+        info: `${alreadyEnhanced} language(s) already had AI Enhanced content and were skipped to save tokens.`
+      }),
       ...(skippedDueToTokens.length > 0 && {
         warning: `Operation stopped: Insufficient tokens. ${successfulLanguages} language(s) enhanced, ${skippedDueToTokens.length} skipped.`,
         skippedLanguages: skippedDueToTokens
@@ -550,6 +571,20 @@ router.post('/collection', validateRequest(), async (req, res) => {
         
         const currentSeo = JSON.parse(data.collection.metafield.value);
         
+        // Ако вече има AI Enhanced съдържание, пропускаме
+        if (currentSeo.bullets?.length > 0 && currentSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+          results.push({ 
+            language, 
+            bullets: currentSeo.bullets,
+            faq: currentSeo.faq,
+            skipped: true,
+            reason: 'Already enhanced',
+            message: 'This language already has AI Enhanced content'
+          });
+          continue;
+        }
+        
         const messages = [
           {
             role: 'system',
@@ -618,11 +653,12 @@ Output JSON with:
     // === END TOKEN FINALIZATION ===
     
     // Prepare response summary
-    const successfulLanguages = results.filter(r => !r.error).length;
+    const successfulLanguages = results.filter(r => !r.error && !r.skipped).length;
     const failedLanguages = results.filter(r => r.error).length;
+    const alreadyEnhanced = results.filter(r => r.skipped && r.reason === 'Already enhanced').length;
     
     res.json({ 
-      success: successfulLanguages > 0,
+      success: successfulLanguages > 0 || alreadyEnhanced > 0,
       collectionId,
       model,
       results,
@@ -630,9 +666,13 @@ Output JSON with:
         total: languages.length,
         successful: successfulLanguages,
         failed: failedLanguages,
+        alreadyEnhanced: alreadyEnhanced,
         skippedDueToTokens: skippedDueToTokens.length,
         tokensExhausted: tokensExhausted
       },
+      ...(alreadyEnhanced > 0 && {
+        info: `${alreadyEnhanced} language(s) already had AI Enhanced content and were skipped to save tokens.`
+      }),
       ...(skippedDueToTokens.length > 0 && {
         warning: `Operation stopped: Insufficient tokens. ${successfulLanguages} language(s) enhanced, ${skippedDueToTokens.length} skipped.`,
         skippedLanguages: skippedDueToTokens
@@ -794,6 +834,13 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         
         const existingSeo = JSON.parse(data.collection.metafield.value);
         console.log(`[AI-ENHANCE] Existing SEO title: ${existingSeo.title}`);
+        
+        // Ако вече има AI Enhanced съдържание, пропускаме
+        if (existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+          results.enhanced++; // Броим като enhanced защото вече е enhanced
+          continue;
+        }
         
         // 2. Call AI for enhancement
         const messages = [
