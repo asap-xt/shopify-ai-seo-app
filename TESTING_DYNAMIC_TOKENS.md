@@ -162,10 +162,18 @@ feature: "ai-seo-collection-enhanced"
 3. **Натисни "AI Enhanced add-ons"**
 
 ### Очаквано поведение:
-- ✅ Започва enhancement
-- ✅ Успява 1-ви език (или 0, ако 500 не достигат)
+
+**Ако токените НЕ достигат преди да започне:**
+- 🚫 Показва "Insufficient Tokens" modal с детайли:
+  - **Current balance:** 500 tokens
+  - **Required:** 5,500 tokens (за 3 езика с margin)
+  - **You need:** 5,000 more tokens
+- ✅ Два бутона: "Go to Billing" и "Cancel"
+
+**Ако започне, но токените свършат по средата:**
+- ✅ Успява колкото може (напр. 1 език)
 - ⚠️ **Спира след изчерпване на токените**
-- ✅ Показва warning: "Operation stopped: Insufficient tokens. 1 language(s) enhanced, 2 skipped."
+- ✅ Показва results modal: "Operation stopped: Insufficient tokens. 1 language(s) enhanced, 2 skipped."
 
 ### Railway Logs:
 ```
