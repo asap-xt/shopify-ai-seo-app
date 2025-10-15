@@ -238,11 +238,15 @@ balance: 100000  // или каквото беше преди
 
 ---
 
-## 🧪 ТЕСТ 6: Already Enhanced Skip Optimization
+## 🧪 ТЕСТ 6: Already Enhanced Skip Optimization (Growth Extra & Enterprise only)
 
-### Цел: Проверка че вече enhanced езици се skip-ват
+### Цел: Проверка че вече enhanced езици се skip-ват САМО за Growth Extra/Enterprise
 
-### Стъпки:
+### ⚠️ Важно: 
+Тази оптимизация работи **САМО** за Growth Extra и Enterprise планове (с включени токени).
+За Starter/Professional/Growth (pay-per-use tokens) винаги се прави **re-enhancement**.
+
+### Стъпки (на Growth Extra или Enterprise план):
 1. **Отвори Products page**
 2. **Избери 1 продукт**
 3. **AI Enhanced add-ons за EN език** (само 1 език)
@@ -250,21 +254,37 @@ balance: 100000  // или каквото беше преди
 5. **Повтори AI Enhanced add-ons за EN + DE** (2 езика)
 
 ### Очаквано поведение:
+
+#### За Growth Extra / Enterprise:
 - ✅ **Първи път**: EN се обработва (харчи токени)
 - ✅ **Втори път**: 
   - EN се skip-ва (БЕЗ AI заявка!)
+  - DE се обработва (харчи токени)
+
+#### За Starter / Professional / Growth:
+- ✅ **Първи път**: EN се обработва (харчи токени)
+- ✅ **Втори път**: 
+  - EN се обработва ОТНОВО (харчи токени - fresh AI enhancement!)
   - DE се обработва (харчи токени)
 
 ### Railway Logs:
 ```
 🔍 Търси при ВТОРИЯ опит:
 
-"[AI-ENHANCE] Skipping en - already has AI Enhanced content"
+Growth Extra / Enterprise:
+"[AI-ENHANCE] Skipping en - already has AI Enhanced content (Growth Extra plan saves tokens)"
 "[AI-ENHANCE] Reserved XXXX tokens"  // само за DE
 "[AI-ENHANCE] de: YYYY tokens"  // само DE се track-ва
+
+Starter / Professional / Growth:
+"[AI-ENHANCE] Reserved XXXX tokens"  // за EN + DE
+"[AI-ENHANCE] en: YYYY tokens"  // и EN се обработва отново!
+"[AI-ENHANCE] de: ZZZZ tokens"
 ```
 
 ### Response JSON (втори опит):
+
+**Growth Extra / Enterprise:**
 ```json
 {
   "success": true,
@@ -279,7 +299,23 @@ balance: 100000  // или каквото беше преди
 }
 ```
 
+**Starter / Professional / Growth:**
+```json
+{
+  "success": true,
+  "summary": {
+    "total": 2,
+    "successful": 2,  // и EN и DE
+    "failed": 0,
+    "alreadyEnhanced": 0,  // НЕ skip-ва
+    "skippedDueToTokens": 0
+  }
+}
+```
+
 ### Изчисли спестяванията:
+
+**Growth Extra / Enterprise:**
 ```
 Без оптимизация:
   Втори опит би харчил: 2 езика × ~2000 tokens = 4000 tokens
@@ -288,6 +324,18 @@ balance: 100000  // или каквото беше преди
   Втори опит харчи: 1 език × ~2000 tokens = 2000 tokens
   
 Savings от skip: 2000 tokens (50%)!
+```
+
+**Starter / Professional / Growth:**
+```
+Без оптимизация:
+  Втори опит би харчил: 2 езика × ~2000 tokens = 4000 tokens
+
+С dynamic tracking (no skip):
+  Втори опит харчи: ~2400 tokens (actual usage)
+  
+Savings от dynamic tracking: ~1600 tokens (40%)!
+Note: No skip savings - user gets fresh AI content
 ```
 
 ---
