@@ -21,7 +21,7 @@ redirect_urls = [
 ]
 
 [access_scopes]
-scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects,read_markets"
+scopes = "read_products,write_products,read_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects,read_markets"
 
 # App Proxy Configuration for Sitemap
 [app_proxy]

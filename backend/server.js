@@ -273,7 +273,7 @@ app.use('/api', async (req, res, next) => {
         accessToken: accessToken,
         shop: shop,
         isOnline: false,
-        scope: 'read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
+        scope: 'read_products,write_products,read_themes,read_translations,write_translations,read_locales,read_metafields,read_metaobjects,write_metaobjects,read_content,write_content'
       };
 
       res.locals.adminSession = session;

@@ -300,9 +300,13 @@ router.post('/product', validateRequest(), async (req, res) => {
           continue;
         }
         
-        // Ако вече има AI Enhanced съдържание, пропускаме
-        if (existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+        // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
+        // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        
+        if (shouldSkipEnhanced && existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: existingSeo.bullets,
@@ -571,9 +575,13 @@ router.post('/collection', validateRequest(), async (req, res) => {
         
         const currentSeo = JSON.parse(data.collection.metafield.value);
         
-        // Ако вече има AI Enhanced съдържание, пропускаме
-        if (currentSeo.bullets?.length > 0 && currentSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+        // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
+        // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        
+        if (shouldSkipEnhanced && currentSeo.bullets?.length > 0 && currentSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: currentSeo.bullets,
@@ -835,9 +843,13 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         const existingSeo = JSON.parse(data.collection.metafield.value);
         console.log(`[AI-ENHANCE] Existing SEO title: ${existingSeo.title}`);
         
-        // Ако вече има AI Enhanced съдържание, пропускаме
-        if (existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content`);
+        // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
+        // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        
+        if (shouldSkipEnhanced && existingSeo.bullets?.length > 0 && existingSeo.faq?.length > 0) {
+          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content (${planKey} plan saves tokens)`);
           results.enhanced++; // Броим като enhanced защото вече е enhanced
           continue;
         }
