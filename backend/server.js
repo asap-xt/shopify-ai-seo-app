@@ -1001,7 +1001,7 @@ app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
 });
 
 // List registered webhooks (for debugging)
-app.get('/api/admin/list-webhooks', attachShop, async (req, res) => {
+app.get('/api/admin/list-webhooks', attachShop, apiResolver, async (req, res) => {
   try {
     const shop = req.shopDomain || req.query.shop;
     
@@ -1009,13 +1009,12 @@ app.get('/api/admin/list-webhooks', attachShop, async (req, res) => {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    const { resolveAdminToken } = await import('./utils/tokenResolver.js');
-    const { makeShopifyGraphQLRequest } = await import('./utils/shopifyGraphQL.js');
-    
-    const accessToken = await resolveAdminToken(req, shop);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No access token' });
+    // Use req.session which is set by apiResolver after token exchange
+    if (!req.session) {
+      return res.status(401).json({ error: 'No session - authentication failed' });
     }
+    
+    const { makeShopifyGraphQLRequest } = await import('./utils/shopifyGraphQL.js');
     
     const query = `
       query {
@@ -1036,7 +1035,7 @@ app.get('/api/admin/list-webhooks', attachShop, async (req, res) => {
       }
     `;
     
-    const result = await makeShopifyGraphQLRequest(shop, accessToken, query);
+    const result = await makeShopifyGraphQLRequest(shop, req.session.accessToken, query);
     
     res.json({
       success: true,
