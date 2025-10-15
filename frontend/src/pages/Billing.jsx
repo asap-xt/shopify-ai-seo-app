@@ -1,7 +1,6 @@
 // frontend/src/pages/Billing.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Page,
   Layout,
   Card,
   Text,
@@ -154,7 +153,7 @@ export default function Billing({ shop }) {
   // Render loading state
   if (loading) {
     return (
-      <Page title="Billing & Subscriptions">
+      <>
         <Layout>
           <Layout.Section>
             <Card>
@@ -167,7 +166,7 @@ export default function Billing({ shop }) {
             </Card>
           </Layout.Section>
         </Layout>
-      </Page>
+      </>
     );
   }
 
@@ -176,9 +175,7 @@ export default function Billing({ shop }) {
   const plans = billingInfo?.plans || [];
 
   return (
-    <Page
-      title="Plans & Billing"
-    >
+    <>
       <Layout>
         {/* Error Banner */}
         {error && (
@@ -480,6 +477,6 @@ export default function Billing({ shop }) {
           </BlockStack>
         </Modal.Section>
       </Modal>
-    </Page>
+    </>
   );
 }

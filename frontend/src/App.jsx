@@ -801,7 +801,7 @@ export default function App() {
   
   const sectionTitle = useMemo(() => {
     if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
-    if (path.startsWith('/billing')) return 'Billing';
+    if (path.startsWith('/billing')) return 'Plans & Billing';
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
     return 'Dashboard';
