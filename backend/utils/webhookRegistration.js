@@ -1,0 +1,140 @@
+// backend/utils/webhookRegistration.js
+// Register webhooks with Shopify
+
+import { makeShopifyGraphQLRequest } from './shopifyGraphQL.js';
+import { resolveAdminToken } from './tokenResolver.js';
+
+/**
+ * Register products/update webhook with Shopify
+ * @param {Object} req - Express request
+ * @param {string} shop - Shop domain
+ * @param {string} callbackUrl - Full webhook URL (e.g., https://your-app.com/webhooks/products)
+ * @returns {Promise<Object>} - Registration result
+ */
+export async function registerProductsUpdateWebhook(req, shop, callbackUrl) {
+  console.log(`[WEBHOOK-REG] Registering products/update webhook for ${shop}`);
+  console.log(`[WEBHOOK-REG] Callback URL: ${callbackUrl}`);
+  
+  try {
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      throw new Error(`No access token found for shop: ${shop}`);
+    }
+    
+    // Check if webhook already exists
+    const checkQuery = `
+      query {
+        webhookSubscriptions(first: 50, topics: PRODUCTS_UPDATE) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const checkResult = await makeShopifyGraphQLRequest(shop, accessToken, checkQuery);
+    const existingWebhooks = checkResult?.webhookSubscriptions?.edges || [];
+    
+    // Check if our webhook is already registered
+    const ourWebhook = existingWebhooks.find(edge => {
+      const endpoint = edge.node.endpoint;
+      return endpoint.__typename === 'WebhookHttpEndpoint' && 
+             endpoint.callbackUrl === callbackUrl;
+    });
+    
+    if (ourWebhook) {
+      console.log(`[WEBHOOK-REG] Webhook already registered: ${ourWebhook.node.id}`);
+      return { 
+        success: true, 
+        alreadyExists: true, 
+        webhookId: ourWebhook.node.id 
+      };
+    }
+    
+    // Register new webhook
+    const createMutation = `
+      mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+          webhookSubscription {
+            id
+            topic
+            endpoint {
+              __typename
+              ... on WebhookHttpEndpoint {
+                callbackUrl
+              }
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      topic: 'PRODUCTS_UPDATE',
+      webhookSubscription: {
+        callbackUrl: callbackUrl,
+        format: 'JSON'
+      }
+    };
+    
+    const createResult = await makeShopifyGraphQLRequest(shop, accessToken, createMutation, variables);
+    
+    const errors = createResult?.webhookSubscriptionCreate?.userErrors || [];
+    if (errors.length > 0) {
+      console.error(`[WEBHOOK-REG] Errors:`, errors);
+      return {
+        success: false,
+        errors: errors.map(e => e.message)
+      };
+    }
+    
+    const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
+    console.log(`[WEBHOOK-REG] ✅ Successfully registered webhook: ${webhook.id}`);
+    
+    return {
+      success: true,
+      alreadyExists: false,
+      webhookId: webhook.id
+    };
+    
+  } catch (error) {
+    console.error(`[WEBHOOK-REG] Error:`, error);
+    return {
+      success: false,
+      errors: [error.message]
+    };
+  }
+}
+
+/**
+ * Register all required webhooks for the app
+ * @param {Object} req - Express request
+ * @param {string} shop - Shop domain
+ * @param {string} appUrl - Base app URL (e.g., https://your-app.com)
+ * @returns {Promise<Object>} - Registration results
+ */
+export async function registerAllWebhooks(req, shop, appUrl) {
+  console.log(`[WEBHOOK-REG] Registering all webhooks for ${shop}`);
+  
+  const results = {};
+  
+  // Register products/update webhook
+  const productsUrl = `${appUrl}/webhooks/products`;
+  results.productsUpdate = await registerProductsUpdateWebhook(req, shop, productsUrl);
+  
+  return results;
+}
+

@@ -958,6 +958,36 @@ app.use('/api/store', (req, res, next) => {
 }, storeRouter);
 
 // ---------------------------------------------------------------------------
+// Webhook registration endpoint
+// ---------------------------------------------------------------------------
+app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
+  try {
+    const shop = req.shop;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    
+    const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
+    const results = await registerAllWebhooks(req, shop, appUrl);
+    
+    res.json({ 
+      success: true, 
+      shop,
+      appUrl,
+      results 
+    });
+  } catch (error) {
+    console.error('[WEBHOOK-REGISTER-ENDPOINT] Error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      success: false 
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Optional routers / webhooks: mounted inside start() so we can import
 // them conditionally without breaking the build if files are missing.
 // ---------------------------------------------------------------------------
