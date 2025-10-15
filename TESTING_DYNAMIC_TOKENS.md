@@ -238,7 +238,61 @@ balance: 100000  // или каквото беше преди
 
 ---
 
-## 🧪 ТЕСТ 6: Compare Old vs New System
+## 🧪 ТЕСТ 6: Already Enhanced Skip Optimization
+
+### Цел: Проверка че вече enhanced езици се skip-ват
+
+### Стъпки:
+1. **Отвори Products page**
+2. **Избери 1 продукт**
+3. **AI Enhanced add-ons за EN език** (само 1 език)
+4. **Изчакай да завърши**
+5. **Повтори AI Enhanced add-ons за EN + DE** (2 езика)
+
+### Очаквано поведение:
+- ✅ **Първи път**: EN се обработва (харчи токени)
+- ✅ **Втори път**: 
+  - EN се skip-ва (БЕЗ AI заявка!)
+  - DE се обработва (харчи токени)
+
+### Railway Logs:
+```
+🔍 Търси при ВТОРИЯ опит:
+
+"[AI-ENHANCE] Skipping en - already has AI Enhanced content"
+"[AI-ENHANCE] Reserved XXXX tokens"  // само за DE
+"[AI-ENHANCE] de: YYYY tokens"  // само DE се track-ва
+```
+
+### Response JSON (втори опит):
+```json
+{
+  "success": true,
+  "summary": {
+    "total": 2,
+    "successful": 1,  // само DE
+    "failed": 0,
+    "alreadyEnhanced": 1,  // EN беше skip-нат
+    "skippedDueToTokens": 0
+  },
+  "info": "1 language(s) already had AI Enhanced content and were skipped to save tokens."
+}
+```
+
+### Изчисли спестяванията:
+```
+Без оптимизация:
+  Втори опит би харчил: 2 езика × ~2000 tokens = 4000 tokens
+
+С оптимизация:
+  Втори опит харчи: 1 език × ~2000 tokens = 2000 tokens
+  
+Savings от skip: 2000 tokens (50%)!
+```
+
+---
+
+## 🧪 ТЕСТ 7: Compare Old vs New System
 
 ### Цел: Потвърждение на спестяванията
 
@@ -271,7 +325,7 @@ Savings: 800 tokens (40%)
 
 ---
 
-## 📊 ФИНАЛЕН ТЕСТ: Full Scenario
+## 📊 ФИНАЛЕН ТЕСТ: Full Scenario + Skip Optimization
 
 ### Цел: Комплексен тест на всички функции
 
@@ -306,6 +360,12 @@ Real savings: _______ tokens (_____%)
 - [ ] Finalization работи (status: "finalized")
 - [ ] Refund работи (виждам refunded amount)
 - [ ] Balance се обновява правилно
+
+### Skip Optimization:
+- [ ] Already enhanced езици се skip-ват
+- [ ] Не се правят duplicate AI calls
+- [ ] Summary показва alreadyEnhanced count
+- [ ] Info message се показва
 
 ### Graceful Stop:
 - [ ] Спира при недостиг на токени
