@@ -39,9 +39,9 @@ export default function InsufficientTokensModal({
   };
 
   const featureNames = {
-    'ai-seo-product-basic': 'AI SEO Optimization (Products)',
-    'ai-seo-product-enhanced': 'AI SEO Optimization (Products - Enhanced)',
-    'ai-seo-collection': 'AI SEO Optimization (Collections)',
+    'ai-seo-product-basic': 'AI Search Optimization (Products)',
+    'ai-seo-product-enhanced': 'AI Search Optimization (Products - Enhanced)',
+    'ai-seo-collection': 'AI Search Optimization (Collections)',
     'ai-testing-simulation': 'AI Testing & Simulation',
     'ai-schema-advanced': 'Advanced Schema Data',
     'ai-sitemap-optimized': 'AI-Optimized Sitemap'
@@ -80,7 +80,7 @@ export default function InsufficientTokensModal({
                 </Box>
                 <Box>
                   <Text variant="bodySm" tone="subdued">Required:</Text>
-                  <Text variant="headingSm" fontWeight="bold">{tokensRequired?.toLocaleString() || 0} tokens</Text>
+                  <Text variant="headingSm" fontWeight="bold">{((tokensAvailable || 0) + (tokensNeeded || 0)).toLocaleString()} tokens</Text>
                 </Box>
                 <Box>
                   <Text variant="bodySm" tone="subdued">You need:</Text>

@@ -806,14 +806,13 @@ function fixupAndValidate(payload) {
   // title
   if (p.seo.title) p.seo.title = clamp(p.seo.title.trim(), TITLE_LIMIT);
 
-  // bodyHtml sanitize + minimal fallback
-  if (p.seo.bodyHtml) p.seo.bodyHtml = sanitizeHtmlSafe(p.seo.bodyHtml);
-  if (!p.seo.bodyHtml || String(p.seo.bodyHtml).trim().length === 0) {
-    const titleFallback = clamp(p.seo?.title || 'Product', 120);
-    p.seo.bodyHtml = `<p>${titleFallback}</p>`;
+  // bodyHtml sanitize - NO fallback to prevent overwriting real product data
+  if (p.seo.bodyHtml) {
+    p.seo.bodyHtml = sanitizeHtmlSafe(p.seo.bodyHtml);
   }
+  // 🚨 DO NOT add fallback values! They would overwrite the real product description!
 
-  // metaDescription clamp + fallback
+  // metaDescription clamp - only process if provided
   if (p.seo.metaDescription) {
     let md = p.seo.metaDescription.trim();
     md = clamp(md, META_MAX);
@@ -822,16 +821,20 @@ function fixupAndValidate(payload) {
       md = clamp(`${md} ${plain}`.trim(), META_MAX);
     }
     p.seo.metaDescription = md;
-  } else {
-    const plain = String(p.seo.bodyHtml || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    p.seo.metaDescription = clamp(plain || (p.seo.title || 'Great product'), META_MAX);
   }
+  // 🚨 DO NOT add fallback metaDescription! Let it be empty if not provided.
 
   // slug normalize; ensure pattern-safe
-  if (p.seo.slug) p.seo.slug = kebab(p.seo.slug);
-  if (!p.seo.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.seo.slug)) {
-    const base = kebab(p.seo?.title || '') || 'product';
+  if (p.seo.slug) {
+    p.seo.slug = kebab(p.seo.slug);
+  } else if (p.seo.title) {
+    // Only generate slug from title if title exists
+    const base = kebab(p.seo.title) || gidTail(p.productId);
     p.seo.slug = `${base}-${gidTail(p.productId)}`.replace(/-+$/, '');
+  }
+  // Validate slug pattern
+  if (p.seo.slug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(p.seo.slug)) {
+    p.seo.slug = gidTail(p.productId); // Use product ID as fallback
   }
 
   // bullets - preserve AI-generated bullets if they exist
@@ -1308,20 +1311,17 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const primary = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
     const isPrimary = language.toLowerCase() === primary.toLowerCase();
 
-    // Decide what to update based on primary/secondary language
-    // For non-primary languages, we should ONLY work with metafields, not product base fields
-    const updateTitle = isPrimary && options?.updateTitle !== false;
-    const updateBody = isPrimary && options?.updateBody !== false;
-    const updateSeo = isPrimary && options?.updateSeo !== false;
-    const updateBullets = options?.updateBullets !== false;
-    const updateFaq = options?.updateFaq !== false;
+    // 🚨 IMPORTANT: We ONLY update metafields, NEVER product base fields!
+    // Product title, description, and Shopify SEO fields remain untouched.
+    // Only our custom metafields (seo_ai namespace) are updated for AI bots.
+    
     const updateAlt = options?.updateAlt === true;
     const dryRun = options?.dryRun === true;
 
     console.log(`[SEO-APPLY] Language: ${language}, isPrimary: ${isPrimary}`);
-    console.log(`[SEO-APPLY] Update flags - title: ${updateTitle}, body: ${updateBody}, seo: ${updateSeo}, bullets: ${updateBullets}, faq: ${updateFaq}`);
+    console.log(`[SEO-APPLY] Will update ONLY metafields (no product base fields)`);
 
-    const updated = { title: false, body: false, seo: false, bullets: false, faq: false, imageAlt: false };
+    const updated = { seoMetafield: false, imageAlt: false };
     const errors = [];
 
     // Validate/normalize - change provider to 'local'
@@ -1339,35 +1339,13 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const v = fixed.value.seo;
 
     if (!dryRun) {
-      // 1. Update product base fields based on options
-      if (updateTitle || updateBody || updateSeo) {
-        const input = { id: productId };
-        if (updateTitle) input.title = v.title;
-        if (updateBody) input.descriptionHtml = v.bodyHtml;
-        if (updateSeo) input.seo = { title: v.title, description: v.metaDescription };
+      // 🚨 SKIP: We do NOT update product base fields (title, description, seo)
+      // Product data remains unchanged - we only update metafields below
 
-        const mut = `
-          mutation ProductUpdate($input: ProductInput!) {
-            productUpdate(input: $input) {
-              product { id }
-              userErrors { field message }
-            }
-          }
-        `;
-        const upd = await shopGraphQL(req, shop, mut, { input });
-        const userErrors = upd?.productUpdate?.userErrors || [];
-        if (userErrors.length) errors.push(...userErrors.map(e => e.message || JSON.stringify(e)));
-        else {
-          if (updateTitle) updated.title = true;
-          if (updateBody) updated.body = true;
-          if (updateSeo) updated.seo = true;
-        }
-      }
-
-      // 2. Ensure metafield definition exists
+      // 1. Ensure metafield definition exists
       await ensureMetafieldDefinition(req, shop, language.toLowerCase());
 
-      // 3. Delete any existing metafield with this key first
+      // 2. Delete any existing metafield with this key first
       const mfKey = `seo__${language.toLowerCase()}`;
       try {
         console.log(`[APPLY-SEO] Deleting existing metafield ${mfKey} for ${productId}`);
@@ -1376,7 +1354,7 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         console.log(`[APPLY-SEO] No existing metafield to delete for ${mfKey}:`, e.message);
       }
 
-      // 4. Always write language-specific metafield with full SEO data
+      // 3. Always write language-specific metafield with full SEO data
       const metaMutation = `
         mutation SetAiSeo($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
@@ -1418,18 +1396,16 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         console.log(`🔍 [SEO-APPLY] Metafield ${mfKey} saved successfully!`);
         // Mark successfully saved metafields
         updated.seoMetafield = true; // Main SEO metafield is always saved
-        // Bullets and faq are optional (for higher plans)
+        // Bullets and faq are included in the metafield (for AI bots)
         if (v.bullets && Array.isArray(v.bullets) && v.bullets.length > 0) {
-          updated.bullets = updateBullets;
-          console.log(`🔍 [SEO-APPLY] Bullets updated: ${v.bullets.length} items`);
+          console.log(`🔍 [SEO-APPLY] Bullets included in metafield: ${v.bullets.length} items`);
         }
         if (v.faq && Array.isArray(v.faq) && v.faq.length > 0) {
-          updated.faq = updateFaq;
-          console.log(`🔍 [SEO-APPLY] FAQ updated: ${v.faq.length} items`);
+          console.log(`🔍 [SEO-APPLY] FAQ included in metafield: ${v.faq.length} items`);
         }
       }
 
-      // 5. Optional: image alts (if needed)
+      // 4. Optional: image alts (if explicitly requested)
       if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
         for (const it of v.imageAlt) {
           try {

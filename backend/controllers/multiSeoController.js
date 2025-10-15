@@ -172,16 +172,11 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         console.log(`🔍 [APPLY-MULTI] Raw r.seo.metaDescription for ${r.language}:`, r.seo.metaDescription);
         console.log(`🔍 [APPLY-MULTI] Raw r.seo.bodyHtml for ${r.language}:`, r.seo.bodyHtml);
         
-        // Create a complete SEO object with all required fields
+        // 🚨 IMPORTANT: Do NOT provide fallback values like 'Product' or '<p>Product</p>'
+        // These fallback values would overwrite the real product title/description!
+        // Only pass through the actual SEO data that was generated
         const completeSeo = {
-          title: r.seo.title || 'Product',
-          metaDescription: r.seo.metaDescription || '',
-          slug: r.seo.slug || 'product',
-          bodyHtml: r.seo.bodyHtml || '<p>Product</p>',
-          bullets: r.seo.bullets || [],  // Keep the AI-generated bullets
-          faq: r.seo.faq || [],          // Keep the AI-generated FAQ
-          imageAlt: r.seo.imageAlt || [],
-          jsonLd: r.seo.jsonLd || {}
+          ...r.seo  // Pass through all SEO data as-is, NO fallbacks
         };
         
         console.log(`🔍 [APPLY-MULTI] Complete SEO object for ${r.language}:`, JSON.stringify(completeSeo, null, 2));
