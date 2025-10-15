@@ -277,7 +277,18 @@ async function generateWithAI(prompt, systemPrompt) {
     }
     
     const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    const content = JSON.parse(data.choices[0].message.content);
+    const usage = data.usage || {};
+    
+    return {
+      content,
+      usage: {
+        prompt_tokens: usage.prompt_tokens || 0,
+        completion_tokens: usage.completion_tokens || 0,
+        total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+        total_cost: usage.total_cost || null
+      }
+    };
   } catch (error) {
     console.error('[SCHEMA] AI generation error:', error);
     throw error;
