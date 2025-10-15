@@ -245,9 +245,30 @@ router.post('/product', validateRequest(), async (req, res) => {
     // === END TOKEN CHECKING ===
     
     const results = [];
+    const skippedDueToTokens = [];
     const model = 'google/gemini-2.5-flash-lite';
+    let tokensExhausted = false;
     
     for (const language of languages) {
+      // === GRACEFUL STOP: Check if we still have enough tokens ===
+      if (reservationId && requiresTokens(feature) && !tokensExhausted) {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
+        
+        if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
+          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
+          console.log(`[AI-ENHANCE] Required: ${estimatePerLanguage.withMargin}, Available: ${tokenBalance.balance}`);
+          tokensExhausted = true;
+          
+          // Mark all remaining languages as skipped
+          const remainingLanguages = languages.slice(languages.indexOf(language));
+          for (const lang of remainingLanguages) {
+            skippedDueToTokens.push(lang);
+          }
+          break; // Stop processing
+        }
+      }
+      
       try {
         // Get current SEO
         const metafieldKey = `seo__${language.toLowerCase()}`;
@@ -273,7 +294,8 @@ router.post('/product', validateRequest(), async (req, res) => {
           console.log(`Skipping ${language} - no base SEO found`);
           results.push({ 
             language, 
-            error: 'No basic SEO found' 
+            error: 'No basic SEO found',
+            skipped: true
           });
           continue;
         }
@@ -366,11 +388,26 @@ router.post('/product', validateRequest(), async (req, res) => {
     }
     // === END TOKEN FINALIZATION ===
     
+    // Prepare response summary
+    const successfulLanguages = results.filter(r => !r.error && !r.skipped).length;
+    const failedLanguages = results.filter(r => r.error && !r.skipped).length;
+    
     res.json({ 
-      success: true,
+      success: successfulLanguages > 0,
       productId,
       model,
-      results 
+      results,
+      summary: {
+        total: languages.length,
+        successful: successfulLanguages,
+        failed: failedLanguages,
+        skippedDueToTokens: skippedDueToTokens.length,
+        tokensExhausted: tokensExhausted
+      },
+      ...(skippedDueToTokens.length > 0 && {
+        warning: `Operation stopped: Insufficient tokens. ${successfulLanguages} language(s) enhanced, ${skippedDueToTokens.length} skipped.`,
+        skippedLanguages: skippedDueToTokens
+      })
     });
     
   } catch (error) {
@@ -469,9 +506,28 @@ router.post('/collection', validateRequest(), async (req, res) => {
     // === END TOKEN CHECKING ===
     
     const results = [];
+    const skippedDueToTokens = [];
     const model = 'google/gemini-2.5-flash-lite';
+    let tokensExhausted = false;
     
     for (const language of languages) {
+      // === GRACEFUL STOP: Check if we still have enough tokens ===
+      if (reservationId && requiresTokens(feature) && !tokensExhausted) {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
+        
+        if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
+          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
+          tokensExhausted = true;
+          
+          const remainingLanguages = languages.slice(languages.indexOf(language));
+          for (const lang of remainingLanguages) {
+            skippedDueToTokens.push(lang);
+          }
+          break;
+        }
+      }
+      
       try {
         const metafieldKey = `seo__${language.toLowerCase()}`;
         const query = `
@@ -561,11 +617,26 @@ Output JSON with:
     }
     // === END TOKEN FINALIZATION ===
     
+    // Prepare response summary
+    const successfulLanguages = results.filter(r => !r.error).length;
+    const failedLanguages = results.filter(r => r.error).length;
+    
     res.json({ 
-      success: true,
+      success: successfulLanguages > 0,
       collectionId,
       model,
-      results 
+      results,
+      summary: {
+        total: languages.length,
+        successful: successfulLanguages,
+        failed: failedLanguages,
+        skippedDueToTokens: skippedDueToTokens.length,
+        tokensExhausted: tokensExhausted
+      },
+      ...(skippedDueToTokens.length > 0 && {
+        warning: `Operation stopped: Insufficient tokens. ${successfulLanguages} language(s) enhanced, ${skippedDueToTokens.length} skipped.`,
+        skippedLanguages: skippedDueToTokens
+      })
     });
     
   } catch (error) {
@@ -675,10 +746,28 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     }
     // === END TOKEN CHECKING ===
     
-    const results = { enhanced: 0, failed: 0, errors: [] };
+    const results = { enhanced: 0, failed: 0, errors: [], skippedDueToTokens: 0 };
+    const skippedLanguages = [];
     const model = 'google/gemini-2.5-flash-lite';
+    let tokensExhausted = false;
     
     for (const language of languages) {
+      // === GRACEFUL STOP: Check if we still have enough tokens ===
+      if (reservationId && requiresTokens(feature) && !tokensExhausted) {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
+        
+        if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
+          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
+          tokensExhausted = true;
+          
+          const remainingLanguages = languages.slice(languages.indexOf(language));
+          results.skippedDueToTokens = remainingLanguages.length;
+          skippedLanguages.push(...remainingLanguages);
+          break;
+        }
+      }
+      
       try {
         // 1. Load existing SEO
         const metafieldKey = `seo__${language}`;
@@ -821,7 +910,13 @@ Guidelines:
       ok: results.enhanced > 0,
       enhanced: results.enhanced,
       failed: results.failed,
-      errors: results.errors
+      skippedDueToTokens: results.skippedDueToTokens,
+      errors: results.errors,
+      tokensExhausted: tokensExhausted,
+      ...(skippedLanguages.length > 0 && {
+        warning: `Operation stopped: Insufficient tokens. ${results.enhanced} language(s) enhanced, ${results.skippedDueToTokens} skipped.`,
+        skippedLanguages: skippedLanguages
+      })
     });
     
   } catch (error) {
