@@ -917,6 +917,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       metafieldDefinitions: { deleted: 0, errors: [] },
       productMetafields: { deleted: 0, errors: [] },
       collectionMetafields: { deleted: 0, errors: [] },
+      productSeoData: { cleared: 0, errors: [] },
+      collectionSeoData: { cleared: 0, errors: [] },
       storeMetadata: { deleted: false, error: null },
       advancedSchemas: { deleted: false, error: null }
     };
@@ -1035,8 +1037,127 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       results.metafieldDefinitions.errors.push({ error: err.message });
     }
     
-    // 2. Delete store metadata (app_settings namespace)
-    console.log('[PREPARE-UNINSTALL] Step 2: Deleting store metadata...');
+    // 2. Clear product.seo and collection.seo data (Translate & Adapt data)
+    console.log('[PREPARE-UNINSTALL] Step 2: Clearing product.seo and collection.seo data...');
+    try {
+      // Get all products with MongoDB records (these are the ones we optimized)
+      const { default: Product } = await import('../db/Product.js');
+      const products = await Product.find({ shop }).select('shopifyProductId').lean();
+      
+      console.log('[PREPARE-UNINSTALL] Found', products.length, 'products to clear SEO data');
+      
+      // Clear SEO data for each product (set to empty strings)
+      for (const product of products) {
+        try {
+          const productGid = `gid://shopify/Product/${product.shopifyProductId}`;
+          
+          const clearSeoMutation = `
+            mutation($input: ProductInput!) {
+              productUpdate(input: $input) {
+                product {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const clearResult = await shopGraphQL(req, shop, clearSeoMutation, {
+            input: {
+              id: productGid,
+              seo: {
+                title: '',
+                description: ''
+              }
+            }
+          });
+          
+          if (clearResult?.productUpdate?.userErrors?.length > 0) {
+            console.error('[PREPARE-UNINSTALL] Error clearing product SEO:', product.shopifyProductId, clearResult.productUpdate.userErrors);
+            results.productSeoData.errors.push({
+              productId: product.shopifyProductId,
+              errors: clearResult.productUpdate.userErrors
+            });
+          } else {
+            results.productSeoData.cleared++;
+          }
+        } catch (err) {
+          console.error('[PREPARE-UNINSTALL] Exception clearing product SEO:', product.shopifyProductId, err.message);
+          results.productSeoData.errors.push({
+            productId: product.shopifyProductId,
+            error: err.message
+          });
+        }
+      }
+      
+      console.log('[PREPARE-UNINSTALL] Cleared SEO data for', results.productSeoData.cleared, 'products');
+      
+      // Get all collections with MongoDB records
+      const { default: Collection } = await import('../db/Collection.js');
+      const collections = await Collection.find({ shop }).select('collectionId').lean();
+      
+      console.log('[PREPARE-UNINSTALL] Found', collections.length, 'collections to clear SEO data');
+      
+      // Clear SEO data for each collection
+      for (const collection of collections) {
+        try {
+          const collectionGid = `gid://shopify/Collection/${collection.collectionId}`;
+          
+          const clearSeoMutation = `
+            mutation($input: CollectionInput!) {
+              collectionUpdate(collection: $input) {
+                collection {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const clearResult = await shopGraphQL(req, shop, clearSeoMutation, {
+            input: {
+              id: collectionGid,
+              seo: {
+                title: '',
+                description: ''
+              }
+            }
+          });
+          
+          if (clearResult?.collectionUpdate?.userErrors?.length > 0) {
+            console.error('[PREPARE-UNINSTALL] Error clearing collection SEO:', collection.collectionId, clearResult.collectionUpdate.userErrors);
+            results.collectionSeoData.errors.push({
+              collectionId: collection.collectionId,
+              errors: clearResult.collectionUpdate.userErrors
+            });
+          } else {
+            results.collectionSeoData.cleared++;
+          }
+        } catch (err) {
+          console.error('[PREPARE-UNINSTALL] Exception clearing collection SEO:', collection.collectionId, err.message);
+          results.collectionSeoData.errors.push({
+            collectionId: collection.collectionId,
+            error: err.message
+          });
+        }
+      }
+      
+      console.log('[PREPARE-UNINSTALL] Cleared SEO data for', results.collectionSeoData.cleared, 'collections');
+      
+    } catch (err) {
+      console.error('[PREPARE-UNINSTALL] Error clearing SEO data:', err.message);
+      results.productSeoData.errors.push({ error: err.message });
+      results.collectionSeoData.errors.push({ error: err.message });
+    }
+    
+    // 3. Delete store metadata (app_settings namespace)
+    console.log('[PREPARE-UNINSTALL] Step 3: Deleting store metadata...');
     try {
       const deleteStoreMetaMutation = `
         mutation {
@@ -1070,8 +1191,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       results.storeMetadata.error = err.message;
     }
     
-    // 3. Delete advanced schemas
-    console.log('[PREPARE-UNINSTALL] Step 3: Deleting advanced schemas...');
+    // 4. Delete advanced schemas
+    console.log('[PREPARE-UNINSTALL] Step 4: Deleting advanced schemas...');
     try {
       // Import AdvancedSchema model
       const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');

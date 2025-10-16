@@ -59,26 +59,30 @@ export default function CleanUninstall() {
               <Text variant="headingMd">What will be removed:</Text>
               <Box paddingInlineStart="400">
                 <BlockStack gap="200">
-                  <InlineStack gap="200" blockAlign="start">
-                    <Text variant="bodyMd">•</Text>
-                    <Text variant="bodyMd">All SEO metafield definitions (seo_ai namespace)</Text>
-                  </InlineStack>
-                  <InlineStack gap="200" blockAlign="start">
-                    <Text variant="bodyMd">•</Text>
-                    <Text variant="bodyMd">All AI-generated content (titles, descriptions, bullets, FAQs)</Text>
-                  </InlineStack>
-                  <InlineStack gap="200" blockAlign="start">
-                    <Text variant="bodyMd">•</Text>
-                    <Text variant="bodyMd">Store metadata configurations (brand voice, policies, target audience)</Text>
-                  </InlineStack>
-                  <InlineStack gap="200" blockAlign="start">
-                    <Text variant="bodyMd">•</Text>
-                    <Text variant="bodyMd">Advanced schema data</Text>
-                  </InlineStack>
-                  <InlineStack gap="200" blockAlign="start">
-                    <Text variant="bodyMd">•</Text>
-                    <Text variant="bodyMd">All metafield definitions created by this app</Text>
-                  </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">All SEO metafield definitions (seo_ai namespace)</Text>
+              </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">All AI-generated content (titles, descriptions, bullets, FAQs)</Text>
+              </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">Product & Collection SEO data (from Translate & Adapt)</Text>
+              </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">Store metadata configurations (brand voice, policies, target audience)</Text>
+              </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">Advanced schema data</Text>
+              </InlineStack>
+              <InlineStack gap="200" blockAlign="start">
+                <Text variant="bodyMd">•</Text>
+                <Text variant="bodyMd">All metafield definitions created by this app</Text>
+              </InlineStack>
                 </BlockStack>
               </Box>
             </BlockStack>
@@ -175,6 +179,7 @@ export default function CleanUninstall() {
                 <ul style={{ margin: 0, paddingLeft: '20px' }}>
                   <li>All product SEO metafields (titles, descriptions, bullets, FAQs)</li>
                   <li>All collection SEO metafields</li>
+                  <li>Product & Collection SEO data (from Translate & Adapt)</li>
                   <li>Store metadata (brand voice, policies, target audience)</li>
                   <li>Advanced schema data</li>
                   <li>All metafield definitions created by this app</li>
@@ -215,6 +220,20 @@ export default function CleanUninstall() {
                   <Text variant="bodyMd">✓</Text>
                   <Text variant="bodyMd">
                     Metafield definitions deleted: <strong>{uninstallResults.results?.metafieldDefinitions?.deleted || 0}</strong>
+                  </Text>
+                </InlineStack>
+                
+                <InlineStack gap="200" blockAlign="start">
+                  <Text variant="bodyMd">✓</Text>
+                  <Text variant="bodyMd">
+                    Product SEO data cleared: <strong>{uninstallResults.results?.productSeoData?.cleared || 0}</strong>
+                  </Text>
+                </InlineStack>
+                
+                <InlineStack gap="200" blockAlign="start">
+                  <Text variant="bodyMd">✓</Text>
+                  <Text variant="bodyMd">
+                    Collection SEO data cleared: <strong>{uninstallResults.results?.collectionSeoData?.cleared || 0}</strong>
                   </Text>
                 </InlineStack>
                 
