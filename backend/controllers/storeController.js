@@ -901,4 +901,204 @@ router.get('/metadata-status', validateRequest(), async (req, res) => {
   }
 });
 
+// POST /api/store/prepare-uninstall - Clean all app data before uninstall
+router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
+  try {
+    console.log('[PREPARE-UNINSTALL] ===== STARTING CLEANUP =====');
+    const shop = getShopFromReq(req);
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not found' });
+    }
+    
+    console.log('[PREPARE-UNINSTALL] Shop:', shop);
+    
+    const results = {
+      metafieldDefinitions: { deleted: 0, errors: [] },
+      productMetafields: { deleted: 0, errors: [] },
+      collectionMetafields: { deleted: 0, errors: [] },
+      storeMetadata: { deleted: false, error: null },
+      advancedSchemas: { deleted: false, error: null }
+    };
+    
+    // 1. Delete all metafield definitions for seo_ai namespace
+    console.log('[PREPARE-UNINSTALL] Step 1: Deleting metafield definitions...');
+    try {
+      // Query all metafield definitions for seo_ai namespace
+      const definitionsQuery = `
+        query {
+          metafieldDefinitions(first: 250, ownerType: PRODUCT, namespace: "seo_ai") {
+            nodes {
+              id
+              key
+              namespace
+            }
+          }
+        }
+      `;
+      
+      const defsData = await shopGraphQL(req, shop, definitionsQuery);
+      const definitions = defsData?.metafieldDefinitions?.nodes || [];
+      
+      console.log('[PREPARE-UNINSTALL] Found', definitions.length, 'product metafield definitions');
+      
+      // Delete each definition
+      for (const def of definitions) {
+        try {
+          const deleteMutation = `
+            mutation($id: ID!) {
+              metafieldDefinitionDelete(id: $id) {
+                deletedDefinitionId
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: def.id });
+          
+          if (deleteResult?.metafieldDefinitionDelete?.userErrors?.length > 0) {
+            console.error('[PREPARE-UNINSTALL] Error deleting definition:', def.key, deleteResult.metafieldDefinitionDelete.userErrors);
+            results.metafieldDefinitions.errors.push({
+              key: def.key,
+              errors: deleteResult.metafieldDefinitionDelete.userErrors
+            });
+          } else {
+            console.log('[PREPARE-UNINSTALL] Deleted definition:', def.key);
+            results.metafieldDefinitions.deleted++;
+          }
+        } catch (err) {
+          console.error('[PREPARE-UNINSTALL] Exception deleting definition:', def.key, err.message);
+          results.metafieldDefinitions.errors.push({
+            key: def.key,
+            error: err.message
+          });
+        }
+      }
+      
+      // Also delete collection metafield definitions
+      const collectionDefsQuery = `
+        query {
+          metafieldDefinitions(first: 250, ownerType: COLLECTION, namespace: "seo_ai") {
+            nodes {
+              id
+              key
+              namespace
+            }
+          }
+        }
+      `;
+      
+      const collectionDefsData = await shopGraphQL(req, shop, collectionDefsQuery);
+      const collectionDefinitions = collectionDefsData?.metafieldDefinitions?.nodes || [];
+      
+      console.log('[PREPARE-UNINSTALL] Found', collectionDefinitions.length, 'collection metafield definitions');
+      
+      for (const def of collectionDefinitions) {
+        try {
+          const deleteMutation = `
+            mutation($id: ID!) {
+              metafieldDefinitionDelete(id: $id) {
+                deletedDefinitionId
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: def.id });
+          
+          if (deleteResult?.metafieldDefinitionDelete?.userErrors?.length > 0) {
+            console.error('[PREPARE-UNINSTALL] Error deleting collection definition:', def.key, deleteResult.metafieldDefinitionDelete.userErrors);
+            results.metafieldDefinitions.errors.push({
+              key: def.key,
+              errors: deleteResult.metafieldDefinitionDelete.userErrors
+            });
+          } else {
+            console.log('[PREPARE-UNINSTALL] Deleted collection definition:', def.key);
+            results.metafieldDefinitions.deleted++;
+          }
+        } catch (err) {
+          console.error('[PREPARE-UNINSTALL] Exception deleting collection definition:', def.key, err.message);
+          results.metafieldDefinitions.errors.push({
+            key: def.key,
+            error: err.message
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[PREPARE-UNINSTALL] Error in metafield definitions cleanup:', err.message);
+      results.metafieldDefinitions.errors.push({ error: err.message });
+    }
+    
+    // 2. Delete store metadata (app_settings namespace)
+    console.log('[PREPARE-UNINSTALL] Step 2: Deleting store metadata...');
+    try {
+      const deleteStoreMetaMutation = `
+        mutation {
+          metafieldsDelete(metafields: [
+            { ownerId: "gid://shopify/Shop/${shop.replace('.myshopify.com', '')}", namespace: "app_settings", key: "store_metadata" }
+          ]) {
+            deletedMetafields {
+              ownerId
+              namespace
+              key
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      const storeMetaResult = await shopGraphQL(req, shop, deleteStoreMetaMutation);
+      
+      if (storeMetaResult?.metafieldsDelete?.userErrors?.length > 0) {
+        console.error('[PREPARE-UNINSTALL] Error deleting store metadata:', storeMetaResult.metafieldsDelete.userErrors);
+        results.storeMetadata.error = storeMetaResult.metafieldsDelete.userErrors;
+      } else {
+        console.log('[PREPARE-UNINSTALL] Deleted store metadata');
+        results.storeMetadata.deleted = true;
+      }
+    } catch (err) {
+      console.error('[PREPARE-UNINSTALL] Exception deleting store metadata:', err.message);
+      results.storeMetadata.error = err.message;
+    }
+    
+    // 3. Delete advanced schemas
+    console.log('[PREPARE-UNINSTALL] Step 3: Deleting advanced schemas...');
+    try {
+      // Import AdvancedSchema model
+      const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
+      const deletedSchemas = await AdvancedSchema.deleteMany({ shop });
+      console.log('[PREPARE-UNINSTALL] Deleted', deletedSchemas.deletedCount, 'advanced schemas from MongoDB');
+      results.advancedSchemas.deleted = deletedSchemas.deletedCount > 0;
+    } catch (err) {
+      console.error('[PREPARE-UNINSTALL] Exception deleting advanced schemas:', err.message);
+      results.advancedSchemas.error = err.message;
+    }
+    
+    console.log('[PREPARE-UNINSTALL] ===== CLEANUP COMPLETED =====');
+    console.log('[PREPARE-UNINSTALL] Results:', JSON.stringify(results, null, 2));
+    
+    res.json({
+      success: true,
+      message: 'App data cleaned successfully',
+      results
+    });
+    
+  } catch (error) {
+    console.error('[PREPARE-UNINSTALL] Fatal error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 export default router;
