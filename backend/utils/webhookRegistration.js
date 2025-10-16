@@ -3,6 +3,7 @@
 
 import { makeShopifyGraphQLRequest } from './shopifyGraphQL.js';
 import { resolveAdminToken } from './tokenResolver.js';
+import { createAllMetafieldDefinitions } from './metafieldDefinitions.js';
 
 /**
  * Register products/update webhook with Shopify
@@ -351,6 +352,7 @@ export async function registerAppUninstalledWebhook(req, shop, callbackUrl) {
 
 /**
  * Register all required webhooks for the app
+ * Also creates metafield definitions to make metafields visible in Shopify Admin
  * @param {Object} req - Express request
  * @param {string} shop - Shop domain
  * @param {string} appUrl - Base app URL (e.g., https://your-app.com)
@@ -372,6 +374,10 @@ export async function registerAllWebhooks(req, shop, appUrl) {
   // Register app/uninstalled webhook
   const uninstallUrl = `${appUrl}/webhooks/app/uninstalled`;
   results.appUninstalled = await registerAppUninstalledWebhook(req, shop, uninstallUrl);
+  
+  // Create metafield definitions (makes metafields visible in Product → Metafields)
+  console.log(`[WEBHOOK-REG] Creating metafield definitions for ${shop}`);
+  results.metafieldDefinitions = await createAllMetafieldDefinitions(req, shop);
   
   return results;
 }
