@@ -37,6 +37,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---------------------------------------------------------------------------
+// App configuration constants
+// ---------------------------------------------------------------------------
+const PORT = process.env.PORT || 8080;
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+
+// ---------------------------------------------------------------------------
 const app = express();
 app.set('trust proxy', 1);
 
@@ -1350,6 +1356,21 @@ app.get('/', async (req, res) => {
               );
               
               console.log('[APP URL] ✅ Token exchange successful, access token saved');
+              
+              // Автоматично регистриране на webhook-ите след успешен token exchange
+              console.log('[APP URL] Checking and registering webhooks...');
+              try {
+                const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
+                const mockReq = {
+                  session: { accessToken },
+                  shopDomain: shop
+                };
+                const webhookResults = await registerAllWebhooks(mockReq, shop, APP_URL);
+                console.log('[APP URL] Webhook registration results:', JSON.stringify(webhookResults, null, 2));
+              } catch (webhookError) {
+                console.error('[APP URL] Webhook registration failed:', webhookError.message);
+                // Не блокираме заредането на апп-а ако webhook регистрацията се провали
+              }
             } else {
               console.error('[APP URL] No access token in response');
             }
@@ -1621,9 +1642,6 @@ app.use((err, _req, res, _next) => {
 // Startup: optional Mongo, mount optional routers, start scheduler, listen
 // ---------------------------------------------------------------------------
 import { startScheduler } from './scheduler.js';
-
-const PORT = process.env.PORT || 8080;
-const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 async function start() {
   try {
