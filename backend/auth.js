@@ -174,6 +174,7 @@ async function testToken(shop, accessToken) {
 async function registerWebhooks(shop, accessToken) {
   const topics = [
     { topic: 'products/update',  address: `${APP_URL}/webhooks/products`,  format: 'json' },
+    { topic: 'collections/update',  address: `${APP_URL}/webhooks/collections`,  format: 'json' },
     { topic: 'app/uninstalled',  address: `${APP_URL}/webhooks/app/uninstalled`, format: 'json' },
   ];
 

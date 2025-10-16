@@ -1898,6 +1898,122 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
       }
     }
     
+    // Update MongoDB Collection record with lastShopifyUpdate
+    // This establishes baseline for webhook comparison
+    if (updated.metafields) {
+      try {
+        const Collection = (await import('../db/Collection.js')).default;
+        const numericId = collectionId.replace('gid://shopify/Collection/', '');
+        
+        // Fetch current collection data from Shopify for lastShopifyUpdate reference
+        const collectionQuery = `
+          query GetCollection($id: ID!) {
+            collection(id: $id) {
+              id
+              title
+              descriptionHtml
+            }
+          }
+        `;
+        
+        let currentCollection = null;
+        try {
+          const collectionData = await shopGraphQL(req, shop, collectionQuery, { id: collectionId });
+          currentCollection = collectionData?.collection;
+          
+          if (!currentCollection) {
+            console.error(`[APPLY-COLLECTION] Could not fetch collection ${collectionId} from Shopify`);
+          } else {
+            console.log(`[APPLY-COLLECTION] Fetched current collection: title="${currentCollection.title}"`);
+          }
+        } catch (fetchError) {
+          console.error(`[APPLY-COLLECTION] Error fetching collection:`, fetchError.message);
+        }
+        
+        // Find or create collection record
+        const collection = await Collection.findOne({ shop, collectionId: numericId });
+        
+        if (collection) {
+          const currentLanguages = collection.seoStatus?.languages || [];
+          const langCode = language.toLowerCase();
+          
+          // Check if language already exists
+          const existingLangIndex = currentLanguages.findIndex(l => l.code === langCode);
+          
+          let updatedLanguages;
+          if (existingLangIndex >= 0) {
+            // Update existing language
+            updatedLanguages = [...currentLanguages];
+            updatedLanguages[existingLangIndex] = {
+              code: langCode,
+              optimized: true,
+              lastOptimizedAt: new Date()
+            };
+          } else {
+            // Add new language
+            updatedLanguages = [
+              ...currentLanguages,
+              { code: langCode, optimized: true, lastOptimizedAt: new Date() }
+            ];
+          }
+          
+          // Prepare update object including lastShopifyUpdate
+          const updateFields = { 
+            'seoStatus.languages': updatedLanguages,
+            'seoStatus.optimized': true
+          };
+          
+          // Add lastShopifyUpdate if we successfully fetched current collection data
+          if (currentCollection) {
+            updateFields['lastShopifyUpdate'] = {
+              title: currentCollection.title,
+              description: currentCollection.descriptionHtml || '',
+              updatedAt: new Date()
+            };
+            console.log(`[APPLY-COLLECTION] Setting lastShopifyUpdate baseline: title="${currentCollection.title}"`);
+          }
+          
+          // Update the collection
+          console.log(`[APPLY-COLLECTION] Updating MongoDB for collection ${numericId}`);
+          await Collection.findOneAndUpdate(
+            { shop, collectionId: numericId },
+            { $set: updateFields },
+            { new: true, runValidators: true }
+          );
+          
+          console.log(`[APPLY-COLLECTION] MongoDB update completed successfully`);
+        } else {
+          // Create new collection record
+          const newCollection = {
+            shop,
+            collectionId: numericId,
+            shopifyCollectionId: numericId,
+            gid: collectionId,
+            title: currentCollection?.title,
+            description: currentCollection?.descriptionHtml || '',
+            seoStatus: {
+              optimized: true,
+              languages: [{ code: language.toLowerCase(), optimized: true, lastOptimizedAt: new Date() }]
+            }
+          };
+          
+          if (currentCollection) {
+            newCollection.lastShopifyUpdate = {
+              title: currentCollection.title,
+              description: currentCollection.descriptionHtml || '',
+              updatedAt: new Date()
+            };
+          }
+          
+          await Collection.create(newCollection);
+          console.log(`[APPLY-COLLECTION] Created new collection record in MongoDB`);
+        }
+      } catch (e) {
+        console.error('[APPLY-COLLECTION] Failed to update MongoDB:', e.message);
+        // Don't fail the request if MongoDB update fails
+      }
+    }
+    
     res.json({
       ok: errors.length === 0,
       collectionId,

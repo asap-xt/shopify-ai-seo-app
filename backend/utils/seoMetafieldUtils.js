@@ -154,3 +154,150 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
   }
 }
 
+/**
+ * Delete all SEO metafields for a collection (all languages)
+ * Called when collection title or description changes in Shopify
+ * 
+ * @param {Object} req - Express request object (for shopGraphQL)
+ * @param {string} shop - Shop domain
+ * @param {string} collectionGid - Collection GID (e.g., "gid://shopify/Collection/123")
+ * @returns {Promise<Object>} - { success: boolean, deletedCount: number, errors: array }
+ */
+export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionGid) {
+  console.log(`[SEO-METAFIELD-UTILS] Deleting ALL SEO metafields for collection: ${collectionGid}`);
+  
+  try {
+    // Resolve access token
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      throw new Error(`No access token found for shop: ${shop}`);
+    }
+    
+    // 1. Fetch all metafields for the collection in seo_ai namespace
+    const fetchQuery = `
+      query GetCollectionMetafields($id: ID!) {
+        collection(id: $id) {
+          id
+          metafields(namespace: "seo_ai", first: 50) {
+            edges {
+              node {
+                id
+                key
+                namespace
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const fetchResult = await makeShopifyGraphQLRequest(shop, accessToken, fetchQuery, { id: collectionGid });
+    
+    if (!fetchResult?.collection?.metafields?.edges) {
+      console.log(`[SEO-METAFIELD-UTILS] No metafields found for collection ${collectionGid}`);
+      return { success: true, deletedCount: 0, errors: [] };
+    }
+    
+    const metafields = fetchResult.collection.metafields.edges
+      .map(edge => ({
+        ownerId: collectionGid,
+        namespace: edge.node.namespace,
+        key: edge.node.key
+      }))
+      .filter(mf => mf.key); // Remove any nulls
+    
+    if (metafields.length === 0) {
+      console.log(`[SEO-METAFIELD-UTILS] No SEO metafields to delete for ${collectionGid}`);
+      return { success: true, deletedCount: 0, errors: [] };
+    }
+    
+    console.log(`[SEO-METAFIELD-UTILS] Found ${metafields.length} metafields to delete`);
+    
+    // 2. Delete all metafields using ownerId, namespace, key
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            namespace
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const deleteResult = await makeShopifyGraphQLRequest(shop, accessToken, deleteMutation, {
+      metafields: metafields
+    });
+    
+    const errors = deleteResult?.metafieldsDelete?.userErrors || [];
+    const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
+    
+    if (errors.length > 0) {
+      console.error(`[SEO-METAFIELD-UTILS] Errors deleting metafields:`, errors);
+      return {
+        success: false,
+        deletedCount: deletedMetafields.length,
+        errors: errors.map(e => e.message)
+      };
+    }
+    
+    console.log(`[SEO-METAFIELD-UTILS] Successfully deleted ${deletedMetafields.length} metafields`);
+    
+    return {
+      success: true,
+      deletedCount: deletedMetafields.length,
+      errors: []
+    };
+    
+  } catch (error) {
+    console.error(`[SEO-METAFIELD-UTILS] Error in deleteAllSeoMetafieldsForCollection:`, error);
+    return {
+      success: false,
+      deletedCount: 0,
+      errors: [error.message]
+    };
+  }
+}
+
+/**
+ * Clear SEO status in MongoDB for a collection
+ * Called after deleting metafields
+ * 
+ * @param {string} shop - Shop domain
+ * @param {string} collectionId - Numeric collection ID
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function clearCollectionSeoStatusInMongoDB(shop, collectionId) {
+  try {
+    const Collection = (await import('../db/Collection.js')).default;
+    
+    const result = await Collection.findOneAndUpdate(
+      { shop, collectionId },
+      { 
+        $set: {
+          'seoStatus.optimized': false,
+          'seoStatus.languages': [],
+          'seoStatus.lastCheckedAt': new Date()
+        }
+      },
+      { new: true }
+    );
+    
+    if (result) {
+      console.log(`[SEO-METAFIELD-UTILS] Cleared SEO status in MongoDB for collection ${collectionId}`);
+      return true;
+    } else {
+      console.log(`[SEO-METAFIELD-UTILS] Collection ${collectionId} not found in MongoDB`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[SEO-METAFIELD-UTILS] Error clearing collection SEO status in MongoDB:`, error);
+    return false;
+  }
+}
+

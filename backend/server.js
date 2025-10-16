@@ -1060,9 +1060,11 @@ async function mountOptionalRouters(app) {
     const { default: validateShopifyWebhook } = await import('./middleware/webhookValidator.js');
     const { default: productsWebhook } = await import('./webhooks/products.js');
     const { default: uninstallWebhook } = await import('./webhooks/uninstall.js');
+    const { default: collectionsWebhook } = await import('./webhooks/collections.js');
 
     // Example webhook endpoints (adjust paths if your files expect different)
     app.post('/webhooks/products', validateShopifyWebhook, productsWebhook);
+    app.post('/webhooks/collections', validateShopifyWebhook, collectionsWebhook);
     app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
     console.log('✔ Webhooks mounted');
   } catch (e) {
