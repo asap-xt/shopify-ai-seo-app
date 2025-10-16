@@ -3,7 +3,7 @@
 
 import { Banner, Button, InlineStack } from '@shopify/polaris';
 import { useState, useEffect } from 'react';
-import { useI18n } from '../hooks/useI18n';
+import useI18n from '../hooks/useI18n';
 
 export function StoreMetadataBanner() {
   const { t } = useI18n();
