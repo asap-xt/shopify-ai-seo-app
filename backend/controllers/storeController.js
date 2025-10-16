@@ -965,12 +965,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           const product = edge.node;
           const metafields = product.metafields?.edges || [];
           
-          // Log all unique namespaces (debug for old versions)
-          if (metafields.length > 0) {
-            const namespaces = [...new Set(metafields.map(mf => mf.node.namespace))];
-            console.log('[PREPARE-UNINSTALL] Product', product.id, 'has namespaces:', namespaces);
-          }
-          
           // Filter только seo_ai и advanced_schema metafields
           const ourMetafields = metafields.filter(mf => 
             mf.node.namespace === 'seo_ai' || mf.node.namespace === 'advanced_schema'
@@ -1012,7 +1006,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
                 } else {
                   const deletedCount = deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0;
                   results.productMetafields.deleted += deletedCount;
-                  console.log('[PREPARE-UNINSTALL] Deleted', deletedCount, 'metafields from product', product.id);
                 }
               } catch (err) {
                 console.error('[PREPARE-UNINSTALL] Exception deleting product metafields:', product.id, err.message);
@@ -1112,7 +1105,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
                 } else {
                   const deletedCount = deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0;
                   results.collectionMetafields.deleted += deletedCount;
-                  console.log('[PREPARE-UNINSTALL] Deleted', deletedCount, 'metafields from collection', collection.id);
                 }
               } catch (err) {
                 console.error('[PREPARE-UNINSTALL] Exception deleting collection metafields:', collection.id, err.message);
@@ -1185,7 +1177,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
               errors: deleteResult.metafieldDefinitionDelete.userErrors
             });
           } else {
-            console.log('[PREPARE-UNINSTALL] Deleted definition:', def.key);
             results.metafieldDefinitions.deleted++;
           }
         } catch (err) {
@@ -1241,7 +1232,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
               errors: deleteResult.metafieldDefinitionDelete.userErrors
             });
           } else {
-            console.log('[PREPARE-UNINSTALL] Deleted collection definition:', def.key);
             results.metafieldDefinitions.deleted++;
           }
         } catch (err) {
@@ -1297,7 +1287,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
               errors: deleteResult.metafieldDefinitionDelete.userErrors
             });
           } else {
-            console.log('[PREPARE-UNINSTALL] Deleted advanced_schema definition:', def.key);
             results.metafieldDefinitions.deleted++;
           }
         } catch (err) {
@@ -1400,7 +1389,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
               errors: clearResult.productUpdate.userErrors
             });
           } else {
-            console.log('[PREPARE-UNINSTALL] Cleared product SEO:', product.id);
             results.productSeoData.cleared++;
           }
         } catch (err) {
@@ -1496,7 +1484,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
               errors: clearResult.collectionUpdate.userErrors
             });
           } else {
-            console.log('[PREPARE-UNINSTALL] Cleared collection SEO:', collection.id);
             results.collectionSeoData.cleared++;
           }
         } catch (err) {
