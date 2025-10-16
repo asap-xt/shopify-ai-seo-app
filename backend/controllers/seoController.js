@@ -2795,13 +2795,17 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
         // Filter out the language to delete
         const updatedLanguages = product.seoStatus.languages.filter(l => l.code !== langCode);
         
-        // Update the product
+        // IMPORTANT: Clear lastShopifyUpdate so webhook can detect future changes
+        // This ensures webhook will work correctly after SEO deletion
         const updateResult = await Product.findOneAndUpdate(
           { shop, productId: numericId },
           { 
             $set: { 
               'seoStatus.languages': updatedLanguages,
               'seoStatus.optimized': updatedLanguages.some(l => l.optimized)
+            },
+            $unset: { 
+              'lastShopifyUpdate': 1  // Delete the entire lastShopifyUpdate field
             }
           },
           { new: true }
@@ -2811,6 +2815,7 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
           deleted.mongodb = true;
           console.log('[DELETE-SEO] MongoDB updated successfully');
           console.log('[DELETE-SEO] Remaining languages:', updatedLanguages.map(l => l.code));
+          console.log('[DELETE-SEO] Cleared lastShopifyUpdate baseline');
         } else {
           console.log('[DELETE-SEO] MongoDB update failed - document not found');
           errors.push('Failed to update optimization status in database');

@@ -106,7 +106,7 @@ export async function createOptimizationSummaryDefinition(req, shop) {
 }
 
 /**
- * Create schema metafield definitions for all supported languages
+ * Create schema metafield definitions for shop's published languages only
  * Visible in: Product → Metafields section
  * Format: JSON array of schema objects
  */
@@ -119,7 +119,28 @@ export async function createSchemaDefinitions(req, shop) {
       throw new Error(`No access token found for shop: ${shop}`);
     }
     
-    const languages = ['en', 'bg', 'es', 'fr', 'de'];
+    // Fetch shop's published languages
+    const localesQuery = `
+      query {
+        shopLocales {
+          locale
+          primary
+          published
+        }
+      }
+    `;
+    
+    const localesResult = await makeShopifyGraphQLRequest(shop, accessToken, localesQuery);
+    const shopLocales = localesResult?.shopLocales || [];
+    
+    // Extract only published language codes
+    const languages = shopLocales
+      .filter(l => l.published)
+      .map(l => l.locale.toLowerCase().split('-')[0]) // Extract language code (e.g., 'en' from 'en-US')
+      .filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
+    
+    console.log(`[METAFIELD-DEF] Shop published languages:`, languages);
+    
     const results = {};
     
     for (const lang of languages) {
