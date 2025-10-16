@@ -5,9 +5,11 @@
 import { Banner, Button, InlineStack } from '@shopify/polaris';
 import { useState, useEffect } from 'react';
 import useI18n from '../hooks/useI18n';
+import { useShopApi } from '../hooks/useShopApi';
 
 export function StoreMetadataBanner() {
   const { t } = useI18n();
+  const { api } = useShopApi();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(() => {
@@ -22,16 +24,9 @@ export function StoreMetadataBanner() {
   const fetchMetadataStatus = async () => {
     try {
       console.log('[StoreMetadataBanner] Fetching metadata status...');
-      const response = await fetch('/api/store/metadata-status');
-      console.log('[StoreMetadataBanner] Response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[StoreMetadataBanner] Status data:', data);
-        setStatus(data);
-      } else {
-        console.error('[StoreMetadataBanner] Failed to fetch status:', response.status);
-      }
+      const data = await api('/api/store/metadata-status');
+      console.log('[StoreMetadataBanner] Status data:', data);
+      setStatus(data);
     } catch (error) {
       console.error('[StoreMetadataBanner] Error fetching metadata status:', error);
     } finally {
