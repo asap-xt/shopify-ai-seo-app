@@ -30,6 +30,7 @@ import {
 import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; }
@@ -1708,6 +1709,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   return (
     <>
+      {/* Store Metadata Banner */}
+      <StoreMetadataBanner />
+      
       <Card>
         <Box padding="400">
           <BlockStack gap="300">

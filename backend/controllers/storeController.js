@@ -871,4 +871,28 @@ router.post('/settings', validateRequest(), async (req, res) => {
   }
 });
 
+// GET /api/store/metadata-status - Check if store metadata is configured
+router.get('/metadata-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = getShopFromReq(req);
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not found' });
+    }
+    
+    // Import here to avoid circular dependencies
+    const { checkStoreMetadataStatus } = await import('../utils/storeContextBuilder.js');
+    
+    const status = await checkStoreMetadataStatus(shop);
+    
+    res.json(status);
+  } catch (error) {
+    console.error('[STORE-METADATA-STATUS] Error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hasMetadata: false,
+      hasPolicies: false
+    });
+  }
+});
+
 export default router;

@@ -6,6 +6,7 @@ import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import { validateAIResponse, createFactualPrompt } from '../utils/aiValidator.js';
+import { getCachedStoreContext } from '../utils/storeContextBuilder.js';
 import { 
   calculateFeatureCost, 
   requiresTokens, 
@@ -106,6 +107,9 @@ async function openrouterChat(model, messages, response_format_json = true) {
 async function generateEnhancedBulletsFAQ(data) {
   const { shop, productId, model, language, product, existingSeo } = data;
   
+  // Get store context (cached for performance)
+  const storeContext = await getCachedStoreContext(shop, { includeProductAnalysis: false });
+  
   // Create factual prompt to prevent hallucinations
   const factualPrompt = createFactualPrompt(
     {
@@ -120,7 +124,9 @@ async function generateEnhancedBulletsFAQ(data) {
   const messages = [
     {
       role: 'system',
-      content: `Language: ${language}. Generate ONLY factual bullets and FAQ based on provided product data. Return ONLY JSON with bullets array and faq array. Nothing else.`
+      content: `${storeContext}
+
+Language: ${language}. Generate ONLY factual bullets and FAQ based on provided product data AND store context above. Return ONLY JSON with bullets array and faq array. Nothing else.`
     },
     {
       role: 'user',

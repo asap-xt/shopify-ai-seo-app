@@ -1,0 +1,108 @@
+// frontend/src/components/StoreMetadataBanner.jsx
+// Banner to prompt users to configure Store Metadata for better AI results
+
+import { Banner, Button, InlineStack } from '@shopify/polaris';
+import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useI18n } from '../hooks/useI18n';
+
+export function StoreMetadataBanner() {
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(() => {
+    // Check if banner was dismissed in this session
+    return sessionStorage.getItem('storeMetadataBannerDismissed') === 'true';
+  });
+  
+  useEffect(() => {
+    fetchMetadataStatus();
+  }, []);
+  
+  const fetchMetadataStatus = async () => {
+    try {
+      const response = await fetch('/api/store/metadata-status');
+      if (response.ok) {
+        const data = await response.json();
+        setStatus(data);
+      }
+    } catch (error) {
+      console.error('Error fetching metadata status:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleDismiss = () => {
+    setDismissed(true);
+    sessionStorage.setItem('storeMetadataBannerDismissed', 'true');
+  };
+  
+  const handleSetup = () => {
+    navigate('/store-metadata');
+  };
+  
+  // Don't show if loading, dismissed, or metadata is complete
+  if (loading || dismissed || !status || status.hasMetadata) {
+    return null;
+  }
+  
+  // Determine banner message based on what's missing
+  let title = t('storeMetadata.banner.title', '⚡ Boost AI Quality');
+  let message = '';
+  let criticalMissing = false;
+  
+  if (!status.hasPolicies) {
+    criticalMissing = true;
+    if (!status.hasShipping && !status.hasReturns) {
+      message = t(
+        'storeMetadata.banner.policiesMissing',
+        'Add shipping and return policies to help AI generate accurate, policy-compliant content. This prevents AI from inventing incorrect delivery times or warranty claims.'
+      );
+    } else if (!status.hasShipping) {
+      message = t(
+        'storeMetadata.banner.shippingMissing',
+        'Add shipping information to help AI generate accurate content about delivery options.'
+      );
+    } else if (!status.hasReturns) {
+      message = t(
+        'storeMetadata.banner.returnsMissing',
+        'Add return policy to help AI generate accurate content about returns and refunds.'
+      );
+    }
+  } else if (!status.hasTargetAudience && !status.hasBrandVoice) {
+    message = t(
+      'storeMetadata.banner.brandingMissing',
+      'Add target audience and brand voice to help AI generate more on-brand, engaging content that resonates with your customers.'
+    );
+  }
+  
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <Banner
+        title={title}
+        tone={criticalMissing ? 'warning' : 'info'}
+        onDismiss={handleDismiss}
+      >
+        <p>{message}</p>
+        <div style={{ marginTop: '0.75rem' }}>
+          <InlineStack gap="200">
+            <Button
+              onClick={handleSetup}
+              variant="primary"
+            >
+              {t('storeMetadata.banner.action', 'Quick Setup (2 min)')}
+            </Button>
+            {!criticalMissing && (
+              <Button onClick={handleDismiss}>
+                {t('common.remindLater', 'Remind me later')}
+              </Button>
+            )}
+          </InlineStack>
+        </div>
+      </Banner>
+    </div>
+  );
+}
+

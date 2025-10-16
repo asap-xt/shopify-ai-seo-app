@@ -27,6 +27,7 @@ import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
@@ -1442,6 +1443,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   return (
     <>
+      {/* Store Metadata Banner */}
+      <StoreMetadataBanner />
+      
       <Card>
         <Box padding="400">
           <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
