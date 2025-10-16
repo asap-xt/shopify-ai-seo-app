@@ -1,7 +1,8 @@
 // backend/webhooks/uninstall.js
-// Handles "app/uninstalled" – изтрива shop от базата данни
+// Handles "app/uninstalled" – пълно изчистване на всички данни и следи от апп-а
 
 import Shop from '../db/Shop.js';
+import { deleteAllMetafieldDefinitions } from '../utils/cleanupOnUninstall.js';
 
 export default async function uninstallWebhook(req, res) {
   try {
@@ -16,6 +17,22 @@ export default async function uninstallWebhook(req, res) {
     if (!shop) {
       console.error('[Webhook] No shop domain in uninstall webhook');
       return res.status(200).send('ok');
+    }
+
+    // ===== 1. DELETE ALL METAFIELD DEFINITIONS FROM SHOPIFY =====
+    // This will also delete all metafield VALUES automatically!
+    console.log('[Webhook] Step 1: Deleting metafield definitions from Shopify...');
+    try {
+      const cleanupResult = await deleteAllMetafieldDefinitions(shop);
+      if (cleanupResult.success) {
+        console.log('[Webhook] ✅ Successfully deleted metafield definitions');
+        console.log('[Webhook] Results:', cleanupResult.results);
+      } else {
+        console.error('[Webhook] ⚠️ Failed to delete metafield definitions:', cleanupResult.error);
+      }
+    } catch (cleanupError) {
+      console.error('[Webhook] ⚠️ Error during metafield cleanup:', cleanupError.message);
+      // Continue with MongoDB cleanup even if Shopify cleanup fails
     }
 
     // Изтриваме shop записа от MongoDB
@@ -77,6 +94,17 @@ export default async function uninstallWebhook(req, res) {
       console.log(`[Webhook] Could not delete Sitemap data for ${shop}:`, e.message);
     }
 
+    // Изтрий Token Balances
+    try {
+      const { default: TokenBalance } = await import('../db/TokenBalance.js');
+      await TokenBalance.deleteOne({ shop });
+      console.log(`[Webhook] Deleted Token Balance for ${shop}`);
+    } catch (e) {
+      console.log(`[Webhook] Could not delete Token Balance for ${shop}:`, e.message);
+    }
+
+    console.log('[Webhook] ===== UNINSTALL CLEANUP COMPLETED =====');
+    console.log(`[Webhook] All data for ${shop} has been removed from both Shopify and MongoDB`);
     res.status(200).send('ok');
   } catch (e) {
     console.error('[Webhook] uninstall error:', e?.message || e);
