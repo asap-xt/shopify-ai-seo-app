@@ -1110,8 +1110,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
             input: {
               id: product.id,
               seo: {
-                title: '',
-                description: ''
+                title: null,
+                description: null
               }
             }
           });
@@ -1206,8 +1206,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
             input: {
               id: collection.id,
               seo: {
-                title: '',
-                description: ''
+                title: null,
+                description: null
               }
             }
           });

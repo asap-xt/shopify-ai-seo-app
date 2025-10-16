@@ -61,30 +61,29 @@ export default function CleanUninstall() {
                 <BlockStack gap="200">
               <InlineStack gap="200" blockAlign="start">
                 <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">All SEO metafield definitions (seo_ai namespace)</Text>
+                <Text variant="bodyMd">All AI Search optimization content</Text>
               </InlineStack>
               <InlineStack gap="200" blockAlign="start">
                 <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">All AI-generated content (titles, descriptions, bullets, FAQs)</Text>
+                <Text variant="bodyMd">AI-generated metadata and structured data</Text>
               </InlineStack>
               <InlineStack gap="200" blockAlign="start">
                 <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">Product & Collection SEO data (from Translate & Adapt)</Text>
+                <Text variant="bodyMd">Store configuration (brand voice, policies, target audience)</Text>
               </InlineStack>
               <InlineStack gap="200" blockAlign="start">
                 <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">Store metadata configurations (brand voice, policies, target audience)</Text>
-              </InlineStack>
-              <InlineStack gap="200" blockAlign="start">
-                <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">Advanced schema data</Text>
-              </InlineStack>
-              <InlineStack gap="200" blockAlign="start">
-                <Text variant="bodyMd">•</Text>
-                <Text variant="bodyMd">All metafield definitions created by this app</Text>
+                <Text variant="bodyMd">Advanced schema markup</Text>
               </InlineStack>
                 </BlockStack>
               </Box>
+              
+              <Banner status="info">
+                <p>
+                  ℹ️ <strong>Your product and collection data will NOT be affected.</strong> This will only remove AI-generated content created by our app. 
+                  Your original product titles, descriptions, and Shopify SEO metafields will remain unchanged.
+                </p>
+              </Banner>
             </BlockStack>
 
             <Divider />
@@ -165,7 +164,7 @@ export default function CleanUninstall() {
           <Modal.Section>
             <BlockStack gap="400">
               <Banner status="critical" title="This action cannot be undone!">
-                <p>All SEO content, metafields, and app configurations will be permanently deleted from your Shopify store.</p>
+                <p>All AI Search optimization content and app configurations will be permanently removed from your store.</p>
               </Banner>
               
               <Text variant="bodyMd">
@@ -177,14 +176,18 @@ export default function CleanUninstall() {
               </Text>
               <Box paddingInlineStart="400">
                 <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                  <li>All product SEO metafields (titles, descriptions, bullets, FAQs)</li>
-                  <li>All collection SEO metafields</li>
-                  <li>Product & Collection SEO data (from Translate & Adapt)</li>
-                  <li>Store metadata (brand voice, policies, target audience)</li>
-                  <li>Advanced schema data</li>
-                  <li>All metafield definitions created by this app</li>
+                  <li>All AI Search optimization content for products and collections</li>
+                  <li>AI-generated metadata and structured data</li>
+                  <li>Store configuration (brand voice, policies, target audience)</li>
+                  <li>Advanced schema markup</li>
                 </ul>
               </Box>
+              
+              <Banner status="info">
+                <p>
+                  ✅ <strong>Your original product and collection data will NOT be affected.</strong> Only AI-generated content will be removed.
+                </p>
+              </Banner>
             </BlockStack>
           </Modal.Section>
         </Modal>
@@ -219,38 +222,37 @@ export default function CleanUninstall() {
                 <InlineStack gap="200" blockAlign="start">
                   <Text variant="bodyMd">✓</Text>
                   <Text variant="bodyMd">
-                    Metafield definitions deleted: <strong>{uninstallResults.results?.metafieldDefinitions?.deleted || 0}</strong>
+                    AI Search optimization data cleared for <strong>{(uninstallResults.results?.productSeoData?.cleared || 0) + (uninstallResults.results?.collectionSeoData?.cleared || 0)}</strong> items
                   </Text>
                 </InlineStack>
                 
                 <InlineStack gap="200" blockAlign="start">
                   <Text variant="bodyMd">✓</Text>
                   <Text variant="bodyMd">
-                    Product SEO data cleared: <strong>{uninstallResults.results?.productSeoData?.cleared || 0}</strong>
+                    Metadata definitions removed: <strong>{uninstallResults.results?.metafieldDefinitions?.deleted || 0}</strong>
                   </Text>
                 </InlineStack>
                 
                 <InlineStack gap="200" blockAlign="start">
                   <Text variant="bodyMd">✓</Text>
                   <Text variant="bodyMd">
-                    Collection SEO data cleared: <strong>{uninstallResults.results?.collectionSeoData?.cleared || 0}</strong>
+                    Store configuration: <strong>{uninstallResults.results?.storeMetadata?.deleted ? 'Removed' : 'Not found'}</strong>
                   </Text>
                 </InlineStack>
                 
                 <InlineStack gap="200" blockAlign="start">
                   <Text variant="bodyMd">✓</Text>
                   <Text variant="bodyMd">
-                    Store metadata: <strong>{uninstallResults.results?.storeMetadata?.deleted ? 'Removed' : 'Not found'}</strong>
-                  </Text>
-                </InlineStack>
-                
-                <InlineStack gap="200" blockAlign="start">
-                  <Text variant="bodyMd">✓</Text>
-                  <Text variant="bodyMd">
-                    Advanced schemas: <strong>{uninstallResults.results?.advancedSchemas?.deleted ? 'Removed' : 'Not found'}</strong>
+                    Advanced schema markup: <strong>{uninstallResults.results?.advancedSchemas?.deleted ? 'Removed' : 'Not found'}</strong>
                   </Text>
                 </InlineStack>
               </BlockStack>
+              
+              <Banner status="success">
+                <p>
+                  ✅ <strong>All AI-generated content has been removed.</strong> Your original product data, titles, descriptions, and Shopify SEO metafields remain unchanged.
+                </p>
+              </Banner>
               
               <Divider />
               
