@@ -1901,14 +1901,21 @@ export default function Settings() {
               
               <BlockStack gap="300">
                 <Text variant="headingMd">Installation Instructions:</Text>
-                <ol style={{ marginLeft: '20px', marginTop: '10px' }}>
-                  <li>Click the button above to see your custom robots.txt code</li>
-                  <li>Copy the generated content</li>
-                  <li>Go to <strong>Online Store → Themes</strong> in your Shopify admin</li>
-                  <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
-                  <li>Find or create <strong>robots.txt.liquid</strong> file in the templates folder</li>
-                  <li>Paste the content and click <strong>Save</strong></li>
+                <ol style={{ marginLeft: '20px', marginTop: '10px', lineHeight: '1.8' }}>
+                  <li><strong>Generate & Copy:</strong> Click the button above to see your custom robots.txt code, then copy it</li>
+                  <li><strong>Open Theme Editor:</strong> Go to <strong>Online Store → Themes</strong> in Shopify admin</li>
+                  <li><strong>Edit Code:</strong> Click <strong>Actions → Edit code</strong> on your active theme</li>
+                  <li><strong>Create New File:</strong> In the left sidebar, click <strong>Add a new file</strong> (top right corner)</li>
+                  <li><strong>Select Location:</strong> Choose <strong>"Create a new template"</strong> from the dropdown</li>
+                  <li><strong>Name the File:</strong> Select template type <strong>"robots"</strong> and it will automatically create <code>templates/robots.txt.liquid</code></li>
+                  <li><strong>Paste Content:</strong> Delete any existing content and paste your copied robots.txt code</li>
+                  <li><strong>Save:</strong> Click the green <strong>Save</strong> button (top right)</li>
                 </ol>
+                
+                <Banner tone="info">
+                  <p><strong>📍 Can't find "Create a new template"?</strong></p>
+                  <p>Alternative method: Click <strong>Add a new file</strong>, then manually type: <code>templates/robots.txt.liquid</code> and click Create file.</p>
+                </Banner>
               </BlockStack>
               
               <Banner status="info">
