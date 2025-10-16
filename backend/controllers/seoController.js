@@ -1420,13 +1420,40 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       }
     }
 
-    // 6. Update MongoDB seoStatus BEFORE sending response
+    // 6. Update MongoDB seoStatus AND lastShopifyUpdate BEFORE sending response
     // This ensures the database is updated before the client reloads data
-    // NOTE: We do NOT update lastShopifyUpdate here - the webhook will do it!
+    // IMPORTANT: We update lastShopifyUpdate HERE to establish the reference point
+    // for webhook comparison BEFORE Shopify triggers the webhook!
     if (updated.seoMetafield && !dryRun) {
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
+        
+        // Fetch current product data from Shopify for lastShopifyUpdate reference
+        // This MUST happen BEFORE saving metafields to establish baseline for webhook
+        const productQuery = `
+          query GetProduct($id: ID!) {
+            product(id: $id) {
+              id
+              title
+              descriptionHtml
+            }
+          }
+        `;
+        
+        let currentProduct = null;
+        try {
+          const productData = await shopGraphQL(req, shop, productQuery, { id: productId });
+          currentProduct = productData?.product;
+          
+          if (!currentProduct) {
+            console.error(`[SEO-CONTROLLER] Could not fetch product ${productId} from Shopify`);
+          } else {
+            console.log(`[SEO-CONTROLLER] Fetched current product: title="${currentProduct.title}"`);
+          }
+        } catch (fetchError) {
+          console.error(`[SEO-CONTROLLER] Error fetching product:`, fetchError.message);
+        }
         
         // Find the product and its current seoStatus
         const product = await Product.findOne({ shop, productId: parseInt(numericId) });
@@ -1455,16 +1482,24 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
             ];
           }
           
-          // Prepare update object - DO NOT update lastShopifyUpdate here!
-          // The webhook will update lastShopifyUpdate after it fires
+          // Prepare update object including lastShopifyUpdate
           const updateFields = { 
             'seoStatus.languages': updatedLanguages,
             'seoStatus.optimized': true
           };
           
+          // Add lastShopifyUpdate if we successfully fetched current product data
+          if (currentProduct) {
+            updateFields['lastShopifyUpdate'] = {
+              title: currentProduct.title,
+              description: currentProduct.descriptionHtml || '',
+              updatedAt: new Date()
+            };
+            console.log(`[SEO-CONTROLLER] Setting lastShopifyUpdate baseline: title="${currentProduct.title}"`);
+          }
+          
           // Update the product and WAIT for completion
-          console.log(`[SEO-CONTROLLER] Updating MongoDB seoStatus for product ${numericId}, languages:`, updatedLanguages);
-          console.log(`[SEO-CONTROLLER] NOT updating lastShopifyUpdate - webhook will do it after metafield save`);
+          console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
             { $set: updateFields },
