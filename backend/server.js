@@ -1356,21 +1356,6 @@ app.get('/', async (req, res) => {
               );
               
               console.log('[APP URL] ✅ Token exchange successful, access token saved');
-              
-              // Автоматично регистриране на webhook-ите след успешен token exchange
-              console.log('[APP URL] Checking and registering webhooks...');
-              try {
-                const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
-                const mockReq = {
-                  session: { accessToken },
-                  shopDomain: shop
-                };
-                const webhookResults = await registerAllWebhooks(mockReq, shop, APP_URL);
-                console.log('[APP URL] Webhook registration results:', JSON.stringify(webhookResults, null, 2));
-              } catch (webhookError) {
-                console.error('[APP URL] Webhook registration failed:', webhookError.message);
-                // Не блокираме заредането на апп-а ако webhook регистрацията се провали
-              }
             } else {
               console.error('[APP URL] No access token in response');
             }
@@ -1381,6 +1366,27 @@ app.get('/', async (req, res) => {
         } catch (error) {
           console.error('[APP URL] Token exchange error:', error);
         }
+      }
+      
+      // Винаги проверявай и регистрирай webhook-ите когато има id_token
+      console.log('[APP URL] Checking and registering webhooks...');
+      try {
+        // Извлечи accessToken от базата данни
+        const shopRecord = await ShopModel.findOne({ shop }).lean();
+        if (shopRecord && shopRecord.accessToken) {
+          const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
+          const mockReq = {
+            session: { accessToken: shopRecord.accessToken },
+            shopDomain: shop
+          };
+          const webhookResults = await registerAllWebhooks(mockReq, shop, APP_URL);
+          console.log('[APP URL] Webhook registration results:', JSON.stringify(webhookResults, null, 2));
+        } else {
+          console.log('[APP URL] No access token available for webhook registration');
+        }
+      } catch (webhookError) {
+        console.error('[APP URL] Webhook registration failed:', webhookError.message);
+        // Не блокираме заредането на апп-а ако webhook регистрацията се провали
       }
       
       console.log('[APP URL] Serving embedded app with token exchange completed');
