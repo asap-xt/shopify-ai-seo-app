@@ -1040,17 +1040,58 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
     // 2. Clear product.seo and collection.seo data (Translate & Adapt data)
     console.log('[PREPARE-UNINSTALL] Step 2: Clearing product.seo and collection.seo data...');
     try {
-      // Get all products with MongoDB records (these are the ones we optimized)
-      const { default: Product } = await import('../db/Product.js');
-      const products = await Product.find({ shop }).select('shopifyProductId').lean();
+      // Get ALL products from Shopify (not just MongoDB records)
+      // This ensures we clear SEO data even if products weren't tracked in our DB
+      const productsQuery = `
+        query {
+          products(first: 250) {
+            edges {
+              node {
+                id
+                seo {
+                  title
+                  description
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
       
-      console.log('[PREPARE-UNINSTALL] Found', products.length, 'products to clear SEO data');
+      let allProducts = [];
+      let hasNextPage = true;
+      let cursor = null;
+      
+      // Fetch all products with pagination
+      while (hasNextPage) {
+        const query = cursor 
+          ? `query { products(first: 250, after: "${cursor}") { edges { node { id seo { title description } } } pageInfo { hasNextPage endCursor } } }`
+          : productsQuery;
+        
+        const productsData = await shopGraphQL(req, shop, query);
+        const edges = productsData?.products?.edges || [];
+        
+        // Only include products that have SEO data set
+        const productsWithSeo = edges.filter(edge => {
+          const seo = edge.node.seo;
+          return seo && (seo.title || seo.description);
+        });
+        
+        allProducts.push(...productsWithSeo.map(edge => edge.node));
+        
+        hasNextPage = productsData?.products?.pageInfo?.hasNextPage || false;
+        cursor = productsData?.products?.pageInfo?.endCursor;
+      }
+      
+      console.log('[PREPARE-UNINSTALL] Found', allProducts.length, 'products with SEO data to clear');
       
       // Clear SEO data for each product (set to empty strings)
-      for (const product of products) {
+      for (const product of allProducts) {
         try {
-          const productGid = `gid://shopify/Product/${product.shopifyProductId}`;
-          
           const clearSeoMutation = `
             mutation($input: ProductInput!) {
               productUpdate(input: $input) {
@@ -1067,7 +1108,7 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           
           const clearResult = await shopGraphQL(req, shop, clearSeoMutation, {
             input: {
-              id: productGid,
+              id: product.id,
               seo: {
                 title: '',
                 description: ''
@@ -1076,18 +1117,19 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           });
           
           if (clearResult?.productUpdate?.userErrors?.length > 0) {
-            console.error('[PREPARE-UNINSTALL] Error clearing product SEO:', product.shopifyProductId, clearResult.productUpdate.userErrors);
+            console.error('[PREPARE-UNINSTALL] Error clearing product SEO:', product.id, clearResult.productUpdate.userErrors);
             results.productSeoData.errors.push({
-              productId: product.shopifyProductId,
+              productId: product.id,
               errors: clearResult.productUpdate.userErrors
             });
           } else {
+            console.log('[PREPARE-UNINSTALL] Cleared product SEO:', product.id);
             results.productSeoData.cleared++;
           }
         } catch (err) {
-          console.error('[PREPARE-UNINSTALL] Exception clearing product SEO:', product.shopifyProductId, err.message);
+          console.error('[PREPARE-UNINSTALL] Exception clearing product SEO:', product.id, err.message);
           results.productSeoData.errors.push({
-            productId: product.shopifyProductId,
+            productId: product.id,
             error: err.message
           });
         }
@@ -1095,17 +1137,57 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       
       console.log('[PREPARE-UNINSTALL] Cleared SEO data for', results.productSeoData.cleared, 'products');
       
-      // Get all collections with MongoDB records
-      const { default: Collection } = await import('../db/Collection.js');
-      const collections = await Collection.find({ shop }).select('collectionId').lean();
+      // Get ALL collections from Shopify (not just MongoDB records)
+      const collectionsQuery = `
+        query {
+          collections(first: 250) {
+            edges {
+              node {
+                id
+                seo {
+                  title
+                  description
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
       
-      console.log('[PREPARE-UNINSTALL] Found', collections.length, 'collections to clear SEO data');
+      let allCollections = [];
+      hasNextPage = true;
+      cursor = null;
+      
+      // Fetch all collections with pagination
+      while (hasNextPage) {
+        const query = cursor 
+          ? `query { collections(first: 250, after: "${cursor}") { edges { node { id seo { title description } } } pageInfo { hasNextPage endCursor } } }`
+          : collectionsQuery;
+        
+        const collectionsData = await shopGraphQL(req, shop, query);
+        const edges = collectionsData?.collections?.edges || [];
+        
+        // Only include collections that have SEO data set
+        const collectionsWithSeo = edges.filter(edge => {
+          const seo = edge.node.seo;
+          return seo && (seo.title || seo.description);
+        });
+        
+        allCollections.push(...collectionsWithSeo.map(edge => edge.node));
+        
+        hasNextPage = collectionsData?.collections?.pageInfo?.hasNextPage || false;
+        cursor = collectionsData?.collections?.pageInfo?.endCursor;
+      }
+      
+      console.log('[PREPARE-UNINSTALL] Found', allCollections.length, 'collections with SEO data to clear');
       
       // Clear SEO data for each collection
-      for (const collection of collections) {
+      for (const collection of allCollections) {
         try {
-          const collectionGid = `gid://shopify/Collection/${collection.collectionId}`;
-          
           const clearSeoMutation = `
             mutation($input: CollectionInput!) {
               collectionUpdate(collection: $input) {
@@ -1122,7 +1204,7 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           
           const clearResult = await shopGraphQL(req, shop, clearSeoMutation, {
             input: {
-              id: collectionGid,
+              id: collection.id,
               seo: {
                 title: '',
                 description: ''
@@ -1131,18 +1213,19 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           });
           
           if (clearResult?.collectionUpdate?.userErrors?.length > 0) {
-            console.error('[PREPARE-UNINSTALL] Error clearing collection SEO:', collection.collectionId, clearResult.collectionUpdate.userErrors);
+            console.error('[PREPARE-UNINSTALL] Error clearing collection SEO:', collection.id, clearResult.collectionUpdate.userErrors);
             results.collectionSeoData.errors.push({
-              collectionId: collection.collectionId,
+              collectionId: collection.id,
               errors: clearResult.collectionUpdate.userErrors
             });
           } else {
+            console.log('[PREPARE-UNINSTALL] Cleared collection SEO:', collection.id);
             results.collectionSeoData.cleared++;
           }
         } catch (err) {
-          console.error('[PREPARE-UNINSTALL] Exception clearing collection SEO:', collection.collectionId, err.message);
+          console.error('[PREPARE-UNINSTALL] Exception clearing collection SEO:', collection.id, err.message);
           results.collectionSeoData.errors.push({
-            collectionId: collection.collectionId,
+            collectionId: collection.id,
             error: err.message
           });
         }
