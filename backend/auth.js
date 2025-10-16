@@ -172,34 +172,26 @@ async function testToken(shop, accessToken) {
 }
 
 async function registerWebhooks(shop, accessToken) {
-  const topics = [
-    { topic: 'products/update',  address: `${APP_URL}/webhooks/products`,  format: 'json' },
-    { topic: 'collections/update',  address: `${APP_URL}/webhooks/collections`,  format: 'json' },
-    { topic: 'app/uninstalled',  address: `${APP_URL}/webhooks/app/uninstalled`, format: 'json' },
-  ];
-
-  for (const webhook of topics) {
-    try {
-      console.log(`[AUTH] Registering webhook: ${webhook.topic}`);
-      
-      const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`, {
-        method: 'POST',
-        headers: { 
-          'X-Shopify-Access-Token': accessToken, 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ webhook }),
-      });
-      
-      if (response.ok) {
-        console.log(`[AUTH] Webhook registered successfully: ${webhook.topic}`);
-      } else {
-        const errorText = await response.text();
-        console.error(`[AUTH] Failed to register webhook ${webhook.topic}:`, errorText);
-      }
-    } catch (e) { 
-      console.error(`[AUTH] Failed to register webhook ${webhook.topic}:`, e.message);
-    }
+  console.log('[AUTH] Starting webhook registration using GraphQL...');
+  
+  try {
+    // Use the GraphQL-based webhook registration from webhookRegistration.js
+    const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
+    
+    // Create a mock request object with the access token
+    const mockReq = {
+      session: { accessToken },
+      shopDomain: shop
+    };
+    
+    const results = await registerAllWebhooks(mockReq, shop, APP_URL);
+    
+    console.log('[AUTH] Webhook registration results:', JSON.stringify(results, null, 2));
+    
+    return results;
+  } catch (error) {
+    console.error('[AUTH] Webhook registration failed:', error.message);
+    throw error;
   }
 }
 

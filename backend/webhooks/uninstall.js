@@ -41,6 +41,15 @@ export default async function uninstallWebhook(req, res) {
       // Ако няма Product модел, продължаваме
     }
 
+    // Изтрий колекции
+    try {
+      const { default: Collection } = await import('../db/Collection.js');
+      await Collection.deleteMany({ shop });
+      console.log(`[Webhook] Deleted collections for ${shop}`);
+    } catch (e) {
+      console.log(`[Webhook] Could not delete collections for ${shop}:`, e.message);
+    }
+
     // Изтрий AI Discovery настройки
     try {
       const { default: AIDiscoverySettings } = await import('../db/AIDiscoverySettings.js');
