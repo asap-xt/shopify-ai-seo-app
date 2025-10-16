@@ -1,6 +1,5 @@
 // backend/utils/optimizationSummary.js
 import Product from '../db/Product.js';
-import AdvancedSchema from '../db/AdvancedSchema.js';
 import { executeShopifyGraphQL } from './tokenResolver.js';
 
 /**
@@ -19,32 +18,48 @@ export async function updateOptimizationSummary(shop, productId) {
       return { success: false, error: 'Product not found' };
     }
     
-    // 2. Check for schemas in MongoDB
-    const schemas = await AdvancedSchema.find({ 
-      shop, 
-      $or: [
-        { 'schemas.url': new RegExp(`/products/.*${product.handle}`) },
-        { productId: productId }
-      ]
-    });
+    // 2. Check for schemas in Shopify metafields
+    const productGid = `gid://shopify/Product/${productId}`;
+    const languages = product.seoStatus?.languages?.map(l => l.code.toLowerCase()) || [];
+    
+    const schemaTypes = new Set(); // Use Set to avoid duplicates
+    
+    // Query each language's schema metafield
+    for (const lang of languages) {
+      try {
+        const schemaQuery = `
+          query GetSchemaMetafield($productId: ID!, $key: String!) {
+            product(id: $productId) {
+              metafield(namespace: "advanced_schema", key: $key) {
+                value
+              }
+            }
+          }
+        `;
+        
+        const schemaResult = await executeShopifyGraphQL(shop, schemaQuery, {
+          productId: productGid,
+          key: `schemas_${lang}`
+        });
+        
+        if (schemaResult?.product?.metafield?.value) {
+          const schemas = JSON.parse(schemaResult.product.metafield.value);
+          
+          if (Array.isArray(schemas)) {
+            schemas.forEach(schema => {
+              if (schema['@type']) {
+                schemaTypes.add(schema['@type']);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`[OPT-SUMMARY] Error fetching schema for language ${lang}:`, err.message);
+      }
+    }
     
     // 3. Build human-readable summary
-    const languages = product.seoStatus?.languages?.map(l => l.code.toUpperCase()) || [];
-    const hasSchema = schemas.length > 0;
-    
-    // Extract unique schema types
-    const schemaTypes = [];
-    if (hasSchema) {
-      schemas.forEach(schemaDoc => {
-        if (schemaDoc.schemas && Array.isArray(schemaDoc.schemas)) {
-          schemaDoc.schemas.forEach(schema => {
-            if (schema['@type'] && !schemaTypes.includes(schema['@type'])) {
-              schemaTypes.push(schema['@type']);
-            }
-          });
-        }
-      });
-    }
+    const languageCodes = languages.map(l => l.toUpperCase());
     
     const lastOptimized = product.seoStatus?.languages?.[0]?.lastOptimizedAt || new Date();
     const lastOptimizedDate = new Date(lastOptimized).toISOString().split('T')[0]; // YYYY-MM-DD
@@ -60,16 +75,17 @@ export async function updateOptimizationSummary(shop, productId) {
     }
     
     // Languages
-    if (languages.length > 0) {
-      summaryParts.push(`Languages: ${languages.join(', ')}`);
+    if (languageCodes.length > 0) {
+      summaryParts.push(`Languages: ${languageCodes.join(', ')}`);
     }
     
     // Last optimization date
     summaryParts.push(`Last: ${lastOptimizedDate}`);
     
-    // Schema types
-    if (hasSchema && schemaTypes.length > 0) {
-      summaryParts.push(`Schema: ${schemaTypes.join(', ')}`);
+    // Schema types (convert Set to Array)
+    const schemaTypesArray = Array.from(schemaTypes);
+    if (schemaTypesArray.length > 0) {
+      summaryParts.push(`Schema: ${schemaTypesArray.join(', ')}`);
     }
     
     const summary = summaryParts.join(' | ');
