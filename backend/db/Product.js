@@ -38,6 +38,14 @@ const productSchema = new mongoose.Schema({
     lastCheckedAt: Date
   },
   
+  // Last known Shopify state for webhook comparison
+  // Used to detect real merchant edits vs our app's metafield updates
+  lastShopifyUpdate: {
+    title: String,
+    description: String,
+    updatedAt: Date
+  },
+  
   // Динамичен SEO статус за всеки език - използваме обекти за пълна информация
   languages: [{
     locale: { type: String, required: true },

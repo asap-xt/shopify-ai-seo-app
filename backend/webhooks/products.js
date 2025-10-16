@@ -3,7 +3,6 @@
 // - Syncs product data to MongoDB
 // - Detects title/description changes and invalidates SEO metafields
 
-import { syncProductsForShop } from '../controllers/productSync.js';
 import { deleteAllSeoMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
 
 /**
@@ -51,12 +50,20 @@ export default async function productsWebhook(req, res) {
       
       if (existingProduct) {
         console.log('[Webhook-Products] Found existing product in MongoDB');
-        console.log('[Webhook-Products] Previous title:', existingProduct.title);
-        console.log('[Webhook-Products] Previous description:', existingProduct.description?.substring(0, 100) + '...');
         
-        // 2. Detect if title or description changed
-        const titleChanged = existingProduct.title !== payload.title;
-        const descriptionChanged = existingProduct.description !== payload.body_html;
+        // 2. Compare with lastShopifyUpdate (if available) for accurate change detection
+        // This prevents false positives when our app updates metafields (not product content)
+        const referenceTitle = existingProduct.lastShopifyUpdate?.title || existingProduct.title;
+        const referenceDescription = existingProduct.lastShopifyUpdate?.description || existingProduct.description;
+        
+        console.log('[Webhook-Products] Reference title:', referenceTitle);
+        console.log('[Webhook-Products] Reference description:', referenceDescription?.substring(0, 100) + '...');
+        console.log('[Webhook-Products] New title:', payload.title);
+        console.log('[Webhook-Products] New description:', payload.body_html?.substring(0, 100) + '...');
+        
+        // Detect if title or description changed from last known Shopify state
+        const titleChanged = referenceTitle !== payload.title;
+        const descriptionChanged = referenceDescription !== payload.body_html;
         
         if (titleChanged || descriptionChanged) {
           console.log('[Webhook-Products] 🚨 CONTENT CHANGED DETECTED!');
@@ -85,11 +92,49 @@ export default async function productsWebhook(req, res) {
         console.log('[Webhook-Products] Product not found in MongoDB (new product or first sync)');
       }
       
-      // 5. Sync all products for shop (updates MongoDB with latest data)
-      // This ensures we have the new title/description stored for future comparisons
-      console.log('[Webhook-Products] Starting product sync...');
-      const count = await syncProductsForShop(req, shop);
-      console.log(`[Webhook-Products] ✅ Synced ${count} products for ${shop}`);
+      // 5. Update MongoDB with new product data for future comparisons
+      // This ensures we have the latest title/description stored
+      // IMPORTANT: Update lastShopifyUpdate to reflect current Shopify state
+      console.log('[Webhook-Products] Updating MongoDB with new product data...');
+      await Product.findOneAndUpdate(
+        { shop, productId: numericProductId },
+        {
+          shopifyProductId: numericProductId,
+          productId: numericProductId,
+          title: payload.title,
+          description: payload.body_html,
+          handle: payload.handle,
+          vendor: payload.vendor,
+          productType: payload.product_type,
+          status: payload.status,
+          publishedAt: payload.published_at,
+          createdAt: payload.created_at,
+          updatedAt: payload.updated_at,
+          tags: payload.tags || '',
+          images: payload.images?.map(img => ({
+            id: img.id,
+            alt: img.alt || '',
+            url: img.src
+          })) || [],
+          featuredImage: payload.image ? {
+            url: payload.image.src,
+            altText: payload.image.alt || ''
+          } : null,
+          price: payload.variants?.[0]?.price || '0.00',
+          currency: 'EUR', // Default currency
+          totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
+          gid: productGid,
+          syncedAt: new Date(),
+          // Update lastShopifyUpdate for accurate future comparisons
+          lastShopifyUpdate: {
+            title: payload.title,
+            description: payload.body_html,
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true, new: true }
+      );
+      console.log('[Webhook-Products] ✅ MongoDB updated successfully (including lastShopifyUpdate reference)');
       
     } catch (err) {
       console.error('[Webhook-Products] Error processing webhook:', err?.message || err);
