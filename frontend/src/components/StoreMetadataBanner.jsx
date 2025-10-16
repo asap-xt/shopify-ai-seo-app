@@ -2,12 +2,10 @@
 // Banner to prompt users to configure Store Metadata for better AI results
 
 import { Banner, Button, InlineStack } from '@shopify/polaris';
-import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useI18n } from '../hooks/useI18n';
 
 export function StoreMetadataBanner() {
-  const navigate = useNavigate();
   const { t } = useI18n();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +38,10 @@ export function StoreMetadataBanner() {
   };
   
   const handleSetup = () => {
-    navigate('/store-metadata');
+    // Navigate using window.location like other pages in the app
+    const currentParams = new URLSearchParams(window.location.search);
+    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    window.location.href = `/store-metadata${paramString}`;
   };
   
   // Don't show if loading, dismissed, or metadata is complete
