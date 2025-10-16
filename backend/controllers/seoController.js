@@ -1302,10 +1302,6 @@ function strictPrompt(ctx, language) {
 
 async function applySEOForLanguage(req, shop, productId, seo, language, options = {}) {
   console.log('[APPLY-SEO] Starting apply for language:', language, 'productId:', productId);
-  console.log('🔍 [APPLY-SEO] Received SEO data:', JSON.stringify(seo, null, 2));
-  console.log('🔍 [APPLY-SEO] SEO bullets:', seo?.bullets);
-  console.log('🔍 [APPLY-SEO] SEO FAQ:', seo?.faq);
-  console.log('🔍 [APPLY-SEO] Options:', JSON.stringify(options, null, 2));
 
   // Get language from body (required now)
   if (!language) {
@@ -1381,8 +1377,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         updatedAt: new Date().toISOString()
       };
       
-      console.log(`🔍 [SEO-APPLY] Writing metafield ${mfKey} with data:`, JSON.stringify(metafieldData, null, 2));
-      
       const metafields = [{
         ownerId: productId,
         namespace: 'seo_ai',
@@ -1399,22 +1393,12 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       const mfRes = await shopGraphQL(req, shop, metaMutation, { metafields });
       const mfErrs = mfRes?.metafieldsSet?.userErrors || [];
       
-      console.log(`🔍 [SEO-APPLY] Metafield response for ${mfKey}:`, JSON.stringify(mfRes, null, 2));
-      
       if (mfErrs.length) {
-        console.error(`🔍 [SEO-APPLY] Metafield errors for ${mfKey}:`, mfErrs);
+        console.error(`[SEO-APPLY] Metafield errors for ${mfKey}:`, mfErrs);
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
       } else {
-        console.log(`🔍 [SEO-APPLY] Metafield ${mfKey} saved successfully!`);
-        // Mark successfully saved metafields
-        updated.seoMetafield = true; // Main SEO metafield is always saved
-        // Bullets and faq are included in the metafield (for AI bots)
-        if (v.bullets && Array.isArray(v.bullets) && v.bullets.length > 0) {
-          console.log(`🔍 [SEO-APPLY] Bullets included in metafield: ${v.bullets.length} items`);
-        }
-        if (v.faq && Array.isArray(v.faq) && v.faq.length > 0) {
-          console.log(`🔍 [SEO-APPLY] FAQ included in metafield: ${v.faq.length} items`);
-        }
+        console.log(`[SEO-APPLY] Metafield ${mfKey} saved successfully`);
+        updated.seoMetafield = true;
       }
 
       // 4. Optional: image alts (if explicitly requested)
@@ -1440,33 +1424,15 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       }
     }
 
-    // 6. Update MongoDB seoStatus AND lastShopifyUpdate BEFORE sending response
+    // 6. Update MongoDB seoStatus BEFORE sending response
     // This ensures the database is updated before the client reloads data
-    // AND ensures webhook has correct reference data for comparison
+    // NOTE: We do NOT update lastShopifyUpdate here - the webhook will do it!
     if (updated.seoMetafield && !dryRun) {
       try {
         const Product = (await import('../db/Product.js')).default;
         const numericId = productId.replace('gid://shopify/Product/', '');
         
-        // Fetch current product data from Shopify for lastShopifyUpdate reference
-        const productQuery = `
-          query GetProduct($id: ID!) {
-            product(id: $id) {
-              id
-              title
-              descriptionHtml
-            }
-          }
-        `;
-        const productData = await shopGraphQL(req, shop, productQuery, { id: productId });
-        const currentProduct = productData?.product;
-        
-        if (!currentProduct) {
-          console.error(`[SEO-CONTROLLER] Could not fetch product ${productId} from Shopify`);
-          errors.push('Could not fetch current product data');
-        }
-        
-        // First find the product and its current seoStatus
+        // Find the product and its current seoStatus
         const product = await Product.findOne({ shop, productId: parseInt(numericId) });
 
         if (product) {
@@ -1493,24 +1459,16 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
             ];
           }
           
-          // Prepare update object
+          // Prepare update object - DO NOT update lastShopifyUpdate here!
+          // The webhook will update lastShopifyUpdate after it fires
           const updateFields = { 
             'seoStatus.languages': updatedLanguages,
             'seoStatus.optimized': true
           };
           
-          // If we fetched current Shopify data, save it for webhook comparison
-          if (currentProduct) {
-            updateFields['lastShopifyUpdate'] = {
-              title: currentProduct.title,
-              description: currentProduct.descriptionHtml || '',
-              updatedAt: new Date()
-            };
-            console.log(`[SEO-CONTROLLER] Saving lastShopifyUpdate reference: title="${currentProduct.title}"`);
-          }
-          
           // Update the product and WAIT for completion
-          console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
+          console.log(`[SEO-CONTROLLER] Updating MongoDB seoStatus for product ${numericId}, languages:`, updatedLanguages);
+          console.log(`[SEO-CONTROLLER] NOT updating lastShopifyUpdate - webhook will do it after metafield save`);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
             { $set: updateFields },

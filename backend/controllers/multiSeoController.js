@@ -167,10 +167,7 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         continue;
       }
       try {
-        console.log(`🔍 [APPLY-MULTI] Processing language ${r.language} with SEO data:`, JSON.stringify(r.seo, null, 2));
-        console.log(`🔍 [APPLY-MULTI] Raw r.seo.title for ${r.language}:`, r.seo.title);
-        console.log(`🔍 [APPLY-MULTI] Raw r.seo.metaDescription for ${r.language}:`, r.seo.metaDescription);
-        console.log(`🔍 [APPLY-MULTI] Raw r.seo.bodyHtml for ${r.language}:`, r.seo.bodyHtml);
+        console.log(`[MULTI-SEO] Processing language ${r.language}`);
         
         // 🚨 IMPORTANT: Do NOT provide fallback values like 'Product' or '<p>Product</p>'
         // These fallback values would overwrite the real product title/description!
@@ -178,8 +175,6 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         const completeSeo = {
           ...r.seo  // Pass through all SEO data as-is, NO fallbacks
         };
-        
-        console.log(`🔍 [APPLY-MULTI] Complete SEO object for ${r.language}:`, JSON.stringify(completeSeo, null, 2));
         
         // Import the apply function directly instead of making HTTP request
         const { applySEOForLanguage } = await import('./seoController.js');
