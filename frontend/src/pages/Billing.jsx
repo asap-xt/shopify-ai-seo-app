@@ -305,7 +305,7 @@ export default function Billing({ shop }) {
                       <Text variant="bodySm" tone="subdued" alignment="center">
                         tokens available
                       </Text>
-                      <Text variant="bodySm" tone="magic" alignment="center" fontWeight="semibold">
+                      <Text variant="bodySm" tone="subdued" alignment="center">
                         ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
                       </Text>
                     </Box>
