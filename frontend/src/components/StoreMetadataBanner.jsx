@@ -1,5 +1,6 @@
 // frontend/src/components/StoreMetadataBanner.jsx
 // Banner to prompt users to configure Store Metadata for better AI results
+// Force rebuild trigger
 
 import { Banner, Button, InlineStack } from '@shopify/polaris';
 import { useState, useEffect } from 'react';
