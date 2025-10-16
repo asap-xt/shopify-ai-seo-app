@@ -948,8 +948,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       for (const def of definitions) {
         try {
           const deleteMutation = `
-            mutation($id: ID!) {
-              metafieldDefinitionDelete(id: $id) {
+            mutation($id: ID!, $deleteAllAssociatedMetafields: Boolean!) {
+              metafieldDefinitionDelete(id: $id, deleteAllAssociatedMetafields: $deleteAllAssociatedMetafields) {
                 deletedDefinitionId
                 userErrors {
                   field
@@ -959,7 +959,10 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
             }
           `;
           
-          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: def.id });
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { 
+            id: def.id, 
+            deleteAllAssociatedMetafields: true 
+          });
           
           if (deleteResult?.metafieldDefinitionDelete?.userErrors?.length > 0) {
             console.error('[PREPARE-UNINSTALL] Error deleting definition:', def.key, deleteResult.metafieldDefinitionDelete.userErrors);
@@ -1001,8 +1004,8 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       for (const def of collectionDefinitions) {
         try {
           const deleteMutation = `
-            mutation($id: ID!) {
-              metafieldDefinitionDelete(id: $id) {
+            mutation($id: ID!, $deleteAllAssociatedMetafields: Boolean!) {
+              metafieldDefinitionDelete(id: $id, deleteAllAssociatedMetafields: $deleteAllAssociatedMetafields) {
                 deletedDefinitionId
                 userErrors {
                   field
@@ -1012,7 +1015,10 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
             }
           `;
           
-          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { id: def.id });
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { 
+            id: def.id, 
+            deleteAllAssociatedMetafields: true 
+          });
           
           if (deleteResult?.metafieldDefinitionDelete?.userErrors?.length > 0) {
             console.error('[PREPARE-UNINSTALL] Error deleting collection definition:', def.key, deleteResult.metafieldDefinitionDelete.userErrors);
@@ -1032,6 +1038,63 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           });
         }
       }
+      
+      // Also delete advanced_schema definitions for products
+      const advancedSchemaDefsQuery = `
+        query {
+          metafieldDefinitions(first: 250, ownerType: PRODUCT, namespace: "advanced_schema") {
+            nodes {
+              id
+              key
+              namespace
+            }
+          }
+        }
+      `;
+      
+      const advancedSchemaDefsData = await shopGraphQL(req, shop, advancedSchemaDefsQuery);
+      const advancedSchemaDefinitions = advancedSchemaDefsData?.metafieldDefinitions?.nodes || [];
+      
+      console.log('[PREPARE-UNINSTALL] Found', advancedSchemaDefinitions.length, 'advanced_schema definitions');
+      
+      for (const def of advancedSchemaDefinitions) {
+        try {
+          const deleteMutation = `
+            mutation($id: ID!, $deleteAllAssociatedMetafields: Boolean!) {
+              metafieldDefinitionDelete(id: $id, deleteAllAssociatedMetafields: $deleteAllAssociatedMetafields) {
+                deletedDefinitionId
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+          
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, { 
+            id: def.id, 
+            deleteAllAssociatedMetafields: true 
+          });
+          
+          if (deleteResult?.metafieldDefinitionDelete?.userErrors?.length > 0) {
+            console.error('[PREPARE-UNINSTALL] Error deleting advanced_schema definition:', def.key, deleteResult.metafieldDefinitionDelete.userErrors);
+            results.metafieldDefinitions.errors.push({
+              key: def.key,
+              errors: deleteResult.metafieldDefinitionDelete.userErrors
+            });
+          } else {
+            console.log('[PREPARE-UNINSTALL] Deleted advanced_schema definition:', def.key);
+            results.metafieldDefinitions.deleted++;
+          }
+        } catch (err) {
+          console.error('[PREPARE-UNINSTALL] Exception deleting advanced_schema definition:', def.key, err.message);
+          results.metafieldDefinitions.errors.push({
+            key: def.key,
+            error: err.message
+          });
+        }
+      }
+      
     } catch (err) {
       console.error('[PREPARE-UNINSTALL] Error in metafield definitions cleanup:', err.message);
       results.metafieldDefinitions.errors.push({ error: err.message });
