@@ -91,10 +91,6 @@ export default function Settings() {
     }
   });
   const [schemaComplete, setSchemaComplete] = useState(false);
-  const [showUninstallModal, setShowUninstallModal] = useState(false);
-  const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
-  const [uninstallProcessing, setUninstallProcessing] = useState(false);
-  const [uninstallResults, setUninstallResults] = useState(null);
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);

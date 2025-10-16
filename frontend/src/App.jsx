@@ -23,6 +23,7 @@ const Settings = React.lazy(() => {
 });
 const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
 const Billing = React.lazy(() => import('./pages/Billing.jsx'));
+const CleanUninstall = React.lazy(() => import('./pages/CleanUninstall.jsx'));
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -121,6 +122,7 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/settings${paramString}`}>Settings</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
+      <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
     </ui-nav-menu>
   );
 }
@@ -804,6 +806,7 @@ export default function App() {
     if (path.startsWith('/billing')) return 'Plans & Billing';
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
+    if (path.startsWith('/clean-uninstall')) return 'Clean & Uninstall';
     return 'Dashboard';
   }, [path]);
 
@@ -833,6 +836,10 @@ export default function App() {
       console.log('[APP] Path:', path);
       console.log('[APP] Shop:', shop);
       return <AiTesting shop={shop} />;
+    }
+    // Clean & Uninstall
+    else if (path === '/clean-uninstall') {
+      return <CleanUninstall shop={shop} />;
     }
     // 404
     else {

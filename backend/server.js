@@ -1558,7 +1558,8 @@ const spaRoutes = [
   '/ai-seo/schema-data',
   '/settings',
   '/ai-testing',
-  '/billing'
+  '/billing',
+  '/clean-uninstall'
 ];
 
   spaRoutes.forEach((route) => {
