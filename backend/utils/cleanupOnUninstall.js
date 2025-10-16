@@ -1,8 +1,6 @@
 // backend/utils/cleanupOnUninstall.js
 // Utility functions for cleaning up ALL app data on uninstall
 
-import { resolveAdminToken } from './tokenResolver.js';
-
 /**
  * Delete all metafield definitions created by our app
  * This is SAFE - we filter by namespace to only delete OUR definitions
@@ -10,17 +8,19 @@ import { resolveAdminToken } from './tokenResolver.js';
  * Our namespaces:
  * - seo_ai (for products & collections)
  * - ai_seo_store (for shop metadata)
+ * 
+ * @param {string} shop - Shop domain (e.g. 'example.myshopify.com')
+ * @param {string} accessToken - Shopify Admin API access token
  */
-export async function deleteAllMetafieldDefinitions(shop) {
+export async function deleteAllMetafieldDefinitions(shop, accessToken) {
   console.log(`[CLEANUP] ===== DELETING METAFIELD DEFINITIONS FOR ${shop} =====`);
   
+  if (!accessToken) {
+    console.error('[CLEANUP] No access token provided');
+    return { success: false, error: 'No access token' };
+  }
+  
   try {
-    // Get access token
-    const accessToken = await resolveAdminToken(shop);
-    if (!accessToken) {
-      console.error('[CLEANUP] No access token found for shop');
-      return { success: false, error: 'No access token' };
-    }
 
     const results = {
       products: { deleted: 0, errors: [] },
