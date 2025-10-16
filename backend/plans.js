@@ -6,48 +6,50 @@ export const TRIAL_DAYS = 5;
 export const PLANS = {
   starter: {
     name: "Starter",
-    priceUsd: 10,
+    priceUsd: 9.99,
     queryLimit: 50,
-    productLimit: 150,
+    productLimit: 100,
     languageLimit: 1, // Only default language
     providersAllowed: ["deepseek", "llama"],
     autosyncCron: "0 0 */14 * *", // every 14 days
   },
   professional: {
     name: "Professional",
-    priceUsd: 39,
+    priceUsd: 15.99,
     queryLimit: 600,
-    productLimit: 300,
+    productLimit: 250,
     languageLimit: 2, // Max 2 languages
     providersAllowed: ["openai", "llama", "deepseek"],
     autosyncCron: "0 */48 * * *", // every 48 hours (minute 0)
   },
   growth: {
     name: "Growth",
-    priceUsd: 59,
+    priceUsd: 29.99,
     queryLimit: 1500,
-    productLimit: 1000,
+    productLimit: 700,
     languageLimit: 3, // Max 3 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
     autosyncCron: "0 */24 * * *", // every 24 hours
   },
   "growth extra": {
     name: "Growth Extra",
-    priceUsd: 119,
+    priceUsd: 49.99,
     queryLimit: 4000,
-    productLimit: 2000,
+    productLimit: 1000,
     languageLimit: 6, // Max 6 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,4),
     autosyncCron: "0 */12 * * *", // every 12 hours
+    includedTokens: 100_000_000, // 100 million tokens per month (included)
   },
   enterprise: {
     name: "Enterprise",
-    priceUsd: 299,
+    priceUsd: 139.99,
     queryLimit: 10000,
-    productLimit: 10000,
+    productLimit: 2500,
     languageLimit: 10, // Max 10 languages
     providersAllowed: ["claude", "openai", "gemini", "deepseek", "llama"],
     autosyncCron: "0 */2 * * *", // every 2 hours
+    includedTokens: 300_000_000, // 300 million tokens per month (included)
   },
 };
 

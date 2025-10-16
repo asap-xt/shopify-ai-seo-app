@@ -118,34 +118,24 @@ export function calculateFeatureCost(feature, options = {}) {
 }
 
 // Plan-specific token inclusions (for Growth Extra+)
+// These are FIXED monthly limits that reset at billing cycle
 export const PLAN_INCLUDED_TOKENS = {
   'starter': 0,
   'professional': 0,
   'growth': 0,
-  'growth extra': {
-    usdAmount: 35.70,  // 30% of $119
-    tokens: null       // Calculated dynamically
-  },
-  'enterprise': {
-    usdAmount: 89.70,  // 30% of $299
-    tokens: null       // Calculated dynamically
-  }
+  'growth extra': 100_000_000,  // 100 million tokens per month
+  'enterprise': 300_000_000     // 300 million tokens per month
 };
 
 // Calculate included tokens for a plan
 export function getIncludedTokens(plan) {
   const planKey = String(plan).toLowerCase();
-  const config = PLAN_INCLUDED_TOKENS[planKey];
-  
-  if (!config || !config.usdAmount) {
-    return { usdAmount: 0, tokens: 0 };
-  }
-  
-  const tokens = TOKEN_CONFIG.calculateTokens(config.usdAmount);
+  const tokens = PLAN_INCLUDED_TOKENS[planKey] || 0;
   
   return {
-    usdAmount: config.usdAmount,
-    tokens
+    tokens,
+    // Calculate approximate USD value (for display purposes only)
+    usdValue: tokens > 0 ? TOKEN_CONFIG.calculateCost(tokens) : 0
   };
 }
 
