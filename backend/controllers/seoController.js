@@ -211,6 +211,7 @@ function requireShop(req) {
 
 // Import centralized token resolver
 import { resolveShopToken, resolveAdminToken } from '../utils/tokenResolver.js';
+import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
 
 // Resolve Admin token using centralized function
 async function resolveAdminTokenForShop(shop, req = null) {
@@ -1535,6 +1536,16 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       });
     } catch (e) {
       console.error('Failed to update AI feed:', e);
+    }
+
+    // Update optimization summary metafield
+    if (!dryRun) {
+      try {
+        const numericId = productId.replace('gid://shopify/Product/', '');
+        await updateOptimizationSummary(shop, numericId);
+      } catch (e) {
+        console.error('Failed to update optimization summary:', e);
+      }
     }
 
     return { 

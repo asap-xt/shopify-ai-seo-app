@@ -15,6 +15,7 @@ import {
   calculateActualTokens,
   requiresTokens
 } from '../billing/tokenConfig.js';
+import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
 
 const router = express.Router();
 
@@ -30,6 +31,52 @@ const generationStatus = new Map(); // shop -> { generating: boolean, progress: 
 async function getAccessToken(shop) {
   const shopRecord = await Shop.findOne({ shop });
   return shopRecord?.accessToken;
+}
+
+// Helper function to save schema to Shopify metafield
+async function saveSchemaToMetafield(shop, productId, language, schemas) {
+  try {
+    console.log(`[SCHEMA-METAFIELD] Saving schema for product ${productId}, language: ${language}`);
+    
+    const mutation = `
+      mutation($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            namespace
+            key
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const variables = {
+      metafields: [{
+        ownerId: `gid://shopify/Product/${productId}`,
+        namespace: "advanced_schema",
+        key: `schemas_${language}`,
+        type: "json",
+        value: JSON.stringify(schemas)
+      }]
+    };
+    
+    const result = await executeShopifyGraphQL(shop, mutation, variables);
+    
+    if (result?.metafieldsSet?.userErrors?.length > 0) {
+      console.error('[SCHEMA-METAFIELD] Error saving metafield:', result.metafieldsSet.userErrors);
+      return { success: false, errors: result.metafieldsSet.userErrors };
+    }
+    
+    console.log(`[SCHEMA-METAFIELD] ✅ Schema metafield saved successfully for product ${productId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[SCHEMA-METAFIELD] Exception saving schema metafield:', error.message);
+    return { success: false, error: error.message };
+  }
 }
 
 // Helper function to sync products from Shopify to MongoDB
@@ -905,6 +952,9 @@ async function generateProductSchemas(shop, productDoc) {
     // Also collect for MongoDB
     allSchemas.push(...langSchemas);
   }
+  
+  // Update optimization summary metafield
+  await updateOptimizationSummary(shop, productDoc.productId);
   
   // Return schemas for MongoDB storage
   // console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
