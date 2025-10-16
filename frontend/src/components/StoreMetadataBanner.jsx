@@ -43,7 +43,7 @@ export function StoreMetadataBanner() {
     // Navigate using window.location like other pages in the app
     const currentParams = new URLSearchParams(window.location.search);
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-    window.location.href = `/store-metadata${paramString}`;
+    window.location.href = `/ai-seo/store-metadata${paramString}`;
   };
   
   // Don't show if loading, dismissed, or metadata is complete
