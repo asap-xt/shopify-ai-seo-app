@@ -1456,10 +1456,34 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
           console.error(`[SEO-CONTROLLER] Error fetching product:`, fetchError.message);
         }
         
-        // Find the product and its current seoStatus
-        const product = await Product.findOne({ shop, productId: parseInt(numericId) });
+        // Find or create the product in MongoDB
+        let product = await Product.findOne({ shop, productId: parseInt(numericId) });
 
-        if (product) {
+        if (!product && currentProduct) {
+          // Product doesn't exist - CREATE it!
+          console.log(`[SEO-CONTROLLER] Product ${numericId} not found in MongoDB, creating new record...`);
+          
+          product = await Product.create({
+            shop,
+            productId: parseInt(numericId),
+            shopifyProductId: numericId,
+            gid: productId,
+            title: currentProduct.title,
+            description: currentProduct.descriptionHtml || '',
+            seoStatus: {
+              optimized: true,
+              languages: [{ code: language.toLowerCase(), optimized: true, lastOptimizedAt: new Date() }]
+            },
+            lastShopifyUpdate: {
+              title: currentProduct.title,
+              description: currentProduct.descriptionHtml || '',
+              updatedAt: new Date()
+            }
+          });
+          
+          console.log(`[SEO-CONTROLLER] ✅ Created new product record in MongoDB`);
+        } else if (product) {
+          // Product exists - UPDATE it
           const currentLanguages = product.seoStatus?.languages || [];
           const langCode = language.toLowerCase();
           
@@ -1519,7 +1543,9 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
             errors.push('Failed to update optimization status in database');
           }
         } else {
-          console.log(`[SEO-CONTROLLER] Product not found in MongoDB: ${numericId}`);
+          // Couldn't fetch product from Shopify - can't create
+          console.error(`[SEO-CONTROLLER] Could not fetch product ${numericId} from Shopify - can't create MongoDB record`);
+          errors.push('Failed to create product record in database');
         }
       } catch (e) {
         console.error('Failed to update MongoDB seoStatus:', e.message);
