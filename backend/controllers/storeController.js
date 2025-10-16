@@ -67,10 +67,8 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   });
 
   console.log('[STORE-GRAPHQL] Response status:', response.status);
-  console.log('[STORE-GRAPHQL] Response headers:', Object.fromEntries(response.headers.entries()));
 
   const json = await response.json();
-  console.log('[STORE-GRAPHQL] Response data:', JSON.stringify(json, null, 2));
   
   if (!response.ok || json.errors) {
     console.error('[STORE-GRAPHQL] Error response:', json.errors || json);
