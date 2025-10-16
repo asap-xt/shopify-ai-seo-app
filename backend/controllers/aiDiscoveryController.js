@@ -190,12 +190,16 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
 router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { type } = req.query;
+    const { type, question } = req.query;
     
-    console.log('[AI-SIMULATE] Request received for type:', type);
+    console.log('[AI-SIMULATE] Request received for type:', type, 'custom question:', question);
     
     if (!type) {
       return res.status(400).json({ error: 'Missing type parameter' });
+    }
+    
+    if (type === 'custom' && !question) {
+      return res.status(400).json({ error: 'Missing question parameter for custom type' });
     }
     
     // The token is already available in res.locals from the /api middleware
@@ -329,6 +333,27 @@ Contact Email: ${storeData.shop.contactEmail || 'Not specified'}
 Question: "What is this store's contact information?"
 
 Generate a helpful response with contact details. Be specific about what's available.`;
+        break;
+        
+      case 'custom':
+        const products = storeData.products.edges.map(e => e.node);
+        const collections = storeData.collections.edges.map(e => e.node);
+        
+        contextPrompt = `Store: ${storeData.shop.name}
+Description: ${storeData.shop.description || 'E-commerce store'}
+Website: ${storeData.shop.url}
+Currency: ${storeData.shop.currencyCode}
+Contact: ${storeData.shop.contactEmail || 'Available via website'}
+
+Products (sample):
+${products.slice(0, 5).map(p => `- ${p.title} (${p.productType || 'General'})`).join('\n')}
+
+Categories:
+${collections.map(c => `- ${c.title}`).join('\n')}
+
+Customer Question: "${question}"
+
+Generate a helpful, accurate response based on the provided store information. If the information needed to answer is not available, politely indicate that and suggest how they can find out (e.g., visit the website, contact support).`;
         break;
         
       default:

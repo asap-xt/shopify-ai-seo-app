@@ -27,6 +27,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [aiSimulationResponse, setAiSimulationResponse] = useState('');
   const [showAiBotModal, setShowAiBotModal] = useState(false);
   const [selectedBot, setSelectedBot] = useState(null);
+  const [customQuestion, setCustomQuestion] = useState('');
 
   useEffect(() => {
     if (shop) {
@@ -98,11 +99,16 @@ export default function AiTesting({ shop: shopProp }) {
     setShowAiBotModal(true);
   };
 
-  const simulateAIResponse = async (queryType) => {
+  const simulateAIResponse = async (queryType, question = null) => {
     try {
       setAiSimulationResponse('Generating AI response...');
       
-      const response = await api(`/api/ai-discovery/simulate?shop=${shop}&type=${queryType}`, {
+      let url = `/api/ai-discovery/simulate?shop=${shop}&type=${queryType}`;
+      if (question) {
+        url += `&question=${encodeURIComponent(question)}`;
+      }
+      
+      const response = await api(url, {
         method: 'GET'
       });
       
@@ -364,6 +370,34 @@ export default function AiTesting({ shop: shopProp }) {
                         Simulate Response
                       </Button>
                     </InlineStack>
+                  </BlockStack>
+
+                  <Divider />
+
+                  {/* Custom Question */}
+                  <BlockStack gap="200">
+                    <Text variant="headingSm">Ask Your Own Question</Text>
+                    <TextField
+                      label=""
+                      value={customQuestion}
+                      onChange={setCustomQuestion}
+                      placeholder="e.g., What are your return policies? Do you ship internationally?"
+                      autoComplete="off"
+                      connectedRight={
+                        <Button
+                          onClick={() => {
+                            if (customQuestion.trim()) {
+                              simulateAIResponse('custom', customQuestion);
+                            } else {
+                              setToastContent('Please enter a question');
+                            }
+                          }}
+                          disabled={!customQuestion.trim()}
+                        >
+                          Ask AI
+                        </Button>
+                      }
+                    />
                   </BlockStack>
 
                   {aiSimulationResponse && (
