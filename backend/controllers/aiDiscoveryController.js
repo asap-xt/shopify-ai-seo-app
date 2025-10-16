@@ -339,7 +339,7 @@ Generate a helpful response.`;
     
     // Call Gemini Flash Lite for AI response
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    const AI_MODEL = 'google/gemini-2.0-flash-lite:free';
+    const AI_MODEL = 'google/gemini-2.5-flash-lite:free';
     
     if (!OPENROUTER_API_KEY) {
       console.warn('[AI-SIMULATE] No OpenRouter API key, using fallback');
