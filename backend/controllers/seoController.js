@@ -267,14 +267,10 @@ async function shopGraphQL(req, shop, query, variables = {}) {
     body: JSON.stringify({ query, variables }),
   });
   
-  console.log('[GRAPHQL] Response status:', rsp.status);
-  console.log('[GRAPHQL] Response headers:', Object.fromEntries(rsp.headers.entries()));
-  
   const json = await rsp.json().catch(() => ({}));
-  console.log('[GRAPHQL] Response data:', JSON.stringify(json, null, 2));
   
   if (!rsp.ok || json.errors) {
-    console.error('[GRAPHQL] Error response:', json.errors || json);
+    console.error('[GRAPHQL] Error - Status:', rsp.status, 'Errors:', json.errors || json);
     const e = new Error(`Admin GraphQL error: ${JSON.stringify(json.errors || json)}`);
     e.status = rsp.status || 500;
     throw e;
