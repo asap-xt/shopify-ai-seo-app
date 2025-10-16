@@ -295,29 +295,43 @@ export default function Billing({ shop }) {
               <Divider />
               
               <BlockStack gap="300">
-                <Box>
-                  <Text variant="heading2xl" alignment="center">
-                    {tokens?.balance?.toLocaleString() || 0}
-                  </Text>
-                  <Text variant="bodySm" tone="subdued" alignment="center">
-                    tokens available
-                  </Text>
-                </Box>
-                
-                {/* Show included tokens for Growth Extra & Enterprise */}
-                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
-                  <InlineStack align="space-between">
-                    <Text variant="bodySm" tone="subdued">Included this cycle</Text>
-                    <Text variant="bodySm" fontWeight="semibold">
-                      {subscription?.plan === 'growth extra' ? '100,000,000' : '300,000,000'}
-                    </Text>
-                  </InlineStack>
+                {/* For Growth Extra & Enterprise: Show included tokens prominently */}
+                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') ? (
+                  <>
+                    <Box>
+                      <Text variant="heading2xl" alignment="center">
+                        {subscription?.plan === 'growth extra' ? '100,000,000' : '300,000,000'}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued" alignment="center">
+                        tokens available
+                      </Text>
+                      <Text variant="bodySm" tone="magic" alignment="center" fontWeight="semibold">
+                        ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
+                      </Text>
+                    </Box>
+                    
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Additional Purchased</Text>
+                      <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
+                    </InlineStack>
+                  </>
+                ) : (
+                  <>
+                    <Box>
+                      <Text variant="heading2xl" alignment="center">
+                        {tokens?.balance?.toLocaleString() || 0}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued" alignment="center">
+                        tokens available
+                      </Text>
+                    </Box>
+                    
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Purchased</Text>
+                      <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
+                    </InlineStack>
+                  </>
                 )}
-                
-                <InlineStack align="space-between">
-                  <Text variant="bodySm" tone="subdued">Purchased</Text>
-                  <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
-                </InlineStack>
                 
                 <InlineStack align="space-between">
                   <Text variant="bodySm" tone="subdued">Used</Text>
