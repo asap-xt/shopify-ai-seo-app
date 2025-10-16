@@ -337,9 +337,9 @@ General question about the store.
 Generate a helpful response.`;
     }
     
-    // Call Gemini Flash for AI response
+    // Call Gemini Flash Lite for AI response (paid model with tokens)
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    const AI_MODEL = 'google/gemini-2.0-flash-exp:free';
+    const AI_MODEL = 'google/gemini-2.5-flash-lite';
     
     if (!OPENROUTER_API_KEY) {
       console.warn('[AI-SIMULATE] No OpenRouter API key, using fallback');
