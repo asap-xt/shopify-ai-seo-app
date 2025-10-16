@@ -90,7 +90,8 @@ export default async function uninstallWebhook(req, res) {
     }
 
     console.log('[Webhook] ===== UNINSTALL CLEANUP COMPLETED =====');
-    console.log(`[Webhook] All data for ${shop} has been removed from both Shopify and MongoDB`);
+    console.log(`[Webhook] All MongoDB data for ${shop} has been removed`);
+    console.log('[Webhook] Note: Shopify metafield definitions and values will remain in the store');
     res.status(200).send('ok');
   } catch (e) {
     console.error('[Webhook] uninstall error:', e?.message || e);
