@@ -20,13 +20,19 @@ export function StoreMetadataBanner() {
   
   const fetchMetadataStatus = async () => {
     try {
+      console.log('[StoreMetadataBanner] Fetching metadata status...');
       const response = await fetch('/api/store/metadata-status');
+      console.log('[StoreMetadataBanner] Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('[StoreMetadataBanner] Status data:', data);
         setStatus(data);
+      } else {
+        console.error('[StoreMetadataBanner] Failed to fetch status:', response.status);
       }
     } catch (error) {
-      console.error('Error fetching metadata status:', error);
+      console.error('[StoreMetadataBanner] Error fetching metadata status:', error);
     } finally {
       setLoading(false);
     }
@@ -45,9 +51,19 @@ export function StoreMetadataBanner() {
   };
   
   // Don't show if loading, dismissed, or metadata is complete
+  console.log('[StoreMetadataBanner] Render check:', { loading, dismissed, status, hasMetadata: status?.hasMetadata });
+  
   if (loading || dismissed || !status || status.hasMetadata) {
+    console.log('[StoreMetadataBanner] Not showing banner. Reason:', {
+      loading,
+      dismissed,
+      noStatus: !status,
+      hasMetadata: status?.hasMetadata
+    });
     return null;
   }
+  
+  console.log('[StoreMetadataBanner] SHOWING BANNER!');
   
   // Determine banner message based on what's missing
   let title = t('storeMetadata.banner.title', '⚡ Boost AI Quality');

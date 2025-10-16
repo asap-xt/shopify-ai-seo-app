@@ -874,15 +874,21 @@ router.post('/settings', validateRequest(), async (req, res) => {
 // GET /api/store/metadata-status - Check if store metadata is configured
 router.get('/metadata-status', validateRequest(), async (req, res) => {
   try {
+    console.log('[STORE-METADATA-STATUS] Request received');
     const shop = getShopFromReq(req);
+    console.log('[STORE-METADATA-STATUS] Shop:', shop);
+    
     if (!shop) {
+      console.error('[STORE-METADATA-STATUS] No shop found in request');
       return res.status(400).json({ error: 'Shop not found' });
     }
     
     // Import here to avoid circular dependencies
     const { checkStoreMetadataStatus } = await import('../utils/storeContextBuilder.js');
     
+    console.log('[STORE-METADATA-STATUS] Checking status for shop:', shop);
     const status = await checkStoreMetadataStatus(shop);
+    console.log('[STORE-METADATA-STATUS] Status result:', JSON.stringify(status, null, 2));
     
     res.json(status);
   } catch (error) {
