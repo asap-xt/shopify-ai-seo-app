@@ -184,7 +184,8 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
 
 /**
  * GET /api/ai-discovery/simulate
- * Simple simulation endpoint for AI Testing page
+ * AI-powered simulation endpoint for AI Testing page
+ * Uses real store data + Gemini Flash Lite to generate realistic responses
  */
 router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
   try {
@@ -204,27 +205,185 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
       throw new Error('No access token available');
     }
     
-    const session = {
-      shop: shop,
-      accessToken: accessToken
+    // Fetch real store data via GraphQL
+    const shopDataQuery = `
+      query GetStoreData {
+        shop {
+          name
+          description
+          url
+          contactEmail
+          currencyCode
+          primaryDomain { url }
+        }
+        products(first: 10) {
+          edges {
+            node {
+              title
+              description
+              productType
+              vendor
+              tags
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+        }
+        collections(first: 5) {
+          edges {
+            node {
+              title
+              description
+            }
+          }
+        }
+      }
+    `;
+    
+    const shopifyGraphQL = async (query) => {
+      const response = await fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Shopify GraphQL error: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+      }
+      
+      return result.data;
     };
     
-    // Get shop context
-    const shopSettings = await aiDiscoveryService.getSettings(shop, session);
+    const storeData = await shopifyGraphQL(shopDataQuery);
     
-    // Simple simulation responses based on type
-    const responses = {
-      products: `Based on the products in your store, I can see you offer a variety of items. Your store specializes in quality products with detailed descriptions. Would you like to know more about specific product categories?`,
-      business: `Your business operates as an e-commerce store with a focus on customer satisfaction. You have a well-structured product catalog and clear policies for shipping and returns. How can I help you today?`,
-      categories: `Your store is organized into several product categories, making it easy for customers to find what they're looking for. The main categories cover your core product offerings. Would you like to explore a specific category?`,
-      contact: `You can reach the store through multiple channels. For general inquiries, feel free to use the contact form on the website. The support team typically responds within 24 hours. Is there something specific I can help you with?`
-    };
+    console.log('[AI-SIMULATE] Store data fetched:', {
+      shop: storeData.shop.name,
+      products: storeData.products.edges.length,
+      collections: storeData.collections.edges.length
+    });
     
-    const response = responses[type] || 'I can help you with information about products, categories, business details, and contact information. What would you like to know?';
+    // Prepare context for AI based on question type
+    let contextPrompt = '';
     
-    console.log('[AI-SIMULATE] Returning response for type:', type);
+    switch (type) {
+      case 'products':
+        const products = storeData.products.edges.map(e => e.node);
+        const productList = products.map(p => 
+          `- ${p.title} (${p.productType || 'General'}) - ${p.description ? p.description.substring(0, 100) : 'No description'}...`
+        ).join('\n');
+        
+        contextPrompt = `Store: ${storeData.shop.name}
+Products available:
+${productList}
+
+Question: "What products does this store sell?"
+
+Generate a helpful, natural response listing the main products and categories. Be specific about actual products.`;
+        break;
+        
+      case 'business':
+        contextPrompt = `Store: ${storeData.shop.name}
+Description: ${storeData.shop.description || 'E-commerce store'}
+Website: ${storeData.shop.url}
+Currency: ${storeData.shop.currencyCode}
+Contact: ${storeData.shop.contactEmail || 'Available via website'}
+
+Question: "Tell me about this business"
+
+Generate a helpful response about the store's business, what they offer, and how to engage with them.`;
+        break;
+        
+      case 'categories':
+        const collections = storeData.collections.edges.map(e => e.node);
+        const categoryList = collections.map(c => 
+          `- ${c.title}: ${c.description ? c.description.substring(0, 80) : 'Product category'}...`
+        ).join('\n');
+        
+        contextPrompt = `Store: ${storeData.shop.name}
+Categories available:
+${categoryList}
+
+Question: "What categories does this store have?"
+
+Generate a helpful response listing the actual categories/collections. Be specific.`;
+        break;
+        
+      case 'contact':
+        contextPrompt = `Store: ${storeData.shop.name}
+Website: ${storeData.shop.url}
+Contact Email: ${storeData.shop.contactEmail || 'Not specified'}
+
+Question: "What is this store's contact information?"
+
+Generate a helpful response with contact details. Be specific about what's available.`;
+        break;
+        
+      default:
+        contextPrompt = `Store: ${storeData.shop.name}
+General question about the store.
+Generate a helpful response.`;
+    }
     
-    res.json({ response });
+    // Call Gemini Flash Lite for AI response
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    const AI_MODEL = 'google/gemini-2.0-flash-lite:free';
+    
+    if (!OPENROUTER_API_KEY) {
+      console.warn('[AI-SIMULATE] No OpenRouter API key, using fallback');
+      return res.json({ 
+        response: 'AI simulation is temporarily unavailable. Please configure API keys.',
+        fallback: true 
+      });
+    }
+    
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful AI assistant for an e-commerce store. Answer questions naturally and conversationally based on the provided store data. Be specific and accurate. Keep responses concise (2-3 sentences).'
+          },
+          {
+            role: 'user',
+            content: contextPrompt
+          }
+        ],
+        temperature: 0.7
+      })
+    });
+    
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('[AI-SIMULATE] OpenRouter error:', errorText);
+      throw new Error(`AI API error: ${aiResponse.statusText}`);
+    }
+    
+    const aiData = await aiResponse.json();
+    const generatedResponse = aiData.choices[0]?.message?.content || 'Unable to generate response';
+    
+    console.log('[AI-SIMULATE] AI response generated:', generatedResponse.substring(0, 100));
+    
+    res.json({ response: generatedResponse });
+    
   } catch (error) {
     console.error('[AI-SIMULATE] Error:', error);
     res.status(500).json({ error: error.message });
