@@ -14,15 +14,11 @@ import {
   Modal,
   DataTable,
   Spinner,
-  Icon,
   Box,
   BlockStack,
   InlineStack,
   Divider
 } from '@shopify/polaris';
-import { 
-  CreditCardIcon
-} from '@shopify/polaris-icons';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100];
 
@@ -294,10 +290,7 @@ export default function Billing({ shop }) {
         <Layout.Section variant="oneThird">
           <Card>
             <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd">Token Balance</Text>
-                <Icon source={CreditCardIcon} tone="base" />
-              </InlineStack>
+              <Text variant="headingMd">Token Balance</Text>
               
               <Divider />
               
@@ -310,6 +303,16 @@ export default function Billing({ shop }) {
                     tokens available
                   </Text>
                 </Box>
+                
+                {/* Show included tokens for Growth Extra & Enterprise */}
+                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Included this cycle</Text>
+                    <Text variant="bodySm" fontWeight="semibold">
+                      {subscription?.plan === 'growth extra' ? '100,000,000' : '300,000,000'}
+                    </Text>
+                  </InlineStack>
+                )}
                 
                 <InlineStack align="space-between">
                   <Text variant="bodySm" tone="subdued">Purchased</Text>
