@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import useI18n from '../hooks/useI18n';
 import { useShopApi } from '../hooks/useShopApi';
 
-export function StoreMetadataBanner() {
+export function StoreMetadataBanner({ globalPlan }) {
   const { t } = useI18n();
   const { api } = useShopApi();
   const [status, setStatus] = useState(null);
@@ -46,15 +46,32 @@ export function StoreMetadataBanner() {
     window.location.href = `/ai-seo/store-metadata${paramString}`;
   };
   
-  // Don't show if loading, dismissed, or metadata is complete
-  console.log('[StoreMetadataBanner] Render check:', { loading, dismissed, status, hasMetadata: status?.hasMetadata });
+  // Check if plan is Professional or higher
+  const planKey = globalPlan?.planKey?.toLowerCase() || '';
+  const isProfessionalOrHigher = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(planKey);
   
-  if (loading || dismissed || !status || status.hasMetadata) {
+  // Don't show if:
+  // - Loading
+  // - Dismissed in this session
+  // - No status data
+  // - Metadata is already complete
+  // - Plan is not Professional or higher (Basic/Starter don't have access to Store Metadata)
+  console.log('[StoreMetadataBanner] Render check:', { 
+    loading, 
+    dismissed, 
+    status, 
+    hasMetadata: status?.hasMetadata,
+    planKey,
+    isProfessionalOrHigher
+  });
+  
+  if (loading || dismissed || !status || status.hasMetadata || !isProfessionalOrHigher) {
     console.log('[StoreMetadataBanner] Not showing banner. Reason:', {
       loading,
       dismissed,
       noStatus: !status,
-      hasMetadata: status?.hasMetadata
+      hasMetadata: status?.hasMetadata,
+      notProfessionalOrHigher: !isProfessionalOrHigher
     });
     return null;
   }

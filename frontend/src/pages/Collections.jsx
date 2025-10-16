@@ -1444,7 +1444,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   return (
     <>
       {/* Store Metadata Banner */}
-      <StoreMetadataBanner />
+      <StoreMetadataBanner globalPlan={globalPlan} />
       
       <Card>
         <Box padding="400">
