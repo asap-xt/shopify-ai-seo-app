@@ -183,6 +183,55 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
 });
 
 /**
+ * GET /api/ai-discovery/simulate
+ * Simple simulation endpoint for AI Testing page
+ */
+router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { type } = req.query;
+    
+    console.log('[AI-SIMULATE] Request received for type:', type);
+    
+    if (!type) {
+      return res.status(400).json({ error: 'Missing type parameter' });
+    }
+    
+    // The token is already available in res.locals from the /api middleware
+    const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
+    
+    if (!accessToken) {
+      throw new Error('No access token available');
+    }
+    
+    const session = {
+      shop: shop,
+      accessToken: accessToken
+    };
+    
+    // Get shop context
+    const shopSettings = await aiDiscoveryService.getSettings(shop, session);
+    
+    // Simple simulation responses based on type
+    const responses = {
+      products: `Based on the products in your store, I can see you offer a variety of items. Your store specializes in quality products with detailed descriptions. Would you like to know more about specific product categories?`,
+      business: `Your business operates as an e-commerce store with a focus on customer satisfaction. You have a well-structured product catalog and clear policies for shipping and returns. How can I help you today?`,
+      categories: `Your store is organized into several product categories, making it easy for customers to find what they're looking for. The main categories cover your core product offerings. Would you like to explore a specific category?`,
+      contact: `You can reach the store through multiple channels. For general inquiries, feel free to use the contact form on the website. The support team typically responds within 24 hours. Is there something specific I can help you with?`
+    };
+    
+    const response = responses[type] || 'I can help you with information about products, categories, business details, and contact information. What would you like to know?';
+    
+    console.log('[AI-SIMULATE] Returning response for type:', type);
+    
+    res.json({ response });
+  } catch (error) {
+    console.error('[AI-SIMULATE] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/ai-discovery/robots-txt
  */
 router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
