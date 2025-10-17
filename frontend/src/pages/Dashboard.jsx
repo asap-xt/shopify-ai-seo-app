@@ -265,9 +265,9 @@ export default function Dashboard({ shop: shopProp }) {
         </Layout.Section>
       )}
 
-      {/* Main Stats Grid */}
+      {/* Main Stats Grid (row 1) */}
       <Layout.Section>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
           {/* Products & Collections Card */}
           <Card>
             <BlockStack gap="400">
@@ -334,116 +334,97 @@ export default function Dashboard({ shop: shopProp }) {
           </Card>
 
           {/* Removed separate Collections card to avoid duplication */}
-
-          {/* Languages & Markets Card */}
-          <Card>
-            <BlockStack gap="400">
-              <Text variant="headingMd">Languages & Markets</Text>
-              
-              <BlockStack gap="200">
-                {stats?.languages && stats.languages.length > 0 ? (
-                  <>
-                    {stats.languages
-                      .slice()
-                      .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (b.totalCount || 0) - (a.totalCount || 0))
-                      .slice(0, 3)
-                      .map((lang, idx) => {
-                        const pct = lang.totalCount > 0 ? Math.round((lang.optimizedCount / lang.totalCount) * 100) : 0;
-                        return (
-                          <BlockStack key={idx} gap="050">
-                            <InlineStack align="space-between">
-                              <Text variant="bodyMd" tone="subdued">{lang.name || lang.code} {lang.primary ? '★' : ''}</Text>
-                              <Text variant="bodySm" fontWeight="semibold">{lang.optimizedCount || 0}/{lang.totalCount || 0}</Text>
-                            </InlineStack>
-                            <ProgressBar progress={pct} size="small" tone={pct === 100 ? 'success' : 'primary'} />
-                          </BlockStack>
-                        );
-                      })}
-                    {stats.languages.length > 3 && (
-                      <Text variant="bodySm" tone="subdued">
-                        +{stats.languages.length - 3} more...
-                      </Text>
-                    )}
-                  </>
-                ) : (
-                  <Text variant="bodyMd" tone="subdued">
-                    No language data
-                  </Text>
-                )}
-              </BlockStack>
-
-              {/* Markets summary (compact) */}
-              {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
-                <Box paddingBlockStart="200">
-                  <Divider />
-                  <Box paddingBlockStart="200">
-                    <Text variant="bodySm" tone="subdued">
-                      Markets: {stats.storeMarkets.slice(0, 2).map(m => m.name).join(', ')}{stats.storeMarkets.length > 2 ? ` +${stats.storeMarkets.length - 2}` : ''}
-                    </Text>
-                  </Box>
-                </Box>
-              )}
-            </BlockStack>
-          </Card>
         </div>
       </Layout.Section>
 
-      {/* Second Row: Last Optimization & Token Balance */}
+      {/* Second Row: two equal columns with stacked cards */}
       <Layout.Section>
-        <InlineStack gap="400" wrap>
-          {/* Last Optimization */}
-          <div style={{ flex: '1', minWidth: '300px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {/* Left column: Languages & Markets (compact) + Last Optimization */}
+          <div style={{ display: 'grid', gap: 12 }}>
             <Card>
               <BlockStack gap="300">
+                <Text variant="headingMd">Languages & Markets</Text>
+                <BlockStack gap="200">
+                  {stats?.languages && stats.languages.length > 0 ? (
+                    <>
+                      {stats.languages
+                        .slice()
+                        .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (b.totalCount || 0) - (a.totalCount || 0))
+                        .slice(0, 2)
+                        .map((lang, idx) => {
+                          const pct = lang.totalCount > 0 ? Math.round((lang.optimizedCount / lang.totalCount) * 100) : 0;
+                          return (
+                            <BlockStack key={idx} gap="050">
+                              <InlineStack align="space-between">
+                                <Text variant="bodyMd" tone="subdued">{lang.name || lang.code} {lang.primary ? '★' : ''}</Text>
+                                <Text variant="bodySm" fontWeight="semibold">{lang.optimizedCount || 0}/{lang.totalCount || 0}</Text>
+                              </InlineStack>
+                              <ProgressBar progress={pct} size="small" tone={pct === 100 ? 'success' : 'primary'} />
+                            </BlockStack>
+                          );
+                        })}
+                      {stats.languages.length > 2 && (
+                        <Text variant="bodySm" tone="subdued">+{stats.languages.length - 2} more...</Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text variant="bodyMd" tone="subdued">No language data</Text>
+                  )}
+                </BlockStack>
+                {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
+                  <Box paddingBlockStart="100">
+                    <Divider />
+                    <Box paddingBlockStart="100">
+                      <Text variant="bodySm" tone="subdued">
+                        Markets: {stats.storeMarkets.slice(0, 2).map(m => m.name).join(', ')}{stats.storeMarkets.length > 2 ? ` +${stats.storeMarkets.length - 2}` : ''}
+                      </Text>
+                    </Box>
+                  </Box>
+                )}
+              </BlockStack>
+            </Card>
+
+            <Card>
+              <BlockStack gap="200">
                 <Text variant="headingMd">Last Optimization</Text>
-                
                 <Text variant="bodyLg" fontWeight="semibold">
-                  {stats?.lastOptimization ? 
-                    new Date(stats.lastOptimization).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    }) 
-                    : 'Never'}
+                  {stats?.lastOptimization ? new Date(stats.lastOptimization).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
                 </Text>
-                
-                <Button
-                  onClick={() => navigate('/ai-seo/products')}
-                >
-                  Optimize Now
-                </Button>
+                <Button onClick={() => navigate('/ai-seo/products')}>Optimize Now</Button>
               </BlockStack>
             </Card>
           </div>
 
-          {/* Token Balance */}
-          <div style={{ flex: '1', minWidth: '300px' }}>
-            <Card>
+          {/* Right column: Token Balance + Current Plan */}
+          <div style={{ display: 'grid', gap: 12 }}>
+            <Card style={{ minHeight: 180 }}>
               <BlockStack gap="300">
                 <Text variant="headingMd">Token Balance</Text>
-                
-                <Text variant="bodyLg" fontWeight="semibold">
-                  {tokens?.balance?.toLocaleString() || 0} tokens
-                </Text>
-                
+                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
                 {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
-                  <Text variant="bodySm" tone="subdued">
-                    {subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly
-                  </Text>
+                  <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
                 )}
-                
-                <Button
-                  variant="primary"
-                  onClick={() => navigate('/billing')}
-                >
-                  Manage Tokens
-                </Button>
+                <Button variant="primary" onClick={() => navigate('/billing')}>Manage Tokens</Button>
+              </BlockStack>
+            </Card>
+
+            <Card style={{ minHeight: 180 }}>
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <div>
+                    <Text variant="headingMd">Current Plan</Text>
+                    <Box paddingBlockStart="100">
+                      <Text variant="bodySm" tone="subdued">${subscription?.price || 0}/month</Text>
+                    </Box>
+                  </div>
+                  <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
+                </InlineStack>
+                <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
               </BlockStack>
             </Card>
           </div>
-        </InlineStack>
+        </div>
       </Layout.Section>
 
       {/* Quick Actions */}
@@ -498,32 +479,7 @@ export default function Dashboard({ shop: shopProp }) {
         </Card>
       </Layout.Section>
 
-      {/* Current Plan */}
-      <Layout.Section>
-        <Card>
-          <BlockStack gap="300">
-            <InlineStack align="space-between" blockAlign="center">
-              <div>
-                <Text variant="headingMd">Current Plan</Text>
-                <Box paddingBlockStart="100">
-                  <Text variant="bodySm" tone="subdued">
-                    ${subscription?.price || 0}/month
-                  </Text>
-                </Box>
-              </div>
-              <Badge tone="info" size="large">
-                {subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}
-              </Badge>
-            </InlineStack>
-            
-            <Button
-              onClick={() => navigate('/billing')}
-            >
-              View Plans & Billing
-            </Button>
-          </BlockStack>
-        </Card>
-      </Layout.Section>
+      {/* Current Plan moved above (right column) */}
       
       {/* Onboarding Accordion */}
       <Layout.Section>
