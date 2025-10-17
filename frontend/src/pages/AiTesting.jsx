@@ -118,22 +118,23 @@ export default function AiTesting({ shop: shopProp }) {
       setAiSimulationResponse(response.response || 'No response generated');
     } catch (error) {
       console.error('[AI-TESTING] Simulation error:', error);
+      console.log('[AI-TESTING] Error status:', error.status);
+      console.log('[AI-TESTING] Error requiresUpgrade:', error.requiresUpgrade);
+      console.log('[AI-TESTING] Error requiresPurchase:', error.requiresPurchase);
       
       // Check for 402 status (payment required)
       if (error.status === 402) {
-        const errorData = error.data || error;
-        
         // Plan upgrade required (Starter plan)
-        if (errorData.requiresUpgrade) {
-          setTokenError(errorData);
+        if (error.requiresUpgrade) {
+          setTokenError(error);
           setShowUpgradeModal(true);
           setAiSimulationResponse('');
           return;
         }
         
         // Token purchase required (Professional/Growth without tokens)
-        if (errorData.requiresPurchase) {
-          setTokenError(errorData);
+        if (error.requiresPurchase) {
+          setTokenError(error);
           setShowTokenModal(true);
           setAiSimulationResponse('');
           return;
@@ -498,6 +499,81 @@ export default function AiTesting({ shop: shopProp }) {
             
             <Banner tone="info">
               <Text>The AI bot will search the web and use your store's structured data to answer.</Text>
+            </Banner>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+
+      {/* Upgrade Modal (Starter plan) */}
+      <Modal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        title="Upgrade Required"
+        primaryAction={{
+          content: 'View Plans',
+          onAction: () => window.location.href = '/billing'
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowUpgradeModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd">
+              AI Testing requires <strong>{tokenError?.minimumPlan || 'Professional'}</strong> plan or higher.
+            </Text>
+            <Text variant="bodyMd" tone="subdued">
+              Your current plan: <strong>{tokenError?.currentPlan || 'Starter'}</strong>
+            </Text>
+            <Banner tone="info">
+              <Text>Upgrade to test AI responses with real store data and Gemini 2.5 Flash Lite.</Text>
+            </Banner>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+
+      {/* Buy Tokens Modal (Professional/Growth) */}
+      <Modal
+        open={showTokenModal}
+        onClose={() => setShowTokenModal(false)}
+        title="Insufficient Tokens"
+        primaryAction={{
+          content: 'Buy Tokens',
+          onAction: () => window.location.href = '/billing'
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowTokenModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd">
+              You need more tokens to use AI Testing.
+            </Text>
+            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+              <BlockStack gap="200">
+                <InlineStack align="space-between">
+                  <Text variant="bodySm">Required:</Text>
+                  <Text variant="bodySm" fontWeight="semibold">{tokenError?.tokensRequired?.toLocaleString() || 0} tokens</Text>
+                </InlineStack>
+                <InlineStack align="space-between">
+                  <Text variant="bodySm">Available:</Text>
+                  <Text variant="bodySm">{tokenError?.tokensAvailable?.toLocaleString() || 0} tokens</Text>
+                </InlineStack>
+                <InlineStack align="space-between">
+                  <Text variant="bodySm">Needed:</Text>
+                  <Text variant="bodySm" fontWeight="semibold" tone="critical">{tokenError?.tokensNeeded?.toLocaleString() || 0} tokens</Text>
+                </InlineStack>
+              </BlockStack>
+            </Box>
+            <Banner tone="info">
+              <Text>Purchase tokens to continue using AI features. Tokens never expire.</Text>
             </Banner>
           </BlockStack>
         </Modal.Section>
