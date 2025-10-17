@@ -214,8 +214,6 @@ export default function AiTesting({ shop: shopProp }) {
       <Card>
         <Box padding="400">
           <BlockStack gap="400">
-            <Text as="h2" variant="headingLg">AI Testing</Text>
-            
             <Banner tone="info">
               <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
             </Banner>

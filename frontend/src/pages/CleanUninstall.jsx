@@ -36,15 +36,11 @@ export default function CleanUninstall() {
       <Card>
         <Box padding="600">
           <BlockStack gap="600">
-            <InlineStack align="space-between" blockAlign="center">
-              <BlockStack gap="200">
-                <Text as="h1" variant="headingLg">🗑️ Clean & Uninstall</Text>
-                <Text variant="bodyMd" tone="subdued">
-                  Prepare your store for app uninstallation
-                </Text>
-              </BlockStack>
-              <Badge tone="critical">DANGER ZONE</Badge>
-            </InlineStack>
+            <BlockStack gap="200">
+              <Text variant="bodyMd" tone="subdued">
+                Prepare your store for app uninstallation
+              </Text>
+            </BlockStack>
 
             <Divider />
 
