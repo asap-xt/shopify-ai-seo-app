@@ -173,6 +173,18 @@ export default function Dashboard({ shop: shopProp }) {
   const hasAdvancedSchema = subscription?.plan === 'enterprise';
   const hasAiSitemap = ['growth_extra', 'enterprise'].includes(subscription?.plan);
 
+  // Plan price fallback mapping (if backend doesn't provide price)
+  const planPriceFallback = useMemo(() => ({
+    starter: 9.99,
+    professional: 29.99,
+    growth: 79.99,
+    growth_extra: 149.99,
+    enterprise: 499.99
+  }), []);
+  const planPriceValue = subscription?.price && subscription.price > 0
+    ? subscription.price
+    : (subscription?.plan ? planPriceFallback[subscription.plan] : undefined);
+
   if (loading) {
     return (
       <Layout>
@@ -323,19 +335,18 @@ export default function Dashboard({ shop: shopProp }) {
                 <Divider />
                 <InlineStack align="space-between">
                   <Text variant="bodySm" tone="subdued">Last synced: {syncStatus?.lastSyncDate ? new Date(syncStatus.lastSyncDate).toLocaleString() : 'Never'}</Text>
-                  <Text variant="bodySm" tone="subdued">Last optimized: {stats?.lastOptimization ? new Date(stats.lastOptimization).toLocaleString() : 'Never'}</Text>
                 </InlineStack>
               </BlockStack>
             </Card>
 
             {/* Current Plan */}
-            <Card>
+            <Card style={{ minHeight: 180 }}>
               <BlockStack gap="300">
                 <InlineStack align="space-between" blockAlign="center">
                   <div>
                     <Text variant="headingMd">Current Plan</Text>
                     <Box paddingBlockStart="100">
-                      <Text variant="bodySm" tone="subdued">${subscription?.price || 0}/month</Text>
+                      <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
                     </Box>
                   </div>
                   <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
@@ -401,14 +412,16 @@ export default function Dashboard({ shop: shopProp }) {
             </Card>
 
             {/* Token Balance */}
-            <Card>
+            <Card style={{ minHeight: 180 }}>
               <BlockStack gap="300">
-                <Text variant="headingMd">Token Balance</Text>
-                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text variant="headingMd">Token Balance</Text>
+                  <Text variant="headingMd" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0}</Text>
+                </InlineStack>
                 {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
                   <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
                 )}
-                <Button variant="primary" onClick={() => navigate('/billing')}>Manage Tokens</Button>
+                <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
               </BlockStack>
             </Card>
           </div>
