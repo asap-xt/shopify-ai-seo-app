@@ -359,7 +359,6 @@ export default function AiTesting({ shop: shopProp }) {
                   <Banner tone="info">
                     <BlockStack gap="100">
                       <Text variant="bodySm" fontWeight="semibold">Simulation Details:</Text>
-                      <Text variant="bodySm">• <strong>AI Model:</strong> Google Gemini 2.5 Flash Lite</Text>
                       <Text variant="bodySm">• <strong>Data Source:</strong> Your store's products, collections, and metadata</Text>
                       <Text variant="bodySm">• <strong>Response Style:</strong> Concise (2-3 sentences), natural language</Text>
                       <Text variant="bodySm">• <strong>Best For:</strong> General store info, products, categories, contact details</Text>
@@ -529,7 +528,7 @@ export default function AiTesting({ shop: shopProp }) {
               Your current plan: <strong>{tokenError?.currentPlan || 'Starter'}</strong>
             </Text>
             <Banner tone="info">
-              <Text>Upgrade to test AI responses with real store data and Gemini 2.5 Flash Lite.</Text>
+              <Text>Upgrade to test AI responses with real store data.</Text>
             </Banner>
           </BlockStack>
         </Modal.Section>
