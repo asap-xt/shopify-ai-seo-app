@@ -204,14 +204,14 @@ export default function Dashboard({ shop: shopProp }) {
             
             <InlineStack gap="300" wrap>
               <Button
-                onClick={() => navigate('/products')}
+                onClick={() => navigate('/ai-seo/products')}
               >
                 Optimize Products
               </Button>
               
               {hasCollections && (
                 <Button
-                  onClick={() => navigate('/collections')}
+                  onClick={() => navigate('/ai-seo/collections')}
                 >
                   Optimize Collections
                 </Button>
@@ -219,21 +219,21 @@ export default function Dashboard({ shop: shopProp }) {
               
               {hasStoreMetadata && (
                 <Button
-                  onClick={() => navigate('/store-metadata')}
+                  onClick={() => navigate('/ai-seo/store-metadata')}
                 >
                   Edit Store Metadata
                 </Button>
               )}
               
               <Button
-                onClick={() => navigate('/sitemap')}
+                onClick={() => navigate('/ai-seo/sitemap')}
               >
                 View Sitemap
               </Button>
               
               {hasAdvancedSchema && (
                 <Button
-                  onClick={() => navigate('/schema')}
+                  onClick={() => navigate('/ai-seo/schema-data')}
                 >
                   Advanced Schema
                 </Button>
