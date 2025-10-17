@@ -184,6 +184,7 @@ tokenBalanceSchema.methods.deductTokens = function(amount, feature, metadata = {
 
 // Add included tokens (for Growth Extra & Enterprise plans)
 // These are NOT purchased, they're included in the plan
+// DEPRECATED: Use setIncludedTokens instead to avoid accumulation
 tokenBalanceSchema.methods.addIncludedTokens = function(tokens, planName, shopifyChargeId) {
   this.balance += tokens;
   // Don't add to totalPurchased - these are included, not purchased!
@@ -197,6 +198,48 @@ tokenBalanceSchema.methods.addIncludedTokens = function(tokens, planName, shopif
       includedAmount: tokens,
       shopifyChargeId,
       type: 'included'
+    },
+    date: new Date()
+  });
+  
+  return this.save();
+};
+
+// Set included tokens (replaces old included tokens, keeps purchased tokens)
+// This is the CORRECT method for plan switching
+tokenBalanceSchema.methods.setIncludedTokens = function(tokens, planName, shopifyChargeId) {
+  // Calculate current included tokens (balance - purchased)
+  const currentIncluded = Math.max(0, this.balance - this.totalPurchased);
+  const purchasedTokens = this.totalPurchased;
+  
+  // New balance = new included tokens + purchased tokens
+  const newBalance = tokens + purchasedTokens;
+  const difference = newBalance - this.balance;
+  
+  console.log('[TokenBalance] Setting included tokens:', {
+    shop: this.shop,
+    oldBalance: this.balance,
+    currentIncluded,
+    purchasedTokens,
+    newIncluded: tokens,
+    newBalance,
+    difference
+  });
+  
+  // Set the new balance
+  this.balance = newBalance;
+  
+  // Track in usage history
+  this.usage.push({
+    feature: 'plan-included-tokens-set',
+    tokensUsed: -difference, // Negative = added, positive = removed
+    metadata: {
+      plan: planName,
+      includedAmount: tokens,
+      previousIncluded: currentIncluded,
+      purchasedTokens,
+      shopifyChargeId,
+      type: 'included-replace'
     },
     date: new Date()
   });

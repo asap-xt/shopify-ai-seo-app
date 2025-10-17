@@ -257,24 +257,24 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         : '⏳ PRODUCTION: Awaiting APP_SUBSCRIPTIONS_UPDATE webhook'
     });
     
-    // In TEST MODE: Add included tokens immediately
+    // In TEST MODE: Set included tokens immediately (replaces old, keeps purchased)
     if (isTestMode) {
       const included = getIncludedTokens(subscription.plan);
-      if (included.tokens > 0) {
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        await tokenBalance.addIncludedTokens(
-          included.tokens, 
-          subscription.plan, 
-          shopifySubscription.id
-        );
-        
-        console.log('[Billing] ✅ TEST MODE: Added included tokens:', {
-          shop,
-          plan: subscription.plan,
-          tokens: included.tokens,
-          newBalance: tokenBalance.balance
-        });
-      }
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // Use setIncludedTokens instead of addIncludedTokens to avoid accumulation
+      await tokenBalance.setIncludedTokens(
+        included.tokens, 
+        subscription.plan, 
+        shopifySubscription.id
+      );
+      
+      console.log('[Billing] ✅ TEST MODE: Set included tokens:', {
+        shop,
+        plan: subscription.plan,
+        includedTokens: included.tokens,
+        newBalance: tokenBalance.balance
+      });
     }
     
     res.json({

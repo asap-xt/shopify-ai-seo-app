@@ -68,36 +68,29 @@ export default async function handleSubscriptionUpdate(req, res) {
       subscription.activatedAt = new Date();
       await subscription.save();
       
-      // Add included tokens for Growth Extra & Enterprise plans
+      // Set included tokens for the plan (replaces old, keeps purchased)
       const included = getIncludedTokens(subscription.plan);
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      if (included.tokens > 0) {
-        console.log('[SUBSCRIPTION-UPDATE] Plan has included tokens:', included.tokens);
-        
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        
-        console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
-          balance: tokenBalance.balance,
-          totalPurchased: tokenBalance.totalPurchased,
-          totalUsed: tokenBalance.totalUsed
-        });
-        
-        // Add included tokens (this is the FIRST time for this billing cycle)
-        await tokenBalance.addIncludedTokens(
-          included.tokens, 
-          subscription.plan, 
-          admin_graphql_api_id
-        );
-        
-        console.log('[SUBSCRIPTION-UPDATE] ✅ Added included tokens:', {
-          shop,
-          plan: subscription.plan,
-          tokensAdded: included.tokens,
-          newBalance: tokenBalance.balance
-        });
-      } else {
-        console.log('[SUBSCRIPTION-UPDATE] Plan has no included tokens (Starter/Professional/Growth)');
-      }
+      console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
+        balance: tokenBalance.balance,
+        totalPurchased: tokenBalance.totalPurchased,
+        totalUsed: tokenBalance.totalUsed
+      });
+      
+      // Use setIncludedTokens to replace old included tokens (keeps purchased)
+      await tokenBalance.setIncludedTokens(
+        included.tokens, 
+        subscription.plan, 
+        admin_graphql_api_id
+      );
+      
+      console.log('[SUBSCRIPTION-UPDATE] ✅ Set included tokens:', {
+        shop,
+        plan: subscription.plan,
+        includedTokens: included.tokens,
+        newBalance: tokenBalance.balance
+      });
       
     } else if (status === 'CANCELLED') {
       // ❌ Subscription cancelled by merchant or Shopify
