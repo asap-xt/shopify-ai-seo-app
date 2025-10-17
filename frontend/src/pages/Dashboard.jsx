@@ -102,6 +102,7 @@ export default function Dashboard({ shop: shopProp }) {
     try {
       setSyncing(true);
       const res = await api.post(`/api/dashboard/sync?shop=${shop}`, {});
+      console.log('[Dashboard] Sync start response:', res.status);
       
       if (res.ok) {
         // Poll for completion
@@ -325,10 +326,15 @@ export default function Dashboard({ shop: shopProp }) {
             </Card>
           )}
 
-          {/* Languages Card */}
+          {/* Languages & Markets Card */}
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd">Languages</Text>
+              <InlineStack align="space-between" blockAlign="center">
+                <Text variant="headingMd">Languages</Text>
+                {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
+                  <Badge tone="info">{stats.storeMarkets.length} markets</Badge>
+                )}
+              </InlineStack>
               
               <BlockStack gap="200">
                 {stats?.languages && stats.languages.length > 0 ? (
@@ -355,6 +361,18 @@ export default function Dashboard({ shop: shopProp }) {
                   </Text>
                 )}
               </BlockStack>
+
+              {/* Markets summary (compact) */}
+              {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
+                <Box paddingBlockStart="200">
+                  <Divider />
+                  <Box paddingBlockStart="200">
+                    <Text variant="bodySm" tone="subdued">
+                      Markets: {stats.storeMarkets.slice(0, 2).map(m => m.name).join(', ')}{stats.storeMarkets.length > 2 ? ` +${stats.storeMarkets.length - 2}` : ''}
+                    </Text>
+                  </Box>
+                </Box>
+              )}
             </BlockStack>
           </Card>
         </div>

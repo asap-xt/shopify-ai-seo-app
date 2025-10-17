@@ -278,6 +278,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
       advancedSchema: hasAdvancedSchema ? {
         active: advancedSchemaActive
       } : null,
+      storeMarkets: (await Shop.findOne({ shop }))?.storeMarkets || [],
       alerts
     };
     
@@ -299,7 +300,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
  * POST /api/dashboard/sync
  * Trigger full store sync
  */
-router.post('/sync', requireAuth, async (req, res) => {
+router.post('/sync', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { adminGraphql } = res.locals;
