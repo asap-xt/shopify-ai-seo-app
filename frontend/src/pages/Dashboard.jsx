@@ -1,5 +1,5 @@
 // frontend/src/pages/Dashboard.jsx
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Page,
   Layout,
@@ -45,6 +45,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
+  const pollRef = useRef(null);
   
   // Onboarding state
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -52,6 +53,12 @@ export default function Dashboard({ shop: shopProp }) {
   useEffect(() => {
     loadDashboardData();
     loadSyncStatus();
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
   }, [shop]);
   
   // Auto-sync on load if enabled
@@ -90,6 +97,8 @@ export default function Dashboard({ shop: shopProp }) {
       if (data) {
         setSyncStatus(data);
         setAutoSync(data.autoSyncEnabled || false);
+        // Keep UI state aligned with backend status
+        setSyncing(!!data.inProgress);
       }
     } catch (error) {
       console.error('[Dashboard] Error loading sync status:', error);
@@ -102,20 +111,31 @@ export default function Dashboard({ shop: shopProp }) {
       const res = await api(`/api/dashboard/sync?shop=${shop}`, { method: 'POST' });
       console.log('[Dashboard] Sync start response:', res);
       
-      if (res.ok) {
+      if (res?.success || res?.inProgress) {
+        // Clear any existing poller
+        if (pollRef.current) clearInterval(pollRef.current);
         // Poll for completion
-        const pollInterval = setInterval(async () => {
-          const status = await api(`/api/dashboard/sync-status?shop=${shop}`);
-          if (status) {
-            setSyncStatus(status);
-            
-            if (!status.inProgress) {
-              clearInterval(pollInterval);
-              setSyncing(false);
-              loadDashboardData(); // Reload stats
+        pollRef.current = setInterval(async () => {
+          try {
+            const status = await api(`/api/dashboard/sync-status?shop=${shop}`);
+            if (status) {
+              setSyncStatus(status);
+              if (!status.inProgress) {
+                if (pollRef.current) {
+                  clearInterval(pollRef.current);
+                  pollRef.current = null;
+                }
+                setSyncing(false);
+                loadDashboardData(); // Reload stats
+              }
             }
+          } catch (e) {
+            console.error('[Dashboard] Poll error:', e);
           }
         }, 2000); // Poll every 2 seconds
+      } else {
+        // If backend didn't acknowledge start, stop spinner
+        setSyncing(false);
       }
     } catch (error) {
       console.error('[Dashboard] Error syncing:', error);
@@ -125,10 +145,13 @@ export default function Dashboard({ shop: shopProp }) {
   
   const handleAutoSyncToggle = async (enabled) => {
     try {
-      const res = await api.post(`/api/dashboard/auto-sync?shop=${shop}`, { enabled });
-      if (res.ok) {
+      const res = await api(`/api/dashboard/auto-sync?shop=${shop}`, { method: 'POST', body: { enabled } });
+      if (res?.success) {
+        setAutoSync(!!res.autoSyncEnabled);
+        setSyncStatus({ ...(syncStatus || {}), autoSyncEnabled: !!res.autoSyncEnabled });
+      } else {
         setAutoSync(enabled);
-        setSyncStatus({ ...syncStatus, autoSyncEnabled: enabled });
+        setSyncStatus({ ...(syncStatus || {}), autoSyncEnabled: enabled });
       }
     } catch (error) {
       console.error('[Dashboard] Error toggling auto-sync:', error);
