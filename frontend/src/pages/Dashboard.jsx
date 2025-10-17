@@ -271,7 +271,7 @@ export default function Dashboard({ shop: shopProp }) {
           {/* Products Card */}
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd">Products</Text>
+              <Text variant="headingMd">Products & Collections</Text>
               
               <BlockStack gap="200">
                 <InlineStack align="space-between">

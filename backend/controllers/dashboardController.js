@@ -38,7 +38,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
     }).sort({ updatedAt: -1 }).select('updatedAt');
     
     // Collections stats (only for Growth+)
-    const hasCollections = ['growth', 'growth extra', 'enterprise'].includes(plan);
+    const hasCollections = ['growth', 'growth_extra', 'enterprise'].includes(plan);
     let totalCollections = 0;
     let optimizedCollections = 0;
     let lastOptimizedCollection = null;
@@ -56,7 +56,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
     }
     
     // Store Metadata status (only for Professional+)
-    const hasStoreMetadata = ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan);
+    const hasStoreMetadata = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(plan);
     let storeMetadataComplete = false;
     
     if (hasStoreMetadata) {
