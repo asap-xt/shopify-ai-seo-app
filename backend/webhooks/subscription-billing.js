@@ -51,13 +51,14 @@ export default async function handleSubscriptionBilling(req, res) {
       
       // MONTHLY REFRESH LOGIC - SIMPLE:
       // Shopify успешно таксува клиента → нов billing cycle започва
-      // 1. Reset balance = 100M or 300M (included tokens)
+      // 1. Reset balance = included tokens (100M or 300M)
       // 2. Reset totalUsed = 0
-      // 3. Purchased tokens carry over if any exist
+      // 3. Any purchased tokens from totalPurchased stay (they never expire)
       
-      const carryOverPurchased = Math.max(0, tokenBalance.balance - included.tokens); // Any remaining purchased tokens
+      const currentUsed = tokenBalance.totalUsed;
       
-      tokenBalance.balance = included.tokens + carryOverPurchased;
+      // Reset to included tokens + any additional purchased tokens
+      tokenBalance.balance = included.tokens + (tokenBalance.totalPurchased || 0);
       tokenBalance.totalUsed = 0; // New cycle starts
       
       // Add to usage history for tracking
@@ -68,8 +69,9 @@ export default async function handleSubscriptionBilling(req, res) {
           refreshType: 'billing-cycle',
           plan: plan,
           includedTokens: included.tokens,
-          previousTotalUsed: tokenBalance.totalUsed,
-          billingAttemptId: webhookData?.app_subscription?.id
+          previousTotalUsed: currentUsed,
+          billingAttemptId: webhookData?.app_subscription?.id,
+          purchasedTokensCarriedOver: tokenBalance.totalPurchased || 0
         },
         date: new Date()
       });

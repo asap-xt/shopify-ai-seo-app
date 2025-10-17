@@ -212,12 +212,15 @@ router.get('/callback', async (req, res) => {
       const included = getIncludedTokens(subscription.plan);
       if (included.tokens > 0) {
         const tokenBalance = await TokenBalance.getOrCreate(shop);
-        await tokenBalance.addTokens(included.usdAmount, included.tokens, charge_id || 'included');
+        
+        // Add included tokens (NOT purchased, just added to balance)
+        await tokenBalance.addIncludedTokens(included.tokens, subscription.plan, charge_id || 'included');
         
         console.log('[Billing] Added included tokens:', {
           shop,
           plan: subscription.plan,
-          tokens: included.tokens
+          tokens: included.tokens,
+          newBalance: tokenBalance.balance
         });
       }
     }

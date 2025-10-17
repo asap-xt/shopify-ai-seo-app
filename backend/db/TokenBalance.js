@@ -182,6 +182,29 @@ tokenBalanceSchema.methods.deductTokens = function(amount, feature, metadata = {
   return this.save();
 };
 
+// Add included tokens (for Growth Extra & Enterprise plans)
+// These are NOT purchased, they're included in the plan
+tokenBalanceSchema.methods.addIncludedTokens = function(tokens, planName, shopifyChargeId) {
+  this.balance += tokens;
+  // Don't add to totalPurchased - these are included, not purchased!
+  
+  // Track in usage history for transparency
+  this.usage.push({
+    feature: 'plan-included-tokens',
+    tokensUsed: -tokens, // Negative = added
+    metadata: {
+      plan: planName,
+      includedAmount: tokens,
+      shopifyChargeId,
+      type: 'included'
+    },
+    date: new Date()
+  });
+  
+  return this.save();
+};
+
+// Add purchased tokens (when user buys additional tokens)
 tokenBalanceSchema.methods.addTokens = function(usdAmount, tokensReceived, shopifyChargeId) {
   const appRevenue = usdAmount * 0.40;
   const tokenBudget = usdAmount * 0.60;
