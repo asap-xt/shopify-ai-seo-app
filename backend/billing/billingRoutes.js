@@ -99,22 +99,33 @@ router.get('/debug', verifyRequest, async (req, res) => {
 
 /**
  * DEBUG: Reset token balance (for development only)
- * POST /api/billing/debug/reset-tokens?shop={shop}
+ * GET /billing/debug/reset-tokens?shop={shop}
+ * WARNING: No auth for easier testing - remove in production!
  */
-router.post('/debug/reset-tokens', verifyRequest, async (req, res) => {
+router.get('/debug/reset-tokens', async (req, res) => {
   try {
-    const shop = req.shopDomain;
+    const shop = req.query.shop;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
     
     // Delete and recreate token balance
-    await TokenBalance.deleteOne({ shop });
+    const deleted = await TokenBalance.deleteOne({ shop });
     const newBalance = await TokenBalance.getOrCreate(shop);
     
-    console.log('[Billing Debug] Token balance reset for:', shop);
+    console.log('[Billing Debug] Token balance reset for:', shop, 'Deleted:', deleted.deletedCount);
     
     res.json({
       success: true,
       message: 'Token balance reset',
-      newBalance: newBalance.toObject()
+      shop,
+      deletedCount: deleted.deletedCount,
+      newBalance: {
+        balance: newBalance.balance,
+        totalPurchased: newBalance.totalPurchased,
+        totalUsed: newBalance.totalUsed
+      }
     });
   } catch (error) {
     console.error('[Billing Debug] Error resetting tokens:', error);
