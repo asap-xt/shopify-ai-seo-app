@@ -71,14 +71,18 @@ export default function AiTesting({ shop: shopProp }) {
     const currentPlanIndex = planHierarchy.indexOf(currentPlan);
     
     switch (feature) {
-      case 'productsJson':
+      case 'basic': // Products, Collections, Store Metadata
         return currentPlanIndex >= 0; // All plans
-      case 'welcomePage':
-        return currentPlanIndex >= 2; // Growth+
-      case 'aiSitemap':
-        return currentPlanIndex >= 2; // Growth+
-      case 'schemaData':
-        return currentPlanIndex >= 4; // Enterprise only
+      case 'perplexity':
+      case 'chatgpt':
+        return currentPlanIndex >= 0; // All plans (they work with basic endpoints)
+      case 'claude':
+      case 'gemini':
+        return currentPlanIndex >= 1; // Professional+ (need more data)
+      case 'meta':
+        return currentPlanIndex >= 2; // Growth+ (need AI Sitemap)
+      case 'deepseek':
+        return currentPlanIndex >= 4; // Enterprise (need Schema Data)
       default:
         return false;
     }
@@ -86,11 +90,12 @@ export default function AiTesting({ shop: shopProp }) {
 
   const getRequiredPlan = (feature) => {
     switch (feature) {
-      case 'welcomePage':
+      case 'claude':
+      case 'gemini':
+        return 'Professional';
+      case 'meta':
         return 'Growth';
-      case 'aiSitemap':
-        return 'Growth';
-      case 'schemaData':
+      case 'deepseek':
         return 'Enterprise';
       default:
         return 'Professional';
@@ -164,90 +169,115 @@ export default function AiTesting({ shop: shopProp }) {
                   <Text as="h3" variant="headingMd">AI Discovery Endpoints</Text>
                   
                   <Text variant="bodyMd" tone="subdued">
-                    These are the URLs that AI bots use to discover and understand your store content.
+                    These are the endpoints that AI bots use to discover and understand your store content.
                   </Text>
 
-                  <TextField
-                    label="Products JSON Feed"
-                    value={`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`} external>
+                  <BlockStack gap="300">
+                    {/* Products JSON Feed - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
+                        <Text variant="bodySm" tone="subdued">Bulk product data for AI consumption</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
                         View
                       </Button>
-                    }
-                    helpText="Bulk product data for AI consumption"
-                  />
+                    </InlineStack>
 
-                  <TextField
-                    label="AI Sitemap"
-                    value={`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`} external>
-                        View
-                      </Button>
-                    }
-                    helpText="Optimized sitemap for AI bots"
-                  />
+                    <Divider />
 
-                  <TextField
-                    label="Store Metadata (AI Search)"
-                    value={`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`} external>
+                    {/* AI Sitemap - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Sitemap</Text>
+                        <Text variant="bodySm" tone="subdued">Optimized sitemap for AI bots</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
                         View
                       </Button>
-                    }
-                    helpText="Organization schema & AI metadata"
-                  />
+                    </InlineStack>
 
-                  <TextField
-                    label="AI Welcome Page"
-                    value={`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`} external>
-                        View
-                      </Button>
-                    }
-                    helpText="Landing page for AI bots"
-                  />
+                    <Divider />
 
-                  <TextField
-                    label="Collections JSON Feed"
-                    value={`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`} external>
+                    {/* Store Metadata - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
+                        <Text variant="bodySm" tone="subdued">Organization schema & AI metadata</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
                         View
                       </Button>
-                    }
-                    helpText="Category data for better AI understanding"
-                  />
+                    </InlineStack>
 
-                  <TextField
-                    label="robots.txt (Dynamic)"
-                    value={`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`}
-                    readOnly
-                    autoComplete="off"
-                    connectedRight={
-                      <Button url={`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`} external>
+                    <Divider />
+
+                    {/* AI Welcome Page - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
+                        <Text variant="bodySm" tone="subdued">Landing page for AI bots</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
                         View
                       </Button>
-                    }
-                    helpText="Use this URL to test how AI bots understand your store"
-                  />
+                    </InlineStack>
+
+                    <Divider />
+
+                    {/* Collections JSON Feed - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
+                        <Text variant="bodySm" tone="subdued">Category data for better AI understanding</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
+                        View
+                      </Button>
+                    </InlineStack>
+
+                    <Divider />
+
+                    {/* robots.txt - Always available */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">robots.txt (Dynamic)</Text>
+                        <Text variant="bodySm" tone="subdued">Test how AI bots understand your store</Text>
+                      </BlockStack>
+                      <Button 
+                        url={`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`} 
+                        external
+                        size="slim"
+                      >
+                        View
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
 
                   <Divider />
 
                   <BlockStack gap="200">
+                    {/* Perplexity & ChatGPT - All plans */}
                     <InlineStack align="space-between">
                       <Text>Perplexity AI Search</Text>
                       <Button
@@ -270,9 +300,10 @@ export default function AiTesting({ shop: shopProp }) {
                       </Button>
                     </InlineStack>
 
+                    {/* Claude & Gemini - Professional+ */}
                     <InlineStack align="space-between">
                       <Text>Claude AI Search</Text>
-                      {isFeatureAvailable('welcomePage') ? (
+                      {isFeatureAvailable('claude') ? (
                         <Button
                           onClick={() => openAiBotModal('Claude AI', 'https://claude.ai/')}
                           size="slim"
@@ -281,14 +312,14 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('welcomePage')}+ Required
+                          {getRequiredPlan('claude')}+ Required
                         </Button>
                       )}
                     </InlineStack>
 
                     <InlineStack align="space-between">
                       <Text>Gemini AI Search</Text>
-                      {isFeatureAvailable('welcomePage') ? (
+                      {isFeatureAvailable('gemini') ? (
                         <Button
                           onClick={() => openAiBotModal('Gemini AI', 'https://gemini.google.com/')}
                           size="slim"
@@ -297,14 +328,15 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('welcomePage')}+ Required
+                          {getRequiredPlan('gemini')}+ Required
                         </Button>
                       )}
                     </InlineStack>
 
+                    {/* Meta AI - Growth+ */}
                     <InlineStack align="space-between">
                       <Text>Meta AI Search</Text>
-                      {isFeatureAvailable('aiSitemap') ? (
+                      {isFeatureAvailable('meta') ? (
                         <Button
                           onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
                           size="slim"
@@ -313,14 +345,15 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('aiSitemap')}+ Required
+                          {getRequiredPlan('meta')}+ Required
                         </Button>
                       )}
                     </InlineStack>
 
+                    {/* DeepSeek - Enterprise only */}
                     <InlineStack align="space-between">
                       <Text>DeepSeek AI Search</Text>
-                      {isFeatureAvailable('schemaData') ? (
+                      {isFeatureAvailable('deepseek') ? (
                         <Button
                           onClick={() => openAiBotModal('DeepSeek AI', 'https://chat.deepseek.com/')}
                           size="slim"
@@ -329,7 +362,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('schemaData')}+ Required
+                          {getRequiredPlan('deepseek')}+ Required
                         </Button>
                       )}
                     </InlineStack>
