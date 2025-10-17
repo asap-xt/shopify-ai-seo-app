@@ -20,7 +20,9 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   }
   
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
-  const isTest = process.env.NODE_ENV !== 'production';
+  // ALWAYS use test mode until we go live with real payments
+  // This allows instant activation without waiting for webhooks
+  const isTest = true;
   
   const mutation = `
     mutation CreateSubscription(

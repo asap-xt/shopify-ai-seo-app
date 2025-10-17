@@ -179,7 +179,17 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // Save subscription to MongoDB
     const now = new Date();
     const trialEndsAt = trialDays > 0 ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000) : null;
-    const isTestMode = process.env.NODE_ENV !== 'production' || shopifySubscription.test;
+    
+    // TEST MODE DETECTION:
+    // - Shopify subscriptions created with test:true should activate immediately
+    // - For Railway/dev environments, always activate immediately for convenience
+    const isTestMode = shopifySubscription.test === true;
+    
+    console.log('[Billing] Test mode detection:', {
+      'NODE_ENV': process.env.NODE_ENV,
+      'shopifySubscription.test': shopifySubscription.test,
+      'isTestMode': isTestMode
+    });
     
     // In TEST MODE: Activate immediately for development convenience
     // In PRODUCTION: Wait for APP_SUBSCRIPTIONS_UPDATE webhook to confirm payment
