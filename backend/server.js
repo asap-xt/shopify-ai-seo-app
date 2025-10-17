@@ -532,6 +532,7 @@ import advancedSchemaRouter from './controllers/advancedSchemaController.js';
 // Import new middleware and controllers
 import { attachShop as attachShopFromApiResolver, apiResolver } from './middleware/apiResolver.js';
 import collectionsRouter from './controllers/collectionsController.js';
+import dashboardRouter from './controllers/dashboardController.js';
 
 // Session validation endpoint (replaces old /api/auth)
 app.post('/api/auth/session', validateRequest(), async (req, res) => {
@@ -935,6 +936,7 @@ app.post('/graphql', express.json(), async (req, res) => {
 });
 app.use('/debug', debugRouter);
 app.use('/api/products', productsRouter);
+app.use('/api/dashboard', dashboardRouter);
 app.use(schemaRouter);
 app.use('/api', aiDiscoveryRouter);
 app.use(aiEndpointsRouter);
