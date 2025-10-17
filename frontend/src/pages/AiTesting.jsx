@@ -65,7 +65,7 @@ export default function AiTesting({ shop: shopProp }) {
     }
   };
 
-  // Plan-based feature availability
+  // Plan-based feature availability (synced with Settings.jsx)
   const isFeatureAvailable = (feature) => {
     if (!currentPlan) return false;
     
@@ -73,18 +73,32 @@ export default function AiTesting({ shop: shopProp }) {
     const currentPlanIndex = planHierarchy.indexOf(currentPlan);
     
     switch (feature) {
-      case 'basic': // Products, Collections, Store Metadata
+      // AI Discovery Features (synced with Settings.jsx)
+      case 'productsJson':
         return currentPlanIndex >= 0; // All plans
-      case 'perplexity':
-      case 'chatgpt':
-        return currentPlanIndex >= 0; // All plans (they work with basic endpoints)
-      case 'claude':
-      case 'gemini':
-        return currentPlanIndex >= 1; // Professional+ (need more data)
+      case 'storeMetadata':
+        return currentPlanIndex >= 1; // Professional+
+      case 'welcomePage':
+      case 'collectionsJson':
+        return currentPlanIndex >= 2; // Growth+
+      case 'aiSitemap':
+        return currentPlanIndex >= 3; // Growth Extra+
+      case 'schemaData':
+        return currentPlanIndex >= 4; // Enterprise
+      
+      // AI Bot Testing (synced with Settings.jsx)
       case 'meta':
-        return currentPlanIndex >= 2; // Growth+ (need AI Sitemap)
+        return currentPlanIndex >= 0; // Starter+ (Meta AI)
+      case 'claude':
+        return currentPlanIndex >= 0; // Starter+ (Anthropic Claude)
+      case 'gemini':
+        return currentPlanIndex >= 1; // Professional+ (Google Gemini)
+      case 'chatgpt':
+        return currentPlanIndex >= 2; // Growth+ (OpenAI ChatGPT)
+      case 'perplexity':
+        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity)
       case 'deepseek':
-        return currentPlanIndex >= 4; // Enterprise (need Schema Data)
+        return currentPlanIndex >= 4; // Enterprise (DeepSeek)
       default:
         return false;
     }
@@ -92,11 +106,24 @@ export default function AiTesting({ shop: shopProp }) {
 
   const getRequiredPlan = (feature) => {
     switch (feature) {
-      case 'claude':
+      // AI Discovery Features
+      case 'storeMetadata':
+        return 'Professional';
+      case 'welcomePage':
+      case 'collectionsJson':
+        return 'Growth';
+      case 'aiSitemap':
+        return 'Growth Extra';
+      case 'schemaData':
+        return 'Enterprise';
+      
+      // AI Bot Testing
       case 'gemini':
         return 'Professional';
-      case 'meta':
+      case 'chatgpt':
         return 'Growth';
+      case 'perplexity':
+        return 'Growth Extra';
       case 'deepseek':
         return 'Enterprise';
       default:
@@ -220,30 +247,14 @@ export default function AiTesting({ shop: shopProp }) {
 
                     <Divider />
 
-                    {/* AI Sitemap - Always available */}
+                    {/* Store Metadata - Professional+ */}
                     <InlineStack align="space-between" blockAlign="center">
                       <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">AI Sitemap</Text>
-                        <Text variant="bodySm" tone="subdued">Optimized sitemap for AI bots</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`, 'AI Sitemap')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
-
-                    <Divider />
-
-                    {/* Store Metadata - Growth Extra+ */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
+                        <Text variant="bodyMd" fontWeight="semibold">Store Metadata for AI Search</Text>
                         <Text variant="bodySm" tone="subdued">Organization schema & AI metadata</Text>
                       </BlockStack>
                       <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`, 'Store Metadata', 'Growth Extra')}
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`, 'Store Metadata for AI Search', 'Professional')}
                         size="slim"
                       >
                         View
@@ -252,14 +263,14 @@ export default function AiTesting({ shop: shopProp }) {
 
                     <Divider />
 
-                    {/* AI Welcome Page - Always available */}
+                    {/* AI Welcome Page - Growth+ */}
                     <InlineStack align="space-between" blockAlign="center">
                       <BlockStack gap="100">
                         <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
                         <Text variant="bodySm" tone="subdued">Landing page for AI bots</Text>
                       </BlockStack>
                       <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`, 'AI Welcome Page')}
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`, 'AI Welcome Page', 'Growth')}
                         size="slim"
                       >
                         View
@@ -268,14 +279,30 @@ export default function AiTesting({ shop: shopProp }) {
 
                     <Divider />
 
-                    {/* Collections JSON Feed - Always available */}
+                    {/* Collections JSON Feed - Growth+ */}
                     <InlineStack align="space-between" blockAlign="center">
                       <BlockStack gap="100">
                         <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
                         <Text variant="bodySm" tone="subdued">Category data for better AI understanding</Text>
                       </BlockStack>
                       <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`, 'Collections JSON Feed')}
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`, 'Collections JSON Feed', 'Growth')}
+                        size="slim"
+                      >
+                        View
+                      </Button>
+                    </InlineStack>
+
+                    <Divider />
+
+                    {/* AI-Optimized Sitemap - Growth Extra+ */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI-Optimized Sitemap</Text>
+                        <Text variant="bodySm" tone="subdued">Optimized sitemap for AI bots</Text>
+                      </BlockStack>
+                      <Button 
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`, 'AI-Optimized Sitemap', 'Growth Extra')}
                         size="slim"
                       >
                         View
@@ -297,35 +324,45 @@ export default function AiTesting({ shop: shopProp }) {
                         View
                       </Button>
                     </InlineStack>
+
+                    <Divider />
+
+                    {/* Advanced Schema Data - Enterprise */}
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
+                        <Text variant="bodySm" tone="subdued">BreadcrumbList, FAQPage & more</Text>
+                      </BlockStack>
+                      <Button 
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/schema-data.json?shop=${shop}`, 'Advanced Schema Data', 'Enterprise')}
+                        size="slim"
+                      >
+                        View
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
 
                   <Divider />
 
                   <BlockStack gap="200">
-                    {/* Perplexity & ChatGPT - All plans */}
+                    {/* Meta AI - Starter+ (Always available) */}
                     <InlineStack align="space-between">
-                      <Text>Perplexity AI Search</Text>
-                      <Button
-                        url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                        external
-                        size="slim"
-                      >
-                        Test
-                      </Button>
+                      <Text>Meta AI Search</Text>
+                      {isFeatureAvailable('meta') ? (
+                        <Button
+                          onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
+                          size="slim"
+                        >
+                          Test
+                        </Button>
+                      ) : (
+                        <Button disabled size="slim">
+                          {getRequiredPlan('meta')}+ Required
+                        </Button>
+                      )}
                     </InlineStack>
 
-                    <InlineStack align="space-between">
-                      <Text>ChatGPT Web Search</Text>
-                      <Button
-                        url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                        external
-                        size="slim"
-                      >
-                        Test
-                      </Button>
-                    </InlineStack>
-
-                    {/* Claude & Gemini - Professional+ */}
+                    {/* Anthropic Claude - Starter+ (Always available) */}
                     <InlineStack align="space-between">
                       <Text>Claude AI Search</Text>
                       {isFeatureAvailable('claude') ? (
@@ -342,6 +379,7 @@ export default function AiTesting({ shop: shopProp }) {
                       )}
                     </InlineStack>
 
+                    {/* Google Gemini - Professional+ */}
                     <InlineStack align="space-between">
                       <Text>Gemini AI Search</Text>
                       {isFeatureAvailable('gemini') ? (
@@ -358,19 +396,38 @@ export default function AiTesting({ shop: shopProp }) {
                       )}
                     </InlineStack>
 
-                    {/* Meta AI - Growth+ */}
+                    {/* ChatGPT - Growth+ */}
                     <InlineStack align="space-between">
-                      <Text>Meta AI Search</Text>
-                      {isFeatureAvailable('meta') ? (
+                      <Text>ChatGPT Web Search</Text>
+                      {isFeatureAvailable('chatgpt') ? (
                         <Button
-                          onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
+                          url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                          external
                           size="slim"
                         >
                           Test
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('meta')}+ Required
+                          {getRequiredPlan('chatgpt')}+ Required
+                        </Button>
+                      )}
+                    </InlineStack>
+
+                    {/* Perplexity - Growth Extra+ */}
+                    <InlineStack align="space-between">
+                      <Text>Perplexity AI Search</Text>
+                      {isFeatureAvailable('perplexity') ? (
+                        <Button
+                          url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
+                          external
+                          size="slim"
+                        >
+                          Test
+                        </Button>
+                      ) : (
+                        <Button disabled size="slim">
+                          {getRequiredPlan('perplexity')}+ Required
                         </Button>
                       )}
                     </InlineStack>
@@ -397,7 +454,7 @@ export default function AiTesting({ shop: shopProp }) {
                     <Text>
                       <strong>How to test with AI bots:</strong><br/>
                       • <strong>Perplexity & ChatGPT:</strong> Click "Test" - they support URL parameters<br/>
-                      • <strong>Claude, Gemini, Meta AI, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
+                      • <strong>Meta AI, Claude, Gemini, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
                     </Text>
                   </Banner>
                 </BlockStack>
