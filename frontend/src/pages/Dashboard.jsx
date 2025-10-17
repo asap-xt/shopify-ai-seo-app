@@ -14,7 +14,6 @@ import {
   Box,
   Icon
 } from '@shopify/polaris';
-import { useNavigate } from 'react-router-dom';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const qs = (k, d = '') => {
@@ -24,7 +23,11 @@ const qs = (k, d = '') => {
 
 export default function Dashboard({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
-  const navigate = useNavigate();
+  
+  // Navigation helper (no react-router-dom needed)
+  const navigate = (path) => {
+    window.location.href = path;
+  };
   const api = useMemo(() => makeSessionFetch(), []);
   
   const [loading, setLoading] = useState(true);

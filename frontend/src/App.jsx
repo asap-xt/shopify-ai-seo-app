@@ -12,6 +12,7 @@ import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 
 import AppHeader from './components/AppHeader.jsx';
+const Dashboard = React.lazy(() => import('./pages/Dashboard.jsx'));
 const BulkEdit = React.lazy(() => import('./pages/BulkEdit.jsx'));
 const Collections = React.lazy(() => import('./pages/Collections.jsx'));
 const Sitemap = React.lazy(() => import('./pages/Sitemap.jsx'));
@@ -128,7 +129,8 @@ function AdminNavMenu({ active, shop }) {
 }
 
 
-// -------- Dashboard
+// -------- Old Dashboard (replaced by pages/Dashboard.jsx)
+/*
 const DashboardCard = React.memo(({ shop }) => {
   const [plan, setPlan] = useState(null);
   const { api } = useShopApi();
@@ -807,7 +809,7 @@ export default function App() {
   const getPageComponent = () => {
     // Dashboard
     if (path === '/' || path === '/dashboard') {
-      return <DashboardCard shop={shop} />;
+      return <Dashboard shop={shop} />;
     } 
     // Search Optimization for AI и под-страници
     else if (path.startsWith('/ai-seo')) {
