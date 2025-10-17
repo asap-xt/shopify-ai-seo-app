@@ -173,6 +173,68 @@ router.get('/stats', verifyRequest, async (req, res) => {
       });
     }
     
+    // Get language statistics
+    const languageStats = [];
+    try {
+      // Aggregate products by language and optimization status
+      const languageAgg = await Product.aggregate([
+        { $match: { shop } },
+        { $unwind: '$seoStatus.languages' },
+        { $group: {
+          _id: '$seoStatus.languages.code',
+          optimizedCount: {
+            $sum: { $cond: ['$seoStatus.languages.optimized', 1, 0] }
+          },
+          totalCount: { $sum: 1 }
+        }},
+        { $sort: { totalCount: -1 } }
+      ]);
+      
+      languageAgg.forEach(lang => {
+        const langName = {
+          'en': 'English',
+          'de': 'German',
+          'fr': 'French',
+          'es': 'Spanish',
+          'it': 'Italian',
+          'nl': 'Dutch',
+          'pt': 'Portuguese',
+          'ja': 'Japanese',
+          'zh': 'Chinese',
+          'ko': 'Korean'
+        }[lang._id] || lang._id;
+        
+        languageStats.push({
+          code: lang._id,
+          name: langName,
+          optimizedCount: lang.optimizedCount,
+          totalCount: lang.totalCount,
+          primary: lang._id === 'en' // Assume English is primary if present
+        });
+      });
+    } catch (error) {
+      console.error('[Dashboard] Error getting language stats:', error);
+    }
+    
+    // Get last optimization date
+    let lastOptimization = null;
+    try {
+      const lastOptimizedProduct = await Product.findOne(
+        { 
+          shop,
+          'seoStatus.languages.optimized': true,
+          'seoStatus.languages.lastOptimizedAt': { $exists: true }
+        },
+        { 'seoStatus.languages.$': 1 }
+      ).sort({ 'seoStatus.languages.lastOptimizedAt': -1 });
+      
+      if (lastOptimizedProduct && lastOptimizedProduct.seoStatus?.languages?.[0]?.lastOptimizedAt) {
+        lastOptimization = lastOptimizedProduct.seoStatus.languages[0].lastOptimizedAt;
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error getting last optimization:', error);
+    }
+    
     // Recommendation: Upgrade plan (if needed)
     if (plan === 'starter' && totalProducts > 50) {
       alerts.push({
@@ -187,6 +249,10 @@ router.get('/stats', verifyRequest, async (req, res) => {
     }
     
     const stats = {
+      subscription: {
+        plan,
+        price: subscription.price || 0
+      },
       products: {
         total: totalProducts,
         optimized: optimizedProducts,
@@ -199,6 +265,8 @@ router.get('/stats', verifyRequest, async (req, res) => {
         unoptimized: totalCollections - optimizedCollections,
         lastOptimized: lastOptimizedCollection?.updatedAt || null
       } : null,
+      languages: languageStats,
+      lastOptimization: lastOptimization,
       storeMetadata: hasStoreMetadata ? {
         complete: storeMetadataComplete
       } : null,

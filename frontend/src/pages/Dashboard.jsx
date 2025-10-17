@@ -1,21 +1,20 @@
 // frontend/src/pages/Dashboard.jsx
-import React, { useEffect, useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
+  Page,
   Layout,
   Card,
   Text,
   Button,
-  InlineStack,
-  BlockStack,
   Badge,
-  Banner,
-  ProgressBar,
+  BlockStack,
+  InlineStack,
   Divider,
-  Box,
-  Icon
+  Box
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
+// Query string helper
 const qs = (k, d = '') => {
   try { return new URLSearchParams(window.location.search).get(k) || d; }
   catch { return d; }
@@ -38,31 +37,26 @@ export default function Dashboard({ shop: shopProp }) {
   const [tokens, setTokens] = useState(null);
 
   useEffect(() => {
-    if (shop) {
-      loadDashboardData();
-    }
+    loadDashboardData();
   }, [shop]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      // Load billing info (subscription & tokens)
-      const billingResponse = await api(`/api/billing/info?shop=${shop}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const [statsRes, tokensRes] = await Promise.all([
+        api.get(`/api/dashboard/stats?shop=${shop}`),
+        api.get(`/api/billing/tokens/balance?shop=${shop}`)
+      ]);
       
-      setSubscription(billingResponse.subscription);
-      setTokens(billingResponse.tokens);
-      
-      // Load optimization stats
-      const statsResponse = await api(`/api/dashboard/stats?shop=${shop}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      setStats(statsResponse);
+      if (statsRes.ok && tokensRes.ok) {
+        const statsData = await statsRes.json();
+        const tokensData = await tokensRes.json();
+        
+        setStats(statsData);
+        setSubscription(statsData.subscription);
+        setTokens(tokensData);
+      }
     } catch (error) {
       console.error('[Dashboard] Error loading data:', error);
     } finally {
@@ -79,9 +73,9 @@ export default function Dashboard({ shop: shopProp }) {
     ? Math.round((stats.collections.optimized / stats.collections.total) * 100) 
     : 0;
 
-  // Plan-based feature checks
-  const hasCollections = ['growth', 'growth extra', 'enterprise'].includes(subscription?.plan);
-  const hasStoreMetadata = ['professional', 'growth', 'growth extra', 'enterprise'].includes(subscription?.plan);
+  // Check feature availability
+  const hasCollections = ['growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
+  const hasStoreMetadata = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
   const hasAdvancedSchema = subscription?.plan === 'enterprise';
 
   if (loading) {
@@ -100,92 +94,192 @@ export default function Dashboard({ shop: shopProp }) {
 
   return (
     <Layout>
-      {/* Optimization Stats Row */}
       <Layout.Section>
-        <InlineStack gap="400" wrap={false}>
-          {/* Products Optimization */}
-          <div style={{ flex: 1 }}>
-            <Card>
-              <BlockStack gap="400">
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="headingMd">Products</Text>
-                  <Badge tone={productOptimizationPercent === 100 ? 'success' : 'attention'}>
-                    {stats?.products?.optimized || 0} / {stats?.products?.total || 0}
-                  </Badge>
+        <Text variant="headingLg" as="h1">Store Overview</Text>
+      </Layout.Section>
+
+      {/* Main Stats Grid */}
+      <Layout.Section>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          {/* Products Card */}
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd">Products</Text>
+              
+              <BlockStack gap="200">
+                <InlineStack align="space-between">
+                  <Text variant="bodyMd" tone="subdued">Total</Text>
+                  <Text variant="bodyMd" fontWeight="semibold">
+                    {stats?.products?.total || 0}
+                  </Text>
                 </InlineStack>
                 
-                <ProgressBar 
-                  progress={productOptimizationPercent} 
-                  tone={productOptimizationPercent === 100 ? 'success' : 'primary'}
-                />
+                <InlineStack align="space-between">
+                  <Text variant="bodyMd" tone="subdued">Optimized</Text>
+                  <Text variant="bodyMd" fontWeight="semibold" tone="success">
+                    {stats?.products?.optimized || 0}
+                  </Text>
+                </InlineStack>
                 
-                <Text variant="bodySm" tone="subdued">
-                  {productOptimizationPercent}% optimized for AI Search
-                </Text>
+                <Divider />
                 
-                {stats?.products?.lastOptimized && (
-                  <Text variant="bodySm" tone="subdued">
-                    Last: {new Date(stats.products.lastOptimized).toLocaleDateString()}
+                <Box paddingBlockStart="200">
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#e0e0e0',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${productOptimizationPercent}%`,
+                      height: '100%',
+                      backgroundColor: productOptimizationPercent === 100 ? '#4caf50' : '#2196f3',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <Box paddingBlockStart="100">
+                    <Text variant="bodySm" tone="subdued">
+                      {productOptimizationPercent}% optimized
+                    </Text>
+                  </Box>
+                </Box>
+              </BlockStack>
+            </BlockStack>
+          </Card>
+
+          {/* Collections Card (if available) */}
+          {hasCollections && (
+            <Card>
+              <BlockStack gap="400">
+                <Text variant="headingMd">Collections</Text>
+                
+                <BlockStack gap="200">
+                  <InlineStack align="space-between">
+                    <Text variant="bodyMd" tone="subdued">Total</Text>
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      {stats?.collections?.total || 0}
+                    </Text>
+                  </InlineStack>
+                  
+                  <InlineStack align="space-between">
+                    <Text variant="bodyMd" tone="subdued">Optimized</Text>
+                    <Text variant="bodyMd" fontWeight="semibold" tone="success">
+                      {stats?.collections?.optimized || 0}
+                    </Text>
+                  </InlineStack>
+                  
+                  <Divider />
+                  
+                  <Box paddingBlockStart="200">
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      backgroundColor: '#e0e0e0',
+                      borderRadius: '4px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${collectionOptimizationPercent}%`,
+                        height: '100%',
+                        backgroundColor: collectionOptimizationPercent === 100 ? '#4caf50' : '#2196f3',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <Box paddingBlockStart="100">
+                      <Text variant="bodySm" tone="subdued">
+                        {collectionOptimizationPercent}% optimized
+                      </Text>
+                    </Box>
+                  </Box>
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          )}
+
+          {/* Languages Card */}
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd">Languages</Text>
+              
+              <BlockStack gap="200">
+                {stats?.languages && stats.languages.length > 0 ? (
+                  <>
+                    {stats.languages.slice(0, 3).map((lang, idx) => (
+                      <InlineStack key={idx} align="space-between">
+                        <Text variant="bodyMd" tone="subdued">
+                          {lang.name || lang.code} {lang.primary && '★'}
+                        </Text>
+                        <Badge tone={lang.optimizedCount > 0 ? 'success' : 'subdued'}>
+                          {lang.optimizedCount || 0}
+                        </Badge>
+                      </InlineStack>
+                    ))}
+                    {stats.languages.length > 3 && (
+                      <Text variant="bodySm" tone="subdued">
+                        +{stats.languages.length - 3} more...
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text variant="bodyMd" tone="subdued">
+                    No language data
                   </Text>
                 )}
               </BlockStack>
+            </BlockStack>
+          </Card>
+        </div>
+      </Layout.Section>
+
+      {/* Second Row: Last Optimization & Token Balance */}
+      <Layout.Section>
+        <InlineStack gap="400" wrap>
+          {/* Last Optimization */}
+          <div style={{ flex: '1', minWidth: '300px' }}>
+            <Card>
+              <BlockStack gap="300">
+                <Text variant="headingMd">Last Optimization</Text>
+                
+                <Text variant="bodyLg" fontWeight="semibold">
+                  {stats?.lastOptimization ? 
+                    new Date(stats.lastOptimization).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) 
+                    : 'Never'}
+                </Text>
+                
+                <Button
+                  onClick={() => navigate('/ai-seo/products')}
+                >
+                  Optimize Now
+                </Button>
+              </BlockStack>
             </Card>
           </div>
-          
-          {/* Collections Optimization (if available) */}
-          {hasCollections && (
-            <div style={{ flex: 1 }}>
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text variant="headingMd">Collections</Text>
-                    <Badge tone={collectionOptimizationPercent === 100 ? 'success' : 'attention'}>
-                      {stats?.collections?.optimized || 0} / {stats?.collections?.total || 0}
-                    </Badge>
-                  </InlineStack>
-                  
-                  <ProgressBar 
-                    progress={collectionOptimizationPercent} 
-                    tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'}
-                  />
-                  
-                  <Text variant="bodySm" tone="subdued">
-                    {collectionOptimizationPercent}% optimized for AI Search
-                  </Text>
-                  
-                  {stats?.collections?.lastOptimized && (
-                    <Text variant="bodySm" tone="subdued">
-                      Last: {new Date(stats.collections.lastOptimized).toLocaleDateString()}
-                    </Text>
-                  )}
-                </BlockStack>
-              </Card>
-            </div>
-          )}
-          
+
           {/* Token Balance */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: '1', minWidth: '300px' }}>
             <Card>
-              <BlockStack gap="400">
+              <BlockStack gap="300">
                 <Text variant="headingMd">Token Balance</Text>
                 
-                <Box>
-                  <Text variant="heading2xl" alignment="center">
-                    {tokens?.balance?.toLocaleString() || 0}
+                <Text variant="bodyLg" fontWeight="semibold">
+                  {tokens?.balance?.toLocaleString() || 0} tokens
+                </Text>
+                
+                {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
+                  <Text variant="bodySm" tone="subdued">
+                    {subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly
                   </Text>
-                  <Text variant="bodySm" tone="subdued" alignment="center">
-                    tokens available
-                  </Text>
-                  {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
-                    <Text variant="bodySm" tone="subdued" alignment="center">
-                      ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included)
-                    </Text>
-                  )}
-                </Box>
+                )}
                 
                 <Button
                   variant="primary"
-                  fullWidth
                   onClick={() => navigate('/billing')}
                 >
                   Manage Tokens
@@ -217,25 +311,25 @@ export default function Dashboard({ shop: shopProp }) {
                 </Button>
               )}
               
-              {hasStoreMetadata && (
-                <Button
-                  onClick={() => navigate('/ai-seo/store-metadata')}
-                >
-                  Edit Store Metadata
-                </Button>
-              )}
-              
               <Button
                 onClick={() => navigate('/ai-seo/sitemap')}
               >
                 View Sitemap
               </Button>
               
+              {hasStoreMetadata && (
+                <Button
+                  onClick={() => navigate('/ai-seo/store-metadata')}
+                >
+                  Store Info
+                </Button>
+              )}
+              
               {hasAdvancedSchema && (
                 <Button
                   onClick={() => navigate('/ai-seo/schema-data')}
                 >
-                  Advanced Schema
+                  Schema Data
                 </Button>
               )}
             </InlineStack>
@@ -243,39 +337,23 @@ export default function Dashboard({ shop: shopProp }) {
         </Card>
       </Layout.Section>
 
-      {/* Alerts & Recommendations - only show first 2 most important */}
-      {(stats?.alerts && stats.alerts.length > 0) && (
-        <Layout.Section>
-          <BlockStack gap="300">
-            {stats.alerts.slice(0, 2).map((alert, idx) => (
-              <Banner
-                key={idx}
-                tone={alert.type === 'warning' ? 'warning' : 'info'}
-                title={alert.title}
-                action={alert.action ? {
-                  content: alert.action.label,
-                  onAction: () => navigate(alert.action.url)
-                } : undefined}
-              >
-                {alert.message && <p>{alert.message}</p>}
-              </Banner>
-            ))}
-          </BlockStack>
-        </Layout.Section>
-      )}
-
-      {/* Current Plan Info */}
+      {/* Current Plan */}
       <Layout.Section>
         <Card>
           <BlockStack gap="300">
             <InlineStack align="space-between" blockAlign="center">
-              <Text variant="headingMd">Current Plan</Text>
-              <Badge tone="info">{subscription?.plan?.toUpperCase() || 'N/A'}</Badge>
+              <div>
+                <Text variant="headingMd">Current Plan</Text>
+                <Box paddingBlockStart="100">
+                  <Text variant="bodySm" tone="subdued">
+                    ${subscription?.price || 0}/month
+                  </Text>
+                </Box>
+              </div>
+              <Badge tone="info" size="large">
+                {subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}
+              </Badge>
             </InlineStack>
-            
-            <Text variant="bodySm" tone="subdued">
-              ${subscription?.price || 0}/month
-            </Text>
             
             <Button
               onClick={() => navigate('/billing')}
