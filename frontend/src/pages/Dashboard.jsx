@@ -64,18 +64,17 @@ export default function Dashboard({ shop: shopProp }) {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
-      const [statsRes, tokensRes] = await Promise.all([
-        api.get(`/api/dashboard/stats?shop=${shop}`),
-        api.get(`/api/billing/tokens/balance?shop=${shop}`)
+      // makeSessionFetch връща директно JSON, не Response
+      const [statsData, tokensData] = await Promise.all([
+        api(`/api/dashboard/stats?shop=${shop}`),
+        api(`/api/billing/tokens/balance?shop=${shop}`)
       ]);
-      
-      if (statsRes.ok && tokensRes.ok) {
-        const statsData = await statsRes.json();
-        const tokensData = await tokensRes.json();
-        
+
+      if (statsData) {
         setStats(statsData);
         setSubscription(statsData.subscription);
+      }
+      if (tokensData) {
         setTokens(tokensData);
       }
     } catch (error) {
@@ -87,9 +86,8 @@ export default function Dashboard({ shop: shopProp }) {
   
   const loadSyncStatus = async () => {
     try {
-      const res = await api.get(`/api/dashboard/sync-status?shop=${shop}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api(`/api/dashboard/sync-status?shop=${shop}`);
+      if (data) {
         setSyncStatus(data);
         setAutoSync(data.autoSyncEnabled || false);
       }
@@ -101,15 +99,14 @@ export default function Dashboard({ shop: shopProp }) {
   const handleSync = async () => {
     try {
       setSyncing(true);
-      const res = await api.post(`/api/dashboard/sync?shop=${shop}`, {});
-      console.log('[Dashboard] Sync start response:', res.status);
+      const res = await api(`/api/dashboard/sync?shop=${shop}`, { method: 'POST' });
+      console.log('[Dashboard] Sync start response:', res);
       
       if (res.ok) {
         // Poll for completion
         const pollInterval = setInterval(async () => {
-          const statusRes = await api.get(`/api/dashboard/sync-status?shop=${shop}`);
-          if (statusRes.ok) {
-            const status = await statusRes.json();
+          const status = await api(`/api/dashboard/sync-status?shop=${shop}`);
+          if (status) {
             setSyncStatus(status);
             
             if (!status.inProgress) {
