@@ -37,35 +37,36 @@ function getPlanFeatures(planKey) {
   
   // Professional - all from Starter plus:
   if (planKey === 'professional') {
-    features.push('All from Starter plus:');
+    features.push('All from Starter plus');
+    features.push('Pay-per-use tokens');
     features.push('AI Bot Access: + Gemini (Google)');
     features.push('Store Metadata for AI Search');
-    features.push('AI-enhanced add ons for products (requires tokens)');
+    features.push('AI-enhanced add-ons for products (pay-per-use tokens required)');
     return features;
   }
   
   // Growth - all from Professional plus:
   if (planKey === 'growth') {
-    features.push('All from Professional plus:');
+    features.push('All from Professional plus');
     features.push('Collections optimization');
     features.push('AI Bot Access: + ChatGPT');
     features.push('AI Welcome Page');
-    features.push('AI-enhanced add ons for Collections (requires tokens)');
+    features.push('AI-enhanced add-ons for Collections (pay-per-use tokens required)');
     return features;
   }
   
   // Growth Extra - all from Growth plus:
   if (planKey === 'growth extra') {
-    features.push('All from Growth plus:');
+    features.push('All from Growth plus');
     features.push('AI-Optimized Sitemap');
     features.push('AI Bot Access: + Perplexity');
-    features.push('AI-enhanced add ons (tokens included)');
+    features.push('AI-enhanced add-ons at no extra cost');
     return features;
   }
   
   // Enterprise - all from Growth Extra plus:
   if (planKey === 'enterprise') {
-    features.push('All from Growth Extra plus:');
+    features.push('All from Growth Extra plus');
     features.push('Advanced Schema Data');
     features.push('AI Bot Access: + Deepseek, Bytespider & others');
     return features;

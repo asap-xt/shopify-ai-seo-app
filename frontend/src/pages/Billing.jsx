@@ -216,7 +216,7 @@ export default function Billing({ shop }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                 {plans.map((plan) => (
                   <Card key={plan.key}>
-                    <BlockStack gap="300">
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '12px' }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
                         {subscription?.plan === plan.key && (
@@ -229,21 +229,10 @@ export default function Billing({ shop }) {
                       
                       <Divider />
                       
-                      {/* Product Limit */}
-                      <InlineStack align="space-between">
-                        <Text variant="bodySm" tone="subdued">Products</Text>
-                        <Text variant="bodySm" fontWeight="semibold">
-                          up to {plan.productLimit?.toLocaleString() || 'N/A'}
-                        </Text>
-                      </InlineStack>
-                      
-                      {/* Language Support */}
-                      <InlineStack align="space-between">
-                        <Text variant="bodySm" tone="subdued">Supported languages</Text>
-                        <Text variant="bodySm" fontWeight="semibold">
-                          {plan.languageLimit || 1}
-                        </Text>
-                      </InlineStack>
+                      {/* Combined Product & Language limit */}
+                      <Text variant="bodySm" tone="subdued">
+                        Optimize up to <strong>{plan.productLimit?.toLocaleString() || 'N/A'}</strong> products in up to <strong>{plan.languageLimit || 1}</strong> language(s)
+                      </Text>
                       
                       {/* Included Tokens - only for plans without them (Starter, Professional, Growth) */}
                       {plan.includedTokens > 0 && !['growth extra', 'enterprise'].includes(plan.key) && (
@@ -257,32 +246,41 @@ export default function Billing({ shop }) {
                         <Box>
                           <Text variant="bodySm" fontWeight="semibold">Features:</Text>
                           <BlockStack gap="100">
-                            {plan.features.slice(0, 5).map((feature, idx) => (
+                            {plan.features.map((feature, idx) => (
                               <Text key={idx} variant="bodySm" tone="subdued">
-                                ✓ {feature}
+                                {feature.startsWith('All from') ? feature : `✓ ${feature}`}
                               </Text>
                             ))}
-                            {plan.features.length > 5 && (
-                              <Text variant="bodySm" tone="subdued">
-                                + {plan.features.length - 5} more...
-                              </Text>
-                            )}
                           </BlockStack>
                         </Box>
                       )}
                       
-                      <Button
-                        variant={subscription?.plan === plan.key ? 'plain' : 'primary'}
-                        fullWidth
-                        disabled={subscription?.plan === plan.key}
-                        onClick={() => {
-                          setSelectedPlan(plan);
-                          setShowPlanModal(true);
-                        }}
-                      >
-                        {subscription?.plan === plan.key ? 'Current Plan' : 'Select Plan'}
-                      </Button>
-                    </BlockStack>
+                      {/* Spacer to push button to bottom */}
+                      <div style={{ flexGrow: 1 }} />
+                      
+                      {subscription?.plan === plan.key ? (
+                        <Box 
+                          background="bg-surface-secondary" 
+                          padding="300" 
+                          borderRadius="200"
+                        >
+                          <Text variant="bodySm" alignment="center" tone="subdued" fontWeight="medium">
+                            Current Plan
+                          </Text>
+                        </Box>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          fullWidth
+                          onClick={() => {
+                            setSelectedPlan(plan);
+                            setShowPlanModal(true);
+                          }}
+                        >
+                          Select Plan
+                        </Button>
+                      )}
+                    </div>
                   </Card>
                 ))}
               </div>
