@@ -28,6 +28,9 @@ export default function AiTesting({ shop: shopProp }) {
   const [showAiBotModal, setShowAiBotModal] = useState(false);
   const [selectedBot, setSelectedBot] = useState(null);
   const [customQuestion, setCustomQuestion] = useState('');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -115,6 +118,28 @@ export default function AiTesting({ shop: shopProp }) {
       setAiSimulationResponse(response.response || 'No response generated');
     } catch (error) {
       console.error('[AI-TESTING] Simulation error:', error);
+      
+      // Check for 402 status (payment required)
+      if (error.status === 402) {
+        const errorData = error.data || error;
+        
+        // Plan upgrade required (Starter plan)
+        if (errorData.requiresUpgrade) {
+          setTokenError(errorData);
+          setShowUpgradeModal(true);
+          setAiSimulationResponse('');
+          return;
+        }
+        
+        // Token purchase required (Professional/Growth without tokens)
+        if (errorData.requiresPurchase) {
+          setTokenError(errorData);
+          setShowTokenModal(true);
+          setAiSimulationResponse('');
+          return;
+        }
+      }
+      
       setAiSimulationResponse('Error generating response. Please try again.');
       setToastContent('Failed to simulate AI response');
     }

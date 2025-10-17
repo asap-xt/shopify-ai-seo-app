@@ -202,6 +202,60 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing question parameter for custom type' });
     }
     
+    // === TOKEN CHECKING ===
+    // Import necessary modules for token checking
+    const Subscription = (await import('../db/Subscription.js')).default;
+    const TokenBalance = (await import('../db/TokenBalance.js')).default;
+    
+    // Get subscription and plan
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan?.toLowerCase().replace(/\s+/g, '_') || 'starter';
+    
+    console.log('[AI-SIMULATE] Plan:', planKey);
+    
+    // Starter plan: Block with upgrade modal
+    if (planKey === 'starter') {
+      return res.status(402).json({
+        error: 'AI Testing requires plan upgrade',
+        requiresUpgrade: true,
+        minimumPlan: 'Professional',
+        currentPlan: subscription?.plan || 'Starter',
+        message: 'AI Testing is available starting from Professional plan'
+      });
+    }
+    
+    // Professional & Growth: Check tokens
+    if (planKey === 'professional' || planKey === 'growth') {
+      const tokenBalance = await TokenBalance.findOne({ shop });
+      const estimatedTokens = 5000; // Estimate for simulation
+      
+      if (!tokenBalance || tokenBalance.balance < estimatedTokens) {
+        return res.status(402).json({
+          error: 'Insufficient tokens',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensRequired: estimatedTokens,
+          tokensAvailable: tokenBalance?.balance || 0,
+          tokensNeeded: estimatedTokens - (tokenBalance?.balance || 0),
+          message: 'Purchase tokens to use AI Testing'
+        });
+      }
+      
+      // Reserve tokens
+      const reservation = tokenBalance.reserveTokens(estimatedTokens, 'ai-simulation', { type, question: question?.substring(0, 50) });
+      await tokenBalance.save();
+      
+      console.log('[AI-SIMULATE] Reserved', estimatedTokens, 'tokens');
+      
+      // Store reservationId for later adjustment
+      res.locals.tokenReservationId = reservation.reservationId;
+      res.locals.tokenBalance = tokenBalance;
+    }
+    
+    // Growth Extra & Enterprise: Has included tokens, just track usage
+    // (token consumption will be tracked at the end)
+    // === END TOKEN CHECKING ===
+    
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
@@ -404,13 +458,52 @@ Generate a helpful response.`;
     
     const aiData = await aiResponse.json();
     const generatedResponse = aiData.choices[0]?.message?.content || 'Unable to generate response';
+    const actualTokens = aiData.usage?.total_tokens || 0;
     
     console.log('[AI-SIMULATE] AI response generated:', generatedResponse.substring(0, 100));
+    console.log('[AI-SIMULATE] Actual tokens used:', actualTokens);
+    
+    // === TOKEN CONSUMPTION TRACKING ===
+    if (res.locals.tokenBalance && res.locals.tokenReservationId) {
+      // Professional & Growth: Adjust reservation to actual usage
+      const tokenBalance = res.locals.tokenBalance;
+      const reservationId = res.locals.tokenReservationId;
+      
+      // Consume actual tokens (this will adjust the reservation)
+      tokenBalance.consumeTokens(reservationId, actualTokens);
+      await tokenBalance.save();
+      
+      console.log('[AI-SIMULATE] Consumed', actualTokens, 'tokens from reservation');
+    } else {
+      // Growth Extra & Enterprise: Just log usage (included tokens)
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.findOne({ shop });
+      
+      if (tokenBalance && actualTokens > 0) {
+        tokenBalance.totalUsed = (tokenBalance.totalUsed || 0) + actualTokens;
+        await tokenBalance.save();
+        console.log('[AI-SIMULATE] Tracked', actualTokens, 'tokens usage (included tokens)');
+      }
+    }
+    // === END TOKEN TRACKING ===
     
     res.json({ response: generatedResponse });
     
   } catch (error) {
     console.error('[AI-SIMULATE] Error:', error);
+    
+    // Refund reserved tokens on error (Professional & Growth only)
+    if (res.locals.tokenBalance && res.locals.tokenReservationId) {
+      try {
+        const tokenBalance = res.locals.tokenBalance;
+        tokenBalance.refundTokens(res.locals.tokenReservationId);
+        await tokenBalance.save();
+        console.log('[AI-SIMULATE] Refunded reserved tokens due to error');
+      } catch (refundError) {
+        console.error('[AI-SIMULATE] Error refunding tokens:', refundError);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
