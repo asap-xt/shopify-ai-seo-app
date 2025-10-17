@@ -465,15 +465,14 @@ Generate a helpful response.`;
     
     // === TOKEN CONSUMPTION TRACKING ===
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
-      // Professional & Growth: Adjust reservation to actual usage
+      // Professional & Growth: Finalize reservation with actual usage
       const tokenBalance = res.locals.tokenBalance;
       const reservationId = res.locals.tokenReservationId;
       
-      // Consume actual tokens (this will adjust the reservation)
-      tokenBalance.consumeTokens(reservationId, actualTokens);
-      await tokenBalance.save();
+      // Finalize reservation (this will refund the difference between estimated and actual)
+      await tokenBalance.finalizeReservation(reservationId, actualTokens);
       
-      console.log('[AI-SIMULATE] Consumed', actualTokens, 'tokens from reservation');
+      console.log('[AI-SIMULATE] Finalized reservation:', actualTokens, 'tokens used');
     } else {
       // Growth Extra & Enterprise: Just log usage (included tokens)
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
@@ -496,9 +495,26 @@ Generate a helpful response.`;
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
       try {
         const tokenBalance = res.locals.tokenBalance;
-        tokenBalance.refundTokens(res.locals.tokenReservationId);
-        await tokenBalance.save();
-        console.log('[AI-SIMULATE] Refunded reserved tokens due to error');
+        const reservationId = res.locals.tokenReservationId;
+        
+        // Find the reservation and mark as cancelled, refund the tokens
+        const reservationIndex = tokenBalance.usage.findIndex(
+          u => u.metadata?.reservationId === reservationId && u.metadata?.status === 'reserved'
+        );
+        
+        if (reservationIndex !== -1) {
+          const estimatedAmount = tokenBalance.usage[reservationIndex].tokensUsed;
+          
+          // Refund the estimated amount back to balance
+          tokenBalance.balance += estimatedAmount;
+          
+          // Mark reservation as cancelled
+          tokenBalance.usage[reservationIndex].metadata.status = 'cancelled';
+          tokenBalance.usage[reservationIndex].metadata.cancelledAt = new Date();
+          
+          await tokenBalance.save();
+          console.log('[AI-SIMULATE] Refunded', estimatedAmount, 'reserved tokens due to error');
+        }
       } catch (refundError) {
         console.error('[AI-SIMULATE] Error refunding tokens:', refundError);
       }
