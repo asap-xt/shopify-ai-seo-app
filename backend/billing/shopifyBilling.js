@@ -152,7 +152,8 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
   }
   
   const tokens = TOKEN_CONFIG.calculateTokens(usdAmount);
-  const isTest = process.env.NODE_ENV !== 'production';
+  // ALWAYS use test mode until we go live with real payments
+  const isTest = true;
   
   const mutation = `
     mutation PurchaseTokens(
