@@ -567,8 +567,6 @@ const schema = buildSchema(`
     plan: String!
     planKey: String
     priceUsd: Float
-    ai_queries_used: Int
-    ai_queries_limit: Int
     product_limit: Int
     providersAllowed: [String!]
     modelsSuggested: [String!]

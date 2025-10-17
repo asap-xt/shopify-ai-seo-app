@@ -80,15 +80,13 @@ export async function getPlansMeForShop(app, shop) {
     // Shop info
     shop,
     
-    // Plan info - IMPORTANT: include planKey
+    // Plan info
     plan: planConfig.name,
-    planKey: planConfig.key,  // <-- THIS WAS MISSING
+    planKey: planConfig.key,
     priceUsd: planConfig.priceUsd,
     
-    // Usage
-    ai_queries_used: subscription.queryCount || 0,
-    ai_queries_limit: subscription.queryLimit,
-    product_limit: subscription.productLimit,
+    // Limits (from plan config, not subscription)
+    product_limit: planConfig.productLimit,
     
     // Features
     providersAllowed: planConfig.providersAllowed,
