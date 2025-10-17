@@ -28,6 +28,7 @@ export default function Billing({ shop }) {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showTokenUpgradeModal, setShowTokenUpgradeModal] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState(PRESET_AMOUNTS[0]);
   const [purchasing, setPurchasing] = useState(false);
@@ -327,7 +328,14 @@ export default function Billing({ shop }) {
                 <Button
                   variant="primary"
                   fullWidth
-                  onClick={() => setShowTokenModal(true)}
+                  onClick={() => {
+                    // Starter plan cannot buy tokens - show upgrade modal
+                    if (subscription?.plan === 'starter') {
+                      setShowTokenUpgradeModal(true);
+                    } else {
+                      setShowTokenModal(true);
+                    }
+                  }}
                 >
                   Buy Tokens
                 </Button>
@@ -476,6 +484,54 @@ export default function Billing({ shop }) {
               </Banner>
           )}
         </BlockStack>
+        </Modal.Section>
+      </Modal>
+
+      {/* Token Purchase Upgrade Modal (for Starter plan) */}
+      <Modal
+        open={showTokenUpgradeModal}
+        onClose={() => setShowTokenUpgradeModal(false)}
+        title="Upgrade Required"
+        primaryAction={{
+          content: 'View Plans',
+          onAction: () => {
+            setShowTokenUpgradeModal(false);
+            // Scroll to plans section
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowTokenUpgradeModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text variant="bodyLg">
+              Token purchases require <strong>Professional</strong> plan or higher.
+            </Text>
+            
+            <Text variant="bodyMd" tone="subdued">
+              Your current plan: <strong>Starter</strong>
+            </Text>
+            
+            <Box background="bg-surface-secondary" padding="400" borderRadius="200">
+              <BlockStack gap="200">
+                <Text variant="headingSm">Upgrade to unlock:</Text>
+                <Text variant="bodyMd">✓ Token purchases</Text>
+                <Text variant="bodyMd">✓ AI-enhanced optimization</Text>
+                <Text variant="bodyMd">✓ Store Metadata for AI Search</Text>
+                <Text variant="bodyMd">✓ More AI bot access</Text>
+                <Text variant="bodyMd">✓ Higher product limits</Text>
+              </BlockStack>
+            </Box>
+            
+            <Banner tone="info">
+              <p>Professional plan starts at $15.99/month with up to 250 products.</p>
+            </Banner>
+          </BlockStack>
         </Modal.Section>
       </Modal>
     </>
