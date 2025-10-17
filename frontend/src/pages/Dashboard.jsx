@@ -340,7 +340,7 @@ export default function Dashboard({ shop: shopProp }) {
             </Card>
 
             {/* Current Plan */}
-            <Card style={{ minHeight: 180 }}>
+            <Card style={{ height: 220, minHeight: 220 }}>
               <BlockStack gap="300">
                 <InlineStack align="space-between" blockAlign="center">
                   <div>
@@ -412,12 +412,10 @@ export default function Dashboard({ shop: shopProp }) {
             </Card>
 
             {/* Token Balance */}
-            <Card style={{ minHeight: 180 }}>
+            <Card style={{ height: 220, minHeight: 220 }}>
               <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="headingMd">Token Balance</Text>
-                  <Text variant="headingMd" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0}</Text>
-                </InlineStack>
+                <Text variant="headingMd">Token Balance</Text>
+                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
                 {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
                   <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
                 )}
@@ -430,32 +428,7 @@ export default function Dashboard({ shop: shopProp }) {
 
       {/* Quick Actions removed */}
 
-      {/* Current Plan */}
-      <Layout.Section>
-        <Card>
-          <BlockStack gap="300">
-            <InlineStack align="space-between" blockAlign="center">
-              <div>
-                <Text variant="headingMd">Current Plan</Text>
-                <Box paddingBlockStart="100">
-                  <Text variant="bodySm" tone="subdued">
-                    ${subscription?.price || 0}/month
-                  </Text>
-                </Box>
-              </div>
-              <Badge tone="info" size="large">
-                {subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}
-              </Badge>
-            </InlineStack>
-            
-            <Button
-              onClick={() => navigate('/billing')}
-            >
-              View Plans & Billing
-            </Button>
-          </BlockStack>
-        </Card>
-      </Layout.Section>
+      {/* Removed extra wide Current Plan card */}
       
       {/* Onboarding Accordion */}
       <Layout.Section>
