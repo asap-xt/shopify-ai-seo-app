@@ -330,6 +330,17 @@ export default function AiTesting({ shop: shopProp }) {
                     Test how AI bots would respond to questions about your store based on your structured data.
                   </Text>
 
+                  <Banner tone="info">
+                    <BlockStack gap="100">
+                      <Text variant="bodySm" fontWeight="semibold">Simulation Details:</Text>
+                      <Text variant="bodySm">• <strong>AI Model:</strong> Google Gemini 2.5 Flash Lite</Text>
+                      <Text variant="bodySm">• <strong>Data Source:</strong> Your store's products, collections, and metadata</Text>
+                      <Text variant="bodySm">• <strong>Response Style:</strong> Concise (2-3 sentences), natural language</Text>
+                      <Text variant="bodySm">• <strong>Best For:</strong> General store info, products, categories, contact details</Text>
+                      <Text variant="bodySm">• <strong>Limitations:</strong> May not have real-time data (current stock, active promotions, exact shipping times)</Text>
+                    </BlockStack>
+                  </Banner>
+
                   <BlockStack gap="200">
                     <InlineStack align="space-between">
                       <Text>What products does this store sell?</Text>
