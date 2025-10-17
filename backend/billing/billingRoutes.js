@@ -157,19 +157,36 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     const now = new Date();
     const trialEndsAt = trialDays > 0 ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000) : null;
     
-    await Subscription.findOneAndUpdate(
+    const subscription = await Subscription.findOneAndUpdate(
       { shop },
       {
         shop,
         plan,
         shopifySubscriptionId: shopifySubscription.id,
-        status: 'pending',
+        status: 'active', // Set to active immediately for test mode
         trialEndsAt,
-        pendingActivation: true,
+        pendingActivation: false,
+        activatedAt: now,
         updatedAt: now
       },
       { upsert: true, new: true }
     );
+    
+    // Add included tokens for Growth Extra+ plans (immediately for test mode)
+    const included = getIncludedTokens(subscription.plan);
+    if (included.tokens > 0) {
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // Add included tokens (NOT purchased, just added to balance)
+      await tokenBalance.addIncludedTokens(included.tokens, subscription.plan, shopifySubscription.id);
+      
+      console.log('[Billing] Added included tokens:', {
+        shop,
+        plan: subscription.plan,
+        tokens: included.tokens,
+        newBalance: tokenBalance.balance
+      });
+    }
     
     res.json({
       confirmationUrl,
