@@ -75,6 +75,29 @@ function getPlanFeatures(planKey) {
 }
 
 /**
+ * DEBUG: Get full subscription and token data
+ * GET /api/billing/debug?shop={shop}
+ */
+router.get('/debug', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    const subscription = await Subscription.findOne({ shop });
+    const tokenBalance = await TokenBalance.findOne({ shop });
+    
+    res.json({
+      shop,
+      subscription: subscription ? subscription.toObject() : null,
+      tokenBalance: tokenBalance ? tokenBalance.toObject() : null,
+      includedTokensForPlan: subscription ? getIncludedTokens(subscription.plan) : null
+    });
+  } catch (error) {
+    console.error('[Billing Debug] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Get billing info for current shop
  * GET /api/billing/info?shop={shop}
  */
