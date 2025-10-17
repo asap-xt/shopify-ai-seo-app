@@ -268,117 +268,97 @@ export default function Dashboard({ shop: shopProp }) {
       {/* Main Stats Grid */}
       <Layout.Section>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-          {/* Products Card */}
+          {/* Products & Collections Card */}
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd">Products & Collections</Text>
               
-              <BlockStack gap="200">
-                <InlineStack align="space-between">
-                  <Text variant="bodyMd" tone="subdued">Total</Text>
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    {stats?.products?.total || 0}
-                  </Text>
-                </InlineStack>
-                
-                <InlineStack align="space-between">
-                  <Text variant="bodyMd" tone="subdued">Optimized</Text>
-                  <Text variant="bodyMd" fontWeight="semibold" tone="success">
-                    {stats?.products?.optimized || 0}
-                  </Text>
-                </InlineStack>
-
-                {/* Collections summary inline */}
-                {stats?.collections && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                {/* Products Section */}
+                <BlockStack gap="150">
+                  <Text variant="bodyMd" fontWeight="semibold">Products</Text>
                   <InlineStack align="space-between">
-                    <Text variant="bodyMd" tone="subdued">Collections</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      {(stats.collections.optimized || 0)}/{(stats.collections.total || 0)}
-                    </Text>
+                    <Text variant="bodySm" tone="subdued">Total</Text>
+                    <Text variant="bodySm" fontWeight="semibold">{stats?.products?.total || 0}</Text>
                   </InlineStack>
-                )}
-                
-                <Divider />
-                
-                <Box paddingBlockStart="200">
-                  <ProgressBar 
-                    progress={productOptimizationPercent} 
-                    size="small"
-                    tone={productOptimizationPercent === 100 ? 'success' : 'primary'}
-                  />
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Optimized</Text>
+                    <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.products?.optimized || 0}</Text>
+                  </InlineStack>
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Unoptimized</Text>
+                    <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.products?.total || 0) - (stats?.products?.optimized || 0), 0)}</Text>
+                  </InlineStack>
                   <Box paddingBlockStart="100">
-                    <Text variant="bodySm" tone="subdued">
-                      {productOptimizationPercent}% optimized
-                    </Text>
-                  </Box>
-                </Box>
-              </BlockStack>
-            </BlockStack>
-          </Card>
-
-          {/* Collections Card (if available) */}
-          {hasCollections && (
-            <Card>
-              <BlockStack gap="400">
-                <Text variant="headingMd">Collections</Text>
-                
-                <BlockStack gap="200">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd" tone="subdued">Total</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      {stats?.collections?.total || 0}
-                    </Text>
-                  </InlineStack>
-                  
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd" tone="subdued">Optimized</Text>
-                    <Text variant="bodyMd" fontWeight="semibold" tone="success">
-                      {stats?.collections?.optimized || 0}
-                    </Text>
-                  </InlineStack>
-                  
-                  <Divider />
-                  
-                  <Box paddingBlockStart="200">
-                    <ProgressBar 
-                      progress={collectionOptimizationPercent} 
-                      size="small"
-                      tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'}
-                    />
-                    <Box paddingBlockStart="100">
-                      <Text variant="bodySm" tone="subdued">
-                        {collectionOptimizationPercent}% optimized
-                      </Text>
+                    <ProgressBar progress={productOptimizationPercent} size="small" tone={productOptimizationPercent === 100 ? 'success' : 'primary'} />
+                    <Box paddingBlockStart="050">
+                      <Text variant="bodySm" tone="subdued">{productOptimizationPercent}% optimized</Text>
                     </Box>
                   </Box>
                 </BlockStack>
-              </BlockStack>
-            </Card>
-          )}
+
+                {/* Collections Section */}
+                <BlockStack gap="150">
+                  <Text variant="bodyMd" fontWeight="semibold">Collections</Text>
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Total</Text>
+                    <Text variant="bodySm" fontWeight="semibold">{stats?.collections?.total || 0}</Text>
+                  </InlineStack>
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Optimized</Text>
+                    <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.collections?.optimized || 0}</Text>
+                  </InlineStack>
+                  <InlineStack align="space-between">
+                    <Text variant="bodySm" tone="subdued">Unoptimized</Text>
+                    <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.collections?.total || 0) - (stats?.collections?.optimized || 0), 0)}</Text>
+                  </InlineStack>
+                  <Box paddingBlockStart="100">
+                    <ProgressBar progress={collectionOptimizationPercent} size="small" tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'} />
+                    <Box paddingBlockStart="050">
+                      <Text variant="bodySm" tone="subdued">{collectionOptimizationPercent}% optimized</Text>
+                    </Box>
+                  </Box>
+                </BlockStack>
+              </div>
+
+              <Divider />
+              <InlineStack align="space-between">
+                <Text variant="bodySm" tone="subdued">
+                  Last synced: {syncStatus?.lastSyncDate ? new Date(syncStatus.lastSyncDate).toLocaleString() : 'Never'}
+                </Text>
+                <Text variant="bodySm" tone="subdued">
+                  Last optimized: {stats?.lastOptimization ? new Date(stats.lastOptimization).toLocaleString() : 'Never'}
+                </Text>
+              </InlineStack>
+            </BlockStack>
+          </Card>
+
+          {/* Removed separate Collections card to avoid duplication */}
 
           {/* Languages & Markets Card */}
           <Card>
             <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="headingMd">Languages</Text>
-                {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
-                  <Badge tone="info">{stats.storeMarkets.length} markets</Badge>
-                )}
-              </InlineStack>
+              <Text variant="headingMd">Languages & Markets</Text>
               
               <BlockStack gap="200">
                 {stats?.languages && stats.languages.length > 0 ? (
                   <>
-                    {stats.languages.slice(0, 3).map((lang, idx) => (
-                      <InlineStack key={idx} align="space-between">
-                        <Text variant="bodyMd" tone="subdued">
-                          {lang.name || lang.code} {lang.primary && '★'}
-                        </Text>
-                        <Badge tone={lang.optimizedCount > 0 ? 'success' : 'subdued'}>
-                          {lang.optimizedCount || 0}
-                        </Badge>
-                      </InlineStack>
-                    ))}
+                    {stats.languages
+                      .slice()
+                      .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (b.totalCount || 0) - (a.totalCount || 0))
+                      .slice(0, 3)
+                      .map((lang, idx) => {
+                        const pct = lang.totalCount > 0 ? Math.round((lang.optimizedCount / lang.totalCount) * 100) : 0;
+                        return (
+                          <BlockStack key={idx} gap="050">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" tone="subdued">{lang.name || lang.code} {lang.primary ? '★' : ''}</Text>
+                              <Text variant="bodySm" fontWeight="semibold">{lang.optimizedCount || 0}/{lang.totalCount || 0}</Text>
+                            </InlineStack>
+                            <ProgressBar progress={pct} size="small" tone={pct === 100 ? 'success' : 'primary'} />
+                          </BlockStack>
+                        );
+                      })}
                     {stats.languages.length > 3 && (
                       <Text variant="bodySm" tone="subdued">
                         +{stats.languages.length - 3} more...
@@ -469,7 +449,7 @@ export default function Dashboard({ shop: shopProp }) {
       {/* Quick Actions */}
       <Layout.Section>
         <Card>
-          <BlockStack gap="400">
+      <BlockStack gap="400">
             <Text variant="headingMd">Quick Actions</Text>
             
             <InlineStack gap="300" wrap>
@@ -642,7 +622,7 @@ export default function Dashboard({ shop: shopProp }) {
                 </BlockStack>
               </Box>
             </Collapsible>
-          </BlockStack>
+      </BlockStack>
         </Card>
       </Layout.Section>
     </Layout>
