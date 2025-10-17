@@ -5,6 +5,7 @@ import Collection from '../db/Collection.js';
 import Shop from '../db/Shop.js';
 import Sitemap from '../db/Sitemap.js';
 import Subscription from '../db/Subscription.js';
+import TokenBalance from '../db/TokenBalance.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
@@ -83,73 +84,91 @@ router.get('/stats', verifyRequest, async (req, res) => {
     }
     
     // Generate alerts & recommendations
+    // Priority order: Products > Collections > Store Metadata > Token Balance > Advanced Schema > Sitemap
     const alerts = [];
     
-    // Alert: Unoptimized products
+    // PRIORITY 1: Unoptimized products (MOST IMPORTANT)
     const unoptimizedProducts = totalProducts - optimizedProducts;
     if (unoptimizedProducts > 0) {
       alerts.push({
         type: 'warning',
-        title: `${unoptimizedProducts} products not yet optimized`,
-        message: 'Optimize your products to improve AI Search visibility.',
+        title: `${unoptimizedProducts} product${unoptimizedProducts > 1 ? 's' : ''} not yet optimized`,
+        message: 'Optimize your products to improve AI Search visibility and drive more organic traffic.',
         action: {
           label: 'Optimize Now',
-          url: `/products?shop=${shop}`
+          url: `/ai-seo/products`
         }
       });
     }
     
-    // Alert: Unoptimized collections (if available)
+    // PRIORITY 2: Unoptimized collections (if available)
     if (hasCollections) {
       const unoptimizedCollections = totalCollections - optimizedCollections;
       if (unoptimizedCollections > 0) {
         alerts.push({
           type: 'warning',
-          title: `${unoptimizedCollections} collections not yet optimized`,
+          title: `${unoptimizedCollections} collection${unoptimizedCollections > 1 ? 's' : ''} not yet optimized`,
           message: 'Optimize your collections to improve AI Search visibility.',
           action: {
             label: 'Optimize Now',
-            url: `/collections?shop=${shop}`
+            url: `/ai-seo/collections`
           }
         });
       }
     }
     
-    // Alert: Incomplete Store Metadata
+    // PRIORITY 3: Incomplete Store Metadata
     if (hasStoreMetadata && !storeMetadataComplete) {
       alerts.push({
         type: 'info',
-        title: 'Store Metadata incomplete',
-        message: 'Complete your store metadata to help AI provide accurate information about shipping, returns, and policies.',
+        title: 'Complete your store information',
+        message: 'Add shipping, return policies, and store details to help AI provide accurate information to customers.',
         action: {
           label: 'Complete Now',
-          url: `/store-metadata?shop=${shop}`
+          url: `/ai-seo/store-metadata`
         }
       });
     }
     
-    // Alert: No sitemap
-    if (!sitemapGenerated) {
-      alerts.push({
-        type: 'info',
-        title: 'Sitemap not yet generated',
-        message: 'Generate a sitemap to help AI bots discover your store content.',
-        action: {
-          label: 'Generate Sitemap',
-          url: `/sitemap?shop=${shop}`
-        }
-      });
+    // PRIORITY 4: Low token balance (only for pay-per-use plans)
+    const payPerUsePlans = ['starter', 'professional', 'growth'];
+    if (payPerUsePlans.includes(plan)) {
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      if (tokenBalance.balance < 10000) { // Less than 10K tokens
+        alerts.push({
+          type: 'warning',
+          title: 'Low token balance',
+          message: `You have ${tokenBalance.balance.toLocaleString()} tokens remaining. Purchase more to continue using AI features.`,
+          action: {
+            label: 'Buy Tokens',
+            url: `/billing`
+          }
+        });
+      }
     }
     
-    // Alert: Advanced Schema not set up (Enterprise only)
+    // PRIORITY 5: Advanced Schema not set up (Enterprise only)
     if (hasAdvancedSchema && !advancedSchemaActive) {
       alerts.push({
         type: 'info',
-        title: 'Advanced Schema not set up',
+        title: 'Advanced Schema available',
         message: 'Add structured data to your products to improve AI understanding.',
         action: {
           label: 'Set Up Schema',
-          url: `/schema?shop=${shop}`
+          url: `/ai-seo/schema-data`
+        }
+      });
+    }
+    
+    // PRIORITY 6: No sitemap (LEAST IMPORTANT - shown last)
+    if (!sitemapGenerated) {
+      alerts.push({
+        type: 'info',
+        title: 'Generate your AI Sitemap',
+        message: 'Create a sitemap to help AI bots discover your store content.',
+        action: {
+          label: 'Generate Sitemap',
+          url: `/ai-seo/sitemap`
         }
       });
     }

@@ -243,58 +243,11 @@ export default function Dashboard({ shop: shopProp }) {
         </Card>
       </Layout.Section>
 
-      {/* AI Features Status */}
-      <Layout.Section>
-        <Card>
-          <BlockStack gap="400">
-            <Text variant="headingMd">AI Features Status</Text>
-            
-            <Divider />
-            
-            <BlockStack gap="300">
-              {/* Store Metadata */}
-              {hasStoreMetadata && (
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="bodyMd">Store Metadata</Text>
-                  {stats?.storeMetadata?.complete ? (
-                    <Badge tone="success">✓ Complete</Badge>
-                  ) : (
-                    <Badge tone="warning">Incomplete</Badge>
-                  )}
-                </InlineStack>
-              )}
-              
-              {/* Sitemap */}
-              <InlineStack align="space-between" blockAlign="center">
-                <Text variant="bodyMd">Sitemap</Text>
-                {stats?.sitemap?.generated ? (
-                  <Badge tone="success">✓ Generated</Badge>
-                ) : (
-                  <Badge tone="attention">Not yet</Badge>
-                )}
-              </InlineStack>
-              
-              {/* Advanced Schema */}
-              {hasAdvancedSchema && (
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="bodyMd">Advanced Schema</Text>
-                  {stats?.advancedSchema?.active ? (
-                    <Badge tone="success">✓ Active</Badge>
-                  ) : (
-                    <Badge tone="attention">Not set up</Badge>
-                  )}
-                </InlineStack>
-              )}
-            </BlockStack>
-          </BlockStack>
-        </Card>
-      </Layout.Section>
-
-      {/* Alerts & Recommendations */}
+      {/* Alerts & Recommendations - only show first 2 most important */}
       {(stats?.alerts && stats.alerts.length > 0) && (
         <Layout.Section>
           <BlockStack gap="300">
-            {stats.alerts.map((alert, idx) => (
+            {stats.alerts.slice(0, 2).map((alert, idx) => (
               <Banner
                 key={idx}
                 tone={alert.type === 'warning' ? 'warning' : 'info'}
