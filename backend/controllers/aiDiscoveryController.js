@@ -474,14 +474,16 @@ Generate a helpful response.`;
       
       console.log('[AI-SIMULATE] Finalized reservation:', actualTokens, 'tokens used');
     } else {
-      // Growth Extra & Enterprise: Just log usage (included tokens)
+      // Growth Extra & Enterprise: Deduct from included tokens balance
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
       const tokenBalance = await TokenBalance.findOne({ shop });
       
       if (tokenBalance && actualTokens > 0) {
+        // Deduct from balance (included tokens)
+        tokenBalance.balance = Math.max(0, tokenBalance.balance - actualTokens);
         tokenBalance.totalUsed = (tokenBalance.totalUsed || 0) + actualTokens;
         await tokenBalance.save();
-        console.log('[AI-SIMULATE] Tracked', actualTokens, 'tokens usage (included tokens)');
+        console.log('[AI-SIMULATE] Deducted', actualTokens, 'tokens from included balance');
       }
     }
     // === END TOKEN TRACKING ===

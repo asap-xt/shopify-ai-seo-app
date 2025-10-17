@@ -288,50 +288,34 @@ export default function Billing({ shop }) {
 
         {/* Token Balance - 1/3 width */}
         <Layout.Section variant="oneThird">
-          <Card>
+      <Card>
             <BlockStack gap="400">
               <Text variant="headingMd">Token Balance</Text>
               
               <Divider />
               
-              <BlockStack gap="300">
-                {/* For Growth Extra & Enterprise: Show included tokens prominently */}
-                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') ? (
-                  <>
-                    <Box>
-                      <Text variant="heading2xl" alignment="center">
-                        {subscription?.plan === 'growth extra' ? '100,000,000' : '300,000,000'}
-                      </Text>
-                      <Text variant="bodySm" tone="subdued" alignment="center">
-                        tokens available
-                      </Text>
-                      <Text variant="bodySm" tone="subdued" alignment="center">
-                        ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
-                      </Text>
-                    </Box>
-                    
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Additional Purchased</Text>
-                      <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
-                    </InlineStack>
-                  </>
-                ) : (
-                  <>
-                    <Box>
-                      <Text variant="heading2xl" alignment="center">
-                        {tokens?.balance?.toLocaleString() || 0}
-                      </Text>
-                      <Text variant="bodySm" tone="subdued" alignment="center">
-                        tokens available
-                      </Text>
-                    </Box>
-                    
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Purchased</Text>
-                      <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
-                    </InlineStack>
-                  </>
-                )}
+        <BlockStack gap="300">
+            {/* Show current balance for all plans */}
+            <Box>
+              <Text variant="heading2xl" alignment="center">
+                {tokens?.balance?.toLocaleString() || 0}
+              </Text>
+              <Text variant="bodySm" tone="subdued" alignment="center">
+                tokens available
+              </Text>
+              {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
+                <Text variant="bodySm" tone="subdued" alignment="center">
+                  ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
+                </Text>
+              )}
+            </Box>
+            
+            <InlineStack align="space-between">
+              <Text variant="bodySm" tone="subdued">
+                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') ? 'Additional Purchased' : 'Purchased'}
+              </Text>
+              <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
+            </InlineStack>
                 
                 <InlineStack align="space-between">
                   <Text variant="bodySm" tone="subdued">Used</Text>
@@ -490,8 +474,8 @@ export default function Billing({ shop }) {
               <Banner tone="info">
                 <p>Your trial will continue after purchasing tokens.</p>
               </Banner>
-            )}
-          </BlockStack>
+          )}
+        </BlockStack>
         </Modal.Section>
       </Modal>
     </>
