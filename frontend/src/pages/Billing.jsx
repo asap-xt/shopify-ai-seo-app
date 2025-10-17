@@ -216,7 +216,7 @@ export default function Billing({ shop }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                 {plans.map((plan) => (
                   <Card key={plan.key}>
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '400px', gap: '12px' }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
                         {subscription?.plan === plan.key && (
@@ -231,7 +231,7 @@ export default function Billing({ shop }) {
                       
                       {/* Combined Product & Language limit */}
                       <Text variant="bodySm" tone="subdued">
-                        Optimize up to <strong>{plan.productLimit?.toLocaleString() || 'N/A'}</strong> products in up to <strong>{plan.languageLimit || 1}</strong> language(s)
+                        Optimize up to <strong>{plan.productLimit?.toLocaleString() || 'N/A'}</strong> products in up to <strong>{plan.languageLimit || 1}</strong> {plan.languageLimit === 1 ? 'language' : 'languages'}
                       </Text>
                       
                       {/* Included Tokens - only for plans without them (Starter, Professional, Growth) */}
@@ -263,6 +263,7 @@ export default function Billing({ shop }) {
                           background="bg-surface-secondary" 
                           padding="300" 
                           borderRadius="200"
+                          style={{ marginTop: 'auto' }}
                         >
                           <Text variant="bodySm" alignment="center" tone="subdued" fontWeight="medium">
                             Current Plan
