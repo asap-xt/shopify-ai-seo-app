@@ -576,27 +576,27 @@ export default function AiTesting({ shop: shopProp }) {
         onClose={() => setShowAiBotModal(false)}
         title={`Test with ${selectedBot?.name}`}
         primaryAction={{
-          content: 'Copy Prompt',
-          onAction: () => {
-            navigator.clipboard.writeText(`What products does ${shop} sell? Tell me about this business and what they offer.`);
-            setToastContent('Prompt copied to clipboard!');
-          }
+          content: 'Open AI Bot',
+          url: selectedBot?.url,
+          external: true
         }}
         secondaryActions={[
           {
-            content: 'Open AI Bot',
-            url: selectedBot?.url,
-            external: true
+            content: 'Copy Prompt',
+            onAction: () => {
+              navigator.clipboard.writeText(`What products does ${shop} sell? Tell me about this business and what they offer.`);
+              setToastContent('Prompt copied to clipboard!');
+            }
           }
         ]}
       >
         <Modal.Section>
           <BlockStack gap="300">
             <Text variant="bodyMd">
-              1. Click "Copy Prompt" below
+              1. Click "Copy Prompt" (left button)
             </Text>
             <Text variant="bodyMd">
-              2. Click "Open AI Bot" to visit {selectedBot?.name}
+              2. Click "Open AI Bot" (right button) to visit {selectedBot?.name}
             </Text>
             <Text variant="bodyMd">
               3. Paste the prompt and send
