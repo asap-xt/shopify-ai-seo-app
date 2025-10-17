@@ -625,7 +625,11 @@ export default function AiTesting({ shop: shopProp }) {
         title="Upgrade Required"
         primaryAction={{
           content: 'View Plans',
-          onAction: () => window.location.href = '/billing'
+          onAction: () => {
+            const currentParams = new URLSearchParams(window.location.search);
+            const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+            window.location.href = `/billing${paramString}`;
+          }
         }}
         secondaryActions={[
           {
@@ -656,7 +660,11 @@ export default function AiTesting({ shop: shopProp }) {
         title="Upgrade Required"
         primaryAction={{
           content: 'View Plans',
-          onAction: () => window.location.href = '/billing'
+          onAction: () => {
+            const currentParams = new URLSearchParams(window.location.search);
+            const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+            window.location.href = `/billing${paramString}`;
+          }
         }}
         secondaryActions={[
           {
@@ -687,7 +695,11 @@ export default function AiTesting({ shop: shopProp }) {
         title="Insufficient Tokens"
         primaryAction={{
           content: 'Buy Tokens',
-          onAction: () => window.location.href = '/billing'
+          onAction: () => {
+            const currentParams = new URLSearchParams(window.location.search);
+            const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+            window.location.href = `/billing${paramString}`;
+          }
         }}
         secondaryActions={[
           {
