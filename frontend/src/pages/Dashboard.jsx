@@ -23,12 +23,14 @@ const qs = (k, d = '') => {
 
 export default function Dashboard({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
-  
-  // Navigation helper (no react-router-dom needed)
-  const navigate = (path) => {
-    window.location.href = path;
-  };
   const api = useMemo(() => makeSessionFetch(), []);
+  
+  // Navigation helper - preserves all URL parameters
+  const navigate = (path) => {
+    const currentParams = new URLSearchParams(window.location.search);
+    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    window.location.href = `${path}${paramString}`;
+  };
   
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
@@ -184,7 +186,7 @@ export default function Dashboard({ shop: shopProp }) {
                 <Button
                   variant="primary"
                   fullWidth
-                  onClick={() => navigate(`/billing?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                  onClick={() => navigate('/billing')}
                 >
                   Manage Tokens
                 </Button>
@@ -202,14 +204,14 @@ export default function Dashboard({ shop: shopProp }) {
             
             <InlineStack gap="300" wrap>
               <Button
-                onClick={() => navigate(`/products?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                onClick={() => navigate('/products')}
               >
                 Optimize Products
               </Button>
               
               {hasCollections && (
                 <Button
-                  onClick={() => navigate(`/collections?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                  onClick={() => navigate('/collections')}
                 >
                   Optimize Collections
                 </Button>
@@ -217,21 +219,21 @@ export default function Dashboard({ shop: shopProp }) {
               
               {hasStoreMetadata && (
                 <Button
-                  onClick={() => navigate(`/store-metadata?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                  onClick={() => navigate('/store-metadata')}
                 >
                   Edit Store Metadata
                 </Button>
               )}
               
               <Button
-                onClick={() => navigate(`/sitemap?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                onClick={() => navigate('/sitemap')}
               >
                 View Sitemap
               </Button>
               
               {hasAdvancedSchema && (
                 <Button
-                  onClick={() => navigate(`/schema?shop=${shop}&host=${qs('host')}&embedded=1`)}
+                  onClick={() => navigate('/schema')}
                 >
                   Advanced Schema
                 </Button>
@@ -323,7 +325,7 @@ export default function Dashboard({ shop: shopProp }) {
             </Text>
             
             <Button
-              onClick={() => navigate(`/billing?shop=${shop}&host=${qs('host')}&embedded=1`)}
+              onClick={() => navigate('/billing')}
             >
               View Plans & Billing
             </Button>
