@@ -154,39 +154,31 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     );
     
     // Save pending subscription to MongoDB
+    // IMPORTANT: Status remains 'pending' until APP_SUBSCRIPTIONS_UPDATE webhook confirms payment
+    // This prevents users from getting free tokens by canceling before payment
     const now = new Date();
     const trialEndsAt = trialDays > 0 ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000) : null;
     
-    const subscription = await Subscription.findOneAndUpdate(
+    await Subscription.findOneAndUpdate(
       { shop },
       {
         shop,
         plan,
         shopifySubscriptionId: shopifySubscription.id,
-        status: 'active', // Set to active immediately for test mode
+        status: 'pending', // Will be activated by APP_SUBSCRIPTIONS_UPDATE webhook
         trialEndsAt,
-        pendingActivation: false,
-        activatedAt: now,
+        pendingActivation: true,
         updatedAt: now
       },
       { upsert: true, new: true }
     );
     
-    // Add included tokens for Growth Extra+ plans (immediately for test mode)
-    const included = getIncludedTokens(subscription.plan);
-    if (included.tokens > 0) {
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
-      
-      // Add included tokens (NOT purchased, just added to balance)
-      await tokenBalance.addIncludedTokens(included.tokens, subscription.plan, shopifySubscription.id);
-      
-      console.log('[Billing] Added included tokens:', {
-        shop,
-        plan: subscription.plan,
-        tokens: included.tokens,
-        newBalance: tokenBalance.balance
-      });
-    }
+    console.log('[Billing] Subscription created as PENDING:', {
+      shop,
+      plan,
+      shopifySubscriptionId: shopifySubscription.id,
+      message: 'Awaiting APP_SUBSCRIPTIONS_UPDATE webhook to activate'
+    });
     
     res.json({
       confirmationUrl,

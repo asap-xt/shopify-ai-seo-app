@@ -1067,11 +1067,15 @@ async function mountOptionalRouters(app) {
     const { default: productsWebhook } = await import('./webhooks/products.js');
     const { default: uninstallWebhook } = await import('./webhooks/uninstall.js');
     const { default: collectionsWebhook } = await import('./webhooks/collections.js');
+    const { default: subscriptionUpdateWebhook } = await import('./webhooks/subscription-update.js');
+    const { default: subscriptionBillingWebhook } = await import('./webhooks/subscription-billing.js');
 
     // Example webhook endpoints (adjust paths if your files expect different)
     app.post('/webhooks/products', validateShopifyWebhook, productsWebhook);
     app.post('/webhooks/collections', validateShopifyWebhook, collectionsWebhook);
     app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
+    app.post('/webhooks/subscription/update', validateShopifyWebhook, subscriptionUpdateWebhook);
+    app.post('/webhooks/subscription/billing', validateShopifyWebhook, subscriptionBillingWebhook);
     console.log('✔ Webhooks mounted');
   } catch (e) {
     console.log('ℹ Webhooks not mounted (missing files or import error).', e?.message || '');
