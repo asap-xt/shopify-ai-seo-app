@@ -305,16 +305,7 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
           node {
             id
             name
-            primary
             enabled
-            regions(first: 50) {
-              edges {
-                node {
-                  name
-                  code
-                }
-              }
-            }
           }
         }
       }
@@ -338,13 +329,7 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
       { shop },
       { 
         $set: { 
-          'storeMarkets': markets.map(m => ({
-            id: m.id,
-            name: m.name,
-            primary: m.primary,
-            enabled: m.enabled,
-            regions: m.regions?.edges?.map(r => r.node) || []
-          }))
+          'storeMarkets': markets.map(m => ({ id: m.id, name: m.name, enabled: m.enabled }))
         } 
       }
     );

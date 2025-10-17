@@ -30,7 +30,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
     const totalProducts = await Product.countDocuments({ shop });
     const optimizedProducts = await Product.countDocuments({ 
       shop, 
-      optimized: true 
+      'seoStatus.optimized': true 
     });
     const lastOptimizedProduct = await Product.findOne({ 
       shop, 
@@ -47,7 +47,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
       totalCollections = await Collection.countDocuments({ shop });
       optimizedCollections = await Collection.countDocuments({ 
         shop, 
-        optimized: true 
+        'seoStatus.optimized': true 
       });
       lastOptimizedCollection = await Collection.findOne({ 
         shop, 
