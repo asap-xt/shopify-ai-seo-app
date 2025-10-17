@@ -253,7 +253,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
     const stats = {
       subscription: {
         plan,
-        price: subscription.price || 0
+        price: subscription?.price || 0
       },
       products: {
         total: totalProducts,

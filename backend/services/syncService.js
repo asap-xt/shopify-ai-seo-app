@@ -97,6 +97,8 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
     try {
       // Process metafields to determine optimization status
       const seoStatus = processMetafields(product.metafields);
+      // Normalize IDs (Shopify returns GID like gid://shopify/Product/12345)
+      const numericId = typeof product.id === 'string' ? product.id.split('/').pop() : null;
       
       await Product.findOneAndUpdate(
         { 
@@ -106,6 +108,8 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
         {
           shop,
           shopifyProductId: product.id,
+          gid: product.id,
+          productId: numericId,
           title: product.title,
           handle: product.handle,
           description: product.description,
@@ -157,7 +161,7 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
               handle
               description
               descriptionHtml
-              productsCount
+              productsCount { count }
               updatedAt
               metafields(first: 50, namespace: "seo_ai") {
                 edges {
@@ -220,7 +224,7 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
           handle: collection.handle,
           description: collection.description,
           descriptionHtml: collection.descriptionHtml,
-          productsCount: collection.productsCount,
+          productsCount: collection.productsCount?.count || 0,
           seoStatus,
           updatedAt: collection.updatedAt,
           syncedAt: new Date()
