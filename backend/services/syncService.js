@@ -68,7 +68,7 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
     `;
 
     const response = await adminGraphql(query, { cursor });
-    const { products } = response.data;
+    const { products } = response || {};
 
     if (!products || !products.edges) {
       console.error('[SYNC] Invalid response from Shopify GraphQL');
@@ -177,7 +177,7 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
     `;
 
     const response = await adminGraphql(query, { cursor });
-    const { collections } = response.data;
+    const { collections } = response || {};
 
     if (!collections || !collections.edges) {
       console.error('[SYNC] Invalid collections response from Shopify GraphQL');
@@ -255,7 +255,7 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
 
   try {
     const response = await adminGraphql(query);
-    const languages = response.data?.shopLocales || [];
+    const languages = response?.shopLocales || [];
 
     if (progressCallback) {
       progressCallback({
@@ -319,7 +319,7 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
 
   try {
     const response = await adminGraphql(query);
-    const markets = response.data?.markets?.edges?.map(e => e.node) || [];
+    const markets = response?.markets?.edges?.map(e => e.node) || [];
 
     if (progressCallback) {
       progressCallback({
