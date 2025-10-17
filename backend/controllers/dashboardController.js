@@ -34,26 +34,20 @@ router.get('/stats', verifyRequest, async (req, res) => {
     });
     const lastOptimizedProduct = await Product.findOne({ 
       shop, 
-      optimized: true 
+      'seoStatus.optimized': true 
     }).sort({ updatedAt: -1 }).select('updatedAt');
     
-    // Collections stats (only for Growth+)
+    // Collections stats (always computed; UI can still gate features by plan)
     const hasCollections = ['growth', 'growth_extra', 'enterprise'].includes(plan);
-    let totalCollections = 0;
-    let optimizedCollections = 0;
-    let lastOptimizedCollection = null;
-    
-    if (hasCollections) {
-      totalCollections = await Collection.countDocuments({ shop });
-      optimizedCollections = await Collection.countDocuments({ 
-        shop, 
-        'seoStatus.optimized': true 
-      });
-      lastOptimizedCollection = await Collection.findOne({ 
-        shop, 
-        optimized: true 
-      }).sort({ updatedAt: -1 }).select('updatedAt');
-    }
+    const totalCollections = await Collection.countDocuments({ shop });
+    const optimizedCollections = await Collection.countDocuments({ 
+      shop, 
+      'seoStatus.optimized': true 
+    });
+    const lastOptimizedCollection = await Collection.findOne({ 
+      shop, 
+      'seoStatus.optimized': true 
+    }).sort({ updatedAt: -1 }).select('updatedAt');
     
     // Store Metadata status (only for Professional+)
     const hasStoreMetadata = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(plan);
@@ -176,7 +170,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
     }
     
     // Get language statistics
-    const languageStats = [];
+    let languageStats = [];
     try {
       // Aggregate products by language and optimization status
       const languageAgg = await Product.aggregate([
@@ -192,7 +186,27 @@ router.get('/stats', verifyRequest, async (req, res) => {
         { $sort: { totalCount: -1 } }
       ]);
       
-      languageAgg.forEach(lang => {
+      // Merge with storeLanguages from Shop to always show available languages
+      const shopDataForLangs = await Shop.findOne({ shop }).lean();
+      const storeLangs = shopDataForLangs?.storeLanguages || [];
+
+      const aggByCode = new Map(languageAgg.map(l => [l._id, l]));
+
+      storeLangs.forEach(l => {
+        const agg = aggByCode.get(l.locale);
+        const langName = l.name || l.locale;
+        languageStats.push({
+          code: l.locale,
+          name: langName,
+          optimizedCount: agg?.optimizedCount || 0,
+          totalCount: agg?.totalCount || 0,
+          primary: !!l.primary
+        });
+        if (agg) aggByCode.delete(l.locale);
+      });
+
+      // Add any remaining languages from aggregation not present in storeLanguages
+      for (const [code, agg] of aggByCode.entries()) {
         const langName = {
           'en': 'English',
           'de': 'German',
@@ -204,16 +218,16 @@ router.get('/stats', verifyRequest, async (req, res) => {
           'ja': 'Japanese',
           'zh': 'Chinese',
           'ko': 'Korean'
-        }[lang._id] || lang._id;
-        
+        }[code] || code;
+
         languageStats.push({
-          code: lang._id,
+          code,
           name: langName,
-          optimizedCount: lang.optimizedCount,
-          totalCount: lang.totalCount,
-          primary: lang._id === 'en' // Assume English is primary if present
+          optimizedCount: agg.optimizedCount,
+          totalCount: agg.totalCount,
+          primary: code === 'en'
         });
-      });
+      }
     } catch (error) {
       console.error('[Dashboard] Error getting language stats:', error);
     }
@@ -261,12 +275,12 @@ router.get('/stats', verifyRequest, async (req, res) => {
         unoptimized: unoptimizedProducts,
         lastOptimized: lastOptimizedProduct?.updatedAt || null
       },
-      collections: hasCollections ? {
+      collections: {
         total: totalCollections,
         optimized: optimizedCollections,
         unoptimized: totalCollections - optimizedCollections,
         lastOptimized: lastOptimizedCollection?.updatedAt || null
-      } : null,
+      },
       languages: languageStats,
       lastOptimization: lastOptimization,
       storeMetadata: hasStoreMetadata ? {
