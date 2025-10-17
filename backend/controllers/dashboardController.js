@@ -7,6 +7,8 @@ import Sitemap from '../db/Sitemap.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
+import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
+import { syncStore } from '../services/syncService.js';
 
 const router = express.Router();
 
@@ -290,6 +292,107 @@ router.get('/stats', verifyRequest, async (req, res) => {
   } catch (error) {
     console.error('[Dashboard] Error getting stats:', error);
     res.status(500).json({ error: 'Failed to load dashboard stats' });
+  }
+});
+
+/**
+ * POST /api/dashboard/sync
+ * Trigger full store sync
+ */
+router.post('/sync', requireAuth, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { adminGraphql } = res.locals;
+    
+    if (!adminGraphql) {
+      return res.status(401).json({ error: 'GraphQL client not available' });
+    }
+
+    console.log(`[Dashboard] Starting store sync for ${shop}`);
+
+    // Check if sync is already in progress
+    const shopData = await Shop.findOne({ shop });
+    if (shopData?.syncStatus?.inProgress) {
+      return res.status(409).json({ 
+        error: 'Sync already in progress',
+        inProgress: true
+      });
+    }
+
+    // Start sync (non-blocking)
+    syncStore(adminGraphql, shop, (progress) => {
+      console.log('[Dashboard] Sync progress:', progress);
+      // TODO: Can emit SSE events here if needed
+    }).catch(error => {
+      console.error('[Dashboard] Sync error:', error);
+    });
+
+    // Return immediately
+    res.json({ 
+      success: true,
+      message: 'Sync started',
+      inProgress: true
+    });
+  } catch (error) {
+    console.error('[Dashboard] Error starting sync:', error);
+    res.status(500).json({ error: 'Failed to start sync' });
+  }
+});
+
+/**
+ * GET /api/dashboard/sync-status
+ * Get current sync status
+ */
+router.get('/sync-status', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    const shopData = await Shop.findOne({ shop });
+    if (!shopData) {
+      return res.json({ 
+        synced: false,
+        inProgress: false,
+        lastSyncDate: null
+      });
+    }
+
+    res.json({
+      synced: !!shopData.lastSyncDate,
+      inProgress: shopData.syncStatus?.inProgress || false,
+      lastSyncDate: shopData.lastSyncDate,
+      lastError: shopData.syncStatus?.lastError || null,
+      autoSyncEnabled: shopData.autoSyncEnabled || false
+    });
+  } catch (error) {
+    console.error('[Dashboard] Error getting sync status:', error);
+    res.status(500).json({ error: 'Failed to get sync status' });
+  }
+});
+
+/**
+ * POST /api/dashboard/auto-sync
+ * Toggle auto-sync setting
+ */
+router.post('/auto-sync', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { enabled } = req.body;
+
+    await Shop.findOneAndUpdate(
+      { shop },
+      { autoSyncEnabled: !!enabled },
+      { new: true }
+    );
+
+    console.log(`[Dashboard] Auto-sync ${enabled ? 'enabled' : 'disabled'} for ${shop}`);
+
+    res.json({ 
+      success: true,
+      autoSyncEnabled: !!enabled
+    });
+  } catch (error) {
+    console.error('[Dashboard] Error toggling auto-sync:', error);
+    res.status(500).json({ error: 'Failed to toggle auto-sync' });
   }
 });
 

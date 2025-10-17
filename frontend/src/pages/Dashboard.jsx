@@ -10,7 +10,12 @@ import {
   BlockStack,
   InlineStack,
   Divider,
-  Box
+  Box,
+  Banner,
+  ProgressBar,
+  Collapsible,
+  Link,
+  Checkbox
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
@@ -35,10 +40,26 @@ export default function Dashboard({ shop: shopProp }) {
   const [stats, setStats] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [tokens, setTokens] = useState(null);
+  
+  // Sync state
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [autoSync, setAutoSync] = useState(false);
+  
+  // Onboarding state
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
+    loadSyncStatus();
   }, [shop]);
+  
+  // Auto-sync on load if enabled
+  useEffect(() => {
+    if (syncStatus && syncStatus.autoSyncEnabled && !syncStatus.synced) {
+      handleSync();
+    }
+  }, [syncStatus]);
 
   const loadDashboardData = async () => {
     try {
@@ -63,6 +84,58 @@ export default function Dashboard({ shop: shopProp }) {
       setLoading(false);
     }
   };
+  
+  const loadSyncStatus = async () => {
+    try {
+      const res = await api.get(`/api/dashboard/sync-status?shop=${shop}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSyncStatus(data);
+        setAutoSync(data.autoSyncEnabled || false);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading sync status:', error);
+    }
+  };
+  
+  const handleSync = async () => {
+    try {
+      setSyncing(true);
+      const res = await api.post(`/api/dashboard/sync?shop=${shop}`, {});
+      
+      if (res.ok) {
+        // Poll for completion
+        const pollInterval = setInterval(async () => {
+          const statusRes = await api.get(`/api/dashboard/sync-status?shop=${shop}`);
+          if (statusRes.ok) {
+            const status = await statusRes.json();
+            setSyncStatus(status);
+            
+            if (!status.inProgress) {
+              clearInterval(pollInterval);
+              setSyncing(false);
+              loadDashboardData(); // Reload stats
+            }
+          }
+        }, 2000); // Poll every 2 seconds
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error syncing:', error);
+      setSyncing(false);
+    }
+  };
+  
+  const handleAutoSyncToggle = async (enabled) => {
+    try {
+      const res = await api.post(`/api/dashboard/auto-sync?shop=${shop}`, { enabled });
+      if (res.ok) {
+        setAutoSync(enabled);
+        setSyncStatus({ ...syncStatus, autoSyncEnabled: enabled });
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error toggling auto-sync:', error);
+    }
+  };
 
   // Calculate percentages
   const productOptimizationPercent = stats?.products?.total > 0 
@@ -77,6 +150,7 @@ export default function Dashboard({ shop: shopProp }) {
   const hasCollections = ['growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
   const hasStoreMetadata = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
   const hasAdvancedSchema = subscription?.plan === 'enterprise';
+  const hasAiSitemap = ['growth_extra', 'enterprise'].includes(subscription?.plan);
 
   if (loading) {
     return (
@@ -91,12 +165,84 @@ export default function Dashboard({ shop: shopProp }) {
       </Layout>
     );
   }
+  
+  // Check if this is first load (no sync yet)
+  const isFirstLoad = !syncStatus?.synced;
 
   return (
     <Layout>
       <Layout.Section>
         <Text variant="headingLg" as="h1">Store Overview</Text>
       </Layout.Section>
+
+      {/* Sync Banner - Inline, not blocking */}
+      {isFirstLoad && (
+        <Layout.Section>
+          <Banner
+            title="Sync your store"
+            tone="info"
+            action={{
+              content: syncing ? 'Syncing...' : 'Sync Now',
+              onAction: handleSync,
+              loading: syncing
+            }}
+          >
+            <BlockStack gap="200">
+              <Text>Sync products, collections, languages, and markets to get started with AI optimization.</Text>
+              {syncing && (
+                <Box paddingBlockStart="200">
+                  <ProgressBar progress={50} size="small" tone="highlight" />
+                  <Box paddingBlockStart="100">
+                    <Text variant="bodySm" tone="subdued">Fetching store data...</Text>
+                  </Box>
+                </Box>
+              )}
+            </BlockStack>
+          </Banner>
+        </Layout.Section>
+      )}
+      
+      {/* Sync Status for subsequent loads */}
+      {!isFirstLoad && syncStatus && (
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="300">
+              <InlineStack align="space-between" blockAlign="center">
+                <div>
+                  <Text variant="bodyMd" fontWeight="semibold">Store Sync</Text>
+                  <Box paddingBlockStart="050">
+                    <Text variant="bodySm" tone="subdued">
+                      Last synced: {syncStatus.lastSyncDate ? 
+                        new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) 
+                        : 'Never'}
+                    </Text>
+                  </Box>
+                </div>
+                <Button 
+                  onClick={handleSync} 
+                  loading={syncing}
+                >
+                  Sync Now
+                </Button>
+              </InlineStack>
+              
+              <Divider />
+              
+              <Checkbox
+                label="Auto-sync on load"
+                checked={autoSync}
+                onChange={handleAutoSyncToggle}
+                helpText="Automatically sync store data when you open the dashboard"
+              />
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      )}
 
       {/* Main Stats Grid */}
       <Layout.Section>
@@ -124,20 +270,11 @@ export default function Dashboard({ shop: shopProp }) {
                 <Divider />
                 
                 <Box paddingBlockStart="200">
-                  <div style={{
-                    width: '100%',
-                    height: '8px',
-                    backgroundColor: '#e0e0e0',
-                    borderRadius: '4px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${productOptimizationPercent}%`,
-                      height: '100%',
-                      backgroundColor: productOptimizationPercent === 100 ? '#4caf50' : '#2196f3',
-                      transition: 'width 0.3s ease'
-                    }} />
-                  </div>
+                  <ProgressBar 
+                    progress={productOptimizationPercent} 
+                    size="small"
+                    tone={productOptimizationPercent === 100 ? 'success' : 'primary'}
+                  />
                   <Box paddingBlockStart="100">
                     <Text variant="bodySm" tone="subdued">
                       {productOptimizationPercent}% optimized
@@ -172,20 +309,11 @@ export default function Dashboard({ shop: shopProp }) {
                   <Divider />
                   
                   <Box paddingBlockStart="200">
-                    <div style={{
-                      width: '100%',
-                      height: '8px',
-                      backgroundColor: '#e0e0e0',
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{
-                        width: `${collectionOptimizationPercent}%`,
-                        height: '100%',
-                        backgroundColor: collectionOptimizationPercent === 100 ? '#4caf50' : '#2196f3',
-                        transition: 'width 0.3s ease'
-                      }} />
-                    </div>
+                    <ProgressBar 
+                      progress={collectionOptimizationPercent} 
+                      size="small"
+                      tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'}
+                    />
                     <Box paddingBlockStart="100">
                       <Text variant="bodySm" tone="subdued">
                         {collectionOptimizationPercent}% optimized
@@ -311,25 +439,30 @@ export default function Dashboard({ shop: shopProp }) {
                 </Button>
               )}
               
-              <Button
-                onClick={() => navigate('/ai-seo/sitemap')}
-              >
-                View Sitemap
-              </Button>
+              {/* Show these buttons only after sync */}
+              {!isFirstLoad && (
+                <>
+                  <Button
+                    onClick={() => navigate('/ai-seo/sitemap')}
+                  >
+                    {hasAiSitemap ? 'Regenerate Sitemap' : 'View Sitemap'}
+                  </Button>
+                  
+                  {hasAdvancedSchema && (
+                    <Button
+                      onClick={() => navigate('/ai-seo/schema-data')}
+                    >
+                      Regenerate Schemas
+                    </Button>
+                  )}
+                </>
+              )}
               
               {hasStoreMetadata && (
                 <Button
                   onClick={() => navigate('/ai-seo/store-metadata')}
                 >
                   Store Info
-                </Button>
-              )}
-              
-              {hasAdvancedSchema && (
-                <Button
-                  onClick={() => navigate('/ai-seo/schema-data')}
-                >
-                  Schema Data
                 </Button>
               )}
             </InlineStack>
@@ -360,6 +493,107 @@ export default function Dashboard({ shop: shopProp }) {
             >
               View Plans & Billing
             </Button>
+          </BlockStack>
+        </Card>
+      </Layout.Section>
+      
+      {/* Onboarding Accordion */}
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="300">
+            <InlineStack align="space-between" blockAlign="center">
+              <Text variant="headingMd">Getting Started</Text>
+              <Button
+                onClick={() => setOnboardingOpen(!onboardingOpen)}
+                disclosure={onboardingOpen ? 'up' : 'down'}
+              >
+                {onboardingOpen ? 'Hide' : 'Show'} Guide
+              </Button>
+            </InlineStack>
+            
+            <Collapsible
+              open={onboardingOpen}
+              id="onboarding-collapsible"
+              transition={{duration: '200ms', timingFunction: 'ease-in-out'}}
+            >
+              <Box paddingBlockStart="300">
+                <BlockStack gap="400">
+                  <Divider />
+                  
+                  <BlockStack gap="300">
+                    <Text variant="headingMd" as="h3">Quick Start Guide</Text>
+                    
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="semibold">1. Sync Your Store</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Click "Sync Now" to fetch your products, collections, and languages from Shopify. 
+                        This is required before you can start optimizing.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">2. Choose a Plan</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Visit Plans & Billing to select the plan that fits your store size. 
+                        Each plan includes different limits for products, languages, and features.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">3. Optimize Your Products</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Go to "Search Optimization for AI" → Products tab. Select products and click "AI Enhance" 
+                        to generate SEO-optimized titles, descriptions, and metadata.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">4. Generate AI Sitemap</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Navigate to Sitemap tab and generate your AI-optimized sitemap. This helps AI search engines 
+                        discover and index your products.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">5. Monitor & Improve</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Return to Dashboard regularly to track optimization progress and token usage. 
+                        Enable auto-sync to keep your data fresh.
+                      </Text>
+                    </BlockStack>
+                  </BlockStack>
+                  
+                  <Divider />
+                  
+                  <BlockStack gap="200">
+                    <Text variant="headingMd" as="h3">Video Tutorial</Text>
+                    <Box 
+                      padding="400" 
+                      background="bg-surface-secondary"
+                      borderRadius="200"
+                    >
+                      <BlockStack gap="200" inlineAlign="center">
+                        <Text variant="bodyMd" tone="subdued" alignment="center">
+                          Video tutorial coming soon
+                        </Text>
+                        <Text variant="bodySm" tone="subdued" alignment="center">
+                          [Embedded video will be added here]
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                  </BlockStack>
+                  
+                  <Box paddingBlockStart="200">
+                    <InlineStack gap="200">
+                      <Button
+                        variant="primary"
+                        onClick={() => navigate('/ai-seo/products')}
+                      >
+                        Start Optimizing
+                      </Button>
+                      <Button
+                        onClick={() => navigate('/billing')}
+                      >
+                        View Plans
+                      </Button>
+                    </InlineStack>
+                  </Box>
+                </BlockStack>
+              </Box>
+            </Collapsible>
           </BlockStack>
         </Card>
       </Layout.Section>

@@ -50,6 +50,32 @@ const shopSchema = new mongoose.Schema({
     type: Number,
     default: 50
   },
+  // Dashboard sync settings
+  lastSyncDate: {
+    type: Date,
+    required: false
+  },
+  autoSyncEnabled: {
+    type: Boolean,
+    default: false
+  },
+  syncStatus: {
+    inProgress: { type: Boolean, default: false },
+    lastError: { type: String, default: null }
+  },
+  storeLanguages: [{
+    locale: String,
+    name: String,
+    primary: Boolean,
+    published: Boolean
+  }],
+  storeMarkets: [{
+    id: String,
+    name: String,
+    primary: Boolean,
+    enabled: Boolean,
+    regions: [{ name: String, code: String }]
+  }],
   createdAt: {
     type: Date,
     default: () => new Date()
