@@ -170,6 +170,9 @@ export default function Billing({ shop }) {
   const subscription = billingInfo?.subscription;
   const tokens = billingInfo?.tokens;
   const plans = billingInfo?.plans || [];
+  
+  // Debug: Log subscription plan
+  console.log('[Billing] Current plan:', subscription?.plan, 'Type:', typeof subscription?.plan);
 
   return (
     <>
@@ -329,10 +332,13 @@ export default function Billing({ shop }) {
                   variant="primary"
                   fullWidth
                   onClick={() => {
+                    console.log('[Billing] Buy Tokens clicked. Plan:', subscription?.plan, 'Comparison:', subscription?.plan === 'starter');
                     // Starter plan cannot buy tokens - show upgrade modal
                     if (subscription?.plan === 'starter') {
+                      console.log('[Billing] Showing upgrade modal for Starter plan');
                       setShowTokenUpgradeModal(true);
                     } else {
+                      console.log('[Billing] Showing token purchase modal');
                       setShowTokenModal(true);
                     }
                   }}

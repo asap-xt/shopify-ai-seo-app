@@ -49,8 +49,6 @@ export default function SitemapPage({ shop: shopProp }) {
             plan
             planKey
             priceUsd
-            ai_queries_used
-            ai_queries_limit
             product_limit
             providersAllowed
             modelsSuggested

@@ -155,8 +155,6 @@ const DashboardCard = React.memo(({ shop }) => {
           plan
           planKey
           priceUsd
-          ai_queries_used
-          ai_queries_limit
           product_limit
           providersAllowed
           modelsSuggested
@@ -219,11 +217,7 @@ const DashboardCard = React.memo(({ shop }) => {
           </Box>
           <Box>
             <Text variant="headingMd" as="h3">Shop</Text>
-            <Text>{plan.shop || 'â€”'}</Text>
-          </Box>
-          <Box>
-            <Text variant="headingMd" as="h3">AI queries</Text>
-            <Text>{plan.ai_queries_used || 0} / {plan.ai_queries_limit || 0}</Text>
+            <Text>{plan.shop || 'â€"'}</Text>
           </Box>
           <Box>
             <Text variant="headingMd" as="h3">Product limit</Text>
@@ -751,8 +745,6 @@ export default function App() {
               plan
               planKey
               priceUsd
-              ai_queries_used
-              ai_queries_limit
               product_limit
               providersAllowed
               modelsSuggested
