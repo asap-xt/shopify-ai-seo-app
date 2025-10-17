@@ -336,8 +336,8 @@ Generate a helpful response with contact details. Be specific about what's avail
         break;
         
       case 'custom':
-        const products = storeData.products.edges.map(e => e.node);
-        const collections = storeData.collections.edges.map(e => e.node);
+        const customProducts = storeData.products.edges.map(e => e.node);
+        const customCollections = storeData.collections.edges.map(e => e.node);
         
         contextPrompt = `Store: ${storeData.shop.name}
 Description: ${storeData.shop.description || 'E-commerce store'}
@@ -346,10 +346,10 @@ Currency: ${storeData.shop.currencyCode}
 Contact: ${storeData.shop.contactEmail || 'Available via website'}
 
 Products (sample):
-${products.slice(0, 5).map(p => `- ${p.title} (${p.productType || 'General'})`).join('\n')}
+${customProducts.slice(0, 5).map(p => `- ${p.title} (${p.productType || 'General'})`).join('\n')}
 
 Categories:
-${collections.map(c => `- ${c.title}`).join('\n')}
+${customCollections.map(c => `- ${c.title}`).join('\n')}
 
 Customer Question: "${question}"
 
