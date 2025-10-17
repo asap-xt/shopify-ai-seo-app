@@ -31,6 +31,8 @@ export default function AiTesting({ shop: shopProp }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
+  const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
+  const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -100,6 +102,35 @@ export default function AiTesting({ shop: shopProp }) {
       default:
         return 'Professional';
     }
+  };
+
+  // Check if endpoint requires plan upgrade
+  const getEndpointRequirement = (endpointName) => {
+    // All endpoints are available for all plans now
+    // (This is a placeholder for future restrictions)
+    return { available: true, requiredPlan: null };
+  };
+
+  // Open endpoint with plan check
+  const openEndpoint = (url, endpointName, requiredPlan = null) => {
+    if (requiredPlan) {
+      const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+      const currentIndex = planHierarchy.indexOf(currentPlan);
+      const requiredIndex = planHierarchy.indexOf(requiredPlan);
+      
+      if (currentIndex < requiredIndex) {
+        setEndpointUpgradeInfo({
+          endpoint: endpointName,
+          currentPlan: currentPlan,
+          requiredPlan: requiredPlan
+        });
+        setShowEndpointUpgrade(true);
+        return;
+      }
+    }
+    
+    // Open in new window
+    window.open(url, '_blank');
   };
 
   const openAiBotModal = (botName, botUrl) => {
@@ -180,8 +211,7 @@ export default function AiTesting({ shop: shopProp }) {
                         <Text variant="bodySm" tone="subdued">Bulk product data for AI consumption</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`, 'Products JSON Feed')}
                         size="slim"
                       >
                         View
@@ -197,8 +227,7 @@ export default function AiTesting({ shop: shopProp }) {
                         <Text variant="bodySm" tone="subdued">Optimized sitemap for AI bots</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`, 'AI Sitemap')}
                         size="slim"
                       >
                         View
@@ -207,15 +236,14 @@ export default function AiTesting({ shop: shopProp }) {
 
                     <Divider />
 
-                    {/* Store Metadata - Always available */}
+                    {/* Store Metadata - Growth Extra+ */}
                     <InlineStack align="space-between" blockAlign="center">
                       <BlockStack gap="100">
                         <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
                         <Text variant="bodySm" tone="subdued">Organization schema & AI metadata</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`, 'Store Metadata', 'Growth Extra')}
                         size="slim"
                       >
                         View
@@ -231,8 +259,7 @@ export default function AiTesting({ shop: shopProp }) {
                         <Text variant="bodySm" tone="subdued">Landing page for AI bots</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`, 'AI Welcome Page')}
                         size="slim"
                       >
                         View
@@ -248,8 +275,7 @@ export default function AiTesting({ shop: shopProp }) {
                         <Text variant="bodySm" tone="subdued">Category data for better AI understanding</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`, 'Collections JSON Feed')}
                         size="slim"
                       >
                         View
@@ -265,8 +291,7 @@ export default function AiTesting({ shop: shopProp }) {
                         <Text variant="bodySm" tone="subdued">Test how AI bots understand your store</Text>
                       </BlockStack>
                       <Button 
-                        url={`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`} 
-                        external
+                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`, 'robots.txt')}
                         size="slim"
                       >
                         View
@@ -531,6 +556,37 @@ export default function AiTesting({ shop: shopProp }) {
             
             <Banner tone="info">
               <Text>The AI bot will search the web and use your store's structured data to answer.</Text>
+            </Banner>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
+
+      {/* Endpoint Upgrade Modal */}
+      <Modal
+        open={showEndpointUpgrade}
+        onClose={() => setShowEndpointUpgrade(false)}
+        title="Upgrade Required"
+        primaryAction={{
+          content: 'View Plans',
+          onAction: () => window.location.href = '/billing'
+        }}
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowEndpointUpgrade(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd">
+              <strong>{endpointUpgradeInfo?.endpoint}</strong> requires <strong>{endpointUpgradeInfo?.requiredPlan}</strong> plan or higher.
+            </Text>
+            <Text variant="bodyMd" tone="subdued">
+              Your current plan: <strong>{endpointUpgradeInfo?.currentPlan}</strong>
+            </Text>
+            <Banner tone="info">
+              <Text>Upgrade to access this advanced AI Discovery feature.</Text>
             </Banner>
           </BlockStack>
         </Modal.Section>
