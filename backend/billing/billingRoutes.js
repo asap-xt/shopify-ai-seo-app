@@ -98,6 +98,31 @@ router.get('/debug', verifyRequest, async (req, res) => {
 });
 
 /**
+ * DEBUG: Reset token balance (for development only)
+ * POST /api/billing/debug/reset-tokens?shop={shop}
+ */
+router.post('/debug/reset-tokens', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    // Delete and recreate token balance
+    await TokenBalance.deleteOne({ shop });
+    const newBalance = await TokenBalance.getOrCreate(shop);
+    
+    console.log('[Billing Debug] Token balance reset for:', shop);
+    
+    res.json({
+      success: true,
+      message: 'Token balance reset',
+      newBalance: newBalance.toObject()
+    });
+  } catch (error) {
+    console.error('[Billing Debug] Error resetting tokens:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Get billing info for current shop
  * GET /api/billing/info?shop={shop}
  */
@@ -266,7 +291,7 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send('Missing shop parameter');
     }
     
-    // Update subscription to active
+    // Update subscription to active (if not already)
     const subscription = await Subscription.findOneAndUpdate(
       { shop },
       {
@@ -277,23 +302,14 @@ router.get('/callback', async (req, res) => {
       { new: true }
     );
     
-    // Add included tokens for Growth Extra+ plans
-    if (subscription) {
-      const included = getIncludedTokens(subscription.plan);
-      if (included.tokens > 0) {
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        
-        // Add included tokens (NOT purchased, just added to balance)
-        await tokenBalance.addIncludedTokens(included.tokens, subscription.plan, charge_id || 'included');
-        
-        console.log('[Billing] Added included tokens:', {
-          shop,
-          plan: subscription.plan,
-          tokens: included.tokens,
-          newBalance: tokenBalance.balance
-        });
-      }
-    }
+    // NOTE: Tokens are added in /subscribe endpoint for test mode
+    // For production mode (real webhooks), tokens would be added by APP_SUBSCRIPTIONS_UPDATE webhook
+    // This callback is just a redirect handler, not the primary activation mechanism
+    console.log('[Billing] Callback processed, subscription already active:', {
+      shop,
+      plan: subscription?.plan,
+      status: subscription?.status
+    });
     
     // Redirect back to app
     res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&success=true`);
