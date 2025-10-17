@@ -264,6 +264,16 @@ export default function Dashboard({ shop: shopProp }) {
                     {stats?.products?.optimized || 0}
                   </Text>
                 </InlineStack>
+
+                {/* Collections summary inline */}
+                {stats?.collections && (
+                  <InlineStack align="space-between">
+                    <Text variant="bodyMd" tone="subdued">Collections</Text>
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      {(stats.collections.optimized || 0)}/{(stats.collections.total || 0)}
+                    </Text>
+                  </InlineStack>
+                )}
                 
                 <Divider />
                 

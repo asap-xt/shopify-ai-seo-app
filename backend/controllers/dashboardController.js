@@ -300,14 +300,11 @@ router.get('/stats', verifyRequest, async (req, res) => {
  * POST /api/dashboard/sync
  * Trigger full store sync
  */
-router.post('/sync', verifyRequest, async (req, res) => {
+router.post('/sync', requireAuth, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { adminGraphql } = res.locals;
-    
-    if (!adminGraphql) {
-      return res.status(401).json({ error: 'GraphQL client not available' });
-    }
+    // Wrap GraphQL helper so syncService can call it like a function
+    const adminGraphql = (query, variables = {}) => executeGraphQL(req, query, variables);
 
     console.log(`[Dashboard] Starting store sync for ${shop}`);
 
