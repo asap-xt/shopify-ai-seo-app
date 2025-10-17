@@ -153,32 +153,60 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       { trialDays }
     );
     
-    // Save pending subscription to MongoDB
-    // IMPORTANT: Status remains 'pending' until APP_SUBSCRIPTIONS_UPDATE webhook confirms payment
-    // This prevents users from getting free tokens by canceling before payment
+    // Save subscription to MongoDB
     const now = new Date();
     const trialEndsAt = trialDays > 0 ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000) : null;
+    const isTestMode = process.env.NODE_ENV !== 'production' || shopifySubscription.test;
     
-    await Subscription.findOneAndUpdate(
+    // In TEST MODE: Activate immediately for development convenience
+    // In PRODUCTION: Wait for APP_SUBSCRIPTIONS_UPDATE webhook to confirm payment
+    const initialStatus = isTestMode ? 'active' : 'pending';
+    
+    const subscription = await Subscription.findOneAndUpdate(
       { shop },
       {
         shop,
         plan,
         shopifySubscriptionId: shopifySubscription.id,
-        status: 'pending', // Will be activated by APP_SUBSCRIPTIONS_UPDATE webhook
+        status: initialStatus,
         trialEndsAt,
-        pendingActivation: true,
+        pendingActivation: !isTestMode,
+        activatedAt: isTestMode ? now : null,
         updatedAt: now
       },
       { upsert: true, new: true }
     );
     
-    console.log('[Billing] Subscription created as PENDING:', {
+    console.log('[Billing] Subscription created:', {
       shop,
       plan,
+      status: initialStatus,
+      isTestMode,
       shopifySubscriptionId: shopifySubscription.id,
-      message: 'Awaiting APP_SUBSCRIPTIONS_UPDATE webhook to activate'
+      message: isTestMode 
+        ? '✅ TEST MODE: Activated immediately' 
+        : '⏳ PRODUCTION: Awaiting APP_SUBSCRIPTIONS_UPDATE webhook'
     });
+    
+    // In TEST MODE: Add included tokens immediately
+    if (isTestMode) {
+      const included = getIncludedTokens(subscription.plan);
+      if (included.tokens > 0) {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        await tokenBalance.addIncludedTokens(
+          included.tokens, 
+          subscription.plan, 
+          shopifySubscription.id
+        );
+        
+        console.log('[Billing] ✅ TEST MODE: Added included tokens:', {
+          shop,
+          plan: subscription.plan,
+          tokens: included.tokens,
+          newBalance: tokenBalance.balance
+        });
+      }
+    }
     
     res.json({
       confirmationUrl,
