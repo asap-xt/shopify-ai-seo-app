@@ -176,14 +176,92 @@ export default function Dashboard({ shop: shopProp }) {
   // Plan price fallback mapping (if backend doesn't provide price)
   const planPriceFallback = useMemo(() => ({
     starter: 9.99,
-    professional: 29.99,
-    growth: 79.99,
-    growth_extra: 149.99,
-    enterprise: 499.99
+    professional: 15.99,
+    growth: 29.99,
+    growth_extra: 49.99,
+    enterprise: 139.99
   }), []);
   const planPriceValue = subscription?.price && subscription.price > 0
     ? subscription.price
     : (subscription?.plan ? planPriceFallback[subscription.plan] : undefined);
+
+  // Plan recommendation logic
+  const getPlanLimits = (planKey) => {
+    switch (planKey) {
+      case 'starter': return { products: 100, languages: 1 };
+      case 'professional': return { products: 250, languages: 2 };
+      case 'growth': return { products: 700, languages: 3 };
+      case 'growth_extra': return { products: 1000, languages: 6 };
+      case 'enterprise': return { products: 2500, languages: 10 };
+      default: return { products: 0, languages: 0 };
+    }
+  };
+
+  const getPlanOrder = (planKey) => {
+    const order = { starter: 1, professional: 2, growth: 3, growth_extra: 4, enterprise: 5 };
+    return order[planKey] || 0;
+  };
+
+  const recommendPlan = () => {
+    if (!stats) return null;
+    
+    const totalProducts = stats.products?.total || 0;
+    const totalLanguages = stats.languages?.length || 1;
+    const currentPlan = subscription?.plan || 'starter';
+    const currentPlanOrder = getPlanOrder(currentPlan);
+
+    // Find the most suitable plan based on store data
+    const plans = ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'];
+    let recommendedPlan = null;
+
+    for (const plan of plans) {
+      const limits = getPlanLimits(plan);
+      if (totalProducts <= limits.products && totalLanguages <= limits.languages) {
+        recommendedPlan = plan;
+        break;
+      }
+    }
+
+    // If no plan fits, recommend enterprise
+    if (!recommendedPlan) recommendedPlan = 'enterprise';
+
+    // Only show recommendation if it's higher than current plan
+    const recommendedPlanOrder = getPlanOrder(recommendedPlan);
+    if (recommendedPlanOrder <= currentPlanOrder) return null;
+
+    const currentLimits = getPlanLimits(currentPlan);
+    const recommendedLimits = getPlanLimits(recommendedPlan);
+    
+    let reason = '';
+    if (totalProducts > currentLimits.products) {
+      reason = `Your store has ${totalProducts} products, exceeding the ${currentLimits.products}-product limit of your current plan.`;
+    } else if (totalLanguages > currentLimits.languages) {
+      reason = `Your store has ${totalLanguages} language(s), exceeding the ${currentLimits.languages}-language limit of your current plan.`;
+    }
+
+    return {
+      plan: recommendedPlan,
+      planName: recommendedPlan.replace('_', ' ').toUpperCase(),
+      price: planPriceFallback[recommendedPlan],
+      productLimit: recommendedLimits.products,
+      languageLimit: recommendedLimits.languages,
+      reason
+    };
+  };
+
+  const recommendation = useMemo(() => recommendPlan(), [stats, subscription]);
+
+  // Token recommendation for Professional/Growth plans (pay-per-use)
+  const shouldRecommendTokens = useMemo(() => {
+    if (!subscription?.plan) return false;
+    const plan = subscription.plan;
+    // Show token recommendation for Professional/Growth (pay-per-use plans without included tokens)
+    if (plan !== 'professional' && plan !== 'growth') return false;
+    // Show if balance is low (less than 1000 tokens) or zero
+    const balance = tokens?.balance || 0;
+    if (balance >= 1000) return false;
+    return true;
+  }, [subscription, tokens]);
 
   if (loading) {
     return (
@@ -274,6 +352,48 @@ export default function Dashboard({ shop: shopProp }) {
               />
             </BlockStack>
           </Card>
+        </Layout.Section>
+      )}
+
+      {/* Plan Upgrade Recommendation */}
+      {recommendation && (
+        <Layout.Section>
+          <Banner
+            title={`Upgrade to ${recommendation.planName} Plan`}
+            tone="warning"
+            action={{
+              content: 'View Plans',
+              onAction: () => navigate('/billing')
+            }}
+          >
+            <BlockStack gap="200">
+              <Text>{recommendation.reason}</Text>
+              <Text variant="bodySm" tone="subdued">
+                The {recommendation.planName} plan supports up to {recommendation.productLimit} products 
+                in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} 
+                for ${recommendation.price}/month.
+              </Text>
+            </BlockStack>
+          </Banner>
+        </Layout.Section>
+      )}
+
+      {/* Token Purchase Recommendation */}
+      {shouldRecommendTokens && (
+        <Layout.Section>
+          <Banner
+            title="Buy Tokens to Unlock AI Features"
+            tone="info"
+            action={{
+              content: 'Buy Tokens',
+              onAction: () => navigate('/billing')
+            }}
+          >
+            <Text>
+              Your current plan uses pay-per-use tokens. Purchase tokens to access AI-enhanced optimization features 
+              like SEO generation, bulk editing, and AI Discovery.
+            </Text>
+          </Banner>
         </Layout.Section>
       )}
 
