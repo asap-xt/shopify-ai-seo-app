@@ -46,6 +46,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
   const pollRef = useRef(null);
+  const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
   // Onboarding state
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -61,12 +62,14 @@ export default function Dashboard({ shop: shopProp }) {
     };
   }, [shop]);
   
-  // Auto-sync on load if enabled
+  // Auto-sync on load if enabled (only once per page load)
   useEffect(() => {
-    if (syncStatus && syncStatus.autoSyncEnabled && !syncStatus.synced) {
+    if (syncStatus && syncStatus.autoSyncEnabled && !syncing && !autoSyncTriggered.current) {
+      console.log('[Dashboard] Auto-sync is enabled, triggering sync...');
+      autoSyncTriggered.current = true;
       handleSync();
     }
-  }, [syncStatus]);
+  }, [syncStatus?.autoSyncEnabled]); // Only trigger when autoSyncEnabled changes
 
   const loadDashboardData = async () => {
     try {
@@ -143,18 +146,28 @@ export default function Dashboard({ shop: shopProp }) {
     }
   };
   
-  const handleAutoSyncToggle = async (enabled) => {
+  const handleAutoSyncToggle = async (newValue) => {
     try {
-      const res = await api(`/api/dashboard/auto-sync?shop=${shop}`, { method: 'POST', body: { enabled } });
+      console.log('[Dashboard] Toggling auto-sync to:', newValue);
+      
+      // Optimistic UI update
+      setAutoSync(newValue);
+      
+      const res = await api(`/api/dashboard/auto-sync?shop=${shop}`, { 
+        method: 'POST', 
+        body: { enabled: newValue } 
+      });
+      
+      console.log('[Dashboard] Auto-sync toggle response:', res);
+      
       if (res?.success) {
         setAutoSync(!!res.autoSyncEnabled);
         setSyncStatus({ ...(syncStatus || {}), autoSyncEnabled: !!res.autoSyncEnabled });
-      } else {
-        setAutoSync(enabled);
-        setSyncStatus({ ...(syncStatus || {}), autoSyncEnabled: enabled });
       }
     } catch (error) {
       console.error('[Dashboard] Error toggling auto-sync:', error);
+      // Revert on error
+      setAutoSync(!newValue);
     }
   };
 
