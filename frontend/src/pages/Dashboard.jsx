@@ -50,6 +50,15 @@ export default function Dashboard({ shop: shopProp }) {
   
   // Onboarding state
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  
+  // Dismissed banners state (persist in localStorage)
+  const [dismissedUpgradeBanner, setDismissedUpgradeBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedUpgradeBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -276,6 +285,16 @@ export default function Dashboard({ shop: shopProp }) {
     return true;
   }, [subscription, tokens]);
 
+  // Handle dismissing the upgrade banner
+  const handleDismissUpgradeBanner = () => {
+    try {
+      localStorage.setItem(`dismissedUpgradeBanner_${shop}`, 'true');
+      setDismissedUpgradeBanner(true);
+    } catch (error) {
+      console.error('[Dashboard] Error saving dismissed banner state:', error);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -326,46 +345,82 @@ export default function Dashboard({ shop: shopProp }) {
       {!isFirstLoad && syncStatus && (
         <Layout.Section>
           <Card>
-            <BlockStack gap="300">
-              <InlineStack align="space-between" blockAlign="center">
-                <div>
-                  <Text variant="bodyMd" fontWeight="semibold">Store Sync</Text>
-                  <Box paddingBlockStart="050">
-                    <Text variant="bodySm" tone="subdued">
-                      Last synced: {syncStatus.lastSyncDate ? 
-                        new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) 
-                        : 'Never'}
-                    </Text>
-                  </Box>
-                </div>
-                <Button 
-                  onClick={handleSync} 
-                  loading={syncing}
-                >
-                  Sync Now
-                </Button>
+            {autoSync ? (
+              // Collapsed view when auto-sync is enabled
+              <InlineStack align="space-between" blockAlign="center" gap="400">
+                <InlineStack gap="200" blockAlign="center">
+                  <Badge tone="success">Auto-sync enabled</Badge>
+                  <Text variant="bodySm" tone="subdued">
+                    Last synced: {syncStatus.lastSyncDate ? 
+                      new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) 
+                      : 'Never'}
+                  </Text>
+                </InlineStack>
+                <InlineStack gap="200">
+                  <Button 
+                    onClick={handleSync} 
+                    loading={syncing}
+                    size="slim"
+                  >
+                    Sync Now
+                  </Button>
+                  <Button 
+                    onClick={() => handleAutoSyncToggle(false)} 
+                    size="slim"
+                    variant="plain"
+                  >
+                    Settings
+                  </Button>
+                </InlineStack>
               </InlineStack>
-              
-              <Divider />
-              
-              <Checkbox
-                label="Auto-sync on load"
-                checked={autoSync}
-                onChange={handleAutoSyncToggle}
-                helpText="Automatically sync store data when you open the dashboard"
-              />
-            </BlockStack>
+            ) : (
+              // Full view when auto-sync is disabled
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <div>
+                    <Text variant="bodyMd" fontWeight="semibold">Store Sync</Text>
+                    <Box paddingBlockStart="050">
+                      <Text variant="bodySm" tone="subdued">
+                        Last synced: {syncStatus.lastSyncDate ? 
+                          new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) 
+                          : 'Never'}
+                      </Text>
+                    </Box>
+                  </div>
+                  <Button 
+                    onClick={handleSync} 
+                    loading={syncing}
+                  >
+                    Sync Now
+                  </Button>
+                </InlineStack>
+                
+                <Divider />
+                
+                <Checkbox
+                  label="Auto-sync on load"
+                  checked={autoSync}
+                  onChange={handleAutoSyncToggle}
+                  helpText="Automatically sync store data when you open the dashboard"
+                />
+              </BlockStack>
+            )}
           </Card>
         </Layout.Section>
       )}
 
       {/* Plan Upgrade Recommendation */}
-      {recommendation && (
+      {recommendation && !dismissedUpgradeBanner && (
         <Layout.Section>
           <Banner
             title={`Upgrade to ${recommendation.planName} Plan`}
@@ -374,6 +429,7 @@ export default function Dashboard({ shop: shopProp }) {
               content: 'View Plans',
               onAction: () => navigate('/billing')
             }}
+            onDismiss={handleDismissUpgradeBanner}
           >
             <BlockStack gap="200">
               <Text>{recommendation.reason}</Text>
