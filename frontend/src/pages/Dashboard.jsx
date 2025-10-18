@@ -282,10 +282,6 @@ export default function Dashboard({ shop: shopProp }) {
 
   return (
     <Layout>
-      <Layout.Section>
-        <Text variant="headingLg" as="h1">Store Overview</Text>
-      </Layout.Section>
-
       {/* Sync Banner - Inline, not blocking */}
       {isFirstLoad && (
         <Layout.Section>
@@ -480,7 +476,7 @@ export default function Dashboard({ shop: shopProp }) {
           <div style={{ display: 'grid', gap: 16 }}>
             {/* Languages & Markets Card */}
             <Card>
-              <BlockStack gap="400">
+      <BlockStack gap="400">
                 <Text variant="headingMd">Languages & Markets</Text>
                 <BlockStack gap="200">
                   {stats?.languages && stats.languages.length > 0 ? (
@@ -647,7 +643,7 @@ export default function Dashboard({ shop: shopProp }) {
                 </BlockStack>
               </Box>
             </Collapsible>
-      </BlockStack>
+          </BlockStack>
         </Card>
       </Layout.Section>
     </Layout>
