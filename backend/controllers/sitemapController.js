@@ -7,6 +7,7 @@ import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import Sitemap from '../db/Sitemap.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
+import { enhanceProductForSitemap } from '../services/aiSitemapEnhancer.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
@@ -429,6 +430,98 @@ async function generateSitemapCore(shop) {
           });
           xml += '      </ai:faq>\n';
         }
+        
+        // ===== NEW: AI-ENHANCED METADATA =====
+        try {
+          console.log('[SITEMAP-CORE] Generating AI enhancements for', product.handle);
+          
+          // Prepare product data for AI enhancement
+          const productForAI = {
+            id: product.id,
+            title: product.title,
+            description: cleanHtmlForXml(product.descriptionHtml),
+            productType: product.productType,
+            tags: product.tags,
+            vendor: product.vendor,
+            price: product.priceRangeV2?.minVariantPrice?.amount
+          };
+          
+          // Generate AI enhancements (with timeout)
+          const enhancementPromise = enhanceProductForSitemap(productForAI, allProducts, {
+            aiProvider: 'deepseek', // Fast and cost-effective
+            enableSummary: true,
+            enableSemanticTags: true,
+            enableContextHints: true,
+            enableQA: true,
+            enableSentiment: true,
+            enableRelated: true
+          });
+          
+          // Set timeout to avoid blocking
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+          const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
+          
+          if (aiEnhancements) {
+            console.log('[SITEMAP-CORE] AI enhancements generated for', product.handle);
+            
+            // Add AI-generated summary
+            if (aiEnhancements.summary) {
+              xml += '      <ai:summary><![CDATA[' + aiEnhancements.summary + ']]></ai:summary>\n';
+            }
+            
+            // Add semantic tags
+            if (aiEnhancements.semanticTags) {
+              xml += '      <ai:semantic_tags>\n';
+              xml += '        <ai:category_hierarchy>' + escapeXml(aiEnhancements.semanticTags.categoryHierarchy) + '</ai:category_hierarchy>\n';
+              xml += '        <ai:use_case>' + escapeXml(aiEnhancements.semanticTags.useCase) + '</ai:use_case>\n';
+              xml += '        <ai:skill_level>' + escapeXml(aiEnhancements.semanticTags.skillLevel) + '</ai:skill_level>\n';
+              xml += '        <ai:season>' + escapeXml(aiEnhancements.semanticTags.season) + '</ai:season>\n';
+              xml += '      </ai:semantic_tags>\n';
+            }
+            
+            // Add context hints
+            if (aiEnhancements.contextHints) {
+              xml += '      <ai:context>\n';
+              xml += '        <ai:best_for>' + escapeXml(aiEnhancements.contextHints.bestFor) + '</ai:best_for>\n';
+              xml += '        <ai:key_differentiator>' + escapeXml(aiEnhancements.contextHints.keyDifferentiator) + '</ai:key_differentiator>\n';
+              xml += '        <ai:target_audience>' + escapeXml(aiEnhancements.contextHints.targetAudience) + '</ai:target_audience>\n';
+              xml += '      </ai:context>\n';
+            }
+            
+            // Add AI-generated Q&A
+            if (aiEnhancements.qa && aiEnhancements.qa.length > 0) {
+              xml += '      <ai:generated_faq>\n';
+              aiEnhancements.qa.forEach(qa => {
+                xml += '        <ai:qa>\n';
+                xml += '          <ai:question>' + escapeXml(qa.question) + '</ai:question>\n';
+                xml += '          <ai:answer><![CDATA[' + qa.answer + ']]></ai:answer>\n';
+                xml += '        </ai:qa>\n';
+              });
+              xml += '      </ai:generated_faq>\n';
+            }
+            
+            // Add sentiment/tone
+            if (aiEnhancements.sentiment) {
+              xml += '      <ai:tone>' + escapeXml(aiEnhancements.sentiment.tone) + '</ai:tone>\n';
+              xml += '      <ai:target_emotion>' + escapeXml(aiEnhancements.sentiment.targetEmotion) + '</ai:target_emotion>\n';
+            }
+            
+            // Add related products
+            if (aiEnhancements.relatedProducts && aiEnhancements.relatedProducts.length > 0) {
+              xml += '      <ai:related>\n';
+              aiEnhancements.relatedProducts.forEach(related => {
+                xml += '        <ai:product_link>' + primaryDomain + '/products/' + related.handle + '</ai:product_link>\n';
+              });
+              xml += '      </ai:related>\n';
+            }
+          } else {
+            console.log('[SITEMAP-CORE] AI enhancement timeout or error for', product.handle);
+          }
+        } catch (aiError) {
+          console.error('[SITEMAP-CORE] Error in AI enhancement for', product.handle, ':', aiError.message);
+          // Continue without AI enhancements
+        }
+        // ===== END: AI-ENHANCED METADATA =====
         
         xml += '    </ai:product>\n';
       }

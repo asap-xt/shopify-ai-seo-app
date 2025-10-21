@@ -694,7 +694,7 @@ export default function Dashboard({ shop: shopProp }) {
                         AI-enhanced features cannot be applied.
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Also optimize your <strong>Collections</strong> (Growth+ plans) to help AI bots understand your product categories 
+                        Also optimize your <strong>Collections</strong> to help AI bots understand your product categories 
                         and relationships.
                       </Text>
                       
@@ -708,7 +708,7 @@ export default function Dashboard({ shop: shopProp }) {
                       <Text variant="bodyMd" tone="subdued">
                         Navigate to Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
                         For advanced optimization, go to Settings → Sitemap to configure <strong>AI-enhanced sitemap</strong> 
-                        with structured data that helps AI search engines discover and index your products (Growth Extra+ plans).
+                         with structured data that helps AI search engines discover and index your products (Growth Extra+ plans).
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">6. AI-Enhanced Features (Optional)</Text>
@@ -736,7 +736,23 @@ export default function Dashboard({ shop: shopProp }) {
                         fine-tuning how your store data is presented to AI search engines.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">8. Monitor & Improve</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">8. Manual Setup Required</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        <strong>Important:</strong> Some features require manual setup in your Shopify theme:
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>Schema Data:</strong> Copy the generated schema markup from Settings → Schema Data 
+                        and paste it into your theme's product templates (Enterprise plan)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>robots.txt.liquid:</strong> Add the generated robots.txt content to your theme's 
+                        templates/layout/robots.txt.liquid file to help AI crawlers discover your content
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        These manual steps are essential for full AI search engine optimization.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">9. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Return to Dashboard regularly to track optimization progress, monitor token usage, 
                         and review plan recommendations.
