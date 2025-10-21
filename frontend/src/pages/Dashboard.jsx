@@ -639,37 +639,63 @@ export default function Dashboard({ shop: shopProp }) {
                   <Divider />
                   
                   <BlockStack gap="300">
+                    <Text variant="headingMd" as="h3">What This App Does</Text>
+                    <Text variant="bodyMd" tone="subdued">
+                      This app helps optimize your Shopify store for <strong>AI search engines</strong> (like ChatGPT, Claude, Perplexity) 
+                      by structuring your existing product data in a format that AI bots can easily understand and reference.
+                    </Text>
+                    <Text variant="bodyMd" tone="subdued">
+                      <strong>Important:</strong> This app primarily <strong>structures</strong> your existing data rather than creating new content. 
+                      AI-enhanced features are supplementary and require additional tokens (unless you're on Growth Extra or Enterprise plans).
+                    </Text>
+                  </BlockStack>
+                  
+                  <Divider />
+                  
+                  <BlockStack gap="300">
                     <Text variant="headingMd" as="h3">Quick Start Guide</Text>
                     
                     <BlockStack gap="200">
-                      <Text variant="bodyMd" fontWeight="semibold">1. Sync Your Store</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">1. Sync Your Store Data</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Click "Sync Now" to fetch your products, collections, and languages from Shopify. 
-                        This is required before you can start optimizing.
+                        Click "Sync Now" to fetch your products, collections, languages, and markets from Shopify. 
+                        This is required before you can start optimizing. Enable "Auto-sync on load" to keep your data fresh.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">2. Choose a Plan</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">2. Plan Selection & Token Management</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Visit Plans & Billing to select the plan that fits your store size. 
-                        Each plan includes different limits for products, languages, and features.
+                        Plan selection happens during app installation. Visit "Plans & Billing" to upgrade your plan 
+                        or purchase additional tokens for AI-enhanced features (Professional/Growth plans).
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">3. Optimize Your Products</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Go to "Search Optimization for AI" → Products tab. Select products and click "AI Enhance" 
-                        to generate SEO-optimized titles, descriptions, and metadata.
+                        to structure existing titles, descriptions, and metadata for better AI consumption.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">4. Generate AI Sitemap</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">4. Configure Store Metadata</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Go to "Store Metadata" to configure store description, keywords, business information, 
+                        and contact details (Professional+ plans).
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">5. Generate AI Sitemap</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Navigate to Sitemap tab and generate your AI-optimized sitemap. This helps AI search engines 
-                        discover and index your products.
+                        discover and index your products (Growth Extra+ plans).
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">5. Monitor & Improve</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">6. AI-Enhanced Features (Optional)</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Return to Dashboard regularly to track optimization progress and token usage. 
-                        Enable auto-sync to keep your data fresh.
+                        Use AI Testing and AI Discovery Endpoints for advanced optimization. These features require 
+                        additional tokens unless you're on Growth Extra or Enterprise plans.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">7. Monitor & Improve</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Return to Dashboard regularly to track optimization progress, monitor token usage, 
+                        and review plan recommendations.
                       </Text>
                     </BlockStack>
                   </BlockStack>
