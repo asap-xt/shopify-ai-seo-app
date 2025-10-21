@@ -157,7 +157,7 @@ export async function getGeminiResponse(prompt, options = {}) {
   const {
     maxTokens = 500,
     temperature = 0.3,
-    model = 'google/gemini-flash-1.5-8b' // Gemini 2.5 Flash Lite (8B) via OpenRouter
+    model = 'google/gemini-2.5-flash-lite' // Gemini 2.5 Flash Lite via OpenRouter
   } = options;
 
   const baseUrl = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
