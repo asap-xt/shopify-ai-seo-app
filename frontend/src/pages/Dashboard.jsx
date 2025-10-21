@@ -59,6 +59,14 @@ export default function Dashboard({ shop: shopProp }) {
       return false;
     }
   });
+  
+  const [dismissedTokenBanner, setDismissedTokenBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedTokenBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -295,6 +303,16 @@ export default function Dashboard({ shop: shopProp }) {
     }
   };
 
+  // Handle dismissing the token banner
+  const handleDismissTokenBanner = () => {
+    try {
+      localStorage.setItem(`dismissedTokenBanner_${shop}`, 'true');
+      setDismissedTokenBanner(true);
+    } catch (error) {
+      console.error('[Dashboard] Error saving dismissed token banner state:', error);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -444,7 +462,7 @@ export default function Dashboard({ shop: shopProp }) {
       )}
 
       {/* Token Purchase Recommendation */}
-      {shouldRecommendTokens && (
+      {shouldRecommendTokens && !dismissedTokenBanner && (
         <Layout.Section>
           <Banner
             title="Buy Tokens to Unlock AI Features"
@@ -453,6 +471,7 @@ export default function Dashboard({ shop: shopProp }) {
               content: 'Buy Tokens',
               onAction: () => navigate('/billing')
             }}
+            onDismiss={handleDismissTokenBanner}
           >
             <Text>
               Your current plan uses pay-per-use tokens. Purchase tokens to access AI-enhanced optimization features 
@@ -670,29 +689,54 @@ export default function Dashboard({ shop: shopProp }) {
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Go to "Search Optimization for AI" → Products tab. Select products and click "AI Enhance" 
-                        to structure existing titles, descriptions, and metadata for better AI consumption.
+                        Go to "Search Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
+                        existing titles, descriptions, and metadata for better AI consumption. This is essential - without basic optimization, 
+                        AI-enhanced features cannot be applied.
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Also optimize your <strong>Collections</strong> (Growth+ plans) to help AI bots understand your product categories 
+                        and relationships.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">4. Configure Store Metadata</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Go to "Store Metadata" to configure store description, keywords, business information, 
-                        and contact details (Professional+ plans).
+                        and contact details (Professional+ plans). This helps AI bots understand your brand and business context.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">5. Generate AI Sitemap</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">5. Generate Sitemaps</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Navigate to Sitemap tab and generate your AI-optimized sitemap. This helps AI search engines 
-                        discover and index your products (Growth Extra+ plans).
+                        Navigate to Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
+                        For advanced optimization, go to Settings → Sitemap to configure <strong>AI-enhanced sitemap</strong> 
+                        with structured data that helps AI search engines discover and index your products (Growth Extra+ plans).
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">6. AI-Enhanced Features (Optional)</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Use AI Testing and AI Discovery Endpoints for advanced optimization. These features require 
-                        additional tokens unless you're on Growth Extra or Enterprise plans.
+                        Use AI-enhanced add-ons to <strong>supplement and strengthen</strong> your data discovery by AI bots, 
+                        increasing your store's chances of being well-represented. These include:
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>AI Discovery Endpoints:</strong> Advanced AI simulation features (Growth Extra+)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>Advanced Schema Data:</strong> Rich structured data markup (Enterprise only)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        These features require additional tokens unless you're on Growth Extra or Enterprise plans.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">7. Monitor & Improve</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">7. Configure Settings</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Visit "Settings" to configure app preferences, view JSON feeds, manage AI providers, 
+                        and access advanced features like AI-enhanced sitemap generation. Settings are crucial for 
+                        fine-tuning how your store data is presented to AI search engines.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">8. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Return to Dashboard regularly to track optimization progress, monitor token usage, 
                         and review plan recommendations.
