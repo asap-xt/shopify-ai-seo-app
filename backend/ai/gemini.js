@@ -148,3 +148,66 @@ Only return JSON.
   }
   throw new Error(lastErr);
 }
+
+/**
+ * Generic Gemini response function for custom prompts
+ * Uses Gemini 2.5 Flash (Lite) for fast, cost-effective responses
+ */
+export async function getGeminiResponse(prompt, options = {}) {
+  const {
+    maxTokens = 500,
+    temperature = 0.3,
+    model = 'gemini-2.0-flash-exp' // Gemini 2.5 Flash Lite equivalent
+  } = options;
+
+  const provider = (process.env.GEMINI_PROVIDER || '').toLowerCase();
+
+  // 1) OpenRouter mode
+  if (provider === 'openrouter') {
+    const baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY is missing.');
+
+    const res = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: `google/${model}`,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+      timeout: 30_000,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Gemini (OpenRouter) HTTP ${res.status}: ${text || res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content || '';
+  }
+
+  // 2) Direct Google SDK
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  if (!apiKey) throw new Error('GEMINI_API_KEY is missing.');
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const genModel = genAI.getGenerativeModel({ model });
+  
+  const result = await genModel.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { 
+      temperature,
+      maxOutputTokens: maxTokens
+    },
+  });
+  
+  return result?.response?.text?.() || '';
+}

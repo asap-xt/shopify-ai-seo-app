@@ -1,13 +1,13 @@
 // backend/services/aiSitemapEnhancer.js
 // AI-powered enhancements for sitemap generation
 
-import { getAIResponse } from '../ai/openrouter.js';
+import { getGeminiResponse } from '../ai/gemini.js';
 
 /**
  * Generate AI-optimized product summary
  * Priority 1: High impact, easy implementation
  */
-export async function generateAISummary(product, aiProvider = 'deepseek') {
+export async function generateAISummary(product) {
   try {
     const prompt = `Analyze this product and create a 2-3 sentence summary optimized for AI search engines.
 Focus on key features, use cases, and what makes it unique.
@@ -21,8 +21,7 @@ Brand: ${product.vendor || 'N/A'}
 
 Format: Plain text, no markdown, concise and informative. Maximum 3 sentences.`;
 
-    const response = await getAIResponse(prompt, {
-      provider: aiProvider,
+    const response = await getGeminiResponse(prompt, {
       maxTokens: 200,
       temperature: 0.3 // Lower temperature for consistency
     });
@@ -39,7 +38,7 @@ Format: Plain text, no markdown, concise and informative. Maximum 3 sentences.`;
  * Generate semantic tags
  * Priority 1: High impact, easy implementation
  */
-export async function generateSemanticTags(product, aiProvider = 'deepseek') {
+export async function generateSemanticTags(product) {
   try {
     const prompt = `Analyze this product and generate structured semantic tags.
 
@@ -63,8 +62,7 @@ Format as JSON:
   "season": "string"
 }`;
 
-    const response = await getAIResponse(prompt, {
-      provider: aiProvider,
+    const response = await getGeminiResponse(prompt, {
       maxTokens: 300,
       temperature: 0.2
     });
@@ -95,7 +93,7 @@ Format as JSON:
  * Generate context hints
  * Priority 2: Medium impact, medium complexity
  */
-export async function generateContextHints(product, aiProvider = 'deepseek') {
+export async function generateContextHints(product) {
   try {
     const prompt = `Analyze this product and provide context hints for AI search engines.
 
@@ -118,8 +116,7 @@ Format as JSON:
   "target_audience": "string"
 }`;
 
-    const response = await getAIResponse(prompt, {
-      provider: aiProvider,
+    const response = await getGeminiResponse(prompt, {
       maxTokens: 400,
       temperature: 0.3
     });
@@ -146,7 +143,7 @@ Format as JSON:
  * Generate Q&A pairs
  * Priority 2: Medium impact, medium complexity
  */
-export async function generateProductQA(product, aiProvider = 'deepseek') {
+export async function generateProductQA(product) {
   try {
     const prompt = `Generate the top 3-5 most likely questions customers would ask about this product, with clear answers.
 
@@ -172,8 +169,7 @@ Format as JSON array:
   }
 ]`;
 
-    const response = await getAIResponse(prompt, {
-      provider: aiProvider,
+    const response = await getGeminiResponse(prompt, {
       maxTokens: 800,
       temperature: 0.4
     });
@@ -192,7 +188,7 @@ Format as JSON array:
  * Analyze sentiment and tone
  * Priority 3: Lower impact, easy implementation
  */
-export async function analyzeSentiment(product, aiProvider = 'deepseek') {
+export async function analyzeSentiment(product) {
   try {
     const prompt = `Analyze the tone and target emotion of this product.
 
@@ -211,8 +207,7 @@ Format as JSON:
   "target_emotion": "string"
 }`;
 
-    const response = await getAIResponse(prompt, {
-      provider: aiProvider,
+    const response = await getGeminiResponse(prompt, {
       maxTokens: 150,
       temperature: 0.2
     });
@@ -285,10 +280,10 @@ export function findRelatedProducts(product, allProducts, maxResults = 5) {
 /**
  * Batch generate all AI enhancements for a product
  * This is the main function to call
+ * Uses Gemini 2.5 Flash (Lite) for fast, cost-effective generation
  */
 export async function enhanceProductForSitemap(product, allProducts = [], options = {}) {
   const {
-    aiProvider = 'deepseek',
     enableSummary = true,
     enableSemanticTags = true,
     enableContextHints = true,
@@ -302,11 +297,11 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
   try {
     // Run all enhancements in parallel for speed
     const [summary, semanticTags, contextHints, qa, sentiment] = await Promise.all([
-      enableSummary ? generateAISummary(product, aiProvider) : Promise.resolve(null),
-      enableSemanticTags ? generateSemanticTags(product, aiProvider) : Promise.resolve(null),
-      enableContextHints ? generateContextHints(product, aiProvider) : Promise.resolve(null),
-      enableQA ? generateProductQA(product, aiProvider) : Promise.resolve(null),
-      enableSentiment ? analyzeSentiment(product, aiProvider) : Promise.resolve(null)
+      enableSummary ? generateAISummary(product) : Promise.resolve(null),
+      enableSemanticTags ? generateSemanticTags(product) : Promise.resolve(null),
+      enableContextHints ? generateContextHints(product) : Promise.resolve(null),
+      enableQA ? generateProductQA(product) : Promise.resolve(null),
+      enableSentiment ? analyzeSentiment(product) : Promise.resolve(null)
     ]);
 
     // Find related products (synchronous, fast)

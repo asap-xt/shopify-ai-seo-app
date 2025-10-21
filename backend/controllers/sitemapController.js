@@ -447,8 +447,8 @@ async function generateSitemapCore(shop) {
           };
           
           // Generate AI enhancements (with timeout)
+          // Uses Gemini 2.5 Flash (Lite) for fast, cost-effective generation
           const enhancementPromise = enhanceProductForSitemap(productForAI, allProducts, {
-            aiProvider: 'deepseek', // Fast and cost-effective
             enableSummary: true,
             enableSemanticTags: true,
             enableContextHints: true,
