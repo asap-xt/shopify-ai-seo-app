@@ -922,6 +922,8 @@ export default function Settings() {
     return availability[featureKey]?.includes(plan) || false;
   };
 
+  // Test Plan Switcher - commented out for production
+  /*
   const setTestPlan = async (plan) => {
     console.log(`[DEBUG] setTestPlan called with plan: ${plan}, shop: ${shop}`);
     try {
@@ -941,9 +943,9 @@ export default function Settings() {
       setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error('[DEBUG] Failed to set test plan', error);
-      setToast(`Failed to set test plan: ${error.message}`);
     }
   };
+  */
 
   const viewJson = async (feature, title) => {
     setJsonModalTitle(title);
@@ -2020,7 +2022,8 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Test Plan Switcher - for development only */}
+      {/* Test Plan Switcher - commented out for production */}
+      {/*
       <Card>
         <Box padding="400">
           <BlockStack gap="400">
@@ -2035,6 +2038,7 @@ export default function Settings() {
           </BlockStack>
         </Box>
       </Card>
+      */}
 
       {/* JSON View Modal */}
       {jsonModalOpen && (
