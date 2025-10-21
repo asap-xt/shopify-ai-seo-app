@@ -151,63 +151,56 @@ Only return JSON.
 
 /**
  * Generic Gemini response function for custom prompts
- * Uses Gemini 2.5 Flash (Lite) for fast, cost-effective responses
+ * Uses Gemini 2.5 Flash via OpenRouter for fast, cost-effective responses
  */
 export async function getGeminiResponse(prompt, options = {}) {
   const {
     maxTokens = 500,
     temperature = 0.3,
-    model = 'gemini-2.0-flash-exp' // Gemini 2.5 Flash Lite equivalent
+    model = 'google/gemini-flash-1.5-8b' // Gemini 2.5 Flash Lite (8B) via OpenRouter
   } = options;
 
-  const provider = (process.env.GEMINI_PROVIDER || '').toLowerCase();
-
-  // 1) OpenRouter mode
-  if (provider === 'openrouter') {
-    const baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    const apiKey = process.env.OPENROUTER_API_KEY || '';
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY is missing.');
-
-    const res = await fetch(baseUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: `google/${model}`,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature,
-        max_tokens: maxTokens,
-      }),
-      timeout: 30_000,
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Gemini (OpenRouter) HTTP ${res.status}: ${text || res.statusText}`);
-    }
-
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content || '';
+  const baseUrl = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
+  const apiKey = process.env.OPENROUTER_API_KEY || '';
+  
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY is missing.');
   }
 
-  // 2) Direct Google SDK
-  const apiKey = process.env.GEMINI_API_KEY || '';
-  if (!apiKey) throw new Error('GEMINI_API_KEY is missing.');
+  console.log('[GEMINI] Calling OpenRouter with model:', model);
+  console.log('[GEMINI] Prompt length:', prompt.length, 'chars');
+  console.log('[GEMINI] Max tokens:', maxTokens, 'Temperature:', temperature);
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const genModel = genAI.getGenerativeModel({ model });
-  
-  const result = await genModel.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { 
-      temperature,
-      maxOutputTokens: maxTokens
+  const res = await fetch(baseUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://shopify-ai-seo.com',
+      'X-Title': process.env.OPENROUTER_APP_NAME || 'Shopify AI SEO'
     },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+    timeout: 30_000,
   });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('[GEMINI] OpenRouter error:', res.status, text);
+    throw new Error(`Gemini (OpenRouter) HTTP ${res.status}: ${text || res.statusText}`);
+  }
+
+  const data = await res.json();
+  console.log('[GEMINI] OpenRouter response received, tokens used:', data?.usage?.total_tokens || 'unknown');
   
-  return result?.response?.text?.() || '';
+  const content = data?.choices?.[0]?.message?.content || '';
+  console.log('[GEMINI] Response length:', content.length, 'chars');
+  
+  return content;
 }
