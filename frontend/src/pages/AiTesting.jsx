@@ -99,8 +99,9 @@ export default function AiTesting({ shop: shopProp }) {
   const loadTokenBalance = async () => {
     try {
       const data = await api(`/api/billing/info?shop=${shop}`);
-      console.log('[AI-TESTING] Token balance:', data);
-      setTokenBalance(data?.tokenBalance || 0);
+      console.log('[AI-TESTING] Token balance data:', data);
+      // API returns: { tokens: { balance, totalPurchased, totalUsed } }
+      setTokenBalance(data?.tokens?.balance || 0);
     } catch (err) {
       console.error('[AI-TESTING] Error loading token balance:', err);
     }
