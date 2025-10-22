@@ -178,113 +178,30 @@ export default function AiTesting({ shop: shopProp }) {
     setTestProgress(0);
     setTestResults({});
     
-    const endpoints = [
-      { 
-        key: 'productsJson', 
-        name: 'Products JSON Feed', 
-        url: `https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`,
-        requiredPlan: null
-      },
-      { 
-        key: 'storeMetadata', 
-        name: 'Store Metadata', 
-        url: `https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`,
-        requiredPlan: 'Professional'
-      },
-      { 
-        key: 'welcomePage', 
-        name: 'AI Welcome Page', 
-        url: `https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`,
-        requiredPlan: 'Growth'
-      },
-      { 
-        key: 'collectionsJson', 
-        name: 'Collections JSON Feed', 
-        url: `https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`,
-        requiredPlan: 'Growth'
-      },
-      { 
-        key: 'aiSitemap', 
-        name: 'AI-Enhanced Sitemap', 
-        url: `https://${shop}/apps/new-ai-seo/ai/sitemap.xml?shop=${shop}`,
-        requiredPlan: 'Growth Extra'
-      },
-      { 
-        key: 'schemaData', 
-        name: 'Advanced Schema Data', 
-        url: `https://${shop}/apps/new-ai-seo/ai/schema-data.json?shop=${shop}`,
-        requiredPlan: 'Enterprise'
+    try {
+      console.log('[AI-TESTING] Starting tests for shop:', shop);
+      
+      // Call backend endpoint to run tests
+      const response = await api('/api/ai-testing/run-tests', {
+        method: 'POST',
+        body: { shop }
+      });
+      
+      console.log('[AI-TESTING] Test results:', response);
+      
+      if (response.results) {
+        setTestResults(response.results);
+        setTestProgress(100);
+        setToastContent('Testing completed!');
+      } else {
+        setToastContent('Testing failed. Please try again.');
       }
-    ];
-    
-    const results = {};
-    
-    for (let i = 0; i < endpoints.length; i++) {
-      const endpoint = endpoints[i];
-      setTestProgress(((i + 1) / endpoints.length) * 100);
-      
-      // Check if feature is available based on plan
-      const available = isFeatureAvailable(endpoint.key);
-      
-      if (!available) {
-        results[endpoint.key] = {
-          status: 'locked',
-          message: `Requires ${endpoint.requiredPlan} plan`,
-          name: endpoint.name
-        };
-        continue;
-      }
-      
-      // Test the endpoint
-      try {
-        const response = await fetch(endpoint.url);
-        
-        if (response.ok) {
-          const contentType = response.headers.get('content-type');
-          let data = null;
-          
-          if (contentType && contentType.includes('application/json')) {
-            data = await response.json();
-          } else if (contentType && contentType.includes('text/html')) {
-            data = await response.text();
-          } else if (contentType && contentType.includes('xml')) {
-            data = await response.text();
-          }
-          
-          results[endpoint.key] = {
-            status: 'success',
-            message: 'Endpoint is working correctly',
-            name: endpoint.name,
-            dataSize: JSON.stringify(data).length
-          };
-        } else if (response.status === 403 || response.status === 402) {
-          results[endpoint.key] = {
-            status: 'locked',
-            message: `Requires ${endpoint.requiredPlan} plan`,
-            name: endpoint.name
-          };
-        } else {
-          results[endpoint.key] = {
-            status: 'error',
-            message: `HTTP ${response.status}: ${response.statusText}`,
-            name: endpoint.name
-          };
-        }
-      } catch (error) {
-        results[endpoint.key] = {
-          status: 'error',
-          message: error.message || 'Failed to fetch endpoint',
-          name: endpoint.name
-        };
-      }
-      
-      // Small delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (error) {
+      console.error('[AI-TESTING] Error running tests:', error);
+      setToastContent('Failed to run tests. Please try again.');
+    } finally {
+      setTesting(false);
     }
-    
-    setTestResults(results);
-    setTesting(false);
-    setToastContent('Testing completed!');
   };
 
   const simulateAIResponse = async (queryType, question = null) => {

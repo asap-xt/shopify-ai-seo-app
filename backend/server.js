@@ -15,6 +15,7 @@ import fs from 'fs';
 import { buildSchema, graphql } from 'graphql';
 import { getPlansMeForShop } from './controllers/seoController.js';
 import aiSimulationController from './controllers/aiSimulationController.js';
+import aiTestingController from './controllers/aiTestingController.js';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
@@ -943,6 +944,7 @@ app.use(aiEndpointsRouter);
 app.use('/ai-enhance', aiEnhanceRouter);
 app.use('/api/schema', advancedSchemaRouter);
 app.use('/api/ai', aiSimulationController);
+app.use('/api', aiTestingController);
 
 
 // Mount the new controllers with fixed authentication
