@@ -57,10 +57,7 @@ function useRoute() {
   const [path, setPath] = useState(() => normalizePath(window.location.pathname));
   
   useEffect(() => {
-    let isNavigating = false;
-    
     const handleLocationChange = () => {
-      if (isNavigating) return;
       const normalized = normalizePath(window.location.pathname);
       console.log('[useRoute] Location changed to:', normalized);
       setPath(normalized);
@@ -68,51 +65,20 @@ function useRoute() {
     
     // Listen for popstate (browser back/forward)
     window.addEventListener('popstate', handleLocationChange);
-
-    // Listen for navigation link clicks
-    const handleClick = (e) => {
-      // Find closest <a> tag (even if clicked on child element)
-      const link = e.target.closest('a');
-      
-      // Ignore if not a link, external link, or if it's the App Bridge nav
-      if (!link || !link.href || !link.href.startsWith(window.location.origin)) {
-        return;
-      }
-      
-      // Don't intercept if already on the same page
-      const newUrl = new URL(link.href);
-      const currentPath = window.location.pathname + window.location.search;
-      const newPath = newUrl.pathname + newUrl.search;
-      
-      if (currentPath === newPath) {
-        return;
-      }
-
-      console.log('[useRoute] Navigation click detected, from:', currentPath, 'to:', newPath);
-      
-      // Prevent default and handle manually
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Set flag to prevent duplicate handling
-      isNavigating = true;
-      
-      // Update browser history
-      window.history.pushState({}, '', newPath);
-      
-      // Update React state
-      const normalized = normalizePath(newUrl.pathname);
-      setPath(normalized);
-      
-      // Reset flag
-      setTimeout(() => { isNavigating = false; }, 100);
-    };
     
-    document.addEventListener('click', handleClick, true);
+    // Poll for URL changes (needed for App Bridge navigation)
+    // App Bridge changes the URL but doesn't always trigger popstate
+    let lastPath = window.location.pathname;
+    const checkPath = setInterval(() => {
+      if (window.location.pathname !== lastPath) {
+        lastPath = window.location.pathname;
+        handleLocationChange();
+      }
+    }, 50); // Check every 50ms
 
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
-      document.removeEventListener('click', handleClick, true);
+      clearInterval(checkPath);
     };
   }, []);
   
