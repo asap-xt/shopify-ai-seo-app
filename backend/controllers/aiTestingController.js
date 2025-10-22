@@ -52,25 +52,9 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`
     },
     { 
-      key: 'collectionsJson', 
-      name: 'Collections JSON Feed', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`
-    },
-    { 
-      key: 'storeMetadata', 
-      name: 'Store Metadata', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`
-    },
-    { 
       key: 'basicSitemap', 
       name: 'Basic Sitemap', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`
-    },
-    { 
-      key: 'aiSitemap', 
-      name: 'AI-Enhanced Sitemap (Growth Extra+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
-      requiresPlan: ['growth_extra', 'enterprise']
     },
     { 
       key: 'robotsTxt', 
@@ -85,8 +69,32 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       themeFile: true
     },
     { 
+      key: 'storeMetadata', 
+      name: 'Store Metadata (Growth Extra+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
+      requiresPlan: ['growth_extra', 'enterprise']
+    },
+    { 
+      key: 'welcomePage', 
+      name: 'AI Welcome Page (Growth+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
+      requiresPlan: ['growth', 'growth_extra', 'enterprise']
+    },
+    { 
+      key: 'collectionsJson', 
+      name: 'Collections JSON Feed (Growth+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
+      requiresPlan: ['growth', 'growth_extra', 'enterprise']
+    },
+    { 
+      key: 'aiSitemap', 
+      name: 'AI-Optimized Sitemap (Professional+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+      requiresPlan: ['professional', 'growth', 'growth_extra', 'enterprise']
+    },
+    { 
       key: 'advancedSchemaApi', 
-      name: 'Advanced Schema API (Enterprise)', 
+      name: 'Advanced Schema Data (Enterprise)', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
       requiresPlan: ['enterprise']
     }

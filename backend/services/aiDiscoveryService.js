@@ -385,7 +385,7 @@ class AIDiscoveryService {
       // Define plan features
       const planFeatures = {
         starter: ['productsJson', 'aiSitemap'],
-        professional: ['productsJson', 'aiSitemap', 'welcomePage'],
+        professional: ['productsJson', 'aiSitemap'],
         growth: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson'],
         growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata'],
         enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData']
@@ -514,7 +514,7 @@ class AIDiscoveryService {
   isFeatureAvailable(plan, feature) {
     const features = {
       starter: ['productsJson', 'aiSitemap'],
-      professional: ['productsJson', 'aiSitemap', 'welcomePage'],
+      professional: ['productsJson', 'aiSitemap'],
       growth: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt'],
       growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata'],
       enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData']
