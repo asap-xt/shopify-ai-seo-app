@@ -137,29 +137,30 @@ export default function SitemapPage({ shop: shopProp }) {
             <p>
               Your {plan?.plan || 'Starter'} plan includes up to{' '}
               <strong>
-                {plan?.plan === 'Starter' ? 100
-                  : plan?.plan === 'Professional' ? 350
-                  : plan?.plan === 'Growth' ? 1000
-                  : plan?.plan === 'Growth Extra' ? 2500
-                  : plan?.plan === 'Enterprise' ? 6000
-                  : 100}
-              </strong>{' '}
-              URLs in the sitemap.
+                {plan?.plan === 'Starter' ? '100 products in 1 language'
+                  : plan?.plan === 'Professional' ? '250 products in up to 2 languages'
+                  : plan?.plan === 'Growth' ? '700 products in up to 3 languages'
+                  : plan?.plan === 'Growth Extra' ? '1,000 products in up to 6 languages'
+                  : plan?.plan === 'Enterprise' ? '2,500 products in up to 10 languages'
+                  : '100 products in 1 language'}
+              </strong>
+              .
               {info?.productCount &&
                 (info.productCount >
                   (plan?.plan === 'Starter' ? 100
-                    : plan?.plan === 'Professional' ? 350
-                    : plan?.plan === 'Growth' ? 1000
-                    : plan?.plan === 'Growth Extra' ? 2500
-                    : plan?.plan === 'Enterprise' ? 6000
+                    : plan?.plan === 'Professional' ? 250
+                    : plan?.plan === 'Growth' ? 700
+                    : plan?.plan === 'Growth Extra' ? 1000
+                    : plan?.plan === 'Enterprise' ? 2500
                     : 100)) && (
                   <> You have {info.productCount} products, so only the first{' '}
                     {plan?.plan === 'Starter' ? 100
-                      : plan?.plan === 'Professional' ? 350
-                      : plan?.plan === 'Growth' ? 1000
-                      : plan?.plan === 'Growth Extra' ? 2500
-                      : plan?.plan === 'Enterprise' ? 6000
-                      : 100} will be included.</>
+                      : plan?.plan === 'Professional' ? 250
+                      : plan?.plan === 'Growth' ? 700
+                      : plan?.plan === 'Growth Extra' ? 1000
+                      : plan?.plan === 'Enterprise' ? 2500
+                      : 100}{' '}
+                    will be included in the sitemap.</>
                 )}
             </p>
           </Banner>
