@@ -40,10 +40,17 @@ export default function AiTesting({ shop: shopProp }) {
   const [testResults, setTestResults] = useState({});
   const [testing, setTesting] = useState(false);
   const [testProgress, setTestProgress] = useState(0);
+  
+  // New state for AI validation
+  const [aiTestResults, setAiTestResults] = useState({});
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestProgress, setAiTestProgress] = useState(0);
+  const [tokenBalance, setTokenBalance] = useState(null);
 
   useEffect(() => {
     if (shop) {
       loadPlan();
+      loadTokenBalance();
     }
   }, [shop, api]);
 
@@ -69,6 +76,16 @@ export default function AiTesting({ shop: shopProp }) {
       setCurrentPlan(data?.data?.plansMe?.plan);
     } catch (err) {
       console.error('[AI-TESTING] Error loading plan:', err);
+    }
+  };
+
+  const loadTokenBalance = async () => {
+    try {
+      const data = await api(`/api/billing/info?shop=${shop}`);
+      console.log('[AI-TESTING] Token balance:', data);
+      setTokenBalance(data?.tokenBalance || 0);
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading token balance:', err);
     }
   };
 
@@ -192,7 +209,7 @@ export default function AiTesting({ shop: shopProp }) {
       if (response.results) {
         setTestResults(response.results);
         setTestProgress(100);
-        setToastContent('Testing completed!');
+        setToastContent('Basic tests completed!');
       } else {
         setToastContent('Testing failed. Please try again.');
       }
@@ -201,6 +218,83 @@ export default function AiTesting({ shop: shopProp }) {
       setToastContent('Failed to run tests. Please try again.');
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Run AI-powered validation
+  const runAiValidation = async () => {
+    // Check if Professional+ plan
+    const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+    const currentIndex = planHierarchy.indexOf(currentPlan);
+    
+    if (currentIndex < 1) { // Less than Professional
+      setTokenError({
+        message: 'AI-powered validation requires Professional plan or higher',
+        requiredPlan: 'Professional'
+      });
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    // Check token balance
+    if (!tokenBalance || tokenBalance < 50) {
+      setTokenError({
+        message: 'You need at least 50 tokens to run AI validation',
+        tokenCost: 50,
+        currentBalance: tokenBalance || 0
+      });
+      setShowTokenModal(true);
+      return;
+    }
+    
+    setAiTesting(true);
+    setAiTestProgress(0);
+    setAiTestResults({});
+    
+    try {
+      console.log('[AI-TESTING] Starting AI validation for shop:', shop);
+      
+      // Call backend endpoint to run AI validation
+      const response = await api('/api/ai-testing/ai-validate', {
+        method: 'POST',
+        body: { 
+          shop,
+          endpointResults: testResults // Pass basic test results
+        }
+      });
+      
+      console.log('[AI-TESTING] AI validation results:', response);
+      
+      if (response.results) {
+        setAiTestResults(response.results);
+        setAiTestProgress(100);
+        setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
+        // Reload token balance
+        loadTokenBalance();
+      } else {
+        setToastContent('AI validation failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('[AI-TESTING] Error running AI validation:', error);
+      
+      // Check for 402 status (payment required)
+      if (error.status === 402) {
+        if (error.requiresUpgrade) {
+          setTokenError(error);
+          setShowUpgradeModal(true);
+          return;
+        }
+        
+        if (error.requiresPurchase) {
+          setTokenError(error);
+          setShowTokenModal(true);
+          return;
+        }
+      }
+      
+      setToastContent('Failed to run AI validation. Please try again.');
+    } finally {
+      setAiTesting(false);
     }
   };
 
@@ -250,31 +344,30 @@ export default function AiTesting({ shop: shopProp }) {
 
   return (
     <>
-      <Card>
-        <Box padding="400">
-          <BlockStack gap="400">
-            <Banner tone="info">
-              <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
-            </Banner>
+      <BlockStack gap="400">
+        <Banner tone="info">
+          <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
+        </Banner>
 
-            {/* AI Discovery Endpoints - Automated Testing */}
-            <Card>
+        {/* Card 1: Basic Endpoint Tests */}
+        <Card>
               <Box padding="300">
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h3" variant="headingMd">AI Discovery Endpoints</Text>
+                    <BlockStack gap="100">
+                      <Text as="h3" variant="headingMd">🔧 Basic Endpoint Tests</Text>
+                      <Text variant="bodySm" tone="subdued">
+                        Quick check if endpoints are accessible and returning data
+                      </Text>
+                    </BlockStack>
                     <Button 
                       onClick={runAllTests}
                       loading={testing}
                       disabled={testing}
                     >
-                      {testing ? 'Testing...' : 'Run All Tests'}
+                      {testing ? 'Testing...' : 'Run Basic Tests'}
                     </Button>
                   </InlineStack>
-                  
-                  <Text variant="bodyMd" tone="subdued">
-                    Automated tests to verify that your AI Discovery endpoints are working correctly.
-                  </Text>
 
                   {testing && (
                     <Box>
@@ -414,14 +507,244 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(testResults).length === 0 && !testing && (
                     <Banner tone="info">
-                      <Text>Click "Run All Tests" to check if your AI Discovery endpoints are configured correctly.</Text>
+                      <Text>Click "Run Basic Tests" to check if your AI Discovery endpoints are configured correctly.</Text>
+                    </Banner>
+                  )}
+                </BlockStack>
+              </Box>
+            </Card>
+
+            {/* Card 2: AI-Powered Validation */}
+            <Card>
+              <Box padding="300">
+                <BlockStack gap="400">
+                  <InlineStack align="space-between" blockAlign="center">
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" blockAlign="center">
+                        <Text as="h3" variant="headingMd">🤖 AI-Powered Validation</Text>
+                        {tokenBalance !== null && (
+                          <Badge tone={tokenBalance > 50 ? 'success' : 'warning'}>
+                            {tokenBalance} tokens
+                          </Badge>
+                        )}
+                      </InlineStack>
+                      <Text variant="bodySm" tone="subdued">
+                        Deep analysis with Gemini 2.5 Flash Lite (~50 tokens per test)
+                      </Text>
+                      {currentPlan && (
+                        <Text variant="bodySm" tone="subdued">
+                          Requires: Professional+ plan & tokens
+                        </Text>
+                      )}
+                    </BlockStack>
+                    <Button 
+                      onClick={runAiValidation}
+                      loading={aiTesting}
+                      disabled={aiTesting || Object.keys(testResults).length === 0}
+                      variant="primary"
+                    >
+                      {aiTesting ? 'Validating...' : 'Test with AI Bot'}
+                    </Button>
+                  </InlineStack>
+
+                  {aiTesting && (
+                    <Box>
+                      <BlockStack gap="200">
+                        <Text variant="bodySm">AI is analyzing your endpoints...</Text>
+                        <ProgressBar progress={aiTestProgress} size="small" tone="primary" />
+                      </BlockStack>
+                    </Box>
+                  )}
+
+                  {Object.keys(aiTestResults).length > 0 && (
+                    <BlockStack gap="300">
+                      {/* AI Results for Products JSON Feed */}
+                      {aiTestResults.productsJson && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
+                                {aiTestResults.productsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                                {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                                {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                                {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm">
+                                {aiTestResults.productsJson.feedback}
+                              </Text>
+                              {aiTestResults.productsJson.suggestions && (
+                                <Text variant="bodySm" tone="subdued">
+                                  💡 {aiTestResults.productsJson.suggestions}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
+
+                      {/* AI Results for Store Metadata */}
+                      {aiTestResults.storeMetadata && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
+                                {aiTestResults.storeMetadata.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm">
+                                {aiTestResults.storeMetadata.feedback}
+                              </Text>
+                              {aiTestResults.storeMetadata.suggestions && (
+                                <Text variant="bodySm" tone="subdued">
+                                  💡 {aiTestResults.storeMetadata.suggestions}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
+
+                      {/* AI Results for Welcome Page */}
+                      {aiTestResults.welcomePage && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
+                                {aiTestResults.welcomePage.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                                {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                                {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                                {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm">
+                                {aiTestResults.welcomePage.feedback}
+                              </Text>
+                              {aiTestResults.welcomePage.suggestions && (
+                                <Text variant="bodySm" tone="subdued">
+                                  💡 {aiTestResults.welcomePage.suggestions}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
+
+                      {/* AI Results for Collections JSON */}
+                      {aiTestResults.collectionsJson && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
+                                {aiTestResults.collectionsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm">
+                                {aiTestResults.collectionsJson.feedback}
+                              </Text>
+                              {aiTestResults.collectionsJson.suggestions && (
+                                <Text variant="bodySm" tone="subdued">
+                                  💡 {aiTestResults.collectionsJson.suggestions}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
+
+                      {/* AI Results for AI Sitemap */}
+                      {aiTestResults.aiSitemap && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
+                                {aiTestResults.aiSitemap.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm">
+                                {aiTestResults.aiSitemap.feedback}
+                              </Text>
+                              {aiTestResults.aiSitemap.suggestions && (
+                                <Text variant="bodySm" tone="subdued">
+                                  💡 {aiTestResults.aiSitemap.suggestions}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
+
+                      {/* AI Results for Schema Data */}
+                      {aiTestResults.schemaData && (
+                        <InlineStack align="space-between" blockAlign="center">
+                          <BlockStack gap="100">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
+                              {aiTestResults.schemaData.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
+                              {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
+                              {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
+                              {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                            </InlineStack>
+                            <Text variant="bodySm">
+                              {aiTestResults.schemaData.feedback}
+                            </Text>
+                            {aiTestResults.schemaData.suggestions && (
+                              <Text variant="bodySm" tone="subdued">
+                                💡 {aiTestResults.schemaData.suggestions}
+                              </Text>
+                            )}
+                          </BlockStack>
+                        </InlineStack>
+                      )}
+                    </BlockStack>
+                  )}
+
+                  {Object.keys(aiTestResults).length === 0 && !aiTesting && (
+                    <Banner tone="info">
+                      <Text>
+                        {Object.keys(testResults).length === 0 
+                          ? 'Run Basic Tests first, then use AI validation for deep analysis'
+                          : 'Click "Test with AI Bot" to get AI-powered feedback on your endpoint data quality'
+                        }
+                      </Text>
                     </Banner>
                   )}
 
-                  <Divider />
+                  {!currentPlan && (
+                    <Banner tone="warning">
+                      <Text>Loading plan information...</Text>
+                    </Banner>
+                  )}
+                </BlockStack>
+              </Box>
+            </Card>
 
-                  <BlockStack gap="200">
-                    {/* Meta AI - Starter+ (Always available) */}
+        {/* Card 3: Test with Real AI Bots */}
+        <Card>
+          <Box padding="300">
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">Test with Real AI Bots</Text>
+              
+              <Text variant="bodyMd" tone="subdued">
+                Manually test your store with real AI search engines
+              </Text>
+
+              <BlockStack gap="200">
+                {/* Meta AI - Starter+ (Always available) */}
                     <InlineStack align="space-between">
                       <Text>Meta AI Search</Text>
                       {isFeatureAvailable('meta') ? (
@@ -638,9 +961,7 @@ export default function AiTesting({ shop: shopProp }) {
                 </BlockStack>
               </Box>
             </Card>
-          </BlockStack>
-        </Box>
-      </Card>
+      </BlockStack>
 
       {toastContent && (
         <Toast content={toastContent} onDismiss={() => setToastContent('')} />
