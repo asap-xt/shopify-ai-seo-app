@@ -409,33 +409,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                     <Card>
                       <Box padding="300">
                         <BlockStack gap="300">
-                          <InlineStack align="space-between" blockAlign="center">
-                            <Text as="h4" variant="headingSm">Code to Install</Text>
-                            <Button 
-                              size="slim"
-                              onClick={() => {
-                                const code = `{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
-${schemaScript}
-
-{% comment %} Product Schema - Dynamic {% endcomment %}
-{% if template contains 'product' %}
-  {% assign seo_bullets = product.metafields.seo_ai.bullets %}
-  {% assign seo_faq = product.metafields.seo_ai.faq %}
-  {% assign seo_data = product.metafields.seo_ai['seo__' | append: request.locale.iso_code] | default: product.metafields.seo_ai.seo__en %}
-  
-  {% if seo_data %}
-    <script type="application/ld+json">
-    {{ seo_data.jsonLd | json }}
-    </script>
-  {% endif %}
-{% endif %}`;
-                                navigator.clipboard.writeText(code);
-                                setToastContent('Code copied to clipboard!');
-                              }}
-                            >
-                              📋 Copy
-                            </Button>
-                          </InlineStack>
+                          <Text as="h4" variant="headingSm">Code to Install</Text>
 
                           <Box background="bg-surface-secondary" padding="200" borderRadius="200">
                             <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap' }}>

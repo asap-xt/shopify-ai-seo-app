@@ -12,7 +12,9 @@ import {
   TextField,
   Badge,
   Divider,
-  Modal
+  Modal,
+  ProgressBar,
+  Spinner
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
@@ -33,6 +35,11 @@ export default function AiTesting({ shop: shopProp }) {
   const [tokenError, setTokenError] = useState(null);
   const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
   const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
+  
+  // New state for automated testing
+  const [testResults, setTestResults] = useState({});
+  const [testing, setTesting] = useState(false);
+  const [testProgress, setTestProgress] = useState(0);
 
   useEffect(() => {
     if (shop) {
@@ -165,6 +172,121 @@ export default function AiTesting({ shop: shopProp }) {
     setShowAiBotModal(true);
   };
 
+  // Run automated tests for all endpoints
+  const runAllTests = async () => {
+    setTesting(true);
+    setTestProgress(0);
+    setTestResults({});
+    
+    const endpoints = [
+      { 
+        key: 'productsJson', 
+        name: 'Products JSON Feed', 
+        url: `https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`,
+        requiredPlan: null
+      },
+      { 
+        key: 'storeMetadata', 
+        name: 'Store Metadata', 
+        url: `https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`,
+        requiredPlan: 'Professional'
+      },
+      { 
+        key: 'welcomePage', 
+        name: 'AI Welcome Page', 
+        url: `https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`,
+        requiredPlan: 'Growth'
+      },
+      { 
+        key: 'collectionsJson', 
+        name: 'Collections JSON Feed', 
+        url: `https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`,
+        requiredPlan: 'Growth'
+      },
+      { 
+        key: 'aiSitemap', 
+        name: 'AI-Enhanced Sitemap', 
+        url: `https://${shop}/apps/new-ai-seo/ai/sitemap.xml?shop=${shop}`,
+        requiredPlan: 'Growth Extra'
+      },
+      { 
+        key: 'schemaData', 
+        name: 'Advanced Schema Data', 
+        url: `https://${shop}/apps/new-ai-seo/ai/schema-data.json?shop=${shop}`,
+        requiredPlan: 'Enterprise'
+      }
+    ];
+    
+    const results = {};
+    
+    for (let i = 0; i < endpoints.length; i++) {
+      const endpoint = endpoints[i];
+      setTestProgress(((i + 1) / endpoints.length) * 100);
+      
+      // Check if feature is available based on plan
+      const available = isFeatureAvailable(endpoint.key);
+      
+      if (!available) {
+        results[endpoint.key] = {
+          status: 'locked',
+          message: `Requires ${endpoint.requiredPlan} plan`,
+          name: endpoint.name
+        };
+        continue;
+      }
+      
+      // Test the endpoint
+      try {
+        const response = await fetch(endpoint.url);
+        
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          let data = null;
+          
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+          } else if (contentType && contentType.includes('text/html')) {
+            data = await response.text();
+          } else if (contentType && contentType.includes('xml')) {
+            data = await response.text();
+          }
+          
+          results[endpoint.key] = {
+            status: 'success',
+            message: 'Endpoint is working correctly',
+            name: endpoint.name,
+            dataSize: JSON.stringify(data).length
+          };
+        } else if (response.status === 403 || response.status === 402) {
+          results[endpoint.key] = {
+            status: 'locked',
+            message: `Requires ${endpoint.requiredPlan} plan`,
+            name: endpoint.name
+          };
+        } else {
+          results[endpoint.key] = {
+            status: 'error',
+            message: `HTTP ${response.status}: ${response.statusText}`,
+            name: endpoint.name
+          };
+        }
+      } catch (error) {
+        results[endpoint.key] = {
+          status: 'error',
+          message: error.message || 'Failed to fetch endpoint',
+          name: endpoint.name
+        };
+      }
+      
+      // Small delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    setTestResults(results);
+    setTesting(false);
+    setToastContent('Testing completed!');
+  };
+
   const simulateAIResponse = async (queryType, question = null) => {
     try {
       setAiSimulationResponse('Generating AI response...');
@@ -218,127 +340,166 @@ export default function AiTesting({ shop: shopProp }) {
               <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
             </Banner>
 
-            {/* AI Discovery Endpoints */}
+            {/* AI Discovery Endpoints - Automated Testing */}
             <Card>
               <Box padding="300">
                 <BlockStack gap="400">
-                  <Text as="h3" variant="headingMd">AI Discovery Endpoints</Text>
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Text as="h3" variant="headingMd">AI Discovery Endpoints</Text>
+                    <Button 
+                      onClick={runAllTests}
+                      loading={testing}
+                      disabled={testing}
+                    >
+                      {testing ? 'Testing...' : 'Run All Tests'}
+                    </Button>
+                  </InlineStack>
                   
                   <Text variant="bodyMd" tone="subdued">
-                    These are the endpoints that AI bots use to discover and understand your store content.
+                    Automated tests to verify that your AI Discovery endpoints are working correctly.
                   </Text>
 
-                  <BlockStack gap="300">
-                    {/* Products JSON Feed - Always available */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
-                        <Text variant="bodySm" tone="subdued">Bulk product data for AI consumption</Text>
+                  {testing && (
+                    <Box>
+                      <BlockStack gap="200">
+                        <Text variant="bodySm">Testing endpoints...</Text>
+                        <ProgressBar progress={testProgress} size="small" />
                       </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/products.json?shop=${shop}`, 'Products JSON Feed')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
+                    </Box>
+                  )}
 
-                    <Divider />
+                  {Object.keys(testResults).length > 0 && (
+                    <BlockStack gap="300">
+                      {/* Products JSON Feed */}
+                      {testResults.productsJson && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
+                                {testResults.productsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.productsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                {testResults.productsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm" tone="subdued">
+                                {testResults.productsJson.message}
+                                {testResults.productsJson.dataSize && ` (${(testResults.productsJson.dataSize / 1024).toFixed(1)} KB)`}
+                              </Text>
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
 
-                    {/* Store Metadata - Professional+ */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Store Metadata for AI Search</Text>
-                        <Text variant="bodySm" tone="subdued">Organization schema & AI metadata</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}`, 'Store Metadata for AI Search', 'Professional')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
+                      {/* Store Metadata */}
+                      {testResults.storeMetadata && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
+                                {testResults.storeMetadata.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.storeMetadata.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                {testResults.storeMetadata.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm" tone="subdued">
+                                {testResults.storeMetadata.message}
+                                {testResults.storeMetadata.dataSize && ` (${(testResults.storeMetadata.dataSize / 1024).toFixed(1)} KB)`}
+                              </Text>
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
 
-                    <Divider />
+                      {/* AI Welcome Page */}
+                      {testResults.welcomePage && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
+                                {testResults.welcomePage.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.welcomePage.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                {testResults.welcomePage.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm" tone="subdued">
+                                {testResults.welcomePage.message}
+                                {testResults.welcomePage.dataSize && ` (${(testResults.welcomePage.dataSize / 1024).toFixed(1)} KB)`}
+                              </Text>
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
 
-                    {/* AI Welcome Page - Growth+ */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
-                        <Text variant="bodySm" tone="subdued">Landing page for AI bots</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/welcome?shop=${shop}`, 'AI Welcome Page', 'Growth')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
+                      {/* Collections JSON Feed */}
+                      {testResults.collectionsJson && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
+                                {testResults.collectionsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.collectionsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                {testResults.collectionsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm" tone="subdued">
+                                {testResults.collectionsJson.message}
+                                {testResults.collectionsJson.dataSize && ` (${(testResults.collectionsJson.dataSize / 1024).toFixed(1)} KB)`}
+                              </Text>
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
 
-                    <Divider />
+                      {/* AI-Enhanced Sitemap */}
+                      {testResults.aiSitemap && (
+                        <>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
+                                {testResults.aiSitemap.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.aiSitemap.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                {testResults.aiSitemap.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                              </InlineStack>
+                              <Text variant="bodySm" tone="subdued">
+                                {testResults.aiSitemap.message}
+                                {testResults.aiSitemap.dataSize && ` (${(testResults.aiSitemap.dataSize / 1024).toFixed(1)} KB)`}
+                              </Text>
+                            </BlockStack>
+                          </InlineStack>
+                          <Divider />
+                        </>
+                      )}
 
-                    {/* Collections JSON Feed - Growth+ */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
-                        <Text variant="bodySm" tone="subdued">Category data for better AI understanding</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}`, 'Collections JSON Feed', 'Growth')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
+                      {/* Advanced Schema Data */}
+                      {testResults.schemaData && (
+                        <InlineStack align="space-between" blockAlign="center">
+                          <BlockStack gap="100">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
+                              {testResults.schemaData.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                              {testResults.schemaData.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                              {testResults.schemaData.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                            </InlineStack>
+                            <Text variant="bodySm" tone="subdued">
+                              {testResults.schemaData.message}
+                              {testResults.schemaData.dataSize && ` (${(testResults.schemaData.dataSize / 1024).toFixed(1)} KB)`}
+                            </Text>
+                          </BlockStack>
+                        </InlineStack>
+                      )}
+                    </BlockStack>
+                  )}
 
-                    <Divider />
-
-                    {/* AI-Optimized Sitemap - Growth Extra+ */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">AI-Optimized Sitemap</Text>
-                        <Text variant="bodySm" tone="subdued">Optimized sitemap for AI bots</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}`, 'AI-Optimized Sitemap', 'Growth Extra')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
-
-                    <Divider />
-
-                    {/* robots.txt - Always available */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">robots.txt (Dynamic)</Text>
-                        <Text variant="bodySm" tone="subdued">Test how AI bots understand your store</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/robots-dynamic?shop=${shop}`, 'robots.txt')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
-
-                    <Divider />
-
-                    {/* Advanced Schema Data - Enterprise */}
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
-                        <Text variant="bodySm" tone="subdued">BreadcrumbList, FAQPage & more</Text>
-                      </BlockStack>
-                      <Button 
-                        onClick={() => openEndpoint(`https://${shop}/apps/new-ai-seo/ai/schema-data.json?shop=${shop}`, 'Advanced Schema Data', 'Enterprise')}
-                        size="slim"
-                      >
-                        View
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
+                  {Object.keys(testResults).length === 0 && !testing && (
+                    <Banner tone="info">
+                      <Text>Click "Run All Tests" to check if your AI Discovery endpoints are configured correctly.</Text>
+                    </Banner>
+                  )}
 
                   <Divider />
 
