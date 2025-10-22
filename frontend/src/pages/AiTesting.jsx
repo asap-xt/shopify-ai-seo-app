@@ -384,134 +384,30 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(testResults).length > 0 && (
                     <BlockStack gap="300">
-                      {/* Products JSON Feed */}
-                      {testResults.productsJson && (
-                        <>
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
-                                {testResults.productsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                {testResults.productsJson.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                {testResults.productsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                {testResults.productsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
-                              </InlineStack>
-                              <Text variant="bodySm" tone="subdued">
-                                {testResults.productsJson.message}
-                                {testResults.productsJson.dataSize && ` (${(testResults.productsJson.dataSize / 1024).toFixed(1)} KB)`}
-                              </Text>
-                            </BlockStack>
-                          </InlineStack>
-                          <Divider />
-                        </>
-                      )}
-
-                      {/* Store Metadata */}
-                      {testResults.storeMetadata && (
-                        <>
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
-                                {testResults.storeMetadata.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                {testResults.storeMetadata.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                {testResults.storeMetadata.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                {testResults.storeMetadata.status === 'locked' && <Badge>🔒 Locked</Badge>}
-                              </InlineStack>
-                              <Text variant="bodySm" tone="subdued">
-                                {testResults.storeMetadata.message}
-                                {testResults.storeMetadata.dataSize && ` (${(testResults.storeMetadata.dataSize / 1024).toFixed(1)} KB)`}
-                              </Text>
-                            </BlockStack>
-                          </InlineStack>
-                          <Divider />
-                        </>
-                      )}
-
-                      {/* AI Welcome Page */}
-                      {testResults.welcomePage && (
-                        <>
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
-                                {testResults.welcomePage.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                {testResults.welcomePage.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                {testResults.welcomePage.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                {testResults.welcomePage.status === 'locked' && <Badge>🔒 Locked</Badge>}
-                              </InlineStack>
-                              <Text variant="bodySm" tone="subdued">
-                                {testResults.welcomePage.message}
-                                {testResults.welcomePage.dataSize && ` (${(testResults.welcomePage.dataSize / 1024).toFixed(1)} KB)`}
-                              </Text>
-                            </BlockStack>
-                          </InlineStack>
-                          <Divider />
-                        </>
-                      )}
-
-                      {/* Collections JSON Feed */}
-                      {testResults.collectionsJson && (
-                        <>
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
-                                {testResults.collectionsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                {testResults.collectionsJson.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                {testResults.collectionsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                {testResults.collectionsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
-                              </InlineStack>
-                              <Text variant="bodySm" tone="subdued">
-                                {testResults.collectionsJson.message}
-                                {testResults.collectionsJson.dataSize && ` (${(testResults.collectionsJson.dataSize / 1024).toFixed(1)} KB)`}
-                              </Text>
-                            </BlockStack>
-                          </InlineStack>
-                          <Divider />
-                        </>
-                      )}
-
-                      {/* AI-Enhanced Sitemap */}
-                      {testResults.aiSitemap && (
-                        <>
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
-                                {testResults.aiSitemap.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                {testResults.aiSitemap.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                {testResults.aiSitemap.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                {testResults.aiSitemap.status === 'locked' && <Badge>🔒 Locked</Badge>}
-                              </InlineStack>
-                              <Text variant="bodySm" tone="subdued">
-                                {testResults.aiSitemap.message}
-                                {testResults.aiSitemap.dataSize && ` (${(testResults.aiSitemap.dataSize / 1024).toFixed(1)} KB)`}
-                              </Text>
-                            </BlockStack>
-                          </InlineStack>
-                          <Divider />
-                        </>
-                      )}
-
-                      {/* Advanced Schema Data */}
-                      {testResults.schemaData && (
-                        <InlineStack align="space-between" blockAlign="center">
-                          <BlockStack gap="100">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
-                              {testResults.schemaData.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                              {testResults.schemaData.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                              {testResults.schemaData.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                              {testResults.schemaData.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                      {/* Helper function to render test result */}
+                      {Object.entries(testResults).map(([key, result], index) => {
+                        const isLast = index === Object.entries(testResults).length - 1;
+                        return (
+                          <React.Fragment key={key}>
+                            <InlineStack align="space-between" blockAlign="center">
+                              <BlockStack gap="100">
+                                <InlineStack gap="200" blockAlign="center">
+                                  <Text variant="bodyMd" fontWeight="semibold">{result.name}</Text>
+                                  {result.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                  {result.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
+                                  {result.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
+                                  {result.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                                </InlineStack>
+                                <Text variant="bodySm" tone="subdued">
+                                  {result.message}
+                                  {result.dataSize && ` (${(result.dataSize / 1024).toFixed(1)} KB)`}
+                                </Text>
+                              </BlockStack>
                             </InlineStack>
-                            <Text variant="bodySm" tone="subdued">
-                              {testResults.schemaData.message}
-                              {testResults.schemaData.dataSize && ` (${(testResults.schemaData.dataSize / 1024).toFixed(1)} KB)`}
-                            </Text>
-                          </BlockStack>
-                        </InlineStack>
-                      )}
+                            {!isLast && <Divider />}
+                          </React.Fragment>
+                        );
+                      })}
                     </BlockStack>
                   )}
 

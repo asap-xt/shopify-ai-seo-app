@@ -6,6 +6,7 @@ import { getGeminiResponse } from '../ai/gemini.js';
 import TokenBalance from '../db/TokenBalance.js';
 import Product from '../db/Product.js';
 import Collection from '../db/Collection.js';
+import Subscription from '../db/Subscription.js';
 
 const router = express.Router();
 
@@ -39,6 +40,11 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     collections: `${optimizedCollections}/${totalCollections}`
   });
   
+  // Get user's plan
+  const subscription = await Subscription.findOne({ shop });
+  const userPlan = subscription?.plan?.toLowerCase().replace(' ', '_') || 'starter';
+  console.log('[AI-TESTING] User plan:', userPlan);
+  
   const endpoints = [
     { 
       key: 'productsJson', 
@@ -46,29 +52,43 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`
     },
     { 
-      key: 'storeMetadata', 
-      name: 'Store Metadata', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`
-    },
-    { 
-      key: 'welcomePage', 
-      name: 'AI Welcome Page', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`
-    },
-    { 
       key: 'collectionsJson', 
       name: 'Collections JSON Feed', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`
     },
     { 
+      key: 'storeMetadata', 
+      name: 'Store Metadata', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`
+    },
+    { 
+      key: 'basicSitemap', 
+      name: 'Basic Sitemap', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`
+    },
+    { 
       key: 'aiSitemap', 
-      name: 'AI-Enhanced Sitemap', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/sitemap.xml?shop=${shop}`
+      name: 'AI-Enhanced Sitemap (Growth Extra+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+      requiresPlan: ['growth_extra', 'enterprise']
+    },
+    { 
+      key: 'robotsTxt', 
+      name: 'robots.txt.liquid', 
+      url: `https://${shop}/robots.txt`,
+      themeFile: true
     },
     { 
       key: 'schemaData', 
-      name: 'Advanced Schema Data', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`
+      name: 'Schema Data (theme.liquid)', 
+      url: `https://${shop}`,
+      themeFile: true
+    },
+    { 
+      key: 'advancedSchemaApi', 
+      name: 'Advanced Schema API (Enterprise)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
+      requiresPlan: ['enterprise']
     }
   ];
   
@@ -77,6 +97,17 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   for (const endpoint of endpoints) {
     try {
       console.log('[AI-TESTING] Testing endpoint:', endpoint.key, endpoint.url);
+      
+      // Check plan requirements
+      if (endpoint.requiresPlan && !endpoint.requiresPlan.includes(userPlan)) {
+        results[endpoint.key] = {
+          status: 'locked',
+          message: `Requires ${endpoint.requiresPlan.map(p => p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())).join(' or ')} plan`,
+          name: endpoint.name
+        };
+        console.log('[AI-TESTING] Locked:', endpoint.key);
+        continue;
+      }
       
       const response = await fetch(endpoint.url, {
         method: 'GET',
@@ -141,20 +172,66 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             }
           }
           
-          // AI Sitemap validation
-          if (endpoint.key === 'aiSitemap' && data) {
-            if (typeof data === 'string' && data.length < 500) {
-              validationStatus = 'warning';
-              validationMessage = 'Endpoint OK, but sitemap appears empty or incomplete';
+          // Basic Sitemap validation
+          if (endpoint.key === 'basicSitemap' && data) {
+            if (typeof data === 'string') {
+              const hasProducts = data.includes('<loc>') && data.includes('/products/');
+              if (!hasProducts) {
+                validationStatus = 'warning';
+                validationMessage = 'Sitemap generated but no products found';
+              } else {
+                validationMessage = 'Sitemap is working correctly';
+              }
             }
           }
           
-          // Schema Data validation
+          // AI-Enhanced Sitemap validation (checks for AI metadata)
+          if (endpoint.key === 'aiSitemap' && data) {
+            if (typeof data === 'string') {
+              const hasAIMetadata = data.includes('xmlns:ai=') && data.includes('<ai:product>');
+              if (!hasAIMetadata) {
+                validationStatus = 'warning';
+                validationMessage = 'Sitemap OK, but no AI enhancements detected';
+              } else {
+                validationMessage = 'AI-enhanced sitemap is working correctly';
+              }
+            }
+          }
+          
+          // robots.txt.liquid validation
+          if (endpoint.key === 'robotsTxt' && data) {
+            if (typeof data === 'string') {
+              const hasCustomContent = data.includes('sitemap_products.xml') || data.includes('User-agent:');
+              if (!hasCustomContent) {
+                validationStatus = 'warning';
+                validationMessage = 'robots.txt found, but may need custom configuration';
+              } else {
+                validationMessage = 'robots.txt.liquid is configured correctly';
+              }
+            }
+          }
+          
+          // Schema Data (theme.liquid) validation
           if (endpoint.key === 'schemaData' && data) {
+            if (typeof data === 'string') {
+              const hasSchemaScript = data.includes('application/ld+json') || data.includes('schema.org');
+              if (!hasSchemaScript) {
+                validationStatus = 'warning';
+                validationMessage = 'Page loaded, but schema data not detected in theme';
+              } else {
+                validationMessage = 'Schema data is installed in theme';
+              }
+            }
+          }
+          
+          // Advanced Schema API validation
+          if (endpoint.key === 'advancedSchemaApi' && data) {
             const schemasCount = data.schemas?.length || 0;
             if (schemasCount === 0) {
               validationStatus = 'warning';
-              validationMessage = 'Endpoint OK, but no schema data found';
+              validationMessage = 'API OK, but no advanced schemas generated yet';
+            } else {
+              validationMessage = `${schemasCount} advanced schema${schemasCount > 1 ? 's' : ''} available`;
             }
           }
           
