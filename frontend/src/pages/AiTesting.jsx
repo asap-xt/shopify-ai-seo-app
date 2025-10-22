@@ -54,6 +54,22 @@ export default function AiTesting({ shop: shopProp }) {
       loadTokenBalance();
     }
   }, [shop, api]);
+  
+  // Refresh token balance when component becomes visible (after returning from billing page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && shop) {
+        console.log('[AI-TESTING] Page visible, refreshing token balance...');
+        loadTokenBalance();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [shop, api]);
 
   const loadPlan = async () => {
     try {
@@ -402,6 +418,14 @@ export default function AiTesting({ shop: shopProp }) {
                                   {result.message}
                                   {result.dataSize && ` (${(result.dataSize / 1024).toFixed(1)} KB)`}
                                 </Text>
+                                {result.actionLink && (
+                                  <Button 
+                                    size="slim" 
+                                    onClick={() => navigate(result.actionLink)}
+                                  >
+                                    Go to Sitemap
+                                  </Button>
+                                )}
                               </BlockStack>
                             </InlineStack>
                             {!isLast && <Divider />}
@@ -435,6 +459,16 @@ export default function AiTesting({ shop: shopProp }) {
                             {tokenBalance} tokens
                           </Badge>
                         )}
+                        <Button 
+                          size="micro" 
+                          onClick={() => {
+                            console.log('[AI-TESTING] Manual token refresh...');
+                            loadTokenBalance();
+                          }}
+                          accessibilityLabel="Refresh token balance"
+                        >
+                          🔄
+                        </Button>
                       </InlineStack>
                       <Text variant="bodySm" tone="subdued">
                         Deep analysis with AI bot
@@ -998,7 +1032,11 @@ export default function AiTesting({ shop: shopProp }) {
       {/* Buy Tokens Modal (Professional/Growth) */}
       <Modal
         open={showTokenModal}
-        onClose={() => setShowTokenModal(false)}
+        onClose={() => {
+          setShowTokenModal(false);
+          // Refresh token balance when closing modal (in case user bought tokens in another tab)
+          loadTokenBalance();
+        }}
         title="Insufficient Tokens"
         primaryAction={{
           content: 'Buy Tokens',
@@ -1011,7 +1049,11 @@ export default function AiTesting({ shop: shopProp }) {
         secondaryActions={[
           {
             content: 'Cancel',
-            onAction: () => setShowTokenModal(false)
+            onAction: () => {
+              setShowTokenModal(false);
+              // Refresh token balance on cancel too
+              loadTokenBalance();
+            }
           }
         ]}
       >

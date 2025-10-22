@@ -273,10 +273,17 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           name: endpoint.name
         };
       } else if (response.status === 404) {
+        // Special message for Basic Sitemap
+        let notFoundMessage = 'Endpoint not found';
+        if (endpoint.key === 'basicSitemap') {
+          notFoundMessage = 'Sitemap not generated yet. Please generate it first in Search Optimization for AI → Sitemap';
+        }
+        
         results[endpoint.key] = {
           status: 'error',
-          message: 'Endpoint not found',
-          name: endpoint.name
+          message: notFoundMessage,
+          name: endpoint.name,
+          actionLink: endpoint.key === 'basicSitemap' ? '/ai-seo/sitemap' : null
         };
       } else {
         const errorText = await response.text();
