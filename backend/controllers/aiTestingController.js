@@ -4,6 +4,8 @@ import { validateRequest } from '../middleware/shopifyAuth.js';
 import fetch from 'node-fetch';
 import { getGeminiResponse } from '../ai/gemini.js';
 import TokenBalance from '../db/TokenBalance.js';
+import Product from '../db/Product.js';
+import Collection from '../db/Collection.js';
 
 const router = express.Router();
 
@@ -19,6 +21,23 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   }
   
   console.log('[AI-TESTING] Running tests for shop:', shop);
+  
+  // Get stats from database (same as Dashboard)
+  const totalProducts = await Product.countDocuments({ shop });
+  const optimizedProducts = await Product.countDocuments({ 
+    shop, 
+    'seoStatus.optimized': true 
+  });
+  const totalCollections = await Collection.countDocuments({ shop });
+  const optimizedCollections = await Collection.countDocuments({ 
+    shop, 
+    'seoStatus.optimized': true 
+  });
+  
+  console.log('[AI-TESTING] Stats:', {
+    products: `${optimizedProducts}/${totalProducts}`,
+    collections: `${optimizedCollections}/${totalCollections}`
+  });
   
   const endpoints = [
     { 
@@ -95,23 +114,22 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           let validationMessage = 'Endpoint is working correctly';
           
           // Products JSON Feed validation
-          if (endpoint.key === 'productsJson' && data) {
-            const productsCount = data.products?.length || 0;
-            if (productsCount === 0) {
+          if (endpoint.key === 'productsJson') {
+            if (optimizedProducts === 0) {
               validationStatus = 'warning';
-              validationMessage = 'Endpoint OK, but no optimized products found';
-            } else if (productsCount < 5) {
-              validationStatus = 'warning';
-              validationMessage = `Endpoint OK, but only ${productsCount} optimized product${productsCount === 1 ? '' : 's'} found`;
+              validationMessage = `0/${totalProducts} products optimized`;
+            } else {
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized`;
             }
           }
           
           // Collections JSON Feed validation
-          if (endpoint.key === 'collectionsJson' && data) {
-            const collectionsCount = data.collections?.length || 0;
-            if (collectionsCount === 0) {
+          if (endpoint.key === 'collectionsJson') {
+            if (optimizedCollections === 0) {
               validationStatus = 'warning';
-              validationMessage = 'Endpoint OK, but no optimized collections found';
+              validationMessage = `0/${totalCollections} collections optimized`;
+            } else {
+              validationMessage = `${optimizedCollections}/${totalCollections} collections optimized`;
             }
           }
           

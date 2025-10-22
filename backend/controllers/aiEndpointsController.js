@@ -94,6 +94,7 @@ router.get('/ai/products.json', async (req, res) => {
 
     const data = await response.json();
     const optimizedProducts = [];
+    const totalProducts = data.data.products.edges.length;
     
     // Извличаме само продуктите с metafields
     data.data.products.edges.forEach(({ node: product }) => {
@@ -121,6 +122,8 @@ router.get('/ai/products.json', async (req, res) => {
       return res.json({
         shop,
         products: [],
+        products_count: 0,
+        products_total: totalProducts,
         warning: 'No optimized products found',
         action_required: {
           message: 'Please optimize your products first',
@@ -133,6 +136,7 @@ router.get('/ai/products.json', async (req, res) => {
       shop,
       generated_at: new Date().toISOString(),
       products_count: optimizedProducts.length,
+      products_total: totalProducts,
       products: optimizedProducts
     });
 
