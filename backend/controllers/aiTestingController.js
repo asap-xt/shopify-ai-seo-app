@@ -90,15 +90,65 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             dataSize = data.length;
           }
           
+          // Smart validation: check if data is meaningful
+          let validationStatus = 'success';
+          let validationMessage = 'Endpoint is working correctly';
+          
+          // Products JSON Feed validation
+          if (endpoint.key === 'productsJson' && data) {
+            const productsCount = data.products?.length || 0;
+            if (productsCount === 0) {
+              validationStatus = 'warning';
+              validationMessage = 'Endpoint OK, but no optimized products found';
+            } else if (productsCount < 5) {
+              validationStatus = 'warning';
+              validationMessage = `Endpoint OK, but only ${productsCount} optimized product${productsCount === 1 ? '' : 's'} found`;
+            }
+          }
+          
+          // Collections JSON Feed validation
+          if (endpoint.key === 'collectionsJson' && data) {
+            const collectionsCount = data.collections?.length || 0;
+            if (collectionsCount === 0) {
+              validationStatus = 'warning';
+              validationMessage = 'Endpoint OK, but no optimized collections found';
+            }
+          }
+          
+          // Store Metadata validation
+          if (endpoint.key === 'storeMetadata' && data) {
+            if (!data.organization && !data.seo_metadata) {
+              validationStatus = 'warning';
+              validationMessage = 'Endpoint OK, but no organization or SEO data configured';
+            }
+          }
+          
+          // AI Sitemap validation
+          if (endpoint.key === 'aiSitemap' && data) {
+            if (typeof data === 'string' && data.length < 500) {
+              validationStatus = 'warning';
+              validationMessage = 'Endpoint OK, but sitemap appears empty or incomplete';
+            }
+          }
+          
+          // Schema Data validation
+          if (endpoint.key === 'schemaData' && data) {
+            const schemasCount = data.schemas?.length || 0;
+            if (schemasCount === 0) {
+              validationStatus = 'warning';
+              validationMessage = 'Endpoint OK, but no schema data found';
+            }
+          }
+          
           results[endpoint.key] = {
-            status: 'success',
-            message: 'Endpoint is working correctly',
+            status: validationStatus,
+            message: validationMessage,
             name: endpoint.name,
             dataSize: dataSize,
             contentType: contentType
           };
           
-          console.log('[AI-TESTING] Success:', endpoint.key, 'Size:', dataSize);
+          console.log('[AI-TESTING]', validationStatus === 'warning' ? 'Warning:' : 'Success:', endpoint.key, 'Size:', dataSize);
         } catch (parseError) {
           console.error('[AI-TESTING] Parse error:', parseError);
           results[endpoint.key] = {

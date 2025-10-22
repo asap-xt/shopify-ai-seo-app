@@ -14,7 +14,8 @@ import {
   Divider,
   Modal,
   ProgressBar,
-  Spinner
+  Spinner,
+  Layout
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 
@@ -349,8 +350,11 @@ export default function AiTesting({ shop: shopProp }) {
           <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
         </Banner>
 
-        {/* Card 1: Basic Endpoint Tests */}
-        <Card>
+        {/* Two-column layout for Basic and AI tests */}
+        <Layout>
+          <Layout.Section variant="oneHalf">
+            {/* Card 1: Basic Endpoint Tests */}
+            <Card>
               <Box padding="300">
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
@@ -388,6 +392,7 @@ export default function AiTesting({ shop: shopProp }) {
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
                                 {testResults.productsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.productsJson.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                                 {testResults.productsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                                 {testResults.productsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
                               </InlineStack>
@@ -409,6 +414,7 @@ export default function AiTesting({ shop: shopProp }) {
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
                                 {testResults.storeMetadata.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.storeMetadata.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                                 {testResults.storeMetadata.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                                 {testResults.storeMetadata.status === 'locked' && <Badge>🔒 Locked</Badge>}
                               </InlineStack>
@@ -430,6 +436,7 @@ export default function AiTesting({ shop: shopProp }) {
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
                                 {testResults.welcomePage.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.welcomePage.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                                 {testResults.welcomePage.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                                 {testResults.welcomePage.status === 'locked' && <Badge>🔒 Locked</Badge>}
                               </InlineStack>
@@ -451,6 +458,7 @@ export default function AiTesting({ shop: shopProp }) {
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
                                 {testResults.collectionsJson.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.collectionsJson.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                                 {testResults.collectionsJson.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                                 {testResults.collectionsJson.status === 'locked' && <Badge>🔒 Locked</Badge>}
                               </InlineStack>
@@ -472,6 +480,7 @@ export default function AiTesting({ shop: shopProp }) {
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
                                 {testResults.aiSitemap.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                                {testResults.aiSitemap.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                                 {testResults.aiSitemap.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                                 {testResults.aiSitemap.status === 'locked' && <Badge>🔒 Locked</Badge>}
                               </InlineStack>
@@ -492,6 +501,7 @@ export default function AiTesting({ shop: shopProp }) {
                             <InlineStack gap="200" blockAlign="center">
                               <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
                               {testResults.schemaData.status === 'success' && <Badge tone="success">✓ OK</Badge>}
+                              {testResults.schemaData.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
                               {testResults.schemaData.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
                               {testResults.schemaData.status === 'locked' && <Badge>🔒 Locked</Badge>}
                             </InlineStack>
@@ -513,7 +523,9 @@ export default function AiTesting({ shop: shopProp }) {
                 </BlockStack>
               </Box>
             </Card>
+          </Layout.Section>
 
+          <Layout.Section variant="oneHalf">
             {/* Card 2: AI-Powered Validation */}
             <Card>
               <Box padding="300">
@@ -529,11 +541,11 @@ export default function AiTesting({ shop: shopProp }) {
                         )}
                       </InlineStack>
                       <Text variant="bodySm" tone="subdued">
-                        Deep analysis with Gemini 2.5 Flash Lite (~50 tokens per test)
+                        Deep analysis with AI bot
                       </Text>
                       {currentPlan && (
                         <Text variant="bodySm" tone="subdued">
-                          Requires: Professional+ plan & tokens
+                          Requires: Professional+ plan & pay-per-use tokens
                         </Text>
                       )}
                     </BlockStack>
@@ -732,6 +744,8 @@ export default function AiTesting({ shop: shopProp }) {
                 </BlockStack>
               </Box>
             </Card>
+          </Layout.Section>
+        </Layout>
 
         {/* Card 3: Test with Real AI Bots */}
         <Card>
