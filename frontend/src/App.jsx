@@ -51,14 +51,16 @@ function useRoute() {
   const normalizePath = (pathname) => {
     // Remove /apps/new-ai-seo or /apps/2749a2f6d38ff5796ed256b5c9dc70a1 prefix
     const normalized = pathname.replace(/^\/apps\/[^/]+/, '') || '/';
-    console.log('[useRoute] Normalized path:', pathname, '→', normalized);
     return normalized;
   };
   
-  const [path, setPath] = useState(normalizePath(window.location.pathname));
+  const [path, setPath] = useState(() => normalizePath(window.location.pathname));
   
   useEffect(() => {
+    let isNavigating = false;
+    
     const handleLocationChange = () => {
+      if (isNavigating) return;
       const normalized = normalizePath(window.location.pathname);
       console.log('[useRoute] Location changed to:', normalized);
       setPath(normalized);
@@ -72,45 +74,47 @@ function useRoute() {
       // Find closest <a> tag (even if clicked on child element)
       const link = e.target.closest('a');
       
-      // Ignore if not a link or if it's an external link
+      // Ignore if not a link, external link, or if it's the App Bridge nav
       if (!link || !link.href || !link.href.startsWith(window.location.origin)) {
         return;
       }
-
-      console.log('[useRoute] Navigation click detected on link:', link.href);
       
-      // Prevent default navigation
-      e.preventDefault();
-      
-      // Get the new path
+      // Don't intercept if already on the same page
       const newUrl = new URL(link.href);
+      const currentPath = window.location.pathname + window.location.search;
       const newPath = newUrl.pathname + newUrl.search;
       
-      console.log('[useRoute] Navigating to:', newPath);
+      if (currentPath === newPath) {
+        return;
+      }
+
+      console.log('[useRoute] Navigation click detected, from:', currentPath, 'to:', newPath);
+      
+      // Prevent default and handle manually
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Set flag to prevent duplicate handling
+      isNavigating = true;
       
       // Update browser history
       window.history.pushState({}, '', newPath);
       
-      // Trigger location change handler
-      handleLocationChange();
+      // Update React state
+      const normalized = normalizePath(newUrl.pathname);
+      setPath(normalized);
+      
+      // Reset flag
+      setTimeout(() => { isNavigating = false; }, 100);
     };
-    document.addEventListener('click', handleClick);
-
-    // Also check for URL changes periodically (fallback)
-    const checkInterval = setInterval(() => {
-      const currentNormalized = normalizePath(window.location.pathname);
-      if (currentNormalized !== path) {
-        console.log('[useRoute] URL changed (periodic check):', currentNormalized);
-        handleLocationChange();
-      }
-    }, 100);
+    
+    document.addEventListener('click', handleClick, true);
 
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
-      document.removeEventListener('click', handleClick);
-      clearInterval(checkInterval);
+      document.removeEventListener('click', handleClick, true);
     };
-  }, [path]);
+  }, []);
   
   return { path };
 }
