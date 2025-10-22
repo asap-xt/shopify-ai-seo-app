@@ -45,7 +45,9 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   const userPlan = subscription?.plan?.toLowerCase().replace(' ', '_') || 'starter';
   console.log('[AI-TESTING] User plan:', userPlan);
   
+  // Endpoints ordered by plan: Starter → Professional → Growth → Growth Extra → Enterprise
   const endpoints = [
+    // Starter plan features
     { 
       key: 'productsJson', 
       name: 'Products JSON Feed', 
@@ -68,12 +70,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `https://${shop}`,
       themeFile: true
     },
-    { 
-      key: 'storeMetadata', 
-      name: 'Store Metadata (Growth Extra+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
-      requiresPlan: ['growth_extra', 'enterprise']
-    },
+    // Growth plan features
     { 
       key: 'welcomePage', 
       name: 'AI Welcome Page (Growth+)', 
@@ -86,12 +83,20 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
       requiresPlan: ['growth', 'growth_extra', 'enterprise']
     },
+    // Growth Extra plan features
+    { 
+      key: 'storeMetadata', 
+      name: 'Store Metadata (Growth Extra+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
+      requiresPlan: ['growth_extra', 'enterprise']
+    },
     { 
       key: 'aiSitemap', 
-      name: 'AI-Optimized Sitemap (Professional+)', 
+      name: 'AI-Optimized Sitemap (Growth Extra+)', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
-      requiresPlan: ['professional', 'growth', 'growth_extra', 'enterprise']
+      requiresPlan: ['growth_extra', 'enterprise']
     },
+    // Enterprise plan features
     { 
       key: 'advancedSchemaApi', 
       name: 'Advanced Schema Data (Enterprise)', 
@@ -273,17 +278,23 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           name: endpoint.name
         };
       } else if (response.status === 404) {
-        // Special message for Basic Sitemap
+        // Special messages for sitemaps
         let notFoundMessage = 'Endpoint not found';
+        let actionLink = null;
+        
         if (endpoint.key === 'basicSitemap') {
           notFoundMessage = 'Sitemap not generated yet. Please generate it first in Search Optimization for AI → Sitemap';
+          actionLink = '/ai-seo/sitemap';
+        } else if (endpoint.key === 'aiSitemap') {
+          notFoundMessage = 'Endpoint not found, please generate it first in Settings';
+          actionLink = '/ai-seo/settings';
         }
         
         results[endpoint.key] = {
           status: 'error',
           message: notFoundMessage,
           name: endpoint.name,
-          actionLink: endpoint.key === 'basicSitemap' ? '/ai-seo/sitemap' : null
+          actionLink
         };
       } else {
         const errorText = await response.text();

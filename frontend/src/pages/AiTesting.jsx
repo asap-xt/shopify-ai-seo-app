@@ -24,6 +24,13 @@ const qs = (k, d = '') => { try { return new URLSearchParams(window.location.sea
 export default function AiTesting({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   
+  // Navigation helper (like Dashboard.jsx)
+  const navigate = (path) => {
+    const currentParams = new URLSearchParams(window.location.search);
+    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    window.location.href = `${path}${paramString}`;
+  };
+  
   const [toastContent, setToastContent] = useState('');
   const api = useMemo(() => makeSessionFetch(), []);
   const [currentPlan, setCurrentPlan] = useState(null);
@@ -424,7 +431,8 @@ export default function AiTesting({ shop: shopProp }) {
                                     size="slim" 
                                     onClick={() => navigate(result.actionLink)}
                                   >
-                                    Go to Sitemap
+                                    {key === 'basicSitemap' ? 'Go to Sitemap' : 
+                                     key === 'aiSitemap' ? 'Go to Settings' : 'Go'}
                                   </Button>
                                 )}
                               </BlockStack>
