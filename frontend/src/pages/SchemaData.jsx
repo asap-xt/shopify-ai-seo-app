@@ -385,25 +385,57 @@ ${JSON.stringify(allSchemas, null, 2)}
               {selectedTab === 1 && (
                 <Box paddingBlockStart="400">
                   <BlockStack gap="400">
+                    <Banner tone="info">
+                      <BlockStack gap="300">
+                        <Text as="h4" variant="headingSm">Theme Installation</Text>
+                        
+                        <List type="number">
+                          <List.Item>
+                            Go to your Shopify Admin → Online Store → Themes
+                          </List.Item>
+                          <List.Item>
+                            Click "Actions" → "Edit code" on your current theme
+                          </List.Item>
+                          <List.Item>
+                            Open the file: <code>layout/theme.liquid</code>
+                          </List.Item>
+                          <List.Item>
+                            Add this code before the closing <code>&lt;/head&gt;</code> tag:
+                          </List.Item>
+                        </List>
+                      </BlockStack>
+                    </Banner>
+
                     <Card>
                       <Box padding="300">
                         <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">Theme Installation</Text>
-                          
-                          <List type="number">
-                            <List.Item>
-                              Go to your Shopify Admin → Online Store → Themes
-                            </List.Item>
-                            <List.Item>
-                              Click "Actions" → "Edit code" on your current theme
-                            </List.Item>
-                            <List.Item>
-                              Open the file: <code>layout/theme.liquid</code>
-                            </List.Item>
-                            <List.Item>
-                              Add this code before the closing <code>&lt;/head&gt;</code> tag:
-                            </List.Item>
-                          </List>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <Text as="h4" variant="headingSm">Code to Install</Text>
+                            <Button 
+                              size="slim"
+                              onClick={() => {
+                                const code = `{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
+${schemaScript}
+
+{% comment %} Product Schema - Dynamic {% endcomment %}
+{% if template contains 'product' %}
+  {% assign seo_bullets = product.metafields.seo_ai.bullets %}
+  {% assign seo_faq = product.metafields.seo_ai.faq %}
+  {% assign seo_data = product.metafields.seo_ai['seo__' | append: request.locale.iso_code] | default: product.metafields.seo_ai.seo__en %}
+  
+  {% if seo_data %}
+    <script type="application/ld+json">
+    {{ seo_data.jsonLd | json }}
+    </script>
+  {% endif %}
+{% endif %}`;
+                                navigator.clipboard.writeText(code);
+                                setToastContent('Code copied to clipboard!');
+                              }}
+                            >
+                              📋 Copy
+                            </Button>
+                          </InlineStack>
 
                           <Box background="bg-surface-secondary" padding="200" borderRadius="200">
                             <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
@@ -424,6 +456,32 @@ ${schemaScript}
 {% endif %}`}
                             </pre>
                           </Box>
+
+                          <InlineStack align="end">
+                            <Button 
+                              onClick={() => {
+                                const code = `{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
+${schemaScript}
+
+{% comment %} Product Schema - Dynamic {% endcomment %}
+{% if template contains 'product' %}
+  {% assign seo_bullets = product.metafields.seo_ai.bullets %}
+  {% assign seo_faq = product.metafields.seo_ai.faq %}
+  {% assign seo_data = product.metafields.seo_ai['seo__' | append: request.locale.iso_code] | default: product.metafields.seo_ai.seo__en %}
+  
+  {% if seo_data %}
+    <script type="application/ld+json">
+    {{ seo_data.jsonLd | json }}
+    </script>
+  {% endif %}
+{% endif %}`;
+                                navigator.clipboard.writeText(code);
+                                setToastContent('Code copied to clipboard!');
+                              }}
+                            >
+                              Copy Code
+                            </Button>
+                          </InlineStack>
 
                           <Banner tone="warning">
                             <Text>Always backup your theme before making changes!</Text>
