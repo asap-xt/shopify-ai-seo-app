@@ -67,35 +67,50 @@ function useRoute() {
     // Listen for popstate (browser back/forward)
     window.addEventListener('popstate', handleLocationChange);
 
-    // Listen for navigation link clicks - ONLY on <a> tags, not on buttons/checkboxes
+    // Listen for navigation link clicks
     const handleClick = (e) => {
-      console.log('[useRoute] ===== CLICK DETECTED =====');
-      console.log('[useRoute] e.target:', e.target);
-      console.log('[useRoute] e.target.tagName:', e.target.tagName);
-      console.log('[useRoute] e.target.closest("input"):', e.target.closest('input'));
-      console.log('[useRoute] e.target.closest("button"):', e.target.closest('button'));
-      console.log('[useRoute] e.target.closest("a"):', e.target.closest('a'));
-
-      // Only handle clicks directly on <a> tags, not child elements
-      if (e.target.tagName !== 'A') {
-        console.log('[useRoute] Ignoring non-A click');
+      // Find closest <a> tag (even if clicked on child element)
+      const link = e.target.closest('a');
+      
+      // Ignore if not a link or if it's an external link
+      if (!link || !link.href || !link.href.startsWith(window.location.origin)) {
         return;
       }
 
-      const target = e.target;
-      if (target && target.href && target.href.startsWith(window.location.origin)) {
-        const newPath = new URL(target.href).pathname;
-        console.log('[useRoute] Navigation click detected, new path:', newPath);
-        setTimeout(() => handleLocationChange(), 0);
-      }
+      console.log('[useRoute] Navigation click detected on link:', link.href);
+      
+      // Prevent default navigation
+      e.preventDefault();
+      
+      // Get the new path
+      const newUrl = new URL(link.href);
+      const newPath = newUrl.pathname + newUrl.search;
+      
+      console.log('[useRoute] Navigating to:', newPath);
+      
+      // Update browser history
+      window.history.pushState({}, '', newPath);
+      
+      // Trigger location change handler
+      handleLocationChange();
     };
     document.addEventListener('click', handleClick);
+
+    // Also check for URL changes periodically (fallback)
+    const checkInterval = setInterval(() => {
+      const currentNormalized = normalizePath(window.location.pathname);
+      if (currentNormalized !== path) {
+        console.log('[useRoute] URL changed (periodic check):', currentNormalized);
+        handleLocationChange();
+      }
+    }, 100);
 
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
       document.removeEventListener('click', handleClick);
+      clearInterval(checkInterval);
     };
-  }, []);
+  }, [path]);
   
   return { path };
 }
