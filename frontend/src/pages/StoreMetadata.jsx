@@ -455,7 +455,8 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, shortDescription: value }
                   }))}
-                  helpText="Enter a short store description - max 100 characters"
+                  placeholder={shopifyData.homePageTitle || "Enter a short description"}
+                  helpText="Short description for SEO - max 100 characters"
                   maxLength={100}
                 />
                 

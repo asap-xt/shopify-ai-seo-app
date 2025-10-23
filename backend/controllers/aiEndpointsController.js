@@ -781,13 +781,13 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       }
     };
     
-    // Add SEO metadata
-    if (seoMetadata) {
+    // Add SEO metadata (with Shopify fallbacks)
+    if (seoMetadata || shopData) {
       storeMetadata.seo = {
-        title: seoMetadata.storeName || shopData.name,
-        shortDescription: seoMetadata.shortDescription,
-        fullDescription: seoMetadata.fullDescription || shopData.description || null,
-        keywords: seoMetadata.keywords
+        title: seoMetadata?.storeName || shopData.name,
+        shortDescription: seoMetadata?.shortDescription || null,
+        fullDescription: seoMetadata?.fullDescription || shopData.description || null,
+        keywords: seoMetadata?.keywords
       };
     }
     
