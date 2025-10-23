@@ -665,14 +665,14 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       });
     }
 
-    // Get shop metafields
+    // Get shop metafields (from both old seo_ai and new ai_seo_store namespaces)
     const metafieldsQuery = `
       query {
         shop {
           name
           email
           url
-          metafields(namespace: "seo_ai", first: 10) {
+          seo_ai_metafields: metafields(namespace: "seo_ai", first: 10) {
             edges {
               node {
                 key
@@ -680,6 +680,9 @@ router.get('/ai/store-metadata.json', async (req, res) => {
                 type
               }
             }
+          }
+          app_settings: metafield(namespace: "ai_seo_store", key: "app_settings") {
+            value
           }
         }
       }
@@ -704,9 +707,9 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     const data = await response.json();
     const shopData = data.data.shop;
     
-    // Parse metafields
+    // Parse metafields from old namespace (seo_ai)
     const metafields = {};
-    shopData.metafields.edges.forEach(({ node }) => {
+    shopData.seo_ai_metafields.edges.forEach(({ node }) => {
       try {
         metafields[node.key] = JSON.parse(node.value);
       } catch (e) {
@@ -714,8 +717,28 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       }
     });
     
+    // Parse app_settings from new namespace (ai_seo_store)
+    let appSettings = null;
+    if (shopData.app_settings?.value) {
+      try {
+        appSettings = JSON.parse(shopData.app_settings.value);
+        console.log('[STORE-METADATA] App settings found:', Object.keys(appSettings));
+      } catch (e) {
+        console.error('[STORE-METADATA] Failed to parse app_settings');
+      }
+    }
+    
+    // Merge data from both sources (app_settings takes priority)
+    const seoMetadata = appSettings?.seoMetadata || metafields.seo_metadata;
+    const aiMetadata = appSettings?.aiMetadata || metafields.ai_metadata;
+    const organizationSchema = appSettings?.organizationSchema || metafields.organization_schema;
+    
+    console.log('[STORE-METADATA] Has seoMetadata:', !!seoMetadata);
+    console.log('[STORE-METADATA] Has aiMetadata:', !!aiMetadata);
+    console.log('[STORE-METADATA] Has organizationSchema:', !!organizationSchema);
+    
     // Check if store metadata exists
-    if (!metafields.seo_metadata && !metafields.organization_schema) {
+    if (!seoMetadata && !organizationSchema && !aiMetadata) {
       return res.json({
         shop: shop,
         generated_at: new Date().toISOString(),
@@ -740,50 +763,54 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       }
     };
     
-    // Add SEO metadata
-    if (metafields.seo_metadata) {
+    // Add SEO metadata (from app_settings or old metafields)
+    if (seoMetadata) {
       storeMetadata.seo = {
-        title: metafields.seo_metadata.storeName,
-        shortDescription: metafields.seo_metadata.shortDescription,
-        fullDescription: metafields.seo_metadata.fullDescription,
-        keywords: metafields.seo_metadata.keywords
+        title: appSettings?.shopName || seoMetadata.storeName,
+        shortDescription: seoMetadata.shortDescription || appSettings?.shortDescription,
+        fullDescription: appSettings?.description || seoMetadata.fullDescription,
+        keywords: seoMetadata.keywords
       };
     }
     
     // Add AI metadata
-    if (metafields.ai_metadata) {
+    if (aiMetadata) {
       storeMetadata.ai_context = {
-        business_type: metafields.ai_metadata.businessType,
-        target_audience: metafields.ai_metadata.targetAudience,
-        unique_selling_points: metafields.ai_metadata.uniqueSellingPoints,
-        brand_voice: metafields.ai_metadata.brandVoice,
-        categories: metafields.ai_metadata.primaryCategories,
-        shipping: metafields.ai_metadata.shippingInfo,
-        returns: metafields.ai_metadata.returnPolicy
+        business_type: aiMetadata.businessType,
+        target_audience: aiMetadata.targetAudience,
+        unique_selling_points: aiMetadata.uniqueSellingPoints,
+        brand_voice: aiMetadata.brandVoice,
+        categories: aiMetadata.primaryCategories,
+        shipping: aiMetadata.shippingInfo,
+        returns: aiMetadata.returnPolicy,
+        languages: aiMetadata.languages,
+        supported_currencies: aiMetadata.supportedCurrencies,
+        shipping_regions: aiMetadata.shippingRegions,
+        cultural_considerations: aiMetadata.culturalConsiderations
       };
     }
     
     // Add Organization Schema
-    if (metafields.organization_schema?.enabled) {
+    if (organizationSchema?.enabled) {
       storeMetadata.organization_schema = {
         "@context": "https://schema.org",
         "@type": "Organization",
-        name: metafields.organization_schema.name || shopData.name,
+        name: organizationSchema.name || shopData.name,
         url: shopData.url,
-        email: metafields.organization_schema.email,
-        telephone: metafields.organization_schema.phone,
-        logo: metafields.organization_schema.logo,
-        sameAs: metafields.organization_schema.sameAs ? 
-          metafields.organization_schema.sameAs.split(',').map(s => s.trim()) : []
+        email: organizationSchema.email,
+        telephone: organizationSchema.phone,
+        logo: organizationSchema.logo,
+        sameAs: organizationSchema.sameAs ? 
+          organizationSchema.sameAs.split(',').map(s => s.trim()) : []
       };
     }
     
-    // Add LocalBusiness Schema if enabled
+    // Add LocalBusiness Schema if enabled (from old metafields only)
     if (metafields.local_business_schema?.enabled) {
       storeMetadata.local_business_schema = {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        name: metafields.organization_schema?.name || shopData.name,
+        name: organizationSchema?.name || shopData.name,
         url: shopData.url,
         priceRange: metafields.local_business_schema.priceRange,
         openingHours: metafields.local_business_schema.openingHours
@@ -846,6 +873,8 @@ router.get('/ai/sitemap-feed.xml', async (req, res) => {
 // Advanced Schema Data endpoint (alias for /schema-data.json for consistency)
 router.get('/ai/schema-data.json', async (req, res) => {
   const shop = req.query.shop;
+  console.log('[ADVANCED-SCHEMA] Request for shop:', shop);
+  
   if (!shop) {
     return res.status(400).json({ error: 'Shop required' });
   }
@@ -853,7 +882,11 @@ router.get('/ai/schema-data.json', async (req, res) => {
   try {
     // Check if feature is enabled (Enterprise only)
     const subscription = await Subscription.findOne({ shop });
+    console.log('[ADVANCED-SCHEMA] Subscription found:', !!subscription);
+    console.log('[ADVANCED-SCHEMA] Plan:', subscription?.plan);
+    
     if (!subscription || subscription.plan.toLowerCase() !== 'enterprise') {
+      console.log('[ADVANCED-SCHEMA] Not Enterprise plan, returning 403');
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Enterprise plan',
         current_plan: subscription?.plan || 'None'
@@ -861,7 +894,10 @@ router.get('/ai/schema-data.json', async (req, res) => {
     }
     
     // Fetch schema data from database
+    console.log('[ADVANCED-SCHEMA] Fetching from AdvancedSchema collection...');
     const schemaData = await AdvancedSchema.findOne({ shop });
+    console.log('[ADVANCED-SCHEMA] Found data:', !!schemaData);
+    console.log('[ADVANCED-SCHEMA] Schemas count:', schemaData?.schemas?.length || 0);
     
     if (!schemaData || !schemaData.schemas?.length) {
       return res.json({

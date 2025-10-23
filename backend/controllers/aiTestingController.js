@@ -250,16 +250,20 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           if (endpoint.key === 'schemaData' && data) {
             if (typeof data === 'string') {
               // Look for multiple indicators of schema.org structured data
+              // More flexible matching to handle minified HTML
               const hasLdJson = data.includes('application/ld+json');
               const hasSchemaOrg = data.includes('schema.org');
-              const hasOrganization = data.includes('"@type":"Organization') || data.includes('"@type": "Organization');
-              const hasWebSite = data.includes('"@type":"WebSite') || data.includes('"@type": "WebSite');
+              const hasOrganization = /@type["\s:]*Organization/i.test(data);
+              const hasWebSite = /@type["\s:]*WebSite/i.test(data);
+              const hasAiSeoComment = data.includes('AI SEO App') || data.includes('Organization & WebSite Schema');
               
               if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
-                validationMessage = 'Page loaded, but schema data not detected in theme';
-              } else if (hasLdJson && (hasOrganization || hasWebSite)) {
+                validationMessage = 'Page loaded, but schema data not detected. If store has password protection, this test may not work correctly.';
+              } else if (hasLdJson && (hasOrganization || hasWebSite || hasAiSeoComment)) {
                 validationMessage = 'Schema data is installed and working correctly in theme';
+              } else if (hasLdJson) {
+                validationMessage = 'Schema data detected (application/ld+json found)';
               } else {
                 validationStatus = 'warning';
                 validationMessage = 'Schema data found but may be incomplete or not rendering';
@@ -406,12 +410,16 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
       try {
         console.log('[AI-VALIDATION] Validating:', key);
         
+        // Skip theme files - they're validated in basic tests only
+        if (key === 'robotsTxt' || key === 'schemaData') {
+          console.log('[AI-VALIDATION] Skipping theme file:', key);
+          continue;
+        }
+        
         // Map endpoint keys to correct URLs (from run-tests endpoint definitions)
         const endpointUrls = {
           productsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`,
           basicSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
-          robotsTxt: `https://${shop}/robots.txt`,
-          schemaData: `https://${shop}`,
           storeMetadata: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
           welcomePage: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
           collectionsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
