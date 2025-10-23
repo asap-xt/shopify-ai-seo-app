@@ -3,6 +3,7 @@ import express from 'express';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
+import AdvancedSchema from '../db/AdvancedSchema.js';
 
 const router = express.Router();
 
@@ -65,7 +66,21 @@ router.get('/ai/products.json', async (req, res) => {
           edges {
             node {
               id
+              title
               handle
+              description
+              productType
+              vendor
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+              featuredImage {
+                url
+                altText
+              }
               metafields(namespace: "seo_ai", first: 100) {
                 edges {
                   node {
@@ -101,7 +116,18 @@ router.get('/ai/products.json', async (req, res) => {
       if (product.metafields.edges.length > 0) {
         const productData = {
           id: product.id,
+          title: product.title,
           handle: product.handle,
+          description: product.description || null,
+          productType: product.productType || null,
+          vendor: product.vendor || null,
+          price: product.priceRangeV2?.minVariantPrice?.amount || null,
+          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          url: `https://${shop}/products/${product.handle}`,
+          image: product.featuredImage ? {
+            url: product.featuredImage.url,
+            alt: product.featuredImage.altText || product.title
+          } : null,
           metafields: {}
         };
         
@@ -182,7 +208,13 @@ router.get('/ai/collections-feed.json', async (req, res) => {
           edges {
             node {
               id
+              title
               handle
+              description
+              image {
+                url
+                altText
+              }
               metafields(namespace: "seo_ai", first: 100) {
                 edges {
                   node {
@@ -217,7 +249,14 @@ router.get('/ai/collections-feed.json', async (req, res) => {
       if (collection.metafields.edges.length > 0) {
         const collectionData = {
           id: collection.id,
+          title: collection.title,
           handle: collection.handle,
+          description: collection.description || null,
+          image: collection.image ? {
+            url: collection.image.url,
+            alt: collection.image.altText || collection.title
+          } : null,
+          url: `https://${shop}/collections/${collection.handle}`,
           metafields: {}
         };
         
@@ -701,8 +740,9 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     // Add SEO metadata
     if (metafields.seo_metadata) {
       storeMetadata.seo = {
-        title: metafields.seo_metadata.title,
-        description: metafields.seo_metadata.metaDescription,
+        title: metafields.seo_metadata.storeName,
+        shortDescription: metafields.seo_metadata.shortDescription,
+        fullDescription: metafields.seo_metadata.fullDescription,
         keywords: metafields.seo_metadata.keywords
       };
     }
@@ -797,6 +837,54 @@ router.get('/ai/sitemap-feed.xml', async (req, res) => {
   } catch (error) {
     console.error('Error in sitemap-feed.xml:', error);
     res.status(500).send('<?xml version="1.0" encoding="UTF-8"?><error>Failed to load sitemap</error>');
+  }
+});
+
+// Advanced Schema Data endpoint (alias for /schema-data.json for consistency)
+router.get('/ai/schema-data.json', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop required' });
+  }
+  
+  try {
+    // Check if feature is enabled (Enterprise only)
+    const subscription = await Subscription.findOne({ shop });
+    if (!subscription || subscription.plan.toLowerCase() !== 'enterprise') {
+      return res.status(403).json({ 
+        error: 'Advanced Schema Data requires Enterprise plan',
+        current_plan: subscription?.plan || 'None'
+      });
+    }
+    
+    // Fetch schema data from database
+    const schemaData = await AdvancedSchema.findOne({ shop });
+    
+    if (!schemaData || !schemaData.schemas?.length) {
+      return res.json({
+        shop,
+        generated_at: new Date(),
+        schemas: [],
+        warning: 'No advanced schema data found',
+        action_required: {
+          message: 'Please generate schema data first',
+          link: `/ai-seo?shop=${shop}#schema-data`,
+          link_text: 'Go to Schema Data'
+        }
+      });
+    }
+    
+    res.json({
+      shop,
+      generated_at: schemaData.generatedAt,
+      total_schemas: schemaData.schemas.length,
+      schemas: schemaData.schemas,
+      siteFAQ: schemaData.siteFAQ
+    });
+    
+  } catch (error) {
+    console.error('[AI-SCHEMA-DATA] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch schema data' });
   }
 });
 

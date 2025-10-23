@@ -227,12 +227,20 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           // Schema Data (theme.liquid) validation
           if (endpoint.key === 'schemaData' && data) {
             if (typeof data === 'string') {
-              const hasSchemaScript = data.includes('application/ld+json') || data.includes('schema.org');
-              if (!hasSchemaScript) {
+              // Look for multiple indicators of schema.org structured data
+              const hasLdJson = data.includes('application/ld+json');
+              const hasSchemaOrg = data.includes('schema.org');
+              const hasOrganization = data.includes('"@type":"Organization') || data.includes('"@type": "Organization');
+              const hasWebSite = data.includes('"@type":"WebSite') || data.includes('"@type": "WebSite');
+              
+              if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
                 validationMessage = 'Page loaded, but schema data not detected in theme';
+              } else if (hasLdJson && (hasOrganization || hasWebSite)) {
+                validationMessage = 'Schema data is installed and working correctly in theme';
               } else {
-                validationMessage = 'Schema data is installed in theme';
+                validationStatus = 'warning';
+                validationMessage = 'Schema data found but may be incomplete or not rendering';
               }
             }
           }
@@ -376,8 +384,21 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
       try {
         console.log('[AI-VALIDATION] Validating:', key);
         
+        // Map endpoint keys to correct URLs (from run-tests endpoint definitions)
+        const endpointUrls = {
+          productsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`,
+          basicSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+          robotsTxt: `https://${shop}/robots.txt`,
+          schemaData: `https://${shop}`,
+          storeMetadata: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
+          welcomePage: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
+          collectionsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
+          aiSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+          advancedSchemaApi: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`
+        };
+        
         // Fetch the actual data
-        const dataResponse = await fetch(result.url || `${process.env.APP_URL}/ai/${key}.json?shop=${shop}`);
+        const dataResponse = await fetch(endpointUrls[key] || result.url);
         let data = '';
         
         if (dataResponse.ok) {
@@ -394,13 +415,20 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
           }
         }
         
-        // Create AI prompt
+        // Create AI prompt (adjust for HTML vs JSON content)
+        const isHtmlContent = data.includes('<!DOCTYPE') || data.includes('<html');
+        const contentDescription = isHtmlContent ? 
+          `This is an HTML page. Analyze: meta tags, schema.org structured data, content quality, SEO elements, and overall page structure.` :
+          `Analyze the data structure, completeness, and SEO optimization.`;
+        
         const prompt = `You are an AI SEO expert analyzing endpoint data for e-commerce stores.
 
 Analyze this ${result.name} data and provide:
 1. Rating: excellent/good/fair/poor
 2. Feedback: 1-2 sentences about data quality
 3. Suggestions: Specific improvement recommendations (if any)
+
+${contentDescription}
 
 Data sample:
 ${data}
