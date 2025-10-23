@@ -250,21 +250,48 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           // Schema Data (theme.liquid) validation
           if (endpoint.key === 'schemaData' && data) {
             if (typeof data === 'string') {
+              console.log('[SCHEMA-DATA-VALIDATION] Data length:', data.length);
+              console.log('[SCHEMA-DATA-VALIDATION] First 500 chars:', data.substring(0, 500));
+              
               // Look for multiple indicators of schema.org structured data
-              // More flexible matching to handle minified HTML
-              const hasLdJson = data.includes('application/ld+json');
-              const hasSchemaOrg = data.includes('schema.org');
-              const hasOrganization = /@type["\s:]*Organization/i.test(data);
-              const hasWebSite = /@type["\s:]*WebSite/i.test(data);
-              const hasAiSeoComment = data.includes('AI SEO App') || data.includes('Organization & WebSite Schema');
+              // ULTRA flexible matching to handle minified/compressed HTML
+              const hasLdJson = data.includes('application/ld+json') || data.includes('application\/ld+json');
+              const hasSchemaOrg = data.includes('schema.org') || data.includes('schema\.org');
+              
+              // More flexible @type matching (handles minified JSON: {"@type":"Organization"})
+              const hasOrganization = /@type["\s:]*"?\s*Organization/i.test(data) || 
+                                      data.includes('"@type":"Organization"') ||
+                                      data.includes("'@type':'Organization'");
+              
+              const hasWebSite = /@type["\s:]*"?\s*WebSite/i.test(data) || 
+                                 data.includes('"@type":"WebSite"') ||
+                                 data.includes("'@type':'WebSite'");
+              
+              const hasAiSeoComment = data.includes('AI SEO App') || 
+                                       data.includes('Organization & WebSite Schema') ||
+                                       data.includes('AI-SEO-App');
+              
+              console.log('[SCHEMA-DATA-VALIDATION] hasLdJson:', hasLdJson);
+              console.log('[SCHEMA-DATA-VALIDATION] hasSchemaOrg:', hasSchemaOrg);
+              console.log('[SCHEMA-DATA-VALIDATION] hasOrganization:', hasOrganization);
+              console.log('[SCHEMA-DATA-VALIDATION] hasWebSite:', hasWebSite);
+              console.log('[SCHEMA-DATA-VALIDATION] hasAiSeoComment:', hasAiSeoComment);
+              
+              // Try to extract and log the actual script tag
+              const scriptMatch = data.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+              if (scriptMatch) {
+                console.log('[SCHEMA-DATA-VALIDATION] Found LD+JSON script, content preview:', scriptMatch[1].substring(0, 200));
+              }
               
               if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
-                validationMessage = 'Page loaded, but schema data not detected. If store has password protection, this test may not work correctly.';
+                validationMessage = 'Page loaded, but schema data not detected in HTML source.';
               } else if (hasLdJson && (hasOrganization || hasWebSite || hasAiSeoComment)) {
                 validationMessage = 'Schema data is installed and working correctly in theme';
               } else if (hasLdJson) {
                 validationMessage = 'Schema data detected (application/ld+json found)';
+              } else if (hasSchemaOrg) {
+                validationMessage = 'Schema.org reference found (likely installed correctly)';
               } else {
                 validationStatus = 'warning';
                 validationMessage = 'Schema data found but may be incomplete or not rendering';
@@ -452,7 +479,52 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
           `This is an HTML page. Analyze: meta tags, schema.org structured data, content quality, SEO elements, and overall page structure.` :
           `Analyze the data structure, completeness, and SEO optimization.`;
         
-        const prompt = `You are an AI SEO expert analyzing endpoint data for e-commerce stores.
+        // Special prompts for specific endpoints
+        let prompt = '';
+        
+        if (key === 'storeMetadata') {
+          prompt = `You are an AI SEO expert analyzing Store Metadata for an e-commerce store.
+
+Data sample:
+${data}
+
+Analyze this data and provide:
+1. Rating: excellent (all fields filled) / good (most fields filled) / fair (some missing) / poor (many missing)
+2. Feedback: Brief assessment of data completeness and quality
+3. Suggestions: If any fields are null/empty/placeholder, list which ones should be filled (be specific)
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'productsJson') {
+          prompt = `You are an AI SEO expert analyzing Products JSON Feed for an e-commerce store.
+
+NOTE: The metafields section may be truncated in this preview due to size limits. This is NORMAL and not a problem.
+
+Data sample:
+${data}
+
+Analyze this data and provide:
+1. Rating: excellent/good/fair/poor (based on visible product data quality, NOT truncation)
+2. Feedback: Brief assessment of product titles, descriptions, pricing, and URL structure
+3. Suggestions: Recommendations for improving SEO value (ignore truncation note)
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else {
+          // Generic prompt for other endpoints
+          prompt = `You are an AI SEO expert analyzing endpoint data for e-commerce stores.
 
 Analyze this ${result.name} data and provide:
 1. Rating: excellent/good/fair/poor
@@ -472,6 +544,7 @@ Format:
   "feedback": "Your feedback here",
   "suggestions": "Your suggestions here (or null if none)"
 }`;
+        }
         
         const aiResponse = await getGeminiResponse(prompt, {
           maxTokens: 150,
