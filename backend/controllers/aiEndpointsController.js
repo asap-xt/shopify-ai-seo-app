@@ -111,9 +111,15 @@ router.get('/ai/products.json', async (req, res) => {
     const optimizedProducts = [];
     const totalProducts = data.data.products.edges.length;
     
+    console.log('[PRODUCTS-JSON] Total products from Shopify:', totalProducts);
+    console.log('[PRODUCTS-JSON] Checking for metafields in namespace "seo_ai"...');
+    
+    let productsWithMetafields = 0;
+    
     // Извличаме само продуктите с metafields
     data.data.products.edges.forEach(({ node: product }) => {
       if (product.metafields.edges.length > 0) {
+        productsWithMetafields++;
         const productData = {
           id: product.id,
           title: product.title,
@@ -143,6 +149,9 @@ router.get('/ai/products.json', async (req, res) => {
         optimizedProducts.push(productData);
       }
     });
+    
+    console.log('[PRODUCTS-JSON] Products with seo_ai metafields:', productsWithMetafields);
+    console.log('[PRODUCTS-JSON] Optimized products count:', optimizedProducts.length);
 
     if (optimizedProducts.length === 0) {
       return res.json({
@@ -707,13 +716,25 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     const data = await response.json();
     const shopData = data.data.shop;
     
+    console.log('[STORE-METADATA] ===== DEBUG METAFIELDS =====');
+    console.log('[STORE-METADATA] Total metafields from seo_ai:', shopData.seo_ai_metafields.edges.length);
+    console.log('[STORE-METADATA] Metafield keys:', shopData.seo_ai_metafields.edges.map(e => e.node.key));
+    console.log('[STORE-METADATA] Has app_settings:', !!shopData.app_settings?.value);
+    
     // Parse metafields from old namespace (seo_ai)
+    // Only parse JSON-type metafields (skip sitemap URLs)
     const metafields = {};
+    const jsonMetafieldKeys = ['seo_metadata', 'ai_metadata', 'organization_schema', 'local_business_schema'];
+    
     shopData.seo_ai_metafields.edges.forEach(({ node }) => {
-      try {
-        metafields[node.key] = JSON.parse(node.value);
-      } catch (e) {
-        console.error(`Failed to parse ${node.key} metafield`);
+      // Only parse known JSON metafields
+      if (jsonMetafieldKeys.includes(node.key)) {
+        try {
+          metafields[node.key] = JSON.parse(node.value);
+          console.log(`[STORE-METADATA] Parsed ${node.key} successfully`);
+        } catch (e) {
+          console.error(`[STORE-METADATA] Failed to parse ${node.key} metafield`);
+        }
       }
     });
     
@@ -723,6 +744,17 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       try {
         appSettings = JSON.parse(shopData.app_settings.value);
         console.log('[STORE-METADATA] App settings found:', Object.keys(appSettings));
+        
+        // Log what's inside each setting
+        if (appSettings.seoMetadata) {
+          console.log('[STORE-METADATA] seoMetadata keys:', Object.keys(appSettings.seoMetadata));
+        }
+        if (appSettings.aiMetadata) {
+          console.log('[STORE-METADATA] aiMetadata keys:', Object.keys(appSettings.aiMetadata));
+        }
+        if (appSettings.organizationSchema) {
+          console.log('[STORE-METADATA] organizationSchema keys:', Object.keys(appSettings.organizationSchema));
+        }
       } catch (e) {
         console.error('[STORE-METADATA] Failed to parse app_settings');
       }

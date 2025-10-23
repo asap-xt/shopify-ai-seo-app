@@ -159,6 +159,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           
           // Products JSON Feed validation
           if (endpoint.key === 'productsJson') {
+            // Use DB counts (Products model is source of truth for optimization status)
             if (optimizedProducts === 0) {
               validationStatus = 'warning';
               validationMessage = `0/${totalProducts} products optimized`;
