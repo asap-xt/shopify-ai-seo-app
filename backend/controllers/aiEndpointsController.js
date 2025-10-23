@@ -674,23 +674,21 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       });
     }
 
-    // Get shop metafields (from both old seo_ai and new ai_seo_store namespaces)
-    const metafieldsQuery = `
+    // Use SAME query as GraphQL resolver (lines 829-845 in server.js)
+    const shopQuery = `
       query {
         shop {
           name
+          description
           email
           url
-          seo_ai_metafields: metafields(namespace: "seo_ai", first: 10) {
-            edges {
-              node {
-                key
-                value
-                type
-              }
-            }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") {
+            value
           }
-          app_settings: metafield(namespace: "ai_seo_store", key: "app_settings") {
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") {
+            value
+          }
+          aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
             value
           }
         }
@@ -698,14 +696,14 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     `;
 
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/graphql.json`,
+      `https://${shop}/admin/api/2025-07/graphql.json`,
       {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': shopRecord.accessToken,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ query: metafieldsQuery })
+        body: JSON.stringify({ query: shopQuery })
       }
     );
 
@@ -714,64 +712,44 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     }
 
     const data = await response.json();
-    
-    console.log('[STORE-METADATA] ===== DEBUG GRAPHQL RESPONSE =====');
-    console.log('[STORE-METADATA] Full response:', JSON.stringify(data, null, 2));
-    
     const shopData = data.data.shop;
     
     console.log('[STORE-METADATA] ===== DEBUG METAFIELDS =====');
-    console.log('[STORE-METADATA] Total metafields from seo_ai:', shopData.seo_ai_metafields.edges.length);
-    console.log('[STORE-METADATA] Metafield keys:', shopData.seo_ai_metafields.edges.map(e => e.node.key));
-    console.log('[STORE-METADATA] Has app_settings:', !!shopData.app_settings?.value);
+    console.log('[STORE-METADATA] Has seoMetafield:', !!shopData.seoMetafield?.value);
+    console.log('[STORE-METADATA] Has organizationMetafield:', !!shopData.organizationMetafield?.value);
+    console.log('[STORE-METADATA] Has aiMetafield:', !!shopData.aiMetafield?.value);
     
-    if (shopData.app_settings?.value) {
-      console.log('[STORE-METADATA] app_settings value (first 500 chars):', shopData.app_settings.value.substring(0, 500));
-    }
+    // Parse metafields (same logic as GraphQL resolver)
+    let seoMetadata = null;
+    let aiMetadata = null;
+    let organizationSchema = null;
     
-    // Parse metafields from old namespace (seo_ai)
-    // Only parse JSON-type metafields (skip sitemap URLs)
-    const metafields = {};
-    const jsonMetafieldKeys = ['seo_metadata', 'ai_metadata', 'organization_schema', 'local_business_schema'];
-    
-    shopData.seo_ai_metafields.edges.forEach(({ node }) => {
-      // Only parse known JSON metafields
-      if (jsonMetafieldKeys.includes(node.key)) {
-        try {
-          metafields[node.key] = JSON.parse(node.value);
-          console.log(`[STORE-METADATA] Parsed ${node.key} successfully`);
-        } catch (e) {
-          console.error(`[STORE-METADATA] Failed to parse ${node.key} metafield`);
-        }
-      }
-    });
-    
-    // Parse app_settings from new namespace (ai_seo_store)
-    let appSettings = null;
-    if (shopData.app_settings?.value) {
+    if (shopData.seoMetafield?.value) {
       try {
-        appSettings = JSON.parse(shopData.app_settings.value);
-        console.log('[STORE-METADATA] App settings found:', Object.keys(appSettings));
-        
-        // Log what's inside each setting
-        if (appSettings.seoMetadata) {
-          console.log('[STORE-METADATA] seoMetadata keys:', Object.keys(appSettings.seoMetadata));
-        }
-        if (appSettings.aiMetadata) {
-          console.log('[STORE-METADATA] aiMetadata keys:', Object.keys(appSettings.aiMetadata));
-        }
-        if (appSettings.organizationSchema) {
-          console.log('[STORE-METADATA] organizationSchema keys:', Object.keys(appSettings.organizationSchema));
-        }
+        seoMetadata = JSON.parse(shopData.seoMetafield.value);
+        console.log('[STORE-METADATA] Parsed seoMetadata successfully');
       } catch (e) {
-        console.error('[STORE-METADATA] Failed to parse app_settings');
+        console.error('[STORE-METADATA] Failed to parse seoMetadata');
       }
     }
     
-    // Merge data from both sources (app_settings takes priority)
-    const seoMetadata = appSettings?.seoMetadata || metafields.seo_metadata;
-    const aiMetadata = appSettings?.aiMetadata || metafields.ai_metadata;
-    const organizationSchema = appSettings?.organizationSchema || metafields.organization_schema;
+    if (shopData.aiMetafield?.value) {
+      try {
+        aiMetadata = JSON.parse(shopData.aiMetafield.value);
+        console.log('[STORE-METADATA] Parsed aiMetadata successfully');
+      } catch (e) {
+        console.error('[STORE-METADATA] Failed to parse aiMetadata');
+      }
+    }
+    
+    if (shopData.organizationMetafield?.value) {
+      try {
+        organizationSchema = JSON.parse(shopData.organizationMetafield.value);
+        console.log('[STORE-METADATA] Parsed organizationSchema successfully');
+      } catch (e) {
+        console.error('[STORE-METADATA] Failed to parse organizationSchema');
+      }
+    }
     
     console.log('[STORE-METADATA] Has seoMetadata:', !!seoMetadata);
     console.log('[STORE-METADATA] Has aiMetadata:', !!aiMetadata);
@@ -803,12 +781,12 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       }
     };
     
-    // Add SEO metadata (from app_settings or old metafields)
+    // Add SEO metadata
     if (seoMetadata) {
       storeMetadata.seo = {
-        title: appSettings?.shopName || seoMetadata.storeName,
-        shortDescription: seoMetadata.shortDescription || appSettings?.shortDescription,
-        fullDescription: appSettings?.description || seoMetadata.fullDescription,
+        title: seoMetadata.storeName || shopData.name,
+        shortDescription: seoMetadata.shortDescription,
+        fullDescription: seoMetadata.fullDescription,
         keywords: seoMetadata.keywords
       };
     }
@@ -842,18 +820,6 @@ router.get('/ai/store-metadata.json', async (req, res) => {
         logo: organizationSchema.logo,
         sameAs: organizationSchema.sameAs ? 
           organizationSchema.sameAs.split(',').map(s => s.trim()) : []
-      };
-    }
-    
-    // Add LocalBusiness Schema if enabled (from old metafields only)
-    if (metafields.local_business_schema?.enabled) {
-      storeMetadata.local_business_schema = {
-        "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        name: organizationSchema?.name || shopData.name,
-        url: shopData.url,
-        priceRange: metafields.local_business_schema.priceRange,
-        openingHours: metafields.local_business_schema.openingHours
       };
     }
     
