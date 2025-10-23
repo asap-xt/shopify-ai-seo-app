@@ -786,7 +786,7 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       storeMetadata.seo = {
         title: seoMetadata.storeName || shopData.name,
         shortDescription: seoMetadata.shortDescription,
-        fullDescription: seoMetadata.fullDescription,
+        fullDescription: seoMetadata.fullDescription || shopData.description || null,
         keywords: seoMetadata.keywords
       };
     }
