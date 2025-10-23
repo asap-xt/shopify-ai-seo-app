@@ -714,12 +714,20 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     }
 
     const data = await response.json();
+    
+    console.log('[STORE-METADATA] ===== DEBUG GRAPHQL RESPONSE =====');
+    console.log('[STORE-METADATA] Full response:', JSON.stringify(data, null, 2));
+    
     const shopData = data.data.shop;
     
     console.log('[STORE-METADATA] ===== DEBUG METAFIELDS =====');
     console.log('[STORE-METADATA] Total metafields from seo_ai:', shopData.seo_ai_metafields.edges.length);
     console.log('[STORE-METADATA] Metafield keys:', shopData.seo_ai_metafields.edges.map(e => e.node.key));
     console.log('[STORE-METADATA] Has app_settings:', !!shopData.app_settings?.value);
+    
+    if (shopData.app_settings?.value) {
+      console.log('[STORE-METADATA] app_settings value (first 500 chars):', shopData.app_settings.value.substring(0, 500));
+    }
     
     // Parse metafields from old namespace (seo_ai)
     // Only parse JSON-type metafields (skip sitemap URLs)
