@@ -365,9 +365,9 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     const results = {};
     let totalTokensUsed = 0;
     
-    // Process only successful endpoints
+    // Process successful and warning endpoints (skip locked and failed)
     const successfulEndpoints = Object.entries(endpointResults).filter(
-      ([key, result]) => result.status === 'success'
+      ([key, result]) => result.status === 'success' || result.status === 'warning'
     );
     
     console.log('[AI-VALIDATION] Processing', successfulEndpoints.length, 'endpoints');
@@ -405,7 +405,9 @@ Analyze this ${result.name} data and provide:
 Data sample:
 ${data}
 
-Respond in JSON format:
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks, no extra text.
+
+Format:
 {
   "rating": "excellent|good|fair|poor",
   "feedback": "Your feedback here",
@@ -419,9 +421,15 @@ Respond in JSON format:
         
         console.log('[AI-VALIDATION] AI response for', key, ':', aiResponse);
         
-        // Parse AI response
+        // Parse AI response (handle markdown code blocks)
         try {
-          const parsed = JSON.parse(aiResponse);
+          // Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
+          let cleanResponse = aiResponse.trim();
+          if (cleanResponse.startsWith('```')) {
+            cleanResponse = cleanResponse.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/, '').trim();
+          }
+          
+          const parsed = JSON.parse(cleanResponse);
           results[key] = {
             rating: parsed.rating || 'good',
             feedback: parsed.feedback || 'Data appears well-structured.',
@@ -429,7 +437,8 @@ Respond in JSON format:
           };
           totalTokensUsed += 10; // Estimate 10 tokens per endpoint
         } catch (parseError) {
-          console.error('[AI-VALIDATION] Parse error:', parseError);
+          console.error('[AI-VALIDATION] Parse error for', key, ':', parseError);
+          console.error('[AI-VALIDATION] Raw response:', aiResponse);
           results[key] = {
             rating: 'good',
             feedback: 'AI analysis completed but response format was unexpected.',
