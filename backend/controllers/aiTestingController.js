@@ -421,13 +421,23 @@ Format:
         
         console.log('[AI-VALIDATION] AI response for', key, ':', aiResponse);
         
-        // Parse AI response (handle markdown code blocks)
+        // Parse AI response (handle markdown code blocks and various formats)
         try {
           // Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
           let cleanResponse = aiResponse.trim();
+          
+          // Method 1: Remove markdown code blocks
           if (cleanResponse.startsWith('```')) {
-            cleanResponse = cleanResponse.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/, '').trim();
+            cleanResponse = cleanResponse.replace(/^```(?:json|JSON)?\s*/i, '').replace(/\s*```$/i, '').trim();
           }
+          
+          // Method 2: Extract JSON from text (find first { to last })
+          const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            cleanResponse = jsonMatch[0];
+          }
+          
+          console.log('[AI-VALIDATION] Cleaned response for', key, ':', cleanResponse);
           
           const parsed = JSON.parse(cleanResponse);
           results[key] = {
@@ -437,11 +447,18 @@ Format:
           };
           totalTokensUsed += 10; // Estimate 10 tokens per endpoint
         } catch (parseError) {
-          console.error('[AI-VALIDATION] Parse error for', key, ':', parseError);
+          console.error('[AI-VALIDATION] Parse error for', key, ':', parseError.message);
           console.error('[AI-VALIDATION] Raw response:', aiResponse);
+          console.error('[AI-VALIDATION] Response length:', aiResponse.length);
+          console.error('[AI-VALIDATION] Response type:', typeof aiResponse);
+          
+          // Try to extract feedback from plain text response
+          const feedbackMatch = aiResponse.match(/feedback["\s:]+([^"}\n]+)/i);
+          const ratingMatch = aiResponse.match(/rating["\s:]+([a-z]+)/i);
+          
           results[key] = {
-            rating: 'good',
-            feedback: 'AI analysis completed but response format was unexpected.',
+            rating: ratingMatch ? ratingMatch[1] : 'good',
+            feedback: feedbackMatch ? feedbackMatch[1].trim() : aiResponse.substring(0, 100),
             suggestions: null
           };
         }
