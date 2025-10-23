@@ -248,28 +248,69 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           }
           
           // Schema Data (theme.liquid) validation
-          if (endpoint.key === 'schemaData' && data) {
-            if (typeof data === 'string') {
-              console.log('[SCHEMA-DATA-VALIDATION] Data length:', data.length);
-              console.log('[SCHEMA-DATA-VALIDATION] First 500 chars:', data.substring(0, 500));
+          // For theme files, we need to read from Shopify API, not public URL
+          if (endpoint.key === 'schemaData') {
+            try {
+              console.log('[SCHEMA-DATA-VALIDATION] Fetching theme.liquid from Shopify API...');
               
-              // Look for multiple indicators of schema.org structured data
-              // ULTRA flexible matching to handle minified/compressed HTML
-              const hasLdJson = data.includes('application/ld+json') || data.includes('application\/ld+json');
-              const hasSchemaOrg = data.includes('schema.org') || data.includes('schema\.org');
+              // Get published theme ID
+              const themesQuery = `{ themes(first: 1, roles: MAIN) { edges { node { id name } } } }`;
+              const themesResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+                method: 'POST',
+                headers: {
+                  'X-Shopify-Access-Token': shopRecord.accessToken,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query: themesQuery })
+              });
               
-              // More flexible @type matching (handles minified JSON: {"@type":"Organization"})
-              const hasOrganization = /@type["\s:]*"?\s*Organization/i.test(data) || 
-                                      data.includes('"@type":"Organization"') ||
-                                      data.includes("'@type':'Organization'");
+              if (!themesResponse.ok) {
+                validationStatus = 'warning';
+                validationMessage = 'Could not access theme API to check schema data';
+                continue;
+              }
               
-              const hasWebSite = /@type["\s:]*"?\s*WebSite/i.test(data) || 
-                                 data.includes('"@type":"WebSite"') ||
-                                 data.includes("'@type':'WebSite'");
+              const themesData = await themesResponse.json();
+              const themeId = themesData?.data?.themes?.edges?.[0]?.node?.id?.split('/')?.pop();
               
-              const hasAiSeoComment = data.includes('AI SEO App') || 
-                                       data.includes('Organization & WebSite Schema') ||
-                                       data.includes('AI-SEO-App');
+              if (!themeId) {
+                validationStatus = 'warning';
+                validationMessage = 'Could not find published theme';
+                continue;
+              }
+              
+              console.log('[SCHEMA-DATA-VALIDATION] Found theme ID:', themeId);
+              
+              // Get theme.liquid asset
+              const assetUrl = `https://${shop}/admin/api/2025-07/themes/${themeId}/assets.json?asset[key]=layout/theme.liquid`;
+              const assetResponse = await fetch(assetUrl, {
+                method: 'GET',
+                headers: {
+                  'X-Shopify-Access-Token': shopRecord.accessToken
+                }
+              });
+              
+              if (!assetResponse.ok) {
+                validationStatus = 'warning';
+                validationMessage = 'Could not read theme.liquid file';
+                continue;
+              }
+              
+              const assetData = await assetResponse.json();
+              const themeContent = assetData?.asset?.value || '';
+              
+              console.log('[SCHEMA-DATA-VALIDATION] theme.liquid length:', themeContent.length);
+              console.log('[SCHEMA-DATA-VALIDATION] First 500 chars:', themeContent.substring(0, 500));
+              
+              // Look for schema.org structured data
+              const hasLdJson = themeContent.includes('application/ld+json') || themeContent.includes('application\\/ld+json');
+              const hasSchemaOrg = themeContent.includes('schema.org') || themeContent.includes('schema\\.org');
+              const hasOrganization = /@type["\s:]*"?\s*Organization/i.test(themeContent) || 
+                                      themeContent.includes('"@type":"Organization"');
+              const hasWebSite = /@type["\s:]*"?\s*WebSite/i.test(themeContent) || 
+                                 themeContent.includes('"@type":"WebSite"');
+              const hasAiSeoComment = themeContent.includes('AI SEO App') || 
+                                       themeContent.includes('Organization & WebSite Schema');
               
               console.log('[SCHEMA-DATA-VALIDATION] hasLdJson:', hasLdJson);
               console.log('[SCHEMA-DATA-VALIDATION] hasSchemaOrg:', hasSchemaOrg);
@@ -277,15 +318,9 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               console.log('[SCHEMA-DATA-VALIDATION] hasWebSite:', hasWebSite);
               console.log('[SCHEMA-DATA-VALIDATION] hasAiSeoComment:', hasAiSeoComment);
               
-              // Try to extract and log the actual script tag
-              const scriptMatch = data.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
-              if (scriptMatch) {
-                console.log('[SCHEMA-DATA-VALIDATION] Found LD+JSON script, content preview:', scriptMatch[1].substring(0, 200));
-              }
-              
               if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
-                validationMessage = 'Page loaded, but schema data not detected in HTML source.';
+                validationMessage = 'Schema data not found in theme.liquid file';
               } else if (hasLdJson && (hasOrganization || hasWebSite || hasAiSeoComment)) {
                 validationMessage = 'Schema data is installed and working correctly in theme';
               } else if (hasLdJson) {
@@ -294,8 +329,15 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
                 validationMessage = 'Schema.org reference found (likely installed correctly)';
               } else {
                 validationStatus = 'warning';
-                validationMessage = 'Schema data found but may be incomplete or not rendering';
+                validationMessage = 'Schema data found but may be incomplete';
               }
+              
+              dataSize = themeContent.length;
+              
+            } catch (themeError) {
+              console.error('[SCHEMA-DATA-VALIDATION] Error reading theme:', themeError);
+              validationStatus = 'warning';
+              validationMessage = `Could not verify schema data: ${themeError.message}`;
             }
           }
           
