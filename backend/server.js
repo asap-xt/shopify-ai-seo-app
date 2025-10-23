@@ -1900,6 +1900,56 @@ App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURICompo
       }
     });
     
+    // Products sitemap endpoint (alias for /sitemap.xml for AI Testing compatibility)
+    app.get('/sitemap_products.xml', async (req, res) => {
+      console.log('[PRODUCTS_SITEMAP] ===== PRODUCTS SITEMAP REQUEST =====');
+      console.log('[PRODUCTS_SITEMAP] Query:', req.query);
+      
+      try {
+        // Import required modules
+        const Sitemap = (await import('./db/Sitemap.js')).default;
+        
+        // Helper function to normalize shop
+        function normalizeShop(s) {
+          if (!s) return null;
+          s = String(s).trim().toLowerCase();
+          if (/^https?:\/\//.test(s)) {
+            const u = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            return u.toLowerCase();
+          }
+          if (!/\.myshopify\.com$/i.test(s)) return s.toLowerCase() + '.myshopify.com';
+          return s.toLowerCase();
+        }
+        
+        const shop = normalizeShop(req.query.shop);
+        if (!shop) {
+          console.error('[PRODUCTS_SITEMAP] Missing shop parameter');
+          return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+        }
+        
+        console.log('[PRODUCTS_SITEMAP] Processing for shop:', shop);
+        
+        // Get saved sitemap with content
+        const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
+        console.log('[PRODUCTS_SITEMAP] Found sitemap:', !!sitemapDoc);
+        console.log('[PRODUCTS_SITEMAP] Has content:', !!(sitemapDoc?.content));
+        console.log('[PRODUCTS_SITEMAP] Content length:', sitemapDoc?.content?.length || 0);
+        
+        if (!sitemapDoc || !sitemapDoc.content) {
+          console.log('[PRODUCTS_SITEMAP] No sitemap found for shop:', shop);
+          return res.status(404).type('text/plain').send('Sitemap not found for this shop. Please generate it first.');
+        }
+        
+        // Serve sitemap XML
+        res.type('application/xml; charset=utf-8');
+        res.send(sitemapDoc.content);
+        
+      } catch (error) {
+        console.error('[PRODUCTS_SITEMAP] Error:', error);
+        return res.status(500).send(`Failed to serve sitemap: ${error.message}`);
+      }
+    });
+    
     // Alternative public sitemap endpoint
     app.get('/public-sitemap.xml', async (req, res) => {
       console.log('[PUBLIC_SITEMAP_ALT] ===== ALTERNATIVE PUBLIC SITEMAP REQUEST =====');

@@ -169,19 +169,41 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           
           // Collections JSON Feed validation
           if (endpoint.key === 'collectionsJson') {
-            if (optimizedCollections === 0) {
+            // Count collections from actual endpoint data
+            let actualOptimized = 0;
+            let actualTotal = 0;
+            
+            if (data && data.collections) {
+              actualTotal = data.collections_total || data.collections.length;
+              actualOptimized = data.collections.length; // Collections with metafields
+            }
+            
+            if (actualOptimized === 0) {
               validationStatus = 'warning';
-              validationMessage = `0/${totalCollections} collections optimized`;
+              validationMessage = `0/${actualTotal} collections optimized`;
             } else {
-              validationMessage = `${optimizedCollections}/${totalCollections} collections optimized`;
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized`;
             }
           }
           
           // Store Metadata validation
           if (endpoint.key === 'storeMetadata' && data) {
-            if (!data.organization && !data.seo_metadata) {
+            // Check for actual data (correct field names from endpoint)
+            const hasSeoData = data.seo && Object.keys(data.seo).length > 0;
+            const hasOrgSchema = data.organization_schema && Object.keys(data.organization_schema).length > 0;
+            const hasAiContext = data.ai_context && Object.keys(data.ai_context).length > 0;
+            const hasLocalBusiness = data.local_business_schema && Object.keys(data.local_business_schema).length > 0;
+            
+            if (!hasSeoData && !hasOrgSchema && !hasAiContext && !hasLocalBusiness) {
               validationStatus = 'warning';
               validationMessage = 'Endpoint OK, but no organization or SEO data configured';
+            } else {
+              const dataTypes = [];
+              if (hasSeoData) dataTypes.push('SEO metadata');
+              if (hasOrgSchema) dataTypes.push('Organization schema');
+              if (hasAiContext) dataTypes.push('AI context');
+              if (hasLocalBusiness) dataTypes.push('Local business');
+              validationMessage = `Store metadata configured: ${dataTypes.join(', ')}`;
             }
           }
           
@@ -250,7 +272,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             const schemasCount = data.schemas?.length || 0;
             if (schemasCount === 0) {
               validationStatus = 'warning';
-              validationMessage = 'API OK, but no advanced schemas generated yet';
+              validationMessage = 'API OK, but no advanced schemas generated yet. Generate schemas in Advanced Schema Data section.';
             } else {
               validationMessage = `${schemasCount} advanced schema${schemasCount > 1 ? 's' : ''} available`;
             }

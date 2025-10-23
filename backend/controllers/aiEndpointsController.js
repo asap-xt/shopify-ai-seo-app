@@ -243,6 +243,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
 
     const data = await response.json();
     const optimizedCollections = [];
+    const totalCollections = data.data.collections.edges.length;
     
     // Извличаме само колекциите с metafields
     data.data.collections.edges.forEach(({ node: collection }) => {
@@ -277,6 +278,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
       return res.json({
         shop,
         collections: [],
+        collections_total: totalCollections,
         warning: 'No optimized collections found',
         action_required: {
           message: 'Please optimize your collections first',
@@ -290,6 +292,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
       shop,
       generated_at: new Date().toISOString(),
       collections_count: optimizedCollections.length,
+      collections_total: totalCollections,
       collections: optimizedCollections
     });
 
