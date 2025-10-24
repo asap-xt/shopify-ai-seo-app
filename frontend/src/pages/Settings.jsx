@@ -1806,8 +1806,7 @@ export default function Settings() {
               </Card>
               
               <Banner status="info" tone="subdued">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. 
-                AI can access them at <code>/ai/product/[handle]/schemas.json</code></p>
+                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
               </Banner>
             </BlockStack>
           </Box>
@@ -2177,7 +2176,7 @@ export default function Settings() {
               
               <Box paddingBlockStart="200">
                 <Text variant="bodySm" tone="subdued">
-                  Schemas are now available at /ai/product/[handle]/schemas.json
+                  Structured schemas are now generated and help AI bots better understand your products.
                 </Text>
               </Box>
             </BlockStack>
@@ -2271,7 +2270,7 @@ export default function Settings() {
               
               <Box paddingBlockStart="200">
                 <Text variant="bodySm" tone="subdued">
-                  Schemas are now available at /ai/product/[handle]/schemas.json
+                  Structured schemas are now generated and help AI bots better understand your products.
                 </Text>
               </Box>
             </BlockStack>
