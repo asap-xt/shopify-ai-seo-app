@@ -1691,7 +1691,7 @@ async function start() {
   });
 
   // Database Indexes Status Endpoint (PHASE 2 - Verification)
-  app.get('/api/db/indexes', async (req, res) => {
+  app.get('/debug/indexes', async (req, res) => {
     try {
       const { getIndexStats } = await import('./db/indexes.js');
       const stats = await getIndexStats();
