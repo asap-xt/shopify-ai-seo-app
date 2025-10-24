@@ -114,8 +114,8 @@ class DatabaseConnection {
       clearInterval(this.healthCheckInterval);
     }
 
-    // Health check every 30 seconds
-    this.healthCheckInterval = setInterval(async () => {
+    // Run health check function
+    const runHealthCheck = async () => {
       try {
         if (mongoose.connection.readyState !== 1) {
           dbLogger.warn('⚠️  Health Check: Connection not ready (state:', mongoose.connection.readyState, ')');
@@ -143,12 +143,21 @@ class DatabaseConnection {
           
           // Log status on EVERY check (every 30 seconds) for monitoring
           dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
+        } else {
+          dbLogger.warn('⚠️  Pool not available (topology?.s?.pool is null)');
         }
         
       } catch (error) {
         dbLogger.error('❌ Health check failed:', error.message);
       }
-    }, 30000);
+    };
+
+    // Run IMMEDIATELY on startup
+    dbLogger.info('🏥 Starting health checks (every 30 seconds)...');
+    runHealthCheck();
+
+    // Then run every 30 seconds
+    this.healthCheckInterval = setInterval(runHealthCheck, 30000);
   }
 
   async disconnect() {
