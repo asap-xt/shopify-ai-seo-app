@@ -12,6 +12,7 @@ class DatabaseConnection {
     this.connectionAttempts = 0;
     this.maxRetries = 5;
     this.healthCheckInterval = null;
+    this._debugLogged = false; // Track if debug info was logged
   }
 
   async connect() {
@@ -133,6 +134,18 @@ class DatabaseConnection {
           const client = mongoose.connection.getClient();
           const topology = client?.topology;
           
+          // DEBUG: Log topology structure (only on first run)
+          if (!this._debugLogged) {
+            dbLogger.info('[DEBUG] Topology exists:', !!topology);
+            dbLogger.info('[DEBUG] Topology.s exists:', !!topology?.s);
+            dbLogger.info('[DEBUG] Topology.s.pool exists:', !!topology?.s?.pool);
+            dbLogger.info('[DEBUG] Topology.s.servers exists:', !!topology?.s?.servers);
+            if (topology?.s?.servers) {
+              dbLogger.info('[DEBUG] Server count:', topology.s.servers.size);
+            }
+            this._debugLogged = true;
+          }
+          
           if (topology?.s?.pool) {
             const pool = topology.s.pool;
             poolSize = pool.totalConnectionCount || 0;
@@ -191,12 +204,14 @@ class DatabaseConnection {
       }
     };
 
-    // Run IMMEDIATELY on startup
+    // Run FIRST check after a small delay (allow pool to initialize)
     dbLogger.info('🏥 Starting health checks (every 30 seconds)...');
-    runHealthCheck();
-
-    // Then run every 30 seconds
-    this.healthCheckInterval = setInterval(runHealthCheck, 30000);
+    
+    setTimeout(() => {
+      runHealthCheck();
+      // Then run every 30 seconds
+      this.healthCheckInterval = setInterval(runHealthCheck, 30000);
+    }, 2000); // Wait 2 seconds for pool to initialize
   }
 
   async disconnect() {
