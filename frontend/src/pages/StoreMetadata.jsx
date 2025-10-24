@@ -85,6 +85,18 @@ export default function StoreMetadata({ shop: shopProp }) {
       const displayShortDescription = customShortDescription || data.shopifyDefaults?.homePageTitle || '';
       const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
       
+      console.log('[StoreMeta] Loading SEO data:', {
+        customStoreName,
+        customShortDescription,
+        customFullDescription,
+        shopifyStoreName: data.shopifyDefaults?.storeName,
+        shopifyHomePageTitle: data.shopifyDefaults?.homePageTitle,
+        shopifyMetaDescription: data.shopifyDefaults?.metaDescription,
+        displayStoreName,
+        displayShortDescription,
+        displayFullDescription
+      });
+      
       // Провери за разлики
       const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
       const shortDescDifferent = customShortDescription && customShortDescription !== data.shopifyDefaults?.homePageTitle;
