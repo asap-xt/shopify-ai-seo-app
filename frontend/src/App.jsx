@@ -25,6 +25,7 @@ const Settings = React.lazy(() => {
 const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
 const Billing = React.lazy(() => import('./pages/Billing.jsx'));
 const CleanUninstall = React.lazy(() => import('./pages/CleanUninstall.jsx'));
+const ContactSupport = React.lazy(() => import('./pages/ContactSupport.jsx'));
 import useI18n from './hooks/useI18n.js';
 
 const I18N = { Polaris: { ResourceList: { sortingLabel: 'Sort by' } } };
@@ -109,6 +110,7 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
       <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
+      <a href={`/contact-support${paramString}`}>Contact Support</a>
     </ui-nav-menu>
   );
 }
@@ -808,6 +810,11 @@ export default function App() {
     else if (path === '/settings') {
       console.log('[APP] ===== RENDERING SETTINGS PAGE =====');
       return <Settings shop={shop} />;
+    }
+    // Contact Support
+    else if (path === '/contact-support') {
+      console.log('[APP] ===== RENDERING CONTACT SUPPORT PAGE =====');
+      return <ContactSupport shop={shop} />;
     }
     // AI Testing
     else if (path === '/ai-testing') {

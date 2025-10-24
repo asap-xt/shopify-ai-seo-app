@@ -208,7 +208,7 @@ export default function Dashboard({ shop: shopProp }) {
     starter: 9.99,
     professional: 15.99,
     growth: 29.99,
-    growth_extra: 49.99,
+    growth_extra: 69.99,
     enterprise: 139.99
   }), []);
   const planPriceValue = subscription?.price && subscription.price > 0

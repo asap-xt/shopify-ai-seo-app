@@ -1,7 +1,9 @@
 // frontend/src/components/StoreMetadataBanner.jsx
 // Banner to prompt users to configure Store Metadata for better AI results
 // Force rebuild trigger
+// TEMPORARILY COMMENTED OUT - Banner seems unnecessary
 
+/*
 import { Banner, Button, InlineStack } from '@shopify/polaris';
 import { useState, useEffect } from 'react';
 import useI18n from '../hooks/useI18n';
@@ -134,5 +136,11 @@ export function StoreMetadataBanner({ globalPlan }) {
       </Banner>
     </div>
   );
+}
+*/
+
+// Return null to disable the banner completely
+export function StoreMetadataBanner({ globalPlan }) {
+  return null;
 }
 

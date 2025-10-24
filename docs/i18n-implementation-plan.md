@@ -85,7 +85,7 @@
     },
     "growth_extra": {
       "name": "Growth Extra",
-      "price": "$49.99/month",
+      "price": "$69.99/month",
       "features": ["Up to 1000 products", "6 languages", "All AI providers", "100M included tokens"]
     },
     "enterprise": {
