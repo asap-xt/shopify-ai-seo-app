@@ -122,30 +122,69 @@ class DatabaseConnection {
           return;
         }
         
-        // Get pool statistics
-        const client = mongoose.connection.getClient();
-        const topology = client?.topology;
+        // Try multiple methods to get pool statistics
+        let poolSize = 0;
+        let availableConnections = 0;
+        let pendingRequests = 0;
+        let method = 'unknown';
         
-        if (topology?.s?.pool) {
-          const pool = topology.s.pool;
-          const poolSize = pool.totalConnectionCount || 0;
-          const availableConnections = pool.availableConnectionCount || 0;
-          const pendingRequests = pool.waitQueueSize || 0;
+        try {
+          // Method 1: Direct access to MongoDB driver pool (most detailed)
+          const client = mongoose.connection.getClient();
+          const topology = client?.topology;
           
-          // Log warnings for high usage
-          if (pendingRequests > 10) {
-            dbLogger.warn(`⚠️  High DB wait queue: ${pendingRequests} pending requests`);
+          if (topology?.s?.pool) {
+            const pool = topology.s.pool;
+            poolSize = pool.totalConnectionCount || 0;
+            availableConnections = pool.availableConnectionCount || 0;
+            pendingRequests = pool.waitQueueSize || 0;
+            method = 'driver-pool';
           }
-          
-          if (poolSize > 40) {
-            dbLogger.warn(`⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
+          // Method 2: Check topology server pools (alternative for newer drivers)
+          else if (topology?.s?.servers) {
+            const servers = topology.s.servers;
+            let totalConns = 0;
+            let availableConns = 0;
+            
+            for (const [, server] of servers) {
+              if (server?.s?.pool) {
+                totalConns += server.s.pool.totalConnectionCount || 0;
+                availableConns += server.s.pool.availableConnectionCount || 0;
+              }
+            }
+            
+            if (totalConns > 0) {
+              poolSize = totalConns;
+              availableConnections = availableConns;
+              method = 'server-pools';
+            }
           }
-          
-          // Log status on EVERY check (every 30 seconds) for monitoring
-          dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
-        } else {
-          dbLogger.warn('⚠️  Pool not available (topology?.s?.pool is null)');
+          // Method 3: Basic connection count (fallback)
+          else {
+            // At minimum, we know we have 1 active connection if readyState is 1
+            poolSize = 1;
+            availableConnections = 1;
+            method = 'basic';
+          }
+        } catch (poolError) {
+          dbLogger.warn('⚠️  Could not read pool stats:', poolError.message);
+          // Fallback to basic stats
+          poolSize = 1;
+          availableConnections = 1;
+          method = 'fallback';
         }
+        
+        // Log warnings for high usage
+        if (pendingRequests > 10) {
+          dbLogger.warn(`⚠️  High DB wait queue: ${pendingRequests} pending requests`);
+        }
+        
+        if (poolSize > 40) {
+          dbLogger.warn(`⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
+        }
+        
+        // Log status on EVERY check (every 30 seconds) for monitoring
+        dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending (method: ${method})`);
         
       } catch (error) {
         dbLogger.error('❌ Health check failed:', error.message);
