@@ -84,11 +84,29 @@ export default function ContactSupport({ shop: shopProp }) {
 
   const handleFileUpload = (files) => {
     if (files.length > 0) {
+      const file = files[0];
+      
+      // Check file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setStatus('error');
+        setStatusMessage('File size must be less than 5MB');
+        return;
+      }
+      
       setFormData(prev => ({
         ...prev,
-        file: files[0]
+        file: file
       }));
     }
+  };
+
+  const convertFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
   };
 
   const validateForm = () => {
@@ -123,7 +141,7 @@ export default function ContactSupport({ shop: shopProp }) {
 
     try {
       // Prepare template parameters
-      const templateParams = {
+      let templateParams = {
         name: formData.name,
         email: formData.email,
         subject: SUBJECT_OPTIONS.find(opt => opt.value === formData.subject)?.label || formData.subject,
@@ -132,6 +150,22 @@ export default function ContactSupport({ shop: shopProp }) {
         shop_url: `https://${shop}`,
         time: new Date().toLocaleString()
       };
+
+      // Add file attachment if present
+      if (formData.file) {
+        try {
+          const base64File = await convertFileToBase64(formData.file);
+          templateParams.attachment = base64File;
+          templateParams.file_name = formData.file.name;
+          templateParams.file_size = `${(formData.file.size / 1024).toFixed(1)} KB`;
+          templateParams.file_type = formData.file.type;
+        } catch (error) {
+          console.error('[ContactSupport] Error converting file to base64:', error);
+          setStatus('error');
+          setStatusMessage('Failed to process file attachment');
+          return;
+        }
+      }
 
       // Send email using EmailJS
       const result = await emailjs.send(
