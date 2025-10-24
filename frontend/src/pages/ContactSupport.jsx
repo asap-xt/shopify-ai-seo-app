@@ -167,7 +167,7 @@ export default function ContactSupport({ shop: shopProp }) {
   return (
     <Box padding="400">
       <BlockStack gap="400">
-        <Text as="h1" variant="headingLg">
+        <Text as="h1" variant="headingXl">
           Contact Support
         </Text>
         
@@ -273,7 +273,7 @@ export default function ContactSupport({ shop: shopProp }) {
                 Other Ways to Reach Us
               </Text>
               <Text variant="bodyMd" tone="subdued">
-                • Email: support@shopify-ai-seo.com
+                • Email: indexaize@gmail.com
               </Text>
               <Text variant="bodyMd" tone="subdued">
                 • Response time: Within 24 hours
