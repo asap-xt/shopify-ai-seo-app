@@ -62,6 +62,7 @@ const PRODUCTS_QUERY = `
           status
           productType
           vendor
+          tags
           createdAt
           updatedAt
           featuredImage {
@@ -176,10 +177,17 @@ router.get('/list', async (req, res) => {
     const sortBy = req.query.sortBy || 'updatedAt';
     const sortOrder = req.query.sortOrder || 'desc';
     
+    // Filter parameters
+    const optimizedFilter = req.query.optimized; // 'true', 'false', or undefined (all)
+    const languageFilter = req.query.languageFilter; // e.g., 'en', 'de'
+    const tagsFilter = req.query.tags ? req.query.tags.split(',') : []; // e.g., 'tag1,tag2'
+    const searchFilter = req.query.search; // search term
+    
     const sortKey = convertSortKey(sortBy);
     const reverse = sortOrder === 'desc';
     
     console.log(`[PRODUCTS] Fetching products for ${req.auth.shop}, page ${page}, limit ${limit}`);
+    console.log(`[PRODUCTS] Filters:`, { optimizedFilter, languageFilter, tagsFilter, searchFilter });
 
     const variables = {
       first: limit,
@@ -191,7 +199,7 @@ router.get('/list', async (req, res) => {
     const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
     
     // Process products to add optimizationSummary
-    const products = rawProducts.map(product => {
+    let products = rawProducts.map(product => {
       const optimizationSummary = processProductMetafields(product.metafields);
       return {
         ...product,
@@ -200,6 +208,40 @@ router.get('/list', async (req, res) => {
         metafields: product.metafields
       };
     });
+
+    // Apply client-side filters (since Shopify GraphQL doesn't support these filters)
+    
+    // Filter by optimization status
+    if (optimizedFilter === 'true') {
+      products = products.filter(p => p.optimizationSummary.optimized === true);
+    } else if (optimizedFilter === 'false') {
+      products = products.filter(p => p.optimizationSummary.optimized === false);
+    }
+    
+    // Filter by language
+    if (languageFilter) {
+      products = products.filter(p => 
+        p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
+      );
+    }
+    
+    // Filter by tags
+    if (tagsFilter.length > 0) {
+      products = products.filter(p => {
+        const productTags = p.tags || [];
+        return tagsFilter.some(tag => productTags.includes(tag));
+      });
+    }
+    
+    // Filter by search term (title, handle, productType)
+    if (searchFilter) {
+      const searchLower = searchFilter.toLowerCase();
+      products = products.filter(p => 
+        p.title?.toLowerCase().includes(searchLower) ||
+        p.handle?.toLowerCase().includes(searchLower) ||
+        p.productType?.toLowerCase().includes(searchLower)
+      );
+    }
 
     return res.json({
       success: true,
