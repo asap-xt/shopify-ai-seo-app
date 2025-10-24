@@ -448,8 +448,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, storeName: value }
                   }))}
-                  placeholder={shopifyData.storeName}
-                  helpText="Leave empty to use Shopify store name"
+                  helpText="Loaded from Shopify. Edit if needed."
                   maxLength={100}
                 />
                 
@@ -460,8 +459,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, shortDescription: value }
                   }))}
-                  placeholder={shopifyData.homePageTitle || "Enter a short description"}
-                  helpText="Short description for SEO - max 100 characters"
+                  helpText="Loaded from Shopify. Edit if needed - max 100 characters"
                   maxLength={100}
                 />
                 
@@ -472,8 +470,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                     ...prev,
                     seo: { ...prev.seo, fullDescription: value }
                   }))}
-                  placeholder={shopifyData.metaDescription}
-                  helpText="Leave empty to use Shopify meta description"
+                  helpText="Loaded from Shopify. Edit if needed - max 300 characters"
                   maxLength={300}
                   multiline={3}
                 />

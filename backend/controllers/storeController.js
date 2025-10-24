@@ -441,32 +441,29 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     const metafieldsToSet = [];
 
-    // SEO metadata - запиши само ако не е празно
+    // SEO metadata - ALWAYS save (even if values are from Shopify defaults)
     if (metadata.seo && options.updateSeo !== false) {
-      const hasCustomData = metadata.seo.storeName || 
-                            metadata.seo.shortDescription || 
-                            metadata.seo.fullDescription || 
-                            (metadata.seo.keywords && metadata.seo.keywords.length > 0);
+      console.log('[STORE-APPLY] Saving SEO metadata:', {
+        storeName: metadata.seo.storeName,
+        shortDescription: metadata.seo.shortDescription,
+        fullDescription: metadata.seo.fullDescription,
+        keywords: metadata.seo.keywords
+      });
       
-      if (hasCustomData) {
-        console.log('[STORE-APPLY] Saving custom SEO metadata');
-        metafieldsToSet.push({
-          ownerId: shopId,
-          namespace: 'ai_seo_store',
-          key: 'seo_metadata',
-          type: 'json',
-          value: JSON.stringify({
-            storeName: metadata.seo.storeName || null,
-            shortDescription: metadata.seo.shortDescription || null,
-            fullDescription: metadata.seo.fullDescription || null,
-            keywords: Array.isArray(metadata.seo.keywords) 
-              ? metadata.seo.keywords 
-              : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
-          })
-        });
-      } else {
-        console.log('[STORE-APPLY] No custom SEO data - will use Shopify defaults');
-      }
+      metafieldsToSet.push({
+        ownerId: shopId,
+        namespace: 'ai_seo_store',
+        key: 'seo_metadata',
+        type: 'json',
+        value: JSON.stringify({
+          storeName: metadata.seo.storeName || null,
+          shortDescription: metadata.seo.shortDescription || null,
+          fullDescription: metadata.seo.fullDescription || null,
+          keywords: Array.isArray(metadata.seo.keywords) 
+            ? metadata.seo.keywords 
+            : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
+        })
+      });
     }
 
     // Home page title - save as separate metafield
