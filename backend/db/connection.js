@@ -193,18 +193,20 @@ class DatabaseConnection {
 // Singleton instance
 const dbConnection = new DatabaseConnection();
 
-// Graceful shutdown handlers
-process.on('SIGINT', async () => {
-  console.log('\n[DB] 🛑 SIGINT received, closing MongoDB connection...');
-  await dbConnection.disconnect();
-  process.exit(0);
-});
+// Setup graceful shutdown handlers (but don't connect yet)
+export function setupShutdownHandlers() {
+  process.on('SIGINT', async () => {
+    console.log('\n[DB] 🛑 SIGINT received, closing MongoDB connection...');
+    await dbConnection.disconnect();
+    process.exit(0);
+  });
 
-process.on('SIGTERM', async () => {
-  console.log('\n[DB] 🛑 SIGTERM received, closing MongoDB connection...');
-  await dbConnection.disconnect();
-  process.exit(0);
-});
+  process.on('SIGTERM', async () => {
+    console.log('\n[DB] 🛑 SIGTERM received, closing MongoDB connection...');
+    await dbConnection.disconnect();
+    process.exit(0);
+  });
+}
 
 export default dbConnection;
 

@@ -1665,7 +1665,8 @@ async function start() {
       // Feature flag: Use optimized connection pooling (set USE_OPTIMIZED_DB_POOL=true to enable)
       if (process.env.USE_OPTIMIZED_DB_POOL === 'true') {
         console.log('[DB] 🚀 Using OPTIMIZED connection pooling (PHASE 1)');
-        const dbConnection = (await import('./db/connection.js')).default;
+        const { default: dbConnection, setupShutdownHandlers } = await import('./db/connection.js');
+        setupShutdownHandlers(); // Setup SIGTERM/SIGINT handlers
         await dbConnection.connect();
       } else {
         console.log('[DB] 📊 Using STANDARD connection (set USE_OPTIMIZED_DB_POOL=true for pooling)');
