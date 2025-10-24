@@ -537,10 +537,28 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
 Data sample:
 ${data}
 
-Analyze this data and provide:
-1. Rating: excellent (all fields filled) / good (most fields filled) / fair (some missing) / poor (many missing)
-2. Feedback: Brief assessment of data completeness and quality
-3. Suggestions: If any fields are null/empty/placeholder, list which ones should be filled (be specific)
+Analyze this data focusing on QUALITY, not just presence:
+
+SEO Metadata:
+- Are titles, descriptions descriptive and SEO-friendly (not just store name)?
+- Are keywords relevant and specific (not generic)?
+- Is the description compelling and informative?
+
+AI Context:
+- Is businessType specific (not generic placeholder)?
+- Are uniqueSellingPoints unique and compelling (not generic text)?
+- Is brandVoice clear and professional?
+- Are targetAudience, primaryCategories specific?
+
+Organization Schema:
+- Are contact details complete (email, phone, logo)?
+- Are social media links present?
+
+Rating Guidelines:
+- excellent: ALL fields filled with QUALITY, specific content
+- good: Most fields filled with good content, minor improvements possible
+- fair: Some fields missing OR content is generic/placeholder-like
+- poor: Many fields missing OR mostly generic content
 
 IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
 
