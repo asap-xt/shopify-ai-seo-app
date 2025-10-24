@@ -381,10 +381,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
 
   
-  // Initial load
+  // Initial load and filter changes
   useEffect(() => {
-    if (shop) loadProducts(1, false, null);
-  }, [shop, loadProducts, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
+    if (shop) {
+      console.log('[BULK-EDIT] Filters changed, reloading products...');
+      loadProducts(1, false, null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
   
   // Mark as visited on first load
   useEffect(() => {
