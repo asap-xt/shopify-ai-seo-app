@@ -86,17 +86,10 @@ export default function ContactSupport({ shop: shopProp }) {
     if (files.length > 0) {
       const file = files[0];
       
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
+      // Check file size (500KB limit)
+      if (file.size > 500 * 1024) {
         setStatus('error');
-        setStatusMessage('Only image files are allowed (JPG, PNG, GIF, etc.)');
-        return;
-      }
-      
-      // Check file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        setStatus('error');
-        setStatusMessage('File size must be less than 5MB');
+        setStatusMessage('File size must be less than 500KB');
         return;
       }
       
@@ -160,8 +153,17 @@ export default function ContactSupport({ shop: shopProp }) {
 
       // Add file attachment if present
       if (formData.file) {
-        // Add file info to message only (no base64 to avoid EmailJS issues)
-        templateParams.message += `\n\n📎 ATTACHED IMAGE:\nName: ${formData.file.name}\nSize: ${(formData.file.size / 1024).toFixed(1)} KB\nType: ${formData.file.type}`;
+        try {
+          const base64File = await convertFileToBase64(formData.file);
+          templateParams.file_name = formData.file.name;
+          templateParams.file_size = `${(formData.file.size / 1024).toFixed(1)} KB`;
+          templateParams.file_type = formData.file.type;
+          templateParams.file_data = base64File;
+        } catch (error) {
+          console.error('[ContactSupport] Error converting file to base64:', error);
+          // Continue without file if conversion fails
+          templateParams.message += `\n\n📎 ATTACHED FILE (conversion failed):\nName: ${formData.file.name}\nSize: ${(formData.file.size / 1024).toFixed(1)} KB\nType: ${formData.file.type}`;
+        }
       }
 
       // Send email using EmailJS
@@ -265,12 +267,11 @@ export default function ContactSupport({ shop: shopProp }) {
 
                 <Box>
                   <Text as="label" variant="bodyMd" fontWeight="medium">
-                    Attach Image (Optional)
+                    Attach File (Optional)
                   </Text>
                   <Box paddingBlockStart="100">
                     <input
                       type="file"
-                      accept="image/*"
                       onChange={(e) => handleFileUpload(e.target.files)}
                       disabled={loading}
                       style={{
@@ -283,7 +284,7 @@ export default function ContactSupport({ shop: shopProp }) {
                     />
                   </Box>
                   <Text variant="bodySm" tone="subdued">
-                    Only image files allowed (JPG, PNG, GIF, etc.) • Maximum file size: 5MB
+                    Any file type allowed • Maximum file size: 500KB
                   </Text>
                 </Box>
 
