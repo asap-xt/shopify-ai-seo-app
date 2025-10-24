@@ -463,14 +463,14 @@ router.post('/collection', validateRequest(), async (req, res) => {
     
     // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
     
     if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({
-        error: 'AI-enhanced add-ons for Collections require Growth plan or higher',
+        error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
         currentPlan: planKey,
-        minimumPlanRequired: 'Growth',
-        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections'
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Collections'
       });
     }
     
@@ -728,14 +728,14 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     
     // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
     
     if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
       return res.status(403).json({
-        error: 'AI-enhanced add-ons for Collections require Growth plan or higher',
+        error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
         currentPlan: planKey,
-        minimumPlanRequired: 'Growth',
-        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections'
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Collections'
       });
     }
     
