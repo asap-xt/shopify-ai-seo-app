@@ -141,14 +141,8 @@ class DatabaseConnection {
             dbLogger.warn(`⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
           }
           
-          // Log status every 5 minutes (10 intervals)
-          if (!this.healthCheckCounter) this.healthCheckCounter = 0;
-          this.healthCheckCounter++;
-          
-          if (this.healthCheckCounter % 10 === 0) {
-            dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
-            this.healthCheckCounter = 0;
-          }
+          // Log status on EVERY check (every 30 seconds) for monitoring
+          dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
         }
         
       } catch (error) {
