@@ -1667,6 +1667,11 @@ async function start() {
       const { default: dbConnection, setupShutdownHandlers } = await import('./db/connection.js');
       setupShutdownHandlers(); // Setup SIGTERM/SIGINT handlers
       await dbConnection.connect();
+      
+      // Create database indexes for optimal query performance (PHASE 2)
+      dbLogger.info('📇 Starting PHASE 2: Database Indexes...');
+      const { createAllIndexes } = await import('./db/indexes.js');
+      await createAllIndexes();
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
