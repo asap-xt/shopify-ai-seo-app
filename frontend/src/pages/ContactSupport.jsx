@@ -86,6 +86,13 @@ export default function ContactSupport({ shop: shopProp }) {
     if (files.length > 0) {
       const file = files[0];
       
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        setStatus('error');
+        setStatusMessage('Only image files are allowed (JPG, PNG, GIF, etc.)');
+        return;
+      }
+      
       // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setStatus('error');
@@ -155,10 +162,13 @@ export default function ContactSupport({ shop: shopProp }) {
       if (formData.file) {
         try {
           const base64File = await convertFileToBase64(formData.file);
-          templateParams.attachment = base64File;
           templateParams.file_name = formData.file.name;
           templateParams.file_size = `${(formData.file.size / 1024).toFixed(1)} KB`;
           templateParams.file_type = formData.file.type;
+          templateParams.file_data = base64File;
+          
+          // Add file info to message
+          templateParams.message += `\n\n📎 ATTACHED IMAGE:\nName: ${formData.file.name}\nSize: ${templateParams.file_size}\nType: ${formData.file.type}`;
         } catch (error) {
           console.error('[ContactSupport] Error converting file to base64:', error);
           setStatus('error');
@@ -259,12 +269,12 @@ export default function ContactSupport({ shop: shopProp }) {
 
                 <Box>
                   <Text as="label" variant="bodyMd" fontWeight="medium">
-                    Attach File (Optional)
+                    Attach Image (Optional)
                   </Text>
                   <Box paddingBlockStart="100">
                     <input
                       type="file"
-                      accept="image/*,.pdf,.doc,.docx,.txt"
+                      accept="image/*"
                       onChange={(e) => handleFileUpload(e.target.files)}
                       disabled={loading}
                       style={{
@@ -277,7 +287,7 @@ export default function ContactSupport({ shop: shopProp }) {
                     />
                   </Box>
                   <Text variant="bodySm" tone="subdued">
-                    Maximum file size: 5MB
+                    Only image files allowed (JPG, PNG, GIF, etc.) • Maximum file size: 5MB
                   </Text>
                 </Box>
 
