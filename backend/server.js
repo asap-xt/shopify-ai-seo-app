@@ -1690,6 +1690,30 @@ async function start() {
     });
   });
 
+  // Database Indexes Status Endpoint (PHASE 2 - Verification)
+  app.get('/api/db/indexes', async (req, res) => {
+    try {
+      const { getIndexStats } = await import('./db/indexes.js');
+      const stats = await getIndexStats();
+      
+      if (!stats) {
+        return res.status(500).json({ error: 'Failed to fetch index stats' });
+      }
+      
+      res.json({
+        phase: 'PHASE 2: Database Indexes',
+        status: 'active',
+        indexes: stats,
+        message: 'Indexes created successfully!'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        error: 'Failed to get index stats', 
+        message: error.message 
+      });
+    }
+  });
+
   app.get('/debug/whoami', (req, res) => {
     const fromQuery = req.query.shop;
     const fromHost = (()=>{
