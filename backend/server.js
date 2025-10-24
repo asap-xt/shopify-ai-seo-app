@@ -1662,11 +1662,16 @@ async function start() {
     if (process.env.MONGODB_URI) {
       mongoose.set('strictQuery', false);
       
-      // Use optimized connection module
-      const dbConnection = (await import('./db/connection.js')).default;
-      await dbConnection.connect();
-      
-      console.log('✔ Mongo connected with optimized pool settings');
+      // Feature flag: Use optimized connection pooling (set USE_OPTIMIZED_DB_POOL=true to enable)
+      if (process.env.USE_OPTIMIZED_DB_POOL === 'true') {
+        console.log('[DB] 🚀 Using OPTIMIZED connection pooling (PHASE 1)');
+        const dbConnection = (await import('./db/connection.js')).default;
+        await dbConnection.connect();
+      } else {
+        console.log('[DB] 📊 Using STANDARD connection (set USE_OPTIMIZED_DB_POOL=true for pooling)');
+        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
+        console.log('✔ Mongo connected');
+      }
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
