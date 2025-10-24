@@ -16,6 +16,7 @@ import { buildSchema, graphql } from 'graphql';
 import { getPlansMeForShop } from './controllers/seoController.js';
 import aiSimulationController from './controllers/aiSimulationController.js';
 import aiTestingController from './controllers/aiTestingController.js';
+import { logger, dbLogger } from './utils/logger.js';
 
 // Optional Mongo (only if MONGODB_URI provided)
 import mongoose from 'mongoose';
@@ -1664,14 +1665,14 @@ async function start() {
       
       // Feature flag: Use optimized connection pooling (set USE_OPTIMIZED_DB_POOL=true to enable)
       if (process.env.USE_OPTIMIZED_DB_POOL === 'true') {
-        console.log('[DB] 🚀 Using OPTIMIZED connection pooling (PHASE 1)');
+        dbLogger.info('🚀 Using OPTIMIZED connection pooling (PHASE 1)');
         const { default: dbConnection, setupShutdownHandlers } = await import('./db/connection.js');
         setupShutdownHandlers(); // Setup SIGTERM/SIGINT handlers
         await dbConnection.connect();
       } else {
-        console.log('[DB] 📊 Using STANDARD connection (set USE_OPTIMIZED_DB_POOL=true for pooling)');
+        dbLogger.info('📊 Using STANDARD connection (set USE_OPTIMIZED_DB_POOL=true for pooling)');
         await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
-        console.log('✔ Mongo connected');
+        dbLogger.info('✔ Mongo connected');
       }
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');

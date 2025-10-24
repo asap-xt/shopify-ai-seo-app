@@ -4,6 +4,7 @@
 // Purpose: Improve database performance and reliability at scale
 
 import mongoose from 'mongoose';
+import { dbLogger } from '../utils/logger.js';
 
 class DatabaseConnection {
   constructor() {
@@ -16,19 +17,19 @@ class DatabaseConnection {
   async connect() {
     // If already connected, skip
     if (this.isConnected && mongoose.connection.readyState === 1) {
-      console.log('[DB] ✅ Already connected to MongoDB');
+      dbLogger.info('✅ Already connected to MongoDB');
       return;
     }
 
     // Check if MONGODB_URI is provided
     if (!process.env.MONGODB_URI) {
-      console.error('[DB] ❌ MONGODB_URI environment variable is not set');
+      dbLogger.error('❌ MONGODB_URI environment variable is not set');
       throw new Error('MONGODB_URI is required');
     }
 
     // DEBUG: Log MongoDB URI (hide password)
     const uriForLog = process.env.MONGODB_URI.replace(/:[^:@]+@/, ':****@');
-    console.log('[DB] 🔗 Connecting to:', uriForLog);
+    dbLogger.info('🔗 Connecting to:', uriForLog);
 
     const options = {
       // Connection Pool Settings (CONSERVATIVE for testing)
@@ -60,25 +61,25 @@ class DatabaseConnection {
       this.isConnected = true;
       this.connectionAttempts = 0;
       
-      console.log('[DB] ✅ MongoDB connected with optimized pool settings');
-      console.log(`[DB]    - Max Pool Size: ${options.maxPoolSize}`);
-      console.log(`[DB]    - Min Pool Size: ${options.minPoolSize}`);
-      console.log(`[DB]    - Host: ${mongoose.connection.host}`);
-      console.log(`[DB]    - Database: ${mongoose.connection.name}`);
+      dbLogger.info('✅ MongoDB connected with optimized pool settings');
+      dbLogger.info(`   - Max Pool Size: ${options.maxPoolSize}`);
+      dbLogger.info(`   - Min Pool Size: ${options.minPoolSize}`);
+      dbLogger.info(`   - Host: ${mongoose.connection.host}`);
+      dbLogger.info(`   - Database: ${mongoose.connection.name}`);
       
       this.setupEventHandlers();
       this.setupHealthChecks();
       
     } catch (error) {
       this.connectionAttempts++;
-      console.error(`[DB] ❌ MongoDB connection failed (attempt ${this.connectionAttempts}/${this.maxRetries}):`, error.message);
+      dbLogger.error(`❌ MongoDB connection failed (attempt ${this.connectionAttempts}/${this.maxRetries}):`, error.message);
       
       if (this.connectionAttempts < this.maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts), 30000);
-        console.log(`[DB]    Retrying in ${delay}ms...`);
+        dbLogger.warn(`   Retrying in ${delay}ms...`);
         setTimeout(() => this.connect(), delay);
       } else {
-        console.error('[DB] ❌ Max connection retries reached. Exiting...');
+        dbLogger.error('❌ Max connection retries reached. Exiting...');
         process.exit(1);
       }
     }
@@ -86,23 +87,23 @@ class DatabaseConnection {
 
   setupEventHandlers() {
     mongoose.connection.on('error', (err) => {
-      console.error('[DB] ❌ MongoDB connection error:', err.message);
+      dbLogger.error('❌ MongoDB connection error:', err.message);
       this.isConnected = false;
     });
     
     mongoose.connection.on('disconnected', () => {
-      console.warn('[DB] ⚠️  MongoDB disconnected. Attempting to reconnect...');
+      dbLogger.warn('⚠️  MongoDB disconnected. Attempting to reconnect...');
       this.isConnected = false;
       setTimeout(() => this.connect(), 5000);
     });
     
     mongoose.connection.on('reconnected', () => {
-      console.log('[DB] ✅ MongoDB reconnected');
+      dbLogger.info('✅ MongoDB reconnected');
       this.isConnected = true;
     });
     
     mongoose.connection.on('close', () => {
-      console.log('[DB] 🔒 MongoDB connection closed');
+      dbLogger.info('🔒 MongoDB connection closed');
       this.isConnected = false;
     });
   }
@@ -117,7 +118,7 @@ class DatabaseConnection {
     this.healthCheckInterval = setInterval(async () => {
       try {
         if (mongoose.connection.readyState !== 1) {
-          console.warn('[DB] ⚠️  Health Check: Connection not ready (state:', mongoose.connection.readyState, ')');
+          dbLogger.warn('⚠️  Health Check: Connection not ready (state:', mongoose.connection.readyState, ')');
           return;
         }
         
@@ -133,11 +134,11 @@ class DatabaseConnection {
           
           // Log warnings for high usage
           if (pendingRequests > 10) {
-            console.warn(`[DB] ⚠️  High DB wait queue: ${pendingRequests} pending requests`);
+            dbLogger.warn(`⚠️  High DB wait queue: ${pendingRequests} pending requests`);
           }
           
           if (poolSize > 40) {
-            console.warn(`[DB] ⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
+            dbLogger.warn(`⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
           }
           
           // Log status every 5 minutes (10 intervals)
@@ -145,20 +146,20 @@ class DatabaseConnection {
           this.healthCheckCounter++;
           
           if (this.healthCheckCounter % 10 === 0) {
-            console.log(`[DB] 📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
+            dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending`);
             this.healthCheckCounter = 0;
           }
         }
         
       } catch (error) {
-        console.error('[DB] ❌ Health check failed:', error.message);
+        dbLogger.error('❌ Health check failed:', error.message);
       }
     }, 30000);
   }
 
   async disconnect() {
     if (!this.isConnected) {
-      console.log('[DB] Already disconnected');
+      dbLogger.info('Already disconnected');
       return;
     }
     
@@ -171,9 +172,9 @@ class DatabaseConnection {
     try {
       await mongoose.connection.close();
       this.isConnected = false;
-      console.log('[DB] ✅ MongoDB connection closed gracefully');
+      dbLogger.info('✅ MongoDB connection closed gracefully');
     } catch (error) {
-      console.error('[DB] ❌ Error closing MongoDB connection:', error.message);
+      dbLogger.error('❌ Error closing MongoDB connection:', error.message);
     }
   }
 
@@ -200,13 +201,13 @@ const dbConnection = new DatabaseConnection();
 // Setup graceful shutdown handlers (but don't connect yet)
 export function setupShutdownHandlers() {
   process.on('SIGINT', async () => {
-    console.log('\n[DB] 🛑 SIGINT received, closing MongoDB connection...');
+    dbLogger.info('\n🛑 SIGINT received, closing MongoDB connection...');
     await dbConnection.disconnect();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
-    console.log('\n[DB] 🛑 SIGTERM received, closing MongoDB connection...');
+    dbLogger.info('\n🛑 SIGTERM received, closing MongoDB connection...');
     await dbConnection.disconnect();
     process.exit(0);
   });

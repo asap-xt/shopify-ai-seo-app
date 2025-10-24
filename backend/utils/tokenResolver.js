@@ -2,6 +2,7 @@
 // Unified token resolver that works consistently across all controllers
 
 import fetch from 'node-fetch';
+import { tokenLogger } from './logger.js';
 
 let ShopModel = null;
 
@@ -12,7 +13,7 @@ async function loadShopModel() {
     ShopModel = mod.default || mod.Shop || mod;
     return ShopModel;
   } catch (error) {
-    console.error('[TOKEN_RESOLVER] Failed to load Shop model:', error);
+    tokenLogger.error('Failed to load Shop model:', error);
     throw new Error('Shop model not found');
   }
 }
@@ -32,15 +33,15 @@ export async function invalidateShopToken(shopInput) {
   try {
     const shop = shopInput.toLowerCase().trim();
     if (!shop) {
-      console.warn('[TOKEN_RESOLVER] Cannot invalidate - invalid shop:', shopInput);
+      tokenLogger.warn('Cannot invalidate - invalid shop:', shopInput);
       return;
     }
     
     const Shop = await loadShopModel();
     await Shop.updateOne({ shop }, { $unset: { accessToken: "", appApiKey: "" } });
-    console.log('[TOKEN_RESOLVER] Invalidated stored token for', shop);
+    tokenLogger.info('Invalidated stored token for', shop);
   } catch (e) {
-    console.warn('[TOKEN_RESOLVER] Failed to invalidate token:', e.message);
+    tokenLogger.warn('Failed to invalidate token:', e.message);
   }
 }
 
@@ -54,7 +55,7 @@ export async function resolveAdminTokenForShop(shop, options = {}) {
   }
 
   const normalizedShop = shop.toLowerCase().trim();
-  console.log(`[TOKEN_RESOLVER] Resolving token for shop: ${normalizedShop}`);
+  tokenLogger.debug(`Resolving token for shop: ${normalizedShop}`);
 
   try {
     const Shop = await loadShopModel();
@@ -75,31 +76,31 @@ export async function resolveAdminTokenForShop(shop, options = {}) {
       if (token && String(token).trim() && token !== 'jwt-pending') {
         // Проверка дали токенът е за текущия API key
         if (shopRecord.appApiKey === process.env.SHOPIFY_API_KEY) {
-          console.log(`[TOKEN_RESOLVER] Found valid token in DB for ${normalizedShop}`);
+          tokenLogger.debug(`Found valid token in DB for ${normalizedShop}`);
           return String(token).trim();
         } else {
-          console.log(`[TOKEN_RESOLVER] Token found but for different API key for ${normalizedShop}`);
+          tokenLogger.warn(`Token found but for different API key for ${normalizedShop}`);
           throw new Error(`Token mismatch - app needs token exchange for shop: ${normalizedShop}`);
         }
       }
 
       if (shopRecord.needsTokenExchange || token === 'jwt-pending') {
-        console.log(`[TOKEN_RESOLVER] Token exchange needed for ${normalizedShop}`);
+        tokenLogger.debug(`Token exchange needed for ${normalizedShop}`);
         throw new Error(`Token exchange required for shop: ${normalizedShop}`);
       }
     }
 
-    console.log(`[TOKEN_RESOLVER] No valid token found in DB for ${normalizedShop}`);
+    tokenLogger.debug(`No valid token found in DB for ${normalizedShop}`);
     throw new Error(`No valid access token found for shop: ${normalizedShop}`);
 
   } catch (dbError) {
-    console.error(`[TOKEN_RESOLVER] Database error for ${normalizedShop}:`, dbError);
+    tokenLogger.error(`Database error for ${normalizedShop}:`, dbError);
     throw new Error(`Failed to retrieve access token for shop: ${normalizedShop}`);
   }
 }
 
 async function exchangeJWTForAccessToken(shop, jwtToken) {
-  console.log(`[TOKEN_EXCHANGE] Exchanging JWT for access token: ${shop}`);
+  tokenLogger.info(`Exchanging JWT for access token: ${shop}`);
   
   const tokenUrl = `https://${shop}/admin/oauth/access_token`;
   const requestBody = {
@@ -111,8 +112,8 @@ async function exchangeJWTForAccessToken(shop, jwtToken) {
     requested_token_type: 'urn:ietf:params:oauth:token-type:access_token'
   };
 
-  console.log(`[TOKEN_EXCHANGE] Request URL: ${tokenUrl}`);
-  console.log(`[TOKEN_EXCHANGE] Request body keys:`, Object.keys(requestBody));
+  tokenLogger.debug(`Request URL: ${tokenUrl}`);
+  tokenLogger.debug(`Request body keys:`, Object.keys(requestBody));
 
   const response = await fetch(tokenUrl, {
     method: 'POST',
@@ -123,8 +124,8 @@ async function exchangeJWTForAccessToken(shop, jwtToken) {
   });
 
   const responseText = await response.text();
-  console.log(`[TOKEN_EXCHANGE] Response status: ${response.status}`);
-  console.log(`[TOKEN_EXCHANGE] Response text: ${responseText}`);
+  tokenLogger.debug(`Response status: ${response.status}`);
+  tokenLogger.debug(`Response text: ${responseText}`);
 
   if (!response.ok) {
     throw new Error(`Token exchange failed: ${response.status} ${responseText}`);
