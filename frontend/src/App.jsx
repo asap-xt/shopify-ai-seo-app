@@ -788,6 +788,7 @@ export default function App() {
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
     if (path.startsWith('/clean-uninstall')) return 'Clean & Uninstall';
+    if (path.startsWith('/contact-support')) return 'Contact Support';
     return 'Dashboard';
   }, [path]);
 

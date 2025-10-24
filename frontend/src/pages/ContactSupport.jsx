@@ -167,10 +167,6 @@ export default function ContactSupport({ shop: shopProp }) {
   return (
     <Box padding="400">
       <BlockStack gap="400">
-        <Text as="h1" variant="headingXl">
-          Contact Support
-        </Text>
-        
         <Text variant="bodyMd" tone="subdued">
           Need help? Send us a message and we'll get back to you within 24 hours.
         </Text>
