@@ -85,18 +85,6 @@ export default function StoreMetadata({ shop: shopProp }) {
       const displayShortDescription = customShortDescription || data.shopifyDefaults?.homePageTitle || '';
       const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
       
-      console.log('[StoreMeta] Loading SEO data:', {
-        customStoreName,
-        customShortDescription,
-        customFullDescription,
-        shopifyStoreName: data.shopifyDefaults?.storeName,
-        shopifyHomePageTitle: data.shopifyDefaults?.homePageTitle,
-        shopifyMetaDescription: data.shopifyDefaults?.metaDescription,
-        displayStoreName,
-        displayShortDescription,
-        displayFullDescription
-      });
-      
       // Провери за разлики
       const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
       const shortDescDifferent = customShortDescription && customShortDescription !== data.shopifyDefaults?.homePageTitle;
@@ -431,8 +419,8 @@ export default function StoreMetadata({ shop: shopProp }) {
                     Store name: <Text as="span" fontWeight="medium">{shopifyData.storeName || 'Not set'}</Text>
                   </Text>
                   <Text variant="bodySm" tone="subdued">
-                  
-                </Text>
+                    Home page title: <Text as="span" fontWeight="medium">{shopifyData.homePageTitle || 'Not set'}</Text>
+                  </Text>
                   <Text variant="bodySm" tone="subdued">
                     Meta description: <Text as="span" fontWeight="medium">
                       {shopifyData.metaDescription ? 
@@ -440,6 +428,27 @@ export default function StoreMetadata({ shop: shopProp }) {
                         : 'Not set'}
                     </Text>
                   </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Languages: <Text as="span" fontWeight="medium">
+                      {storeData?.shopInfo?.locales?.filter(l => l.published).map(l => l.locale).join(', ') || 'Not set'}
+                    </Text>
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Currencies: <Text as="span" fontWeight="medium">
+                      {storeData?.shopInfo?.currencies?.join(', ') || 'EUR'}
+                    </Text>
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Markets: <Text as="span" fontWeight="medium">
+                      {storeData?.shopInfo?.markets?.map(m => m.name).join(', ') || 'Not set'}
+                    </Text>
+                  </Text>
+                  {storeData?.shopInfo?.name && (
+                    <Text variant="bodySm" tone="subdued">
+                      Organization: <Text as="span" fontWeight="medium">{storeData.shopInfo.name}</Text>
+                      {storeData.shopInfo.email && <> ({storeData.shopInfo.email})</>}
+                    </Text>
+                  )}
                 </Box>
                 {hasShopifyChanges && (
                   <Box paddingBlockStart="300">
