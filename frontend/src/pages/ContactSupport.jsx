@@ -160,24 +160,13 @@ export default function ContactSupport({ shop: shopProp }) {
 
       // Add file attachment if present
       if (formData.file) {
-        try {
-          const base64File = await convertFileToBase64(formData.file);
-          templateParams.file_name = formData.file.name;
-          templateParams.file_size = `${(formData.file.size / 1024).toFixed(1)} KB`;
-          templateParams.file_type = formData.file.type;
-          templateParams.file_data = base64File;
-          
-          // Add file info to message
-          templateParams.message += `\n\n📎 ATTACHED IMAGE:\nName: ${formData.file.name}\nSize: ${templateParams.file_size}\nType: ${formData.file.type}`;
-        } catch (error) {
-          console.error('[ContactSupport] Error converting file to base64:', error);
-          setStatus('error');
-          setStatusMessage('Failed to process file attachment');
-          return;
-        }
+        // Add file info to message only (no base64 to avoid EmailJS issues)
+        templateParams.message += `\n\n📎 ATTACHED IMAGE:\nName: ${formData.file.name}\nSize: ${(formData.file.size / 1024).toFixed(1)} KB\nType: ${formData.file.type}`;
       }
 
       // Send email using EmailJS
+      console.log('[ContactSupport] Sending email with params:', templateParams);
+      
       const result = await emailjs.send(
         'service_c8j657n', // Service ID
         'template_zrftkfg', // Template ID
@@ -201,8 +190,15 @@ export default function ContactSupport({ shop: shopProp }) {
 
     } catch (error) {
       console.error('[ContactSupport] Error sending email:', error);
+      console.error('[ContactSupport] Error details:', {
+        message: error.message,
+        status: error.status,
+        text: error.text,
+        stack: error.stack
+      });
+      
       setStatus('error');
-      setStatusMessage('Failed to send message. Please try again or contact us directly.');
+      setStatusMessage(`Failed to send message: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
