@@ -158,11 +158,45 @@ class DatabaseConnection {
             const servers = topology.s.servers;
             let totalConns = 0;
             let availableConns = 0;
+            let serverCount = 0;
             
-            for (const [, server] of servers) {
+            // DEBUG: Log server structure (only once)
+            if (!this._debugLogged) {
+              dbLogger.info('[DEBUG] Inspecting servers...');
+            }
+            
+            for (const [serverKey, server] of servers) {
+              serverCount++;
+              
+              // DEBUG: Log server structure (only once)
+              if (!this._debugLogged) {
+                dbLogger.info(`[DEBUG] Server ${serverCount}:`);
+                dbLogger.info(`[DEBUG]   - server exists:`, !!server);
+                dbLogger.info(`[DEBUG]   - server.s exists:`, !!server?.s);
+                dbLogger.info(`[DEBUG]   - server.s.pool exists:`, !!server?.s?.pool);
+                dbLogger.info(`[DEBUG]   - server.pool exists:`, !!server?.pool);
+                
+                // Try to log pool structure
+                if (server?.s?.pool) {
+                  const pool = server.s.pool;
+                  dbLogger.info(`[DEBUG]   - pool.totalConnectionCount:`, pool.totalConnectionCount);
+                  dbLogger.info(`[DEBUG]   - pool.availableConnectionCount:`, pool.availableConnectionCount);
+                } else if (server?.pool) {
+                  const pool = server.pool;
+                  dbLogger.info(`[DEBUG]   - pool.totalConnectionCount:`, pool.totalConnectionCount);
+                  dbLogger.info(`[DEBUG]   - pool.availableConnectionCount:`, pool.availableConnectionCount);
+                }
+              }
+              
+              // Try server.s.pool first
               if (server?.s?.pool) {
                 totalConns += server.s.pool.totalConnectionCount || 0;
                 availableConns += server.s.pool.availableConnectionCount || 0;
+              }
+              // Try server.pool as fallback
+              else if (server?.pool) {
+                totalConns += server.pool.totalConnectionCount || 0;
+                availableConns += server.pool.availableConnectionCount || 0;
               }
             }
             
@@ -170,6 +204,11 @@ class DatabaseConnection {
               poolSize = totalConns;
               availableConnections = availableConns;
               method = 'server-pools';
+            } else if (serverCount > 0) {
+              // At least we know we have connections (readyState is 1)
+              poolSize = serverCount; // Assume 1 connection per server
+              availableConnections = serverCount;
+              method = 'basic-servers';
             }
           }
           // Method 3: Basic connection count (fallback)
