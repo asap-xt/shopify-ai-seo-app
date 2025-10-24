@@ -23,6 +23,12 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   
   console.log('[AI-TESTING] Running tests for shop:', shop);
   
+  // Get shop record for access token
+  const shopRecord = await Shop.findOne({ shop });
+  if (!shopRecord) {
+    return res.status(404).json({ error: 'Shop not found' });
+  }
+  
   // Get stats from database (same as Dashboard)
   const totalProducts = await Product.countDocuments({ shop });
   const optimizedProducts = await Product.countDocuments({ 

@@ -80,6 +80,11 @@ export default function StoreMetadata({ shop: shopProp }) {
       const customShortDescription = existing.seo_metadata?.value?.shortDescription || '';
       const customFullDescription = existing.seo_metadata?.value?.fullDescription || '';
       
+      // Use custom data if available, otherwise use Shopify defaults
+      const displayStoreName = customStoreName || '';
+      const displayShortDescription = customShortDescription || '';
+      const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
+      
       // Провери за разлики
       const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
       const shortDescDifferent = customShortDescription && customShortDescription !== data.shopifyDefaults?.homePageTitle;
@@ -90,9 +95,9 @@ export default function StoreMetadata({ shop: shopProp }) {
         ...prev,
         seo: {
           ...prev.seo,
-          storeName: customStoreName,
-          shortDescription: customShortDescription,
-          fullDescription: customFullDescription,
+          storeName: displayStoreName,
+          shortDescription: displayShortDescription,
+          fullDescription: displayFullDescription,
           keywords: Array.isArray(existing.seo_metadata?.value?.keywords) 
             ? existing.seo_metadata.value.keywords.join(', ')
             : existing.seo_metadata?.value?.keywords || ''
