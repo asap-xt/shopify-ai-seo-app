@@ -7,6 +7,7 @@ import TokenBalance from '../db/TokenBalance.js';
 import Product from '../db/Product.js';
 import Collection from '../db/Collection.js';
 import Subscription from '../db/Subscription.js';
+import Shop from '../db/Shop.js';
 
 const router = express.Router();
 
