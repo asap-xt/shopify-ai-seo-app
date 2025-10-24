@@ -1658,11 +1658,15 @@ import { startScheduler } from './scheduler.js';
 
 async function start() {
   try {
-    // Optional Mongo (connect if provided)
+    // MongoDB Connection with optimized pooling (PHASE 1 - Database Optimization)
     if (process.env.MONGODB_URI) {
       mongoose.set('strictQuery', false);
-      await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
-      console.log('✔ Mongo connected');
+      
+      // Use optimized connection module
+      const dbConnection = (await import('./db/connection.js')).default;
+      await dbConnection.connect();
+      
+      console.log('✔ Mongo connected with optimized pool settings');
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
