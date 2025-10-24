@@ -70,7 +70,7 @@ function isDebugEnabled() {
   return currentLevel >= LEVELS.debug;
 }
 
-module.exports = {
+export {
   Logger,
   logger,
   graphqlLogger,
@@ -79,6 +79,6 @@ module.exports = {
   dbLogger,
   shopLogger,
   isDebugEnabled,
-  LOG_LEVEL: LOG_LEVEL
+  LOG_LEVEL
 };
 
