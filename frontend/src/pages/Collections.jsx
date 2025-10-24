@@ -1485,10 +1485,20 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                 
                 if (!hasOptimizedCollections) return null;
                 
-                // AI Enhancement uses pay-per-use tokens (no plan restriction)
+                // Check if Starter plan (Collections require Professional+)
+                const isStarter = currentPlan.toLowerCase().replace(/_/g, ' ') === 'starter';
+                
                 return (
                   <Button
-                    onClick={handleStartEnhancement}
+                    onClick={isStarter ? () => {
+                      // Show upgrade modal for Starter plan only
+                      setTokenError({
+                        error: 'Collections require Professional plan or higher',
+                        message: 'Upgrade to Professional plan to access Collections optimization',
+                        minimumPlanRequired: 'Professional'
+                      });
+                      setShowUpgradeModal(true);
+                    } : handleStartEnhancement}
                     disabled={selectedItems.length === 0 && !selectAllPages}
                   >
                     AI Enhanced add-ons
