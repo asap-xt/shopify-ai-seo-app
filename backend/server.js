@@ -2015,6 +2015,14 @@ App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURICompo
       }
     });
 
+// Contact Support route - MUST be before catch-all
+app.get('/contact-support', (req, res) => {
+  console.log('[CONTACT-SUPPORT] Serving contact support page');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+});
+
 // Catch-all for any unmatched routes - MUST be last
 app.get('*', (req, res) => {
   console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
