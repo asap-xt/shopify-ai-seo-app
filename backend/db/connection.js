@@ -26,20 +26,24 @@ class DatabaseConnection {
       throw new Error('MONGODB_URI is required');
     }
 
+    // DEBUG: Log MongoDB URI (hide password)
+    const uriForLog = process.env.MONGODB_URI.replace(/:[^:@]+@/, ':****@');
+    console.log('[DB] 🔗 Connecting to:', uriForLog);
+
     const options = {
-      // Connection Pool Settings
-      maxPoolSize: 50,           // Max connections (was unlimited)
-      minPoolSize: 10,           // Min connections (was 0)
-      maxIdleTimeMS: 30000,      // Close idle connections after 30s
+      // Connection Pool Settings (CONSERVATIVE for testing)
+      maxPoolSize: 20,           // Reduced from 50
+      minPoolSize: 2,            // Reduced from 10 (less aggressive)
+      maxIdleTimeMS: 60000,      // Increased to 60s (more forgiving)
       
-      // Timeouts
-      serverSelectionTimeoutMS: 15000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000,
+      // Timeouts (INCREASED for Railway)
+      serverSelectionTimeoutMS: 30000,  // Increased from 15s
+      socketTimeoutMS: 60000,           // Increased from 45s
+      connectTimeoutMS: 20000,          // Increased from 10s
       
       // Performance
-      maxConnecting: 10,         // Max simultaneous connection attempts
-      compressors: ['zlib'],     // Compress data transfer
+      maxConnecting: 5,          // Reduced from 10
+      // compressors: ['zlib'],  // DISABLED for testing (might cause issues)
       
       // Reliability
       retryWrites: true,
