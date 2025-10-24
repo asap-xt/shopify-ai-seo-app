@@ -755,6 +755,12 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     console.log('[STORE-METADATA] Has aiMetadata:', !!aiMetadata);
     console.log('[STORE-METADATA] Has organizationSchema:', !!organizationSchema);
     
+    // DEBUG: Log actual values
+    console.log('[STORE-METADATA] ===== ACTUAL VALUES =====');
+    console.log('[STORE-METADATA] seoMetadata:', JSON.stringify(seoMetadata, null, 2));
+    console.log('[STORE-METADATA] aiMetadata:', JSON.stringify(aiMetadata, null, 2));
+    console.log('[STORE-METADATA] organizationSchema:', JSON.stringify(organizationSchema, null, 2));
+    
     // Check if store metadata exists
     if (!seoMetadata && !organizationSchema && !aiMetadata) {
       return res.json({
