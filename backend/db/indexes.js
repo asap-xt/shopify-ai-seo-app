@@ -62,18 +62,26 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    // Index 4: shop + handle (for quick product lookup) - UNIQUE
+    // Index 4: shop + handle (for quick product lookup) - PARTIAL UNIQUE
+    // Only enforce uniqueness when handle is not null
     await Product.collection.createIndex({ 
       shop: 1, 
       handle: 1 
-    }, { unique: true });
+    }, { 
+      unique: true,
+      partialFilterExpression: { handle: { $ne: null } }
+    });
     indexCount++;
     
-    // Index 5: shop + shopifyId (for GraphQL sync) - UNIQUE
+    // Index 5: shop + shopifyId (for GraphQL sync) - PARTIAL UNIQUE
+    // Only enforce uniqueness when shopifyId is not null (allows drafts/temporary products)
     await Product.collection.createIndex({ 
       shop: 1, 
       shopifyId: 1 
-    }, { unique: true });
+    }, { 
+      unique: true,
+      partialFilterExpression: { shopifyId: { $ne: null } }
+    });
     indexCount++;
     
     dbLogger.info('✅ Product indexes created (5)');
@@ -102,11 +110,15 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    // Index 3: shop + handle (for quick collection lookup) - UNIQUE
+    // Index 3: shop + handle (for quick collection lookup) - PARTIAL UNIQUE
+    // Only enforce uniqueness when handle is not null
     await Collection.collection.createIndex({ 
       shop: 1, 
       handle: 1 
-    }, { unique: true });
+    }, { 
+      unique: true,
+      partialFilterExpression: { handle: { $ne: null } }
+    });
     indexCount++;
     
     dbLogger.info('✅ Collection indexes created (3)');
@@ -162,11 +174,15 @@ export async function createAllIndexes() {
       // Index doesn't exist, that's fine
     }
     
-    // Index 1: shop + productHandle (for quick schema lookup) - UNIQUE
+    // Index 1: shop + productHandle (for quick schema lookup) - PARTIAL UNIQUE
+    // Only enforce uniqueness when productHandle is not null
     await AdvancedSchema.collection.createIndex({ 
       shop: 1, 
       productHandle: 1 
-    }, { unique: true });
+    }, { 
+      unique: true,
+      partialFilterExpression: { productHandle: { $ne: null } }
+    });
     indexCount++;
     
     dbLogger.info('✅ AdvancedSchema indexes created (1)');
