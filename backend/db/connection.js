@@ -12,7 +12,6 @@ class DatabaseConnection {
     this.connectionAttempts = 0;
     this.maxRetries = 5;
     this.healthCheckInterval = null;
-    this._debugLogged = false; // Track if debug info was logged
   }
 
   async connect() {
@@ -134,17 +133,8 @@ class DatabaseConnection {
           const client = mongoose.connection.getClient();
           const topology = client?.topology;
           
-          // DEBUG: Log topology structure (only on first run)
-          if (!this._debugLogged) {
-            dbLogger.info('[DEBUG] Topology exists:', !!topology);
-            dbLogger.info('[DEBUG] Topology.s exists:', !!topology?.s);
-            dbLogger.info('[DEBUG] Topology.s.pool exists:', !!topology?.s?.pool);
-            dbLogger.info('[DEBUG] Topology.s.servers exists:', !!topology?.s?.servers);
-            if (topology?.s?.servers) {
-              dbLogger.info('[DEBUG] Server count:', topology.s.servers.size);
-            }
-            this._debugLogged = true;
-          }
+          // PHASE 1 COMPLETE - Pool monitoring is working!
+          // Debug logs removed after successful verification
           
           if (topology?.s?.pool) {
             const pool = topology.s.pool;
@@ -160,33 +150,8 @@ class DatabaseConnection {
             let availableConns = 0;
             let serverCount = 0;
             
-            // DEBUG: Log server structure (only once)
-            if (!this._debugLogged) {
-              dbLogger.info('[DEBUG] Inspecting servers...');
-            }
-            
             for (const [serverKey, server] of servers) {
               serverCount++;
-              
-              // DEBUG: Log server structure (only once)
-              if (!this._debugLogged) {
-                dbLogger.info(`[DEBUG] Server ${serverCount}:`);
-                dbLogger.info(`[DEBUG]   - server exists:`, !!server);
-                dbLogger.info(`[DEBUG]   - server.s exists:`, !!server?.s);
-                dbLogger.info(`[DEBUG]   - server.s.pool exists:`, !!server?.s?.pool);
-                dbLogger.info(`[DEBUG]   - server.pool exists:`, !!server?.pool);
-                
-                // Try to log pool structure
-                if (server?.s?.pool) {
-                  const pool = server.s.pool;
-                  dbLogger.info(`[DEBUG]   - pool.totalConnectionCount:`, pool.totalConnectionCount);
-                  dbLogger.info(`[DEBUG]   - pool.availableConnectionCount:`, pool.availableConnectionCount);
-                } else if (server?.pool) {
-                  const pool = server.pool;
-                  dbLogger.info(`[DEBUG]   - pool.totalConnectionCount:`, pool.totalConnectionCount);
-                  dbLogger.info(`[DEBUG]   - pool.availableConnectionCount:`, pool.availableConnectionCount);
-                }
-              }
               
               // Try server.s.pool first
               if (server?.s?.pool) {

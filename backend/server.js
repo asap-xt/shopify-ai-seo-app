@@ -1659,21 +1659,14 @@ import { startScheduler } from './scheduler.js';
 
 async function start() {
   try {
-    // MongoDB Connection with optimized pooling (PHASE 1 - Database Optimization)
+    // MongoDB Connection with optimized pooling (PHASE 1 - COMPLETE ✅)
     if (process.env.MONGODB_URI) {
       mongoose.set('strictQuery', false);
       
-      // Feature flag: Use optimized connection pooling (set USE_OPTIMIZED_DB_POOL=true to enable)
-      if (process.env.USE_OPTIMIZED_DB_POOL === 'true') {
-        dbLogger.info('🚀 Using OPTIMIZED connection pooling (PHASE 1)');
-        const { default: dbConnection, setupShutdownHandlers } = await import('./db/connection.js');
-        setupShutdownHandlers(); // Setup SIGTERM/SIGINT handlers
-        await dbConnection.connect();
-      } else {
-        dbLogger.info('📊 Using STANDARD connection (set USE_OPTIMIZED_DB_POOL=true for pooling)');
-        await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
-        dbLogger.info('✔ Mongo connected');
-      }
+      dbLogger.info('🚀 Connecting with optimized connection pooling...');
+      const { default: dbConnection, setupShutdownHandlers } = await import('./db/connection.js');
+      setupShutdownHandlers(); // Setup SIGTERM/SIGINT handlers
+      await dbConnection.connect();
     } else {
       console.log('ℹ No MONGODB_URI provided — skipping Mongo connection');
     }
