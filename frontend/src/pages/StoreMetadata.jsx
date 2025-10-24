@@ -80,9 +80,9 @@ export default function StoreMetadata({ shop: shopProp }) {
       const customShortDescription = existing.seo_metadata?.value?.shortDescription || '';
       const customFullDescription = existing.seo_metadata?.value?.fullDescription || '';
       
-      // Use custom data if available, otherwise use Shopify defaults
-      const displayStoreName = customStoreName || '';
-      const displayShortDescription = customShortDescription || '';
+      // Use custom data if available, otherwise use Shopify defaults (DIRECT text, not placeholder)
+      const displayStoreName = customStoreName || data.shopifyDefaults?.storeName || '';
+      const displayShortDescription = customShortDescription || data.shopifyDefaults?.homePageTitle || '';
       const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
       
       // Провери за разлики
