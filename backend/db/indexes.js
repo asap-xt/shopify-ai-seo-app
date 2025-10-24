@@ -29,6 +29,21 @@ export async function createAllIndexes() {
     // ============================================================================
     dbLogger.info('📇 Creating Product indexes...');
     
+    // Drop existing conflicting indexes first (if they exist)
+    try {
+      await Product.collection.dropIndex('shop_1_handle_1');
+      dbLogger.info('🗑️  Dropped old shop_1_handle_1 index');
+    } catch (e) {
+      // Index doesn't exist, that's fine
+    }
+    
+    try {
+      await Product.collection.dropIndex('shop_1_shopifyId_1');
+      dbLogger.info('🗑️  Dropped old shop_1_shopifyId_1 index');
+    } catch (e) {
+      // Index doesn't exist, that's fine
+    }
+    
     // Index 1: shop (most common query)
     await Product.collection.createIndex({ shop: 1 });
     indexCount++;
@@ -47,14 +62,14 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    // Index 4: shop + handle (for quick product lookup)
+    // Index 4: shop + handle (for quick product lookup) - UNIQUE
     await Product.collection.createIndex({ 
       shop: 1, 
       handle: 1 
     }, { unique: true });
     indexCount++;
     
-    // Index 5: shop + shopifyId (for GraphQL sync)
+    // Index 5: shop + shopifyId (for GraphQL sync) - UNIQUE
     await Product.collection.createIndex({ 
       shop: 1, 
       shopifyId: 1 
@@ -68,6 +83,14 @@ export async function createAllIndexes() {
     // ============================================================================
     dbLogger.info('📇 Creating Collection indexes...');
     
+    // Drop existing conflicting indexes first (if they exist)
+    try {
+      await Collection.collection.dropIndex('shop_1_handle_1');
+      dbLogger.info('🗑️  Dropped old Collection shop_1_handle_1 index');
+    } catch (e) {
+      // Index doesn't exist, that's fine
+    }
+    
     // Index 1: shop (most common query)
     await Collection.collection.createIndex({ shop: 1 });
     indexCount++;
@@ -79,7 +102,7 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    // Index 3: shop + handle (for quick collection lookup)
+    // Index 3: shop + handle (for quick collection lookup) - UNIQUE
     await Collection.collection.createIndex({ 
       shop: 1, 
       handle: 1 
@@ -131,7 +154,15 @@ export async function createAllIndexes() {
     // ============================================================================
     dbLogger.info('📇 Creating AdvancedSchema indexes...');
     
-    // Index 1: shop + productHandle (for quick schema lookup)
+    // Drop existing conflicting indexes first (if they exist)
+    try {
+      await AdvancedSchema.collection.dropIndex('shop_1_productHandle_1');
+      dbLogger.info('🗑️  Dropped old AdvancedSchema shop_1_productHandle_1 index');
+    } catch (e) {
+      // Index doesn't exist, that's fine
+    }
+    
+    // Index 1: shop + productHandle (for quick schema lookup) - UNIQUE
     await AdvancedSchema.collection.createIndex({ 
       shop: 1, 
       productHandle: 1 
