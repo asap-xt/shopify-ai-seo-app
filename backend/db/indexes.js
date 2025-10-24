@@ -63,24 +63,28 @@ export async function createAllIndexes() {
     indexCount++;
     
     // Index 4: shop + handle (for quick product lookup) - PARTIAL UNIQUE
-    // Only enforce uniqueness when handle is not null
+    // Only enforce uniqueness when handle exists and is not null
     await Product.collection.createIndex({ 
       shop: 1, 
       handle: 1 
     }, { 
       unique: true,
-      partialFilterExpression: { handle: { $ne: null } }
+      partialFilterExpression: { 
+        handle: { $exists: true, $type: "string" } 
+      }
     });
     indexCount++;
     
     // Index 5: shop + shopifyId (for GraphQL sync) - PARTIAL UNIQUE
-    // Only enforce uniqueness when shopifyId is not null (allows drafts/temporary products)
+    // Only enforce uniqueness when shopifyId exists and is not null (allows drafts/temporary products)
     await Product.collection.createIndex({ 
       shop: 1, 
       shopifyId: 1 
     }, { 
       unique: true,
-      partialFilterExpression: { shopifyId: { $ne: null } }
+      partialFilterExpression: { 
+        shopifyId: { $exists: true, $type: "string" } 
+      }
     });
     indexCount++;
     
@@ -111,13 +115,15 @@ export async function createAllIndexes() {
     indexCount++;
     
     // Index 3: shop + handle (for quick collection lookup) - PARTIAL UNIQUE
-    // Only enforce uniqueness when handle is not null
+    // Only enforce uniqueness when handle exists and is not null
     await Collection.collection.createIndex({ 
       shop: 1, 
       handle: 1 
     }, { 
       unique: true,
-      partialFilterExpression: { handle: { $ne: null } }
+      partialFilterExpression: { 
+        handle: { $exists: true, $type: "string" } 
+      }
     });
     indexCount++;
     
@@ -175,13 +181,15 @@ export async function createAllIndexes() {
     }
     
     // Index 1: shop + productHandle (for quick schema lookup) - PARTIAL UNIQUE
-    // Only enforce uniqueness when productHandle is not null
+    // Only enforce uniqueness when productHandle exists and is not null
     await AdvancedSchema.collection.createIndex({ 
       shop: 1, 
       productHandle: 1 
     }, { 
       unique: true,
-      partialFilterExpression: { productHandle: { $ne: null } }
+      partialFilterExpression: { 
+        productHandle: { $exists: true, $type: "string" } 
+      }
     });
     indexCount++;
     
