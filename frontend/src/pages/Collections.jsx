@@ -1485,21 +1485,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                 
                 if (!hasOptimizedCollections) return null;
                 
-                // Check if Growth+ plan
-                const isGrowthPlus = ['growth', 'growth_extra', 'growth extra', 'enterprise']
-                  .includes(currentPlan.toLowerCase().replace(/_/g, ' '));
-                
+                // AI Enhancement uses pay-per-use tokens (no plan restriction)
                 return (
                   <Button
-                    onClick={isGrowthPlus ? handleStartEnhancement : () => {
-                      // Show upgrade modal for Starter/Professional plans
-                      setTokenError({
-                        error: 'AI Enhancement requires a higher plan',
-                        message: 'Upgrade to Growth plan to access AI-enhanced optimization for Collections',
-                        minimumPlanRequired: 'Growth'
-                      });
-                      setShowUpgradeModal(true);
-                    }}
+                    onClick={handleStartEnhancement}
                     disabled={selectedItems.length === 0 && !selectAllPages}
                   >
                     AI Enhanced add-ons
