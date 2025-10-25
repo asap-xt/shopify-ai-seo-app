@@ -462,6 +462,10 @@ router.get('/tokens/callback', async (req, res) => {
       newBalance: tokenBalance.balance
     });
     
+    // CRITICAL: Invalidate cache so new token balance is immediately visible
+    await cacheService.invalidateShop(shop);
+    console.log('[Billing] Cache invalidated for shop:', shop);
+    
     // Redirect back to app
     res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
   } catch (error) {
