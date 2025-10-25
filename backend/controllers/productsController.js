@@ -8,7 +8,11 @@ const router = express.Router();
 
 // Helper function to process product metafields and generate optimizationSummary
 function processProductMetafields(metafields) {
+  console.log('[PRODUCTS] ===== PROCESSING METAFIELDS =====');
+  console.log('[PRODUCTS] Metafields structure:', JSON.stringify(metafields, null, 2));
+  
   if (!metafields?.edges) {
+    console.log('[PRODUCTS] No metafields.edges found, returning default');
     return {
       optimized: false,
       optimizedLanguages: [],
@@ -16,15 +20,26 @@ function processProductMetafields(metafields) {
     };
   }
 
+  console.log('[PRODUCTS] Metafields edges count:', metafields.edges.length);
+  
   const optimizedLanguages = [];
   let lastOptimized = null;
 
-  metafields.edges.forEach(({ node: metafield }) => {
+  metafields.edges.forEach(({ node: metafield }, index) => {
+    console.log(`[PRODUCTS] Metafield ${index}:`, {
+      key: metafield.key,
+      value: metafield.value?.substring(0, 100) + '...',
+      type: metafield.type
+    });
+    
     if (metafield.key && metafield.key.startsWith('seo__')) {
+      console.log(`[PRODUCTS] Found SEO metafield: ${metafield.key}`);
       try {
         const seoData = JSON.parse(metafield.value);
+        console.log(`[PRODUCTS] Parsed SEO data:`, seoData);
         if (seoData && seoData.language) {
           optimizedLanguages.push(seoData.language);
+          console.log(`[PRODUCTS] Added language: ${seoData.language}`);
           
           // Track the most recent optimization
           if (seoData.updatedAt) {
@@ -40,11 +55,16 @@ function processProductMetafields(metafields) {
     }
   });
 
-  return {
+  const result = {
     optimized: optimizedLanguages.length > 0,
     optimizedLanguages: [...new Set(optimizedLanguages)], // Remove duplicates
     lastOptimized: lastOptimized?.toISOString() || null
   };
+  
+  console.log('[PRODUCTS] Final optimization summary:', result);
+  console.log('[PRODUCTS] ===== METAFIELDS PROCESSING COMPLETE =====');
+  
+  return result;
 }
 
 // Apply authentication to all routes

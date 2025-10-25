@@ -67,6 +67,11 @@ export default async function productsWebhook(req, res) {
         const titleChanged = referenceTitle !== payload.title;
         const descriptionChanged = referenceDescription !== payload.body_html;
         
+        console.log('[Webhook-Products] Title changed:', titleChanged);
+        console.log('[Webhook-Products] Description changed:', descriptionChanged);
+        console.log('[Webhook-Products] Title comparison:', `"${referenceTitle}" !== "${payload.title}"`);
+        console.log('[Webhook-Products] Description comparison:', `"${referenceDescription?.substring(0, 50)}..." !== "${payload.body_html?.substring(0, 50)}..."`);
+        
         if (titleChanged || descriptionChanged) {
           console.log('[Webhook-Products] 🚨 CONTENT CHANGED DETECTED!');
           console.log('[Webhook-Products] Title changed:', titleChanged);

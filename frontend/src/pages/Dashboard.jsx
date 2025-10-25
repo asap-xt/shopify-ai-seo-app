@@ -398,11 +398,6 @@ export default function Dashboard({ shop: shopProp }) {
                   </Text>
                 </InlineStack>
                 <InlineStack gap="200">
-                  <Checkbox
-                    label="Auto-sync on load"
-                    checked={autoSync}
-                    onChange={handleAutoSyncToggle}
-                  />
                   <Button 
                     onClick={handleSync} 
                     loading={syncing}
@@ -411,7 +406,7 @@ export default function Dashboard({ shop: shopProp }) {
                     Sync Now
                   </Button>
                   <Button 
-                    onClick={() => handleAutoSyncToggle(false)} 
+                    onClick={() => setShowSyncSettings(true)} 
                     size="slim"
                     variant="plain"
                   >
