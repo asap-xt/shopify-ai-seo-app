@@ -283,17 +283,72 @@ class AIDiscoveryService {
       enterprise: ['meta', 'anthropic', 'google', 'openai', 'perplexity', 'others'] // + Others
     };
 
-    const base = {
-      bots: allBots,
-      availableBots: availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter,
-      features: {
+    // Plan-specific default features (enabled by default based on plan)
+    const defaultFeaturesByPlan = {
+      starter: {
         productsJson: false,
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
-        autoRobotsTxt: false, // Always false by default - user must enable manually
         storeMetadata: false,
         schemaData: false
+      },
+      professional: {
+        productsJson: false,
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        storeMetadata: false,
+        schemaData: false
+      },
+      professional_plus: {
+        productsJson: true, // Enabled by default
+        aiSitemap: true, // Enabled by default (requires tokens when used)
+        welcomePage: true, // Enabled by default (requires tokens when used)
+        collectionsJson: true, // Enabled by default (requires tokens when used)
+        storeMetadata: true, // Enabled by default (requires tokens when used)
+        schemaData: true // Enabled by default (requires tokens when used)
+      },
+      growth: {
+        productsJson: false,
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        storeMetadata: false,
+        schemaData: false
+      },
+      growth_plus: {
+        productsJson: true, // Enabled by default
+        aiSitemap: true, // Enabled by default (requires tokens when used)
+        welcomePage: true, // Enabled by default (Growth includes, no tokens)
+        collectionsJson: true, // Enabled by default (Growth includes, no tokens)
+        storeMetadata: true, // Enabled by default (requires tokens when used)
+        schemaData: true // Enabled by default (requires tokens when used)
+      },
+      growth_extra: {
+        productsJson: false,
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        storeMetadata: false,
+        schemaData: false
+      },
+      enterprise: {
+        productsJson: false,
+        aiSitemap: false,
+        welcomePage: false,
+        collectionsJson: false,
+        storeMetadata: false,
+        schemaData: false
+      }
+    };
+
+    const base = {
+      bots: allBots,
+      availableBots: availableBotsByPlan[normalizedPlan] || availableBotsByPlan.starter,
+      features: {
+        ...(defaultFeaturesByPlan[normalizedPlan] || defaultFeaturesByPlan.starter),
+        autoRobotsTxt: false // Always false by default - user must enable manually
       },
       richAttributes: {
         material: false,

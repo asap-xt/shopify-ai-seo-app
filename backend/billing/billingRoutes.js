@@ -49,12 +49,12 @@ function getPlanFeatures(planKey) {
   // Professional Plus - all from Professional plus:
   if (planKey === 'professional plus') {
     features.push('All from Professional plus');
-    features.push('🔓 All AI Discovery features unlocked with tokens');
-    features.push('AI Welcome Page (tokens)');
-    features.push('Collections JSON Feed (tokens)');
-    features.push('AI-Optimized Sitemap (tokens)');
-    features.push('Store Metadata (tokens)');
-    features.push('Advanced Schema Data (tokens)');
+    features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
+    features.push('AI Welcome Page (pay-per-use tokens)');
+    features.push('Collections JSON Feed (pay-per-use tokens)');
+    features.push('AI-Optimized Sitemap (pay-per-use tokens)');
+    features.push('Store Metadata (pay-per-use tokens)');
+    features.push('Advanced Schema Data (pay-per-use tokens)');
     return features;
   }
   
@@ -72,10 +72,10 @@ function getPlanFeatures(planKey) {
   // Growth Plus - all from Growth plus:
   if (planKey === 'growth plus') {
     features.push('All from Growth plus');
-    features.push('🔓 All AI Discovery features unlocked with tokens');
-    features.push('AI-Optimized Sitemap (tokens)');
-    features.push('Store Metadata (tokens)');
-    features.push('Advanced Schema Data (tokens)');
+    features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
+    features.push('AI-Optimized Sitemap (pay-per-use tokens)');
+    features.push('Store Metadata (pay-per-use tokens)');
+    features.push('Advanced Schema Data (pay-per-use tokens)');
     return features;
   }
   
