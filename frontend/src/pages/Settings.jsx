@@ -947,7 +947,48 @@ export default function Settings() {
   };
   */
 
+  // Check if Plus plan needs tokens for a feature
+  const requiresTokensForPlusPlans = (featureKey) => {
+    const plan = normalizePlan(settings?.plan);
+    
+    // Features that Plus plans need tokens for
+    const plusPlansRequireTokens = {
+      professional_plus: ['welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'],
+      growth_plus: ['aiSitemap', 'storeMetadata', 'schemaData']
+    };
+    
+    return plusPlansRequireTokens[plan]?.includes(featureKey) || false;
+  };
+
+  // Check tokens before viewing/using a feature
+  const checkTokensBeforeAction = async (featureKey) => {
+    if (!requiresTokensForPlusPlans(featureKey)) {
+      return true; // No token check needed
+    }
+    
+    try {
+      const balance = await api(`/api/billing/tokens/balance?shop=${shop}`);
+      if (balance.balance <= 0) {
+        // Show "Buy tokens" modal (you can replace this with your existing modal)
+        setToast('This feature requires tokens. Please purchase tokens to use it.');
+        // TODO: Show BuyTokensModal here
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('[SETTINGS] Error checking token balance:', error);
+      setToast('Error checking token balance');
+      return false;
+    }
+  };
+
   const viewJson = async (feature, title) => {
+    // Check tokens first for Plus plans
+    const canProceed = await checkTokensBeforeAction(feature);
+    if (!canProceed) {
+      return; // Stop if tokens are required but not available
+    }
+    
     setJsonModalTitle(title);
     setJsonModalOpen(true);
     setLoadingJson(true);
@@ -1496,8 +1537,15 @@ export default function Settings() {
                             <Button
                               size="slim"
                               variant="primary"
-                              onClick={() => {
+                              onClick={async () => {
                                 console.log('[SETTINGS DEBUG] Configure button clicked!');
+                                
+                                // Check tokens first for Plus plans
+                                const canProceed = await checkTokensBeforeAction('storeMetadata');
+                                if (!canProceed) {
+                                  return; // Stop if tokens are required but not available
+                                }
+                                
                                 // Open Store Metadata tab in new window
                                 const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
                                 console.log('[SETTINGS DEBUG] Opening URL:', storeMetadataUrl);
