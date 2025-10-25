@@ -2,6 +2,9 @@
 // Handles Shopify "collections/update" webhook
 // - Syncs collection data to MongoDB
 // - Detects title/description changes and invalidates SEO metafields
+// - Invalidates Redis cache to reflect changes immediately
+
+import cacheService from '../services/cacheService.js';
 
 /**
  * Smart webhook handler for collections:
@@ -106,6 +109,13 @@ export default async function collectionsWebhook(req, res) {
       );
       
       console.log('[Webhook-Collections] ✅ MongoDB updated successfully');
+      
+      // 7. Invalidate Redis cache for this shop's collections
+      // This ensures frontend immediately sees the updated collection status
+      console.log('[Webhook-Collections] Invalidating Redis cache for shop:', shop);
+      await cacheService.delPattern(`collections:${shop}:*`);
+      await cacheService.del(`stats:${shop}`);
+      console.log('[Webhook-Collections] ✅ Redis cache invalidated for shop collections');
       
     } catch (error) {
       console.error('[Webhook-Collections] Error processing webhook:', error);

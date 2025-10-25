@@ -2,8 +2,10 @@
 // Handles Shopify "products/update" webhook
 // - Syncs product data to MongoDB
 // - Detects title/description changes and invalidates SEO metafields
+// - Invalidates Redis cache to reflect changes immediately
 
 import { deleteAllSeoMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
+import cacheService from '../services/cacheService.js';
 
 /**
  * Smart webhook handler:
@@ -135,6 +137,13 @@ export default async function productsWebhook(req, res) {
         { upsert: true, new: true }
       );
       console.log('[Webhook-Products] ✅ MongoDB updated successfully (including lastShopifyUpdate reference)');
+      
+      // 6. Invalidate Redis cache for this shop's products
+      // This ensures frontend immediately sees the updated product status
+      console.log('[Webhook-Products] Invalidating Redis cache for shop:', shop);
+      await cacheService.delPattern(`products:${shop}:*`);
+      await cacheService.del(`stats:${shop}`);
+      console.log('[Webhook-Products] ✅ Redis cache invalidated for shop products');
       
     } catch (err) {
       console.error('[Webhook-Products] Error processing webhook:', err?.message || err);
