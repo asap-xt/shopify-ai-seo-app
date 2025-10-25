@@ -239,9 +239,26 @@ async function generateSitemapCore(shop) {
         const session = { accessToken: shopRecord.accessToken };
         const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
         
-        // CRITICAL: AI-Optimized Sitemap is ONLY for Growth Extra+ and Enterprise plans
-        const planKey = settings?.planKey?.toLowerCase() || plan?.toLowerCase() || 'starter';
-        const isEligiblePlan = ['growth_extra', 'enterprise', 'growth extra'].includes(planKey);
+        // CRITICAL: AI-Optimized Sitemap eligibility check
+        const planKey = (settings?.planKey || plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+        const plansWithAccess = ['growth_extra', 'enterprise'];
+        const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+        
+        let isEligiblePlan = plansWithAccess.includes(planKey);
+        
+        // Plus plans: Check if they have tokens
+        if (plusPlansRequireTokens.includes(planKey)) {
+          const { default: TokenBalance } = await import('../db/TokenBalance.js');
+          const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+          
+          if (tokenBalance.balance > 0) {
+            isEligiblePlan = true; // Has tokens - eligible
+            console.log('[SITEMAP-CORE] Plus plan with tokens, AI sitemap enabled');
+          } else {
+            isEligiblePlan = false; // No tokens - not eligible
+            console.log('[SITEMAP-CORE] Plus plan without tokens, AI sitemap disabled');
+          }
+        }
         
         isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
         

@@ -203,10 +203,30 @@ router.get('/ai/collections-feed.json', async (req, res) => {
       });
     }
 
-    // Check plan
-    if (!['growth', 'growth extra', 'enterprise'].includes(settings?.planKey)) {
+    // Check plan access
+    const planKey = (settings?.planKey || '').toLowerCase().replace(/\s+/g, '_');
+    const plansWithAccess = ['growth', 'growth_extra', 'enterprise'];
+    const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+    
+    // Plus plans: Check if they have tokens
+    if (plusPlansRequireTokens.includes(planKey)) {
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      if (tokenBalance.balance <= 0) {
+        return res.status(403).json({ 
+          error: 'Collections JSON requires tokens. Please purchase tokens to enable this feature.',
+          tokensRequired: true
+        });
+      }
+      // Has tokens - allow access
+    } 
+    // Regular plans: Check if plan has access
+    else if (!plansWithAccess.includes(planKey)) {
       return res.status(403).json({ 
-        error: 'Collections JSON requires Growth plan or higher' 
+        error: 'Collections JSON requires Professional Plus, Growth or higher plan',
+        upgradeRequired: true,
+        currentPlan: planKey
       });
     }
 
