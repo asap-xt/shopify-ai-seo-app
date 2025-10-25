@@ -9,6 +9,8 @@ import TokenBalance from '../db/TokenBalance.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 import { syncStore } from '../services/syncService.js';
+import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
+import cacheService from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -22,9 +24,12 @@ router.get('/stats', verifyRequest, async (req, res) => {
     
     console.log('[Dashboard] Loading stats for:', shop);
     
-    // Get subscription to check plan features
-    const subscription = await Subscription.findOne({ shop });
-    const plan = subscription?.plan || 'starter';
+    // Cache dashboard stats for 1 minute (PHASE 3: Caching)
+    // Dashboard is frequently accessed, so short TTL keeps data fresh
+    const stats = await withShopCache(shop, 'dashboard:stats', CACHE_TTL.VERY_SHORT, async () => {
+      // Get subscription to check plan features
+      const subscription = await Subscription.findOne({ shop });
+      const plan = subscription?.plan || 'starter';
     
     // Products stats
     const totalProducts = await Product.countDocuments({ shop });
@@ -305,6 +310,9 @@ router.get('/stats', verifyRequest, async (req, res) => {
       alertsCount: alerts.length
     });
     
+    return stats; // Return stats for caching
+    }); // End withShopCache
+    
     res.json(stats);
   } catch (error) {
     console.error('[Dashboard] Error getting stats:', error);
@@ -339,6 +347,10 @@ router.post('/sync', requireAuth, async (req, res) => {
       // TODO: Can emit SSE events here if needed
     }).catch(error => {
       console.error('[Dashboard] Sync error:', error);
+    }).finally(async () => {
+      // Invalidate cache after sync completes (PHASE 3: Caching)
+      await cacheService.invalidateShop(shop);
+      console.log('[Dashboard] Cache invalidated after sync');
     });
 
     // Return immediately

@@ -1713,6 +1713,36 @@ async function start() {
       });
     }
   });
+  
+  // Redis Cache Status Endpoint (PHASE 3 - Verification)
+  app.get('/debug/cache', async (req, res) => {
+    try {
+      const cacheService = (await import('./services/cacheService.js')).default;
+      const stats = await cacheService.getStats();
+      
+      if (!stats) {
+        return res.json({
+          phase: 'PHASE 3: Redis Caching',
+          status: 'disabled',
+          message: 'Redis not configured. Add REDIS_URL environment variable.',
+          enabled: false
+        });
+      }
+      
+      res.json({
+        phase: 'PHASE 3: Redis Caching',
+        status: 'active',
+        enabled: true,
+        stats,
+        message: 'Redis caching is operational!'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        error: 'Failed to get cache stats', 
+        message: error.message 
+      });
+    }
+  });
 
   app.get('/debug/whoami', (req, res) => {
     const fromQuery = req.query.shop;

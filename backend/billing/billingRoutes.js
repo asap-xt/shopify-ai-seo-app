@@ -6,6 +6,8 @@ import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import { PLANS, TRIAL_DAYS } from '../plans.js';
+import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
+import cacheService from '../services/cacheService.js';
 import { 
   TOKEN_CONFIG, 
   getIncludedTokens,
@@ -142,44 +144,49 @@ router.get('/info', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    const subscription = await Subscription.findOne({ shop });
-    const tokenBalance = await TokenBalance.getOrCreate(shop);
-    
-    const now = new Date();
-    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
-    
-    // Note: subscription.price is now a virtual property that auto-computes from plans.js
-    
-    res.json({
-      subscription: subscription ? {
-        plan: subscription.plan,
-        status: subscription.status || 'active',
-        price: subscription.price, // Virtual property from Subscription model
-        trialEndsAt: subscription.trialEndsAt,
-        inTrial,
-        shopifySubscriptionId: subscription.shopifySubscriptionId
-      } : null,
-      tokens: {
-        balance: tokenBalance.balance,
-        totalPurchased: tokenBalance.totalPurchased,
-        totalUsed: tokenBalance.totalUsed,
-        lastPurchase: tokenBalance.lastPurchase
-      },
-      plans: Object.keys(PLANS).map(key => {
-        const included = getIncludedTokens(key);
-        return {
-          key,
-          name: PLANS[key].name,
-          price: PLANS[key].priceUsd,
-          productLimit: PLANS[key].productLimit,
-          queryLimit: PLANS[key].queryLimit,
-          providersAllowed: PLANS[key].providersAllowed?.length || 0,
-          languageLimit: PLANS[key].languageLimit || 1,
-          includedTokens: included.tokens || 0,
-          features: getPlanFeatures(key)
-        };
-      })
+    // Cache billing info for 5 minutes (PHASE 3: Caching)
+    const billingInfo = await withShopCache(shop, 'billing:info', CACHE_TTL.SHORT, async () => {
+      const subscription = await Subscription.findOne({ shop });
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      
+      // Note: subscription.price is now a virtual property that auto-computes from plans.js
+      
+      return {
+        subscription: subscription ? {
+          plan: subscription.plan,
+          status: subscription.status || 'active',
+          price: subscription.price, // Virtual property from Subscription model
+          trialEndsAt: subscription.trialEndsAt,
+          inTrial,
+          shopifySubscriptionId: subscription.shopifySubscriptionId
+        } : null,
+        tokens: {
+          balance: tokenBalance.balance,
+          totalPurchased: tokenBalance.totalPurchased,
+          totalUsed: tokenBalance.totalUsed,
+          lastPurchase: tokenBalance.lastPurchase
+        },
+        plans: Object.keys(PLANS).map(key => {
+          const included = getIncludedTokens(key);
+          return {
+            key,
+            name: PLANS[key].name,
+            price: PLANS[key].priceUsd,
+            productLimit: PLANS[key].productLimit,
+            queryLimit: PLANS[key].queryLimit,
+            providersAllowed: PLANS[key].providersAllowed?.length || 0,
+            languageLimit: PLANS[key].languageLimit || 1,
+            includedTokens: included.tokens || 0,
+            features: getPlanFeatures(key)
+          };
+        })
+      };
     });
+    
+    res.json(billingInfo);
   } catch (error) {
     console.error('[Billing] Error getting info:', error);
     res.status(500).json({ error: 'Failed to get billing info' });
@@ -248,6 +255,9 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       },
       { upsert: true, new: true }
     );
+    
+    // Invalidate cache after subscription change (PHASE 3: Caching)
+    await cacheService.invalidateShop(shop);
     
     console.log('[Billing] Subscription created:', {
       shop,
