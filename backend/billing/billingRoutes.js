@@ -5,7 +5,7 @@ import express from 'express';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
-import { PLANS, TRIAL_DAYS, getPlanConfig } from '../plans.js';
+import { PLANS, TRIAL_DAYS } from '../plans.js';
 import { 
   TOKEN_CONFIG, 
   getIncludedTokens,
@@ -148,14 +148,13 @@ router.get('/info', verifyRequest, async (req, res) => {
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
     
-    // Get plan config using resolvePlanKey to handle "growth extra" vs "growth_extra"
-    const planConfig = subscription ? getPlanConfig(subscription.plan) : null;
+    // Note: subscription.price is now a virtual property that auto-computes from plans.js
     
     res.json({
       subscription: subscription ? {
         plan: subscription.plan,
         status: subscription.status || 'active',
-        price: planConfig?.priceUsd || 0,
+        price: subscription.price, // Virtual property from Subscription model
         trialEndsAt: subscription.trialEndsAt,
         inTrial,
         shopifySubscriptionId: subscription.shopifySubscriptionId
