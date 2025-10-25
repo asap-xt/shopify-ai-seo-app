@@ -23,7 +23,8 @@ export default function UpgradeModal({
     'Collections optimization (Professional+)',
     'AI Enhancement features with pay-per-use tokens',
     'Advanced AI features',
-    'Growth Extra & Enterprise include monthly tokens'
+    'Growth Extra includes 100M monthly tokens',
+    'Enterprise includes 300M monthly tokens'
   ];
   
   const featuresToShow = features || defaultFeatures;

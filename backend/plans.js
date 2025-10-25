@@ -58,7 +58,7 @@ export const PLANS = {
   },
   "growth extra": {
     name: "Growth Extra",
-    priceUsd: 69.99,
+    priceUsd: 79.99,
     queryLimit: 4000,
     productLimit: 1000,
     collectionLimit: 999, // Unlimited (practical limit)
