@@ -88,29 +88,60 @@ export default async function collectionsWebhook(req, res) {
       
       // 6. Update MongoDB with new collection data for future comparisons
       console.log('[Webhook-Collections] Updating MongoDB with new collection data...');
-      await Collection.findOneAndUpdate(
-        { shop, collectionId },
-        {
-          shopifyCollectionId: collectionId,
-          collectionId,
-          gid: collectionGid,
-          title: payload.title,
-          description: payload.body_html || '',
-          descriptionHtml: payload.body_html || '',
-          handle: payload.handle,
-          productsCount: payload.products_count || 0,
-          lastShopifyUpdate: {
+      
+      try {
+        await Collection.findOneAndUpdate(
+          { shop, collectionId },
+          {
+            shopifyCollectionId: collectionId,
+            collectionId,
+            gid: collectionGid,
             title: payload.title,
             description: payload.body_html || '',
-            updatedAt: new Date()
+            descriptionHtml: payload.body_html || '',
+            handle: payload.handle,
+            productsCount: payload.products_count || 0,
+            lastShopifyUpdate: {
+              title: payload.title,
+              description: payload.body_html || '',
+              updatedAt: new Date()
+            },
+            updatedAt: new Date(),
+            syncedAt: new Date()
           },
-          updatedAt: new Date(),
-          syncedAt: new Date()
-        },
-        { upsert: true, new: true }
-      );
-      
-      console.log('[Webhook-Collections] ✅ MongoDB updated successfully');
+          { upsert: true, new: true }
+        );
+        console.log('[Webhook-Collections] ✅ MongoDB updated successfully');
+      } catch (mongoError) {
+        if (mongoError.code === 11000) {
+          // Duplicate key error - try to update existing record
+          console.log('[Webhook-Collections] Duplicate key error, updating existing record...');
+          await Collection.findOneAndUpdate(
+            { shop, handle: payload.handle },
+            {
+              shopifyCollectionId: collectionId,
+              collectionId,
+              gid: collectionGid,
+              title: payload.title,
+              description: payload.body_html || '',
+              descriptionHtml: payload.body_html || '',
+              handle: payload.handle,
+              productsCount: payload.products_count || 0,
+              lastShopifyUpdate: {
+                title: payload.title,
+                description: payload.body_html || '',
+                updatedAt: new Date()
+              },
+              updatedAt: new Date(),
+              syncedAt: new Date()
+            },
+            { new: true }
+          );
+          console.log('[Webhook-Collections] ✅ MongoDB updated existing record successfully');
+        } else {
+          throw mongoError;
+        }
+      }
       
       // 7. Invalidate Redis cache for this shop's collections
       // This ensures frontend immediately sees the updated collection status
