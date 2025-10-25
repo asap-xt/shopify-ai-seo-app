@@ -42,8 +42,19 @@ function getPlanFeatures(planKey) {
     features.push('All from Starter plus');
     features.push('Pay-per-use tokens');
     features.push('AI Bot Access: + Gemini (Google)');
-    features.push('Store Metadata for AI Search');
     features.push('AI-enhanced add-ons for products (pay-per-use tokens required)');
+    return features;
+  }
+  
+  // Professional Plus - all from Professional plus:
+  if (planKey === 'professional plus') {
+    features.push('All from Professional plus');
+    features.push('🔓 All AI Discovery features unlocked with tokens');
+    features.push('AI Welcome Page (tokens)');
+    features.push('Collections JSON Feed (tokens)');
+    features.push('AI-Optimized Sitemap (tokens)');
+    features.push('Store Metadata (tokens)');
+    features.push('Advanced Schema Data (tokens)');
     return features;
   }
   
@@ -52,8 +63,19 @@ function getPlanFeatures(planKey) {
     features.push('All from Professional plus');
     features.push('Collections optimization');
     features.push('AI Bot Access: + ChatGPT');
-    features.push('AI Welcome Page');
+    features.push('AI Welcome Page (included)');
+    features.push('Collections JSON Feed (included)');
     features.push('AI-enhanced add-ons for Collections (pay-per-use tokens required)');
+    return features;
+  }
+  
+  // Growth Plus - all from Growth plus:
+  if (planKey === 'growth plus') {
+    features.push('All from Growth plus');
+    features.push('🔓 All AI Discovery features unlocked with tokens');
+    features.push('AI-Optimized Sitemap (tokens)');
+    features.push('Store Metadata (tokens)');
+    features.push('Advanced Schema Data (tokens)');
     return features;
   }
   
