@@ -740,7 +740,7 @@ export default function Settings() {
     setHasUnsavedChanges(true); // Mark that there are changes
   };
 
-  const toggleFeature = (featureKey) => {
+  const toggleFeature = async (featureKey) => {
     if (!isFeatureAvailable(featureKey)) {
       const feature = {
         productsJson: 'Products JSON Feed',
@@ -752,6 +752,25 @@ export default function Settings() {
       };
       setToast(`Upgrade your plan to enable ${feature[featureKey] || featureKey}`);
       return;
+    }
+    
+    // Check if we're enabling a feature (toggling ON)
+    const isEnabling = !settings.features[featureKey];
+    
+    if (isEnabling && requiresTokensForPlusPlans(featureKey)) {
+      // Check tokens before enabling
+      try {
+        const balance = await api(`/api/billing/tokens/balance?shop=${shop}`);
+        if (balance.balance <= 0) {
+          setToast('This feature requires tokens. Please purchase tokens to enable it.');
+          // TODO: Show BuyTokensModal here
+          return; // Don't toggle the feature ON
+        }
+      } catch (error) {
+        console.error('[SETTINGS] Error checking token balance:', error);
+        setToast('Error checking token balance');
+        return;
+      }
     }
     
     setSettings(prev => ({
