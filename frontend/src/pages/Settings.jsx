@@ -911,12 +911,12 @@ export default function Settings() {
     const plan = normalizePlan(settings?.plan);
     
     const availability = {
-      productsJson: ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'],
-      storeMetadata: ['professional', 'growth', 'growth_extra', 'enterprise'],
-      welcomePage: ['growth', 'growth_extra', 'enterprise'],
-      collectionsJson: ['growth', 'growth_extra', 'enterprise'],
-      aiSitemap: ['growth_extra', 'enterprise'],
-      schemaData: ['enterprise']
+      productsJson: ['starter', 'professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
+      storeMetadata: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
+      welcomePage: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
+      collectionsJson: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
+      aiSitemap: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
+      schemaData: ['professional_plus', 'growth_plus', 'enterprise'] // Plus plans have access (with tokens)
     };
     
     return availability[featureKey]?.includes(plan) || false;
