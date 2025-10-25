@@ -241,7 +241,7 @@ export default function Billing({ shop }) {
                           <BlockStack gap="100">
                             {plan.features.map((feature, idx) => (
                               <Text key={idx} variant="bodySm" tone="subdued">
-                                {feature.startsWith('All from') || feature.startsWith('✓') || feature.startsWith('✓') ? feature : `✓ ${feature}`}
+                                {feature.startsWith('All from') || feature.startsWith('✓') ? feature : `✓ ${feature}`}
                               </Text>
                             ))}
                           </BlockStack>

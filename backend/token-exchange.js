@@ -51,18 +51,24 @@ router.post('/', async (req, res) => {
     }
 
     // Запази в базата данни
-    await Shop.findOneAndUpdate(
-      { shop },
-      { 
-        shop, 
-        accessToken,
-        appApiKey: process.env.SHOPIFY_API_KEY,
-        useJWT: true,
-        installedAt: new Date(),
-        updatedAt: new Date() 
-      },
-      { upsert: true, new: true }
-    );
+    try {
+      await Shop.findOneAndUpdate(
+        { shop },
+        { 
+          shop, 
+          accessToken,
+          appApiKey: process.env.SHOPIFY_API_KEY,
+          useJWT: true,
+          installedAt: new Date(),
+          updatedAt: new Date() 
+        },
+        { upsert: true, new: true }
+      );
+      console.log(`✅ Token saved to database for shop: ${shop}`);
+    } catch (dbError) {
+      console.error(`❌ Failed to save token to database for ${shop}:`, dbError);
+      throw new Error(`Database save failed: ${dbError.message}`);
+    }
 
     console.log(`✅ Token exchange successful for shop: ${shop}`);
     return res.status(200).json({ 
