@@ -223,8 +223,19 @@ async function generateSitemapCore(shop) {
       if (shopRecord?.accessToken) {
         const session = { accessToken: shopRecord.accessToken };
         const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
-        isAISitemapEnabled = settings?.features?.aiSitemap || false;
-        console.log('[SITEMAP-CORE] AI Discovery settings:', { aiSitemap: isAISitemapEnabled });
+        
+        // CRITICAL: AI-Optimized Sitemap is ONLY for Growth Extra+ and Enterprise plans
+        const planKey = settings?.planKey?.toLowerCase() || plan?.toLowerCase() || 'starter';
+        const isEligiblePlan = ['growth_extra', 'enterprise', 'growth extra'].includes(planKey);
+        
+        isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
+        
+        console.log('[SITEMAP-CORE] AI Discovery settings:', { 
+          aiSitemap: settings?.features?.aiSitemap, 
+          plan: planKey,
+          isEligiblePlan,
+          finalAiEnabled: isAISitemapEnabled
+        });
       }
     } catch (error) {
       console.log('[SITEMAP-CORE] Could not fetch AI Discovery settings, using basic sitemap:', error.message);
