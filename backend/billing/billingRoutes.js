@@ -315,24 +315,37 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send('Missing shop parameter');
     }
     
-    // Update subscription to active (if not already)
+    // CRITICAL FIX: Update both status AND plan (for plan changes)
+    // In test mode, /subscribe already created subscription with the new plan
+    // But if user changes plans, this callback confirms the change
+    const updateData = {
+      status: 'active',
+      pendingActivation: false,
+      activatedAt: new Date()
+    };
+    
+    // If plan is provided in callback, ensure it's updated
+    if (plan && PLANS[plan]) {
+      updateData.plan = plan;
+    }
+    
     const subscription = await Subscription.findOneAndUpdate(
       { shop },
-      {
-        status: 'active',
-        pendingActivation: false,
-        activatedAt: new Date()
-      },
+      updateData,
       { new: true }
     );
+    
+    // Invalidate cache after subscription change (PHASE 3: Caching)
+    await cacheService.invalidateShop(shop);
     
     // NOTE: Tokens are added in /subscribe endpoint for test mode
     // For production mode (real webhooks), tokens would be added by APP_SUBSCRIPTIONS_UPDATE webhook
     // This callback is just a redirect handler, not the primary activation mechanism
-    console.log('[Billing] Callback processed, subscription already active:', {
+    console.log('[Billing] Callback processed, subscription updated:', {
       shop,
       plan: subscription?.plan,
-      status: subscription?.status
+      status: subscription?.status,
+      planUpdated: !!plan
     });
     
     // Redirect back to app
