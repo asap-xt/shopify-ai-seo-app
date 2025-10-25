@@ -234,13 +234,6 @@ export default function Billing({ shop }) {
                         Optimize up to <strong>{plan.productLimit?.toLocaleString() || 'N/A'}</strong> products in up to <strong>{plan.languageLimit || 1}</strong> {plan.languageLimit === 1 ? 'language' : 'languages'}
                       </Text>
                       
-                      {/* Included Tokens - only for plans without them (Starter, Professional, Growth) */}
-                      {plan.includedTokens > 0 && !['growth extra', 'enterprise'].includes(plan.key) && (
-                        <Badge tone="info">
-                          +{plan.includedTokens.toLocaleString()} tokens/month
-                        </Badge>
-                      )}
-                      
                       {/* Features List */}
                       {plan.features && plan.features.length > 0 && (
                         <Box>

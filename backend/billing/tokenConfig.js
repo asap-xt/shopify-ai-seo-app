@@ -123,7 +123,7 @@ export const PLAN_INCLUDED_TOKENS = {
   'starter': 0,
   'professional': 0,
   'growth': 0,
-  'growth extra': 100_000_000,  // 100 million tokens per month
+  'growth_extra': 100_000_000,  // 100 million tokens per month
   'enterprise': 300_000_000     // 300 million tokens per month
 };
 

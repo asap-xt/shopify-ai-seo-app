@@ -82,6 +82,7 @@ function getPlanFeatures(planKey) {
   // Growth Extra - all from Growth plus:
   if (planKey === 'growth extra') {
     features.push('All from Growth plus');
+    features.push('✓ 100M monthly tokens');
     features.push('AI-Optimized Sitemap');
     features.push('AI Bot Access: + Perplexity');
     features.push('AI-enhanced add-ons at no extra cost');
@@ -91,6 +92,7 @@ function getPlanFeatures(planKey) {
   // Enterprise - all from Growth Extra plus:
   if (planKey === 'enterprise') {
     features.push('All from Growth Extra plus');
+    features.push('✓ 300M monthly tokens');
     features.push('Advanced Schema Data');
     features.push('AI Bot Access: + Deepseek, Bytespider & others');
     return features;
