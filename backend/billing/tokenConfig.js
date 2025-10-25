@@ -20,8 +20,8 @@ export const TOKEN_CONFIG = {
   customAllowed: true,               // User can enter custom amount
   
   // Revenue split (INTERNAL ONLY - not shown to users)
-  appRevenuePercent: 0.40,           // 40% to app
-  tokenBudgetPercent: 0.60,          // 60% for Gemini tokens
+  appRevenuePercent: 0.70,           // 70% to app
+  tokenBudgetPercent: 0.30,          // 30% for Gemini tokens
   
   // Provider (internal only)
   provider: 'gemini-2.5-flash-lite',
@@ -32,10 +32,10 @@ export const TOKEN_CONFIG = {
   rollover: true,
   
   // Calculate tokens from USD amount
-  // Example: $10 → $6 for tokens (60% budget) → tokens based on actual OpenRouter rate
-  // With default rate $0.10/1M: $6 → 60,000,000 tokens
+  // Example: $10 → $3 for tokens (30% budget) → tokens based on actual OpenRouter rate
+  // With default rate $0.10/1M: $3 → 30,000,000 tokens
   calculateTokens(usdAmount) {
-    const tokenBudget = usdAmount * this.tokenBudgetPercent; // 60% goes to tokens
+    const tokenBudget = usdAmount * this.tokenBudgetPercent; // 30% goes to tokens
     const tokens = Math.floor(tokenBudget / this.providerRate);
     return tokens;
   },
