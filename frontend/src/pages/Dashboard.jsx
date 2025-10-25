@@ -45,6 +45,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false); // New state for expanded view
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
@@ -381,7 +382,7 @@ export default function Dashboard({ shop: shopProp }) {
       {!isFirstLoad && syncStatus && (
         <Layout.Section>
           <Card>
-            {autoSync ? (
+            {!isExpanded ? (
               // Collapsed view when auto-sync is enabled
               <InlineStack align="space-between" blockAlign="center" gap="400">
                 <InlineStack gap="200" blockAlign="center">
@@ -406,7 +407,7 @@ export default function Dashboard({ shop: shopProp }) {
                     Sync Now
                   </Button>
                   <Button 
-                    onClick={() => setShowSyncSettings(true)} 
+                    onClick={() => setIsExpanded(!isExpanded)} 
                     size="slim"
                     variant="plain"
                   >
@@ -433,12 +434,20 @@ export default function Dashboard({ shop: shopProp }) {
                       </Text>
                     </Box>
                   </div>
-                  <Button 
-                    onClick={handleSync} 
-                    loading={syncing}
-                  >
-                    Sync Now
-                  </Button>
+                  <InlineStack gap="200">
+                    <Button 
+                      onClick={handleSync} 
+                      loading={syncing}
+                    >
+                      Sync Now
+                    </Button>
+                    <Button 
+                      onClick={() => setIsExpanded(false)} 
+                      variant="plain"
+                    >
+                      Close
+                    </Button>
+                  </InlineStack>
                 </InlineStack>
                 
                 <Divider />
