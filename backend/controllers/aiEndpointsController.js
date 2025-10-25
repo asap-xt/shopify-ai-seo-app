@@ -352,27 +352,31 @@ router.get('/ai/welcome', async (req, res) => {
       return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
     }
 
-    // ВРЕМЕННО РЕШЕНИЕ: Проверяваме дали има subscription
+    // Check plan access for AI Welcome Page
     const subscription = await Subscription.findOne({ shop });
-    let effectivePlan = settings?.planKey || 'starter';
+    const planKey = (settings?.planKey || 'starter').toLowerCase().replace(/\s+/g, '_');
+    const plansWithAccess = ['growth', 'growth_extra', 'enterprise'];
+    const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
     
-    // Ако няма subscription, даваме trial достъп до Growth
-    if (!subscription) {
-      console.log('[WELCOME] No subscription found, using trial access');
-      effectivePlan = 'growth';
-    }
-    
-    // Check plan - Welcome page requires Professional+
-    const allowedPlans = ['professional', 'growth', 'growth extra', 'enterprise'];
-    
-    if (!allowedPlans.includes(effectivePlan)) {
+    // Plus plans: Check if they have tokens
+    if (plusPlansRequireTokens.includes(planKey)) {
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      if (tokenBalance.balance <= 0) {
+        return res.status(403).json({ 
+          error: 'AI Welcome Page requires tokens. Please purchase tokens to enable this feature.',
+          tokensRequired: true
+        });
+      }
+      // Has tokens - allow access
+    } 
+    // Regular plans: Check if plan has access
+    else if (!plansWithAccess.includes(planKey)) {
       return res.status(403).json({ 
-        error: 'This feature requires Professional plan or higher',
-        debug: {
-          currentPlan: settings?.plan,
-          effectivePlan: effectivePlan,
-          hasSubscription: !!subscription
-        }
+        error: 'AI Welcome Page requires Professional Plus, Growth or higher plan',
+        upgradeRequired: true,
+        currentPlan: planKey
       });
     }
     
@@ -687,10 +691,30 @@ router.get('/ai/store-metadata.json', async (req, res) => {
       });
     }
 
-    // Check plan
-    if (!['growth extra', 'enterprise'].includes(settings?.planKey)) {
+    // Check plan access
+    const planKey = (settings?.planKey || '').toLowerCase().replace(/\s+/g, '_');
+    const plansWithAccess = ['growth_extra', 'enterprise'];
+    const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+    
+    // Plus plans: Check if they have tokens
+    if (plusPlansRequireTokens.includes(planKey)) {
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      if (tokenBalance.balance <= 0) {
+        return res.status(403).json({ 
+          error: 'Store Metadata requires tokens. Please purchase tokens to enable this feature.',
+          tokensRequired: true
+        });
+      }
+      // Has tokens - allow access
+    } 
+    // Regular plans: Check if plan has access
+    else if (!plansWithAccess.includes(planKey)) {
       return res.status(403).json({ 
-        error: 'Store Metadata requires Growth Extra plan or higher' 
+        error: 'Store Metadata requires Professional Plus, Growth Extra or Enterprise plan',
+        upgradeRequired: true,
+        currentPlan: planKey
       });
     }
 

@@ -137,9 +137,33 @@ router.get('/schema-data.json', async (req, res) => {
     const plan = await fetchPlan(shop);
     console.log('[SCHEMA-ENDPOINT] Plan result:', plan);
     
-    if (plan.planKey !== 'enterprise') {
-      console.log('[SCHEMA-ENDPOINT] Not enterprise plan');
-      return res.status(403).json({ error: 'Enterprise plan required' });
+    const planKey = (plan.planKey || '').toLowerCase().replace(/\s+/g, '_');
+    const plansWithAccess = ['enterprise'];
+    const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+    
+    // Plus plans: Check if they have tokens
+    if (plusPlansRequireTokens.includes(planKey)) {
+      const { default: TokenBalance } = await import('../db/TokenBalance.js');
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      if (tokenBalance.balance <= 0) {
+        console.log('[SCHEMA-ENDPOINT] Plus plan without tokens');
+        return res.status(403).json({ 
+          error: 'Advanced Schema Data requires tokens. Please purchase tokens to enable this feature.',
+          tokensRequired: true
+        });
+      }
+      console.log('[SCHEMA-ENDPOINT] Plus plan with tokens, access granted');
+      // Has tokens - allow access
+    } 
+    // Regular plans: Check if plan has access
+    else if (!plansWithAccess.includes(planKey)) {
+      console.log('[SCHEMA-ENDPOINT] Plan not eligible:', planKey);
+      return res.status(403).json({ 
+        error: 'Advanced Schema Data requires Professional Plus or Enterprise plan',
+        upgradeRequired: true,
+        currentPlan: planKey
+      });
     }
     
     console.log('[SCHEMA-ENDPOINT] Looking for AdvancedSchema document...');
