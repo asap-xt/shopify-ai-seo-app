@@ -382,7 +382,7 @@ export default function Dashboard({ shop: shopProp }) {
       {!isFirstLoad && syncStatus && (
         <Layout.Section>
           <Card>
-            {!isExpanded ? (
+            {autoSync && !isExpanded ? (
               // Collapsed view when auto-sync is enabled
               <InlineStack align="space-between" blockAlign="center" gap="400">
                 <InlineStack gap="200" blockAlign="center">
