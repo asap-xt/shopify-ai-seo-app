@@ -941,6 +941,39 @@ export default function Settings() {
     return availability[featureKey]?.includes(plan) || false;
   };
 
+  // Get upgrade text for unavailable features
+  const getUpgradeText = (featureKey) => {
+    const plan = normalizePlan(settings?.plan);
+    
+    // Feature upgrade paths based on current plan
+    const upgradeTexts = {
+      storeMetadata: {
+        starter: 'Available in Professional or higher'
+      },
+      welcomePage: {
+        starter: 'Available in Professional Plus (tokens) or Growth+',
+        professional: 'Available in Professional Plus (tokens) or Growth+'
+      },
+      collectionsJson: {
+        starter: 'Available in Professional Plus (tokens) or Growth+',
+        professional: 'Available in Professional Plus (tokens) or Growth+'
+      },
+      aiSitemap: {
+        starter: 'Available in Professional Plus (tokens) or Growth Extra+',
+        professional: 'Available in Professional Plus (tokens) or Growth Extra+',
+        growth: 'Available in Growth Plus (tokens) or Growth Extra+'
+      },
+      schemaData: {
+        starter: 'Available in Professional Plus (tokens), Growth Plus (tokens) or Enterprise',
+        professional: 'Available in Professional Plus (tokens), Growth Plus (tokens) or Enterprise',
+        growth: 'Available in Growth Plus (tokens) or Enterprise',
+        growth_extra: 'Available in Enterprise'
+      }
+    };
+    
+    return upgradeTexts[featureKey]?.[plan] || `Upgrade to enable this feature`;
+  };
+
   // Test Plan Switcher - commented out for production
   /*
   const setTestPlan = async (plan) => {
@@ -1604,7 +1637,7 @@ export default function Settings() {
                         checked={false}
                         onChange={() => toggleFeature(feature.key)}
                         disabled={true}
-                        helpText={`Upgrade to ${feature.requiredPlan} plan to enable`}
+                        helpText={getUpgradeText(feature.key)}
                       />
                     )}
                   </Box>
