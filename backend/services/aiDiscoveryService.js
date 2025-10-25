@@ -298,7 +298,7 @@ class AIDiscoveryService {
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
-        storeMetadata: false,
+        storeMetadata: true, // Enabled by default (included in Professional)
         schemaData: false
       },
       professional_plus: {
@@ -314,7 +314,7 @@ class AIDiscoveryService {
         aiSitemap: false,
         welcomePage: false,
         collectionsJson: false,
-        storeMetadata: false,
+        storeMetadata: true, // Enabled by default (included in Growth)
         schemaData: false
       },
       growth_plus: {
@@ -442,12 +442,12 @@ class AIDiscoveryService {
       // Define plan features
       const planFeatures = {
         starter: ['productsJson'],
-        professional: ['productsJson'],
-        professional_plus: ['productsJson', 'welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'], // All features unlocked, requires tokens
-        growth: ['productsJson', 'welcomePage', 'collectionsJson'],
-        growth_plus: ['productsJson', 'welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'], // All features unlocked, requires tokens
-        growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata'],
-        enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData']
+        professional: ['productsJson', 'storeMetadata'], // Store Metadata included
+        professional_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // All features unlocked, some require tokens
+        growth: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson'], // Store Metadata included
+        growth_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // All features unlocked, some require tokens
+        growth_extra: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson'],
+        enterprise: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'schemaData']
       };
       
       const availableFeatures = planFeatures[normalizedPlan] || planFeatures.starter;

@@ -931,11 +931,11 @@ export default function Settings() {
     
     const availability = {
       productsJson: ['starter', 'professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
-      storeMetadata: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
-      welcomePage: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
-      collectionsJson: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
-      aiSitemap: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Plus plans have access (with tokens)
-      schemaData: ['professional_plus', 'growth_plus', 'enterprise'] // Plus plans have access (with tokens)
+      storeMetadata: ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Included for Professional+
+      welcomePage: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
+      collectionsJson: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
+      aiSitemap: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Requires tokens for Plus plans
+      schemaData: ['professional_plus', 'growth_plus', 'enterprise'] // Requires tokens for Plus plans
     };
     
     return availability[featureKey]?.includes(plan) || false;
@@ -972,8 +972,8 @@ export default function Settings() {
     
     // Features that Plus plans need tokens for
     const plusPlansRequireTokens = {
-      professional_plus: ['welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'],
-      growth_plus: ['aiSitemap', 'storeMetadata', 'schemaData']
+      professional_plus: ['welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // Store Metadata is included (no tokens)
+      growth_plus: ['aiSitemap', 'schemaData'] // Store Metadata, Welcome Page, Collections JSON are included (no tokens)
     };
     
     return plusPlansRequireTokens[plan]?.includes(featureKey) || false;
