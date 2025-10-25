@@ -26,6 +26,8 @@ export default async function collectionsWebhook(req, res) {
     console.log('[Webhook-Collections] Shop:', shop);
     console.log('[Webhook-Collections] Collection ID:', payload?.id);
     console.log('[Webhook-Collections] Collection Title:', payload?.title);
+    console.log('[Webhook-Collections] Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[Webhook-Collections] Request body:', JSON.stringify(payload, null, 2));
     
     // Respond immediately to Shopify (prevent timeout)
     res.status(200).send('ok');
