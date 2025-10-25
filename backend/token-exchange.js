@@ -65,6 +65,20 @@ router.post('/', async (req, res) => {
         { upsert: true, new: true }
       );
       console.log(`✅ Token saved to database for shop: ${shop}`);
+      
+      // Регистрирай webhook-ите след успешното запазване на токена
+      try {
+        const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
+        const mockReq = {
+          session: { accessToken },
+          shopDomain: shop
+        };
+        const webhookResults = await registerAllWebhooks(mockReq, shop, process.env.APP_URL);
+        console.log('[TOKEN_EXCHANGE] Webhook registration results:', JSON.stringify(webhookResults, null, 2));
+      } catch (webhookError) {
+        console.error('[TOKEN_EXCHANGE] Webhook registration failed:', webhookError.message);
+        // Не блокираме token exchange-а ако webhook регистрацията се провали
+      }
     } catch (dbError) {
       console.error(`❌ Failed to save token to database for ${shop}:`, dbError);
       throw new Error(`Database save failed: ${dbError.message}`);
