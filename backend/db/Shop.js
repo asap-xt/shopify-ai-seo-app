@@ -63,6 +63,18 @@ const shopSchema = new mongoose.Schema({
     inProgress: { type: Boolean, default: false },
     lastError: { type: String, default: null }
   },
+  // PHASE 4: Sitemap generation queue status
+  sitemapStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed, retrying
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null }
+  },
   storeLanguages: [{
     locale: String,
     name: String,

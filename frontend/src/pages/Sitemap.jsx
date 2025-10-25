@@ -25,6 +25,9 @@ export default function SitemapPage({ shop: shopProp }) {
   const [toast, setToast] = useState('');
   // plan banner state (restored)
   const [plan, setPlan] = useState(null);
+  // PHASE 4: Queue status
+  const [queueStatus, setQueueStatus] = useState(null);
+  const [polling, setPolling] = useState(false);
   const api = useMemo(() => makeSessionFetch(), []);
 
   const loadInfo = useCallback(async () => {
@@ -78,29 +81,74 @@ export default function SitemapPage({ shop: shopProp }) {
   const generate = useCallback(async () => {
     if (!shop) return;
     setBusy(true);
+    setQueueStatus(null);
+    
     try {
-      // ✅ backend route is /api/sitemap/generate - returns XML, not JSON
+      // PHASE 4: POST generates async, returns queue status
       const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}`, {
         method: 'POST',
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`,
+          'Content-Type': 'application/json'
         }
       });
       
       if (response.ok) {
-        setToast('Sitemap generated successfully!');
-        await loadInfo(); // Reload info to get updated status
+        const data = await response.json();
+        console.log('[SITEMAP] Generation response:', data);
+        
+        if (data.success) {
+          setToast(data.message || 'Sitemap generation started!');
+          setQueueStatus(data.job);
+          
+          // Start polling for status if queued
+          if (data.job?.queued) {
+            setPolling(true);
+          }
+        } else {
+          setToast(data.message || 'Sitemap generation failed');
+        }
       } else {
         const errorText = await response.text();
         setToast(`Sitemap generation failed: ${errorText}`);
       }
     } catch (e) {
+      console.error('[SITEMAP] Generation error:', e);
       setToast(e.message || 'Sitemap generation failed');
     } finally {
       setBusy(false);
     }
-  }, [shop, loadInfo]);
+  }, [shop]);
+
+  // PHASE 4: Poll for queue status
+  const checkStatus = useCallback(async () => {
+    if (!shop || !polling) return;
+    
+    try {
+      const status = await api(`/api/sitemap/status?shop=${shop}`);
+      console.log('[SITEMAP] Status:', status);
+      
+      setQueueStatus(status.queue);
+      
+      // Stop polling if generation is completed or failed
+      if (status.queue.status === 'completed' || status.queue.status === 'failed' || status.queue.status === 'idle') {
+        setPolling(false);
+        setToast(status.queue.message || 'Sitemap generation completed!');
+        await loadInfo(); // Reload sitemap info
+      }
+    } catch (e) {
+      console.error('[SITEMAP] Status check error:', e);
+    }
+  }, [shop, polling, api, loadInfo]);
+
+  // PHASE 4: Polling effect
+  useEffect(() => {
+    if (polling) {
+      const interval = setInterval(checkStatus, 3000); // Check every 3 seconds
+      return () => clearInterval(interval);
+    }
+  }, [polling, checkStatus]);
 
   const viewSitemap = useCallback(async () => {
     if (!shop) return;
@@ -164,6 +212,32 @@ export default function SitemapPage({ shop: shopProp }) {
                 )}
             </p>
           </Banner>
+
+          {/* PHASE 4: Queue Status Banner */}
+          {(polling || queueStatus) && (
+            <Banner tone={queueStatus?.status === 'processing' ? 'info' : queueStatus?.status === 'failed' ? 'critical' : 'success'}>
+              <BlockStack gap="200">
+                <InlineStack gap="200" blockAlign="center">
+                  {polling && <Spinner size="small" />}
+                  <Text variant="bodyMd" fontWeight="medium">
+                    {queueStatus?.message || 'Processing...'}
+                  </Text>
+                </InlineStack>
+                
+                {queueStatus?.position > 0 && (
+                  <Text variant="bodySm" tone="subdued">
+                    Position in queue: {queueStatus.position} | Estimated time: ~{queueStatus.estimatedTime}s
+                  </Text>
+                )}
+                
+                {queueStatus?.queueLength > 0 && (
+                  <Text variant="bodySm" tone="subdued">
+                    Queue length: {queueStatus.queueLength} job(s)
+                  </Text>
+                )}
+              </BlockStack>
+            </Banner>
+          )}
 
           <InlineStack align="space-between" blockAlign="center">
             <Box>
