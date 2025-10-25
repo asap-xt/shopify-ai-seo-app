@@ -24,6 +24,17 @@ export const PLANS = {
     providersAllowed: ["openai", "llama", "deepseek"],
     autosyncCron: "0 */48 * * *", // every 48 hours (minute 0)
   },
+  "professional plus": {
+    name: "Professional Plus",
+    priceUsd: 19.99,
+    queryLimit: 600,
+    productLimit: 250,
+    collectionLimit: 20,
+    languageLimit: 2, // Max 2 languages
+    providersAllowed: ["openai", "llama", "deepseek"],
+    autosyncCron: "0 */48 * * *", // every 48 hours
+    includedTokens: 0, // No included tokens, but AI Discovery features unlocked with purchased tokens
+  },
   growth: {
     name: "Growth",
     priceUsd: 29.99,
@@ -33,6 +44,17 @@ export const PLANS = {
     languageLimit: 3, // Max 3 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
     autosyncCron: "0 */24 * * *", // every 24 hours
+  },
+  "growth plus": {
+    name: "Growth Plus",
+    priceUsd: 35.99,
+    queryLimit: 1500,
+    productLimit: 700,
+    collectionLimit: 40,
+    languageLimit: 3, // Max 3 languages
+    providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
+    autosyncCron: "0 */24 * * *", // every 24 hours
+    includedTokens: 0, // No included tokens, but AI Discovery features unlocked with purchased tokens
   },
   "growth extra": {
     name: "Growth Extra",
@@ -71,7 +93,12 @@ export function resolvePlanKey(input) {
   const key = String(input || "").toLowerCase().trim();
   if (!key) return null;
   if (PLANS[key]) return key;
+  
+  // Resolve variants
   if (key === "growth_extra" || key === "growthextra") return "growth extra";
+  if (key === "professional_plus" || key === "professionalplus") return "professional plus";
+  if (key === "growth_plus" || key === "growthplus") return "growth plus";
+  
   return null;
 }
 

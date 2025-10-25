@@ -276,7 +276,9 @@ class AIDiscoveryService {
     const availableBotsByPlan = {
       starter: ['meta', 'anthropic'],                                           // Meta AI + Claude
       professional: ['meta', 'anthropic', 'google'],                            // + Gemini
+      professional_plus: ['meta', 'anthropic', 'google'],                       // Same as Professional
       growth: ['meta', 'anthropic', 'google', 'openai'],                       // + ChatGPT
+      growth_plus: ['meta', 'anthropic', 'google', 'openai'],                  // Same as Growth
       growth_extra: ['meta', 'anthropic', 'google', 'openai', 'perplexity'],  // + Perplexity
       enterprise: ['meta', 'anthropic', 'google', 'openai', 'perplexity', 'others'] // + Others
     };
@@ -386,7 +388,9 @@ class AIDiscoveryService {
       const planFeatures = {
         starter: ['productsJson'],
         professional: ['productsJson'],
+        professional_plus: ['productsJson', 'welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'], // All features unlocked, requires tokens
         growth: ['productsJson', 'welcomePage', 'collectionsJson'],
+        growth_plus: ['productsJson', 'welcomePage', 'collectionsJson', 'aiSitemap', 'storeMetadata', 'schemaData'], // All features unlocked, requires tokens
         growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata'],
         enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData']
       };
