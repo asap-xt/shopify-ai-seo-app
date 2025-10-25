@@ -951,22 +951,22 @@ export default function Settings() {
         starter: 'Available in Professional or higher'
       },
       welcomePage: {
-        starter: 'Available in Professional Plus (tokens) or Growth+',
-        professional: 'Available in Professional Plus (tokens) or Growth+'
+        starter: 'Available in Professional Plus (pay-per-use tokens) or Growth+',
+        professional: 'Available in Professional Plus (pay-per-use tokens) or Growth+'
       },
       collectionsJson: {
-        starter: 'Available in Professional Plus (tokens) or Growth+',
-        professional: 'Available in Professional Plus (tokens) or Growth+'
+        starter: 'Available in Professional Plus (pay-per-use tokens) or Growth+',
+        professional: 'Available in Professional Plus (pay-per-use tokens) or Growth+'
       },
       aiSitemap: {
-        starter: 'Available in Professional Plus (tokens) or Growth Extra+',
-        professional: 'Available in Professional Plus (tokens) or Growth Extra+',
-        growth: 'Available in Growth Plus (tokens) or Growth Extra+'
+        starter: 'Available in Professional Plus (pay-per-use tokens) or Growth Extra+',
+        professional: 'Available in Professional Plus (pay-per-use tokens) or Growth Extra+',
+        growth: 'Available in Growth Plus (pay-per-use tokens) or Growth Extra+'
       },
       schemaData: {
-        starter: 'Available in Professional Plus (tokens), Growth Plus (tokens) or Enterprise',
-        professional: 'Available in Professional Plus (tokens), Growth Plus (tokens) or Enterprise',
-        growth: 'Available in Growth Plus (tokens) or Enterprise',
+        starter: 'Available in Professional Plus (pay-per-use tokens), Growth Plus (pay-per-use tokens) or Enterprise',
+        professional: 'Available in Professional Plus (pay-per-use tokens), Growth Plus (pay-per-use tokens) or Enterprise',
+        growth: 'Available in Growth Plus (pay-per-use tokens) or Enterprise',
         growth_extra: 'Available in Enterprise'
       }
     };
