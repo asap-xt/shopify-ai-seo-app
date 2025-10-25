@@ -153,27 +153,42 @@ async function getProductLocalizedContent(shop, productId, language) {
   }
 }
 
-// Helper: get plan limits
+// Helper: get plan limits from central plans.js configuration
 async function getPlanLimits(shop) {
   try {
+    const { getPlanConfig } = await import('../plans.js');
     const sub = await Subscription.findOne({ shop }).lean().exec();
     console.log('[SITEMAP] Subscription found:', !!sub, 'plan:', sub?.plan);
     
-    if (!sub) return { limit: 100, plan: 'starter' };
+    if (!sub) {
+      // Default to starter plan
+      const starterConfig = getPlanConfig('starter');
+      return { 
+        limit: starterConfig.productLimit, 
+        collections: starterConfig.collectionLimit, 
+        plan: 'starter' 
+      };
+    }
     
-    const planLimits = {
-      'starter': 100,
-      'professional': 350,
-      'growth': 1000,
-      'growth_extra': 2500,
-      'enterprise': 6000
+    const planConfig = getPlanConfig(sub.plan);
+    if (!planConfig) {
+      console.warn('[SITEMAP] Unknown plan:', sub.plan, '- falling back to starter');
+      const starterConfig = getPlanConfig('starter');
+      return { 
+        limit: starterConfig.productLimit, 
+        collections: starterConfig.collectionLimit, 
+        plan: sub.plan 
+      };
+    }
+    
+    return { 
+      limit: planConfig.productLimit, 
+      collections: planConfig.collectionLimit, 
+      plan: sub.plan 
     };
-    
-    const limit = planLimits[sub.plan?.toLowerCase()] || 100;
-    return { limit, plan: sub.plan };
   } catch (e) {
     console.error('[SITEMAP] Error getting plan limits:', e.message);
-    return { limit: 100, plan: 'starter' };
+    return { limit: 100, collections: 0, plan: 'starter' };
   }
 }
 
@@ -828,7 +843,7 @@ async function handleInfo(req, res) {
     
     console.log('[SITEMAP] Getting info for shop:', shop);
     
-    const { limit, plan } = await getPlanLimits(shop);
+    const { limit, collections: collectionLimit, plan } = await getPlanLimits(shop);
     
     // Check if sitemap exists
     const existingSitemap = await Sitemap.findOne({ shop }).select('-content').lean();
@@ -844,7 +859,7 @@ async function handleInfo(req, res) {
     `);
     
     const productCount = countData.productsCount?.count || 0;
-    const includesCollections = ['growth', 'professional', 'growth_extra', 'enterprise'].includes(plan?.toLowerCase());
+    const includesCollections = collectionLimit > 0;
     
     const response = {
       shop,
@@ -852,7 +867,7 @@ async function handleInfo(req, res) {
       productCount,
       limits: {
         products: limit,
-        collections: includesCollections ? 20 : 0
+        collections: collectionLimit
       },
       features: {
         products: true,
