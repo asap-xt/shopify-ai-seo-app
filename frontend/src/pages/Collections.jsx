@@ -56,6 +56,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const [optimizedFilter, setOptimizedFilter] = useState('all');
   const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
   
+  // Sorting state
+  const [sortBy, setSortBy] = useState('updatedAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  
   // SEO generation state
   const [model, setModel] = useState('');
   const [modelOptions, setModelOptions] = useState([]);
@@ -81,6 +85,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   // Track selected collections with SEO
   const [selectedHaveSEO, setSelectedHaveSEO] = useState(false);
+  
+  // Sync state
+  const [syncing, setSyncing] = useState(false);
   
   // Confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -214,6 +221,34 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       });
   }, [shop, api]);
   
+  // Sync collections function
+  const handleSyncCollections = async () => {
+    try {
+      setSyncing(true);
+      console.log('[COLLECTIONS] Starting collections sync...');
+      
+      const response = await api(`/api/collections/sync?shop=${shop}`, {
+        method: 'POST'
+      });
+      
+      if (response?.success) {
+        console.log('[COLLECTIONS] Sync successful:', response);
+        setToast('Collections synced successfully!');
+        
+        // Reload collections after sync
+        await loadCollections();
+      } else {
+        console.error('[COLLECTIONS] Sync failed:', response);
+        setToast('Failed to sync collections');
+      }
+    } catch (error) {
+      console.error('[COLLECTIONS] Sync error:', error);
+      setToast('Error syncing collections');
+    } finally {
+      setSyncing(false);
+    }
+  };
+  
   // Load collections
   const loadCollections = useCallback(async () => {
     setLoading(true);
@@ -226,6 +261,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         shop,
         ...(searchValue && { search: searchValue }),
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+        sortBy,
+        sortOrder
       });
       
       // Use GraphQL endpoint
@@ -267,7 +304,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, searchValue, optimizedFilter, api]);
+  }, [shop, searchValue, optimizedFilter, sortBy, sortOrder, api]);
   
   // Initial load and filter changes
   useEffect(() => {
@@ -275,7 +312,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       loadCollections();
       setSelectedHaveSEO(false); // Reset SEO tracking on reload
     }
-  }, [shop, optimizedFilter, loadCollections]);
+  }, [shop, optimizedFilter, sortBy, sortOrder, loadCollections]);
   
   // Search debounce effect
   useEffect(() => {
@@ -1467,6 +1504,14 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             {/* Buttons stacked vertically on the right */}
             <BlockStack gap="200">
               <Button
+                onClick={handleSyncCollections}
+                disabled={syncing}
+                size="medium"
+              >
+                {syncing ? 'Syncing...' : 'Sync Collections'}
+              </Button>
+              
+              <Button
                 primary
                 onClick={openLanguageModal}
                 disabled={selectedItems.length === 0 && !selectAllPages}
@@ -1516,6 +1561,64 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               </Button>
             </BlockStack>
           </InlineStack>
+          
+          {/* Filters and Sorting */}
+          {totalCount > 0 && (
+            <Box paddingBlockStart="300">
+              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+                <InlineStack gap="200">
+                  {/* AI Search Status Filter */}
+                  <Popover
+                    active={showOptimizedPopover}
+                    activator={
+                      <Button
+                        onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
+                        disclosure
+                      >
+                        AI Search Status
+                      </Button>
+                    }
+                    onClose={() => setShowOptimizedPopover(false)}
+                  >
+                    <Popover.Pane>
+                      <ChoiceList
+                        title="Filter by optimization status"
+                        choices={[
+                          { label: 'All collections', value: 'all' },
+                          { label: 'Optimized', value: 'optimized' },
+                          { label: 'Not optimized', value: 'not_optimized' },
+                        ]}
+                        selected={[optimizedFilter]}
+                        onChange={(value) => {
+                          setOptimizedFilter(value[0]);
+                          setShowOptimizedPopover(false);
+                        }}
+                      />
+                    </Popover.Pane>
+                  </Popover>
+                </InlineStack>
+                
+                {/* Sorting */}
+                <Select
+                  label="Sort by"
+                  options={[
+                    { label: 'Newest first', value: 'updatedAt_desc' },
+                    { label: 'Oldest first', value: 'updatedAt_asc' },
+                    { label: 'Name A-Z', value: 'title_asc' },
+                    { label: 'Name Z-A', value: 'title_desc' },
+                    { label: 'Most products', value: 'productsCount_desc' },
+                    { label: 'Least products', value: 'productsCount_asc' },
+                  ]}
+                  value={`${sortBy}_${sortOrder}`}
+                  onChange={(value) => {
+                    const [field, order] = value.split('_');
+                    setSortBy(field);
+                    setSortOrder(order);
+                  }}
+                />
+              </InlineStack>
+            </Box>
+          )}
           
           {/* Select all checkbox below */}
           {totalCount > 0 && (
