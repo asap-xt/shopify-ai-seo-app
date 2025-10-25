@@ -131,6 +131,8 @@ class CacheService {
     const patterns = [
       `subscription:${shop}`,
       `plan:${shop}`,
+      `billing:info:${shop}`,  // CRITICAL: Billing info cache
+      `dashboard:stats:${shop}`,  // Dashboard stats cache
       `products:${shop}:*`,
       `collections:${shop}:*`,
       `stats:${shop}`,
