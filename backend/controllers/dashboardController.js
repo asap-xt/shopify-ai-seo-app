@@ -9,6 +9,7 @@ import TokenBalance from '../db/TokenBalance.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 import { syncStore } from '../services/syncService.js';
+import { getPlanConfig } from '../plans.js';
 
 const router = express.Router();
 
@@ -264,10 +265,13 @@ router.get('/stats', verifyRequest, async (req, res) => {
       });
     }
     
+    // Get plan config for correct pricing
+    const planConfig = getPlanConfig(plan);
+    
     const stats = {
       subscription: {
         plan,
-        price: subscription?.price || 0
+        price: planConfig?.priceUsd || 0
       },
       products: {
         total: totalProducts,
