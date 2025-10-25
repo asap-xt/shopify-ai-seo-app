@@ -67,14 +67,20 @@ export default function Dashboard({ shop: shopProp }) {
       return false;
     }
   });
+  
+  // Debounce timer for dashboard data loading
+  const loadDataTimeoutRef = useRef(null);
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(true); // Force immediate load on mount
     loadSyncStatus();
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
+      }
+      if (loadDataTimeoutRef.current) {
+        clearTimeout(loadDataTimeoutRef.current);
       }
     };
   }, [shop]);
@@ -88,27 +94,39 @@ export default function Dashboard({ shop: shopProp }) {
     }
   }, [syncStatus?.autoSyncEnabled]); // Only trigger when autoSyncEnabled changes
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      // makeSessionFetch връща директно JSON, не Response
-      const [statsData, tokensData] = await Promise.all([
-        api(`/api/dashboard/stats?shop=${shop}`),
-        api(`/api/billing/tokens/balance?shop=${shop}`)
-      ]);
-
-      if (statsData) {
-        setStats(statsData);
-        setSubscription(statsData.subscription);
-      }
-      if (tokensData) {
-        setTokens(tokensData);
-      }
-    } catch (error) {
-      console.error('[Dashboard] Error loading data:', error);
-    } finally {
-      setLoading(false);
+  const loadDashboardData = async (force = false) => {
+    // Debounce multiple calls within 500ms
+    if (!force && loadDataTimeoutRef.current) {
+      clearTimeout(loadDataTimeoutRef.current);
     }
+    
+    return new Promise((resolve) => {
+      loadDataTimeoutRef.current = setTimeout(async () => {
+        try {
+          setLoading(true);
+          // makeSessionFetch връща директно JSON, не Response
+          const [statsData, tokensData] = await Promise.all([
+            api(`/api/dashboard/stats?shop=${shop}`),
+            api(`/api/billing/tokens/balance?shop=${shop}`)
+          ]);
+
+          if (statsData) {
+            setStats(statsData);
+            setSubscription(statsData.subscription);
+          }
+          if (tokensData) {
+            setTokens(tokensData);
+          }
+          
+          resolve();
+        } catch (error) {
+          console.error('[Dashboard] Error loading data:', error);
+          resolve();
+        } finally {
+          setLoading(false);
+        }
+      }, force ? 0 : 500); // Immediate if forced, otherwise debounce
+    });
   };
   
   const loadSyncStatus = async () => {
@@ -146,7 +164,7 @@ export default function Dashboard({ shop: shopProp }) {
                   pollRef.current = null;
                 }
                 setSyncing(false);
-                loadDashboardData(); // Reload stats
+                loadDashboardData(); // Reload stats (debounced)
               }
             }
           } catch (e) {
