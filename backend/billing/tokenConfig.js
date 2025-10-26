@@ -123,14 +123,21 @@ export const PLAN_INCLUDED_TOKENS = {
   'starter': 0,
   'professional': 0,
   'growth': 0,
-  'growth_extra': 100_000_000,  // 100 million tokens per month
+  'growth extra': 100_000_000,  // 100 million tokens per month
   'enterprise': 300_000_000     // 300 million tokens per month
 };
 
 // Calculate included tokens for a plan
 export function getIncludedTokens(plan) {
-  const planKey = String(plan).toLowerCase();
-  const tokens = PLAN_INCLUDED_TOKENS[planKey] || 0;
+  const planKey = String(plan).toLowerCase().trim();
+  
+  // Handle plan key variants
+  let normalizedKey = planKey;
+  if (planKey === 'growth_extra' || planKey === 'growthextra') {
+    normalizedKey = 'growth extra';
+  }
+  
+  const tokens = PLAN_INCLUDED_TOKENS[normalizedKey] || PLAN_INCLUDED_TOKENS[planKey] || 0;
   
   return {
     tokens,
