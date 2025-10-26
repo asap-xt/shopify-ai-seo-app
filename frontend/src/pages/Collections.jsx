@@ -54,7 +54,13 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   // Filter state
   const [searchValue, setSearchValue] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
+  const [languageFilter, setLanguageFilter] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
   const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
+  const [showLanguagePopover, setShowLanguagePopover] = useState(false);
+  const [showTagsPopover, setShowTagsPopover] = useState(false);
+  const [showSortPopover, setShowSortPopover] = useState(false);
   
   // Sorting state
   const [sortBy, setSortBy] = useState('updatedAt');
@@ -1623,37 +1629,168 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     />
                   </Box>
                 </Popover>
+                
+                {/* Language Status filter */}
+                <Popover
+                  active={showLanguagePopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowLanguagePopover(!showLanguagePopover)}
+                      removeUnderline
+                    >
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>Language Status</span>
+                        {languageFilter && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setLanguageFilter('');
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
+                    </Button>
+                  }
+                  onClose={() => setShowLanguagePopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="Language Status"
+                      titleHidden
+                      choices={[
+                        { label: 'All languages', value: '' },
+                        ...(availableLanguages?.map(lang => ({
+                          label: `Has ${lang.toUpperCase()}`,
+                          value: `has_${lang}`
+                        })) || []),
+                        ...(availableLanguages?.map(lang => ({
+                          label: `Missing ${lang.toUpperCase()}`,
+                          value: `missing_${lang}`
+                        })) || []),
+                      ]}
+                      selected={languageFilter ? [languageFilter] : []}
+                      onChange={(value) => {
+                        setLanguageFilter(value[0] || '');
+                        setShowLanguagePopover(false);
+                      }}
+                    />
+                  </Box>
+                </Popover>
+                
+                {/* Tags filter */}
+                <Popover
+                  active={showTagsPopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowTagsPopover(!showTagsPopover)}
+                      removeUnderline
+                    >
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>Tags</span>
+                        {selectedTags.length > 0 && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTags([]);
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
+                    </Button>
+                  }
+                  onClose={() => setShowTagsPopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="Tags"
+                      titleHidden
+                      allowMultiple
+                      choices={availableTags.map(tag => ({ label: tag, value: tag }))}
+                      selected={selectedTags}
+                      onChange={(value) => {
+                        setSelectedTags(value);
+                      }}
+                    />
+                    <Box paddingBlockStart="200">
+                      <Button
+                        size="slim"
+                        onClick={() => setShowTagsPopover(false)}
+                      >
+                        Apply
+                      </Button>
+                    </Box>
+                  </Box>
+                </Popover>
               </InlineStack>
               
-              {/* Sort by dropdown */}
-              <Box minWidth="200px">
-                <Select
-                  label=""
-                  options={[
-                    { label: 'Newest first', value: 'updatedAt_desc' },
-                    { label: 'Oldest first', value: 'updatedAt_asc' },
-                    { label: 'Name A-Z', value: 'title_asc' },
-                    { label: 'Name Z-A', value: 'title_desc' },
-                    { label: 'Most products', value: 'productsCount_desc' },
-                    { label: 'Least products', value: 'productsCount_asc' },
-                  ]}
-                  value={`${sortBy}_${sortOrder}`}
-                  onChange={(value) => {
-                    const [field, order] = value.split('_');
-                    setSortBy(field);
-                    setSortOrder(order);
-                  }}
-                />
-              </Box>
+              {/* Sort dropdown - same style as other filters */}
+              <Popover
+                active={showSortPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowSortPopover(!showSortPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>
+                        {sortBy === 'updatedAt' && sortOrder === 'desc' && 'Newest first'}
+                        {sortBy === 'updatedAt' && sortOrder === 'asc' && 'Oldest first'}
+                        {sortBy === 'title' && sortOrder === 'asc' && 'Name A-Z'}
+                        {sortBy === 'title' && sortOrder === 'desc' && 'Name Z-A'}
+                        {sortBy === 'productsCount' && sortOrder === 'desc' && 'Most products'}
+                        {sortBy === 'productsCount' && sortOrder === 'asc' && 'Least products'}
+                      </span>
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowSortPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="Sort Order"
+                    titleHidden
+                    choices={[
+                      { label: 'Newest first', value: 'updatedAt_desc' },
+                      { label: 'Oldest first', value: 'updatedAt_asc' },
+                      { label: 'Name A-Z', value: 'title_asc' },
+                      { label: 'Name Z-A', value: 'title_desc' },
+                      { label: 'Most products', value: 'productsCount_desc' },
+                      { label: 'Least products', value: 'productsCount_asc' },
+                    ]}
+                    selected={[`${sortBy}_${sortOrder}`]}
+                    onChange={(value) => {
+                      const [field, order] = value[0].split('_');
+                      setSortBy(field);
+                      setSortOrder(order);
+                      setShowSortPopover(false);
+                    }}
+                  />
+                </Box>
+              </Popover>
             </InlineStack>
             
             {/* Applied filters */}
-            {optimizedFilter !== 'all' && (
+            {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
               <Box paddingBlockStart="200">
                 <InlineStack gap="100" wrap>
-                  <Badge onRemove={() => setOptimizedFilter('all')}>
-                    {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
-                  </Badge>
+                  {optimizedFilter !== 'all' && (
+                    <Badge onRemove={() => setOptimizedFilter('all')}>
+                      {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
+                    </Badge>
+                  )}
+                  {languageFilter && (
+                    <Badge onRemove={() => setLanguageFilter('')}>
+                      {languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </Badge>
+                  )}
+                  {selectedTags.map(tag => (
+                    <Badge key={tag} onRemove={() => setSelectedTags(prev => prev.filter(t => t !== tag))}>
+                      Tag: {tag}
+                    </Badge>
+                  ))}
                 </InlineStack>
               </Box>
             )}
