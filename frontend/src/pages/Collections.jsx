@@ -1562,64 +1562,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             </BlockStack>
           </InlineStack>
           
-          {/* Filters and Sorting */}
-          {totalCount > 0 && (
-            <Box paddingBlockStart="300">
-              <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
-                <InlineStack gap="200">
-                  {/* AI Search Status Filter */}
-                  <Popover
-                    active={showOptimizedPopover}
-                    activator={
-                      <Button
-                        onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
-                        disclosure
-                      >
-                        AI Search Status
-                      </Button>
-                    }
-                    onClose={() => setShowOptimizedPopover(false)}
-                  >
-                    <Popover.Pane>
-                      <ChoiceList
-                        title="Filter by optimization status"
-                        choices={[
-                          { label: 'All collections', value: 'all' },
-                          { label: 'Optimized', value: 'optimized' },
-                          { label: 'Not optimized', value: 'not_optimized' },
-                        ]}
-                        selected={[optimizedFilter]}
-                        onChange={(value) => {
-                          setOptimizedFilter(value[0]);
-                          setShowOptimizedPopover(false);
-                        }}
-                      />
-                    </Popover.Pane>
-                  </Popover>
-                </InlineStack>
-                
-                {/* Sorting */}
-                <Select
-                  label="Sort by"
-                  options={[
-                    { label: 'Newest first', value: 'updatedAt_desc' },
-                    { label: 'Oldest first', value: 'updatedAt_asc' },
-                    { label: 'Name A-Z', value: 'title_asc' },
-                    { label: 'Name Z-A', value: 'title_desc' },
-                    { label: 'Most products', value: 'productsCount_desc' },
-                    { label: 'Least products', value: 'productsCount_asc' },
-                  ]}
-                  value={`${sortBy}_${sortOrder}`}
-                  onChange={(value) => {
-                    const [field, order] = value.split('_');
-                    setSortBy(field);
-                    setSortOrder(order);
-                  }}
-                />
-              </InlineStack>
-            </Box>
-          )}
-          
           {/* Select all checkbox below */}
           {totalCount > 0 && (
             <Box paddingBlockStart="300">
@@ -1637,48 +1579,71 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         <Card>
           {/* Filter buttons */}
           <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-            <InlineStack gap="200" wrap>
-              {/* AI Search Status filter */}
-              <Popover
-                active={showOptimizedPopover}
-                activator={
-                  <Button 
-                    disclosure="down"
-                    onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
-                    removeUnderline
-                  >
-                    <InlineStack gap="100" blockAlign="center">
-                      <span>AI Search Status</span>
-                      {optimizedFilter !== 'all' && (
-                        <Box onClick={(e) => {
-                          e.stopPropagation();
-                          setOptimizedFilter('all');
-                        }}>
-                          <Text as="span" tone="subdued">✕</Text>
-                        </Box>
-                      )}
-                    </InlineStack>
-                  </Button>
-                }
-                onClose={() => setShowOptimizedPopover(false)}
-              >
-                <Box padding="300" minWidth="200px">
-                  <ChoiceList
-                    title="AI Search Status"
-                    titleHidden
-                    choices={[
-                      { label: 'All collections', value: 'all' },
-                      { label: 'Has AI Search Optimisation', value: 'true' },
-                      { label: 'No AI Search Optimisation', value: 'false' },
-                    ]}
-                    selected={[optimizedFilter]}
-                    onChange={(value) => {
-                      setOptimizedFilter(value[0]);
-                      setShowOptimizedPopover(false);
-                    }}
-                  />
-                </Box>
-              </Popover>
+            <InlineStack gap="200" wrap align="space-between">
+              <InlineStack gap="200" wrap>
+                {/* AI Search Status filter */}
+                <Popover
+                  active={showOptimizedPopover}
+                  activator={
+                    <Button 
+                      disclosure="down"
+                      onClick={() => setShowOptimizedPopover(!showOptimizedPopover)}
+                      removeUnderline
+                    >
+                      <InlineStack gap="100" blockAlign="center">
+                        <span>AI Search Status</span>
+                        {optimizedFilter !== 'all' && (
+                          <Box onClick={(e) => {
+                            e.stopPropagation();
+                            setOptimizedFilter('all');
+                          }}>
+                            <Text as="span" tone="subdued">✕</Text>
+                          </Box>
+                        )}
+                      </InlineStack>
+                    </Button>
+                  }
+                  onClose={() => setShowOptimizedPopover(false)}
+                >
+                  <Box padding="300" minWidth="200px">
+                    <ChoiceList
+                      title="AI Search Status"
+                      titleHidden
+                      choices={[
+                        { label: 'All collections', value: 'all' },
+                        { label: 'Has AI Search Optimisation', value: 'true' },
+                        { label: 'No AI Search Optimisation', value: 'false' },
+                      ]}
+                      selected={[optimizedFilter]}
+                      onChange={(value) => {
+                        setOptimizedFilter(value[0]);
+                        setShowOptimizedPopover(false);
+                      }}
+                    />
+                  </Box>
+                </Popover>
+              </InlineStack>
+              
+              {/* Sort by dropdown */}
+              <Box minWidth="200px">
+                <Select
+                  label=""
+                  options={[
+                    { label: 'Newest first', value: 'updatedAt_desc' },
+                    { label: 'Oldest first', value: 'updatedAt_asc' },
+                    { label: 'Name A-Z', value: 'title_asc' },
+                    { label: 'Name Z-A', value: 'title_desc' },
+                    { label: 'Most products', value: 'productsCount_desc' },
+                    { label: 'Least products', value: 'productsCount_asc' },
+                  ]}
+                  value={`${sortBy}_${sortOrder}`}
+                  onChange={(value) => {
+                    const [field, order] = value.split('_');
+                    setSortBy(field);
+                    setSortOrder(order);
+                  }}
+                />
+              </Box>
             </InlineStack>
             
             {/* Applied filters */}
