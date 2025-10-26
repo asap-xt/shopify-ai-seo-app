@@ -27,7 +27,9 @@ const COLLECTIONS_QUERY = `
             url
             altText
           }
-          productsCount
+          productsCount {
+            count
+          }
           seo {
             title
             description
@@ -103,7 +105,7 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
     title: collection.title || '',
     description: collection.description || '',
     descriptionHtml: collection.descriptionHtml || '',
-    productsCount: collection.productsCount || 0,
+    productsCount: collection.productsCount?.count || 0,
     image: collection.image ? {
       id: collection.image.id,
       url: collection.image.url,
