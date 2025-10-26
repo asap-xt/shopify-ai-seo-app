@@ -1485,10 +1485,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       
       <Card>
         <Box padding="400">
-          <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
-            {/* Search field on the left */}
-            <Box minWidth="400px" maxWidth="600px">
-              <BlockStack gap="200">
+          <BlockStack gap="300">
+            {/* First row: Search bar + Generate button */}
+            <InlineStack gap="400" align="space-between" blockAlign="center" wrap={false}>
+              <Box minWidth="400px">
                 <TextField
                   label=""
                   placeholder="Search by collection name..."
@@ -1498,71 +1498,83 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                   clearButton
                   onClearButtonClick={() => setSearchValue('')}
                 />
-              </BlockStack>
-            </Box>
+              </Box>
+              
+              <Box width="320px">
+                <Button
+                  primary
+                  onClick={openLanguageModal}
+                  disabled={selectedItems.length === 0 && !selectAllPages}
+                  size="medium"
+                  fullWidth
+                >
+                  Generate Optimization for AI Search
+                </Button>
+              </Box>
+            </InlineStack>
             
-            {/* Buttons stacked vertically on the right */}
-            <BlockStack gap="200">
+            {/* Second row: Sync Collections + Dynamic right side */}
+            <InlineStack gap="400" align="space-between" blockAlign="start" wrap={false}>
               <Button
                 onClick={handleSyncCollections}
-                disabled={syncing}
+                disabled={syncing || loading}
                 size="medium"
               >
                 {syncing ? 'Syncing...' : 'Sync Collections'}
               </Button>
               
-              <Button
-                primary
-                onClick={openLanguageModal}
-                disabled={selectedItems.length === 0 && !selectAllPages}
-              >
-                Generate Optimization for AI Search
-              </Button>
-              
-              {/* AI Enhanced Search Optimisation Button */}
-              {(() => {
-                if (selectedItems.length === 0 && !selectAllPages) return null;
-                
-                const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
-                const hasOptimizedCollections = selectedCollections.some(c => 
-                  c.optimizedLanguages?.length > 0
-                );
-                
-                if (!hasOptimizedCollections) return null;
-                
-                // Check if Starter plan (Collections require Professional+)
-                const isStarter = currentPlan.toLowerCase().replace(/_/g, ' ') === 'starter';
-                
-                return (
+              <Box width="320px">
+                <BlockStack gap="200" align="end">
+                  {/* AI Enhanced Search Optimisation Button */}
+                  {(() => {
+                    if (selectedItems.length === 0 && !selectAllPages) return null;
+                    
+                    const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
+                    const hasOptimizedCollections = selectedCollections.some(c => 
+                      c.optimizedLanguages?.length > 0
+                    );
+                    
+                    if (!hasOptimizedCollections) return null;
+                    
+                    // Check if Starter plan (Collections require Professional+)
+                    const isStarter = currentPlan.toLowerCase().replace(/_/g, ' ') === 'starter';
+                    
+                    return (
+                      <Button
+                        onClick={isStarter ? () => {
+                          // Show upgrade modal for Starter plan only
+                          setTokenError({
+                            error: 'Collections require Professional plan or higher',
+                            message: 'Upgrade to Professional plan to access Collections optimization',
+                            minimumPlanRequired: 'Professional'
+                          });
+                          setShowUpgradeModal(true);
+                        } : handleStartEnhancement}
+                        disabled={selectedItems.length === 0 && !selectAllPages}
+                        size="medium"
+                        fullWidth
+                      >
+                        AI Enhanced add-ons
+                      </Button>
+                    );
+                  })()}
+                  
                   <Button
-                    onClick={isStarter ? () => {
-                      // Show upgrade modal for Starter plan only
-                      setTokenError({
-                        error: 'Collections require Professional plan or higher',
-                        message: 'Upgrade to Professional plan to access Collections optimization',
-                        minimumPlanRequired: 'Professional'
-                      });
-                      setShowUpgradeModal(true);
-                    } : handleStartEnhancement}
-                    disabled={selectedItems.length === 0 && !selectAllPages}
+                    outline
+                    destructive
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    disabled={selectedItems.length === 0 || !selectedHaveSEO}
+                    size="medium"
+                    fullWidth
                   >
-                    AI Enhanced add-ons
+                    Delete Optimization for AI Search
                   </Button>
-                );
-              })()}
-              
-              <Button
-                outline
-                destructive
-                onClick={() => setShowBulkDeleteModal(true)}
-                disabled={selectedItems.length === 0 || !selectedHaveSEO}
-              >
-                Delete Optimization for AI Search
-              </Button>
-            </BlockStack>
-          </InlineStack>
+                </BlockStack>
+              </Box>
+            </InlineStack>
+          </BlockStack>
           
-          {/* Select all checkbox below */}
+          {/* Select all checkbox */}
           {totalCount > 0 && (
             <Box paddingBlockStart="300">
               <Checkbox
