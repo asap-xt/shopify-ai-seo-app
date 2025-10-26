@@ -1573,17 +1573,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               </Box>
             </InlineStack>
           </BlockStack>
-          
-          {/* Select all checkbox */}
-          {totalCount > 0 && (
-            <Box paddingBlockStart="300">
-              <Checkbox
-                label={`Select all ${totalCount} collections`}
-                checked={selectAllPages}
-                onChange={handleSelectAllPages}
-              />
-            </Box>
-          )}
         </Box>
       </Card>
 
@@ -1669,6 +1658,17 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               </Box>
             )}
           </Box>
+
+          {/* Select all checkbox in table */}
+          {totalCount > 0 && (
+            <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+              <Checkbox
+                label={`Select all ${totalCount} collections`}
+                checked={selectAllPages}
+                onChange={handleSelectAllPages}
+              />
+            </Box>
+          )}
 
           <ResourceList
             key={`collections-${collections.length}-${selectedItems.length}`}
