@@ -239,4 +239,55 @@ router.get('/check-definitions', async (req, res) => {
   }
 });
 
+// POST /api/collections/sync
+router.post('/sync', async (req, res) => {
+  try {
+    console.log(`[COLLECTIONS_SYNC] Starting sync for ${req.auth.shop}...`);
+
+    const allCollections = [];
+    let hasNextPage = true;
+    let cursor = null;
+    
+    // Fetch all collections using pagination
+    while (hasNextPage) {
+      const variables = { first: 50 };
+      if (cursor) {
+        variables.after = cursor;
+      }
+      
+      const data = await executeGraphQL(req, COLLECTIONS_QUERY, variables);
+      const collectionsData = data?.collections;
+      
+      if (!collectionsData) break;
+      
+      const edges = collectionsData.edges || [];
+      console.log(`[COLLECTIONS_SYNC] Fetched ${edges.length} collections for ${req.auth.shop}`);
+      
+      allCollections.push(...edges.map(edge => edge.node));
+      
+      hasNextPage = collectionsData.pageInfo?.hasNextPage || false;
+      cursor = collectionsData.pageInfo?.endCursor || null;
+      
+      if (edges.length === 0) break;
+    }
+
+    console.log(`[COLLECTIONS_SYNC] Total collections synced for ${req.auth.shop}: ${allCollections.length}`);
+
+    return res.json({
+      success: true,
+      collectionsCount: allCollections.length,
+      shop: req.auth.shop,
+      message: `Successfully synced ${allCollections.length} collections`
+    });
+
+  } catch (error) {
+    console.error(`[COLLECTIONS_SYNC] Error:`, error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Collection sync failed',
+      shop: req.auth.shop
+    });
+  }
+});
+
 export default router;

@@ -1630,8 +1630,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                   </Box>
                 </Popover>
                 
-                {/* Language Status filter */}
-                <Popover
+                {/* Language Status filter - commented out for now */}
+                {/* <Popover
                   active={showLanguagePopover}
                   activator={
                     <Button 
@@ -1676,10 +1676,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                       }}
                     />
                   </Box>
-                </Popover>
+                </Popover> */}
                 
-                {/* Tags filter */}
-                <Popover
+                {/* Tags filter - commented out for now */}
+                {/* <Popover
                   active={showTagsPopover}
                   activator={
                     <Button 
@@ -1722,7 +1722,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                       </Button>
                     </Box>
                   </Box>
-                </Popover>
+                </Popover> */}
               </InlineStack>
               
               {/* Sort dropdown - same style as other filters */}
@@ -1773,15 +1773,13 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             </InlineStack>
             
             {/* Applied filters */}
-            {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
+            {optimizedFilter !== 'all' && (
               <Box paddingBlockStart="200">
                 <InlineStack gap="100" wrap>
-                  {optimizedFilter !== 'all' && (
-                    <Badge onRemove={() => setOptimizedFilter('all')}>
-                      {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
-                    </Badge>
-                  )}
-                  {languageFilter && (
+                  <Badge onRemove={() => setOptimizedFilter('all')}>
+                    {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
+                  </Badge>
+                  {/* {languageFilter && (
                     <Badge onRemove={() => setLanguageFilter('')}>
                       {languageFilter.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </Badge>
@@ -1790,7 +1788,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     <Badge key={tag} onRemove={() => setSelectedTags(prev => prev.filter(t => t !== tag))}>
                       Tag: {tag}
                     </Badge>
-                  ))}
+                  ))} */}
                 </InlineStack>
               </Box>
             )}
