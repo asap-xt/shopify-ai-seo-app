@@ -299,16 +299,26 @@ export default function Billing({ shop }) {
               <Text variant="bodySm" tone="subdued" alignment="center">
                 tokens available
               </Text>
-              {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
-                <Text variant="bodySm" tone="subdued" alignment="center">
-                  ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
-                </Text>
-              )}
+              {(() => {
+                const planKey = subscription?.plan?.toLowerCase().trim();
+                console.log('[Billing] Current plan key:', planKey);
+                if (planKey === 'growth extra' || planKey === 'enterprise') {
+                  return (
+                    <Text variant="bodySm" tone="subdued" alignment="center">
+                      ({planKey === 'growth extra' ? '100M' : '300M'} included this cycle)
+                    </Text>
+                  );
+                }
+                return null;
+              })()}
             </Box>
             
             <InlineStack align="space-between">
               <Text variant="bodySm" tone="subdued">
-                {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') ? 'Additional Purchased' : 'Purchased'}
+                {(() => {
+                  const planKey = subscription?.plan?.toLowerCase().trim();
+                  return (planKey === 'growth extra' || planKey === 'enterprise') ? 'Additional Purchased' : 'Purchased';
+                })()}
               </Text>
               <Text variant="bodySm">{tokens?.totalPurchased?.toLocaleString() || 0}</Text>
             </InlineStack>
