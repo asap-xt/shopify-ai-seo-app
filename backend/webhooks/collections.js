@@ -49,6 +49,10 @@ export default async function collectionsWebhook(req, res) {
       // 1. Find existing collection in MongoDB
       const existingCollection = await Collection.findOne({ shop, collectionId });
       
+      // Track whether content changed (initialize outside if block)
+      let titleChanged = false;
+      let descriptionChanged = false;
+      
       if (existingCollection) {
         console.log('[Webhook-Collections] Found existing collection in MongoDB');
         
@@ -63,8 +67,8 @@ export default async function collectionsWebhook(req, res) {
         console.log('[Webhook-Collections] New description:', payload.body_html?.substring(0, 100) + '...');
         
         // 3. Detect if title or description changed
-        const titleChanged = referenceTitle !== payload.title;
-        const descriptionChanged = referenceDescription !== (payload.body_html || '');
+        titleChanged = referenceTitle !== payload.title;
+        descriptionChanged = referenceDescription !== (payload.body_html || '');
         
         if (titleChanged || descriptionChanged) {
           console.log('[Webhook-Collections] 🚨 CONTENT CHANGED DETECTED!');
@@ -89,6 +93,9 @@ export default async function collectionsWebhook(req, res) {
       // 6. Update MongoDB with new collection data for future comparisons
       console.log('[Webhook-Collections] Updating MongoDB with new collection data...');
       
+      // Store whether content changed for proper lastShopifyUpdate update
+      const contentChanged = titleChanged || descriptionChanged;
+      
       try {
         await Collection.findOneAndUpdate(
           { shop, collectionId },
@@ -101,11 +108,15 @@ export default async function collectionsWebhook(req, res) {
             descriptionHtml: payload.body_html || '',
             handle: payload.handle,
             productsCount: payload.products_count || 0,
-            lastShopifyUpdate: {
-              title: payload.title,
-              description: payload.body_html || '',
-              updatedAt: new Date()
-            },
+            // Only update lastShopifyUpdate if content didn't change
+            // If content changed, lastShopifyUpdate preserves the OLD state for comparison
+            ...(contentChanged ? {} : {
+              lastShopifyUpdate: {
+                title: payload.title,
+                description: payload.body_html || '',
+                updatedAt: new Date()
+              }
+            }),
             updatedAt: new Date(),
             syncedAt: new Date()
           },
@@ -127,11 +138,14 @@ export default async function collectionsWebhook(req, res) {
               descriptionHtml: payload.body_html || '',
               handle: payload.handle,
               productsCount: payload.products_count || 0,
-              lastShopifyUpdate: {
-                title: payload.title,
-                description: payload.body_html || '',
-                updatedAt: new Date()
-              },
+              // Only update lastShopifyUpdate if content didn't change
+              ...(contentChanged ? {} : {
+                lastShopifyUpdate: {
+                  title: payload.title,
+                  description: payload.body_html || '',
+                  updatedAt: new Date()
+                }
+              }),
               updatedAt: new Date(),
               syncedAt: new Date()
             },
