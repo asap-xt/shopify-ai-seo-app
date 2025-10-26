@@ -3,6 +3,7 @@
 
 import express from 'express';
 import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
+import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
 
 const router = express.Router();
 
@@ -123,48 +124,60 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
 // GET /collections/list-graphql
 router.get('/list-graphql', async (req, res) => {
   try {
-    console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${req.auth.shop}`);
+    const shop = req.auth.shop;
+    console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${shop}`);
     
-    const collections = await fetchAllCollections(req);
+    // Generate unique cache key
+    const cacheKey = `collections:list:all`;
     
-    // Get shop languages dynamically
-    const Q_SHOP_LOCALES = `
-      query ShopLocales {
-        shopLocales {
-          locale
-          primary
-          published
+    // Try to get from cache first
+    const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
+      const collections = await fetchAllCollections(req);
+      
+      // Get shop languages dynamically
+      const Q_SHOP_LOCALES = `
+        query ShopLocales {
+          shopLocales {
+            locale
+            primary
+            published
+          }
         }
+      `;
+      
+      let shopLanguages = ['en']; // fallback
+      try {
+        const shopData = await executeGraphQL(req, Q_SHOP_LOCALES);
+        const shopLocales = shopData?.shopLocales || [];
+        shopLanguages = shopLocales
+          .filter(l => l.published)
+          .map(l => l.locale)
+          .filter(Boolean);
+        console.log(`[COLLECTIONS-GQL] Found ${shopLanguages.length} shop languages: ${shopLanguages.join(',')}`);
+      } catch (error) {
+        console.error(`[COLLECTIONS-GQL] Error fetching shop languages:`, error.message);
       }
-    `;
+      
+      const formattedCollections = collections.map(collection => 
+        formatCollection(collection, shop, shopLanguages)
+      );
+      
+      // Debug: log first collection's optimizedLanguages
+      if (formattedCollections.length > 0) {
+        console.log(`[COLLECTIONS-GQL] First collection optimizedLanguages:`, formattedCollections[0].optimizedLanguages);
+      }
+      
+      return {
+        success: true,
+        collections: formattedCollections,
+        count: formattedCollections.length,
+        shop: shop
+      };
+    });
     
-    let shopLanguages = ['en']; // fallback
-    try {
-      const shopData = await executeGraphQL(req, Q_SHOP_LOCALES);
-      const shopLocales = shopData?.shopLocales || [];
-      shopLanguages = shopLocales
-        .filter(l => l.published)
-        .map(l => l.locale)
-        .filter(Boolean);
-      console.log(`[COLLECTIONS-GQL] Found ${shopLanguages.length} shop languages: ${shopLanguages.join(',')}`);
-    } catch (error) {
-      console.error(`[COLLECTIONS-GQL] Error fetching shop languages:`, error.message);
-    }
-    
-    const formattedCollections = collections.map(collection => 
-      formatCollection(collection, req.auth.shop, shopLanguages)
-    );
-    
-    // Debug: log first collection's optimizedLanguages
-    if (formattedCollections.length > 0) {
-      console.log(`[COLLECTIONS-GQL] First collection optimizedLanguages:`, formattedCollections[0].optimizedLanguages);
-    }
-    
+    // Return cached or fresh data
     return res.json({
-      success: true,
-      collections: formattedCollections,
-      count: formattedCollections.length,
-      shop: req.auth.shop,
+      ...cachedResult,
       auth: {
         tokenType: req.auth.tokenType,
         source: req.auth.source
