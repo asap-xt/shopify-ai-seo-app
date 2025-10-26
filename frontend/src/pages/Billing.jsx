@@ -299,20 +299,11 @@ export default function Billing({ shop }) {
               <Text variant="bodySm" tone="subdued" alignment="center">
                 tokens available
               </Text>
-              {(() => {
-                // Find current plan from plans array to get includedTokens
-                const currentPlan = plans.find(p => p.key === subscription?.plan);
-                if (currentPlan?.includedTokens > 0) {
-                  // Format millions with M suffix
-                  const tokensInMillions = (currentPlan.includedTokens / 1_000_000).toLocaleString() + 'M';
-                  return (
-                    <Text variant="bodySm" tone="subdued" alignment="center">
-                      ({tokensInMillions} included this cycle)
-                    </Text>
-                  );
-                }
-                return null;
-              })()}
+              {(subscription?.plan === 'growth extra' || subscription?.plan === 'enterprise') && (
+                <Text variant="bodySm" tone="subdued" alignment="center">
+                  ({subscription?.plan === 'growth extra' ? '100M' : '300M'} included this cycle)
+                </Text>
+              )}
             </Box>
             
             <InlineStack align="space-between">
