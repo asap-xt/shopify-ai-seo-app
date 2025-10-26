@@ -50,6 +50,10 @@ export default async function productsWebhook(req, res) {
         productId: numericProductId 
       });
       
+      // Track whether content changed (initialize outside if block)
+      let titleChanged = false;
+      let descriptionChanged = false;
+      
       if (existingProduct) {
         console.log('[Webhook-Products] Found existing product in MongoDB');
         
@@ -64,8 +68,8 @@ export default async function productsWebhook(req, res) {
         console.log('[Webhook-Products] New description:', payload.body_html?.substring(0, 100) + '...');
         
         // Detect if title or description changed from last known Shopify state
-        const titleChanged = referenceTitle !== payload.title;
-        const descriptionChanged = referenceDescription !== payload.body_html;
+        titleChanged = referenceTitle !== payload.title;
+        descriptionChanged = referenceDescription !== payload.body_html;
         
         console.log('[Webhook-Products] Title changed:', titleChanged);
         console.log('[Webhook-Products] Description changed:', descriptionChanged);
@@ -101,8 +105,12 @@ export default async function productsWebhook(req, res) {
       
       // 5. Update MongoDB with new product data for future comparisons
       // This ensures we have the latest title/description stored
-      // IMPORTANT: Update lastShopifyUpdate to reflect current Shopify state
+      // IMPORTANT: Update lastShopifyUpdate AFTER we've checked for changes
       console.log('[Webhook-Products] Updating MongoDB with new product data...');
+      
+      // Store whether content changed for proper lastShopifyUpdate update
+      const contentChanged = titleChanged || descriptionChanged;
+      
       await Product.findOneAndUpdate(
         { shop, productId: numericProductId },
         {
@@ -132,12 +140,15 @@ export default async function productsWebhook(req, res) {
           totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
           gid: productGid,
           syncedAt: new Date(),
-          // Update lastShopifyUpdate for accurate future comparisons
-          lastShopifyUpdate: {
-            title: payload.title,
-            description: payload.body_html,
-            updatedAt: new Date()
-          }
+          // Only update lastShopifyUpdate if content didn't change
+          // If content changed, lastShopifyUpdate preserves the OLD state for comparison
+          ...(contentChanged ? {} : {
+            lastShopifyUpdate: {
+              title: payload.title,
+              description: payload.body_html,
+              updatedAt: new Date()
+            }
+          })
         },
         { upsert: true, new: true }
       );
