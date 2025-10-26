@@ -302,20 +302,27 @@ export default function Billing({ shop }) {
               {(() => {
                 const planKey = subscription?.plan?.toLowerCase().trim();
                 console.log('[Billing] Current plan key:', planKey);
-                console.log('[Billing] Is growth extra?', planKey === 'growth extra');
-                console.log('[Billing] Is enterprise?', planKey === 'enterprise');
-                console.log('[Billing] Condition result:', planKey === 'growth extra' || planKey === 'enterprise');
-                if (planKey === 'growth extra' || planKey === 'enterprise') {
-                  const tokensText = planKey === 'growth extra' ? '100M' : '300M';
-                  console.log('[Billing] Rendering tokens text:', tokensText);
-                  return (
-                    <Text variant="bodySm" tone="subdued" alignment="center">
-                      ({tokensText} included this cycle)
-                    </Text>
-                  );
+                const isGrowthExtra = planKey === 'growth extra';
+                const isEnterprise = planKey === 'enterprise';
+                const shouldShow = isGrowthExtra || isEnterprise;
+                
+                console.log('[Billing] Is growth extra?', isGrowthExtra);
+                console.log('[Billing] Is enterprise?', isEnterprise);
+                console.log('[Billing] Condition result:', shouldShow);
+                
+                if (!shouldShow) {
+                  console.log('[Billing] NOT rendering tokens text');
+                  return null;
                 }
-                console.log('[Billing] NOT rendering tokens text');
-                return null;
+                
+                const tokensText = isGrowthExtra ? '100M' : '300M';
+                console.log('[Billing] Rendering tokens text:', tokensText);
+                
+                return (
+                  <Text variant="bodySm" tone="subdued" alignment="center">
+                    ({tokensText} included this cycle)
+                  </Text>
+                );
               })()}
             </Box>
             
