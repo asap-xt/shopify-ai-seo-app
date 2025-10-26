@@ -302,13 +302,19 @@ export default function Billing({ shop }) {
               {(() => {
                 const planKey = subscription?.plan?.toLowerCase().trim();
                 console.log('[Billing] Current plan key:', planKey);
+                console.log('[Billing] Is growth extra?', planKey === 'growth extra');
+                console.log('[Billing] Is enterprise?', planKey === 'enterprise');
+                console.log('[Billing] Condition result:', planKey === 'growth extra' || planKey === 'enterprise');
                 if (planKey === 'growth extra' || planKey === 'enterprise') {
+                  const tokensText = planKey === 'growth extra' ? '100M' : '300M';
+                  console.log('[Billing] Rendering tokens text:', tokensText);
                   return (
                     <Text variant="bodySm" tone="subdued" alignment="center">
-                      ({planKey === 'growth extra' ? '100M' : '300M'} included this cycle)
+                      ({tokensText} included this cycle)
                     </Text>
                   );
                 }
+                console.log('[Billing] NOT rendering tokens text');
                 return null;
               })()}
             </Box>
