@@ -319,11 +319,9 @@ export default function Billing({ shop }) {
                 console.log('[Billing] Rendering tokens text:', tokensText);
                 
                 return (
-                  <Box background="bg-fill" padding="100" borderRadius="200">
-                    <Text variant="bodySm" tone="subdued" alignment="center">
-                      ({tokensText} included this cycle)
-                    </Text>
-                  </Box>
+                  <Text variant="bodySm" tone="subdued" alignment="center" fontWeight="medium">
+                    ({tokensText} included this cycle)
+                  </Text>
                 );
               })()}
             </Box>
