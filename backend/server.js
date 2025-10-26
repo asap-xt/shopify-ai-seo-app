@@ -949,7 +949,7 @@ app.use('/api', aiTestingController);
 
 
 // Mount the new controllers with fixed authentication
-app.use('/collections', collectionsRouter);
+app.use('/api/collections', collectionsRouter);
 
 // Sitemap routes
 app.use('/api/sitemap', sitemapRouter);

@@ -233,8 +233,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setSyncing(true);
       console.log('[COLLECTIONS] Starting collections sync...');
       
-      const response = await api(`/api/collections/sync?shop=${shop}`, {
-        method: 'POST'
+      const response = await api('/api/collections/sync', {
+        method: 'POST',
+        shop
       });
       
       if (response?.success) {
