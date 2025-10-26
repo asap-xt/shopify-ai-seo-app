@@ -146,7 +146,10 @@ export default async function productsWebhook(req, res) {
       // 6. Invalidate Redis cache for this shop's products
       // This ensures frontend immediately sees the updated product status
       console.log('[Webhook-Products] Invalidating Redis cache for shop:', shop);
+      // Delete both old format (products:shop:*) and new format (products:*:shop)
       await cacheService.delPattern(`products:${shop}:*`);
+      await cacheService.delPattern(`products:*:${shop}`);
+      await cacheService.delPattern(`products:${shop}*`);
       await cacheService.del(`stats:${shop}`);
       console.log('[Webhook-Products] ✅ Redis cache invalidated for shop products');
       

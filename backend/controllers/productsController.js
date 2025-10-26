@@ -3,6 +3,7 @@
 
 import express from 'express';
 import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
+import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
 
 const router = express.Router();
 
@@ -203,76 +204,89 @@ router.get('/list', async (req, res) => {
     const tagsFilter = req.query.tags ? req.query.tags.split(',') : []; // e.g., 'tag1,tag2'
     const searchFilter = req.query.search; // search term
     
-    const sortKey = convertSortKey(sortBy);
-    const reverse = sortOrder === 'desc';
+    const shop = req.auth.shop;
     
-    console.log(`[PRODUCTS] Fetching products for ${req.auth.shop}, page ${page}, limit ${limit}`);
+    console.log(`[PRODUCTS] Fetching products for ${shop}, page ${page}, limit ${limit}`);
     console.log(`[PRODUCTS] Filters:`, { optimizedFilter, languageFilter, tagsFilter, searchFilter });
 
-    const variables = {
-      first: limit,
-      sortKey: sortKey,
-      reverse: reverse
-    };
-
-    const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
-    const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
+    // Generate unique cache key based on all parameters
+    const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${optimizedFilter || 'all'}:${languageFilter || 'all'}:${tagsFilter.join(',')}:${searchFilter || ''}`;
     
-    // Process products to add optimizationSummary
-    let products = rawProducts.map(product => {
-      const optimizationSummary = processProductMetafields(product.metafields);
+    // Try to get from cache first
+    const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
+      const sortKey = convertSortKey(sortBy);
+      const reverse = sortOrder === 'desc';
+
+      const variables = {
+        first: limit,
+        sortKey: sortKey,
+        reverse: reverse
+      };
+
+      const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
+      const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
+      
+      // Process products to add optimizationSummary
+      let products = rawProducts.map(product => {
+        const optimizationSummary = processProductMetafields(product.metafields);
+        return {
+          ...product,
+          optimizationSummary,
+          // Keep metafields for debugging if needed
+          metafields: product.metafields
+        };
+      });
+
+      // Apply client-side filters (since Shopify GraphQL doesn't support these filters)
+      
+      // Filter by optimization status
+      if (optimizedFilter === 'true') {
+        products = products.filter(p => p.optimizationSummary.optimized === true);
+      } else if (optimizedFilter === 'false') {
+        products = products.filter(p => p.optimizationSummary.optimized === false);
+      }
+      
+      // Filter by language
+      if (languageFilter) {
+        products = products.filter(p => 
+          p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
+        );
+      }
+      
+      // Filter by tags
+      if (tagsFilter.length > 0) {
+        products = products.filter(p => {
+          const productTags = p.tags || [];
+          return tagsFilter.some(tag => productTags.includes(tag));
+        });
+      }
+      
+      // Filter by search term (title, handle, productType)
+      if (searchFilter) {
+        const searchLower = searchFilter.toLowerCase();
+        products = products.filter(p => 
+          p.title?.toLowerCase().includes(searchLower) ||
+          p.handle?.toLowerCase().includes(searchLower) ||
+          p.productType?.toLowerCase().includes(searchLower)
+        );
+      }
+
       return {
-        ...product,
-        optimizationSummary,
-        // Keep metafields for debugging if needed
-        metafields: product.metafields
+        success: true,
+        products: products,
+        pagination: {
+          page: page,
+          limit: limit,
+          hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
+          endCursor: data?.products?.pageInfo?.endCursor
+        },
+        shop: shop
       };
     });
 
-    // Apply client-side filters (since Shopify GraphQL doesn't support these filters)
-    
-    // Filter by optimization status
-    if (optimizedFilter === 'true') {
-      products = products.filter(p => p.optimizationSummary.optimized === true);
-    } else if (optimizedFilter === 'false') {
-      products = products.filter(p => p.optimizationSummary.optimized === false);
-    }
-    
-    // Filter by language
-    if (languageFilter) {
-      products = products.filter(p => 
-        p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
-      );
-    }
-    
-    // Filter by tags
-    if (tagsFilter.length > 0) {
-      products = products.filter(p => {
-        const productTags = p.tags || [];
-        return tagsFilter.some(tag => productTags.includes(tag));
-      });
-    }
-    
-    // Filter by search term (title, handle, productType)
-    if (searchFilter) {
-      const searchLower = searchFilter.toLowerCase();
-      products = products.filter(p => 
-        p.title?.toLowerCase().includes(searchLower) ||
-        p.handle?.toLowerCase().includes(searchLower) ||
-        p.productType?.toLowerCase().includes(searchLower)
-      );
-    }
-
+    // Return cached or fresh data
     return res.json({
-      success: true,
-      products: products,
-      pagination: {
-        page: page,
-        limit: limit,
-        hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
-        endCursor: data?.products?.pageInfo?.endCursor
-      },
-      shop: req.auth.shop,
+      ...cachedResult,
       auth: {
         tokenType: req.auth.tokenType,
         source: req.auth.source
