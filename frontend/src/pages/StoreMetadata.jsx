@@ -59,10 +59,17 @@ export default function StoreMetadata({ shop: shopProp }) {
   }, [shop, api]);
 
   async function loadStoreData() {
+    console.log('[StoreMeta] LOAD - Start');
     setLoading(true);
     try {
       const url = `/api/store/generate?shop=${encodeURIComponent(shop)}`;
+      console.log('[StoreMeta] LOAD - Fetching from', url);
       const data = await api(url, { headers: { 'X-Shop': shop } });
+      console.log('[StoreMeta] LOAD - Received data', { 
+        hasExisting: !!data.existingMetadata,
+        existingKeys: Object.keys(data.existingMetadata || {}),
+        shopifyDefaults: data.shopifyDefaults 
+      });
       
       setStoreData(data);
       
@@ -85,16 +92,20 @@ export default function StoreMetadata({ shop: shopProp }) {
       const displayShortDescription = customShortDescription || data.shopifyDefaults?.homePageTitle || '';
       const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
       
+      console.log('[StoreMeta] LOAD - Display values', {
+        displayStoreName,
+        displayShortDescription,
+        displayFullDescription
+      });
+      
       // Провери за разлики
       const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
       const shortDescDifferent = customShortDescription && customShortDescription !== data.shopifyDefaults?.homePageTitle;
       const fullDescDifferent = customFullDescription && customFullDescription !== data.shopifyDefaults?.metaDescription;
       setHasShopifyChanges(storeNameDifferent || shortDescDifferent || fullDescDifferent);
       
-      setFormData(prev => ({
-        ...prev,
+      const newFormData = {
         seo: {
-          ...prev.seo,
           storeName: displayStoreName,
           shortDescription: displayShortDescription,
           fullDescription: displayFullDescription,
@@ -103,7 +114,6 @@ export default function StoreMetadata({ shop: shopProp }) {
             : existing.seo_metadata?.value?.keywords || ''
         },
         aiMetadata: {
-          ...prev.aiMetadata,
           ...(existing.ai_metadata?.value || {}),
           languages: existing.ai_metadata?.value?.languages?.length > 0 
             ? existing.ai_metadata.value.languages 
@@ -116,14 +126,16 @@ export default function StoreMetadata({ shop: shopProp }) {
             : (data.shopInfo?.markets || []).map(market => market.name)
         },
         organizationSchema: {
-          ...prev.organizationSchema,
           ...(existing.organization_schema?.value || {}),
           enabled: existing.organization_schema?.value?.enabled === true,
           name: existing.organization_schema?.value?.name || data.shopInfo?.name || '',
           email: existing.organization_schema?.value?.email || data.shopInfo?.email || ''
         },
         // localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema // DISABLED
-      }));
+      };
+      
+      console.log('[StoreMeta] LOAD - Setting formData', newFormData);
+      setFormData(newFormData);
       
     } catch (error) {
       console.error('[StoreMeta] Load error:', error);
@@ -338,10 +350,10 @@ export default function StoreMetadata({ shop: shopProp }) {
 
   // Clear all metadata function
   async function handleClear() {
+    console.log('[StoreMeta] CLEAR - Start', { formData });
     setClearing(true);
     try {
-      // Reset form to empty state
-      setFormData({
+      const emptyData = {
         seo: {
           storeName: '',
           shortDescription: '',
@@ -374,13 +386,24 @@ export default function StoreMetadata({ shop: shopProp }) {
         //   priceRange: '',
         //   openingHours: ''
         // } // DISABLED
-      });
+      };
       
+      console.log('[StoreMeta] CLEAR - Setting formData to empty', { emptyData });
+      // Reset form to empty state
+      setFormData(emptyData);
+      
+      console.log('[StoreMeta] CLEAR - Calling handleSave');
       // Save empty data to clear from backend/preview
       await handleSave();
+      
+      console.log('[StoreMeta] CLEAR - Save complete, reloading data');
+      await loadStoreData();
+      
+      console.log('[StoreMeta] CLEAR - Complete');
       setToast('Metadata cleared successfully!');
       
     } catch (error) {
+      console.error('[StoreMeta] CLEAR - Error', error);
       setToast(`Clear failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setClearing(false);
