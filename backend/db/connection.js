@@ -200,8 +200,10 @@ class DatabaseConnection {
           dbLogger.warn(`⚠️  High connection count: ${poolSize} connections (${availableConnections} available)`);
         }
         
-        // Log status on EVERY check (every 30 seconds) for monitoring
-        dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending (method: ${method})`);
+        // Only log if there are issues or high activity
+        if (poolSize > 20 || pendingRequests > 5 || availableConnections === 0) {
+          dbLogger.info(`📊 Pool Status: ${poolSize} total, ${availableConnections} available, ${pendingRequests} pending (method: ${method})`);
+        }
         
       } catch (error) {
         dbLogger.error('❌ Health check failed:', error.message);
