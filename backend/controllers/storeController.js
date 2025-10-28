@@ -448,11 +448,13 @@ router.post('/apply', validateRequest(), async (req, res) => {
       !metadata.seo.fullDescription?.trim() && 
       !metadata.seo.keywords?.trim();
     
-    console.log('[STORE-APPLY] SEO is empty?', isEmptySeo, {
-      storeName: metadata.seo?.storeName,
-      shortDescription: metadata.seo?.shortDescription,
-      fullDescription: metadata.seo?.fullDescription,
-      keywords: metadata.seo?.keywords
+    console.log('[STORE-APPLY] SEO metadata received:', JSON.stringify(metadata.seo));
+    console.log('[STORE-APPLY] SEO is empty?', isEmptySeo);
+    console.log('[STORE-APPLY] Individual checks:', {
+      storeNameEmpty: !metadata.seo?.storeName?.trim(),
+      shortDescEmpty: !metadata.seo?.shortDescription?.trim(),
+      fullDescEmpty: !metadata.seo?.fullDescription?.trim(),
+      keywordsEmpty: !metadata.seo?.keywords?.trim()
     });
 
     // SEO metadata - ONLY save if not all empty
