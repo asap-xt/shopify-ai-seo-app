@@ -343,8 +343,9 @@ export default function StoreMetadata({ shop: shopProp }) {
       // Reset form to empty state
       setFormData({
         seo: {
-          title: '',
-          metaDescription: '',
+          storeName: '',
+          shortDescription: '',
+          fullDescription: '',
           keywords: ''
         },
         aiMetadata: {
