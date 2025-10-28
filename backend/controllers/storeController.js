@@ -441,14 +441,23 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     const metafieldsToSet = [];
 
-    // SEO metadata - ALWAYS save (even if values are from Shopify defaults)
-    if (metadata.seo && options.updateSeo !== false) {
-      console.log('[STORE-APPLY] Saving SEO metadata:', {
-        storeName: metadata.seo.storeName,
-        shortDescription: metadata.seo.shortDescription,
-        fullDescription: metadata.seo.fullDescription,
-        keywords: metadata.seo.keywords
-      });
+    // SEO metadata - Check if all values are empty
+    const isEmptySeo = metadata.seo && 
+      !metadata.seo.storeName?.trim() && 
+      !metadata.seo.shortDescription?.trim() && 
+      !metadata.seo.fullDescription?.trim() && 
+      !metadata.seo.keywords?.trim();
+    
+    console.log('[STORE-APPLY] SEO is empty?', isEmptySeo, {
+      storeName: metadata.seo?.storeName,
+      shortDescription: metadata.seo?.shortDescription,
+      fullDescription: metadata.seo?.fullDescription,
+      keywords: metadata.seo?.keywords
+    });
+
+    // SEO metadata - ONLY save if not all empty
+    if (metadata.seo && options.updateSeo !== false && !isEmptySeo) {
+      console.log('[STORE-APPLY] Saving SEO metadata');
       
       metafieldsToSet.push({
         ownerId: shopId,
@@ -464,10 +473,25 @@ router.post('/apply', validateRequest(), async (req, res) => {
             : (metadata.seo.keywords || '').split(',').map(k => k.trim()).filter(Boolean)
         })
       });
+    } else if (isEmptySeo) {
+      console.log('[STORE-APPLY] All SEO fields are empty, will save empty metafield');
+      // Save empty values to clear the metafield
+      metafieldsToSet.push({
+        ownerId: shopId,
+        namespace: 'ai_seo_store',
+        key: 'seo_metadata',
+        type: 'json',
+        value: JSON.stringify({
+          storeName: null,
+          shortDescription: null,
+          fullDescription: null,
+          keywords: []
+        })
+      });
     }
 
-    // Home page title - save as separate metafield
-    if (metadata.seo?.shortDescription && options.updateSeo !== false) {
+    // Home page title - save only if not empty
+    if (metadata.seo?.shortDescription?.trim() && options.updateSeo !== false) {
       console.log('[STORE-APPLY] Saving home page title');
       metafieldsToSet.push({
         ownerId: shopId,
@@ -475,6 +499,16 @@ router.post('/apply', validateRequest(), async (req, res) => {
         key: 'home_page_title',
         type: 'single_line_text_field',
         value: metadata.seo.shortDescription
+      });
+    } else if (options.updateSeo !== false && isEmptySeo) {
+      console.log('[STORE-APPLY] Will save empty home_page_title to clear it');
+      // Save empty value to clear the metafield
+      metafieldsToSet.push({
+        ownerId: shopId,
+        namespace: 'ai_seo_store',
+        key: 'home_page_title',
+        type: 'single_line_text_field',
+        value: ''
       });
     }
 
