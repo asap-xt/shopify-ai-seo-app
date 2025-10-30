@@ -864,13 +864,19 @@ export default function StoreMetadata({ shop: shopProp }) {
                 Preview Metadata
               </Button>
               
-              <Button
-                onClick={handleClear}
-                loading={clearing}
-                destructive
-              >
-                Clear Metadata
-              </Button>
+              {/**
+               * Clear Metadata button temporarily disabled
+               * The backend clearing behaviour will be revised before re-enabling
+               */}
+              {false && (
+                <Button
+                  onClick={handleClear}
+                  loading={clearing}
+                  destructive
+                >
+                  Clear Metadata
+                </Button>
+              )}
             </InlineStack>
           </Box>
         </Card>
