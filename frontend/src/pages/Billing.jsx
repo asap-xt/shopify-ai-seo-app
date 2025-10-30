@@ -137,14 +137,15 @@ export default function Billing({ shop }) {
     }
   };
 
-  // Calculate token value (display-only)
-  // Policy: 30% of the amount buys tokens; effective display rate $1 / 1M tokens
-  // Example: $10 → $3 for tokens → 3,000,000 tokens
+  // Calculate token value (matches backend calculation)
+  // Policy: 30% of the amount buys tokens; uses real OpenRouter rate
+  // Gemini 2.5 Flash Lite: ~$0.10 per 1M tokens (80% input @ $0.075 + 20% output @ $0.30)
+  // Example: $10 → $3 for tokens → $3 / $0.10 per 1M = 30,000,000 tokens
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (display policy)
-    const ratePerMillion = 1.00; // $1 per 1M tokens (display)
-    const tokensPerMillion = 1_000_000;
-    const tokens = Math.floor((tokenBudget / ratePerMillion) * tokensPerMillion);
+    const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (revenue split)
+    const ratePer1M = 0.10; // $0.10 per 1M tokens (Gemini 2.5 Flash Lite via OpenRouter)
+    const ratePerToken = ratePer1M / 1_000_000; // $0.0000001 per token
+    const tokens = Math.floor(tokenBudget / ratePerToken);
     return tokens;
   };
 

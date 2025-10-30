@@ -451,7 +451,9 @@ router.get('/tokens/callback', async (req, res) => {
     }
     
     const usdAmount = parseFloat(amount);
-    const tokens = TOKEN_CONFIG.calculateTokens(usdAmount);
+    // Use dynamic pricing from OpenRouter to calculate accurate token count
+    const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
+    const tokens = await calculateTokensWithDynamicPricing(usdAmount);
     
     // Add tokens to balance
     const tokenBalance = await TokenBalance.getOrCreate(shop);

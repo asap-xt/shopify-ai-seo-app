@@ -1,6 +1,8 @@
 // backend/billing/tokenConfig.js
 // Token pricing and configuration
 
+import fetch from 'node-fetch';
+
 // Gemini 2.5 Flash Lite pricing (as of 2025)
 // We fetch the actual rate dynamically from OpenRouter
 // This is a fallback/default estimate for UI display purposes
@@ -207,5 +209,110 @@ export function calculateActualTokens(usage = {}) {
     totalTokens,
     costUsd: usage.total_cost || null // OpenRouter sometimes provides this
   };
+}
+
+// ====================================================================
+// DYNAMIC PRICING FROM OPENROUTER
+// ====================================================================
+
+// Cache for model pricing (refresh every hour)
+let pricingCache = {
+  rate: null,
+  lastFetch: null,
+  cacheDuration: 60 * 60 * 1000 // 1 hour
+};
+
+/**
+ * Fetch current pricing for Gemini 2.5 Flash Lite from OpenRouter
+ * @returns {Promise<number>} Rate per 1M tokens (USD)
+ */
+export async function fetchOpenRouterPricing() {
+  try {
+    // Check cache first
+    if (pricingCache.rate && pricingCache.lastFetch) {
+      const cacheAge = Date.now() - pricingCache.lastFetch;
+      if (cacheAge < pricingCache.cacheDuration) {
+        console.log('[TokenConfig] Using cached pricing:', pricingCache.rate, 'per 1M tokens');
+        return pricingCache.rate;
+      }
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      console.warn('[TokenConfig] OPENROUTER_API_KEY not set, using fallback rate');
+      return GEMINI_RATE_PER_1M_TOKENS;
+    }
+
+    // Fetch model pricing from OpenRouter
+    const modelName = 'google/gemini-2.5-flash-lite';
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.warn('[TokenConfig] Failed to fetch pricing from OpenRouter, using fallback');
+      return GEMINI_RATE_PER_1M_TOKENS;
+    }
+
+    const data = await response.json();
+    const model = data.data?.find(m => m.id === modelName);
+
+    if (!model?.pricing) {
+      console.warn('[TokenConfig] Model pricing not found, using fallback');
+      return GEMINI_RATE_PER_1M_TOKENS;
+    }
+
+    // Calculate average rate: (input + output) / 2
+    // Most of our usage is input tokens, but we average for safety
+    const inputRate = model.pricing.prompt || model.pricing.input || 0.075; // Default: $0.075 per 1M
+    const outputRate = model.pricing.completion || model.pricing.output || 0.30; // Default: $0.30 per 1M
+    const avgRate = (inputRate + outputRate) / 2;
+
+    // Since most of our usage is input (titles, descriptions are in prompt),
+    // we weight input more: 80% input, 20% output
+    const weightedRate = (inputRate * 0.8) + (outputRate * 0.2);
+
+    console.log('[TokenConfig] OpenRouter pricing fetched:', {
+      model: modelName,
+      inputRate: `$${inputRate} per 1M`,
+      outputRate: `$${outputRate} per 1M`,
+      weightedRate: `$${weightedRate} per 1M (80/20 split)`
+    });
+
+    // Update cache
+    pricingCache.rate = weightedRate;
+    pricingCache.lastFetch = Date.now();
+
+    return weightedRate;
+
+  } catch (error) {
+    console.error('[TokenConfig] Error fetching OpenRouter pricing:', error.message);
+    return GEMINI_RATE_PER_1M_TOKENS; // Fallback to default
+  }
+}
+
+/**
+ * Calculate tokens with dynamic pricing check
+ * @param {number} usdAmount - Amount in USD
+ * @returns {Promise<number>} Number of tokens
+ */
+export async function calculateTokensWithDynamicPricing(usdAmount) {
+  const tokenBudget = usdAmount * TOKEN_CONFIG.tokenBudgetPercent; // 30% goes to tokens
+  const ratePer1M = await fetchOpenRouterPricing();
+  const ratePerToken = ratePer1M / 1_000_000;
+  const tokens = Math.floor(tokenBudget / ratePerToken);
+  
+  console.log('[TokenConfig] Token calculation with dynamic pricing:', {
+    usdAmount,
+    tokenBudget,
+    ratePer1M: `$${ratePer1M} per 1M`,
+    tokens: tokens.toLocaleString()
+  });
+
+  return tokens;
 }
 

@@ -151,7 +151,9 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
     throw new Error(`Invalid amount: must be between $${TOKEN_CONFIG.minimumPurchase} and $${TOKEN_CONFIG.maximumPurchase}, in increments of $${TOKEN_CONFIG.increment}`);
   }
   
-  const tokens = TOKEN_CONFIG.calculateTokens(usdAmount);
+  // Use dynamic pricing from OpenRouter (checks cache first, then fetches if needed)
+  const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
+  const tokens = await calculateTokensWithDynamicPricing(usdAmount);
   // ALWAYS use test mode until we go live with real payments
   const isTest = true;
   
