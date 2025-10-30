@@ -1,5 +1,6 @@
 // backend/db/TokenBalance.js
 import mongoose from 'mongoose';
+import { TOKEN_CONFIG } from '../billing/tokenConfig.js';
 
 const tokenBalanceSchema = new mongoose.Schema({
   shop: {
@@ -249,8 +250,9 @@ tokenBalanceSchema.methods.setIncludedTokens = function(tokens, planName, shopif
 
 // Add purchased tokens (when user buys additional tokens)
 tokenBalanceSchema.methods.addTokens = function(usdAmount, tokensReceived, shopifyChargeId) {
-  const appRevenue = usdAmount * 0.40;
-  const tokenBudget = usdAmount * 0.60;
+  // Use TOKEN_CONFIG percentages: 70% app revenue, 30% token budget
+  const appRevenue = usdAmount * TOKEN_CONFIG.appRevenuePercent;
+  const tokenBudget = usdAmount * TOKEN_CONFIG.tokenBudgetPercent;
   
   this.balance += tokensReceived;
   this.totalPurchased += tokensReceived;
