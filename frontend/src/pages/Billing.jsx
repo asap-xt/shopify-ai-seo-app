@@ -137,13 +137,14 @@ export default function Billing({ shop }) {
     }
   };
 
-  // Calculate token value
-  // Backend calculates: $10 → $6 for tokens → 60M tokens at $0.10/1M rate
+  // Calculate token value (display-only)
+  // Policy: 30% of the amount buys tokens; effective display rate $1 / 1M tokens
+  // Example: $10 → $3 for tokens → 3,000,000 tokens
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.60; // 60% goes to tokens (internal)
-    const geminiRate = 0.10; // $0.10 per 1M tokens
-    const tokensPerMillion = 1000000;
-    const tokens = Math.floor((tokenBudget / geminiRate) * tokensPerMillion);
+    const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (display policy)
+    const ratePerMillion = 1.00; // $1 per 1M tokens (display)
+    const tokensPerMillion = 1_000_000;
+    const tokens = Math.floor((tokenBudget / ratePerMillion) * tokensPerMillion);
     return tokens;
   };
 
