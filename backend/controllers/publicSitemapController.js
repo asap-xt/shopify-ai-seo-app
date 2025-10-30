@@ -189,7 +189,7 @@ To generate a fresh sitemap:
 3. Click "Generate Sitemap"
 4. Your sitemap will be available at this URL
 
-App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
     `);
     
   } catch (err) {

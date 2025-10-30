@@ -1807,7 +1807,7 @@ To generate a sitemap:
 2. Go to the Sitemap section and click "Generate Sitemap"
 3. Your sitemap will be available at this URL
 
-App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
           `);
         }
         
@@ -1923,7 +1923,7 @@ To generate a sitemap:
 2. Go to the Sitemap section and click "Generate Sitemap"
 3. Your sitemap will be available at this URL
 
-App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
           `);
         }
         
@@ -2038,7 +2038,7 @@ To generate a sitemap:
 2. Go to the Sitemap section and click "Generate Sitemap"
 3. Your sitemap will be available at this URL
 
-App URL: https://new-ai-seo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
           `);
         }
         

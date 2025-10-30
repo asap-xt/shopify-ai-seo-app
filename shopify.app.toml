@@ -6,7 +6,7 @@ type = "public"
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
 name = "NEW AI SEO"
 handle = "new-ai-seo"
-application_url = "https://new-ai-seo-app-production.up.railway.app"
+application_url = "https://indexaize-aiseo-app-production.up.railway.app"
 embedded = true
 
 [webhooks]
@@ -14,10 +14,10 @@ api_version = "2025-07"
 
 [auth]
 redirect_urls = [
-  "https://new-ai-seo-app-production.up.railway.app/auth/callback",
-  "https://new-ai-seo-app-production.up.railway.app/api/auth/callback",
-  "https://new-ai-seo-app-production.up.railway.app/api/auth",
-  "https://new-ai-seo-app-production.up.railway.app/"
+  "https://indexaize-aiseo-app-production.up.railway.app/auth/callback",
+  "https://indexaize-aiseo-app-production.up.railway.app/api/auth/callback",
+  "https://indexaize-aiseo-app-production.up.railway.app/api/auth",
+  "https://indexaize-aiseo-app-production.up.railway.app/"
 ]
 
 [access_scopes]
@@ -29,6 +29,7 @@ scopes = "read_products,write_products,read_themes,read_translations,write_trans
 # You already mount your router there in server.js:
 #   app.use('/apps/new-ai-seo', appProxyRouter)
 url = "https://new-ai-seo-app-production.up.railway.app/apps"
+url = "https://indexaize-aiseo-app-production.up.railway.app/apps"
 
 # Merchant-facing URL on the storefront:
 # https://{shop}.myshopify.com/apps/new-ai-seo/<anything>
