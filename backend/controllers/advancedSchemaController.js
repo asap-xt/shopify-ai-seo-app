@@ -378,7 +378,6 @@ function sanitizeAIResponse(response, knownFacts) {
     // console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
     // Try to get settings from AI Discovery settings
   const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
-    const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
     console.log(`[SCHEMA-DEBUG] API response status:`, response.status);
     
     if (response.ok) {
