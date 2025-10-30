@@ -864,7 +864,6 @@ export default function StoreMetadata({ shop: shopProp }) {
                 Preview Metadata
               </Button>
               
-              // NOTE: Clear button is temporarily disabled until backend clearing is finalized
               {false && (
                 <Button
                   onClick={handleClear}
