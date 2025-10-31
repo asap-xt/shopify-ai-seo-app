@@ -256,7 +256,7 @@ export default function CleanUninstall() {
               <Box paddingInlineStart="400">
                 <ol style={{ margin: 0, paddingLeft: '20px' }}>
                   <li>Go to <strong>Settings → Apps and sales channels</strong></li>
-                  <li>Find <strong>"NEW AI SEO"</strong> in the list</li>
+                  <li>Find <strong>"indexAIze - Unlock AI Search"</strong> in the list</li>
                   <li>Click the <strong>three dots (•••)</strong> menu</li>
                   <li>Select <strong>"Uninstall"</strong></li>
                   <li>Confirm the uninstallation</li>
