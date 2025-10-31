@@ -20,13 +20,7 @@ class CacheService {
         },
       });
       
-      this.redis.on('connect', () => console.log('[CACHE] ✅ Redis connected'));
       this.redis.on('error', (err) => console.error('[CACHE] ❌ Redis error:', err.message));
-      this.redis.on('close', () => console.warn('[CACHE] ⚠️  Redis connection closed'));
-      this.redis.on('reconnecting', () => console.log('[CACHE] 🔄 Redis reconnecting...'));
-    } else {
-      console.warn('[CACHE] ⚠️  Redis not configured (REDIS_URL missing), caching disabled');
-      console.warn('[CACHE] ℹ️  Add Redis on Railway: railway add redis');
     }
   }
 
@@ -34,7 +28,6 @@ class CacheService {
     if (this.enabled && !this.redis.status.includes('connect')) {
       try {
         await this.redis.connect();
-        console.log('[CACHE] ✅ Redis connection established');
       } catch (error) {
         console.error('[CACHE] ❌ Failed to connect to Redis:', error.message);
         this.enabled = false; // Disable caching if connection fails
@@ -110,7 +103,6 @@ class CacheService {
       const keys = await this.redis.keys(pattern);
       if (keys.length > 0) {
         await this.redis.del(...keys);
-        console.log(`[CACHE] 🗑️  Deleted ${keys.length} keys matching pattern: ${pattern}`);
         return keys.length;
       }
       return 0;
@@ -145,10 +137,6 @@ class CacheService {
     for (const pattern of patterns) {
       const deleted = await this.delPattern(pattern);
       totalDeleted += deleted;
-    }
-    
-    if (totalDeleted > 0) {
-      console.log(`[CACHE] 🗑️  Invalidated ${totalDeleted} cache entries for shop: ${shop}`);
     }
     
     return totalDeleted;

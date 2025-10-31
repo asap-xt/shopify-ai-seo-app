@@ -43,7 +43,6 @@ export async function generateWithLlama(product = {}) {
   if (!apiKey)  throw new Error('LLAMA_API_KEY is missing.');
 
   const candidates = buildCandidates(provider, process.env.LLAMA_MODEL);
-  console.log(`[Llama] Boot with provider=${provider}, models=${candidates.join(', ')}`);
 
   const title = product.title || 'Product';
   const description = product.description || '';
@@ -72,7 +71,6 @@ Only return JSON.
 
   for (const model of candidates) {
     try {
-      console.log(`[Llama] Trying model=${model}`);
       const res = await fetch(baseUrl, {
         method: 'POST',
         headers: {
@@ -94,7 +92,6 @@ Only return JSON.
         const text = await res.text().catch(() => '');
         lastErrText = `Llama HTTP ${res.status}: ${text || res.statusText}`;
         if (res.status === 404 || /model_not_found/i.test(text)) {
-          console.warn(`[Llama] Model not found: ${model} → trying next`);
           continue;
         }
         throw new Error(lastErrText);
@@ -121,7 +118,6 @@ Only return JSON.
       }
     } catch (e) {
       lastErrText = e?.message || String(e);
-      console.warn(`[Llama] Candidate failed (${model}): ${lastErrText}`);
       continue;
     }
   }

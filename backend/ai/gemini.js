@@ -76,7 +76,6 @@ Only return JSON.
         const text = await res.text().catch(() => '');
         lastErr = `Gemini (OpenRouter) HTTP ${res.status}: ${text || res.statusText}`;
         if (res.status === 404 || /model_not_found|not found/i.test(lastErr)) {
-          console.warn(`[Gemini] Model not found: ${model} → trying next`);
           continue;
         }
         throw new Error(lastErr);
@@ -142,7 +141,6 @@ Only return JSON.
       }
     } catch (e) {
       lastErr = e?.message || String(e);
-      console.warn(`[Gemini] Candidate failed (${modelId}): ${lastErr}`);
       continue;
     }
   }
@@ -166,10 +164,6 @@ export async function getGeminiResponse(prompt, options = {}) {
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is missing.');
   }
-
-  console.log('[GEMINI] Calling OpenRouter with model:', model);
-  console.log('[GEMINI] Prompt length:', prompt.length, 'chars');
-  console.log('[GEMINI] Max tokens:', maxTokens, 'Temperature:', temperature);
 
   const res = await fetch(baseUrl, {
     method: 'POST',
@@ -197,10 +191,8 @@ export async function getGeminiResponse(prompt, options = {}) {
   }
 
   const data = await res.json();
-  console.log('[GEMINI] OpenRouter response received, tokens used:', data?.usage?.total_tokens || 'unknown');
   
   const content = data?.choices?.[0]?.message?.content || '';
-  console.log('[GEMINI] Response length:', content.length, 'chars');
   
   return content;
 }

@@ -43,8 +43,6 @@ function extractShop(req) {
  */
 async function getOfflineTokenViaExchange(shop, sessionToken) {
   try {
-    console.log(`[TOKEN_EXCHANGE] Exchanging session token for offline token: ${shop}`);
-    
     const result = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
@@ -65,7 +63,6 @@ async function getOfflineTokenViaExchange(shop, sessionToken) {
       { upsert: true, new: true }
     );
 
-    console.log(`[TOKEN_EXCHANGE] Success for ${shop}`);
     return tokenString;
 
   } catch (error) {
@@ -79,15 +76,12 @@ async function getOfflineTokenViaExchange(shop, sessionToken) {
  */
 async function getOnlineTokenViaExchange(shop, sessionToken) {
   try {
-    console.log(`[TOKEN_EXCHANGE] Exchanging session token for online token: ${shop}`);
-    
     const result = await shopify.auth.tokenExchange({
       shop,
       sessionToken,
       requestedTokenType: RequestedTokenType.OnlineAccessToken,
     });
 
-    console.log(`[TOKEN_EXCHANGE] Online token success for ${shop}`);
     return result.session?.accessToken || result.accessToken || result;
 
   } catch (error) {
@@ -127,7 +121,6 @@ export async function resolveAccessToken(req) {
   // First try cached offline token
   const cachedToken = await getCachedOfflineToken(shop);
   if (cachedToken) {
-    console.log(`[AUTH] Using cached offline token for ${shop}`);
     return {
       shop,
       accessToken: cachedToken,
@@ -139,7 +132,6 @@ export async function resolveAccessToken(req) {
   // If we have session token, try token exchange, but fallback to cached if it fails
   if (sessionToken) {
     try {
-      console.log(`[AUTH] Attempting token exchange for ${shop}`);
       const accessToken = await getOfflineTokenViaExchange(shop, sessionToken);
       return {
         shop,
@@ -148,12 +140,9 @@ export async function resolveAccessToken(req) {
         source: 'token_exchange'
       };
     } catch (exchangeError) {
-      console.log(`[AUTH] Token exchange failed for ${shop}:`, exchangeError.message);
-      
       // Fallback to any cached token (even if not from token_exchange)
       const fallbackToken = await Shop.findOne({ shop }).lean();
       if (fallbackToken?.accessToken) {
-        console.log(`[AUTH] Using fallback cached token for ${shop}`);
         return {
           shop,
           accessToken: fallbackToken.accessToken,
@@ -217,8 +206,6 @@ export async function executeGraphQL(req, query, variables = {}) {
   const { shop, accessToken } = req.auth;
   const url = `https://${shop}/admin/api/${LATEST_API_VERSION}/graphql.json`;
 
-  console.log(`[GRAPHQL] Making request to ${url}`);
-
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -249,6 +236,5 @@ export async function executeGraphQL(req, query, variables = {}) {
     throw new Error(`GraphQL errors: ${errorMessage}`);
   }
 
-  console.log(`[GRAPHQL] Success for ${shop}`);
   return json.data;
 }

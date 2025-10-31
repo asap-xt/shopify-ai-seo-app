@@ -22,10 +22,5 @@ export function attachShop(req, _res, next) {
 
   req.shopDomain = normalizeShop(raw); // винаги низ или null
   
-  console.log('[ATTACH_SHOP] Raw shop from query:', req.query?.shop);
-  console.log('[ATTACH_SHOP] Raw shop from body:', req.body?.shop);
-  console.log('[ATTACH_SHOP] Raw shop from params:', req.params?.shop);
-  console.log('[ATTACH_SHOP] Normalized shop domain:', req.shopDomain);
-  
   next();
 }
