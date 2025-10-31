@@ -19,6 +19,12 @@ export default function StoreMetadata({ shop: shopProp }) {
   const [clearing, setClearing] = useState(false);
   const [shopifyData, setShopifyData] = useState({ storeName: '', homePageTitle: '', metaDescription: '' });
   const [hasShopifyChanges, setHasShopifyChanges] = useState(false);
+  // Local raw string values for comma-separated fields (to prevent cursor jump)
+  const [rawFieldValues, setRawFieldValues] = useState({
+    languages: '',
+    supportedCurrencies: '',
+    shippingRegions: ''
+  });
   const [formData, setFormData] = useState({
     seo: {
       storeName: '',
@@ -137,6 +143,13 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] LOAD - Setting formData', newFormData);
       setFormData(newFormData);
       
+      // Initialize raw field values for comma-separated fields
+      setRawFieldValues({
+        languages: newFormData.aiMetadata.languages?.join(', ') || '',
+        supportedCurrencies: newFormData.aiMetadata.supportedCurrencies?.join(', ') || '',
+        shippingRegions: newFormData.aiMetadata.shippingRegions?.join(', ') || ''
+      });
+      
     } catch (error) {
       console.error('[StoreMeta] Load error:', error);
       setToast(`Load failed: ${error?.message || 'Unknown error'}`);
@@ -177,12 +190,21 @@ export default function StoreMetadata({ shop: shopProp }) {
       
       // Update form with generated data
       if (data.metadata) {
-        setFormData(prev => ({
-          ...prev,
-          seo: data.metadata.seo || prev.seo,
-          aiMetadata: data.metadata.aiMetadata || prev.aiMetadata,
-          organizationSchema: data.metadata.organizationSchema || prev.organizationSchema
-        }));
+        const newFormData = {
+          ...formData,
+          seo: data.metadata.seo || formData.seo,
+          aiMetadata: data.metadata.aiMetadata || formData.aiMetadata,
+          organizationSchema: data.metadata.organizationSchema || formData.organizationSchema
+        };
+        setFormData(newFormData);
+        
+        // Update raw field values
+        setRawFieldValues({
+          languages: newFormData.aiMetadata.languages?.join(', ') || '',
+          supportedCurrencies: newFormData.aiMetadata.supportedCurrencies?.join(', ') || '',
+          shippingRegions: newFormData.aiMetadata.shippingRegions?.join(', ') || ''
+        });
+        
         setToast('Metadata generated successfully!');
       }
     } catch (error) {
@@ -196,13 +218,38 @@ export default function StoreMetadata({ shop: shopProp }) {
   async function handleSave() {
     setSaving(true);
     try {
+      // Normalize raw field values before saving
+      const normalizedLanguages = rawFieldValues.languages.split(',').map(lang => lang.trim()).filter(lang => lang);
+      const normalizedCurrencies = rawFieldValues.supportedCurrencies.split(',').map(curr => curr.trim()).filter(curr => curr);
+      const normalizedRegions = rawFieldValues.shippingRegions.split(',').map(region => region.trim()).filter(region => region);
+      
+      // Update formData with normalized values
+      const normalizedFormData = {
+        ...formData,
+        aiMetadata: {
+          ...formData.aiMetadata,
+          languages: normalizedLanguages,
+          supportedCurrencies: normalizedCurrencies,
+          shippingRegions: normalizedRegions
+        }
+      };
+      
+      // Update formData state
+      setFormData(normalizedFormData);
+      // Also update rawFieldValues to cleaned version
+      setRawFieldValues({
+        languages: normalizedLanguages.join(', '),
+        supportedCurrencies: normalizedCurrencies.join(', '),
+        shippingRegions: normalizedRegions.join(', ')
+      });
+      
       const url = `/api/store/apply?shop=${encodeURIComponent(shop)}`;
       console.log('[StoreMeta] SAVE', url);
       const data = await api(url, {
         method: 'POST',
         headers: { 'X-Shop': shop },
         body: {
-          metadata: formData,
+          metadata: normalizedFormData,
           options: {
             updateSeo: true,
             updateAiMetadata: true,
@@ -391,6 +438,12 @@ export default function StoreMetadata({ shop: shopProp }) {
       console.log('[StoreMeta] CLEAR - Setting formData to empty', { emptyData });
       // Reset form to empty state
       setFormData(emptyData);
+      // Also clear raw field values
+      setRawFieldValues({
+        languages: '',
+        supportedCurrencies: '',
+        shippingRegions: ''
+      });
       
       console.log('[StoreMeta] CLEAR - Calling handleSave');
       // Save empty data to clear from backend/preview
@@ -623,41 +676,77 @@ export default function StoreMetadata({ shop: shopProp }) {
               
               <TextField
                 label="Supported Languages"
-                value={formData.aiMetadata.languages?.join(', ') || ''}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  aiMetadata: { 
-                    ...prev.aiMetadata, 
-                    languages: value.split(',').map(lang => lang.trim()).filter(lang => lang)
-                  }
-                }))}
+                value={rawFieldValues.languages}
+                onChange={(value) => {
+                  setRawFieldValues(prev => ({ ...prev, languages: value }));
+                  // Also update formData for validation, but keep the raw string intact
+                  const normalized = value.split(',').map(lang => lang.trim()).filter(lang => lang);
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, languages: normalized }
+                  }));
+                }}
+                onBlur={() => {
+                  // Normalize on blur - trim trailing commas and clean up
+                  const normalized = rawFieldValues.languages.split(',').map(lang => lang.trim()).filter(lang => lang);
+                  const cleaned = normalized.join(', ');
+                  setRawFieldValues(prev => ({ ...prev, languages: cleaned }));
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, languages: normalized }
+                  }));
+                }}
                 helpText="Comma-separated language codes (e.g., en, de, es, fr)"
                 multiline={2}
               />
               
               <TextField
                 label="Supported Currencies"
-                value={formData.aiMetadata.supportedCurrencies?.join(', ') || ''}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  aiMetadata: { 
-                    ...prev.aiMetadata, 
-                    supportedCurrencies: value.split(',').map(curr => curr.trim()).filter(curr => curr)
-                  }
-                }))}
+                value={rawFieldValues.supportedCurrencies}
+                onChange={(value) => {
+                  setRawFieldValues(prev => ({ ...prev, supportedCurrencies: value }));
+                  // Also update formData for validation, but keep the raw string intact
+                  const normalized = value.split(',').map(curr => curr.trim()).filter(curr => curr);
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, supportedCurrencies: normalized }
+                  }));
+                }}
+                onBlur={() => {
+                  // Normalize on blur - trim trailing commas and clean up
+                  const normalized = rawFieldValues.supportedCurrencies.split(',').map(curr => curr.trim()).filter(curr => curr);
+                  const cleaned = normalized.join(', ');
+                  setRawFieldValues(prev => ({ ...prev, supportedCurrencies: cleaned }));
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, supportedCurrencies: normalized }
+                  }));
+                }}
                 helpText="Comma-separated currency codes (e.g., EUR, USD, GBP)"
               />
               
               <TextField
                 label="Shipping Regions"
-                value={formData.aiMetadata.shippingRegions?.join(', ') || ''}
-                onChange={(value) => setFormData(prev => ({
-                  ...prev,
-                  aiMetadata: { 
-                    ...prev.aiMetadata, 
-                    shippingRegions: value.split(',').map(region => region.trim()).filter(region => region)
-                  }
-                }))}
+                value={rawFieldValues.shippingRegions}
+                onChange={(value) => {
+                  setRawFieldValues(prev => ({ ...prev, shippingRegions: value }));
+                  // Also update formData for validation, but keep the raw string intact
+                  const normalized = value.split(',').map(region => region.trim()).filter(region => region);
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, shippingRegions: normalized }
+                  }));
+                }}
+                onBlur={() => {
+                  // Normalize on blur - trim trailing commas and clean up
+                  const normalized = rawFieldValues.shippingRegions.split(',').map(region => region.trim()).filter(region => region);
+                  const cleaned = normalized.join(', ');
+                  setRawFieldValues(prev => ({ ...prev, shippingRegions: cleaned }));
+                  setFormData(prev => ({
+                    ...prev,
+                    aiMetadata: { ...prev.aiMetadata, shippingRegions: normalized }
+                  }));
+                }}
                 helpText="Comma-separated regions (e.g., EU, USA, UK, Canada)"
                 multiline={2}
               />
