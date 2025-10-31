@@ -678,23 +678,23 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Supported Languages"
                 value={rawFieldValues.languages}
                 onChange={(value) => {
+                  // Only update raw value - don't normalize yet to prevent cursor jump
+                  // Accept any value including leading/trailing commas
                   setRawFieldValues(prev => ({ ...prev, languages: value }));
-                  // Also update formData for validation, but keep the raw string intact
-                  const normalized = value.split(',').map(lang => lang.trim()).filter(lang => lang);
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, languages: normalized }
-                  }));
                 }}
                 onBlur={() => {
-                  // Normalize on blur - trim trailing commas and clean up
-                  const normalized = rawFieldValues.languages.split(',').map(lang => lang.trim()).filter(lang => lang);
-                  const cleaned = normalized.join(', ');
-                  setRawFieldValues(prev => ({ ...prev, languages: cleaned }));
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, languages: normalized }
-                  }));
+                  // Normalize on blur - preserve commas but clean up spacing
+                  const trimmed = rawFieldValues.languages.trim();
+                  if (trimmed) {
+                    // Split and clean up, but preserve structure
+                    const parts = trimmed.split(',').map(lang => lang.trim()).filter(lang => lang);
+                    const cleaned = parts.join(', ');
+                    setRawFieldValues(prev => ({ ...prev, languages: cleaned }));
+                    setFormData(prev => ({
+                      ...prev,
+                      aiMetadata: { ...prev.aiMetadata, languages: parts }
+                    }));
+                  }
                 }}
                 helpText="Comma-separated language codes (e.g., en, de, es, fr)"
                 multiline={2}
@@ -704,23 +704,23 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Supported Currencies"
                 value={rawFieldValues.supportedCurrencies}
                 onChange={(value) => {
+                  // Only update raw value - don't normalize yet to prevent cursor jump
+                  // Accept any value including leading/trailing commas
                   setRawFieldValues(prev => ({ ...prev, supportedCurrencies: value }));
-                  // Also update formData for validation, but keep the raw string intact
-                  const normalized = value.split(',').map(curr => curr.trim()).filter(curr => curr);
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, supportedCurrencies: normalized }
-                  }));
                 }}
                 onBlur={() => {
-                  // Normalize on blur - trim trailing commas and clean up
-                  const normalized = rawFieldValues.supportedCurrencies.split(',').map(curr => curr.trim()).filter(curr => curr);
-                  const cleaned = normalized.join(', ');
-                  setRawFieldValues(prev => ({ ...prev, supportedCurrencies: cleaned }));
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, supportedCurrencies: normalized }
-                  }));
+                  // Normalize on blur - preserve commas but clean up spacing
+                  const trimmed = rawFieldValues.supportedCurrencies.trim();
+                  if (trimmed) {
+                    // Split and clean up, but preserve structure
+                    const parts = trimmed.split(',').map(curr => curr.trim()).filter(curr => curr);
+                    const cleaned = parts.join(', ');
+                    setRawFieldValues(prev => ({ ...prev, supportedCurrencies: cleaned }));
+                    setFormData(prev => ({
+                      ...prev,
+                      aiMetadata: { ...prev.aiMetadata, supportedCurrencies: parts }
+                    }));
+                  }
                 }}
                 helpText="Comma-separated currency codes (e.g., EUR, USD, GBP)"
               />
@@ -729,23 +729,23 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Shipping Regions"
                 value={rawFieldValues.shippingRegions}
                 onChange={(value) => {
+                  // Only update raw value - don't normalize yet to prevent cursor jump
+                  // Accept any value including leading/trailing commas
                   setRawFieldValues(prev => ({ ...prev, shippingRegions: value }));
-                  // Also update formData for validation, but keep the raw string intact
-                  const normalized = value.split(',').map(region => region.trim()).filter(region => region);
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, shippingRegions: normalized }
-                  }));
                 }}
                 onBlur={() => {
-                  // Normalize on blur - trim trailing commas and clean up
-                  const normalized = rawFieldValues.shippingRegions.split(',').map(region => region.trim()).filter(region => region);
-                  const cleaned = normalized.join(', ');
-                  setRawFieldValues(prev => ({ ...prev, shippingRegions: cleaned }));
-                  setFormData(prev => ({
-                    ...prev,
-                    aiMetadata: { ...prev.aiMetadata, shippingRegions: normalized }
-                  }));
+                  // Normalize on blur - preserve commas but clean up spacing
+                  const trimmed = rawFieldValues.shippingRegions.trim();
+                  if (trimmed) {
+                    // Split and clean up, but preserve structure
+                    const parts = trimmed.split(',').map(region => region.trim()).filter(region => region);
+                    const cleaned = parts.join(', ');
+                    setRawFieldValues(prev => ({ ...prev, shippingRegions: cleaned }));
+                    setFormData(prev => ({
+                      ...prev,
+                      aiMetadata: { ...prev.aiMetadata, shippingRegions: parts }
+                    }));
+                  }
                 }}
                 helpText="Comma-separated regions (e.g., EU, USA, UK, Canada)"
                 multiline={2}
