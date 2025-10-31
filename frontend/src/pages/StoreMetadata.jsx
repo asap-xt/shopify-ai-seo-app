@@ -643,6 +643,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Supported Languages"
                 value={formData.aiMetadata.languages || ''}
                 onChange={(value) => {
+                  console.log('[LANGUAGES] onChange value:', JSON.stringify(value), 'last char:', value.slice(-1));
                   // Store as string - no normalization during typing (allows trailing commas)
                   setFormData(prev => ({
                     ...prev,
@@ -657,6 +658,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Supported Currencies"
                 value={formData.aiMetadata.supportedCurrencies || ''}
                 onChange={(value) => {
+                  console.log('[CURRENCIES] onChange value:', JSON.stringify(value), 'last char:', value.slice(-1));
                   // Store as string - no normalization during typing (allows trailing commas)
                   setFormData(prev => ({
                     ...prev,
@@ -670,6 +672,7 @@ export default function StoreMetadata({ shop: shopProp }) {
                 label="Shipping Regions"
                 value={formData.aiMetadata.shippingRegions || ''}
                 onChange={(value) => {
+                  console.log('[SHIPPING] onChange value:', JSON.stringify(value), 'last char:', value.slice(-1));
                   // Store as string - no normalization during typing (allows trailing commas)
                   setFormData(prev => ({
                     ...prev,

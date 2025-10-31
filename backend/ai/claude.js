@@ -78,6 +78,7 @@ Only return JSON.
         lastErr = `Claude (OpenRouter) HTTP ${res.status}: ${text || res.statusText}`;
         // ако моделът липсва/недостъпен – пробваме следващия
         if (res.status === 404 || /model_not_found|not found/i.test(text)) {
+          console.warn(`[Claude] Model not found: ${model} → trying next`);
           continue;
         }
         throw new Error(lastErr);
@@ -136,6 +137,7 @@ Only return JSON.
       const text = await res.text().catch(() => '');
       lastErr = `Claude (Anthropic) HTTP ${res.status}: ${text || res.statusText}`;
       if (res.status === 404 || /model_not_found|not found/i.test(lastErr)) {
+        console.warn(`[Claude] Model not found: ${model} → trying next`);
         continue;
       }
       throw new Error(lastErr);

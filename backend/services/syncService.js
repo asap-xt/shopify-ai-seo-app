@@ -17,6 +17,8 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
   let cursor = null;
   let pageCount = 0;
 
+  console.log(`[SYNC] Starting products sync for ${shop}`);
+
   while (hasNextPage) {
     pageCount++;
     
@@ -84,9 +86,13 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
         message: `Fetched ${allProducts.length} products...`
       });
     }
+
+    console.log(`[SYNC] Fetched page ${pageCount}, total products: ${allProducts.length}`);
   }
 
   // Save products to database
+  console.log(`[SYNC] Saving ${allProducts.length} products to database...`);
+  
   for (const { node: product } of allProducts) {
     try {
       // Process metafields to determine optimization status
@@ -123,6 +129,7 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
     }
   }
 
+  console.log(`[SYNC] Products sync complete: ${allProducts.length} products`);
   return allProducts.length;
 }
 
@@ -134,6 +141,8 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
   let hasNextPage = true;
   let cursor = null;
   let pageCount = 0;
+
+  console.log(`[SYNC] Starting collections sync for ${shop}`);
 
   while (hasNextPage) {
     pageCount++;
@@ -190,9 +199,13 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
         message: `Fetched ${allCollections.length} collections...`
       });
     }
+
+    console.log(`[SYNC] Fetched page ${pageCount}, total collections: ${allCollections.length}`);
   }
 
   // Save collections to database
+  console.log(`[SYNC] Saving ${allCollections.length} collections to database...`);
+  
   for (const { node: collection } of allCollections) {
     try {
       const seoStatus = processMetafields(collection.metafields);
@@ -223,6 +236,7 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
     }
   }
 
+  console.log(`[SYNC] Collections sync complete: ${allCollections.length} collections`);
   return allCollections.length;
 }
 
@@ -230,6 +244,8 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
  * Get store languages from Shopify
  */
 export async function syncLanguages(adminGraphql, shop, progressCallback = null) {
+  console.log(`[SYNC] Fetching store languages for ${shop}`);
+
   const query = `
     query {
       shopLocales {
@@ -268,6 +284,7 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
       }
     );
 
+    console.log(`[SYNC] Languages sync complete:`, languages);
     return languages;
   } catch (error) {
     console.error('[SYNC] Error fetching languages:', error);
@@ -279,6 +296,8 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
  * Get store markets from Shopify
  */
 export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
+  console.log(`[SYNC] Fetching store markets for ${shop}`);
+
   const query = `
     query {
       markets(first: 10) {
@@ -315,6 +334,7 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
       }
     );
 
+    console.log(`[SYNC] Markets sync complete:`, markets.length);
     return markets;
   } catch (error) {
     console.error('[SYNC] Error fetching markets:', error);
@@ -351,7 +371,7 @@ function processMetafields(metafields) {
           }
         }
       } catch (error) {
-        // Failed to parse metafield
+        console.warn(`[SYNC] Failed to parse metafield ${node.key}`);
       }
     }
   });
@@ -367,6 +387,8 @@ function processMetafields(metafields) {
  * Full store sync - all data
  */
 export async function syncStore(adminGraphql, shop, progressCallback = null) {
+  console.log(`[SYNC] ===== FULL STORE SYNC STARTED for ${shop} =====`);
+  
   const startTime = Date.now();
   const results = {
     products: 0,
@@ -408,6 +430,10 @@ export async function syncStore(adminGraphql, shop, progressCallback = null) {
     );
 
     results.success = true;
+    
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`[SYNC] ===== FULL STORE SYNC COMPLETE in ${duration}s =====`);
+    console.log(`[SYNC] Results:`, results);
 
     if (progressCallback) {
       progressCallback({
