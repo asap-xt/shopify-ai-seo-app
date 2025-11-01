@@ -1079,16 +1079,11 @@ app.get('/api/admin/list-webhooks', attachShop, apiResolver, async (req, res) =>
 // ---------------------------------------------------------------------------
 async function mountOptionalRouters(app) {
   // GDPR Compliance Webhooks (mandatory for Shopify App Store)
+  // Single unified endpoint that handles all 3 compliance topics
   try {
-    const gdprDataRequest = require('./webhooks/gdpr-data-request');
-    const gdprCustomerRedact = require('./webhooks/gdpr-customer-redact');
-    const gdprShopRedact = require('./webhooks/gdpr-shop-redact');
-    
-    app.use('/webhooks/gdpr', gdprDataRequest);
-    app.use('/webhooks/gdpr', gdprCustomerRedact);
-    app.use('/webhooks/gdpr', gdprShopRedact);
-    
-    console.log('✔ GDPR compliance webhooks mounted');
+    const gdprCompliance = require('./webhooks/gdpr-compliance');
+    app.use('/webhooks/gdpr', gdprCompliance);
+    console.log('✔ GDPR compliance webhooks mounted at /webhooks/gdpr');
   } catch (e) {
     console.error('⚠ GDPR webhooks failed to mount:', e?.message || '');
   }
