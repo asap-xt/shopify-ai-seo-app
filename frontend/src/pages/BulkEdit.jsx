@@ -1765,9 +1765,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     
                     if (!hasOptimizedProducts) return null;
                     
-                    // Check if Professional+ plan
-                    const isProfessionalPlus = ['professional', 'growth', 'growth_extra', 'growth extra', 'enterprise']
-                      .includes(currentPlan.toLowerCase().replace(/_/g, ' '));
+                    // Check if Professional+ plan (including Plus plans)
+                    const isProfessionalPlus = [
+                      'professional', 
+                      'professional_plus', 
+                      'professional plus',
+                      'growth', 
+                      'growth_plus',
+                      'growth plus',
+                      'growth_extra', 
+                      'growth extra', 
+                      'enterprise'
+                    ].includes(currentPlan.toLowerCase().replace(/_/g, ' '));
                     
                     return (
                       <Button
