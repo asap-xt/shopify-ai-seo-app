@@ -47,15 +47,8 @@ async function resolveAdminTokenForShop(shop) {
 
 // GraphQL query function
 async function shopGraphQL(req, shop, query, variables = {}) {
-  console.log('[STORE-GRAPHQL] Shop:', shop);
-  console.log('[STORE-GRAPHQL] Query:', query.substring(0, 100) + '...');
-  console.log('[STORE-GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
-  
   const token = await resolveAdminTokenForShop(shop);
-  console.log('[STORE-GRAPHQL] Token:', token ? `${token.substring(0, 10)}...` : 'null');
-  
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
-  console.log('[STORE-GRAPHQL] URL:', url);
   
   const response = await fetch(url, {
     method: 'POST',
@@ -65,8 +58,6 @@ async function shopGraphQL(req, shop, query, variables = {}) {
     },
     body: JSON.stringify({ query, variables }),
   });
-
-  console.log('[STORE-GRAPHQL] Response status:', response.status);
 
   const json = await response.json();
   
@@ -83,11 +74,6 @@ async function shopGraphQL(req, shop, query, variables = {}) {
 // Load plan data for shop
 // Updated: Added read_markets scope support and plan override support
 async function fetchPlan(shop, app = null) {
-  
-  // DEBUG
-  console.log('ENV APP_PLAN:', process.env.APP_PLAN);
-  console.log('All ENV:', Object.keys(process.env).filter(k => k.includes('APP')));
-
   // FIRST: Check environment variable
   const envPlan = process.env.APP_PLAN;
   if (envPlan) {
@@ -100,7 +86,6 @@ async function fetchPlan(shop, app = null) {
     };
     
     if (planMappings[envPlan.toLowerCase()]) {
-      console.log(`Using APP_PLAN from environment: ${envPlan}`);
       return planMappings[envPlan.toLowerCase()];
     }
   }
@@ -130,7 +115,6 @@ async function fetchPlan(shop, app = null) {
     try {
       const override = app?.locals?.planOverrides?.get?.(shop);
       if (override) {
-        console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
         plan = {
           plan: override,
           queryLimit: 50,
@@ -166,13 +150,9 @@ router.get('/generate', validateRequest(), async (req, res) => {
     return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   }
 
-  console.log('[STORE/HANDLER] Using fresh adminGraphql token for shop:', shop);
-
   try {
-
     // Check plan access
     const plan = await fetchPlan(shop, req.app);
-    console.log('[STORE-DEBUG] fetchPlan result:', JSON.stringify(plan, null, 2));
     if (plan.plan === 'Starter') {
       return res.status(403).json({ 
         error: 'Store metadata requires Professional plan or higher',
@@ -209,9 +189,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
     const shopInfo = shopResp?.data?.shop;
     const shopLocales = localesResp?.data?.shopLocales || [];
     
-    console.log('[STORE-DEBUG] shopInfo:', JSON.stringify(shopInfo, null, 2));
-    console.log('[STORE-DEBUG] shopLocales:', shopLocales);
-    
     // Get markets separately (simplified query)
     const marketsQuery = `{
       markets(first: 10) {
@@ -228,22 +205,13 @@ router.get('/generate', validateRequest(), async (req, res) => {
     const marketsResp = await adminGraphql.request(marketsQuery);
     const markets = marketsResp?.data?.markets?.edges?.map(edge => edge.node) || [];
     
-    console.log('[STORE-DEBUG] markets:', markets);
-    console.log('[STORE-DEBUG] plan.plan:', plan.plan);
-    
     // Normalize plan name for comparison (handle spaces and underscores)
     const normalizedPlan = (plan.plan || '').toLowerCase().replace(/\s+/g, '_');
     const allowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
     
-    console.log('[STORE-DEBUG] features:', {
-      organizationSchema: allowedPlans.includes(normalizedPlan),
-      // localBusinessSchema: plan.plan.toLowerCase() === 'enterprise' // DISABLED - not relevant for online stores
-    });
-    
     if (!shopInfo) return res.status(404).json({ error: 'Shop not found' });
 
     // Get existing metafields
-    console.log('[STORE-METAFIELDS] Fetching metafields for shop:', shop);
     const metafieldsQuery = `{
       shop {
         metafields(namespace: "ai_seo_store", first: 10) {
@@ -260,7 +228,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
     }`;
 
     const metafieldsResp = await adminGraphql.request(metafieldsQuery);
-    console.log('[STORE-METAFIELDS] Metafields data:', JSON.stringify(metafieldsResp, null, 2));
     const metafields = {};
     
     metafieldsResp?.data?.shop?.metafields?.edges?.forEach(edge => {
@@ -321,12 +288,6 @@ router.get('/generate', validateRequest(), async (req, res) => {
 
 // Generate AI metadata (mock for now)
 router.post('/ai-generate', validateRequest(), async (req, res) => {
-  console.log('[STORE/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -337,13 +298,8 @@ router.post('/ai-generate', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop not provided' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[STORE/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
     const shop = req.shopDomain;
-
     const { shopInfo, businessType, targetAudience } = req.body;
 
     // Check plan
@@ -405,11 +361,8 @@ router.post('/ai-generate', validateRequest(), async (req, res) => {
 router.post('/apply', validateRequest(), async (req, res) => {
   const { adminGraphql, shop } = res.locals;
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
-  
-  console.log('[STORE-APPLY] Starting metadata save for shop:', shop);
 
   try {
-
     const { metadata, options = {} } = req.body;
     if (!metadata) return res.status(400).json({ error: 'No metadata provided' });
 
@@ -420,27 +373,12 @@ router.post('/apply', validateRequest(), async (req, res) => {
       }
     }`;
     
-    console.log('[STORE-APPLY] Executing shop query...');
-    console.log('[STORE-APPLY] Shop query:', shopQuery);
-    console.log('[STORE-APPLY] adminGraphql exists:', !!adminGraphql);
-    console.log('[STORE-APPLY] adminGraphql.request type:', typeof adminGraphql?.request);
-    
     const shopResp = await adminGraphql.request(shopQuery);
-    console.log('[STORE-APPLY] Raw shopResp:', shopResp);
-    console.log('[STORE-APPLY] shopResp type:', typeof shopResp);
     
     // Shopify SDK returns { data: { shop: { id: "..." } } } directly, not wrapped in body
     const shopId = shopResp?.data?.shop?.id;
     
-    console.log('[STORE-APPLY] Shop query result:', {
-      hasData: !!shopResp?.data,
-      hasShop: !!shopResp?.data?.shop,
-      shopId: shopId,
-      fullResponse: JSON.stringify(shopResp?.data, null, 2)
-    });
-    
     if (!shopId) {
-      console.log('[STORE-APPLY] Shop ID not found in response');
       return res.status(404).json({ error: 'Shop not found' });
     }
 
@@ -452,20 +390,9 @@ router.post('/apply', validateRequest(), async (req, res) => {
       !metadata.seo.shortDescription?.trim() && 
       !metadata.seo.fullDescription?.trim() && 
       !metadata.seo.keywords?.trim();
-    
-    console.log('[STORE-APPLY] SEO metadata received:', JSON.stringify(metadata.seo));
-    console.log('[STORE-APPLY] SEO is empty?', isEmptySeo);
-    console.log('[STORE-APPLY] Individual checks:', {
-      storeNameEmpty: !metadata.seo?.storeName?.trim(),
-      shortDescEmpty: !metadata.seo?.shortDescription?.trim(),
-      fullDescEmpty: !metadata.seo?.fullDescription?.trim(),
-      keywordsEmpty: !metadata.seo?.keywords?.trim()
-    });
 
     // SEO metadata - ONLY save if not all empty
     if (metadata.seo && options.updateSeo !== false && !isEmptySeo) {
-      console.log('[STORE-APPLY] Saving SEO metadata');
-      
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
@@ -481,7 +408,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
         })
       });
     } else if (isEmptySeo) {
-      console.log('[STORE-APPLY] All SEO fields are empty, will save empty metafield');
       // Save empty values to clear the metafield
       metafieldsToSet.push({
         ownerId: shopId,
@@ -499,7 +425,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
 
     // Home page title - save only if not empty
     if (metadata.seo?.shortDescription?.trim() && options.updateSeo !== false) {
-      console.log('[STORE-APPLY] Saving home page title');
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
@@ -508,7 +433,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
         value: metadata.seo.shortDescription
       });
     } else if (options.updateSeo !== false && isEmptySeo) {
-      console.log('[STORE-APPLY] Will save empty home_page_title to clear it');
       // Save empty value to clear the metafield
       metafieldsToSet.push({
         ownerId: shopId,
@@ -538,8 +462,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
         enabled: metadata.organizationSchema.enabled === true
       };
       
-      console.log('[STORE-APPLY] Organization schema data:', orgSchemaData);
-      
       metafieldsToSet.push({
         ownerId: shopId,
         namespace: 'ai_seo_store',
@@ -547,8 +469,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
         type: 'json',
         value: JSON.stringify(orgSchemaData)
       });
-    } else {
-      console.log('[STORE-APPLY] No organization schema in metadata');
     }
 
     // Local business schema (Enterprise only) - DISABLED - not relevant for online stores
@@ -565,16 +485,8 @@ router.post('/apply', validateRequest(), async (req, res) => {
     */
 
     if (metafieldsToSet.length === 0) {
-      console.log('[STORE-APPLY] No metafields to update');
       return res.status(400).json({ error: 'No metafields to update' });
     }
-
-    console.log('[STORE-APPLY] Saving metafields:', metafieldsToSet.map(m => ({
-      namespace: m.namespace,
-      key: m.key,
-      type: m.type,
-      valueLength: m.value?.length || 0
-    })));
 
     // Apply metafields
     const mutation = `
@@ -597,11 +509,6 @@ router.post('/apply', validateRequest(), async (req, res) => {
     const variables = { metafields: metafieldsToSet };
     const resp = await adminGraphql.request(mutation, { variables });
     const result = resp?.body?.data;
-    
-    console.log('[STORE-APPLY] GraphQL result:', {
-      metafieldsCreated: result?.metafieldsSet?.metafields?.length || 0,
-      userErrors: result?.metafieldsSet?.userErrors || []
-    });
 
     if (result?.metafieldsSet?.userErrors?.length > 0) {
       return res.status(400).json({ 
@@ -627,18 +534,9 @@ router.post('/apply', validateRequest(), async (req, res) => {
 // Public endpoint for AI crawlers
 router.get('/public/:shop', async (req, res) => {
   try {
-    console.log('[STORE-PUBLIC] GET /public/:shop called');
-    console.log('[STORE-PUBLIC] req.url:', req.url);
-    console.log('[STORE-PUBLIC] req.path:', req.path);
-    console.log('[STORE-PUBLIC] req.params:', req.params);
-    console.log('[STORE-PUBLIC] req.params.shop:', req.params.shop);
-    console.log('[STORE-PUBLIC] req.route:', req.route);
-    
     const shop = normalizeShop(req.params.shop);
-    console.log('[STORE-PUBLIC] Normalized shop:', shop);
     
     if (!shop) {
-      console.log('[STORE-PUBLIC] Shop validation failed');
       return res.status(400).json({ error: 'Invalid shop' });
     }
     
@@ -780,10 +678,8 @@ router.get('/public/:shop', async (req, res) => {
 
 // Settings endpoints за Advanced Schema
 router.get('/settings', validateRequest(), async (req, res) => {
-  console.log('[STORE-SETTINGS] GET /settings called'); // DEBUG
   try {
     const shop = req.shopDomain;
-    console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
     
     // Get settings from shop metafield
     const query = `{
@@ -794,14 +690,12 @@ router.get('/settings', validateRequest(), async (req, res) => {
       }
     }`;
     
-    console.log('[STORE-SETTINGS] Fetching metafield...'); // DEBUG
     const data = await shopGraphQL(req, shop, query);
     
     const settings = data?.shop?.metafield?.value 
       ? JSON.parse(data.shop.metafield.value)
       : { advancedSchemaEnabled: false };
     
-    console.log('[STORE-SETTINGS] Retrieved settings:', settings); // DEBUG
     res.json(settings);
   } catch (error) {
     console.error('[STORE-SETTINGS] Error loading settings:', error);
@@ -810,19 +704,13 @@ router.get('/settings', validateRequest(), async (req, res) => {
 });
 
 router.post('/settings', validateRequest(), async (req, res) => {
-  console.log('[STORE-SETTINGS] POST /settings called'); // DEBUG
-  console.log('[STORE-SETTINGS] Request body:', req.body); // DEBUG
-  
   try {
     const shop = req.shopDomain;
-    console.log('[STORE-SETTINGS] Shop:', shop); // DEBUG
     
     // Get shop ID
     const shopQuery = `{ shop { id } }`;
     const shopData = await shopGraphQL(req, shop, shopQuery);
     const shopId = shopData?.shop?.id;
-    
-    console.log('[STORE-SETTINGS] Shop ID:', shopId); // DEBUG
     
     if (!shopId) return res.status(404).json({ error: 'Shop not found' });
     
@@ -842,20 +730,16 @@ router.post('/settings', validateRequest(), async (req, res) => {
     
     // Check if advancedSchemaEnabled is being turned on
     if (req.body.advancedSchemaEnabled && !currentSettings.advancedSchemaEnabled) {
-      console.log('[STORE-SETTINGS] Advanced Schema being ENABLED!'); // DEBUG
-      
       // Trigger schema generation
       setTimeout(async () => {
         try {
-          console.log('[STORE-SETTINGS] Triggering schema generation...'); // DEBUG
           const schemaRes = await fetch(`${process.env.APP_URL || 'http://localhost:8080'}/api/schema/generate-all`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ shop })
           });
           
-          const schemaResult = await schemaRes.json();
-          console.log('[STORE-SETTINGS] Schema generation response:', schemaResult); // DEBUG
+          await schemaRes.json();
         } catch (err) {
           console.error('[STORE-SETTINGS] Failed to trigger schema generation:', err);
         }
@@ -888,18 +772,15 @@ router.post('/settings', validateRequest(), async (req, res) => {
       }]
     };
     
-    console.log('[STORE-SETTINGS] Saving metafield...'); // DEBUG
     const result = await shopGraphQL(req, shop, mutation, variables);
     
     if (result?.metafieldsSet?.userErrors?.length > 0) {
-      console.error('[STORE-SETTINGS] Metafield errors:', result.metafieldsSet.userErrors); // DEBUG
       return res.status(400).json({ 
         error: 'Failed to save settings', 
         errors: result.metafieldsSet.userErrors 
       });
     }
     
-    console.log('[STORE-SETTINGS] Settings saved successfully!'); // DEBUG
     res.json({ success: true });
   } catch (error) {
     console.error('[STORE-SETTINGS] Error saving settings:', error);
@@ -910,9 +791,7 @@ router.post('/settings', validateRequest(), async (req, res) => {
 // GET /api/store/metadata-status - Check if store metadata is configured
 router.get('/metadata-status', validateRequest(), async (req, res) => {
   try {
-    console.log('[STORE-METADATA-STATUS] Request received');
     const shop = getShopFromReq(req);
-    console.log('[STORE-METADATA-STATUS] Shop:', shop);
     
     if (!shop) {
       console.error('[STORE-METADATA-STATUS] No shop found in request');
@@ -922,9 +801,7 @@ router.get('/metadata-status', validateRequest(), async (req, res) => {
     // Import here to avoid circular dependencies
     const { checkStoreMetadataStatus } = await import('../utils/storeContextBuilder.js');
     
-    console.log('[STORE-METADATA-STATUS] Checking status for shop:', shop);
     const status = await checkStoreMetadataStatus(shop);
-    console.log('[STORE-METADATA-STATUS] Status result:', JSON.stringify(status, null, 2));
     
     res.json(status);
   } catch (error) {
@@ -940,14 +817,11 @@ router.get('/metadata-status', validateRequest(), async (req, res) => {
 // POST /api/store/prepare-uninstall - Clean all app data before uninstall
 router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
   try {
-    console.log('[PREPARE-UNINSTALL] ===== STARTING CLEANUP =====');
     const shop = getShopFromReq(req);
     
     if (!shop) {
       return res.status(400).json({ error: 'Shop not found' });
     }
-    
-    console.log('[PREPARE-UNINSTALL] Shop:', shop);
     
     const results = {
       metafieldDefinitions: { deleted: 0, errors: [] },
@@ -958,7 +832,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
     };
     
     // 1. Delete all metafield definitions (this also deletes all associated values automatically)
-    console.log('[PREPARE-UNINSTALL] Step 1: Deleting metafield definitions and all associated values...');
     try {
       // Query all metafield definitions for seo_ai namespace
       const definitionsQuery = `
@@ -975,8 +848,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       
       const defsData = await shopGraphQL(req, shop, definitionsQuery);
       const definitions = defsData?.metafieldDefinitions?.nodes || [];
-      
-      console.log('[PREPARE-UNINSTALL] Found', definitions.length, 'product metafield definitions');
       
       // Delete each definition
       for (const def of definitions) {
@@ -1032,8 +903,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       const collectionDefsData = await shopGraphQL(req, shop, collectionDefsQuery);
       const collectionDefinitions = collectionDefsData?.metafieldDefinitions?.nodes || [];
       
-      console.log('[PREPARE-UNINSTALL] Found', collectionDefinitions.length, 'collection metafield definitions');
-      
       for (const def of collectionDefinitions) {
         try {
           const deleteMutation = `
@@ -1087,8 +956,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       const advancedSchemaDefsData = await shopGraphQL(req, shop, advancedSchemaDefsQuery);
       const advancedSchemaDefinitions = advancedSchemaDefsData?.metafieldDefinitions?.nodes || [];
       
-      console.log('[PREPARE-UNINSTALL] Found', advancedSchemaDefinitions.length, 'advanced_schema definitions');
-      
       for (const def of advancedSchemaDefinitions) {
         try {
           const deleteMutation = `
@@ -1132,7 +999,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
     }
     
     // 2. Clear product.seo and collection.seo data (Translate & Adapt data)
-    console.log('[PREPARE-UNINSTALL] Step 2: Clearing product.seo and collection.seo data...');
     try {
       // Get ALL products from Shopify (not just MongoDB records)
       // This ensures we clear SEO data even if products weren't tracked in our DB
@@ -1181,8 +1047,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
         cursor = productsData?.products?.pageInfo?.endCursor;
       }
       
-      console.log('[PREPARE-UNINSTALL] Found', allProducts.length, 'products with SEO data to clear');
-      
       // Clear SEO data for each product (set to empty strings)
       for (const product of allProducts) {
         try {
@@ -1227,8 +1091,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
           });
         }
       }
-      
-      console.log('[PREPARE-UNINSTALL] Cleared SEO data for', results.productSeoData.cleared, 'products');
       
       // Get ALL collections from Shopify (not just MongoDB records)
       const collectionsQuery = `
@@ -1276,8 +1138,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
         cursor = collectionsData?.collections?.pageInfo?.endCursor;
       }
       
-      console.log('[PREPARE-UNINSTALL] Found', allCollections.length, 'collections with SEO data to clear');
-      
       // Clear SEO data for each collection
       for (const collection of allCollections) {
         try {
@@ -1323,8 +1183,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
         }
       }
       
-      console.log('[PREPARE-UNINSTALL] Cleared SEO data for', results.collectionSeoData.cleared, 'collections');
-      
     } catch (err) {
       console.error('[PREPARE-UNINSTALL] Error clearing SEO data:', err.message);
       results.productSeoData.errors.push({ error: err.message });
@@ -1332,7 +1190,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
     }
     
     // 3. Delete store metadata (app_settings namespace)
-    console.log('[PREPARE-UNINSTALL] Step 3: Deleting store metadata...');
     try {
       const deleteStoreMetaMutation = `
         mutation {
@@ -1358,7 +1215,6 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
         console.error('[PREPARE-UNINSTALL] Error deleting store metadata:', storeMetaResult.metafieldsDelete.userErrors);
         results.storeMetadata.error = storeMetaResult.metafieldsDelete.userErrors;
       } else {
-        console.log('[PREPARE-UNINSTALL] Deleted store metadata');
         results.storeMetadata.deleted = true;
       }
     } catch (err) {
@@ -1367,20 +1223,15 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
     }
     
     // 4. Delete advanced schemas
-    console.log('[PREPARE-UNINSTALL] Step 4: Deleting advanced schemas...');
     try {
       // Import AdvancedSchema model
       const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
       const deletedSchemas = await AdvancedSchema.deleteMany({ shop });
-      console.log('[PREPARE-UNINSTALL] Deleted', deletedSchemas.deletedCount, 'advanced schemas from MongoDB');
       results.advancedSchemas.deleted = deletedSchemas.deletedCount > 0;
     } catch (err) {
       console.error('[PREPARE-UNINSTALL] Exception deleting advanced schemas:', err.message);
       results.advancedSchemas.error = err.message;
     }
-    
-    console.log('[PREPARE-UNINSTALL] ===== CLEANUP COMPLETED =====');
-    console.log('[PREPARE-UNINSTALL] Results:', JSON.stringify(results, null, 2));
     
     res.json({
       success: true,
