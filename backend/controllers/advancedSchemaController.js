@@ -342,7 +342,6 @@ function sanitizeAIResponse(response, knownFacts) {
   
   for (const { pattern, replacement } of suspiciousPatterns) {
     if (pattern.test(response)) {
-      console.log(`[SCHEMA] Replacing suspicious pattern: ${pattern}`);
       validated = validated.replace(pattern, replacement);
     }
   }
@@ -352,23 +351,16 @@ function sanitizeAIResponse(response, knownFacts) {
 
   // Load rich attributes settings - fetches user preferences for AI-generated schema features
   async function loadRichAttributesSettings(shop) {
-    console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
   try {
-    // console.log(`[SCHEMA-DEBUG] Loading rich attributes settings for shop: ${shop}`);
     // Try to get settings from AI Discovery settings
   const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
-    console.log(`[SCHEMA-DEBUG] API response status:`, response.status);
     
     if (response.ok) {
       const data = await response.json();
-      console.log(`[SCHEMA-DEBUG] API response data:`, data);
-      console.log(`[SCHEMA-DEBUG] richAttributes from API:`, data.richAttributes);
       return data.richAttributes || {};
-    } else {
-      // console.log(`[SCHEMA-DEBUG] API request failed with status:`, response.status);
     }
   } catch (error) {
-    console.log('[SCHEMA] Could not load rich attributes settings:', error.message);
+    // Could not load rich attributes settings
   }
   
   // Default settings if not found
@@ -385,7 +377,6 @@ function sanitizeAIResponse(response, knownFacts) {
     enhancedDescription: false,
     organization: false
   };
-  // console.log(`[SCHEMA-DEBUG] Returning default richAttributes:`, defaultSettings);
   return defaultSettings;
 }
 
@@ -730,8 +721,6 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
     // Extract content and usage
     const content = result.content;
     const usage = result.usage;
-    
-    console.log(`[SCHEMA] Site FAQ generated, tokens used: ${usage.total_tokens}`);
     
     // Validate AI response to prevent hallucinations
     const validatedResponse = validateAIResponse(
