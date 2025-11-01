@@ -88,23 +88,14 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     const shopInfo = resp?.data;
     const localeInfo = await getShopLocale(adminGraphql, shop);
 
-    console.log('[SCHEMA-PREVIEW] Shop info:', {
-      hasOrganizationMetafield: !!shopInfo?.shop?.organizationMetafield?.value,
-      hasSeoMetafield: !!shopInfo?.shop?.seoMetafield?.value,
-      hasAiMetafield: !!shopInfo?.shop?.aiMetafield?.value
-    });
-
     // Parse organization metadata if exists
     let organizationData = {};
     if (shopInfo?.shop?.organizationMetafield?.value) {
       try {
         organizationData = JSON.parse(shopInfo.shop.organizationMetafield.value);
-        console.log('[SCHEMA-PREVIEW] Parsed organization data:', organizationData);
       } catch (e) {
         console.error('[SCHEMA-PREVIEW] Failed to parse organization metadata:', e);
       }
-    } else {
-      console.log('[SCHEMA-PREVIEW] No organization metafield found');
     }
 
     // Parse SEO metadata if exists
@@ -118,7 +109,6 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     }
 
     // Generate Organization schema - UPDATED to use organizationData structure
-    console.log('[SCHEMA-PREVIEW] Organization enabled:', organizationData.enabled);
     const organizationSchema = organizationData.enabled ? {
       '@context': 'https://schema.org',
       '@type': 'Organization',
@@ -185,12 +175,6 @@ router.get('/api/schema/preview', validateRequest(), async (req, res) => {
     const productData = productResp?.body?.data;
     const products = productData?.products?.edges || [];
 
-    console.log('[SCHEMA-PREVIEW] Final schemas:', {
-      hasOrganization: !!organizationSchema,
-      hasWebsite: !!websiteSchema,
-      productsCount: products.length
-    });
-
     res.json({
       ok: true,
       schemas: {
@@ -212,8 +196,6 @@ router.post('/api/schema/generate', validateRequest(), async (req, res) => {
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
   try {
-    console.log('[SCHEMA-GENERATE] Regenerating schemas for shop:', shop);
-    
     // Force refresh by clearing any potential cache and triggering regeneration
     // Since schemas are generated dynamically from metafields, we just need to ensure fresh data
     
@@ -234,8 +216,6 @@ router.post('/api/schema/generate', validateRequest(), async (req, res) => {
     
     const resp = await adminGraphql.request(metaQuery);
     const metafields = resp?.data?.shop?.metafields?.edges || [];
-    
-    console.log('[SCHEMA-GENERATE] Found metafields:', metafields.map(e => e.node.key));
     
     res.json({ 
       ok: true, 
@@ -330,8 +310,6 @@ router.get('/api/schema/validate', validateRequest(), async (req, res) => {
   if (!adminGraphql) return res.status(401).json({ error: 'No admin session. Reinstall app.' });
   
   try {
-    console.log('[SCHEMA-VALIDATE] Starting validation for shop:', shop);
-    
     // Check various aspects of the installation
     const checks = {
       hasStoreMetadata: false,
@@ -373,8 +351,6 @@ router.get('/api/schema/validate', validateRequest(), async (req, res) => {
     // Note: We can't directly check theme files, but we can provide guidance
     checks.hasThemeInstallation = 'manual_check_required';
     checks.hasValidSchemas = checks.hasStoreMetadata || checks.hasProductsWithSEO;
-
-    console.log('[SCHEMA-VALIDATE] Final checks:', checks);
 
     res.json({
       ok: checks.hasValidSchemas,
