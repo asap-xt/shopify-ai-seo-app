@@ -45,7 +45,15 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true); // Start expanded by default
+  const [isExpanded, setIsExpanded] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`syncCardExpanded_${shop}`);
+      // If never set before, default to true (expanded)
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true; // Default expanded if localStorage fails
+    }
+  });
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
@@ -616,7 +624,14 @@ export default function Dashboard({ shop: shopProp }) {
                     Sync Now
                   </Button>
                   <Button 
-                    onClick={() => setIsExpanded(true)} 
+                    onClick={() => {
+                      setIsExpanded(true);
+                      try {
+                        localStorage.setItem(`syncCardExpanded_${shop}`, 'true');
+                      } catch (error) {
+                        console.error('[Dashboard] Error saving sync card state:', error);
+                      }
+                    }} 
                     size="slim"
                     variant="plain"
                   >
@@ -651,7 +666,14 @@ export default function Dashboard({ shop: shopProp }) {
                       Sync Now
                     </Button>
                     <Button 
-                      onClick={() => setIsExpanded(false)} 
+                      onClick={() => {
+                        setIsExpanded(false);
+                        try {
+                          localStorage.setItem(`syncCardExpanded_${shop}`, 'false');
+                        } catch (error) {
+                          console.error('[Dashboard] Error saving sync card state:', error);
+                        }
+                      }} 
                       variant="plain"
                     >
                       Close
