@@ -318,7 +318,6 @@ async function generateSitemapCore(shop) {
       `;
       
       const batchSize = Math.min(50, limit - allProducts.length);
-      console.log('[SITEMAP-CORE] Fetching products batch, size:', batchSize, 'cursor:', cursor);
       
       const data = await shopGraphQL(normalizedShop, productsQuery, { cursor, first: batchSize });
       const products = data?.products || { edges: [], pageInfo: {} };
@@ -326,11 +325,7 @@ async function generateSitemapCore(shop) {
       allProducts.push(...products.edges);
       hasMore = products.pageInfo.hasNextPage;
       cursor = products.edges[products.edges.length - 1]?.cursor;
-      
-      console.log('[SITEMAP-CORE] Fetched', products.edges.length, 'products, total:', allProducts.length);
     }
-    
-    console.log('[SITEMAP-CORE] Total products fetched:', allProducts.length);
     
     // Generate XML
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -338,12 +333,8 @@ async function generateSitemapCore(shop) {
     xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"';
     
     // Add AI namespace only if AI sitemap is enabled
-    console.log('[SITEMAP-CORE] isAISitemapEnabled:', isAISitemapEnabled);
     if (isAISitemapEnabled) {
       xml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
-      console.log('[SITEMAP-CORE] Added AI namespace to XML');
-    } else {
-      console.log('[SITEMAP-CORE] AI namespace NOT added to XML');
     }
     
     xml += '>\n';
@@ -361,9 +352,7 @@ async function generateSitemapCore(shop) {
       xml += '    <priority>0.8</priority>\n';
       
       // Add AI metadata ONLY if AI sitemap is enabled
-      console.log('[SITEMAP-CORE] Product', product.handle, '- isAISitemapEnabled:', isAISitemapEnabled);
       if (isAISitemapEnabled) {
-        console.log('[SITEMAP-CORE] Adding AI metadata for product:', product.handle);
         xml += '    <ai:product>\n';
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
         xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
@@ -386,14 +375,12 @@ async function generateSitemapCore(shop) {
         
         // Add AI-generated bullets from main SEO metafield
         let bullets = null;
-        console.log('[SITEMAP-CORE] Checking bullets for', product.handle, ':', !!product.metafield_seo_ai?.value);
         if (product.metafield_seo_ai?.value) {
           try {
             const seoData = JSON.parse(product.metafield_seo_ai.value);
             bullets = seoData.bullets || null;
-            console.log('[SITEMAP-CORE] Parsed bullets for', product.handle, ':', bullets?.length || 0, 'items');
           } catch (e) {
-            console.log('[SITEMAP-CORE] Could not parse bullets for', product.handle, ':', e.message);
+            // Could not parse bullets
           }
         }
         
@@ -409,14 +396,12 @@ async function generateSitemapCore(shop) {
         
         // Add AI-generated FAQ from main SEO metafield
         let faq = null;
-        console.log('[SITEMAP-CORE] Checking FAQ for', product.handle, ':', !!product.metafield_seo_ai?.value);
         if (product.metafield_seo_ai?.value) {
           try {
             const seoData = JSON.parse(product.metafield_seo_ai.value);
             faq = seoData.faq || null;
-            console.log('[SITEMAP-CORE] Parsed FAQ for', product.handle, ':', faq?.length || 0, 'items');
           } catch (e) {
-            console.log('[SITEMAP-CORE] Could not parse FAQ for', product.handle, ':', e.message);
+            // Could not parse FAQ
           }
         }
         
@@ -435,8 +420,6 @@ async function generateSitemapCore(shop) {
         
         // ===== NEW: AI-ENHANCED METADATA =====
         try {
-          console.log('[SITEMAP-CORE] Generating AI enhancements for', product.handle);
-          
           // Prepare product data for AI enhancement
           const productForAI = {
             id: product.id,
@@ -464,8 +447,6 @@ async function generateSitemapCore(shop) {
           const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
           
           if (aiEnhancements) {
-            console.log('[SITEMAP-CORE] AI enhancements generated for', product.handle);
-            
             // Add AI-generated summary
             if (aiEnhancements.summary) {
               xml += '      <ai:summary><![CDATA[' + aiEnhancements.summary + ']]></ai:summary>\n';
@@ -516,8 +497,6 @@ async function generateSitemapCore(shop) {
               });
               xml += '      </ai:related>\n';
             }
-          } else {
-            console.log('[SITEMAP-CORE] AI enhancement timeout or error for', product.handle);
           }
         } catch (aiError) {
           console.error('[SITEMAP-CORE] Error in AI enhancement for', product.handle, ':', aiError.message);
@@ -559,7 +538,6 @@ async function generateSitemapCore(shop) {
           
           // Add AI metadata ONLY if AI sitemap is enabled
           if (isAISitemapEnabled) {
-            console.log('[SITEMAP-CORE] Adding AI metadata for multilingual product:', product.handle, 'language:', lang);
             xml += '    <ai:product>\n';
             xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
             xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
@@ -608,8 +586,7 @@ async function generateSitemapCore(shop) {
     
     // Add collections if plan supports it
     if (['growth', 'growth_extra', 'enterprise'].includes(plan)) {
-      console.log('[SITEMAP-CORE] Including collections for plan:', plan);
-      try {
+      try{
         const collectionsQuery = `
           query {
             collections(first: 20) {
@@ -639,10 +616,8 @@ async function generateSitemapCore(shop) {
           xml += '    <priority>0.7</priority>\n';
           xml += '  </url>\n';
         }
-        
-        console.log('[SITEMAP-CORE] Added', collections.length, 'collections');
       } catch (collectionsErr) {
-        console.log('[SITEMAP-CORE] Could not fetch collections:', collectionsErr.message);
+        // Could not fetch collections
       }
     }
     
@@ -677,17 +652,13 @@ async function generateSitemapCore(shop) {
         xml += '    <priority>0.6</priority>\n';
         xml += '  </url>\n';
       }
-      
-      console.log('[SITEMAP-CORE] Added', pages.length, 'pages');
     } catch (pagesErr) {
-      console.log('[SITEMAP-CORE] Could not fetch pages:', pagesErr.message);
+      // Could not fetch pages
     }
     
     xml += '</urlset>\n';
     
     // Save to database
-    console.log('[SITEMAP-CORE] Attempting to save sitemap...');
-    console.log('[SITEMAP-CORE] XML size:', xml.length, 'bytes');
     
     const { default: Sitemap } = await import('../db/Sitemap.js');
     const sitemapDoc = await Sitemap.findOneAndUpdate(
@@ -704,24 +675,6 @@ async function generateSitemapCore(shop) {
       },
       { upsert: true, new: true }
     );
-    
-    console.log('[SITEMAP-CORE] Save result:');
-    console.log('[SITEMAP-CORE]   - Document ID:', sitemapDoc._id);
-    console.log('[SITEMAP-CORE]   - Content saved:', !!sitemapDoc.content);
-    
-    // Verify save
-    const verification = await Sitemap.findOne({ shop: normalizedShop }).select('content');
-    console.log('[SITEMAP-CORE] Verification - content exists:', !!verification?.content);
-    console.log('[SITEMAP-CORE] Verification - content length:', verification?.content?.length || 0);
-    
-    console.log('[SITEMAP-CORE] Sitemap generation completed successfully');
-    console.log('[SITEMAP-CORE] Final result:', {
-      success: true,
-      shop: normalizedShop,
-      productCount: allProducts.length,
-      size: xml.length,
-      aiEnabled: isAISitemapEnabled
-    });
     
     return {
       success: true,
