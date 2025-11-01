@@ -509,9 +509,6 @@ router.post('/collection', validateRequest(), async (req, res) => {
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      console.log(`[AI-ENHANCE] Token estimate:`, tokenEstimate);
-      console.log(`[AI-ENHANCE] Current balance: ${tokenBalance.balance}`);
-      
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         // Determine if upgrade is needed (for Starter/Professional/Growth plans)
@@ -539,9 +536,6 @@ router.post('/collection', validateRequest(), async (req, res) => {
       const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { collectionId });
       reservationId = reservation.reservationId;
       await reservation.save();
-      
-      console.log(`[AI-ENHANCE] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
-      console.log(`[AI-ENHANCE] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -557,7 +551,6 @@ router.post('/collection', validateRequest(), async (req, res) => {
         const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
         
         if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
-          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
           tokensExhausted = true;
           
           const remainingLanguages = languages.slice(languages.indexOf(language));
@@ -598,7 +591,6 @@ router.post('/collection', validateRequest(), async (req, res) => {
         const hasAIEnhanced = currentSeo.enhancedAt; // Само enhancedAt, не updatedAt
         
         if (shouldSkipEnhanced && hasAIEnhanced) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${currentSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: currentSeo.bullets,
@@ -661,19 +653,12 @@ Output JSON with:
         if (result.usage) {
           const actual = calculateActualTokens(result.usage);
           totalActualTokens += actual.totalTokens;
-          
-          console.log(`[AI-ENHANCE] ${result.language}: ${actual.totalTokens} tokens (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
         }
       }
-      
-      console.log(`[AI-ENHANCE] Total actual tokens used: ${totalActualTokens}`);
       
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
-      
-      console.log(`[AI-ENHANCE] Finalized reservation ${reservationId}`);
-      console.log(`[AI-ENHANCE] New balance: ${tokenBalance.balance}`);
     }
     // === END TOKEN FINALIZATION ===
     
