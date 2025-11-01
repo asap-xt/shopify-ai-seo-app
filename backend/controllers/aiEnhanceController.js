@@ -20,12 +20,6 @@ const router = express.Router();
 
 // POST /ai-enhance/check-eligibility
 router.post('/check-eligibility', validateRequest(), async (req, res) => {
-  console.log('[AI-ENHANCE/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -36,16 +30,10 @@ router.post('/check-eligibility', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop not provided' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[AI-ENHANCE/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
     const shop = req.shopDomain;
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
-    
-    console.log('🔍 [CHECK-ELIGIBILITY] Shop:', shop, 'Plan:', planKey);
     
     // CHANGED: Always return eligible=true
     // Token checking will happen in actual enhancement endpoints
@@ -66,9 +54,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
 async function openrouterChat(model, messages, response_format_json = true) {
-  console.log('🤖 [AI-ENHANCE] Starting OpenRouter request');
-  console.log('🤖 [AI-ENHANCE] Model:', model);
-  console.log('🤖 [AI-ENHANCE] Messages:', JSON.stringify(messages, null, 2));
   
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
@@ -96,10 +81,6 @@ async function openrouterChat(model, messages, response_format_json = true) {
   
   const j = await rsp.json();
   const content = j?.choices?.[0]?.message?.content || '';
-  
-  console.log('🤖 [AI-ENHANCE] Response received');
-  console.log('🤖 [AI-ENHANCE] Content:', content);
-  console.log('🤖 [AI-ENHANCE] Usage:', j?.usage);
   
   return { content, usage: j?.usage || {} };
 }
@@ -191,8 +172,6 @@ router.post('/product', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
     
-    console.log(`[AI-ENHANCE] Starting for product ${productId}, ${languages.length} language(s)`);
-    
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
@@ -238,9 +217,6 @@ router.post('/product', validateRequest(), async (req, res) => {
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      console.log(`[AI-ENHANCE] Token estimate:`, tokenEstimate);
-      console.log(`[AI-ENHANCE] Current balance: ${tokenBalance.balance}`);
-      
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         // Determine if upgrade is needed (for Starter/Professional/Growth plans)
@@ -270,9 +246,6 @@ router.post('/product', validateRequest(), async (req, res) => {
       const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { productId });
       reservationId = reservation.reservationId;
       await reservation.save();
-      
-      console.log(`[AI-ENHANCE] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
-      console.log(`[AI-ENHANCE] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -288,8 +261,6 @@ router.post('/product', validateRequest(), async (req, res) => {
         const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
         
         if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
-          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
-          console.log(`[AI-ENHANCE] Required: ${estimatePerLanguage.withMargin}, Available: ${tokenBalance.balance}`);
           tokensExhausted = true;
           
           // Mark all remaining languages as skipped
@@ -333,7 +304,6 @@ router.post('/product', validateRequest(), async (req, res) => {
 
         // Ако няма базово SEO, пропускаме
         if (!existingSeo || !existingSeo.title) {
-          console.log(`Skipping ${language} - no base SEO found`);
           results.push({ 
             language, 
             error: 'No basic SEO found',
@@ -350,7 +320,6 @@ router.post('/product', validateRequest(), async (req, res) => {
         const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt (това е за apply)
         
         if (shouldSkipEnhanced && hasAIEnhanced) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${existingSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.push({ 
             language, 
             bullets: existingSeo.bullets,
@@ -434,19 +403,12 @@ router.post('/product', validateRequest(), async (req, res) => {
         if (result.usage) {
           const actual = calculateActualTokens(result.usage);
           totalActualTokens += actual.totalTokens;
-          
-          console.log(`[AI-ENHANCE] ${result.language}: ${actual.totalTokens} tokens (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
         }
       }
-      
-      console.log(`[AI-ENHANCE] Total actual tokens used: ${totalActualTokens}`);
       
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
-      
-      console.log(`[AI-ENHANCE] Finalized reservation ${reservationId}`);
-      console.log(`[AI-ENHANCE] New balance: ${tokenBalance.balance}`);
     }
     // === END TOKEN FINALIZATION ===
     
