@@ -143,9 +143,11 @@ export default function Billing({ shop }) {
   // Example: $10 → $3 for tokens → $3 / $0.10 per 1M = 30,000,000 tokens
   const calculateTokens = (usdAmount) => {
     const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (revenue split)
-    const ratePer1M = 0.10; // $0.10 per 1M tokens (Gemini 2.5 Flash Lite via OpenRouter)
-    const ratePerToken = ratePer1M / 1_000_000; // $0.0000001 per token
-    const tokens = Math.floor(tokenBudget / ratePerToken);
+    const ratePer1M = 0.10; // $0.10 per 1M tokens (Gemini 2.5 Flash Lite via OpenRouter) - ALREADY per 1M!
+    
+    // Calculate how many millions of tokens we can buy
+    const tokensInMillions = tokenBudget / ratePer1M;
+    const tokens = Math.floor(tokensInMillions * 1_000_000);
     return tokens;
   };
 
