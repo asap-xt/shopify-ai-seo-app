@@ -1153,6 +1153,155 @@ const pollingInterval = setInterval(pollProgress, 2000);
 
 ---
 
+## 🚀 FUTURE: PHASE 3 ROADMAP
+
+### Interactive AI Chat (Planned for Phase 3) 🌟
+
+**Status:** Concept Stage - To be implemented after Phase 2 success
+
+**Vision:**
+Transform the AI Welcome Page from a static information hub into an interactive AI assistant that can answer questions about the store in real-time.
+
+#### Core Concept:
+
+**Interactive Chat Interface:**
+- Visitors (AI agents or humans) can ask questions
+- AI responds with data from the store
+- Conversational experience powered by store data
+
+**Example Interactions:**
+```
+User: "What products do you sell?"
+AI: "We specialize in outdoor gear with 150+ products across 
+     5 categories: Snowboards, Jackets, Accessories, Footwear, 
+     and Equipment. Our most popular category is Snowboards 
+     with 45 premium models."
+
+User: "Do you have winter jackets?"
+AI: "Yes! We have 23 winter jackets in our Winter Apparel 
+     collection. Prices range from $89 to $299. Would you like 
+     to see our featured jackets?"
+
+User: "What's your return policy?"
+AI: "Based on our store metadata, we offer [return policy from 
+     store settings]. Returns are accepted within [timeframe]."
+```
+
+#### Technical Architecture:
+
+**Frontend:**
+- Chat widget on `/ai/welcome` page
+- Real-time message streaming
+- Markdown formatting support
+- Copy-to-clipboard for responses
+
+**Backend:**
+- New endpoint: `POST /api/ai-discovery/chat`
+- Context-aware AI (remembers conversation)
+- Retrieves relevant data (products, collections, policies)
+- Rate limiting (prevent abuse)
+
+**AI Prompt Strategy:**
+```
+System: You are a helpful AI assistant for [Store Name]. 
+Answer questions using ONLY the provided store data. 
+If information is not available, clearly state that.
+
+Context:
+- Store: [name, description]
+- Products: [summary]
+- Collections: [list]
+- Policies: [from metadata]
+
+User Question: [question]
+
+Respond naturally and helpfully.
+```
+
+#### Token Strategy:
+
+**Cost Model:**
+- ~500-1000 tokens per conversation
+- ~100-200 tokens per message
+
+**Plans:**
+- Professional Plus / Growth Plus: Deduct from purchased tokens
+- Growth Extra+: Deduct from included tokens
+- Rate limits:
+  - Plus plans: 50 messages/day
+  - Growth Extra: 200 messages/day
+  - Enterprise: Unlimited
+
+#### User Experience:
+
+**Chat Widget:**
+```
+┌─────────────────────────────────┐
+│ 💬 Ask me about this store      │
+├─────────────────────────────────┤
+│                                 │
+│ 🤖 How can I help you today?   │
+│                                 │
+│ 👤 Do you have red shoes?      │
+│                                 │
+│ 🤖 Yes! We have 5 red shoes... │
+│                                 │
+├─────────────────────────────────┤
+│ [Type your question...]    [↑] │
+└─────────────────────────────────┘
+```
+
+**Suggested Questions:**
+- "What products do you sell?"
+- "Show me your collections"
+- "What's your most popular item?"
+- "Do you offer international shipping?"
+
+#### Benefits:
+
+**For AI Bots (Perplexity, ChatGPT, etc.):**
+- Can query store data conversationally
+- Better understanding of inventory
+- More accurate recommendations
+
+**For Human Visitors:**
+- Quick answers without browsing
+- Natural language search
+- Improved user experience
+
+**For Store Owners:**
+- Lower support burden
+- Better engagement metrics
+- SEO benefits (rich interactions)
+
+#### Implementation Estimate:
+
+| Component | Time | Complexity |
+|-----------|------|------------|
+| Backend Chat API | 4-6h | Medium |
+| Context Management | 2-3h | Medium |
+| Frontend Widget | 3-4h | Medium |
+| Rate Limiting | 2h | Low |
+| Testing | 3-4h | Medium |
+| **TOTAL** | **14-19h** | |
+
+#### Success Metrics:
+
+- Chat engagement rate
+- Average messages per session
+- Questions answered successfully
+- Token usage vs value delivered
+- User satisfaction scores
+
+#### Prerequisites:
+
+- ✅ Phase 2 completed
+- ✅ Token system stable
+- ✅ Store data structure finalized
+- ✅ User feedback on Phase 2 features
+
+---
+
 ## 📞 CONTACT & SUPPORT
 
 **Implementation Lead:** [Your Name]  
@@ -1163,5 +1312,5 @@ const pollingInterval = setInterval(pollProgress, 2000);
 
 **Last Updated:** November 1, 2025  
 **Next Review:** After Shopify Approval  
-**Version:** 1.0
+**Version:** 1.1 (Added Phase 3 Roadmap)
 
