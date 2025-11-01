@@ -219,18 +219,49 @@ function validateSize(size, productData) {
  * Create factual prompt for AI to prevent hallucinations
  */
 export function createFactualPrompt(productData, requestedFields) {
+  // Build enriched product context
+  let contextSummary = `
+PRODUCT INFORMATION:
+- Title: ${productData.title}
+- Description: ${productData.description || 'No detailed description'}`;
+  
+  if (productData.productType) {
+    contextSummary += `\n- Product Type: ${productData.productType}`;
+  }
+  
+  if (productData.vendor) {
+    contextSummary += `\n- Brand/Vendor: ${productData.vendor}`;
+  }
+  
+  if (productData.tags && productData.tags.length > 0) {
+    contextSummary += `\n- Tags: ${productData.tags.join(', ')}`;
+  }
+  
+  if (productData.price && productData.currency) {
+    contextSummary += `\n- Price: ${productData.price} ${productData.currency}`;
+  }
+  
   return `Based on this EXACT product data, generate ONLY the requested fields: ${requestedFields.join(', ')}.
 
-PRODUCT DATA:
-${JSON.stringify(productData, null, 2)}
+${contextSummary}
+
+EXISTING SEO DATA (for reference):
+${JSON.stringify(productData.existingSeo, null, 2)}
 
 CRITICAL RULES:
-- Use ONLY information present in the product data
+- Use ONLY information present in the product data above
+- For products with minimal descriptions, leverage product type, vendor, and tags to create helpful generic FAQs
 - Do NOT add certifications, warranties, or guarantees not mentioned
 - Do NOT specify countries of origin unless stated
 - Do NOT add material percentages unless specified
 - Do NOT add store policies (shipping, returns, etc.)
 - Keep responses factual and based on provided data only
+
+HELPFUL FAQ EXAMPLES (when data is minimal):
+- "What type of ${productData.productType || 'product'} is this?"
+- "How should I care for my ${productData.productType || 'product'}?"
+- "What makes this ${productData.vendor || 'product'} special?"
+- "Is this suitable for ${productData.tags?.[0] || 'general'} use?"
 
 Return JSON with only the requested fields.`;
 }

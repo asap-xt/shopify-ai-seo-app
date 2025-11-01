@@ -110,12 +110,24 @@ async function generateEnhancedBulletsFAQ(data) {
   // Get store context (cached for performance)
   const storeContext = await getCachedStoreContext(shop, { includeProductAnalysis: false });
   
+  // Extract additional product enrichment data
+  const productType = product.productType || 'product';
+  const vendor = product.vendor || '';
+  const tags = product.tags || [];
+  const price = product.priceRangeV2?.minVariantPrice?.amount || '';
+  const currency = product.priceRangeV2?.minVariantPrice?.currencyCode || '';
+  const rawDescription = product.description || '';
+  
   // Create factual prompt to prevent hallucinations
   const factualPrompt = createFactualPrompt(
     {
       title: product.title,
-      description: existingSeo?.metaDescription || '',
-      tags: [], // Will be populated from product data if needed
+      description: existingSeo?.metaDescription || rawDescription || '',
+      tags: tags,
+      productType: productType,
+      vendor: vendor,
+      price: price,
+      currency: currency,
       existingSeo: existingSeo
     },
     ['bullets', 'faq']
@@ -134,6 +146,8 @@ Guidelines:
 - Create helpful FAQ questions and answers based on product data
 - Keep the same language as input
 - Use ONLY factual information from product data AND store context above
+- For products with minimal descriptions, use product type, vendor, tags, and price to create relevant generic FAQs
+- Examples for minimal data: "What is this ${productType} suitable for?", "How do I care for my ${productType}?", "What makes this ${vendor} product special?"
 - Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
 - bullets: array of 5 strings
 - faq: array of 3-5 objects with "q" and "a" keys`
@@ -157,8 +171,10 @@ Guidelines:
   // Validate AI response to prevent hallucinations
   const validated = validateAIResponse(enhanced, {
     title: product.title,
-    description: existingSeo?.metaDescription || '',
-    tags: [],
+    description: existingSeo?.metaDescription || rawDescription || '',
+    tags: tags,
+    productType: productType,
+    vendor: vendor,
     existingSeo: existingSeo
   }, ['bullets', 'faq']);
   
@@ -286,12 +302,22 @@ router.post('/product', validateRequest(), async (req, res) => {
       }
       
       try {
-        // Get current SEO
+        // Get current SEO + product enrichment data
         const metafieldKey = `seo__${language.toLowerCase()}`;
         const query = `
           query GetProductSEO($productId: ID!) {
             product(id: $productId) {
               title
+              description
+              productType
+              vendor
+              tags
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
               metafield(namespace: "seo_ai", key: "${metafieldKey}") {
                 value
               }
