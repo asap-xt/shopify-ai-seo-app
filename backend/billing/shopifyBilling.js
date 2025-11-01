@@ -91,14 +91,6 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
     ]
   };
   
-  console.log('[Shopify Billing] Creating subscription:', {
-    shop,
-    plan,
-    price: planConfig.priceUsd,
-    trialDays,
-    test: isTest
-  });
-  
   const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
     method: 'POST',
     headers: {
@@ -131,8 +123,6 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
     throw new Error(createResult.userErrors[0].message);
   }
   
-  console.log('[Shopify Billing] Subscription created:', createResult.appSubscription.id);
-  
   return {
     confirmationUrl: createResult.confirmationUrl,
     subscription: createResult.appSubscription
@@ -154,13 +144,6 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
   // Use dynamic pricing from OpenRouter (checks cache first, then fetches if needed)
   const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
-  
-  console.log('🔍 [shopifyBilling.js] BEFORE creating charge:', {
-    usdAmount,
-    tokens,
-    tokensFormatted: tokens.toLocaleString(),
-    chargeName: `AI Tokens Purchase (${tokens.toLocaleString()} tokens)`
-  });
   
   // ALWAYS use test mode until we go live with real payments
   const isTest = true;
@@ -207,13 +190,6 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
     test: isTest
   };
   
-  console.log('[Shopify Billing] Creating token purchase:', {
-    shop,
-    usdAmount,
-    tokens,
-    test: isTest
-  });
-  
   const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
     method: 'POST',
     headers: {
@@ -245,8 +221,6 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
     console.error('[Shopify Billing] User errors:', purchaseResult.userErrors);
     throw new Error(purchaseResult.userErrors[0].message);
   }
-  
-  console.log('[Shopify Billing] Token purchase created:', purchaseResult.appPurchaseOneTime.id);
   
   return {
     confirmationUrl: purchaseResult.confirmationUrl,
@@ -344,8 +318,6 @@ export async function cancelSubscription(shop, subscriptionId, accessToken) {
   
   const variables = { id: subscriptionId };
   
-  console.log('[Shopify Billing] Canceling subscription:', subscriptionId);
-  
   const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
     method: 'POST',
     headers: {
@@ -377,7 +349,6 @@ export async function cancelSubscription(shop, subscriptionId, accessToken) {
     return false;
   }
   
-  console.log('[Shopify Billing] Subscription canceled successfully');
   return true;
 }
 

@@ -231,7 +231,6 @@ export async function fetchOpenRouterPricing() {
     if (pricingCache.rate && pricingCache.lastFetch) {
       const cacheAge = Date.now() - pricingCache.lastFetch;
       if (cacheAge < pricingCache.cacheDuration) {
-        console.log('[TokenConfig] Using cached pricing:', pricingCache.rate, 'per 1M tokens');
         return pricingCache.rate;
       }
     }
@@ -277,13 +276,6 @@ export async function fetchOpenRouterPricing() {
     // we weight input more: 80% input, 20% output
     const weightedRate = (inputRate * 0.8) + (outputRate * 0.2);
 
-    console.log('[TokenConfig] OpenRouter pricing fetched:', {
-      model: modelName,
-      inputRate: `$${inputRate} per 1M`,
-      outputRate: `$${outputRate} per 1M`,
-      weightedRate: `$${weightedRate} per 1M (80/20 split)`
-    });
-
     // Update cache
     pricingCache.rate = weightedRate;
     pricingCache.lastFetch = Date.now();
@@ -308,16 +300,6 @@ export async function calculateTokensWithDynamicPricing(usdAmount) {
   // Calculate how many millions of tokens we can buy
   const tokensInMillions = tokenBudget / ratePer1M;
   const tokens = Math.floor(tokensInMillions * 1_000_000);
-  
-  console.log('[TokenConfig] ✅ FIXED VERSION - Token calculation with dynamic pricing:', {
-    version: 'v3-fixed-Nov1-13:11-FINAL',
-    usdAmount,
-    tokenBudget,
-    ratePer1M: `$${ratePer1M} per 1M`,
-    tokensInMillions: tokensInMillions.toFixed(2),
-    tokens: tokens.toLocaleString(),
-    timestamp: new Date().toISOString()
-  });
 
   return tokens;
 }

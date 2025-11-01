@@ -141,8 +141,6 @@ router.get('/debug/reset-tokens', async (req, res) => {
     const deleted = await TokenBalance.deleteOne({ shop });
     const newBalance = await TokenBalance.getOrCreate(shop);
     
-    console.log('[Billing Debug] Token balance reset for:', shop, 'Deleted:', deleted.deletedCount);
-    
     res.json({
       success: true,
       message: 'Token balance reset',
