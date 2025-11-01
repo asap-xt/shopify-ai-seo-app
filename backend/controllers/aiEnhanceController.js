@@ -199,9 +199,9 @@ router.post('/product', validateRequest(), async (req, res) => {
     
     // === PLAN CHECK: Professional+ required for Products AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const productsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const productsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
     
-    if (!productsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+    if (!productsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
       return res.status(403).json({
         error: 'AI-enhanced add-ons for Products require Professional plan or higher',
         currentPlan: planKey,
@@ -510,9 +510,9 @@ router.post('/collection', validateRequest(), async (req, res) => {
     
     // === PLAN CHECK 2: AI-enhanced add-ons require Professional+ ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
     
-    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
       return res.status(403).json({
         error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
         currentPlan: planKey,
@@ -775,9 +775,9 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     
     // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-    const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
+    const collectionsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
     
-    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra') {
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
       return res.status(403).json({
         error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
         currentPlan: planKey,

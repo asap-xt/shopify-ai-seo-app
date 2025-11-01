@@ -615,7 +615,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           
           // Check if it's a 403 error (plan restriction - Products require Professional+)
           if (error.status === 403) {
-            // Stop processing and show upgrade modal
+            // Stop processing
             setAIEnhanceProgress({
               processing: false,
               current: 0,
@@ -629,7 +629,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
             });
             setCurrentPlan(error.currentPlan || currentPlan);
-            setShowPlanUpgradeModal(true);
+            
+            // Check if Plus plan with insufficient tokens (needsUpgrade=false)
+            // OR base plan needing upgrade (needsUpgrade=true)
+            if (error.needsUpgrade === false && error.requiresPurchase) {
+              // Plus plan user - just needs tokens
+              setShowInsufficientTokensModal(true);
+            } else {
+              // Base plan user - needs upgrade
+              setShowPlanUpgradeModal(true);
+            }
             return; // Stop processing
           }
           
