@@ -266,22 +266,14 @@ async function generateSitemapCore(shop) {
         }
       `;
       const localesData = await shopGraphQL(normalizedShop, localesQuery);
-      console.log('[SITEMAP-CORE] Locales data fetched:', localesData);
       if (localesData.shopLocales) {
         locales = localesData.shopLocales;
-        console.log('[SITEMAP-CORE] Using fetched locales:', locales);
-      } else {
-        console.log('[SITEMAP-CORE] No locales found, using default');
       }
     } catch (localeErr) {
-      console.log('[SITEMAP-CORE] Could not fetch locales, using default:', localeErr.message);
+      // Could not fetch locales, using default
     }
     
-    console.log('[SITEMAP-CORE] Primary domain:', primaryDomain);
-    console.log('[SITEMAP-CORE] Locales:', locales);
-    
     // Fetch products with AI-relevant data
-    console.log('[SITEMAP-CORE] Starting to fetch products...');
     let allProducts = [];
     let cursor = null;
     let hasMore = true;
