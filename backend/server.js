@@ -129,6 +129,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// GDPR webhooks need raw body for HMAC validation
+// Must be BEFORE express.json() middleware
+app.use('/webhooks/gdpr', express.raw({ type: 'application/json' }), (req, res, next) => {
+  // Store raw body for HMAC validation
+  req.rawBody = req.body.toString('utf8');
+  // Parse JSON for convenience
+  try {
+    req.body = JSON.parse(req.rawBody);
+  } catch (e) {
+    req.body = {};
+  }
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
@@ -1064,6 +1078,21 @@ app.get('/api/admin/list-webhooks', attachShop, apiResolver, async (req, res) =>
 // them conditionally without breaking the build if files are missing.
 // ---------------------------------------------------------------------------
 async function mountOptionalRouters(app) {
+  // GDPR Compliance Webhooks (mandatory for Shopify App Store)
+  try {
+    const gdprDataRequest = require('./webhooks/gdpr-data-request');
+    const gdprCustomerRedact = require('./webhooks/gdpr-customer-redact');
+    const gdprShopRedact = require('./webhooks/gdpr-shop-redact');
+    
+    app.use('/webhooks/gdpr', gdprDataRequest);
+    app.use('/webhooks/gdpr', gdprCustomerRedact);
+    app.use('/webhooks/gdpr', gdprShopRedact);
+    
+    console.log('✔ GDPR compliance webhooks mounted');
+  } catch (e) {
+    console.error('⚠ GDPR webhooks failed to mount:', e?.message || '');
+  }
+
   // Webhook validator + product webhooks
   try {
     const { default: validateShopifyWebhook } = await import('./middleware/webhookValidator.js');
