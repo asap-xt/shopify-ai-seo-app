@@ -51,8 +51,6 @@ async function fetchAllCollections(req) {
   let hasNextPage = true;
   let cursor = null;
   
-  console.log(`[COLLECTIONS] Starting to fetch collections for ${req.auth.shop}`);
-  
   while (hasNextPage) {
     try {
       const variables = { first: 50 };
@@ -69,7 +67,6 @@ async function fetchAllCollections(req) {
       }
       
       const edges = collectionsData.edges || [];
-      console.log(`[COLLECTIONS] Fetched ${edges.length} collections for ${req.auth.shop}`);
       
       collections.push(...edges.map(edge => edge.node));
       
@@ -86,18 +83,12 @@ async function fetchAllCollections(req) {
     }
   }
   
-  console.log(`[COLLECTIONS] Total collections fetched for ${req.auth.shop}: ${collections.length}`);
   return collections;
 }
 
 // Format collection data
 function formatCollection(collection, shop, shopLanguages = ['en']) {
   const optimizedLanguages = collection.optimizedLanguages || shopLanguages;
-  console.log(`[COLLECTIONS-GQL] Formatting collection "${collection.title}":`, {
-    shopLanguages,
-    collectionOptimizedLanguages: collection.optimizedLanguages,
-    finalOptimizedLanguages: optimizedLanguages
-  });
   
   return {
     id: collection.id,
@@ -127,7 +118,6 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
 router.get('/list-graphql', async (req, res) => {
   try {
     const shop = req.auth.shop;
-    console.log(`[COLLECTIONS-GQL] Fetching collections via GraphQL for shop: ${shop}`);
     
     // Generate unique cache key
     const cacheKey = `collections:list:all`;
@@ -155,7 +145,6 @@ router.get('/list-graphql', async (req, res) => {
           .filter(l => l.published)
           .map(l => l.locale)
           .filter(Boolean);
-        console.log(`[COLLECTIONS-GQL] Found ${shopLanguages.length} shop languages: ${shopLanguages.join(',')}`);
       } catch (error) {
         console.error(`[COLLECTIONS-GQL] Error fetching shop languages:`, error.message);
       }
@@ -163,11 +152,6 @@ router.get('/list-graphql', async (req, res) => {
       const formattedCollections = collections.map(collection => 
         formatCollection(collection, shop, shopLanguages)
       );
-      
-      // Debug: log first collection's optimizedLanguages
-      if (formattedCollections.length > 0) {
-        console.log(`[COLLECTIONS-GQL] First collection optimizedLanguages:`, formattedCollections[0].optimizedLanguages);
-      }
       
       return {
         success: true,
@@ -199,8 +183,6 @@ router.get('/list-graphql', async (req, res) => {
 // GET /collections/check-definitions
 router.get('/check-definitions', async (req, res) => {
   try {
-    console.log(`[COLLECTIONS] Checking definitions for shop: ${req.auth.shop}`);
-    
     // Simple query to check if we can access collections
     const testQuery = `
       query TestCollectionsAccess {
@@ -244,8 +226,6 @@ router.get('/check-definitions', async (req, res) => {
 // POST /api/collections/sync
 router.post('/sync', async (req, res) => {
   try {
-    console.log(`[COLLECTIONS_SYNC] Starting sync for ${req.auth.shop}...`);
-
     const allCollections = [];
     let hasNextPage = true;
     let cursor = null;
@@ -263,7 +243,6 @@ router.post('/sync', async (req, res) => {
       if (!collectionsData) break;
       
       const edges = collectionsData.edges || [];
-      console.log(`[COLLECTIONS_SYNC] Fetched ${edges.length} collections for ${req.auth.shop}`);
       
       allCollections.push(...edges.map(edge => edge.node));
       
@@ -272,8 +251,6 @@ router.post('/sync', async (req, res) => {
       
       if (edges.length === 0) break;
     }
-
-    console.log(`[COLLECTIONS_SYNC] Total collections synced for ${req.auth.shop}: ${allCollections.length}`);
 
     return res.json({
       success: true,
