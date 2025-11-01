@@ -308,7 +308,8 @@ export async function calculateTokensWithDynamicPricing(usdAmount) {
   const tokensInMillions = tokenBudget / ratePer1M;
   const tokens = Math.floor(tokensInMillions * 1_000_000);
   
-  console.log('[TokenConfig] Token calculation with dynamic pricing:', {
+  console.log('[TokenConfig] ✅ FIXED VERSION - Token calculation with dynamic pricing:', {
+    version: 'v2-fixed-Nov1-12:30',
     usdAmount,
     tokenBudget,
     ratePer1M: `$${ratePer1M} per 1M`,
