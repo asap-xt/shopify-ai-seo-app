@@ -221,9 +221,13 @@ router.post('/product', validateRequest(), async (req, res) => {
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        // Determine if upgrade is needed (for Starter/Professional/Growth base plans)
+        // Plus plans (professional_plus, growth_plus) do NOT need upgrade, just tokens
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan) 
+          && planKey !== 'growth extra' 
+          && planKey !== 'professional plus' 
+          && planKey !== 'growth plus';
         
         const responseData = {
           error: 'Insufficient token balance',
@@ -513,9 +517,13 @@ router.post('/collection', validateRequest(), async (req, res) => {
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        // Determine if upgrade is needed (for Starter/Professional/Growth base plans)
+        // Plus plans (professional_plus, growth_plus) do NOT need upgrade, just tokens
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan) 
+          && planKey !== 'growth extra' 
+          && planKey !== 'professional plus' 
+          && planKey !== 'growth plus';
         
         return res.status(402).json({
           error: 'Insufficient token balance',
@@ -756,9 +764,13 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-        // Determine if upgrade is needed (for Starter/Professional/Growth plans)
+        // Determine if upgrade is needed (for Starter/Professional/Growth base plans)
+        // Plus plans (professional_plus, growth_plus) do NOT need upgrade, just tokens
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
-        const needsUpgrade = !['growth_extra', 'enterprise'].includes(normalizedPlan) && planKey !== 'growth extra';
+        const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan) 
+          && planKey !== 'growth extra' 
+          && planKey !== 'professional plus' 
+          && planKey !== 'growth plus';
         
         return res.status(402).json({
           error: 'Insufficient token balance',
