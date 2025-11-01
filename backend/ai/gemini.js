@@ -176,8 +176,8 @@ export async function getGeminiResponse(prompt, options = {}) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://shopify-ai-seo.com',
-      'X-Title': process.env.OPENROUTER_APP_NAME || 'Shopify AI SEO'
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+      'X-Title': 'indexAIze - Unlock AI Search'
     },
     body: JSON.stringify({
       model,
