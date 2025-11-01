@@ -200,8 +200,6 @@ async function fetchAllProducts(req) {
   let hasNextPage = true;
   let cursor = null;
   
-  console.log(`[SYNC] Starting to fetch products for ${req.auth.shop}`);
-  
   while (hasNextPage) {
     try {
       const variables = { first: 50 };
@@ -218,7 +216,6 @@ async function fetchAllProducts(req) {
       }
       
       const edges = productsData.edges || [];
-      console.log(`[SYNC] Fetched ${edges.length} products for ${req.auth.shop}`);
       
       products.push(...edges.map(edge => edge.node));
       
@@ -235,7 +232,6 @@ async function fetchAllProducts(req) {
     }
   }
   
-  console.log(`[SYNC] Total products fetched for ${req.auth.shop}: ${products.length}`);
   return products;
 }
 
@@ -292,7 +288,6 @@ function formatProductForAI(product, { shopCurrency, shopDomain, shopUrl, langua
 // Main sync function
 export async function syncProductsForShop(req) {
   const startTime = Date.now();
-  console.log(`[SYNC] Starting product sync for ${req.auth.shop}`);
   
   try {
     // Get shop info and languages in parallel
@@ -301,15 +296,8 @@ export async function syncProductsForShop(req) {
       getShopLanguages(req)
     ]);
     
-    console.log(`[SYNC] Shop info for ${req.auth.shop}:`, shopInfo);
-    console.log(`[SYNC] Shop languages for ${req.auth.shop}:`, languages);
-    
     // Fetch all products
     const products = await fetchAllProducts(req);
-    
-    if (products.length === 0) {
-      console.log(`[SYNC] No products found for ${req.auth.shop}`);
-    }
     
     // Format products for AI
     const formattedProducts = products.map(product =>
@@ -339,7 +327,6 @@ export async function syncProductsForShop(req) {
     );
     
     const duration = Date.now() - startTime;
-    console.log(`[SYNC] Product sync completed for ${req.auth.shop} in ${duration}ms. Products: ${products.length}`);
     
     return {
       success: true,
