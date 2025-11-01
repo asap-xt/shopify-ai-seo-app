@@ -188,10 +188,10 @@ router.get('/list', async (req, res) => {
     
     const shop = req.auth.shop;
 
-    // Generate unique cache key based on all parameters
-    const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${optimizedFilter || 'all'}:${languageFilter || 'all'}:${tagsFilter.join(',')}:${searchFilter || ''}`;
+    // Cache key WITHOUT optimization filters (they will be applied AFTER fresh metafield fetch)
+    const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${tagsFilter.join(',')}:${searchFilter || ''}`;
     
-    // Try to get from cache first
+    // Step 1: Get basic product data from cache (or fetch if cache miss)
     const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
       const sortKey = convertSortKey(sortBy);
       const reverse = sortOrder === 'desc';
@@ -205,50 +205,13 @@ router.get('/list', async (req, res) => {
       const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
       const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
       
-      // Process products to add optimizationSummary
-      let products = rawProducts.map(product => {
-        const optimizationSummary = processProductMetafields(product.metafields);
-        return {
-          ...product,
-          optimizationSummary,
-          // Keep metafields for debugging if needed
-          metafields: product.metafields
-        };
-      });
-
-      // Apply client-side filters (since Shopify GraphQL doesn't support these filters)
-      
-      // Filter by optimization status
-      if (optimizedFilter === 'true') {
-        products = products.filter(p => p.optimizationSummary.optimized === true);
-      } else if (optimizedFilter === 'false') {
-        products = products.filter(p => p.optimizationSummary.optimized === false);
-      }
-      
-      // Filter by language
-      if (languageFilter) {
-        products = products.filter(p => 
-          p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
-        );
-      }
-      
-      // Filter by tags
-      if (tagsFilter.length > 0) {
-        products = products.filter(p => {
-          const productTags = p.tags || [];
-          return tagsFilter.some(tag => productTags.includes(tag));
-        });
-      }
-      
-      // Filter by search term (title, handle, productType)
-      if (searchFilter) {
-        const searchLower = searchFilter.toLowerCase();
-        products = products.filter(p => 
-          p.title?.toLowerCase().includes(searchLower) ||
-          p.handle?.toLowerCase().includes(searchLower) ||
-          p.productType?.toLowerCase().includes(searchLower)
-        );
-      }
+      // Store basic product data WITHOUT optimization summary
+      // (optimization summary will be fetched fresh later)
+      const products = rawProducts.map(product => ({
+        ...product,
+        // Remove metafields from cached data (we'll fetch them fresh)
+        metafields: undefined
+      }));
 
       return {
         success: true,
@@ -262,10 +225,89 @@ router.get('/list', async (req, res) => {
         shop: shop
       };
     });
+    
+    // Step 2: Fetch FRESH optimization status for all products (NOT cached!)
+    // This ensures badges update immediately after optimize/delete operations
+    const productIds = cachedResult.products.map(p => p.id);
+    
+    const FRESH_METAFIELDS_QUERY = `
+      query GetProductMetafields($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Product {
+            id
+            metafields(first: 50, namespace: "seo_ai") {
+              edges {
+                node {
+                  key
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const freshData = await executeGraphQL(req, FRESH_METAFIELDS_QUERY, { ids: productIds });
+    const freshMetafields = {};
+    
+    (freshData?.nodes || []).forEach(node => {
+      if (node?.id) {
+        freshMetafields[node.id] = node.metafields;
+      }
+    });
+    
+    // Step 3: Merge cached products with fresh optimization status
+    let products = cachedResult.products.map(product => {
+      const metafields = freshMetafields[product.id] || { edges: [] };
+      const optimizationSummary = processProductMetafields(metafields);
+      return {
+        ...product,
+        optimizationSummary,
+        metafields // Include fresh metafields for debugging
+      };
+    });
 
-    // Return cached or fresh data
+    // Step 4: Apply client-side filters (using FRESH optimization data)
+    
+    // Filter by optimization status
+    if (optimizedFilter === 'true') {
+      products = products.filter(p => p.optimizationSummary.optimized === true);
+    } else if (optimizedFilter === 'false') {
+      products = products.filter(p => p.optimizationSummary.optimized === false);
+    }
+    
+    // Filter by language
+    if (languageFilter) {
+      products = products.filter(p => 
+        p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
+      );
+    }
+    
+    // Filter by tags
+    if (tagsFilter.length > 0) {
+      products = products.filter(p => {
+        const productTags = p.tags || [];
+        return tagsFilter.some(tag => productTags.includes(tag));
+      });
+    }
+    
+    // Filter by search term (title, handle, productType)
+    if (searchFilter) {
+      const searchLower = searchFilter.toLowerCase();
+      products = products.filter(p => 
+        p.title?.toLowerCase().includes(searchLower) ||
+        p.handle?.toLowerCase().includes(searchLower) ||
+        p.productType?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Return result with FRESH optimization status
     return res.json({
-      ...cachedResult,
+      success: true,
+      products: products,
+      pagination: cachedResult.pagination,
+      shop: shop,
       auth: {
         tokenType: req.auth.tokenType,
         source: req.auth.source
