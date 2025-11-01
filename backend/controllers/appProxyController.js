@@ -1,7 +1,5 @@
 // backend/controllers/appProxyController.js
-// App Proxy Controller for Sitemap - Enhanced with extensive logging
-
-console.log('[APP_PROXY_CONTROLLER] Loading App Proxy Controller...');
+// App Proxy Controller for Sitemap
 
 import express from 'express';
 import fetch from 'node-fetch';
@@ -17,7 +15,6 @@ const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
 // Helper: normalize shop domain
 function normalizeShop(s) {
-  console.log('[APP_PROXY] Normalizing shop:', s);
   if (!s) return null;
   s = String(s).trim().toLowerCase();
   if (/^https?:\/\//.test(s)) {
@@ -30,10 +27,8 @@ function normalizeShop(s) {
 
 // Helper: get access token using centralized resolver
 async function resolveAdminTokenForShop(shop) {
-  console.log('[APP_PROXY] Resolving token for shop:', shop);
   try {
     const token = await resolveShopToken(shop);
-    console.log('[APP_PROXY] Token resolved successfully');
     return token;
   } catch (err) {
     console.error('[APP_PROXY] Token resolution failed:', err.message);
@@ -45,12 +40,8 @@ async function resolveAdminTokenForShop(shop) {
 
 // Helper: GraphQL request
 async function shopGraphQL(shop, query, variables = {}) {
-  console.log('[APP_PROXY] GraphQL request for shop:', shop);
-  console.log('[APP_PROXY] Query:', query.substring(0, 100) + '...');
-  
   const token = await resolveAdminTokenForShop(shop);
   const url = 'https://' + shop + '/admin/api/' + API_VERSION + '/graphql.json';
-  console.log('[APP_PROXY] GraphQL URL:', url);
   
   const rsp = await fetch(url, {
     method: 'POST',
@@ -70,13 +61,11 @@ async function shopGraphQL(shop, query, variables = {}) {
     throw e;
   }
   
-  console.log('[APP_PROXY] GraphQL request successful');
   return json.data;
 }
 
 // Helper: Check which languages have SEO optimization for a product
 async function checkProductSEOLanguages(shop, productId) {
-  console.log('[APP_PROXY] Checking SEO languages for product:', productId);
   try {
     const query = `
       query GetProductSEOLanguages($id: ID!) {
@@ -105,7 +94,6 @@ async function checkProductSEOLanguages(shop, productId) {
     
     // Always include 'en' as default if no languages found
     const result = languages.length > 0 ? [...new Set(['en', ...languages])] : ['en'];
-    console.log('[APP_PROXY] SEO languages found:', result);
     return result;
   } catch (error) {
     console.error('[APP_PROXY] Error checking SEO languages for product:', productId, error);
@@ -115,10 +103,8 @@ async function checkProductSEOLanguages(shop, productId) {
 
 // Helper: get plan limits
 async function getPlanLimits(shop) {
-  console.log('[APP_PROXY] Getting plan limits for shop:', shop);
   try {
     const sub = await Subscription.findOne({ shop }).lean().exec();
-    console.log('[APP_PROXY] Subscription found:', !!sub, 'plan:', sub?.plan);
     
     if (!sub) return { limit: 100, plan: 'starter' };
     
@@ -132,7 +118,6 @@ async function getPlanLimits(shop) {
     
     const limit = planLimits[sub.plan?.toLowerCase()] || 100;
     const result = { limit, plan: sub.plan };
-    console.log('[APP_PROXY] Plan limits:', result);
     return result;
   } catch (e) {
     console.error('[APP_PROXY] Error getting plan limits:', e.message);
@@ -163,45 +148,24 @@ function cleanHtmlForXml(html) {
 
 // Main App Proxy handler for sitemap
 async function handleSitemapProxy(req, res) {
-  console.log('[APP_PROXY] ===== SITEMAP PROXY REQUEST =====');
-  console.log('[APP_PROXY] handleSitemapProxy function called!');
-  console.log('[APP_PROXY] Request method:', req.method);
-  console.log('[APP_PROXY] Request URL:', req.url);
-  console.log('[APP_PROXY] Request headers:', req.headers);
-  console.log('[APP_PROXY] Request query:', req.query);
-  console.log('[APP_PROXY] Request body:', req.body);
-  
   try {
     // Extract shop from Shopify App Proxy headers
     const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
-    console.log('[APP_PROXY] Extracted shop:', shop);
     
     if (!shop) {
       console.error('[APP_PROXY] Missing shop parameter in headers or query');
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    console.log('[APP_PROXY] Processing sitemap for shop:', shop);
-    
     // Check if we have cached sitemap
-    console.log('[APP_PROXY] Checking for cached sitemap...');
     const cachedSitemap = await Sitemap.findOne({ shop }).select('+content').lean().exec();
     
     if (cachedSitemap && cachedSitemap.content) {
-      console.log('[APP_PROXY] Found cached sitemap:', {
-        generatedAt: cachedSitemap.generatedAt,
-        productCount: cachedSitemap.productCount,
-        size: cachedSitemap.size,
-        contentLength: cachedSitemap.content.length
-      });
-      
       // Check if cache is fresh (less than 1 hour old)
       const cacheAge = Date.now() - new Date(cachedSitemap.generatedAt).getTime();
       const oneHour = 60 * 60 * 1000;
       
       if (cacheAge < oneHour) {
-        console.log('[APP_PROXY] Serving cached sitemap (age:', Math.round(cacheAge / 1000), 'seconds)');
-        
         res.set({
           'Content-Type': 'application/xml; charset=utf-8',
           'Cache-Control': 'public, max-age=3600',
@@ -210,17 +174,11 @@ async function handleSitemapProxy(req, res) {
           'X-Sitemap-Generated': cachedSitemap.generatedAt
         });
         return res.send(cachedSitemap.content);
-      } else {
-        console.log('[APP_PROXY] Cached sitemap is stale (age:', Math.round(cacheAge / 1000), 'seconds), regenerating...');
       }
-    } else {
-      console.log('[APP_PROXY] No cached sitemap found, generating new one...');
     }
     
     // Generate new sitemap
-    console.log('[APP_PROXY] Starting sitemap generation...');
     const { limit, plan } = await getPlanLimits(shop);
-    console.log('[APP_PROXY] Plan limits:', { limit, plan });
     
     // Get shop info
     const shopQuery = `
@@ -231,10 +189,8 @@ async function handleSitemapProxy(req, res) {
       }
     `;
     
-    console.log('[APP_PROXY] Fetching shop data...');
     const shopData = await shopGraphQL(shop, shopQuery);
     const primaryDomain = shopData.shop.primaryDomain.url;
-    console.log('[APP_PROXY] Primary domain:', primaryDomain);
     
     // Try to get locales
     let locales = [{ locale: 'en', primary: true }];
@@ -251,9 +207,8 @@ async function handleSitemapProxy(req, res) {
       if (localesData.shopLocales) {
         locales = localesData.shopLocales;
       }
-      console.log('[APP_PROXY] Locales found:', locales);
     } catch (localeErr) {
-      console.log('[APP_PROXY] Could not fetch locales (missing scope), using default:', locales);
+      // Could not fetch locales, using default
     }
     
     // Fetch products
@@ -262,11 +217,8 @@ async function handleSitemapProxy(req, res) {
     let hasMore = true;
     let batchCount = 0;
     
-    console.log('[APP_PROXY] Starting product fetching...');
-    
     while (hasMore && allProducts.length < limit) {
       batchCount++;
-      console.log('[APP_PROXY] Fetching batch #', batchCount, 'cursor:', cursor);
       
       const productsQuery = `
         query($cursor: String, $first: Int!) {
@@ -311,7 +263,6 @@ async function handleSitemapProxy(req, res) {
       `;
       
       const batchSize = Math.min(50, limit - allProducts.length);
-      console.log('[APP_PROXY] Batch size:', batchSize);
       
       const data = await shopGraphQL(shop, productsQuery, {
         first: batchSize,
@@ -323,17 +274,12 @@ async function handleSitemapProxy(req, res) {
         hasMore = data.products.pageInfo.hasNextPage;
         const lastEdge = data.products.edges[data.products.edges.length - 1];
         cursor = lastEdge?.cursor;
-        console.log('[APP_PROXY] Fetched', data.products.edges.length, 'products, total:', allProducts.length);
       } else {
         hasMore = false;
-        console.log('[APP_PROXY] No more products found');
       }
     }
     
-    console.log('[APP_PROXY] Total products fetched:', allProducts.length);
-    
     // Generate XML
-    console.log('[APP_PROXY] Generating XML sitemap...');
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
     xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"\n';
@@ -458,7 +404,6 @@ async function handleSitemapProxy(req, res) {
     
     // Add collections if plan allows
     if (['growth', 'professional', 'growth_extra', 'enterprise'].includes(plan?.toLowerCase())) {
-      console.log('[APP_PROXY] Adding collections for plan:', plan);
       try {
         const collectionsQuery = `
           query {
@@ -509,16 +454,8 @@ async function handleSitemapProxy(req, res) {
     
     xml += '</urlset>';
     
-    console.log('[APP_PROXY] XML generation completed:', {
-      processedProducts,
-      productsWithBullets,
-      productsWithFaq,
-      xmlLength: xml.length
-    });
-    
     // Save to cache
     try {
-      console.log('[APP_PROXY] Saving sitemap to cache...');
       const sitemapDoc = await Sitemap.findOneAndUpdate(
         { shop },
         {
@@ -538,10 +475,6 @@ async function handleSitemapProxy(req, res) {
         }
       );
       
-      console.log('[APP_PROXY] Sitemap cached successfully:', {
-        id: sitemapDoc._id,
-        contentSaved: !!sitemapDoc.content
-      });
     } catch (saveErr) {
       console.error('[APP_PROXY] Failed to cache sitemap:', saveErr);
     }
@@ -555,7 +488,6 @@ async function handleSitemapProxy(req, res) {
       'X-Sitemap-Products': allProducts.length.toString()
     });
     
-    console.log('[APP_PROXY] Sending sitemap response...');
     res.send(xml);
     
   } catch (err) {
@@ -568,7 +500,6 @@ async function handleSitemapProxy(req, res) {
 
 // Test endpoint to verify controller is working
 router.get('/test', (req, res) => {
-  console.log('[APP_PROXY] Test endpoint called!');
   res.json({
     message: 'App Proxy controller is working!',
     url: req.url,
@@ -580,15 +511,6 @@ router.get('/test', (req, res) => {
 
 // Debug endpoint to see what parameters we receive
 router.get('/debug', (req, res) => {
-  console.log('[APP_PROXY] Debug endpoint called!');
-  console.log('[APP_PROXY] Full request object:', JSON.stringify({
-    url: req.url,
-    method: req.method,
-    query: req.query,
-    headers: req.headers,
-    body: req.body
-  }, null, 2));
-  
   res.json({
     message: 'Debug endpoint - check server logs for full request details',
     url: req.url,
@@ -604,15 +526,6 @@ router.get('/sitemap', appProxyAuth, handleSitemapProxy);
 
 // Debug routes without HMAC verification
 router.get('/debug-sitemap', (req, res) => {
-  console.log('[APP_PROXY] Debug sitemap endpoint called!');
-  console.log('[APP_PROXY] Full request object:', JSON.stringify({
-    url: req.url,
-    method: req.method,
-    query: req.query,
-    headers: req.headers,
-    body: req.body
-  }, null, 2));
-  
   res.json({
     message: 'Debug sitemap endpoint - no HMAC verification',
     url: req.url,
@@ -627,7 +540,6 @@ router.get('/debug-sitemap', (req, res) => {
 
 // AI Welcome Page
 router.get('/ai/welcome', appProxyAuth, async (req, res) => {
-  console.log('[APP_PROXY] AI Welcome Page requested');
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -871,7 +783,6 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
 
 // AI Products JSON Feed
 router.get('/ai/products.json', appProxyAuth, async (req, res) => {
-  console.log('[APP_PROXY] AI Products JSON requested');
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -901,7 +812,6 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
 
 // AI Collections JSON Feed
 router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
-  console.log('[APP_PROXY] AI Collections JSON requested');
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -931,7 +841,6 @@ router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
 
 // AI Sitemap Feed
 router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
-  console.log('[APP_PROXY] AI Sitemap requested');
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
