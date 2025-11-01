@@ -51,14 +51,10 @@ async function resolveLanguages({ req, productId }) {
   let shopLocalesRaw = [];
   let productLocalesRaw = [];
 
-  console.log(`[LANGUAGE] Starting language resolution for shop: ${req.auth.shop}, product: ${productId || 'none'}`);
-
   try {
     // Get shop locales
-    console.log(`[LANGUAGE] Fetching shop locales...`);
     const shopData = await executeGraphQL(req, Q_SHOP_LOCALES);
     shopLocalesRaw = shopData?.shopLocales || [];
-    console.log(`[LANGUAGE] Found ${shopLocalesRaw.length} shop locales`);
   } catch (error) {
     console.error(`[LANGUAGE] Shop locales error:`, error.message);
     errors.push(`Shop locales: ${error.message}`);
@@ -67,11 +63,9 @@ async function resolveLanguages({ req, productId }) {
   // Get product locales if productId provided
   if (productId) {
     try {
-      console.log(`[LANGUAGE] Fetching product locales for ${productId}...`);
       const gidProductId = toGID(productId);
       const productData = await executeGraphQL(req, Q_PRODUCT_LOCALES, { id: gidProductId });
       productLocalesRaw = productData?.product?.resourcePublications?.edges || [];
-      console.log(`[LANGUAGE] Found ${productLocalesRaw.length} product locales`);
     } catch (error) {
       console.error(`[LANGUAGE] Product locales error:`, error.message);
       errors.push(`Product locales: ${error.message}`);
@@ -131,9 +125,6 @@ function shapeOutput({ shop, productId, shopLocalesRaw, productLocalesRaw, authU
 // Route handlers
 router.get('/shop/:shop', async (req, res) => {
   try {
-    console.log(`[LANGUAGE-ENDPOINT] ===== HANDLER CALLED =====`);
-    console.log(`[LANGUAGE-ENDPOINT] Starting with shop: ${req.auth.shop}`);
-
     const result = await resolveLanguages({ 
       req,
       productId: null

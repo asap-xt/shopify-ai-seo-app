@@ -22,8 +22,6 @@ router.get('/stats', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    console.log('[Dashboard] Loading stats for:', shop);
-    
     // Cache dashboard stats for 1 minute (PHASE 3: Caching)
     // Dashboard is frequently accessed, so short TTL keeps data fresh
     const stats = await withShopCache(shop, 'dashboard:stats', CACHE_TTL.VERY_SHORT, async () => {
@@ -303,13 +301,6 @@ router.get('/stats', verifyRequest, async (req, res) => {
       alerts
     };
     
-    console.log('[Dashboard] Stats loaded:', {
-      shop,
-      productsOptimized: `${optimizedProducts}/${totalProducts}`,
-      collectionsOptimized: hasCollections ? `${optimizedCollections}/${totalCollections}` : 'N/A',
-      alertsCount: alerts.length
-    });
-    
     return stats; // Return stats for caching
     }); // End withShopCache
     
@@ -343,14 +334,12 @@ router.post('/sync', requireAuth, async (req, res) => {
 
     // Start sync (non-blocking)
     syncStore(adminGraphql, shop, (progress) => {
-      console.log('[Dashboard] Sync progress:', progress);
       // TODO: Can emit SSE events here if needed
     }).catch(error => {
       console.error('[Dashboard] Sync error:', error);
     }).finally(async () => {
       // Invalidate cache after sync completes (PHASE 3: Caching)
       await cacheService.invalidateShop(shop);
-      console.log('[Dashboard] Cache invalidated after sync');
     });
 
     // Return immediately
@@ -409,8 +398,6 @@ router.post('/auto-sync', verifyRequest, async (req, res) => {
       { autoSyncEnabled: !!enabled },
       { new: true }
     );
-
-    console.log(`[Dashboard] Auto-sync ${enabled ? 'enabled' : 'disabled'} for ${shop}`);
 
     res.json({ 
       success: true,
