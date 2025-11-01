@@ -696,13 +696,6 @@ Output JSON with:
 
 // POST /ai-enhance/collection/:collectionId
 router.post('/collection/:collectionId', validateRequest(), async (req, res) => {
-  console.log('[AI-ENHANCE-COLLECTION] Request details:', {
-    shopDomain: req.shopDomain,
-    bodyShop: req.body?.shop,
-    queryShop: req.query?.shop,
-    params: req.params
-  });
-  
   try {
     const shop = req.shopDomain || req.body?.shop || req.query?.shop;
     if (!shop) {
@@ -711,8 +704,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     
     const { collectionId } = req.params;
     const { languages = [] } = req.body;
-    
-    console.log(`[AI-ENHANCE] Starting for collection ${collectionId}, ${languages.length} language(s)`);
     
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
@@ -760,8 +751,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      console.log(`[AI-ENHANCE] Token estimate:`, tokenEstimate);
-      console.log(`[AI-ENHANCE] Current balance: ${tokenBalance.balance}`);
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
@@ -791,8 +780,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       reservationId = reservation.reservationId;
       await reservation.save();
       
-      console.log(`[AI-ENHANCE] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
-      console.log(`[AI-ENHANCE] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
@@ -808,7 +795,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
         
         if (!tokenBalance.hasBalance(estimatePerLanguage.withMargin)) {
-          console.log(`[AI-ENHANCE] ⚠️ Insufficient tokens for remaining languages. Stopping gracefully.`);
           tokensExhausted = true;
           
           const remainingLanguages = languages.slice(languages.indexOf(language));
@@ -821,7 +807,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       try {
         // 1. Load existing SEO
         const metafieldKey = `seo__${language}`;
-        console.log(`[AI-ENHANCE] Loading existing SEO for ${language}`);
         
         const query = `
           query GetCollectionMetafield($id: ID!) {
@@ -834,7 +819,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         `;
         
         const data = await shopGraphQL(req, shop, query, { id: collectionId });
-        console.log(`[AI-ENHANCE] GraphQL response:`, data?.collection?.metafield ? 'Found' : 'Not found');
         
         if (!data?.collection?.metafield?.value) {
           results.errors.push(`${language}: No basic SEO found`);
@@ -843,7 +827,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         }
         
         const existingSeo = JSON.parse(data.collection.metafield.value);
-        console.log(`[AI-ENHANCE] Existing SEO title: ${existingSeo.title}`);
         
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
@@ -853,7 +836,6 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
         const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt
         
         if (shouldSkipEnhanced && hasAIEnhanced) {
-          console.log(`[AI-ENHANCE] Skipping ${language} - already has AI Enhanced content from ${existingSeo.enhancedAt} (${planKey} plan saves tokens)`);
           results.enhanced++; // Броим като enhanced защото вече е enhanced
           continue;
         }
@@ -884,7 +866,6 @@ Guidelines:
           }
         ];
         
-        console.log(`[AI-ENHANCE] Calling OpenRouter for ${language}`);
         const { content, usage } = await openrouterChat(model, messages, true);
         
         // Track usage for finalization
@@ -895,7 +876,6 @@ Guidelines:
         let enhanced;
         try {
           enhanced = JSON.parse(content);
-          console.log(`[AI-ENHANCE] AI returned ${enhanced.bullets?.length || 0} bullets and ${enhanced.faq?.length || 0} FAQ items`);
         } catch (parseErr) {
           console.error(`[AI-ENHANCE] Failed to parse AI response:`, content);
           throw new Error('Invalid JSON from AI');
@@ -933,7 +913,6 @@ Guidelines:
           throw new Error(userErrors.map(e => e.message).join(', '));
         }
         
-        console.log(`[AI-ENHANCE] Successfully enhanced ${language}`);
         results.enhanced++;
         
       } catch (error) {
@@ -952,22 +931,13 @@ Guidelines:
       for (const detail of usageDetails) {
         const actual = calculateActualTokens(detail.usage);
         totalActualTokens += actual.totalTokens;
-        
-        console.log(`[AI-ENHANCE] ${detail.language}: ${actual.totalTokens} tokens (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
       }
-      
-      console.log(`[AI-ENHANCE] Total actual tokens used: ${totalActualTokens}`);
       
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
-      
-      console.log(`[AI-ENHANCE] Finalized reservation ${reservationId}`);
-      console.log(`[AI-ENHANCE] New balance: ${tokenBalance.balance}`);
     }
     // === END TOKEN FINALIZATION ===
-    
-    console.log('[AI-ENHANCE] Final results:', results);
     
     res.json({ 
       ok: results.enhanced > 0,
