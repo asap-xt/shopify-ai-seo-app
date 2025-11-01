@@ -265,11 +265,13 @@ export async function fetchOpenRouterPricing() {
       return GEMINI_RATE_PER_1M_TOKENS;
     }
 
-    // Calculate average rate: (input + output) / 2
-    // Most of our usage is input tokens, but we average for safety
-    const inputRate = model.pricing.prompt || model.pricing.input || 0.075; // Default: $0.075 per 1M
-    const outputRate = model.pricing.completion || model.pricing.output || 0.30; // Default: $0.30 per 1M
-    const avgRate = (inputRate + outputRate) / 2;
+    // OpenRouter returns prices per token, we need per 1M tokens
+    // So we multiply by 1,000,000 to convert
+    const inputRatePerToken = model.pricing.prompt || model.pricing.input || 0.000000075; // per token
+    const outputRatePerToken = model.pricing.completion || model.pricing.output || 0.00000030; // per token
+    
+    const inputRate = inputRatePerToken * 1_000_000; // Convert to per 1M tokens
+    const outputRate = outputRatePerToken * 1_000_000; // Convert to per 1M tokens
 
     // Since most of our usage is input (titles, descriptions are in prompt),
     // we weight input more: 80% input, 20% output
@@ -308,12 +310,13 @@ export async function calculateTokensWithDynamicPricing(usdAmount) {
   const tokens = Math.floor(tokensInMillions * 1_000_000);
   
   console.log('[TokenConfig] ✅ FIXED VERSION - Token calculation with dynamic pricing:', {
-    version: 'v2-fixed-Nov1-12:30',
+    version: 'v3-fixed-Nov1-13:11-FINAL',
     usdAmount,
     tokenBudget,
     ratePer1M: `$${ratePer1M} per 1M`,
     tokensInMillions: tokensInMillions.toFixed(2),
-    tokens: tokens.toLocaleString()
+    tokens: tokens.toLocaleString(),
+    timestamp: new Date().toISOString()
   });
 
   return tokens;
