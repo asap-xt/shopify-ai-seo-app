@@ -9,11 +9,7 @@ const router = express.Router();
 
 // Helper function to process product metafields and generate optimizationSummary
 function processProductMetafields(metafields) {
-  console.log('[PRODUCTS] ===== PROCESSING METAFIELDS =====');
-  console.log('[PRODUCTS] Metafields structure:', JSON.stringify(metafields, null, 2));
-  
   if (!metafields?.edges) {
-    console.log('[PRODUCTS] No metafields.edges found, returning default');
     return {
       optimized: false,
       optimizedLanguages: [],
@@ -21,26 +17,15 @@ function processProductMetafields(metafields) {
     };
   }
 
-  console.log('[PRODUCTS] Metafields edges count:', metafields.edges.length);
-  
   const optimizedLanguages = [];
   let lastOptimized = null;
 
-  metafields.edges.forEach(({ node: metafield }, index) => {
-    console.log(`[PRODUCTS] Metafield ${index}:`, {
-      key: metafield.key,
-      value: metafield.value?.substring(0, 100) + '...',
-      type: metafield.type
-    });
-    
+  metafields.edges.forEach(({ node: metafield }) => {
     if (metafield.key && metafield.key.startsWith('seo__')) {
-      console.log(`[PRODUCTS] Found SEO metafield: ${metafield.key}`);
       try {
         const seoData = JSON.parse(metafield.value);
-        console.log(`[PRODUCTS] Parsed SEO data:`, seoData);
         if (seoData && seoData.language) {
           optimizedLanguages.push(seoData.language);
-          console.log(`[PRODUCTS] Added language: ${seoData.language}`);
           
           // Track the most recent optimization
           if (seoData.updatedAt) {
@@ -61,9 +46,6 @@ function processProductMetafields(metafields) {
     optimizedLanguages: [...new Set(optimizedLanguages)], // Remove duplicates
     lastOptimized: lastOptimized?.toISOString() || null
   };
-  
-  console.log('[PRODUCTS] Final optimization summary:', result);
-  console.log('[PRODUCTS] ===== METAFIELDS PROCESSING COMPLETE =====');
   
   return result;
 }
@@ -205,9 +187,6 @@ router.get('/list', async (req, res) => {
     const searchFilter = req.query.search; // search term
     
     const shop = req.auth.shop;
-    
-    console.log(`[PRODUCTS] Fetching products for ${shop}, page ${page}, limit ${limit}`);
-    console.log(`[PRODUCTS] Filters:`, { optimizedFilter, languageFilter, tagsFilter, searchFilter });
 
     // Generate unique cache key based on all parameters
     const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${optimizedFilter || 'all'}:${languageFilter || 'all'}:${tagsFilter.join(',')}:${searchFilter || ''}`;
@@ -306,8 +285,6 @@ router.get('/list', async (req, res) => {
 // GET /api/products/tags/list
 router.get('/tags/list', async (req, res) => {
   try {
-    console.log(`[PRODUCTS] Fetching product tags for ${req.auth.shop}`);
-
     const data = await executeGraphQL(req, PRODUCT_TAGS_QUERY, { first: 250 });
     const tags = data?.productTags?.edges?.map(edge => edge.node) || [];
 
@@ -331,8 +308,6 @@ router.get('/tags/list', async (req, res) => {
 // POST /api/products/sync
 router.post('/sync', async (req, res) => {
   try {
-    console.log(`[PRODUCT_SYNC] Starting sync for ${req.auth.shop}...`);
-
     const allProducts = [];
     let hasNextPage = true;
     let cursor = null;
@@ -350,7 +325,6 @@ router.post('/sync', async (req, res) => {
       if (!productsData) break;
       
       const edges = productsData.edges || [];
-      console.log(`[SYNC] Fetched ${edges.length} products for ${req.auth.shop}`);
       
       allProducts.push(...edges.map(edge => edge.node));
       
@@ -359,8 +333,6 @@ router.post('/sync', async (req, res) => {
       
       if (edges.length === 0) break;
     }
-
-    console.log(`[SYNC] Total products synced for ${req.auth.shop}: ${allProducts.length}`);
 
     return res.json({
       success: true,
