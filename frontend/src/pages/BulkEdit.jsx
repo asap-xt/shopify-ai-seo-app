@@ -102,9 +102,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Component mounted debug
   useEffect(() => {
-    // console.log('[BULK-EDIT] Component mounted');
-    // console.log('[BULK-EDIT] Shop:', shop);
-    // console.log('[BULK-EDIT] API function available:', typeof api === 'function');
   }, [shop, api]);
   
   // Product list state
@@ -272,14 +269,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Load shop languages
   useEffect(() => {
-    // console.log('[BULK-EDIT] Languages useEffect triggered', { shop, api: !!api });
     if (!shop) {
-      // console.log('[BULK-EDIT] No shop, skipping languages load');
       return;
     }
-    // console.log('[BULK-EDIT] Making languages API call to:', `/api/languages/shop/${shop}`);
     // оставяме :shop в path (бекендът може да го очаква), но пращаме и session token
-    // console.log('[BULK-EDIT] About to call api() function');
     
     // Add timeout to detect hanging requests
     const timeoutPromise = new Promise((_, reject) => {
@@ -291,9 +284,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       timeoutPromise
     ])
       .then((data) => {
-        // console.log('[BULK-EDIT] Languages API response:', data);
         const langs = Array.isArray(data?.shopLanguages) && data.shopLanguages.length ? data.shopLanguages : ['en'];
-        // console.log('[BULK-EDIT] Setting available languages to:', langs.includes('en') ? langs : ['en', ...langs]);
         setAvailableLanguages(langs.includes('en') ? langs : ['en', ...langs]);
       })
       .catch((error) => {
@@ -314,8 +305,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Load products
   const loadProducts = useCallback(async (pageNum = 1, append = false, timestamp = null) => {
-    // console.log(`[BULK-EDIT-LOAD] loadProducts called with pageNum: ${pageNum}, append: ${append}, timestamp: ${timestamp}`);
-    // console.log('[BULK-EDIT-LOAD] Current products state:', products.length);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -338,11 +327,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           'Pragma': 'no-cache'
         }
       });
-      // console.log(`[BULK-EDIT-LOAD] API returned ${data.products?.length || 0} products`);
       
       // Log първия продукт за проверка
       if (data.products?.length > 0) {
-        // console.log('[BULK-EDIT-LOAD] First product data:', {
         //   id: data.products[0].id,
         //   _id: data.products[0]._id,
         //   title: data.products[0].title,
@@ -353,11 +340,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       
       // DEBUG: Log product IDs before setting state
-      console.log('[LOAD-PRODUCTS] ===== PRODUCTS LOADED =====');
-      console.log('[LOAD-PRODUCTS] Total products:', data.products?.length);
       if (data.products?.length > 0) {
         data.products.forEach((p, idx) => {
-          console.log(`[LOAD-PRODUCTS] Product ${idx}: ID=${p.id} (type: ${typeof p.id}), _id=${p._id}, title="${p.title}", has SEO: ${!!p.optimizationSummary?.optimizedLanguages?.length}`);
         });
       }
       
@@ -384,7 +368,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Initial load and filter changes
   useEffect(() => {
     if (shop) {
-      console.log('[BULK-EDIT] Filters changed, reloading products...');
       loadProducts(1, false, null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -407,11 +390,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // DEBUG: Monitor products and selectedItems changes
   useEffect(() => {
-    console.log('[DEBUG-MONITOR] ===== STATE CHANGED =====');
-    console.log('[DEBUG-MONITOR] Products count:', products.length);
-    console.log('[DEBUG-MONITOR] Selected items count:', selectedItems.length);
-    console.log('[DEBUG-MONITOR] Products:', products.map(p => ({ id: p.id, title: p.title })));
-    console.log('[DEBUG-MONITOR] Selected items:', selectedItems);
   }, [products, selectedItems]);
   
   // Unified search function
@@ -432,12 +410,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Handle selection
   const handleSelectionChange = useCallback((items) => {
-    console.log('[SELECTION-CHANGE] ===== SELECTION CHANGED =====');
-    console.log('[SELECTION-CHANGE] New selected items:', items);
-    console.log('[SELECTION-CHANGE] Item count:', items.length);
-    console.log('[SELECTION-CHANGE] Item types:', items.map(id => typeof id));
-    console.log('[SELECTION-CHANGE] Current products count:', products.length);
-    console.log('[SELECTION-CHANGE] Current products IDs:', products.map(p => p.id));
     
     setSelectedItems(items);
     if (items.length === 0) {
@@ -516,7 +488,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       !p.optimizationSummary?.optimizedLanguages?.length
     );
 
-    // console.log('🔍 [AI-ENHANCE] handleStartEnhancement called with products:', selectedWithSEO);
 
     // Check product limit before processing
     const planLimit = getProductLimitByPlan(plan);
@@ -580,7 +551,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             },
           });
           
-          // console.log(`🔍 [AI-ENHANCE] Product ${product.id} enhance data:`, enhanceData);
           
           // Apply the enhanced SEO
           if (enhanceData.results && enhanceData.results.length > 0) {
@@ -588,9 +558,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               shop,
               productId: product.gid || toProductGID(product.id),
               results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
-                // console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI bullets:`, r.bullets);
-                // console.log(`🔍 [AI-ENHANCE] Language ${r.language} - AI FAQ:`, r.faq);
-                // console.log(`🔍 [AI-ENHANCE] Language ${r.language} - updatedSeo from AI:`, r.updatedSeo);
                 
                 const seoResult = {
                   language: r.language,
@@ -601,15 +568,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   }
                 };
                 
-                // console.log(`🔍 [AI-ENHANCE] Language ${r.language} - final seo result:`, JSON.stringify(seoResult.seo, null, 2));
                 
                 return seoResult;
               }),
               options: { updateBullets: true, updateFaq: true }
             };
             
-            // console.log(`🔍 [AI-ENHANCE] Applying data for product ${product.id}:`, applyData);
-            // console.log(`🔍 [AI-ENHANCE] First result SEO object:`, JSON.stringify(applyData.results[0]?.seo, null, 2));
             
             const applyResult = await api('/api/seo/apply-multi', {
               method: 'POST',
@@ -617,10 +581,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               body: applyData
             });
             
-            // console.log(`🔍 [AI-ENHANCE] Apply result for product ${product.id}:`, applyResult);
             results.successful++;
           } else {
-            // console.log(`🔍 [AI-ENHANCE] No valid results for product ${product.id}:`, enhanceData);
             results.failed++;
           }
         } catch (error) {
@@ -799,10 +761,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Generate SEO for selected products
   const generateSEO = async () => {
-    // console.log('[BULK-EDIT/DEBUG] ===== GENERATE SEO START =====');
-    // console.log('[BULK-EDIT/DEBUG] selectedLanguages:', selectedLanguages);
-    // console.log('[BULK-EDIT/DEBUG] model:', model);
-    // console.log('[BULK-EDIT/DEBUG] modelOptions:', modelOptions);
     
     if (!selectedLanguages.length) {
       setToast('Please select at least one language');
@@ -812,9 +770,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     // Ensure we have a valid model
     let finalModel = model;
     if (!finalModel || !finalModel.trim()) {
-      // console.log('[BULK-EDIT/DEBUG] Model is empty, using fallback');
       finalModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
-      // console.log('[BULK-EDIT/DEBUG] Using fallback model:', finalModel);
     }
     
     setIsProcessing(true);
@@ -892,10 +848,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               return;
             }
             
-            // console.log('[BULK-EDIT/DEBUG] Making API call with:');
-            // console.log('[BULK-EDIT/DEBUG] - productId:', productGid);
-            // console.log('[BULK-EDIT/DEBUG] - model:', finalModel);
-            // console.log('[BULK-EDIT/DEBUG] - languages:', languagesToGenerate);
             
             const data = await api('/api/seo/generate-multi', {
               method: 'POST',
@@ -998,7 +950,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           
           // Optimistic update - веднага обновяваме локалното състояние
           if (data.appliedLanguages && data.appliedLanguages.length > 0) {
-            // console.log(`[BULK-EDIT] Optimistic update for product ${productId}, languages:`, data.appliedLanguages);
             setProducts(prevProducts => 
               prevProducts.map(prod => {
                 if (prod.id === productId) {
@@ -1033,22 +984,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       setShowResultsModal(false);
       
       // Clear selected items
-      console.log('[APPLY-SEO] ===== CLEARING SELECTION =====');
-      console.log('[APPLY-SEO] Selected items BEFORE clear:', selectedItems);
       setSelectedItems([]);
       setSelectAllPages(false);
-      console.log('[APPLY-SEO] Selected items cleared');
       
       // Add delay to ensure MongoDB writes are propagated
-      console.log('[APPLY-SEO] Waiting for database propagation...');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Force a complete refresh of the products list
-      console.log('[APPLY-SEO] Clearing products state before reload...');
       setProducts([]); // Clear current products to force re-render
       
       // Load products with cache bypass
-      // console.log('[BULK-EDIT] Reloading products with cache bypass...');
       const params = new URLSearchParams({
         shop,
         page: 1,
@@ -1071,8 +1016,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       });
       
       
-      // console.log('[BULK-EDIT] Products reloaded, first product:', data.products[0]?.title);
-      // console.log('[BULK-EDIT] First product optimization summary:', data.products[0]?.optimizationSummary);
       
       setProducts(data.products || []);
       setPage(1);
@@ -1130,8 +1073,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
           );
 
-          // console.log('[BULK-DELETE] Product optimized languages:', optimizedLanguages);
-          // console.log('[BULK-DELETE] Languages to delete:', languagesToDelete);
           
           if (languagesToDelete.length === 0) {
             skippedCount++;
@@ -1147,13 +1088,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               languages: languagesToDelete,
             }
           });
-          // console.log('[BULK-DELETE] Delete response:', data);
-          // console.log('[BULK-DELETE] Deleted languages:', data.deletedLanguages);
           
           // Optimistic update - immediately update local state
           if (data.deletedLanguages && data.deletedLanguages.length > 0) {
-            // console.log('[BULK-DELETE] Before optimistic update, product:', product);
-            // console.log('[BULK-DELETE] Current optimized languages:', product.optimizationSummary?.optimizedLanguages);
             
             setProducts(prevProducts => 
               prevProducts.map(prod => {
@@ -1163,9 +1100,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     !data.deletedLanguages.includes(lang)
                   );
                   
-                  // console.log('[BULK-DELETE] Updating product:', prod.id);
-                  // console.log('[BULK-DELETE] Languages before:', currentOptimized);
-                  // console.log('[BULK-DELETE] Languages after:', newOptimized);
                   
                   return {
                     ...prod,
@@ -1184,7 +1118,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             );
             
             // Debug log after optimistic update
-            // console.log('[BULK-DELETE] State updated, checking first product:', products[0]);
           }
           
           successCount++;
@@ -1222,11 +1155,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       }
       
       // Apply the same fix pattern as apply function
-      // console.log('[BULK-DELETE] Operation successful!');
       
       // Force refetch with delay and cache busting
       setTimeout(() => {
-        // console.log('[BULK-DELETE] Triggering reload with timestamp');
         const timestamp = Date.now();
         loadProducts(1, false, timestamp); // Pass timestamp to bypass cache
       }, 500); // Small delay to ensure backend has completed
@@ -1246,10 +1177,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const numericId = extractNumericId(product.productId || product.id);
       const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
       
-      console.log(`[BULK-EDIT-RENDER] Product: "${product.title}", ID: ${product.id}, Type: ${typeof product.id}`);
-      console.log(`[BULK-EDIT-RENDER] Optimized Languages:`, optimizedLanguages);
-      console.log(`[BULK-EDIT-RENDER] Selected Items:`, selectedItems);
-      console.log(`[BULK-EDIT-RENDER] Is Selected:`, selectedItems.includes(product.id));
       
 
       
@@ -1275,12 +1202,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         media={media}
         accessibilityLabel={`View details for ${product.title}`}
         onClick={(e) => {
-          console.log('[ResourceItem] ===== CLICK ON RESOURCE ITEM =====');
-          console.log('[ResourceItem] e.target:', e.target);
-          console.log('[ResourceItem] e.target.tagName:', e.target.tagName);
-          console.log('[ResourceItem] e.target.closest("input"):', e.target.closest('input'));
-          console.log('[ResourceItem] e.target.closest("a"):', e.target.closest('a'));
-          console.log('[ResourceItem] Event bubbling up...');
         }}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
@@ -1292,16 +1213,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
             <InlineStack gap="100">
               {(() => {
-                // console.log(`[BULK-EDIT] Rendering badges for "${product.title}"`);
-                // console.log(`[BULK-EDIT] availableLanguages.length:`, availableLanguages.length);
-                // console.log(`[BULK-EDIT] availableLanguages:`, availableLanguages);
-                // console.log(`[BULK-EDIT] optimizedLanguages:`, optimizedLanguages);
                 
                 if (availableLanguages.length > 0) {
-                  // console.log(`[BULK-EDIT] Using availableLanguages.map`);
                   return availableLanguages.map(lang => {
                     const isOptimized = optimizedLanguages.includes(lang);
-                    // console.log(`[BULK-EDIT] Language ${lang}: optimized=${isOptimized}`);
                     return (
                       <Badge
                         key={lang}
@@ -1313,7 +1228,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     );
                   });
                 } else {
-                  console.log(`[BULK-EDIT] Using fallback optimizedLanguages.map`);
                   return optimizedLanguages.map(lang => (
                     <Badge
                       key={lang}

@@ -59,17 +59,10 @@ export default function StoreMetadata({ shop: shopProp }) {
   }, [shop, api]);
 
   async function loadStoreData() {
-    console.log('[StoreMeta] LOAD - Start');
     setLoading(true);
     try {
       const url = `/api/store/generate?shop=${encodeURIComponent(shop)}`;
-      console.log('[StoreMeta] LOAD - Fetching from', url);
       const data = await api(url, { headers: { 'X-Shop': shop } });
-      console.log('[StoreMeta] LOAD - Received data', { 
-        hasExisting: !!data.existingMetadata,
-        existingKeys: Object.keys(data.existingMetadata || {}),
-        shopifyDefaults: data.shopifyDefaults 
-      });
       
       setStoreData(data);
       
@@ -91,12 +84,6 @@ export default function StoreMetadata({ shop: shopProp }) {
       const displayStoreName = customStoreName || data.shopifyDefaults?.storeName || '';
       const displayShortDescription = customShortDescription || data.shopifyDefaults?.homePageTitle || '';
       const displayFullDescription = customFullDescription || data.shopifyDefaults?.metaDescription || '';
-      
-      console.log('[StoreMeta] LOAD - Display values', {
-        displayStoreName,
-        displayShortDescription,
-        displayFullDescription
-      });
       
       // Провери за разлики
       const storeNameDifferent = customStoreName && customStoreName !== data.shopifyDefaults?.storeName;
@@ -135,7 +122,6 @@ export default function StoreMetadata({ shop: shopProp }) {
         // localBusinessSchema: existing.local_business_schema?.value || prev.localBusinessSchema // DISABLED
       };
       
-      console.log('[StoreMeta] LOAD - Setting formData', newFormData);
       setFormData(newFormData);
       
     } catch (error) {
@@ -164,7 +150,6 @@ export default function StoreMetadata({ shop: shopProp }) {
     setLoading(true);
     try {
       const url = `/api/store/ai-generate?shop=${encodeURIComponent(shop)}`;
-      console.log('[StoreMeta] POST', url);
       const data = await api(url, {
         method: 'POST',
         headers: { 'X-Shop': shop },
@@ -174,7 +159,6 @@ export default function StoreMetadata({ shop: shopProp }) {
           targetAudience: formData.aiMetadata.targetAudience
         }
       });
-      console.log('[StoreMeta] POST ok', { url, keys: Object.keys(data || {}) });
       
       // Update form with generated data
       if (data.metadata) {
@@ -215,7 +199,6 @@ export default function StoreMetadata({ shop: shopProp }) {
       };
       
       const url = `/api/store/apply?shop=${encodeURIComponent(shop)}`;
-      console.log('[StoreMeta] SAVE', url);
       const data = await api(url, {
         method: 'POST',
         headers: { 'X-Shop': shop },
@@ -229,7 +212,6 @@ export default function StoreMetadata({ shop: shopProp }) {
           }
         }
       });
-      console.log('[StoreMeta] SAVE ok', { url, ok: data?.ok });
       
       setToast('Metadata saved successfully!');
       await loadStoreData(); // Reload за да обновим hasShopifyChanges
@@ -276,11 +258,6 @@ export default function StoreMetadata({ shop: shopProp }) {
       const previewData = result.data?.storeMetadata;
       if (previewData) {
         const previewWindow = window.open('', '_blank');
-        
-        console.log('[STORE-METADATA] Raw preview data:', previewData);
-        console.log('[STORE-METADATA] seoMetadata raw:', previewData.seoMetadata);
-        console.log('[STORE-METADATA] aiMetadata raw:', previewData.aiMetadata);
-        console.log('[STORE-METADATA] organizationSchema raw:', previewData.organizationSchema);
         
         // Format the data for better readability
         const formattedData = {
@@ -368,7 +345,6 @@ export default function StoreMetadata({ shop: shopProp }) {
 
   // Clear all metadata function
   async function handleClear() {
-    console.log('[StoreMeta] CLEAR - Start', { formData });
     setClearing(true);
     try {
       const emptyData = {
@@ -406,18 +382,14 @@ export default function StoreMetadata({ shop: shopProp }) {
         // } // DISABLED
       };
       
-      console.log('[StoreMeta] CLEAR - Setting formData to empty', { emptyData });
       // Reset form to empty state
       setFormData(emptyData);
       
-      console.log('[StoreMeta] CLEAR - Calling handleSave');
       // Save empty data to clear from backend/preview
       await handleSave();
       
-      console.log('[StoreMeta] CLEAR - Save complete, reloading data');
       await loadStoreData();
       
-      console.log('[StoreMeta] CLEAR - Complete');
       setToast('Metadata cleared successfully!');
       
     } catch (error) {
