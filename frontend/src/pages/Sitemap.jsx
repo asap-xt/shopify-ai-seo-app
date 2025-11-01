@@ -17,6 +17,23 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
+// Helper: Get plan limits dynamically
+const getPlanLimits = (planName) => {
+  const normalized = (planName || 'starter').toLowerCase().replace(/\s+/g, '_');
+  
+  const limits = {
+    starter: { products: 100, languages: 1 },
+    professional: { products: 250, languages: 2 },
+    professional_plus: { products: 250, languages: 2 },
+    growth: { products: 700, languages: 3 },
+    growth_plus: { products: 700, languages: 3 },
+    growth_extra: { products: 1000, languages: 6 },
+    enterprise: { products: 2500, languages: 10 }
+  };
+  
+  return limits[normalized] || limits.starter;
+};
+
 export default function SitemapPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   const [info, setInfo] = useState(null);
@@ -185,29 +202,16 @@ export default function SitemapPage({ shop: shopProp }) {
             <p>
               Your {plan?.plan || 'Starter'} plan includes up to{' '}
               <strong>
-                {plan?.plan === 'Starter' ? '100 products in 1 language'
-                  : plan?.plan === 'Professional' ? '250 products in up to 2 languages'
-                  : plan?.plan === 'Growth' ? '700 products in up to 3 languages'
-                  : plan?.plan === 'Growth Extra' ? '1,000 products in up to 6 languages'
-                  : plan?.plan === 'Enterprise' ? '2,500 products in up to 10 languages'
-                  : '100 products in 1 language'}
+                {(() => {
+                  const limits = getPlanLimits(plan?.plan);
+                  return `${limits.products.toLocaleString()} products in up to ${limits.languages} language${limits.languages > 1 ? 's' : ''}`;
+                })()}
               </strong>
               .
               {info?.productCount &&
-                (info.productCount >
-                  (plan?.plan === 'Starter' ? 100
-                    : plan?.plan === 'Professional' ? 250
-                    : plan?.plan === 'Growth' ? 700
-                    : plan?.plan === 'Growth Extra' ? 1000
-                    : plan?.plan === 'Enterprise' ? 2500
-                    : 100)) && (
+                (info.productCount > getPlanLimits(plan?.plan).products) && (
                   <> You have {info.productCount} products, so only the first{' '}
-                    {plan?.plan === 'Starter' ? 100
-                      : plan?.plan === 'Professional' ? 250
-                      : plan?.plan === 'Growth' ? 700
-                      : plan?.plan === 'Growth Extra' ? 1000
-                      : plan?.plan === 'Enterprise' ? 2500
-                      : 100}{' '}
+                    {getPlanLimits(plan?.plan).products.toLocaleString()}{' '}
                     will be included in the sitemap.</>
                 )}
             </p>

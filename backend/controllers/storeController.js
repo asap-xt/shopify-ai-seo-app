@@ -230,8 +230,13 @@ router.get('/generate', validateRequest(), async (req, res) => {
     
     console.log('[STORE-DEBUG] markets:', markets);
     console.log('[STORE-DEBUG] plan.plan:', plan.plan);
+    
+    // Normalize plan name for comparison (handle spaces and underscores)
+    const normalizedPlan = (plan.plan || '').toLowerCase().replace(/\s+/g, '_');
+    const allowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    
     console.log('[STORE-DEBUG] features:', {
-      organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
+      organizationSchema: allowedPlans.includes(normalizedPlan),
       // localBusinessSchema: plan.plan.toLowerCase() === 'enterprise' // DISABLED - not relevant for online stores
     });
     
@@ -304,7 +309,7 @@ router.get('/generate', validateRequest(), async (req, res) => {
       existingMetadata: metafields,
       plan: plan.plan,
       features: {
-        organizationSchema: ['professional', 'growth', 'growth extra', 'enterprise'].includes(plan.plan.toLowerCase()),
+        organizationSchema: allowedPlans.includes(normalizedPlan),
         // localBusinessSchema: plan.plan.toLowerCase() === 'enterprise' // DISABLED - not relevant for online stores
       }
     });
