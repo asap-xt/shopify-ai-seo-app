@@ -26,12 +26,6 @@ function toGID(productId) {
 // POST /api/seo/generate-multi
 // Body: { shop, productId, model, languages: ['en','it','el', ...] }
 router.post('/generate-multi', validateRequest(), async (req, res) => {
-  console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -42,36 +36,11 @@ router.post('/generate-multi', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop not provided' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[MULTI-SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
-    console.log('[MULTI-SEO/DEBUG] ===== REQUEST DEBUG START =====');
-    console.log('[MULTI-SEO/DEBUG] req.body:', JSON.stringify(req.body, null, 2));
-    console.log('[MULTI-SEO/DEBUG] req.query:', JSON.stringify(req.query, null, 2));
-    console.log('[MULTI-SEO/DEBUG] req.shopDomain:', req.shopDomain);
-    console.log('[MULTI-SEO/DEBUG] res.locals.shopify:', res.locals?.shopify);
-    
     const shopDomain = req.shopDomain;
     const { productId: pid, model, languages } = req.body || {};
     
-    console.log('[MULTI-SEO/DEBUG] Extracted values:');
-    console.log('[MULTI-SEO/DEBUG] - shopDomain:', shopDomain);
-    console.log('[MULTI-SEO/DEBUG] - productId (pid):', pid);
-    console.log('[MULTI-SEO/DEBUG] - model:', model);
-    console.log('[MULTI-SEO/DEBUG] - languages:', languages);
-    console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
-    console.log('[MULTI-SEO/DEBUG] - languages length:', languages?.length);
-    
     if (!pid || !model || !model.trim() || !Array.isArray(languages) || languages.length === 0) {
-      console.log('[MULTI-SEO/DEBUG] ===== VALIDATION FAILED =====');
-      console.log('[MULTI-SEO/DEBUG] Missing values check:');
-      console.log('[MULTI-SEO/DEBUG] - pid exists:', !!pid);
-      console.log('[MULTI-SEO/DEBUG] - model exists:', !!model);
-      console.log('[MULTI-SEO/DEBUG] - model is not empty:', model && model.trim());
-      console.log('[MULTI-SEO/DEBUG] - languages is array:', Array.isArray(languages));
-      console.log('[MULTI-SEO/DEBUG] - languages has length:', languages?.length > 0);
       return res.status(400).json({ error: 'Missing productId, model or languages[]' });
     }
     const productId = toGID(String(pid));
@@ -121,13 +90,6 @@ router.post('/generate-multi', validateRequest(), async (req, res) => {
 // POST /api/seo/apply-multi
 // Body: { shop, productId, results: [{ language, seo }...], options }
 router.post('/apply-multi', validateRequest(), async (req, res) => {
-  console.log('[MULTI-SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-  console.log('[MULTI-SEO/APPLY] Full req.body:', JSON.stringify(req.body, null, 2));
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -138,20 +100,11 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop not provided' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[MULTI-SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
     const shop = req.shopDomain;
-    console.log('[MULTI-SEO/APPLY] req.shopDomain:', shop);
-    console.log('[MULTI-SEO/APPLY] req.body:', req.body);
-    
     const { productId: pid, results, options = {} } = req.body || {};
-    console.log('[MULTI-SEO/APPLY] Extracted:', { pid, results: results?.length, options });
     
     if (!pid || !Array.isArray(results) || results.length === 0) {
-      console.log('[MULTI-SEO/APPLY] Validation failed:', { pid: !!pid, results: Array.isArray(results), length: results?.length });
       return res.status(400).json({ error: 'Missing productId or results[]' });
     }
     const productId = toGID(String(pid));
@@ -167,8 +120,6 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         continue;
       }
       try {
-        console.log(`[MULTI-SEO] Processing language ${r.language}`);
-        
         // 🚨 IMPORTANT: Do NOT provide fallback values like 'Product' or '<p>Product</p>'
         // These fallback values would overwrite the real product title/description!
         // Only pass through the actual SEO data that was generated
@@ -179,7 +130,6 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
         // Import the apply function directly instead of making HTTP request
         const { applySEOForLanguage } = await import('./seoController.js');
         const result = await applySEOForLanguage(req, shop, productId, completeSeo, r.language, options);
-        console.log(`[MULTI-SEO] Apply result for ${r.language}:`, result?.ok ? 'SUCCESS' : 'FAILED', result);
         if (!result?.ok) {
           const err = result?.errors?.join('; ') || result?.error || 'Apply failed';
           errors.push(`[${r.language}] ${err}`);
@@ -239,8 +189,6 @@ router.post('/delete-multi', async (req, res) => {
           errors.push(`[${lang}] ${json.error || `Delete failed (${rsp.status})`}`);
         } else {
           deleted.push(lang);
-          console.log('[DELETE-MULTI] Languages actually deleted:', deleted);
-          console.log('[DELETE-MULTI] Delete response from backend:', json);
         }
       } catch (e) {
         errors.push(`[${lang}] ${e.message}`);
