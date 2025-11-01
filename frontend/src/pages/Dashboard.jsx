@@ -392,164 +392,7 @@ export default function Dashboard({ shop: shopProp }) {
 
   return (
     <Layout>
-      {/* Sync Banner - Inline, not blocking */}
-      {isFirstLoad && (
-        <Layout.Section>
-          <Banner
-            title="Sync your store"
-            tone="info"
-            action={{
-              content: syncing ? 'Syncing...' : 'Sync Now',
-              onAction: handleSync,
-              loading: syncing
-            }}
-          >
-            <BlockStack gap="200">
-              <Text>Sync products, collections, languages, and markets to get started with AI optimization.</Text>
-              {syncing && (
-                <Box paddingBlockStart="200">
-                  <ProgressBar progress={50} size="small" tone="highlight" />
-                  <Box paddingBlockStart="100">
-                    <Text variant="bodySm" tone="subdued">Fetching store data...</Text>
-                  </Box>
-                </Box>
-              )}
-            </BlockStack>
-          </Banner>
-        </Layout.Section>
-      )}
-      
-      {/* Sync Status for subsequent loads */}
-      {!isFirstLoad && syncStatus && (
-        <Layout.Section>
-          <Card>
-            {autoSync && !isExpanded ? (
-              // Collapsed view when auto-sync is enabled
-              <InlineStack align="space-between" blockAlign="center" gap="400">
-                <InlineStack gap="200" blockAlign="center">
-                  <Badge tone="success">Auto-sync enabled</Badge>
-                  <Text variant="bodySm" tone="subdued">
-                    Last synced: {syncStatus.lastSyncDate ? 
-                      new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) 
-                      : 'Never'}
-                  </Text>
-                </InlineStack>
-                <InlineStack gap="200">
-                  <Button 
-                    onClick={handleSync} 
-                    loading={syncing}
-                    size="slim"
-                  >
-                    Sync Now
-                  </Button>
-                  <Button 
-                    onClick={() => setIsExpanded(!isExpanded)} 
-                    size="slim"
-                    variant="plain"
-                  >
-                    Settings
-                  </Button>
-                </InlineStack>
-              </InlineStack>
-            ) : (
-              // Full view when auto-sync is disabled
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <div>
-                    <Text variant="bodyMd" fontWeight="semibold">Store Sync</Text>
-                    <Box paddingBlockStart="050">
-                      <Text variant="bodySm" tone="subdued">
-                        Last synced: {syncStatus.lastSyncDate ? 
-                          new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) 
-                          : 'Never'}
-                      </Text>
-                    </Box>
-                  </div>
-                  <InlineStack gap="200">
-                    <Button 
-                      onClick={handleSync} 
-                      loading={syncing}
-                    >
-                      Sync Now
-                    </Button>
-                    <Button 
-                      onClick={() => setIsExpanded(false)} 
-                      variant="plain"
-                    >
-                      Close
-                    </Button>
-                  </InlineStack>
-                </InlineStack>
-                
-                <Divider />
-                
-                <Checkbox
-                  label="Auto-sync on load"
-                  checked={autoSync}
-                  onChange={handleAutoSyncToggle}
-                  helpText="Automatically sync store data when you open the dashboard"
-                />
-              </BlockStack>
-            )}
-          </Card>
-        </Layout.Section>
-      )}
-
-      {/* Plan Upgrade Recommendation */}
-      {recommendation && !dismissedUpgradeBanner && (
-        <Layout.Section>
-          <Banner
-            title={`Upgrade to ${recommendation.planName} Plan`}
-            tone="warning"
-            action={{
-              content: 'View Plans',
-              onAction: () => navigate('/billing')
-            }}
-            onDismiss={handleDismissUpgradeBanner}
-          >
-            <BlockStack gap="200">
-              <Text>{recommendation.reason}</Text>
-              <Text variant="bodySm" tone="subdued">
-                The {recommendation.planName} plan supports up to {recommendation.productLimit} products 
-                in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} 
-                for ${recommendation.price}/month.
-              </Text>
-            </BlockStack>
-          </Banner>
-        </Layout.Section>
-      )}
-
-      {/* Token Purchase Recommendation */}
-      {shouldRecommendTokens && !dismissedTokenBanner && (
-        <Layout.Section>
-          <Banner
-            title="Buy Tokens to Unlock AI Features"
-            tone="info"
-            action={{
-              content: 'Buy Tokens',
-              onAction: () => navigate('/billing')
-            }}
-            onDismiss={handleDismissTokenBanner}
-          >
-            <Text>
-              Your current plan uses pay-per-use tokens. Purchase tokens to access AI-enhanced optimization features 
-              like SEO generation, bulk editing, and AI Discovery.
-            </Text>
-          </Banner>
-        </Layout.Section>
-      )}
-
-      {/* Onboarding Accordion - Moved to top */}
+      {/* Onboarding Accordion - Top priority */}
       <Layout.Section>
         <Card>
           <BlockStack gap="300">
@@ -716,6 +559,163 @@ export default function Dashboard({ shop: shopProp }) {
           </BlockStack>
         </Card>
       </Layout.Section>
+
+      {/* Sync Banner - Inline, not blocking */}
+      {isFirstLoad && (
+        <Layout.Section>
+          <Banner
+            title="Sync your store"
+            tone="info"
+            action={{
+              content: syncing ? 'Syncing...' : 'Sync Now',
+              onAction: handleSync,
+              loading: syncing
+            }}
+          >
+            <BlockStack gap="200">
+              <Text>Sync products, collections, languages, and markets to get started with AI optimization.</Text>
+              {syncing && (
+                <Box paddingBlockStart="200">
+                  <ProgressBar progress={50} size="small" tone="highlight" />
+                  <Box paddingBlockStart="100">
+                    <Text variant="bodySm" tone="subdued">Fetching store data...</Text>
+                  </Box>
+                </Box>
+              )}
+            </BlockStack>
+          </Banner>
+        </Layout.Section>
+      )}
+      
+      {/* Sync Status for subsequent loads */}
+      {!isFirstLoad && syncStatus && (
+        <Layout.Section>
+          <Card>
+            {autoSync && !isExpanded ? (
+              // Collapsed view when auto-sync is enabled
+              <InlineStack align="space-between" blockAlign="center" gap="400">
+                <InlineStack gap="200" blockAlign="center">
+                  <Badge tone="success">Auto-sync enabled</Badge>
+                  <Text variant="bodySm" tone="subdued">
+                    Last synced: {syncStatus.lastSyncDate ? 
+                      new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) 
+                      : 'Never'}
+                  </Text>
+                </InlineStack>
+                <InlineStack gap="200">
+                  <Button 
+                    onClick={handleSync} 
+                    loading={syncing}
+                    size="slim"
+                  >
+                    Sync Now
+                  </Button>
+                  <Button 
+                    onClick={() => setIsExpanded(!isExpanded)} 
+                    size="slim"
+                    variant="plain"
+                  >
+                    Settings
+                  </Button>
+                </InlineStack>
+              </InlineStack>
+            ) : (
+              // Full view when auto-sync is disabled
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <div>
+                    <Text variant="bodyMd" fontWeight="semibold">Store Sync</Text>
+                    <Box paddingBlockStart="050">
+                      <Text variant="bodySm" tone="subdued">
+                        Last synced: {syncStatus.lastSyncDate ? 
+                          new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) 
+                          : 'Never'}
+                      </Text>
+                    </Box>
+                  </div>
+                  <InlineStack gap="200">
+                    <Button 
+                      onClick={handleSync} 
+                      loading={syncing}
+                    >
+                      Sync Now
+                    </Button>
+                    <Button 
+                      onClick={() => setIsExpanded(false)} 
+                      variant="plain"
+                    >
+                      Close
+                    </Button>
+                  </InlineStack>
+                </InlineStack>
+                
+                <Divider />
+                
+                <Checkbox
+                  label="Auto-sync on load"
+                  checked={autoSync}
+                  onChange={handleAutoSyncToggle}
+                  helpText="Automatically sync store data when you open the dashboard"
+                />
+              </BlockStack>
+            )}
+          </Card>
+        </Layout.Section>
+      )}
+
+      {/* Plan Upgrade Recommendation */}
+      {recommendation && !dismissedUpgradeBanner && (
+        <Layout.Section>
+          <Banner
+            title={`Upgrade to ${recommendation.planName} Plan`}
+            tone="warning"
+            action={{
+              content: 'View Plans',
+              onAction: () => navigate('/billing')
+            }}
+            onDismiss={handleDismissUpgradeBanner}
+          >
+            <BlockStack gap="200">
+              <Text>{recommendation.reason}</Text>
+              <Text variant="bodySm" tone="subdued">
+                The {recommendation.planName} plan supports up to {recommendation.productLimit} products 
+                in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} 
+                for ${recommendation.price}/month.
+              </Text>
+            </BlockStack>
+          </Banner>
+        </Layout.Section>
+      )}
+
+      {/* Token Purchase Recommendation */}
+      {shouldRecommendTokens && !dismissedTokenBanner && (
+        <Layout.Section>
+          <Banner
+            title="Buy Tokens to Unlock AI Features"
+            tone="info"
+            action={{
+              content: 'Buy Tokens',
+              onAction: () => navigate('/billing')
+            }}
+            onDismiss={handleDismissTokenBanner}
+          >
+            <Text>
+              Your current plan uses pay-per-use tokens. Purchase tokens to access AI-enhanced optimization features 
+              like SEO generation, bulk editing, and AI Discovery.
+            </Text>
+          </Banner>
+        </Layout.Section>
+      )}
 
       {/* Two columns: Left = Products & Collections + Current Plan; Right = Languages & Markets + Last Optimization + Token Balance */}
       <Layout.Section>
