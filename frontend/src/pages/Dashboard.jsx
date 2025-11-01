@@ -49,8 +49,16 @@ export default function Dashboard({ shop: shopProp }) {
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
-  // Onboarding state
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  // Onboarding state - open by default, persist in localStorage
+  const [onboardingOpen, setOnboardingOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`onboardingOpen_${shop}`);
+      // If never set before, default to true (open)
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true; // Default open if localStorage fails
+    }
+  });
   
   // Dismissed banners state (persist in localStorage)
   const [dismissedUpgradeBanner, setDismissedUpgradeBanner] = useState(() => {
@@ -354,6 +362,17 @@ export default function Dashboard({ shop: shopProp }) {
     }
   };
 
+  // Handle onboarding toggle with localStorage persistence
+  const handleOnboardingToggle = () => {
+    const newState = !onboardingOpen;
+    setOnboardingOpen(newState);
+    try {
+      localStorage.setItem(`onboardingOpen_${shop}`, String(newState));
+    } catch (error) {
+      console.error('[Dashboard] Error saving onboarding state:', error);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -530,167 +549,14 @@ export default function Dashboard({ shop: shopProp }) {
         </Layout.Section>
       )}
 
-      {/* Two columns: Left = Products & Collections + Current Plan; Right = Languages & Markets + Last Optimization + Token Balance */}
-      <Layout.Section>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-          {/* LEFT COLUMN */}
-          <div style={{ display: 'grid', gap: 16 }}>
-            {/* Products & Collections Card */}
-            <Card>
-              <BlockStack gap="400">
-                <Text variant="headingMd">Products & Collections</Text>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                  {/* Products Section */}
-                  <BlockStack gap="150">
-                    <Text variant="bodyMd" fontWeight="semibold">Products</Text>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Total</Text>
-                      <Text variant="bodySm" fontWeight="semibold">{stats?.products?.total || 0}</Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Optimized</Text>
-                      <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.products?.optimized || 0}</Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Unoptimized</Text>
-                      <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.products?.total || 0) - (stats?.products?.optimized || 0), 0)}</Text>
-                    </InlineStack>
-                    <Box paddingBlockStart="100">
-                      <ProgressBar progress={productOptimizationPercent} size="small" tone={productOptimizationPercent === 100 ? 'success' : 'primary'} />
-                      <Box paddingBlockStart="050">
-                        <Text variant="bodySm" tone="subdued">{productOptimizationPercent}% optimized</Text>
-                      </Box>
-                    </Box>
-                  </BlockStack>
-                  {/* Collections Section */}
-                  <BlockStack gap="150">
-                    <Text variant="bodyMd" fontWeight="semibold">Collections</Text>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Total</Text>
-                      <Text variant="bodySm" fontWeight="semibold">{stats?.collections?.total || 0}</Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Optimized</Text>
-                      <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.collections?.optimized || 0}</Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">Unoptimized</Text>
-                      <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.collections?.total || 0) - (stats?.collections?.optimized || 0), 0)}</Text>
-                    </InlineStack>
-                    <Box paddingBlockStart="100">
-                      <ProgressBar progress={collectionOptimizationPercent} size="small" tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'} />
-                      <Box paddingBlockStart="050">
-                        <Text variant="bodySm" tone="subdued">{collectionOptimizationPercent}% optimized</Text>
-                      </Box>
-                    </Box>
-                  </BlockStack>
-                </div>
-                <Divider />
-                <InlineStack align="space-between">
-                  <Text variant="bodySm" tone="subdued">Last synced: {syncStatus?.lastSyncDate ? new Date(syncStatus.lastSyncDate).toLocaleString() : 'Never'}</Text>
-                </InlineStack>
-              </BlockStack>
-            </Card>
-
-            {/* Current Plan */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <div>
-                    <Text variant="headingMd">Current Plan</Text>
-                    <Box paddingBlockStart="100">
-                      <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
-                    </Box>
-                  </div>
-                  <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
-                </InlineStack>
-                <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
-              </BlockStack>
-            </Card>
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div style={{ display: 'grid', gap: 16 }}>
-            {/* Languages & Markets Card */}
-            <Card>
-      <BlockStack gap="400">
-                <Text variant="headingMd">Languages & Markets</Text>
-                <BlockStack gap="200">
-                  {stats?.languages && stats.languages.length > 0 ? (
-                    <>
-                      {stats.languages
-                        .slice()
-                        .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (b.totalCount || 0) - (a.totalCount || 0))
-                        .slice(0, 3)
-                        .map((lang, idx) => {
-                          const pct = lang.totalCount > 0 ? Math.round((lang.optimizedCount / lang.totalCount) * 100) : 0;
-                          return (
-                            <BlockStack key={idx} gap="050">
-                              <InlineStack align="space-between">
-                                <Text variant="bodyMd" tone="subdued">{lang.name || lang.code} {lang.primary ? '★' : ''}</Text>
-                                <Text variant="bodySm" fontWeight="semibold">{lang.optimizedCount || 0}/{lang.totalCount || 0}</Text>
-                              </InlineStack>
-                              <ProgressBar progress={pct} size="small" tone={pct === 100 ? 'success' : 'primary'} />
-                            </BlockStack>
-                          );
-                        })}
-                      {stats.languages.length > 3 && (
-                        <Text variant="bodySm" tone="subdued">+{stats.languages.length - 3} more...</Text>
-                      )}
-                    </>
-                  ) : (
-                    <Text variant="bodyMd" tone="subdued">No language data</Text>
-                  )}
-                </BlockStack>
-                {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
-                  <Box paddingBlockStart="200">
-                    <Divider />
-                    <Box paddingBlockStart="200">
-                      <Text variant="bodySm" tone="subdued">Markets: {stats.storeMarkets.slice(0, 2).map(m => m.name).join(', ')}{stats.storeMarkets.length > 2 ? ` +${stats.storeMarkets.length - 2}` : ''}</Text>
-                    </Box>
-                  </Box>
-                )}
-              </BlockStack>
-            </Card>
-
-            {/* Last Optimization */}
-            <Card>
-              <BlockStack gap="300">
-                <Text variant="headingMd">Last Optimization</Text>
-                <Text variant="bodyLg" fontWeight="semibold">
-                  {stats?.lastOptimization ? new Date(stats.lastOptimization).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
-                </Text>
-                <Button onClick={() => navigate('/ai-seo/products')}>Optimize Now</Button>
-              </BlockStack>
-            </Card>
-
-            {/* Token Balance */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <Text variant="headingMd">Token Balance</Text>
-                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
-                {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
-                  <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
-                )}
-                <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
-              </BlockStack>
-            </Card>
-          </div>
-        </div>
-      </Layout.Section>
-
-      {/* Quick Actions removed */}
-
-      {/* Removed extra wide Current Plan card */}
-      
-      {/* Onboarding Accordion */}
+      {/* Onboarding Accordion - Moved to top */}
       <Layout.Section>
         <Card>
           <BlockStack gap="300">
             <InlineStack align="space-between" blockAlign="center">
               <Text variant="headingMd">Getting Started</Text>
               <Button
-                onClick={() => setOnboardingOpen(!onboardingOpen)}
+                onClick={handleOnboardingToggle}
                 disclosure={onboardingOpen ? 'up' : 'down'}
               >
                 {onboardingOpen ? 'Hide' : 'Show'} Guide
@@ -850,6 +716,156 @@ export default function Dashboard({ shop: shopProp }) {
           </BlockStack>
         </Card>
       </Layout.Section>
+
+      {/* Two columns: Left = Products & Collections + Current Plan; Right = Languages & Markets + Last Optimization + Token Balance */}
+      <Layout.Section>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {/* LEFT COLUMN */}
+          <div style={{ display: 'grid', gap: 16 }}>
+            {/* Products & Collections Card */}
+            <Card>
+              <BlockStack gap="400">
+                <Text variant="headingMd">Products & Collections</Text>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  {/* Products Section */}
+                  <BlockStack gap="150">
+                    <Text variant="bodyMd" fontWeight="semibold">Products</Text>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Total</Text>
+                      <Text variant="bodySm" fontWeight="semibold">{stats?.products?.total || 0}</Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Optimized</Text>
+                      <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.products?.optimized || 0}</Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Unoptimized</Text>
+                      <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.products?.total || 0) - (stats?.products?.optimized || 0), 0)}</Text>
+                    </InlineStack>
+                    <Box paddingBlockStart="100">
+                      <ProgressBar progress={productOptimizationPercent} size="small" tone={productOptimizationPercent === 100 ? 'success' : 'primary'} />
+                      <Box paddingBlockStart="050">
+                        <Text variant="bodySm" tone="subdued">{productOptimizationPercent}% optimized</Text>
+                      </Box>
+                    </Box>
+                  </BlockStack>
+                  {/* Collections Section */}
+                  <BlockStack gap="150">
+                    <Text variant="bodyMd" fontWeight="semibold">Collections</Text>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Total</Text>
+                      <Text variant="bodySm" fontWeight="semibold">{stats?.collections?.total || 0}</Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Optimized</Text>
+                      <Text variant="bodySm" fontWeight="semibold" tone="success">{stats?.collections?.optimized || 0}</Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">Unoptimized</Text>
+                      <Text variant="bodySm" fontWeight="semibold">{Math.max((stats?.collections?.total || 0) - (stats?.collections?.optimized || 0), 0)}</Text>
+                    </InlineStack>
+                    <Box paddingBlockStart="100">
+                      <ProgressBar progress={collectionOptimizationPercent} size="small" tone={collectionOptimizationPercent === 100 ? 'success' : 'primary'} />
+                      <Box paddingBlockStart="050">
+                        <Text variant="bodySm" tone="subdued">{collectionOptimizationPercent}% optimized</Text>
+                      </Box>
+                    </Box>
+                  </BlockStack>
+                </div>
+                <Divider />
+                <InlineStack align="space-between">
+                  <Text variant="bodySm" tone="subdued">Last synced: {syncStatus?.lastSyncDate ? new Date(syncStatus.lastSyncDate).toLocaleString() : 'Never'}</Text>
+                </InlineStack>
+              </BlockStack>
+            </Card>
+
+            {/* Current Plan */}
+            <Card style={{ height: 220, minHeight: 220 }}>
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <div>
+                    <Text variant="headingMd">Current Plan</Text>
+                    <Box paddingBlockStart="100">
+                      <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
+                    </Box>
+                  </div>
+                  <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
+                </InlineStack>
+                <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
+              </BlockStack>
+            </Card>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div style={{ display: 'grid', gap: 16 }}>
+            {/* Languages & Markets Card */}
+            <Card>
+      <BlockStack gap="400">
+                <Text variant="headingMd">Languages & Markets</Text>
+                <BlockStack gap="200">
+                  {stats?.languages && stats.languages.length > 0 ? (
+                    <>
+                      {stats.languages
+                        .slice()
+                        .sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || (b.totalCount || 0) - (a.totalCount || 0))
+                        .slice(0, 3)
+                        .map((lang, idx) => {
+                          const pct = lang.totalCount > 0 ? Math.round((lang.optimizedCount / lang.totalCount) * 100) : 0;
+                          return (
+                            <BlockStack key={idx} gap="050">
+                              <InlineStack align="space-between">
+                                <Text variant="bodyMd" tone="subdued">{lang.name || lang.code} {lang.primary ? '★' : ''}</Text>
+                                <Text variant="bodySm" fontWeight="semibold">{lang.optimizedCount || 0}/{lang.totalCount || 0}</Text>
+                              </InlineStack>
+                              <ProgressBar progress={pct} size="small" tone={pct === 100 ? 'success' : 'primary'} />
+                            </BlockStack>
+                          );
+                        })}
+                      {stats.languages.length > 3 && (
+                        <Text variant="bodySm" tone="subdued">+{stats.languages.length - 3} more...</Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text variant="bodyMd" tone="subdued">No language data</Text>
+                  )}
+                </BlockStack>
+                {stats?.storeMarkets && stats.storeMarkets.length > 0 && (
+                  <Box paddingBlockStart="200">
+                    <Divider />
+                    <Box paddingBlockStart="200">
+                      <Text variant="bodySm" tone="subdued">Markets: {stats.storeMarkets.slice(0, 2).map(m => m.name).join(', ')}{stats.storeMarkets.length > 2 ? ` +${stats.storeMarkets.length - 2}` : ''}</Text>
+                    </Box>
+                  </Box>
+                )}
+              </BlockStack>
+            </Card>
+
+            {/* Last Optimization */}
+            <Card>
+              <BlockStack gap="300">
+                <Text variant="headingMd">Last Optimization</Text>
+                <Text variant="bodyLg" fontWeight="semibold">
+                  {stats?.lastOptimization ? new Date(stats.lastOptimization).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                </Text>
+                <Button onClick={() => navigate('/ai-seo/products')}>Optimize Now</Button>
+              </BlockStack>
+            </Card>
+
+            {/* Token Balance */}
+            <Card style={{ height: 220, minHeight: 220 }}>
+              <BlockStack gap="300">
+                <Text variant="headingMd">Token Balance</Text>
+                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
+                {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
+                  <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
+                )}
+                <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
+              </BlockStack>
+            </Card>
+          </div>
+        </div>
+      </Layout.Section>
+
     </Layout>
   );
 }
