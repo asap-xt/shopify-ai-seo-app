@@ -302,14 +302,17 @@ export async function fetchOpenRouterPricing() {
  */
 export async function calculateTokensWithDynamicPricing(usdAmount) {
   const tokenBudget = usdAmount * TOKEN_CONFIG.tokenBudgetPercent; // 30% goes to tokens
-  const ratePer1M = await fetchOpenRouterPricing();
-  const ratePerToken = ratePer1M / 1_000_000;
-  const tokens = Math.floor(tokenBudget / ratePerToken);
+  const ratePer1M = await fetchOpenRouterPricing(); // This is ALREADY in $ per 1M tokens
+  
+  // Calculate how many millions of tokens we can buy
+  const tokensInMillions = tokenBudget / ratePer1M;
+  const tokens = Math.floor(tokensInMillions * 1_000_000);
   
   console.log('[TokenConfig] Token calculation with dynamic pricing:', {
     usdAmount,
     tokenBudget,
     ratePer1M: `$${ratePer1M} per 1M`,
+    tokensInMillions: tokensInMillions.toFixed(2),
     tokens: tokens.toLocaleString()
   });
 
