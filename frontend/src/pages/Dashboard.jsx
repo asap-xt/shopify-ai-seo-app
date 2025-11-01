@@ -45,8 +45,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // New state for expanded view
-  const [syncCardClosed, setSyncCardClosed] = useState(false); // Track if user closed sync card
+  const [isExpanded, setIsExpanded] = useState(true); // Start expanded by default
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
@@ -589,14 +588,14 @@ export default function Dashboard({ shop: shopProp }) {
       )}
       
       {/* Sync Status for subsequent loads */}
-      {!isFirstLoad && syncStatus && !syncCardClosed && (
+      {!isFirstLoad && syncStatus && (
         <Layout.Section>
           <Card>
-            {autoSync && !isExpanded ? (
-              // Collapsed view when auto-sync is enabled
+            {!isExpanded ? (
+              // Collapsed view - shows compact info
               <InlineStack align="space-between" blockAlign="center" gap="400">
                 <InlineStack gap="200" blockAlign="center">
-                  <Badge tone="success">Auto-sync enabled</Badge>
+                  {autoSync && <Badge tone="success">Auto-sync enabled</Badge>}
                   <Text variant="bodySm" tone="subdued">
                     Last synced: {syncStatus.lastSyncDate ? 
                       new Date(syncStatus.lastSyncDate).toLocaleString('en-US', {
@@ -617,11 +616,11 @@ export default function Dashboard({ shop: shopProp }) {
                     Sync Now
                   </Button>
                   <Button 
-                    onClick={() => setIsExpanded(!isExpanded)} 
+                    onClick={() => setIsExpanded(true)} 
                     size="slim"
                     variant="plain"
                   >
-                    Settings
+                    Expand
                   </Button>
                 </InlineStack>
               </InlineStack>
@@ -652,10 +651,7 @@ export default function Dashboard({ shop: shopProp }) {
                       Sync Now
                     </Button>
                     <Button 
-                      onClick={() => {
-                        setIsExpanded(false);
-                        setSyncCardClosed(true);
-                      }} 
+                      onClick={() => setIsExpanded(false)} 
                       variant="plain"
                     >
                       Close
