@@ -145,7 +145,7 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   this.usage[reservationIndex].metadata.actualTokensUsed = actualTokensUsed;
   this.usage[reservationIndex].metadata.refunded = difference > 0 ? difference : 0;
   
-  // Refund or deduct the difference
+  // Refund or deduct the difference from balance
   if (difference > 0) {
     // Refund: actual was less than estimated
     this.balance += difference;
@@ -153,11 +153,11 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   } else if (difference < 0) {
     // Deduct more: actual was more than estimated (should rarely happen with 10% margin)
     this.balance += difference; // difference is negative, so this deducts
-    this.totalUsed += Math.abs(difference);
     console.warn(`[TokenBalance] Extra ${Math.abs(difference)} tokens deducted (exceeded estimate)`);
   }
   
-  // Update total used to reflect actual
+  // Update total used to reflect actual usage
+  // We add the actualTokensUsed because reserveTokens() doesn't update totalUsed
   this.totalUsed += actualTokensUsed;
   
   return this.save();
