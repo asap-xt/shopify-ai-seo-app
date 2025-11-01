@@ -453,8 +453,6 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const { collectionId, languages = [] } = req.body;
     
-    console.log(`[AI-ENHANCE] Starting for collection ${collectionId}, ${languages.length} language(s)`);
-    
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
