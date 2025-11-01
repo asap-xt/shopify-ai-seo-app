@@ -139,11 +139,18 @@ export default function Billing({ shop }) {
 
   // Calculate token value (matches backend calculation)
   // Policy: 30% of the amount buys tokens; uses real OpenRouter rate
-  // Gemini 2.5 Flash Lite: ~$0.10 per 1M tokens (80% input @ $0.075 + 20% output @ $0.30)
-  // Example: $10 → $3 for tokens → $3 / $0.10 per 1M = 30,000,000 tokens
+  // Gemini 2.5 Flash Lite via OpenRouter:
+  //   Input:  $0.10 per 1M tokens (80% of usage)
+  //   Output: $0.40 per 1M tokens (20% of usage)
+  //   Weighted average: $0.16 per 1M tokens
+  // Example: $10 → $3 for tokens → $3 / $0.16 per 1M = 18,750,000 tokens
   const calculateTokens = (usdAmount) => {
     const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (revenue split)
-    const ratePer1M = 0.10; // $0.10 per 1M tokens (Gemini 2.5 Flash Lite via OpenRouter) - ALREADY per 1M!
+    
+    // OpenRouter pricing for Gemini 2.5 Flash Lite:
+    // Input: $0.10 per 1M, Output: $0.40 per 1M
+    // Weighted (80% input, 20% output): $0.16 per 1M
+    const ratePer1M = 0.16; // Matches backend weighted rate
     
     // Calculate how many millions of tokens we can buy
     const tokensInMillions = tokenBudget / ratePer1M;
