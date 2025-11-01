@@ -22,18 +22,11 @@ export default async function productsWebhook(req, res) {
     // Parse webhook payload
     const payload = typeof req.body === 'object' && req.body !== null ? req.body : {};
     
-    console.log('[Webhook-Products] ===== PRODUCTS/UPDATE WEBHOOK =====');
-    console.log('[Webhook-Products] Topic:', topic);
-    console.log('[Webhook-Products] Shop:', shop);
-    console.log('[Webhook-Products] Product ID:', payload?.id);
-    console.log('[Webhook-Products] Product Title:', payload?.title);
-    
     // Respond immediately to Shopify (prevent timeout)
     res.status(200).send('ok');
     
     // Process webhook asynchronously
     if (!shop || !payload?.id) {
-      console.log('[Webhook-Products] Missing shop or product ID, skipping');
       return;
     }
     
@@ -55,58 +48,31 @@ export default async function productsWebhook(req, res) {
       let descriptionChanged = false;
       
       if (existingProduct) {
-        console.log('[Webhook-Products] Found existing product in MongoDB');
-        
         // 2. Compare with lastShopifyUpdate (if available) for accurate change detection
         // This prevents false positives when our app updates metafields (not product content)
         const referenceTitle = existingProduct.lastShopifyUpdate?.title || existingProduct.title;
         const referenceDescription = existingProduct.lastShopifyUpdate?.description || existingProduct.description;
         
-        console.log('[Webhook-Products] Reference title:', referenceTitle);
-        console.log('[Webhook-Products] Reference description:', referenceDescription?.substring(0, 100) + '...');
-        console.log('[Webhook-Products] New title:', payload.title);
-        console.log('[Webhook-Products] New description:', payload.body_html?.substring(0, 100) + '...');
-        
         // Detect if title or description changed from last known Shopify state
         titleChanged = referenceTitle !== payload.title;
         descriptionChanged = referenceDescription !== payload.body_html;
         
-        console.log('[Webhook-Products] Title changed:', titleChanged);
-        console.log('[Webhook-Products] Description changed:', descriptionChanged);
-        console.log('[Webhook-Products] Title comparison:', `"${referenceTitle}" !== "${payload.title}"`);
-        console.log('[Webhook-Products] Description comparison:', `"${referenceDescription?.substring(0, 50)}..." !== "${payload.body_html?.substring(0, 50)}..."`);
-        
         if (titleChanged || descriptionChanged) {
-          console.log('[Webhook-Products] 🚨 CONTENT CHANGED DETECTED!');
-          console.log('[Webhook-Products] Title changed:', titleChanged);
-          console.log('[Webhook-Products] Description changed:', descriptionChanged);
-          console.log('[Webhook-Products] Invalidating ALL SEO metafields...');
-          
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
           
           if (deleteResult.success) {
-            console.log(`[Webhook-Products] ✅ Deleted ${deleteResult.deletedCount} SEO metafields`);
-            
             // 4. Clear SEO status in MongoDB
             await clearSeoStatusInMongoDB(shop, numericProductId);
-            console.log('[Webhook-Products] ✅ Cleared SEO status in MongoDB');
-            console.log('[Webhook-Products] Product now appears as unoptimized and ready for new SEO generation');
           } else {
             console.error('[Webhook-Products] ❌ Failed to delete metafields:', deleteResult.errors);
           }
-        } else {
-          console.log('[Webhook-Products] No content changes detected, skipping SEO invalidation');
-          console.log('[Webhook-Products] (Only price, inventory, images, or other non-content fields changed)');
         }
-      } else {
-        console.log('[Webhook-Products] Product not found in MongoDB (new product or first sync)');
       }
       
       // 5. Update MongoDB with new product data for future comparisons
       // This ensures we have the latest title/description stored
       // IMPORTANT: Update lastShopifyUpdate AFTER we've checked for changes
-      console.log('[Webhook-Products] Updating MongoDB with new product data...');
       
       // Store whether content changed for proper lastShopifyUpdate update
       const contentChanged = titleChanged || descriptionChanged;
@@ -152,17 +118,14 @@ export default async function productsWebhook(req, res) {
         },
         { upsert: true, new: true }
       );
-      console.log('[Webhook-Products] ✅ MongoDB updated successfully (including lastShopifyUpdate reference)');
       
       // 6. Invalidate Redis cache for this shop's products
       // This ensures frontend immediately sees the updated product status
-      console.log('[Webhook-Products] Invalidating Redis cache for shop:', shop);
       // Delete both old format (products:shop:*) and new format (products:*:shop)
       await cacheService.delPattern(`products:${shop}:*`);
       await cacheService.delPattern(`products:*:${shop}`);
       await cacheService.delPattern(`products:${shop}*`);
       await cacheService.del(`stats:${shop}`);
-      console.log('[Webhook-Products] ✅ Redis cache invalidated for shop products');
       
     } catch (err) {
       console.error('[Webhook-Products] Error processing webhook:', err?.message || err);
