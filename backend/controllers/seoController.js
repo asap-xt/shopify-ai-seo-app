@@ -23,12 +23,6 @@ export async function getPlansMeForShop(app, shop) {
 
   // 1. First check Subscription (this is the truth)
   let subscription = await Subscription.findOne({ shop });
-  console.log('[PLANS-DEBUG] Found subscription:', subscription ? {
-    shop: subscription.shop,
-    plan: subscription.plan,
-    queryLimit: subscription.queryLimit,
-    productLimit: subscription.productLimit
-  } : 'No subscription found');
   
   // 2. If no subscription, create trial
   if (!subscription) {
@@ -54,7 +48,6 @@ export async function getPlansMeForShop(app, shop) {
   try {
     const override = app?.locals?.planOverrides?.get?.(shop);
     if (override) {
-      console.log(`[TEST] Using plan override: ${shop} -> ${override}`);
       plan = override;
     }
   } catch (e) {
@@ -213,49 +206,27 @@ import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
 
 // Resolve Admin token using centralized function
 async function resolveAdminTokenForShop(shop, req = null) {
-  console.log('=== TOKEN RESOLVER DEBUG ===');
-  console.log('1. Looking for shop:', shop);
-  
   try {
     // Try to get idToken from request if available
     let idToken = null;
     if (req) {
-      console.log('=== ID TOKEN EXTRACTION DEBUG ===');
-      console.log('req.headers:', Object.keys(req.headers));
-      console.log('req.headers.authorization:', req.headers['authorization'] ? 'Present' : 'Missing');
-      console.log('req.headers.Authorization:', req.headers['Authorization'] ? 'Present' : 'Missing');
-      console.log('req.query.id_token:', req.query.id_token ? 'Present' : 'Missing');
-      console.log('req.body?.id_token:', req.body?.id_token ? 'Present' : 'Missing');
-      
       idToken = req.headers['authorization']?.replace('Bearer ', '') || 
                 req.headers['Authorization']?.replace('Bearer ', '') ||
                 req.query.id_token ||
                 req.body?.id_token;
-      
-      console.log('Extracted idToken:', idToken ? 'Present' : 'Missing');
     }
     
     const token = await resolveShopToken(shop, { idToken, requested: 'offline' });
-    console.log('2. Token resolved successfully');
-    console.log('3. Token type:', typeof token);
-    console.log('4. Token starts with shpat_:', token?.startsWith('shpat_'));
     return token;
   } catch (err) {
-    console.error('5. Token resolution failed:', err.message);
+    console.error('Token resolution failed:', err.message);
     throw new Error(`No Admin API token available for shop ${shop}: ${err.message}`);
   }
 }
 
 async function shopGraphQL(req, shop, query, variables = {}) {
-  console.log('[GRAPHQL] Shop:', shop);
-  console.log('[GRAPHQL] Query:', query.substring(0, 100) + '...');
-  console.log('[GRAPHQL] Variables:', JSON.stringify(variables, null, 2));
-  
   const token = await resolveAdminToken(req, shop);
-  console.log('[GRAPHQL] Token resolved:', token ? 'Yes' : 'No');
-  
   const url = `https://${shop}/admin/api/${API_VERSION}/graphql.json`;
-  console.log('[GRAPHQL] URL:', url);
   
   const rsp = await fetch(url, {
     method: 'POST',
@@ -291,7 +262,6 @@ async function shopGraphQL(req, shop, query, variables = {}) {
     throw e;
   }
   
-  console.log('[GRAPHQL] Success, returning data');
   return json.data;
 }
 
@@ -300,9 +270,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
 async function openrouterChat(model, messages, response_format_json = true) {
-  console.log('🔴 [AI CALL] Starting AI request with model:', model);
-  console.log('🔴 [AI CALL] Messages being sent:', JSON.stringify(messages, null, 2));
-  
   // TEMPORARY CLAUDE BLOCK - remove if you want to use Claude
   if (model.includes('claude')) {
     console.error('🚫 BLOCKED: Claude model calls are disabled');
@@ -339,18 +306,12 @@ async function openrouterChat(model, messages, response_format_json = true) {
     j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
     '';
   
-  console.log('🔴 [AI RESPONSE] Received from AI:', content);
-  console.log('🔴 [AI USAGE] Tokens used:', j?.usage);
-  
   return { content, usage: j?.usage || {} };
 }
 
 /* --------------------------- Metafield Definition Helper --------------------------- */
 async function ensureMetafieldDefinition(req, shop, language) {
   const key = `seo__${language}`;
-  console.log(`[PRODUCT METAFIELDS] ===== STARTING DEFINITION CREATION =====`);
-  console.log(`[PRODUCT METAFIELDS] Creating definition for language: ${language}, key: ${key}`);
-  console.log(`[PRODUCT METAFIELDS] Shop: ${shop}`);
   
   // Simpler approach - create directly without checking
   const createMutation = `
@@ -384,7 +345,6 @@ async function ensureMetafieldDefinition(req, shop, language) {
       const errors = result.metafieldDefinitionCreate.userErrors;
       // If error is "already exists", that's OK
       if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
-        console.log(`[PRODUCT METAFIELDS] Definition already exists for ${key} - OK`);
         return { exists: true };
       }
       console.error(`[PRODUCT METAFIELDS] Errors:`, errors);
@@ -392,7 +352,6 @@ async function ensureMetafieldDefinition(req, shop, language) {
     }
     
     if (result?.metafieldDefinitionCreate?.createdDefinition) {
-      console.log(`[PRODUCT METAFIELDS] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
       return { created: true };
     }
   } catch (e) {
@@ -400,7 +359,6 @@ async function ensureMetafieldDefinition(req, shop, language) {
     // Continue - metafield will still work
   }
   
-  console.log(`[PRODUCT METAFIELDS] ===== DEFINITION CREATION COMPLETE =====`);
   return { attempted: true };
 }
 
@@ -436,11 +394,9 @@ async function deleteProductMetafield(req, shop, productId, key) {
     
     if (result?.metafieldsDelete?.userErrors?.length > 0) {
       const errorMessages = result.metafieldsDelete.userErrors.map(e => e.message);
-      console.log(`[DELETE-PRODUCT-METAFIELD] Delete errors for ${key}:`, errorMessages);
       throw new Error(`Delete failed: ${errorMessages.join(', ')}`);
     }
     
-    console.log(`[DELETE-PRODUCT-METAFIELD] Successfully deleted metafield ${key}`);
     return true;
   } catch (e) {
     console.error(`[DELETE-PRODUCT-METAFIELD] Error deleting ${key}:`, e.message);
@@ -480,11 +436,9 @@ async function deleteCollectionMetafield(req, shop, collectionId, key) {
     
     if (result?.metafieldsDelete?.userErrors?.length > 0) {
       const errorMessages = result.metafieldsDelete.userErrors.map(e => e.message);
-      console.log(`[DELETE-COLLECTION-METAFIELD] Delete errors for ${key}:`, errorMessages);
       throw new Error(`Delete failed: ${errorMessages.join(', ')}`);
     }
     
-    console.log(`[DELETE-COLLECTION-METAFIELD] Successfully deleted metafield ${key}`);
     return true;
   } catch (e) {
     console.error(`[DELETE-COLLECTION-METAFIELD] Error deleting ${key}:`, e.message);
@@ -520,15 +474,10 @@ async function getMetafieldDefinitionId(req, shop, key) {
 
 // Creates metafield definitions for Collections
 async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
-  console.log('[COLLECTION METAFIELDS] ===== STARTING DEFINITION CREATION =====');
-  console.log('[COLLECTION METAFIELDS] Creating definitions for languages:', languages);
-  console.log('[COLLECTION METAFIELDS] Shop:', shop);
-  
   const results = [];
   
   for (const lang of languages) {
     const key = `seo__${lang.toLowerCase()}`; // ALWAYS lowercase
-    console.log(`[COLLECTION METAFIELDS] Processing language: ${lang}, key: ${key}`);
     
     const createMutation = `
       mutation {
@@ -560,7 +509,6 @@ async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
       if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
         const errors = result.metafieldDefinitionCreate.userErrors;
         if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
-          console.log(`[COLLECTION METAFIELDS] Definition already exists for ${key} - OK`);
           // Try to get existing definition ID
           const existingDefinition = await getMetafieldDefinitionId(req, shop, key);
           results.push({ lang, status: 'exists', definitionId: existingDefinition });
@@ -569,7 +517,6 @@ async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
           results.push({ lang, status: 'error', errors });
         }
       } else if (result?.metafieldDefinitionCreate?.createdDefinition) {
-        console.log(`[COLLECTION METAFIELDS] Created successfully:`, result.metafieldDefinitionCreate.createdDefinition);
         results.push({ lang, status: 'created', definitionId: result.metafieldDefinitionCreate.createdDefinition.id });
       }
     } catch (e) {
@@ -578,17 +525,11 @@ async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
     }
   }
   
-  console.log('[COLLECTION METAFIELDS] ===== DEFINITION CREATION COMPLETE =====');
-  console.log('[COLLECTION METAFIELDS] Final results:', results);
   return results;
 }
 
 /* --------------------------- Product JSON-LD Generator --------------------------- */
 function generateProductJsonLd(product, seoData, language) {
-  console.log('🟢 [JSON-LD] Generating locally (NOT via AI) for language:', language);
-  console.log('🟢 [JSON-LD] Product data:', JSON.stringify(product, null, 2));
-  console.log('🟢 [JSON-LD] SEO data:', JSON.stringify(seoData, null, 2));
-  
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -623,7 +564,6 @@ function generateProductJsonLd(product, seoData, language) {
     jsonLd.inLanguage = language;
   }
   
-  console.log('🟢 [JSON-LD] Generated:', JSON.stringify(jsonLd, null, 2));
   return jsonLd;
 }
 
@@ -872,14 +812,9 @@ function fixupAndValidate(payload) {
 
   // REMOVED jsonLd fixup/validation code
 
-  // Debug what's being validated
-  console.log('🔍 [FIXUP] Final bullets:', p.seo.bullets);
-  console.log('🔍 [FIXUP] Final FAQ:', p.seo.faq);
-
   const ok = validateSeo(p);
   if (!ok) {
-    console.log('🔍 [VALIDATION] Schema validation failed:', validateSeo.errors);
-    console.log('🔍 [VALIDATION] Payload being validated:', JSON.stringify(p, null, 2));
+    console.error('[VALIDATION] Schema validation failed:', validateSeo.errors);
   }
   return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
 }
@@ -889,12 +824,6 @@ function fixupAndValidate(payload) {
 // Plans endpoint е премахнат - използваме GraphQL версията в server.js
 
 router.post('/seo/generate', validateRequest(), async (req, res) => {
-  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -905,13 +834,7 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop not provided' });
   }
 
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
-
   try {
-    console.log('[SEO/GENERATE] req.shopDomain:', req.shopDomain);
-    console.log('[SEO/GENERATE] req.body:', req.body);
     const shop = req.shopDomain;
     const { productId, model, language = 'en', enhanced = false } = req.body || {};
     if (!productId || !model) {
@@ -999,7 +922,6 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
       
       // Deduct tokens immediately (will be rolled back if generation fails)
       await tokenBalance.deductTokens(requiredTokens, feature, { productId });
-      console.log(`[SEO/GENERATE] Deducted ${requiredTokens} tokens for ${feature}, remaining: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
 
@@ -1098,9 +1020,6 @@ function extractBulletsFromHtml(html) {
 }
 
 async function generateSEOForLanguage(req, shop, productId, model, language) {
-  console.log('🟡 [GENERATE] Starting generation for language:', language, 'model:', model);
-  console.log('🚀 [LOCAL MODE] Using product data directly - NO AI costs!');
-  
   const langNormalized = canonLang(language);
   
   // Get shop's primary language
@@ -1227,13 +1146,6 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     });
   }
 
-  // Debug logs
-  console.log('🔍 [DEBUG] Extracted bullets:', extractedBullets);
-  console.log('🔍 [DEBUG] Final bullets:', bullets);
-  console.log('🔍 [DEBUG] Simple FAQ:', simpleFaq);
-  console.log('🔍 [DEBUG] Localized title:', localizedTitle);
-  console.log('🔍 [DEBUG] Meta description:', metaDescription);
-
   const localSeoData = {
     title: seoTitle || localizedTitle || 'Product',
     metaDescription: metaDescription,
@@ -1269,7 +1181,6 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     throw e;
   }
   
-  console.log('✅ [SUCCESS] SEO data generated locally with ZERO AI costs!');
   return value;
 }
 
@@ -1321,9 +1232,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const updateAlt = options?.updateAlt === true;
     const dryRun = options?.dryRun === true;
 
-    console.log(`[SEO-APPLY] Language: ${language}, isPrimary: ${isPrimary}`);
-    console.log(`[SEO-APPLY] Will update ONLY metafields (no product base fields)`);
-
     const updated = { seoMetafield: false, imageAlt: false };
     const errors = [];
 
@@ -1351,10 +1259,9 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
       // 2. Delete any existing metafield with this key first
       const mfKey = `seo__${language.toLowerCase()}`;
       try {
-        console.log(`[APPLY-SEO] Deleting existing metafield ${mfKey} for ${productId}`);
         await deleteProductMetafield(req, shop, productId, mfKey);
       } catch (e) {
-        console.log(`[APPLY-SEO] No existing metafield to delete for ${mfKey}:`, e.message);
+        // Metafield didn't exist, that's fine
       }
 
       // 3. Always write language-specific metafield with full SEO data
@@ -1392,7 +1299,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         console.error(`[SEO-APPLY] Metafield errors for ${mfKey}:`, mfErrs);
         errors.push(...mfErrs.map(e => e.message || JSON.stringify(e)));
       } else {
-        console.log(`[SEO-APPLY] Metafield ${mfKey} saved successfully`);
         updated.seoMetafield = true;
       }
 
@@ -1447,8 +1353,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
           
           if (!currentProduct) {
             console.error(`[SEO-CONTROLLER] Could not fetch product ${productId} from Shopify`);
-          } else {
-            console.log(`[SEO-CONTROLLER] Fetched current product: title="${currentProduct.title}"`);
           }
         } catch (fetchError) {
           console.error(`[SEO-CONTROLLER] Error fetching product:`, fetchError.message);
@@ -1459,7 +1363,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
 
         if (!product && currentProduct) {
           // Product doesn't exist - CREATE it!
-          console.log(`[SEO-CONTROLLER] Product ${numericId} not found in MongoDB, creating new record...`);
           
           product = await Product.create({
             shop,
@@ -1478,8 +1381,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
               updatedAt: new Date()
             }
           });
-          
-          console.log(`[SEO-CONTROLLER] ✅ Created new product record in MongoDB`);
         } else if (product) {
           // Product exists - UPDATE it
           const currentLanguages = product.seoStatus?.languages || [];
@@ -1518,11 +1419,9 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
               description: currentProduct.descriptionHtml || '',
               updatedAt: new Date()
             };
-            console.log(`[SEO-CONTROLLER] Setting lastShopifyUpdate baseline: title="${currentProduct.title}"`);
           }
           
           // Update the product and WAIT for completion
-          console.log(`[SEO-CONTROLLER] Updating MongoDB for product ${numericId}, languages:`, updatedLanguages);
           const updateResult = await Product.findOneAndUpdate(
             { shop, productId: parseInt(numericId) },
             { $set: updateFields },
@@ -1533,11 +1432,9 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
           );
           
           if (updateResult) {
-            console.log(`[SEO-CONTROLLER] MongoDB update completed successfully`);
             // Ensure the write is propagated
             await new Promise(resolve => setTimeout(resolve, 50));
           } else {
-            console.log(`[SEO-CONTROLLER] MongoDB update failed - document not found`);
             errors.push('Failed to update optimization status in database');
           }
         } else {
