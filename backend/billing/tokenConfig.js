@@ -247,7 +247,9 @@ export async function fetchOpenRouterPricing() {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search'
       }
     });
 

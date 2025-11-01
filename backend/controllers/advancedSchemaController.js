@@ -291,6 +291,8 @@ async function generateWithAI(prompt, systemPrompt) {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
       },
       body: JSON.stringify({
         model: AI_MODEL,
