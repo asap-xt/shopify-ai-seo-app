@@ -154,6 +154,14 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
   // Use dynamic pricing from OpenRouter (checks cache first, then fetches if needed)
   const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
+  
+  console.log('🔍 [shopifyBilling.js] BEFORE creating charge:', {
+    usdAmount,
+    tokens,
+    tokensFormatted: tokens.toLocaleString(),
+    chargeName: `AI Tokens Purchase (${tokens.toLocaleString()} tokens)`
+  });
+  
   // ALWAYS use test mode until we go live with real payments
   const isTest = true;
   

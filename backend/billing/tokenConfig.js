@@ -11,7 +11,6 @@ import fetch from 'node-fetch';
 // Average for our use case: ~$0.10 per 1M tokens (mostly input)
 
 const GEMINI_RATE_PER_1M_TOKENS = 0.10; // USD per 1M tokens (fallback estimate)
-const GEMINI_RATE_PER_TOKEN = GEMINI_RATE_PER_1M_TOKENS / 1_000_000; // $0.0000001 per token
 
 export const TOKEN_CONFIG = {
   // Purchase settings
@@ -27,18 +26,18 @@ export const TOKEN_CONFIG = {
   
   // Provider (internal only)
   provider: 'gemini-2.5-flash-lite',
-  providerRate: GEMINI_RATE_PER_TOKEN, // $0.0000001 per token
+  providerRatePer1M: GEMINI_RATE_PER_1M_TOKENS, // $0.10 per 1M tokens
   
   // Token expiration
   tokensExpire: false,
   rollover: true,
   
   // Calculate tokens from USD amount
-  // Example: $10 → $3 for tokens (30% budget) → tokens based on actual OpenRouter rate
-  // With default rate $0.10/1M: $3 → 30,000,000 tokens
+  // Example: $10 → $3 for tokens (30% budget) → $3 / $0.10 per 1M = 30M tokens
   calculateTokens(usdAmount) {
     const tokenBudget = usdAmount * this.tokenBudgetPercent; // 30% goes to tokens
-    const tokens = Math.floor(tokenBudget / this.providerRate);
+    const tokensInMillions = tokenBudget / this.providerRatePer1M;
+    const tokens = Math.floor(tokensInMillions * 1_000_000);
     return tokens;
   },
   
