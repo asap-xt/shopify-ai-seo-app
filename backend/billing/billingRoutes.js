@@ -253,12 +253,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // - For Railway/dev environments, always activate immediately for convenience
     const isTestMode = shopifySubscription.test === true;
     
-    console.log('[Billing] Test mode detection:', {
-      'NODE_ENV': process.env.NODE_ENV,
-      'shopifySubscription.test': shopifySubscription.test,
-      'isTestMode': isTestMode
-    });
-    
     // In TEST MODE: Activate immediately for development convenience
     // In PRODUCTION: Wait for APP_SUBSCRIPTIONS_UPDATE webhook to confirm payment
     const initialStatus = isTestMode ? 'active' : 'pending';
@@ -281,17 +275,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
     
-    console.log('[Billing] Subscription created:', {
-      shop,
-      plan,
-      status: initialStatus,
-      isTestMode,
-      shopifySubscriptionId: shopifySubscription.id,
-      message: isTestMode 
-        ? '✅ TEST MODE: Activated immediately' 
-        : '⏳ PRODUCTION: Awaiting APP_SUBSCRIPTIONS_UPDATE webhook'
-    });
-    
     // In TEST MODE: Set included tokens immediately (replaces old, keeps purchased)
     if (isTestMode) {
       const included = getIncludedTokens(subscription.plan);
@@ -303,13 +286,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         subscription.plan, 
         shopifySubscription.id
       );
-      
-      console.log('[Billing] ✅ TEST MODE: Set included tokens:', {
-        shop,
-        plan: subscription.plan,
-        includedTokens: included.tokens,
-        newBalance: tokenBalance.balance
-      });
     }
     
     res.json({
@@ -330,8 +306,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
 router.get('/callback', async (req, res) => {
   try {
     const { shop, plan, charge_id } = req.query;
-    
-    console.log('[Billing] Callback received:', { shop, plan, charge_id });
     
     if (!shop) {
       return res.status(400).send('Missing shop parameter');
@@ -363,12 +337,6 @@ router.get('/callback', async (req, res) => {
     // NOTE: Tokens are added in /subscribe endpoint for test mode
     // For production mode (real webhooks), tokens would be added by APP_SUBSCRIPTIONS_UPDATE webhook
     // This callback is just a redirect handler, not the primary activation mechanism
-    console.log('[Billing] Callback processed, subscription updated:', {
-      shop,
-      plan: subscription?.plan,
-      status: subscription?.status,
-      planUpdated: !!plan
-    });
     
     // Redirect back to app
     res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&success=true`);
@@ -442,8 +410,6 @@ router.get('/tokens/callback', async (req, res) => {
   try {
     const { shop, amount, charge_id } = req.query;
     
-    console.log('[Billing] Token callback received:', { shop, amount, charge_id });
-    
     if (!shop || !amount) {
       return res.status(400).send('Missing parameters');
     }
@@ -457,16 +423,8 @@ router.get('/tokens/callback', async (req, res) => {
     const tokenBalance = await TokenBalance.getOrCreate(shop);
     await tokenBalance.addTokens(usdAmount, tokens, charge_id || 'completed');
     
-    console.log('[Billing] Tokens added:', {
-      shop,
-      amount: usdAmount,
-      tokens,
-      newBalance: tokenBalance.balance
-    });
-    
     // CRITICAL: Invalidate cache so new token balance is immediately visible
     await cacheService.invalidateShop(shop);
-    console.log('[Billing] Cache invalidated for shop:', shop);
     
     // Redirect back to app
     res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
