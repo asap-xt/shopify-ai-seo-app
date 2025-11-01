@@ -46,6 +46,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [syncing, setSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // New state for expanded view
+  const [syncCardClosed, setSyncCardClosed] = useState(false); // Track if user closed sync card
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
@@ -588,7 +589,7 @@ export default function Dashboard({ shop: shopProp }) {
       )}
       
       {/* Sync Status for subsequent loads */}
-      {!isFirstLoad && syncStatus && (
+      {!isFirstLoad && syncStatus && !syncCardClosed && (
         <Layout.Section>
           <Card>
             {autoSync && !isExpanded ? (
@@ -651,7 +652,10 @@ export default function Dashboard({ shop: shopProp }) {
                       Sync Now
                     </Button>
                     <Button 
-                      onClick={() => setIsExpanded(false)} 
+                      onClick={() => {
+                        setIsExpanded(false);
+                        setSyncCardClosed(true);
+                      }} 
                       variant="plain"
                     >
                       Close
