@@ -4,6 +4,7 @@ import { getPlanConfig } from '../plans.js';
 const subscriptionSchema = new mongoose.Schema({
   shop: { type: String, required: true, unique: true },
   plan: { type: String, required: true }, // starter, professional, growth, growth extra, enterprise
+  pendingPlan: String, // Plan waiting for approval (if user hasn't approved yet)
   
   // Shopify billing
   shopifySubscriptionId: String,

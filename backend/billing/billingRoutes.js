@@ -257,26 +257,44 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // In PRODUCTION: Wait for APP_SUBSCRIPTIONS_UPDATE webhook to confirm payment
     const initialStatus = isTestMode ? 'active' : 'pending';
     
+    // CRITICAL: Get existing subscription to preserve current plan if exists
+    const existingSub = await Subscription.findOne({ shop });
+    
+    // LOGIC:
+    // - If new subscription (no existing): plan = plan (first install)
+    // - If upgrade/downgrade: pendingPlan = new plan, plan = old plan (until approval)
+    const updateData = {
+      shop,
+      shopifySubscriptionId: shopifySubscription.id,
+      status: initialStatus,
+      trialEndsAt,
+      pendingActivation: !isTestMode,
+      activatedAt: isTestMode ? now : null,
+      updatedAt: now
+    };
+    
+    if (existingSub) {
+      // Plan change: Keep old plan, set new plan as pending
+      updateData.pendingPlan = plan;
+      // Don't update 'plan' field - it stays as old plan until approval
+    } else {
+      // First install: Set plan immediately
+      updateData.plan = plan;
+      updateData.pendingPlan = null;
+    }
+    
     const subscription = await Subscription.findOneAndUpdate(
       { shop },
-      {
-        shop,
-        plan,
-        shopifySubscriptionId: shopifySubscription.id,
-        status: initialStatus,
-        trialEndsAt,
-        pendingActivation: !isTestMode,
-        activatedAt: isTestMode ? now : null,
-        updatedAt: now
-      },
+      updateData,
       { upsert: true, new: true }
     );
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
     
-    // In TEST MODE: Set included tokens immediately (replaces old, keeps purchased)
-    if (isTestMode) {
+    // In TEST MODE: Set included tokens immediately ONLY for new subscriptions
+    // For plan changes, tokens are set in callback after approval
+    if (isTestMode && !existingSub) {
       const included = getIncludedTokens(subscription.plan);
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
@@ -311,17 +329,22 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send('Missing shop parameter');
     }
     
-    // CRITICAL FIX: Update both status AND plan (for plan changes)
-    // In test mode, /subscribe already created subscription with the new plan
-    // But if user changes plans, this callback confirms the change
+    // CRITICAL FIX: Activate pending plan (if user approved subscription)
+    // Get current subscription to check for pendingPlan
+    const currentSub = await Subscription.findOne({ shop });
+    
     const updateData = {
       status: 'active',
       pendingActivation: false,
       activatedAt: new Date()
     };
     
-    // If plan is provided in callback, ensure it's updated
-    if (plan && PLANS[plan]) {
+    // If there's a pendingPlan, activate it now (user approved!)
+    if (currentSub?.pendingPlan) {
+      updateData.plan = currentSub.pendingPlan;
+      updateData.pendingPlan = null; // Clear pending
+    } else if (plan && PLANS[plan]) {
+      // Fallback: If plan is provided in callback, ensure it's updated
       updateData.plan = plan;
     }
     
@@ -334,9 +357,21 @@ router.get('/callback', async (req, res) => {
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
     
-    // NOTE: Tokens are added in /subscribe endpoint for test mode
-    // For production mode (real webhooks), tokens would be added by APP_SUBSCRIPTIONS_UPDATE webhook
-    // This callback is just a redirect handler, not the primary activation mechanism
+    // If plan was activated (pendingPlan → plan), set included tokens
+    if (currentSub?.pendingPlan && subscription.plan) {
+      const included = getIncludedTokens(subscription.plan);
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // Use setIncludedTokens to replace old included tokens (keeps purchased)
+      await tokenBalance.setIncludedTokens(
+        included.tokens, 
+        subscription.plan, 
+        subscription.shopifySubscriptionId
+      );
+    }
+    
+    // NOTE: For production mode (real webhooks), tokens would also be added by APP_SUBSCRIPTIONS_UPDATE webhook
+    // This callback handles test mode and user-approved subscriptions
     
     // Redirect back to app
     res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&success=true`);

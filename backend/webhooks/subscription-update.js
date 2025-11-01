@@ -93,11 +93,12 @@ export default async function handleSubscriptionUpdate(req, res) {
       });
       
     } else if (status === 'CANCELLED') {
-      // ❌ Subscription cancelled by merchant or Shopify
+      // ❌ Subscription cancelled by merchant or Shopify (or user declined approval)
       console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled for:', shop);
       
       subscription.status = 'cancelled';
       subscription.cancelledAt = new Date();
+      subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
       await subscription.save();
       
     } else if (status === 'EXPIRED') {
