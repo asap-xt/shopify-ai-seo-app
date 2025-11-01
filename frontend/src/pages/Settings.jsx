@@ -1752,14 +1752,17 @@ export default function Settings() {
         </Card>
       )} */}
 
-      {/* Advanced Schema Data Management - shows only for Enterprise plan AND if enabled */}
+      {/* Advanced Schema Data Management - shows for Professional Plus, Growth Plus, and Enterprise plans if enabled */}
       {(() => {
-        const planCheck = normalizePlan(settings?.plan) === 'enterprise';
+        const plan = normalizePlan(settings?.plan);
+        const allowedPlans = ['professional_plus', 'growth_plus', 'enterprise'];
+        const planCheck = allowedPlans.includes(plan);
         const settingsCheck = settings?.features?.schemaData;
         const originalCheck = originalSettings?.features?.schemaData;
         
         console.log('[SCHEMA-DEBUG] Advanced Schema Management visibility check:');
-        console.log('[SCHEMA-DEBUG] - Plan check (enterprise):', planCheck);
+        console.log('[SCHEMA-DEBUG] - Plan:', plan);
+        console.log('[SCHEMA-DEBUG] - Plan check (Plus/Enterprise):', planCheck);
         console.log('[SCHEMA-DEBUG] - Settings schemaData:', settingsCheck);
         console.log('[SCHEMA-DEBUG] - Original schemaData:', originalCheck);
         console.log('[SCHEMA-DEBUG] - All conditions met:', planCheck && settingsCheck && originalCheck);
