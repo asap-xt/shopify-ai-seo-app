@@ -801,7 +801,6 @@ ${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
 
 // Generate product schemas
 async function generateProductSchemas(shop, productDoc) {
-  console.log(`[SCHEMA] generateProductSchemas called for product ${productDoc.productId}`);
   const productGid = `gid://shopify/Product/${productDoc.productId}`;
   
   // Get full product data
@@ -1070,12 +1069,9 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add enhanced description if enabled
-  console.log(`[SCHEMA-DEBUG] enhancedDescription enabled:`, richAttributesSettings.enhancedDescription);
   if (richAttributesSettings.enhancedDescription) {
-    console.log(`[SCHEMA-DEBUG] Generating enhanced description for product: ${product.title}`);
     try {
       const enhancedDesc = await generateEnhancedDescription(product, seoData, language);
-      console.log(`[SCHEMA-DEBUG] Enhanced description result:`, enhancedDesc ? 'Generated' : 'Failed');
       if (enhancedDesc) {
         productSchema.description = enhancedDesc;
       }
@@ -1091,12 +1087,9 @@ async function generateLangSchemas(product, seoData, shop, language) {
   baseSchemas.push(productSchema);
 
   // Add Review schemas if enabled
-  console.log(`[SCHEMA-DEBUG] reviews enabled:`, richAttributesSettings.reviews);
   if (richAttributesSettings.reviews) {
-    console.log(`[SCHEMA-DEBUG] Generating review schemas for product: ${product.title}`);
     try {
       const reviewSchemas = await generateReviewSchemas(product, seoData, language);
-      console.log(`[SCHEMA-DEBUG] Review schemas generated:`, reviewSchemas.length);
       baseSchemas.push(...reviewSchemas);
     } catch (error) {
       console.error('[SCHEMA] Failed to generate review schemas:', error);
@@ -1104,12 +1097,9 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add Rating schemas if enabled
-  console.log(`[SCHEMA-DEBUG] ratings enabled:`, richAttributesSettings.ratings);
   if (richAttributesSettings.ratings) {
-    console.log(`[SCHEMA-DEBUG] Generating rating schemas for product: ${product.title}`);
     try {
       const ratingSchemas = await generateRatingSchemas(product, seoData, language);
-      console.log(`[SCHEMA-DEBUG] Rating schemas generated:`, ratingSchemas.length);
       baseSchemas.push(...ratingSchemas);
     } catch (error) {
       console.error('[SCHEMA] Failed to generate rating schemas:', error);
@@ -1117,12 +1107,9 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
 
   // Add Organization schema if enabled
-  console.log(`[SCHEMA-DEBUG] organization enabled:`, richAttributesSettings.organization);
   if (richAttributesSettings.organization) {
-    console.log(`[SCHEMA-DEBUG] Generating organization schema for product: ${product.title}`);
     try {
       const organizationSchema = await generateOrganizationSchema(product, shop, language);
-      console.log(`[SCHEMA-DEBUG] Organization schema generated:`, organizationSchema ? 'Yes' : 'No');
       if (organizationSchema) {
         baseSchemas.push(organizationSchema);
       }
@@ -1158,7 +1145,6 @@ async function installScriptTag(shop) {
     );
     
     if (ourScriptTag) {
-      console.log('[SCHEMA] Script tag already installed');
       return;
     }
     
@@ -1191,8 +1177,6 @@ async function installScriptTag(shop) {
       throw new Error(result.scriptTagCreate.userErrors[0].message);
     }
     
-    console.log('[SCHEMA] Script tag installed successfully');
-    
   } catch (error) {
     console.error('[SCHEMA] Failed to install script tag:', error);
     throw error;
@@ -1201,7 +1185,6 @@ async function installScriptTag(shop) {
 
 // Install Theme Snippet for auto-injection
 async function installThemeSnippet(shop) {
-  console.log('[SCHEMA] Installing theme snippet...');
   
   try {
     // Намираме активната тема
@@ -1299,8 +1282,6 @@ async function installThemeSnippet(shop) {
       });
     }
     
-    console.log('[SCHEMA] Theme snippet installed successfully');
-    
   } catch (error) {
     console.error('[SCHEMA] Failed to install theme snippet:', error);
     throw error;
@@ -1309,7 +1290,6 @@ async function installThemeSnippet(shop) {
 
 // Main background process
 async function generateAllSchemas(shop) {
-  console.log(`[SCHEMA] Starting advanced schema generation for ${shop}`);
   
   // Set generation status
   generationStatus.set(shop, { 
@@ -1319,9 +1299,7 @@ async function generateAllSchemas(shop) {
   });
   
   try {
-    // ПРЕМАХВАМЕ script tag частта напълно
-    // await installScriptTag(shop); // ПРЕМАХВАМЕ ТОВА
-    console.log('[SCHEMA] Using theme snippet approach (no script tags needed)');
+    // Using theme snippet approach (no script tags needed)
     
     // Load shop context
     const shopContext = await loadShopContext(shop);
@@ -1330,21 +1308,16 @@ async function generateAllSchemas(shop) {
     }
     
     // Generate site-wide FAQ
-    console.log('[SCHEMA] Generating site FAQ...');
     const faqResult = await generateSiteFAQ(shop, shopContext);
     const siteFAQ = faqResult.schema;
     const usageDetails = faqResult.usage ? [{ feature: 'site-faq', usage: faqResult.usage }] : [];
     
     // First, sync products from Shopify to MongoDB if needed
-    console.log('[SCHEMA] Checking if products need to be synced...');
     const totalProductsInMongo = await Product.countDocuments({ shop });
-    console.log(`[SCHEMA] Products in MongoDB: ${totalProductsInMongo}`);
     
     if (totalProductsInMongo === 0) {
-      console.log('[SCHEMA] No products in MongoDB, syncing from Shopify...');
       try {
         const syncResult = await syncProductsToMongoDB(shop);
-        console.log(`[SCHEMA] Sync completed: ${syncResult.syncedCount} products synced`);
       } catch (error) {
         console.error('[SCHEMA] Failed to sync products:', error);
         // Continue anyway, maybe some products exist
@@ -1352,44 +1325,11 @@ async function generateAllSchemas(shop) {
     }
     
     // Get all products with SEO
-    console.log('[SCHEMA] Looking for products with optimized SEO...');
-    console.log('[SCHEMA] Query:', JSON.stringify({
-      shop,
-      'seoStatus.optimized': true
-    }));
     
     const products = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
-    
-    console.log(`[SCHEMA] Found ${products.length} products with optimized SEO`);
-    
-    // DEBUG: Let's also check total products and products with any SEO
-    const totalProducts = await Product.countDocuments({ shop });
-    const productsWithAnySeo = await Product.countDocuments({ 
-      shop,
-      'seoStatus': { $exists: true }
-    });
-    
-    console.log(`[SCHEMA] DEBUG - Total products: ${totalProducts}`);
-    console.log(`[SCHEMA] DEBUG - Products with any SEO: ${productsWithAnySeo}`);
-    console.log(`[SCHEMA] DEBUG - Products with optimized SEO: ${products.length}`);
-    
-    // DEBUG: Let's also check what the actual product documents look like
-    if (productsWithAnySeo > 0) {
-      const sampleProduct = await Product.findOne({ 
-        shop,
-        'seoStatus': { $exists: true }
-      });
-      console.log('[SCHEMA] DEBUG - Sample product with SEO:', JSON.stringify(sampleProduct, null, 2));
-    }
-    
-    if (products.length === 0) {
-      console.log('[SCHEMA] ⚠️ No products with optimized SEO found!');
-      console.log('[SCHEMA] This means product schemas cannot be generated.');
-      console.log('[SCHEMA] Users need to optimize products first in Bulk Edit.');
-    }
     
     // Collect all generated schemas
     const allProductSchemas = [];
@@ -1412,12 +1352,8 @@ async function generateAllSchemas(shop) {
           });
           
           const productSchemas = await generateProductSchemas(shop, product);
-          // console.log(`[SCHEMA] Product ${product.productId} returned ${productSchemas ? productSchemas.length : 0} schemas`);
           if (productSchemas && productSchemas.length > 0) {
             allProductSchemas.push(...productSchemas);
-            // console.log(`[SCHEMA] Added ${productSchemas.length} schemas to collection. Total: ${allProductSchemas.length}`);
-          } else {
-            console.log(`[SCHEMA] No schemas generated for product ${product.productId}`);
           }
         } catch (err) {
           console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
@@ -1440,19 +1376,13 @@ async function generateAllSchemas(shop) {
         },
         { upsert: true }
       );
-      console.log(`[SCHEMA] Saved ${allProductSchemas.length} schemas to MongoDB`);
       
       // Verification - check if data was actually saved
       const saved = await AdvancedSchema.findOne({ shop });
-      // console.log('[SCHEMA] Verification - saved document exists:', !!saved);
-      // console.log('[SCHEMA] Verification - schemas count:', saved?.schemas?.length);
-      // console.log('[SCHEMA] Verification - first schema:', saved?.schemas?.[0]);
     } catch (err) {
       console.error('[SCHEMA] Failed to save to MongoDB:', err);
       throw err;
     }
-    
-    console.log(`[SCHEMA] Completed schema generation for ${shop}`);
     
     // Mark generation as complete
     generationStatus.set(shop, { 
@@ -1460,9 +1390,6 @@ async function generateAllSchemas(shop) {
       progress: '100%', 
       currentProduct: 'Generation complete!' 
     });
-    
-    console.log(`[SCHEMA] ✅ Generation status updated to complete for ${shop}`);
-    console.log(`[SCHEMA] Final status:`, generationStatus.get(shop));
     
   } catch (error) {
     console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
@@ -1474,9 +1401,6 @@ async function generateAllSchemas(shop) {
       currentProduct: 'Generation failed' 
     });
     
-    console.log(`[SCHEMA] ❌ Generation status updated to failed for ${shop}`);
-    console.log(`[SCHEMA] Final status:`, generationStatus.get(shop));
-    
     throw error;
   }
 }
@@ -1485,31 +1409,18 @@ async function generateAllSchemas(shop) {
 
 // POST /api/schema/generate-all - Start background generation
 router.post('/generate-all', async (req, res) => {
-  console.log('[SCHEMA] ============================================'); // DEBUG
-  console.log('[SCHEMA] Generate-all endpoint called at:', new Date().toISOString()); // DEBUG
-  console.log('[SCHEMA] Request headers:', req.headers); // DEBUG
-  console.log('[SCHEMA] Request body:', req.body); // DEBUG
-  console.log('[SCHEMA] req.shopDomain:', req.shopDomain); // DEBUG
-  
   try {
     const shop = req.shopDomain || requireShop(req);
-    console.log('[SCHEMA] Shop extracted:', shop); // DEBUG
     
     // Check Enterprise plan
-    console.log('[SCHEMA] Checking subscription...'); // DEBUG
     const subscription = await Subscription.findOne({ shop });
-    console.log('[SCHEMA] Subscription found:', subscription); // DEBUG
-    console.log('[SCHEMA] Plan:', subscription?.plan); // DEBUG
     
     if (subscription?.plan !== 'enterprise') {
-      console.log('[SCHEMA] NOT ENTERPRISE - rejecting'); // DEBUG
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Enterprise plan',
         currentPlan: subscription?.plan || 'none'
       });
     }
-    
-    console.log('[SCHEMA] Enterprise plan confirmed!'); // DEBUG
     
     // Return immediately
     res.json({ 
@@ -1518,7 +1429,6 @@ router.post('/generate-all', async (req, res) => {
     });
     
     // Start background process
-    console.log('[SCHEMA] Starting background generation NOW...'); // DEBUG
     generateAllSchemas(shop).catch(err => {
       console.error('[SCHEMA] ❌ Background generation failed:', err);
     });
@@ -1540,8 +1450,6 @@ router.get('/status', async (req, res) => {
       progress: '0%', 
       currentProduct: '' 
     };
-    
-    console.log(`[SCHEMA-STATUS] Status check for ${shop}:`, currentStatus);
     
     // IMPORTANT: Check if data actually exists in MongoDB
     // This is the source of truth, not the in-memory status
@@ -1569,13 +1477,6 @@ router.get('/status', async (req, res) => {
         productsWithSchema = uniqueProducts.size;
         
         hasFAQ = !!savedSchema.siteFAQ;
-        
-        console.log(`[SCHEMA-STATUS] Found saved data in MongoDB:`, {
-          totalSchemas: savedSchema.schemas.length,
-          uniqueProducts: productsWithSchema,
-          hasFAQ: hasFAQ,
-          generatedAt: savedSchema.generatedAt
-        });
       }
       
       // Also check FAQ in metafields as backup
@@ -1602,7 +1503,6 @@ router.get('/status', async (req, res) => {
     
     // If memory says generating but we found complete data, generation is done
     if (isActuallyGenerating && actualDataExists) {
-      console.log(`[SCHEMA-STATUS] Memory says generating but data exists - marking as complete`);
       isActuallyGenerating = false;
       
       // Clear the in-memory status since generation is complete
