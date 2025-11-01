@@ -126,7 +126,17 @@ async function generateEnhancedBulletsFAQ(data) {
       role: 'system',
       content: `${storeContext}
 
-Language: ${language}. Generate ONLY factual bullets and FAQ based on provided product data AND store context above. Return ONLY JSON with bullets array and faq array. Nothing else.`
+You are an AI assistant that enhances e-commerce product SEO content.
+Your task is to improve ONLY the bullets and FAQ sections.
+Language: ${language}
+Guidelines:
+- Make bullets more compelling and benefit-focused
+- Create helpful FAQ questions and answers based on product data
+- Keep the same language as input
+- Use ONLY factual information from product data AND store context above
+- Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
+- bullets: array of 5 strings
+- faq: array of 3-5 objects with "q" and "a" keys`
     },
     {
       role: 'user',

@@ -69,14 +69,14 @@ function validateBullets(bullets, productData) {
  * Validate FAQ items against product data
  */
 function validateFAQ(faq, productData) {
-  return faq.filter(item => {
+  const validFaqs = faq.filter(item => {
     // Ensure FAQ has both question and answer
     if (!item.q || !item.a) {
       console.log('[AI-VALIDATOR] Rejected FAQ (missing q/a):', item);
       return false;
     }
     
-    // Check for specific claims in answers
+    // Check for specific claims in answers (only critical hallucinations)
     const suspiciousAnswers = [
       /\d+\s*(day|week|month|year)s?\s*(money\s*back|return|warranty|guarantee)/i,
       /made in (italy|france|germany|japan|china|usa)/i,
@@ -86,13 +86,30 @@ function validateFAQ(faq, productData) {
     
     for (const pattern of suspiciousAnswers) {
       if (pattern.test(item.a)) {
-        console.log(`[AI-VALIDATOR] Rejected FAQ answer: "${item.a}"`);
+        console.log(`[AI-VALIDATOR] Rejected FAQ answer (hallucination): "${item.a}"`);
         return false;
       }
     }
     
+    // Check length constraints
+    if (item.q.length < 3 || item.q.length > 160 || item.a.length < 3 || item.a.length > 400) {
+      console.log(`[AI-VALIDATOR] Rejected FAQ (length): q=${item.q.length}, a=${item.a.length}`);
+      return false;
+    }
+    
     return true;
   });
+  
+  // FALLBACK: If all FAQs were rejected, create a generic one to meet schema requirements
+  if (validFaqs.length === 0 && productData.title) {
+    console.log('[AI-VALIDATOR] All FAQs rejected, adding fallback generic FAQ');
+    validFaqs.push({
+      q: `What is ${productData.title}?`,
+      a: productData.description || productData.existingSeo?.metaDescription || 'A quality product designed to meet your needs.'
+    });
+  }
+  
+  return validFaqs;
 }
 
 /**
