@@ -1100,20 +1100,17 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
   };
 
   const messages = strictPrompt(ctx, langNormalized);
-  console.log('🟡 [PROMPT] Sending to AI:', JSON.stringify(messages, null, 2));
   
   const { content } = await openrouterChat(model, messages, true);
 
   let candidate;
   try { 
     candidate = JSON.parse(content);
-    console.log('🟡 [AI PARSED] AI returned:', JSON.stringify(candidate, null, 2));
   }
   catch { throw new Error('Model did not return valid JSON'); }
   */
 
   // LOCAL SEO DATA GENERATION
-  console.log('💰 [ZERO COST] Generating SEO data locally from product data');
   
   // Generate meta description from body or title
   let metaDescription = seoDescription;
@@ -1207,8 +1204,6 @@ function strictPrompt(ctx, language) {
 }
 
 async function applySEOForLanguage(req, shop, productId, seo, language, options = {}) {
-  console.log('[APPLY-SEO] Starting apply for language:', language, 'productId:', productId);
-
   // Get language from body (required now)
   if (!language) {
     throw new Error("Missing 'language' for apply");
@@ -1484,12 +1479,6 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
 }
 
 router.post('/seo/apply', validateRequest(), async (req, res) => {
-  console.log('[SEO/HANDLER]', req.method, req.originalUrl, {
-    queryShop: req.query?.shop,
-    bodyShop: req.body?.shop,
-    sessionShop: res.locals?.shopify?.session?.shop,
-  });
-
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -1499,10 +1488,6 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
     console.error('[SEO/HANDLER] No shop resolved — cannot load Admin API token');
     return res.status(400).json({ error: 'Shop not provided' });
   }
-
-  // Тук логни и от къде четеш Admin API токена:
-  const tokenSource = 'db|kv|session'; // актуализирай според твоя сторидж
-  console.log('[SEO/HANDLER] Resolving Admin token', { shop, tokenSource });
 
   try {
     const shop = req.shopDomain;
@@ -1522,8 +1507,6 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    
-    console.log('[COLLECTIONS-GQL] Fetching collections via GraphQL for shop:', shop);
     
     // Single GraphQL query to get all collections with metafields and product counts
     const query = `
@@ -1581,8 +1564,6 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
     const data = result.data;
     const collections = data?.collections?.edges || [];
     
-    console.log('[COLLECTIONS-GQL] Found', collections.length, 'collections');
-    
     // Transform to same structure as REST endpoint
     const collectionsWithData = collections.map(edge => {
       const c = edge.node;
@@ -1604,8 +1585,6 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       
       hasSeoData = optimizedLanguages.length > 0;
       
-      console.log(`[COLLECTIONS-GQL] Collection "${c.title}" - products: ${c.productsCount?.count || 0}, languages: ${optimizedLanguages.join(',') || 'none'}`);
-      
       return {
         id: c.id, // Already in GID format from GraphQL
         title: c.title,
@@ -1619,7 +1598,6 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       };
     });
     
-    console.log('[COLLECTIONS-GQL] Returning', collectionsWithData.length, 'collections with data');
     res.json({ collections: collectionsWithData });
     
   } catch (e) {
@@ -1669,9 +1647,6 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
     const data = await shopGraphQL(req, shop, query, { id: collectionId });
     const collection = data?.collection;
     
-    console.log(`[GENERATE-COLLECTION] Raw GraphQL response:`, JSON.stringify(collection, null, 2));
-    console.log(`[GENERATE-COLLECTION] productsCount from GraphQL:`, collection?.productsCount);
-    
     if (!collection) {
       return res.status(404).json({ error: 'Collection not found' });
     }
@@ -1681,9 +1656,6 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
       ...collection,
       productsCount: collection.productsCount?.count || 0
     };
-    
-    console.log(`[GENERATE-COLLECTION] Collection "${collection.title}" has ${transformedCollection.productsCount} products`);
-    console.log(`[GENERATE-COLLECTION] Transformed collection:`, JSON.stringify(transformedCollection, null, 2));
     
     // Generate SEO data locally (no AI costs)
     const cleanDescription = (collection.descriptionHtml || '')
@@ -1723,15 +1695,10 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
 
 // POST /seo/apply-collection
 router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
-  console.log('[APPLY-COLLECTION] Request body:', JSON.stringify(req.body, null, 2));
-  
   try {
     const shop = req.shopDomain;
-    console.log('[APPLY-COLLECTION] Shop:', shop);
     
     const { collectionId, seo, language = 'en', options = {} } = req.body;
-    console.log('[APPLY-COLLECTION] CollectionId:', collectionId);
-    console.log('[APPLY-COLLECTION] Language:', language);
     
     if (!collectionId || !seo) {
       console.error('[APPLY-COLLECTION] Missing required fields');
@@ -1794,9 +1761,6 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
       const definitionResult = definitionResults[0];
       const definitionId = definitionResult?.definitionId;
       
-      console.log(`[APPLY-COLLECTION] Definition result for ${language}:`, definitionResult);
-      console.log(`[APPLY-COLLECTION] Definition ID:`, definitionId);
-      
       const metafields = [{
         ownerId: collectionId,
         namespace: 'seo_ai',  // Same namespace like products!
@@ -1855,8 +1819,6 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
           
           if (!currentCollection) {
             console.error(`[APPLY-COLLECTION] Could not fetch collection ${collectionId} from Shopify`);
-          } else {
-            console.log(`[APPLY-COLLECTION] Fetched current collection: title="${currentCollection.title}"`);
           }
         } catch (fetchError) {
           console.error(`[APPLY-COLLECTION] Error fetching collection:`, fetchError.message);
@@ -1902,18 +1864,14 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
               description: currentCollection.descriptionHtml || '',
               updatedAt: new Date()
             };
-            console.log(`[APPLY-COLLECTION] Setting lastShopifyUpdate baseline: title="${currentCollection.title}"`);
           }
           
           // Update the collection
-          console.log(`[APPLY-COLLECTION] Updating MongoDB for collection ${numericId}`);
           await Collection.findOneAndUpdate(
             { shop, collectionId: numericId },
             { $set: updateFields },
             { new: true, runValidators: true }
           );
-          
-          console.log(`[APPLY-COLLECTION] MongoDB update completed successfully`);
         } else {
           // Create new collection record
           const newCollection = {
@@ -1938,7 +1896,6 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
           }
           
           await Collection.create(newCollection);
-          console.log(`[APPLY-COLLECTION] Created new collection record in MongoDB`);
         }
       } catch (e) {
         console.error('[APPLY-COLLECTION] Failed to update MongoDB:', e.message);
