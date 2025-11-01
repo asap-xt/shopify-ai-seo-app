@@ -36,8 +36,6 @@ async function getAccessToken(shop) {
 // Helper function to save schema to Shopify metafield
 async function saveSchemaToMetafield(shop, productId, language, schemas) {
   try {
-    console.log(`[SCHEMA-METAFIELD] Saving schema for product ${productId}, language: ${language}`);
-    
     const mutation = `
       mutation($metafields: [MetafieldsSetInput!]!) {
         metafieldsSet(metafields: $metafields) {
@@ -71,7 +69,6 @@ async function saveSchemaToMetafield(shop, productId, language, schemas) {
       return { success: false, errors: result.metafieldsSet.userErrors };
     }
     
-    console.log(`[SCHEMA-METAFIELD] ✅ Schema metafield saved successfully for product ${productId}`);
     return { success: true };
   } catch (error) {
     console.error('[SCHEMA-METAFIELD] Exception saving schema metafield:', error.message);
@@ -83,8 +80,6 @@ async function saveSchemaToMetafield(shop, productId, language, schemas) {
 // This function fetches all products and detects AI SEO metafields to mark them as optimized
 // Added debug logging to troubleshoot metafields detection - force deploy
 async function syncProductsToMongoDB(shop) {
-  console.log(`[SYNC] Starting product sync for ${shop}...`);
-  
   try {
     // GraphQL query to fetch all products
     const query = `
@@ -165,7 +160,6 @@ async function syncProductsToMongoDB(shop) {
       if (!productsData) break;
       
       const edges = productsData.edges || [];
-      console.log(`[SYNC] Fetched ${edges.length} products for ${shop}`);
       
       allProducts.push(...edges.map(edge => edge.node));
       
@@ -175,8 +169,6 @@ async function syncProductsToMongoDB(shop) {
       if (edges.length === 0) break;
     }
 
-    console.log(`[SYNC] Total products fetched for ${shop}: ${allProducts.length}`);
-
     // Save products to MongoDB
     let syncedCount = 0;
     for (const product of allProducts) {
@@ -184,15 +176,6 @@ async function syncProductsToMongoDB(shop) {
       
       // Check if product has AI SEO metafields (indicating it's been optimized)
       const metafields = product.metafields?.edges || [];
-      console.log(`[SYNC] Product ${product.title} - metafields count: ${metafields.length}`);
-      
-      if (metafields.length > 0) {
-        console.log(`[SYNC] Product ${product.title} - metafields:`, metafields.map(mf => ({
-          namespace: mf.node.namespace,
-          key: mf.node.key,
-          value: mf.node.value?.substring(0, 50) + '...'
-        })));
-      }
       
       // Extract SEO languages from metafield keys (seo__en__title, seo__bg__description, etc.)
       const seoLanguages = [];
@@ -214,9 +197,6 @@ async function syncProductsToMongoDB(shop) {
       const detectedLanguages = seoLanguages.length > 0 ? [...new Set(['en', ...seoLanguages])] : ['en'];
       
       const hasSeoMetafields = seoLanguages.length > 0;
-      
-      console.log(`[SYNC] Product ${product.title} - detected SEO languages:`, detectedLanguages);
-      console.log(`[SYNC] Product ${product.title} has SEO metafields: ${hasSeoMetafields}`);
       
       // Check if product already exists
       const existingProduct = await Product.findOne({ 
@@ -283,7 +263,6 @@ async function syncProductsToMongoDB(shop) {
       syncedCount++;
     }
 
-    console.log(`[SYNC] Successfully synced ${syncedCount} products to MongoDB for ${shop}`);
     return { success: true, syncedCount, totalProducts: allProducts.length };
     
   } catch (error) {
