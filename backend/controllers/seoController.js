@@ -2141,9 +2141,6 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
     const data = await shopGraphQL(req, shop, query, { id: collectionId });
     const collection = data?.collection;
     
-    console.log(`[GENERATE-COLLECTION-MULTI] Raw GraphQL response:`, JSON.stringify(collection, null, 2));
-    console.log(`[GENERATE-COLLECTION-MULTI] productsCount from GraphQL:`, collection?.productsCount);
-    
     if (!collection) {
       return res.status(404).json({ error: 'Collection not found' });
     }
@@ -2153,9 +2150,6 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
       ...collection,
       productsCount: collection.productsCount?.count || 0
     };
-    
-    console.log(`[GENERATE-COLLECTION-MULTI] Collection "${collection.title}" has ${transformedCollection.productsCount} products`);
-    console.log(`[GENERATE-COLLECTION-MULTI] Transformed collection:`, JSON.stringify(transformedCollection, null, 2));
 
     for (const language of languages) {
       try {
@@ -2239,8 +2233,6 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
     const shop = req.shopDomain;
     const { collectionId, results = [], options = {} } = req.body;
     
-    console.log('[APPLY-MULTI] Request languages:', results.map(r => r.language));
-    
     if (!collectionId || !results.length) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -2270,15 +2262,12 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
     
     // Ensure EN definition always exists
     const allLanguages = results.map(r => r.language);
-    console.log('[APPLY-MULTI] Ensuring definitions for:', allLanguages);
     await ensureCollectionMetafieldDefinitions(req, shop, allLanguages);
     
     for (const result of results) {
       try {
         const { language, seo } = result;
         const isPrimary = language.toLowerCase() === primary.toLowerCase();
-        
-        console.log(`[APPLY-MULTI] Processing ${language}, isPrimary: ${isPrimary}`);
         
         // Update collection base fields only for primary language
         if (isPrimary && (options.updateTitle || options.updateDescription || options.updateSeo)) {
@@ -2322,24 +2311,17 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
           // Always update metafields
           if (options.updateMetafields !== false) {
             // Ensure definition exists for this language
-            console.log(`[APPLY-MULTI] ===== ENSURING DEFINITION FOR ${language} =====`);
             const definitionResults = await ensureCollectionMetafieldDefinitions(req, shop, [language]);
             const definitionResult = definitionResults[0];
             const definitionId = definitionResult?.definitionId;
-            
-            console.log(`[APPLY-MULTI] Definition results:`, definitionResults);
-            console.log(`[APPLY-MULTI] Definition result for ${language}:`, definitionResult);
-            console.log(`[APPLY-MULTI] Definition ID:`, definitionId);
-            console.log(`[APPLY-MULTI] ===== DEFINITION ENSURED =====`);
             
             const key = `seo__${String(language || 'en').toLowerCase()}`; // ALWAYS lowercase!
             
             // Delete any existing metafield with this key first
             try {
-              console.log(`[APPLY-MULTI] Deleting existing metafield ${key} for ${collectionId}`);
               await deleteCollectionMetafield(req, shop, collectionId, key);
             } catch (e) {
-              console.log(`[APPLY-MULTI] No existing metafield to delete for ${key}:`, e.message);
+              // No existing metafield to delete
             }
             
             const metafields = [{
@@ -2450,8 +2432,6 @@ router.post('/collections/create-definitions', validateRequest(), async (req, re
     const shop = req.shopDomain;
     const { languages = ['en'] } = req.body;
     
-    console.log('[CREATE-DEFINITIONS] Creating definitions for languages:', languages);
-    
     const results = await ensureCollectionMetafieldDefinitions(req, shop, languages);
     
     res.json({
@@ -2481,7 +2461,6 @@ router.post('/collections/init-metafields', validateRequest(), async (req, res) 
       .map(l => canonLang(l.locale));
     
     const uniqueLanguages = [...new Set(languages)];
-    console.log('[INIT] Creating collection metafield definitions for languages:', uniqueLanguages);
     
     const results = await ensureCollectionMetafieldDefinitions(req, shop, uniqueLanguages);
     
@@ -2645,8 +2624,6 @@ router.get('/collections/:id/seo-data', validateRequest(), async (req, res) => {
 
 // DELETE /seo/delete - Delete SEO for specific language
 router.delete('/seo/delete', validateRequest(), async (req, res) => {
-  console.log('[DELETE-SEO] Request received:', req.body);
-  
   try {
     const shop = req.shopDomain;
     const { productId, language } = req.body;
@@ -2658,8 +2635,6 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
     const errors = [];
     const deleted = { metafield: false, mongodb: false };
     const metafieldKey = `seo__${language.toLowerCase()}`;
-    
-    console.log(`[DELETE-SEO] Attempting to delete metafield: ${metafieldKey} for product: ${productId}`);
     
     // 1. Delete using metafieldsDelete - DON'T search for ID, delete directly
     try {
@@ -2688,11 +2663,7 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
         }]
       };
       
-      console.log('[DELETE-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
-      
       const deleteResult = await shopGraphQL(req, shop, deleteMutation, variables);
-      
-      console.log('[DELETE-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
       
       if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
         const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
@@ -2701,7 +2672,6 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
       } else {
         // Successful deletion or metafield doesn't exist
         deleted.metafield = true;
-        console.log(`[DELETE-SEO] Metafield deletion completed`);
       }
     } catch (e) {
       console.error('[DELETE-SEO] GraphQL error:', e);
@@ -2710,8 +2680,6 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
     
     // 2. Update MongoDB using Mongoose model
     try {
-      console.log('[DELETE-SEO] Updating MongoDB for product ID:', productId);
-      
       // Extract numeric ID
       const numericId = parseInt(productId.replace('gid://shopify/Product/', ''));
       
@@ -2745,15 +2713,9 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
         
         if (updateResult) {
           deleted.mongodb = true;
-          console.log('[DELETE-SEO] MongoDB updated successfully');
-          console.log('[DELETE-SEO] Remaining languages:', updatedLanguages.map(l => l.code));
-          console.log('[DELETE-SEO] Cleared lastShopifyUpdate baseline');
         } else {
-          console.log('[DELETE-SEO] MongoDB update failed - document not found');
           errors.push('Failed to update optimization status in database');
         }
-      } else {
-        console.log('[DELETE-SEO] Product not found in MongoDB or no seoStatus');
       }
       
     } catch (e) {
@@ -2793,8 +2755,6 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
 
 // DELETE /seo/bulk-delete - Delete SEO for multiple products
 router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
-  console.log('[BULK-DELETE-SEO] Request received');
-  
   try {
     const shop = req.shopDomain;
     const { items } = req.body; // Array of { productId, language }
@@ -2819,8 +2779,6 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       }
     });
     
-    console.log(`[BULK-DELETE-SEO] Deleting ${metafieldsToDelete.length} metafields`);
-    
     // 1. Delete all metafields in one GraphQL call
     if (metafieldsToDelete.length > 0) {
       try {
@@ -2843,8 +2801,6 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
         const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
           metafields: metafieldsToDelete
         });
-        
-        console.log('[BULK-DELETE-SEO] GraphQL result:', JSON.stringify(deleteResult, null, 2));
         
         if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
           results.push({
@@ -2927,27 +2883,17 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
 
 // DELETE /collections/delete-seo - Delete collection SEO for specific language
 router.delete('/collections/delete-seo', validateRequest(), async (req, res) => {
-  console.log('[DELETE-COLLECTION-SEO] ===== DELETE REQUEST START =====');
-  console.log('[DELETE-COLLECTION-SEO] Request received:', req.body);
-  console.log('[DELETE-COLLECTION-SEO] Headers:', req.headers);
-  console.log('[DELETE-COLLECTION-SEO] Shop domain:', req.shopDomain);
-  
   try {
     const shop = req.shopDomain;
     const { collectionId, language } = req.body;
     
     if (!collectionId || !language) {
-      console.log('[DELETE-COLLECTION-SEO] Missing parameters:', { collectionId, language });
       return res.status(400).json({ error: 'Missing collectionId or language' });
     }
-    
-    console.log('[DELETE-COLLECTION-SEO] Parameters validated:', { shop, collectionId, language });
     
     const errors = [];
     const deleted = { metafield: false };
     const metafieldKey = `seo__${language.toLowerCase()}`;
-    
-    console.log(`[DELETE-COLLECTION-SEO] Attempting to delete metafield: ${metafieldKey} for collection: ${collectionId}`);
     
     // Delete using metafieldsDelete
     try {
@@ -2975,11 +2921,7 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
         }]
       };
       
-      console.log('[DELETE-COLLECTION-SEO] Calling metafieldsDelete with:', JSON.stringify(variables, null, 2));
-      
       const deleteResult = await shopGraphQL(req, shop, deleteMutation, variables);
-      
-      console.log('[DELETE-COLLECTION-SEO] Delete result:', JSON.stringify(deleteResult, null, 2));
       
       if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
         const errorMessages = deleteResult.metafieldsDelete.userErrors.map(e => e.message);
@@ -2987,7 +2929,6 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
         errors.push(...errorMessages);
       } else {
         deleted.metafield = true;
-        console.log(`[DELETE-COLLECTION-SEO] Metafield deletion completed`);
       }
     } catch (e) {
       console.error('[DELETE-COLLECTION-SEO] GraphQL error:', e);
@@ -2995,10 +2936,7 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
     }
     
     // Return response
-    console.log('[DELETE-COLLECTION-SEO] Final result:', { errors: errors.length, deleted });
-    
     if (errors.length === 0) {
-      console.log('[DELETE-COLLECTION-SEO] ===== DELETE SUCCESS =====');
       res.json({ 
         ok: true, 
         shop,
@@ -3008,8 +2946,6 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
         message: `Successfully deleted SEO for language: ${language}`
       });
     } else {
-      console.log('[DELETE-COLLECTION-SEO] ===== DELETE FAILED =====');
-      console.log('[DELETE-COLLECTION-SEO] Errors:', errors);
       res.status(400).json({ 
         ok: false, 
         shop,
@@ -3026,35 +2962,6 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
       ok: false,
       error: error.message
     });
-  }
-});
-
-// DEBUG ROUTE - временен за диагностика на токени
-router.get('/debug-token', async (req, res) => {
-  const shop = req.query.shop;
-  console.log('=== DEBUG TOKEN CHECK ===');
-  
-  try {
-    // Провери DB
-    const Shop = await import('../db/Shop.js');
-    const doc = await Shop.default.findOne({ shop }).lean();
-    
-    // Провери token exchange
-    console.log('Shop doc:', doc);
-    
-    res.json({
-      shop,
-      hasDoc: !!doc,
-      accessToken: doc?.accessToken,
-      tokenType: typeof doc?.accessToken,
-      isUndefinedString: doc?.accessToken === 'undefined',
-      tokenLength: doc?.accessToken?.length,
-      startsWithShpat: doc?.accessToken?.startsWith('shpat_'),
-      installedAt: doc?.installedAt,
-      updatedAt: doc?.updatedAt
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 

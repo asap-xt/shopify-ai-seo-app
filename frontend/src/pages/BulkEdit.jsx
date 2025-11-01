@@ -187,7 +187,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const limits = {
         'starter': 1,
         'professional': 2,
+        'professional plus': 2,
+        'professional_plus': 2,
         'growth': 3,
+        'growth plus': 3,
+        'growth_plus': 3,
         'growth extra': 6,
         'growth_extra': 6,
         'enterprise': 10
@@ -202,7 +206,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const limits = {
         'starter': 1,
         'professional': 2,
+        'professional plus': 2,
+        'professional_plus': 2,
         'growth': 3,
+        'growth plus': 3,
+        'growth_plus': 3,
         'growth extra': 6,
         'growth_extra': 6,
         'enterprise': 10
@@ -257,7 +265,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const limits = {
           'starter': 1,
           'professional': 2,
+          'professional plus': 2,
+          'professional_plus': 2,
           'growth': 3,
+          'growth plus': 3,
+          'growth_plus': 3,
           'growth extra': 6,
           'growth_extra': 6,
           'enterprise': 10
