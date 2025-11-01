@@ -527,7 +527,7 @@ async function generateSitemapCore(shop) {
               langDescription = seo.metaDescription || langDescription;
             }
           } catch (err) {
-            console.log(`[SITEMAP-CORE] Could not get SEO for ${lang}:`, err.message);
+            // Could not get SEO for language
           }
           
           xml += '  <url>\n';
@@ -570,11 +570,11 @@ async function generateSitemapCore(shop) {
                     }
                   });
                   xml += '      </ai:faq>\n';
-                }
               }
-            } catch (err) {
-              console.log(`[SITEMAP-CORE] Could not get localized AI content for ${lang}:`, err.message);
             }
+          } catch (err) {
+            // Could not get localized AI content
+          }
             
             xml += '    </ai:product>\n';
           }
@@ -693,10 +693,6 @@ async function generateSitemapCore(shop) {
 // Handler functions
 // PHASE 4: Async generation with queue system
 async function handleGenerate(req, res) {
-  console.log('[SITEMAP] Generate called');
-  console.log('[SITEMAP] Request body:', req.body);
-  console.log('[SITEMAP] Request query:', req.query);
-  
   try {
     const shop = normalizeShop(req.query.shop || req.body.shop);
     if (!shop) {
@@ -704,13 +700,10 @@ async function handleGenerate(req, res) {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    console.log('[SITEMAP] Normalized shop:', shop);
-    
     // Check if force-sync (skip queue for immediate generation - for viewing)
     const forceSync = req.query.force === 'true';
     
     if (forceSync) {
-      console.log('[SITEMAP] Force sync requested, generating immediately...');
       // Generate synchronously and return XML (for viewing)
       const result = await generateSitemapCore(shop);
       
@@ -729,13 +722,9 @@ async function handleGenerate(req, res) {
     }
     
     // PHASE 4: Add to queue for async generation
-    console.log('[SITEMAP] Adding to queue for async generation...');
-    
     const jobInfo = await sitemapQueue.addJob(shop, async () => {
       return await generateSitemapCore(shop);
     });
-    
-    console.log('[SITEMAP] Job queued:', jobInfo);
     
     // Return immediate response
     return res.json({
@@ -760,21 +749,16 @@ async function handleGenerate(req, res) {
 }
 
 async function handleInfo(req, res) {
-  console.log('[SITEMAP] Info called, query:', req.query);
-  
   try {
     const shop = normalizeShop(req.query.shop);
     if (!shop) {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    console.log('[SITEMAP] Getting info for shop:', shop);
-    
     const { limit, collections: collectionLimit, plan } = await getPlanLimits(shop);
     
     // Check if sitemap exists
     const existingSitemap = await Sitemap.findOne({ shop }).select('-content').lean();
-    console.log('[SITEMAP] Existing sitemap found:', !!existingSitemap);
     
     // Get actual product count
     const countData = await shopGraphQL(shop, `
@@ -812,7 +796,6 @@ async function handleInfo(req, res) {
       size: existingSitemap?.size || 0
     };
     
-    console.log('[SITEMAP] Returning info:', response);
     return res.json(response);
     
   } catch (err) {
@@ -825,13 +808,11 @@ async function handleInfo(req, res) {
 
 async function handleProgress(req, res) {
   // Deprecated - use /status endpoint for queue status
-  console.log('[SITEMAP] Progress called (deprecated)');
   res.json({ status: 'completed', progress: 100, message: 'Use /api/sitemap/status for queue status' });
 }
 
 // PHASE 4: Queue status endpoint
 async function handleStatus(req, res) {
-  console.log('[SITEMAP] Status called');
   try {
     const shop = normalizeShop(req.query.shop);
     if (!shop) {
@@ -873,11 +854,6 @@ async function handleStatus(req, res) {
 
 // Add new function to serve saved sitemap
 async function serveSitemap(req, res) {
-  console.log('[SITEMAP] ===== SERVE SITEMAP CALLED =====');
-  console.log('[SITEMAP] URL:', req.url);
-  console.log('[SITEMAP] Query:', req.query);
-  console.log('[SITEMAP] Method:', req.method);
-  
   try {
     const shop = normalizeShop(req.query.shop || req.params.shop);
     if (!shop) {
@@ -886,16 +862,11 @@ async function serveSitemap(req, res) {
     }
     
     const forceRegenerate = req.query.force === 'true';
-    console.log('[SITEMAP] Force regenerate:', forceRegenerate);
-    console.log('[SITEMAP] Force parameter value:', req.query.force);
-    console.log('[SITEMAP] Looking for sitemap for shop:', shop);
     
     // Check if we should force regenerate
     if (forceRegenerate) {
-      console.log('[SITEMAP] Force regeneration requested, generating new sitemap...');
       try {
         const result = await generateSitemapCore(shop);
-        console.log('[SITEMAP] Generated new sitemap:', result);
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
@@ -915,16 +886,11 @@ async function serveSitemap(req, res) {
     
     // Get saved sitemap with content - use .lean() for better performance
     const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-    console.log('[SITEMAP] Found sitemap:', !!sitemapDoc);
-    console.log('[SITEMAP] Has content:', !!(sitemapDoc?.content));
-    console.log('[SITEMAP] Content length:', sitemapDoc?.content?.length || 0);
     
     if (!sitemapDoc || !sitemapDoc.content) {
       // Try to generate new one if none exists
-      console.log('[SITEMAP] No saved sitemap, generating new one...');
       try {
         const result = await generateSitemapCore(shop);
-        console.log('[SITEMAP] Generated new sitemap:', result);
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
@@ -940,7 +906,6 @@ async function serveSitemap(req, res) {
         console.error('[SITEMAP] Failed to generate sitemap:', genErr);
       }
       
-      console.log('[SITEMAP] No saved sitemap, returning 404');
       return res.status(404).send('Sitemap not found. Please generate it first.');
     }
     
@@ -960,23 +925,17 @@ async function serveSitemap(req, res) {
 
 // Public sitemap endpoint (no authentication required)
 async function handlePublicSitemap(req, res) {
-  console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
-  console.log('[PUBLIC_SITEMAP] Query:', req.query);
-  
   const shop = normalizeShop(req.query.shop);
   if (!shop) {
     console.error('[PUBLIC_SITEMAP] Missing shop parameter');
     return res.status(400).send('Missing shop parameter. Use: /api/sitemap/public?shop=your-shop.myshopify.com');
   }
   
-  console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
-  
   try {
     // Check for cached sitemap
     const cachedSitemap = await Sitemap.findOne({ shop }).select('+content').lean().exec();
     
     if (cachedSitemap && cachedSitemap.content) {
-      console.log('[PUBLIC_SITEMAP] Serving cached sitemap for shop:', shop);
       
       res.set({
         'Content-Type': 'application/xml; charset=utf-8',
@@ -988,7 +947,6 @@ async function handlePublicSitemap(req, res) {
       });
       return res.send(cachedSitemap.content);
     } else {
-      console.log('[PUBLIC_SITEMAP] No cached sitemap found for shop:', shop);
       return res.status(404).send(`
 Sitemap not found for shop: ${shop}
 
@@ -1008,9 +966,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
 
 // Public sitemap endpoint (no authentication required) - simplified version
 async function servePublicSitemap(req, res) {
-  console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
-  console.log('[PUBLIC_SITEMAP] Query:', req.query);
-  
   try {
     const shop = normalizeShop(req.query.shop);
     if (!shop) {
@@ -1018,14 +973,10 @@ async function servePublicSitemap(req, res) {
       return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
     }
     
-    console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
-    
     // Get saved sitemap with content
     const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-    console.log('[PUBLIC_SITEMAP] Found sitemap:', !!sitemapDoc);
     
     if (!sitemapDoc || !sitemapDoc.content) {
-      console.log('[PUBLIC_SITEMAP] No sitemap found, returning instructions');
       return res.status(404).send(`
 Sitemap not found for shop: ${shop}
 
@@ -1039,7 +990,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
     }
     
     // Serve the saved sitemap
-    console.log('[PUBLIC_SITEMAP] Serving sitemap for shop:', shop);
     res.set({
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=21600', // 6 hours
