@@ -28,10 +28,8 @@ function normalizeShop(s) {
 
 // Helper: get access token using centralized resolver
 async function resolveAdminTokenForShop(shop) {
-  console.log('[SITEMAP] Resolving token for shop:', shop);
   try {
     const token = await resolveShopToken(shop);
-    console.log('[SITEMAP] Token resolved successfully');
     return token;
   } catch (err) {
     console.error('[SITEMAP] Token resolution failed:', err.message);
@@ -45,17 +43,12 @@ async function resolveAdminTokenForShop(shop) {
 async function shopGraphQL(shop, query, variables = {}) {
   const token = await resolveAdminTokenForShop(shop);
   const url = 'https://' + shop + '/admin/api/' + API_VERSION + '/graphql.json';
-  console.log('[SITEMAP] GraphQL request to:', url);
-  
-  console.log('[SITEMAP] Token prefix:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
   
   // Always use OAuth access token for GraphQL API calls
   const headers = {
     'Content-Type': 'application/json',
     'X-Shopify-Access-Token': token,
   };
-  
-  console.log('[SITEMAP] Using OAuth access token for GraphQL');
   
   const rsp = await fetch(url, {
     method: 'POST',
@@ -105,7 +98,6 @@ async function checkProductSEOLanguages(shop, productId) {
     
     // Always include 'en' as default if no languages found
     const result = languages.length > 0 ? [...new Set(['en', ...languages])] : ['en'];
-    console.log('[SITEMAP] Product', productId, 'SEO languages:', result);
     return result;
   } catch (error) {
     console.error('[SITEMAP] Error checking SEO languages for product:', productId, error);
@@ -134,21 +126,14 @@ async function getProductLocalizedContent(shop, productId, language) {
     if (metafield?.value) {
       try {
         const seoData = JSON.parse(metafield.value);
-        console.log(`[SITEMAP-CORE] Found localized content for ${language}:`, {
-          title: seoData.title,
-          metaDescription: seoData.metaDescription?.substring(0, 100) + '...'
-        });
         return seoData;
       } catch (parseErr) {
-        console.log(`[SITEMAP-CORE] Failed to parse localized content for ${language}:`, parseErr.message);
         return null;
       }
     }
     
-    console.log(`[SITEMAP-CORE] No localized content found for ${language}`);
     return null;
   } catch (error) {
-    console.log(`[SITEMAP-CORE] Error getting localized content for ${language}:`, error.message);
     return null;
   }
 }
@@ -158,7 +143,6 @@ async function getPlanLimits(shop) {
   try {
     const { getPlanConfig } = await import('../plans.js');
     const sub = await Subscription.findOne({ shop }).lean().exec();
-    console.log('[SITEMAP] Subscription found:', !!sub, 'plan:', sub?.plan);
     
     if (!sub) {
       // Default to starter plan
@@ -172,7 +156,6 @@ async function getPlanLimits(shop) {
     
     const planConfig = getPlanConfig(sub.plan);
     if (!planConfig) {
-      console.warn('[SITEMAP] Unknown plan:', sub.plan, '- falling back to starter');
       const starterConfig = getPlanConfig('starter');
       return { 
         limit: starterConfig.productLimit, 
@@ -215,18 +198,13 @@ function cleanHtmlForXml(html) {
 
 // Core sitemap generation function (without Express req/res dependencies)
 async function generateSitemapCore(shop) {
-  console.log('[SITEMAP-CORE] Starting sitemap generation for shop:', shop);
-  
   try {
     const normalizedShop = normalizeShop(shop);
     if (!normalizedShop) {
       throw new Error('Invalid shop parameter');
     }
     
-    console.log('[SITEMAP-CORE] Normalized shop:', normalizedShop);
-    
     const { limit, plan } = await getPlanLimits(normalizedShop);
-    console.log('[SITEMAP-CORE] Plan limits:', { limit, plan });
     
     // Check AI Discovery settings for AI-Optimized Sitemap
     let isAISitemapEnabled = false;
@@ -253,24 +231,15 @@ async function generateSitemapCore(shop) {
           
           if (tokenBalance.balance > 0) {
             isEligiblePlan = true; // Has tokens - eligible
-            console.log('[SITEMAP-CORE] Plus plan with tokens, AI sitemap enabled');
           } else {
             isEligiblePlan = false; // No tokens - not eligible
-            console.log('[SITEMAP-CORE] Plus plan without tokens, AI sitemap disabled');
           }
         }
         
         isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
-        
-        console.log('[SITEMAP-CORE] AI Discovery settings:', { 
-          aiSitemap: settings?.features?.aiSitemap, 
-          plan: planKey,
-          isEligiblePlan,
-          finalAiEnabled: isAISitemapEnabled
-        });
       }
     } catch (error) {
-      console.log('[SITEMAP-CORE] Could not fetch AI Discovery settings, using basic sitemap:', error.message);
+      // Could not fetch AI Discovery settings, using basic sitemap
     }
     
     // Get shop info and languages
@@ -282,14 +251,10 @@ async function generateSitemapCore(shop) {
       }
     `;
     
-    console.log('[SITEMAP-CORE] Fetching shop data...');
     const shopData = await shopGraphQL(normalizedShop, shopQuery);
-    console.log('[SITEMAP-CORE] Shop data fetched successfully');
     const primaryDomain = shopData.shop.primaryDomain.url;
-    console.log('[SITEMAP-CORE] Primary domain:', primaryDomain);
     
     // Try to get locales
-    console.log('[SITEMAP-CORE] Fetching locales...');
     let locales = [{ locale: 'en', primary: true }];
     try {
       const localesQuery = `
