@@ -15,7 +15,7 @@ api_version = "2025-07"
 # GDPR Compliance Webhooks (mandatory for Shopify App Store)
 [[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-uri = "/webhooks/gdpr"
+uri = "https://indexaize-aiseo-app-production.up.railway.app/webhooks/gdpr"
 
 [auth]
 redirect_urls = [
