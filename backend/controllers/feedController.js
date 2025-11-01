@@ -2,16 +2,12 @@
 // Serves AI-ready catalog feed from Mongo cache.
 // Secured with ?shop=...&token=... (FEED_TOKEN). If cache is missing, attempts on-demand build.
 
-console.log('📁 FEED CONTROLLER LOADING...');
-
 import express from 'express';
 import crypto from 'crypto';
 import { FeedCache, syncProductsForShop } from './productSync.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import Subscription from '../db/Subscription.js';
 import { shopGraphQL } from './seoController.js';
-
-console.log('[FEED] AdvancedSchema model loaded:', !!AdvancedSchema); // DEBUG
 
 const router = express.Router();
 
@@ -120,22 +116,13 @@ router.get('/ai/feed/catalog.json', async (req, res) => {
 
 // GET /ai/schema-data.json?shop=...
 router.get('/schema-data.json', async (req, res) => {
-  console.log('🚀🚀🚀 SCHEMA ENDPOINT CALLED! 🚀🚀🚀');
-  console.log('[SCHEMA-ENDPOINT] ============ REQUEST RECEIVED ============');
-  console.log('[SCHEMA-ENDPOINT] URL:', req.url);
-  console.log('[SCHEMA-ENDPOINT] Query:', req.query);
-  console.log('[SCHEMA-ENDPOINT] Headers:', req.headers);
-  
   try {
     const shop = req.query.shop;
     if (!shop) {
-      console.log('[SCHEMA-ENDPOINT] No shop parameter');
       return res.status(400).json({ error: 'Shop required' });
     }
     
-    console.log('[SCHEMA-ENDPOINT] Checking plan for shop:', shop);
     const plan = await fetchPlan(shop);
-    console.log('[SCHEMA-ENDPOINT] Plan result:', plan);
     
     const planKey = (plan.planKey || '').toLowerCase().replace(/\s+/g, '_');
     const plansWithAccess = ['enterprise'];
@@ -147,18 +134,15 @@ router.get('/schema-data.json', async (req, res) => {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       if (tokenBalance.balance <= 0) {
-        console.log('[SCHEMA-ENDPOINT] Plus plan without tokens');
         return res.status(403).json({ 
           error: 'Advanced Schema Data requires tokens. Please purchase tokens to enable this feature.',
           tokensRequired: true
         });
       }
-      console.log('[SCHEMA-ENDPOINT] Plus plan with tokens, access granted');
       // Has tokens - allow access
     } 
     // Regular plans: Check if plan has access
     else if (!plansWithAccess.includes(planKey)) {
-      console.log('[SCHEMA-ENDPOINT] Plan not eligible:', planKey);
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Professional Plus or Enterprise plan',
         upgradeRequired: true,
@@ -166,16 +150,9 @@ router.get('/schema-data.json', async (req, res) => {
       });
     }
     
-    console.log('[SCHEMA-ENDPOINT] Looking for AdvancedSchema document...');
-    console.log('[SCHEMA-ENDPOINT] MongoDB query: { shop:', shop, '}');
     const schemaData = await AdvancedSchema.findOne({ shop });
-    console.log('[SCHEMA-ENDPOINT] Found document:', !!schemaData);
-    console.log('[SCHEMA-ENDPOINT] Raw document:', schemaData);
-    console.log('[SCHEMA-ENDPOINT] Document ID:', schemaData?._id);
-    console.log('[SCHEMA-ENDPOINT] Schemas count:', schemaData?.schemas?.length);
     
     if (!schemaData || !schemaData.schemas?.length) {
-      console.log('[SCHEMA-ENDPOINT] Returning empty response');
       return res.json({
         shop,
         generated_at: new Date(),
@@ -189,7 +166,6 @@ router.get('/schema-data.json', async (req, res) => {
       });
     }
     
-    console.log('[SCHEMA-ENDPOINT] Returning', schemaData.schemas.length, 'schemas');
     res.json({
       shop,
       generated_at: schemaData.generatedAt,
