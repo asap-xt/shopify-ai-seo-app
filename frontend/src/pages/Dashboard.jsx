@@ -217,17 +217,22 @@ export default function Dashboard({ shop: shopProp }) {
     : 0;
 
   // Check feature availability
-  const hasCollections = ['growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
-  const hasStoreMetadata = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(subscription?.plan);
+  const hasCollections = ['growth', 'growth_plus', 'growth plus', 'growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
+  const hasStoreMetadata = ['professional', 'professional_plus', 'professional plus', 'growth', 'growth_plus', 'growth plus', 'growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
   const hasAdvancedSchema = subscription?.plan === 'enterprise';
-  const hasAiSitemap = ['growth_extra', 'enterprise'].includes(subscription?.plan);
+  const hasAiSitemap = ['growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
 
   // Plan price fallback mapping (if backend doesn't provide price)
   const planPriceFallback = useMemo(() => ({
     starter: 9.99,
     professional: 15.99,
+    professional_plus: 19.99,
+    'professional plus': 19.99,
     growth: 29.99,
+    growth_plus: 35.99,
+    'growth plus': 35.99,
     growth_extra: 79.99,
+    'growth extra': 79.99,
     enterprise: 139.99
   }), []);
   const planPriceValue = subscription?.price && subscription.price > 0
@@ -239,15 +244,31 @@ export default function Dashboard({ shop: shopProp }) {
     switch (planKey) {
       case 'starter': return { products: 100, languages: 1 };
       case 'professional': return { products: 250, languages: 2 };
+      case 'professional_plus':
+      case 'professional plus': return { products: 250, languages: 2 };
       case 'growth': return { products: 700, languages: 3 };
-      case 'growth_extra': return { products: 1000, languages: 6 };
+      case 'growth_plus':
+      case 'growth plus': return { products: 700, languages: 3 };
+      case 'growth_extra':
+      case 'growth extra': return { products: 1000, languages: 6 };
       case 'enterprise': return { products: 2500, languages: 10 };
       default: return { products: 0, languages: 0 };
     }
   };
 
   const getPlanOrder = (planKey) => {
-    const order = { starter: 1, professional: 2, growth: 3, growth_extra: 4, enterprise: 5 };
+    const order = { 
+      starter: 1, 
+      professional: 2, 
+      'professional_plus': 2.5,
+      'professional plus': 2.5, 
+      growth: 3, 
+      'growth_plus': 3.5,
+      'growth plus': 3.5,
+      growth_extra: 4,
+      'growth extra': 4, 
+      enterprise: 5 
+    };
     return order[planKey] || 0;
   };
 
@@ -300,12 +321,13 @@ export default function Dashboard({ shop: shopProp }) {
 
   const recommendation = useMemo(() => recommendPlan(), [stats, subscription]);
 
-  // Token recommendation for Professional/Growth plans (pay-per-use)
+  // Token recommendation for Professional/Growth/Plus plans (pay-per-use)
   const shouldRecommendTokens = useMemo(() => {
     if (!subscription?.plan) return false;
     const plan = subscription.plan;
-    // Show token recommendation for Professional/Growth (pay-per-use plans without included tokens)
-    if (plan !== 'professional' && plan !== 'growth') return false;
+    // Show token recommendation for plans without included tokens (Professional, Growth, and their Plus variants)
+    const payPerUsePlans = ['professional', 'professional_plus', 'professional plus', 'growth', 'growth_plus', 'growth plus'];
+    if (!payPerUsePlans.includes(plan)) return false;
     // Show if balance is low (less than 1000 tokens) or zero
     const balance = tokens?.balance || 0;
     if (balance >= 1000) return false;
