@@ -22,6 +22,7 @@ import {
 } from '@shopify/polaris';
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 
 export default function Settings() {
   console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
@@ -69,6 +70,15 @@ export default function Settings() {
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
+  
+  // Insufficient Tokens Modal state
+  const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [tokenModalData, setTokenModalData] = useState({
+    feature: '',
+    tokensRequired: 0,
+    tokensAvailable: 0,
+    tokensNeeded: 0
+  });
   const [processingSchema, setProcessingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState('');
   const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
@@ -762,8 +772,22 @@ export default function Settings() {
       try {
         const balance = await api(`/api/billing/tokens/balance?shop=${shop}`);
         if (balance.balance <= 0) {
-          setToast('This feature requires tokens. Please purchase tokens to enable it.');
-          // TODO: Show BuyTokensModal here
+          // Show InsufficientTokensModal instead of toast
+          const featureMapping = {
+            aiSitemap: 'ai-sitemap-optimized',
+            schemaData: 'ai-schema-advanced',
+            welcomePage: 'ai-welcome-page',
+            collectionsJson: 'ai-collections-json',
+            storeMetadata: 'ai-store-metadata'
+          };
+          
+          setTokenModalData({
+            feature: featureMapping[featureKey] || featureKey,
+            tokensRequired: 1000, // Estimate
+            tokensAvailable: balance.balance || 0,
+            tokensNeeded: 1000 // Estimate
+          });
+          setShowInsufficientTokensModal(true);
           return; // Don't toggle the feature ON
         }
       } catch (error) {
@@ -1021,9 +1045,22 @@ export default function Settings() {
     try {
       const balance = await api(`/api/billing/tokens/balance?shop=${shop}`);
       if (balance.balance <= 0) {
-        // Show "Buy tokens" modal (you can replace this with your existing modal)
-        setToast('This feature requires tokens. Please purchase tokens to use it.');
-        // TODO: Show BuyTokensModal here
+        // Show InsufficientTokensModal instead of toast
+        const featureMapping = {
+          aiSitemap: 'ai-sitemap-optimized',
+          schemaData: 'ai-schema-advanced',
+          welcomePage: 'ai-welcome-page',
+          collectionsJson: 'ai-collections-json',
+          storeMetadata: 'ai-store-metadata'
+        };
+        
+        setTokenModalData({
+          feature: featureMapping[featureKey] || featureKey,
+          tokensRequired: 1000, // Estimate
+          tokensAvailable: balance.balance || 0,
+          tokensNeeded: 1000 // Estimate
+        });
+        setShowInsufficientTokensModal(true);
         return false;
       }
       return true;
@@ -2380,6 +2417,20 @@ export default function Settings() {
 
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
+      
+      {/* Insufficient Tokens Modal */}
+      <InsufficientTokensModal
+        open={showInsufficientTokensModal}
+        onClose={() => setShowInsufficientTokensModal(false)}
+        feature={tokenModalData.feature}
+        tokensRequired={tokenModalData.tokensRequired}
+        tokensAvailable={tokenModalData.tokensAvailable}
+        tokensNeeded={tokenModalData.tokensNeeded}
+        shop={shop}
+        needsUpgrade={false}
+        minimumPlan={null}
+        currentPlan={settings?.plan || 'starter'}
+      />
       
     </BlockStack>
     );
