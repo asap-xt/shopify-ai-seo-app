@@ -696,10 +696,31 @@ router.get('/settings', validateRequest(), async (req, res) => {
       ? JSON.parse(data.shop.metafield.value)
       : { advancedSchemaEnabled: false };
     
-    res.json(settings);
+    // Add plan and token balance info for frontend plan checks
+    const Subscription = require('../db/Subscription');
+    const TokenBalance = require('../db/TokenBalance');
+    
+    const subscription = await Subscription.findOne({ shop });
+    const tokenBalance = await TokenBalance.findOne({ shop });
+    
+    // Add plan and token info to response
+    const response = {
+      ...settings,
+      plan: subscription?.plan || 'starter',
+      tokenBalance: {
+        available: tokenBalance?.available || 0,
+        totalUsed: tokenBalance?.totalUsed || 0
+      }
+    };
+    
+    res.json(response);
   } catch (error) {
     console.error('[STORE-SETTINGS] Error loading settings:', error);
-    res.json({ advancedSchemaEnabled: false }); // Default settings
+    res.json({ 
+      advancedSchemaEnabled: false,
+      plan: 'starter',
+      tokenBalance: { available: 0, totalUsed: 0 }
+    }); // Default settings
   }
 });
 

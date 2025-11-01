@@ -826,13 +826,20 @@ export default function Settings() {
       setOriginalSettings(settings); // Update original settings
       generateRobotsTxt(); // Regenerate robots.txt
       
-      // Background sitemap regeneration if AI Sitemap is enabled
-      console.log('[SETTINGS] Checking AI Sitemap feature:', settings.features?.aiSitemap);
-      if (settings.features?.aiSitemap) {
+      // Background sitemap regeneration if AI Sitemap is enabled AND plan allows it
+      // Check if plan supports AI Sitemap (Growth Extra+ or Plus plans with tokens)
+      const normalizedPlan = normalizePlan(settings?.plan);
+      const plansWithAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
+      const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
+      
+      // Check token balance - fetch from settings or default to 0
+      const currentTokenBalance = settings?.tokenBalance?.available || 0;
+      
+      const hasAISitemapAccess = plansWithAISitemap.includes(normalizedPlan) || 
+                                  (plusPlans.includes(normalizedPlan) && currentTokenBalance > 0);
+      
+      if (settings.features?.aiSitemap && hasAISitemapAccess) {
         try {
-          console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION START =====');
-          console.log('[SETTINGS] AI Sitemap enabled, starting background regeneration...');
-          console.log('[SETTINGS] Shop:', shop);
           
           const REGENERATE_SITEMAP_MUTATION = `
             mutation RegenerateSitemap($shop: String!) {
