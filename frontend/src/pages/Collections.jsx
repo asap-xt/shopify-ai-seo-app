@@ -799,6 +799,20 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             data
           };
         } catch (err) {
+          // Check if it's a plan restriction error (403)
+          if (err.status === 403 || err.message?.includes('requires Professional plan')) {
+            // Stop processing and show upgrade modal
+            setIsProcessing(false);
+            setCurrentCollection('');
+            setTokenError({
+              error: err.message || 'Collections SEO requires Professional plan or higher',
+              currentPlan: err.currentPlan || currentPlan || 'starter',
+              upgradeMessage: err.upgradeMessage || 'Upgrade to Professional plan to optimize collections for AI search'
+            });
+            setShowUpgradeModal(true);
+            return; // Stop loop
+          }
+          
           results[collection.id] = {
             success: false,
             error: err.message,

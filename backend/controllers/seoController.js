@@ -200,6 +200,53 @@ function requireShop(req) {
   return shop;
 }
 
+/**
+ * Check if shop's plan allows Collections SEO
+ * @param {string} shop - Shop domain
+ * @returns {Promise<{allowed: boolean, plan: string, collectionLimit: number}>}
+ */
+async function checkCollectionAccess(shop) {
+  try {
+    const subscription = await Subscription.findOne({ shop });
+    
+    // If no subscription, they're on trial with Starter plan
+    if (!subscription) {
+      const starterConfig = getPlanConfig('starter');
+      return {
+        allowed: false,
+        plan: 'Starter',
+        collectionLimit: starterConfig.collectionLimit || 0
+      };
+    }
+    
+    const planConfig = getPlanConfig(subscription.plan);
+    
+    if (!planConfig) {
+      // Unknown plan, default to Starter
+      return {
+        allowed: false,
+        plan: subscription.plan || 'Starter',
+        collectionLimit: 0
+      };
+    }
+    
+    return {
+      allowed: planConfig.collectionLimit > 0,
+      plan: subscription.plan,
+      collectionLimit: planConfig.collectionLimit
+    };
+    
+  } catch (error) {
+    console.error('[COLLECTION-ACCESS-CHECK] Error:', error);
+    // On error, deny access to be safe
+    return {
+      allowed: false,
+      plan: 'unknown',
+      collectionLimit: 0
+    };
+  }
+}
+
 // Import centralized token resolver
 import { resolveShopToken, resolveAdminToken } from '../utils/tokenResolver.js';
 import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
@@ -1616,6 +1663,17 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing required field: collectionId' });
     }
     
+    // Check if shop's plan allows Collections SEO
+    const accessCheck = await checkCollectionAccess(shop);
+    if (!accessCheck.allowed) {
+      return res.status(403).json({
+        error: 'Collections SEO requires Professional plan or higher',
+        currentPlan: accessCheck.plan,
+        collectionLimit: accessCheck.collectionLimit,
+        upgradeMessage: 'Upgrade to Professional plan to optimize collections for AI search'
+      });
+    }
+    
     // Fetch collection data
     const query = `
       query GetCollection($id: ID!) {
@@ -2039,6 +2097,17 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    // Check if shop's plan allows Collections SEO
+    const accessCheck = await checkCollectionAccess(shop);
+    if (!accessCheck.allowed) {
+      return res.status(403).json({
+        error: 'Collections SEO requires Professional plan or higher',
+        currentPlan: accessCheck.plan,
+        collectionLimit: accessCheck.collectionLimit,
+        upgradeMessage: 'Upgrade to Professional plan to optimize collections for AI search'
+      });
+    }
+    
     const results = [];
     
     // Първо вземи основната колекция
@@ -2174,6 +2243,17 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
     
     if (!collectionId || !results.length) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check if shop's plan allows Collections SEO
+    const accessCheck = await checkCollectionAccess(shop);
+    if (!accessCheck.allowed) {
+      return res.status(403).json({
+        error: 'Collections SEO requires Professional plan or higher',
+        currentPlan: accessCheck.plan,
+        collectionLimit: accessCheck.collectionLimit,
+        upgradeMessage: 'Upgrade to Professional plan to optimize collections for AI search'
+      });
     }
     
     const updated = [];

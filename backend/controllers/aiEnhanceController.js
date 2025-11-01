@@ -497,7 +497,18 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';
     
-    // === PLAN CHECK: Growth+ required for Collections AI enhancement ===
+    // === PLAN CHECK 1: Check if plan allows Collections at all ===
+    const planConfig = getPlanConfig(planKey);
+    if (!planConfig || planConfig.collectionLimit === 0) {
+      return res.status(403).json({
+        error: 'Collections SEO requires Professional plan or higher',
+        currentPlan: planKey,
+        collectionLimit: 0,
+        message: 'Upgrade to Professional plan to optimize collections for AI search'
+      });
+    }
+    
+    // === PLAN CHECK 2: AI-enhanced add-ons require Professional+ ===
     const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
     const collectionsAllowedPlans = ['professional', 'growth', 'growth_extra', 'enterprise'];
     
@@ -511,7 +522,7 @@ router.post('/collection', validateRequest(), async (req, res) => {
     }
     
     // === LANGUAGE LIMIT CHECK ===
-    const planConfig = getPlanConfig(planKey);
+    // planConfig already defined above in PLAN CHECK 1
     const languageLimit = planConfig?.languageLimit || 1;
     
     if (languages.length > languageLimit) {
