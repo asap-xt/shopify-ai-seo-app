@@ -33,7 +33,6 @@ scopes = "read_products,write_products,read_themes,read_translations,write_trans
 # This is the *destination* on your server that Shopify will call.
 # You already mount your router there in server.js:
 #   app.use('/apps/new-ai-seo', appProxyRouter)
-url = "https://new-ai-seo-app-production.up.railway.app/apps"
 url = "https://indexaize-aiseo-app-production.up.railway.app/apps"
 
 # Merchant-facing URL on the storefront:
