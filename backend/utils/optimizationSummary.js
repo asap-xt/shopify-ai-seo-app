@@ -8,8 +8,6 @@ import { executeShopifyGraphQL } from './tokenResolver.js';
  */
 export async function updateOptimizationSummary(shop, productId) {
   try {
-    console.log(`[OPT-SUMMARY] Updating optimization summary for product ${productId}`);
-    
     // 1. Fetch current optimization state from MongoDB
     const product = await Product.findOne({ shop, productId });
     
@@ -90,8 +88,6 @@ export async function updateOptimizationSummary(shop, productId) {
     
     const summary = summaryParts.join(' | ');
     
-    console.log(`[OPT-SUMMARY] Summary for product ${productId}: ${summary}`);
-    
     // 4. Save to Shopify metafield
     const mutation = `
       mutation($metafields: [MetafieldsSetInput!]!) {
@@ -126,7 +122,6 @@ export async function updateOptimizationSummary(shop, productId) {
       return { success: false, errors: result.metafieldsSet.userErrors };
     }
     
-    console.log(`[OPT-SUMMARY] ✅ Optimization summary metafield saved for product ${productId}`);
     return { success: true, summary };
     
   } catch (error) {
