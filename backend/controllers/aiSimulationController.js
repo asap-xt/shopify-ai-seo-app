@@ -17,10 +17,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
 async function openrouterChat(model, messages, response_format_json = true) {
-  console.log('🤖 [AI-SIMULATION] Starting OpenRouter request');
-  console.log('🤖 [AI-SIMULATION] Model:', model);
-  console.log('🤖 [AI-SIMULATION] Messages:', JSON.stringify(messages, null, 2));
-  
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
   }
@@ -76,11 +72,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
   try {
     const { questionType, context } = req.body;
     
-    console.log('[AI-SIMULATION] Starting simulation for:', questionType);
-    console.log('[AI-SIMULATION] Shop:', shop);
-    console.log('[AI-SIMULATION] Context:', context);
-    console.log('[AI-SIMULATION] Access token available:', !!accessToken);
-    
     // === TOKEN CHECKING WITH DYNAMIC TRACKING ===
     // AI Testing/Simulation requires tokens for all plans
     const feature = 'ai-testing-simulation';
@@ -98,9 +89,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
-      
-      console.log(`[AI-SIMULATION] Token estimate:`, tokenEstimate);
-      console.log(`[AI-SIMULATION] Current balance: ${tokenBalance.balance}`);
       
       // If in trial AND insufficient tokens → Block with trial activation modal
       if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
@@ -145,15 +133,11 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { questionType });
       reservationId = reservation.reservationId;
       await reservation.save();
-      
-      console.log(`[AI-SIMULATION] Reserved ${tokenEstimate.withMargin} tokens (${tokenEstimate.margin} margin), reservation: ${reservationId}`);
-      console.log(`[AI-SIMULATION] Remaining balance after reservation: ${tokenBalance.balance}`);
     }
     // === END TOKEN CHECKING ===
     
     // Check if OpenRouter API key is available
     if (!process.env.OPENROUTER_API_KEY) {
-      console.warn('[AI-SIMULATION] OPENROUTER_API_KEY is not set. Falling back to basic simulation.');
       // Instead of returning error, fall back to basic simulation
       return res.json({
         success: true,
@@ -176,7 +160,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     let additionalData = {};
     
     if (questionType === 'products') {
-      console.log('[AI-SIMULATION] Fetching products data...');
       const productsQuery = `
         query {
           products(first: 20) {
@@ -196,9 +179,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       
       try {
         const productsResp = await adminGraphql.request(productsQuery);
-        console.log('[AI-SIMULATION] Products response:', JSON.stringify(productsResp, null, 2));
         additionalData.products = productsResp?.products?.edges || [];
-        console.log('[AI-SIMULATION] Products count:', additionalData.products.length);
       } catch (error) {
         console.error('[AI-SIMULATION] Products query error:', error);
         additionalData.products = [];
@@ -206,7 +187,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     }
     
     if (questionType === 'categories') {
-      console.log('[AI-SIMULATION] Fetching collections data...');
       const collectionsQuery = `
         query {
           collections(first: 20) {
@@ -223,9 +203,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       
       try {
         const collectionsResp = await adminGraphql.request(collectionsQuery);
-        console.log('[AI-SIMULATION] Collections response:', JSON.stringify(collectionsResp, null, 2));
         additionalData.collections = collectionsResp?.collections?.edges || [];
-        console.log('[AI-SIMULATION] Collections count:', additionalData.collections.length);
       } catch (error) {
         console.error('[AI-SIMULATION] Collections query error:', error);
         additionalData.collections = [];
@@ -243,12 +221,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     
     // Generate AI response using OpenRouter
     const prompt = generatePrompt(questionType, aiContext);
-    console.log('[AI-SIMULATION] Prompt:', prompt);
     
-    // Initialize OpenRouter
-    console.log('[AI-SIMULATION] Initializing OpenRouter...');
-    
-    console.log('[AI-SIMULATION] Generating AI response...');
     const result = await openrouterChat('google/gemini-2.5-flash-lite', [
       {
         role: 'system',
@@ -267,14 +240,9 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     if (reservationId && requiresTokens(feature) && result.usage) {
       const actual = calculateActualTokens(result.usage);
       
-      console.log(`[AI-SIMULATION] Actual tokens used: ${actual.totalTokens} (prompt: ${actual.promptTokens}, completion: ${actual.completionTokens})`);
-      
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, actual.totalTokens);
-      
-      console.log(`[AI-SIMULATION] Finalized reservation ${reservationId}`);
-      console.log(`[AI-SIMULATION] New balance: ${tokenBalance.balance}`);
     }
     // === END TOKEN FINALIZATION ===
     
