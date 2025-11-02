@@ -27,14 +27,6 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
-    console.log('[AI-DISCOVERY] Debug token info:', {
-      shop,
-      hasShopifySession: !!res.locals.shopify?.session,
-      hasAccessToken: !!accessToken,
-      tokenStartsWith: accessToken ? accessToken.substring(0, 10) + '...' : 'none',
-      hasShopAccessToken: !!req.shopAccessToken
-    });
-    
     if (!accessToken) {
       throw new Error('No access token available');
     }
@@ -69,10 +61,6 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     // Get default structure for the plan
     const defaultSettings = aiDiscoveryService.getDefaultSettings(normalizedPlan);
 
-    console.log('[AI-DISCOVERY] ===== DEBUG SETTINGS =====');
-    console.log('[AI-DISCOVERY] savedSettings.richAttributes:', savedSettings.richAttributes);
-    console.log('[AI-DISCOVERY] defaultSettings.richAttributes:', defaultSettings.richAttributes);
-
     // IMPORTANT: For new shops, all features should be false by default
     const defaultFeatures = {
       productsJson: false,
@@ -96,11 +84,6 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
 
     const isFreshShop = allFeaturesFalse && hasRecentDefaultTimestamp;
 
-    console.log('[AI-DISCOVERY] allFeaturesFalse:', allFeaturesFalse);
-    console.log('[AI-DISCOVERY] hasRecentDefaultTimestamp:', hasRecentDefaultTimestamp);
-    console.log('[AI-DISCOVERY] isFreshShop:', isFreshShop);
-    console.log('[AI-DISCOVERY] Will use features:', isFreshShop ? 'defaultFeatures (all false)' : 'savedSettings.features');
-
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
@@ -110,10 +93,6 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString()
     };
-
-    console.log('[AI-DISCOVERY] Final mergedSettings.features:', JSON.stringify(mergedSettings.features, null, 2));
-    console.log('[AI-DISCOVERY] Final mergedSettings.richAttributes:', JSON.stringify(mergedSettings.richAttributes, null, 2));
-    console.log('[AI-DISCOVERY] ===== END DEBUG =====');
 
     res.json(mergedSettings);
   } catch (error) {
@@ -129,8 +108,6 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     const { bots, features, advancedSchemaEnabled, richAttributes } = req.body;
-    
-    console.log('[AI-DISCOVERY] Saving settings for shop:', shop);
     
     if (!bots || !features) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -192,8 +169,6 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const { type, question } = req.query;
     
-    console.log('[AI-SIMULATE] Request received for type:', type, 'custom question:', question);
-    
     if (!type) {
       return res.status(400).json({ error: 'Missing type parameter' });
     }
@@ -210,8 +185,6 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
     // Get subscription and plan
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan?.toLowerCase().replace(/\s+/g, '_') || 'starter';
-    
-    console.log('[AI-SIMULATE] Plan:', planKey);
     
     // Starter plan: Block with upgrade modal
     if (planKey === 'starter') {
@@ -244,8 +217,6 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
       // Reserve tokens
       const reservation = tokenBalance.reserveTokens(estimatedTokens, 'ai-simulation', { type, question: question?.substring(0, 50) });
       await tokenBalance.save();
-      
-      console.log('[AI-SIMULATE] Reserved', estimatedTokens, 'tokens');
       
       // Store reservationId for later adjustment
       res.locals.tokenReservationId = reservation.reservationId;
@@ -326,12 +297,6 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
     };
     
     const storeData = await shopifyGraphQL(shopDataQuery);
-    
-    console.log('[AI-SIMULATE] Store data fetched:', {
-      shop: storeData.shop.name,
-      products: storeData.products.edges.length,
-      collections: storeData.collections.edges.length
-    });
     
     // Prepare context for AI based on question type
     let contextPrompt = '';
@@ -462,9 +427,6 @@ Generate a helpful response.`;
     const generatedResponse = aiData.choices[0]?.message?.content || 'Unable to generate response';
     const actualTokens = aiData.usage?.total_tokens || 0;
     
-    console.log('[AI-SIMULATE] AI response generated:', generatedResponse.substring(0, 100));
-    console.log('[AI-SIMULATE] Actual tokens used:', actualTokens);
-    
     // === TOKEN CONSUMPTION TRACKING ===
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
       // Professional & Growth: Finalize reservation with actual usage
@@ -473,8 +435,6 @@ Generate a helpful response.`;
       
       // Finalize reservation (this will refund the difference between estimated and actual)
       await tokenBalance.finalizeReservation(reservationId, actualTokens);
-      
-      console.log('[AI-SIMULATE] Finalized reservation:', actualTokens, 'tokens used');
     } else {
       // Growth Extra & Enterprise: Deduct from included tokens balance
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
@@ -485,7 +445,6 @@ Generate a helpful response.`;
         tokenBalance.balance = Math.max(0, tokenBalance.balance - actualTokens);
         tokenBalance.totalUsed = (tokenBalance.totalUsed || 0) + actualTokens;
         await tokenBalance.save();
-        console.log('[AI-SIMULATE] Deducted', actualTokens, 'tokens from included balance');
       }
     }
     // === END TOKEN TRACKING ===
@@ -517,7 +476,6 @@ Generate a helpful response.`;
           tokenBalance.usage[reservationIndex].metadata.cancelledAt = new Date();
           
           await tokenBalance.save();
-          console.log('[AI-SIMULATE] Refunded', estimatedAmount, 'reserved tokens due to error');
         }
       } catch (refundError) {
         console.error('[AI-SIMULATE] Error refunding tokens:', refundError);
@@ -535,12 +493,7 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    console.log('[ROBOTS-TXT] Request received');
-    console.log('[ROBOTS-TXT] Shop:', shop);
-    console.log('[ROBOTS-TXT] Headers:', req.headers);
-    
     if (!shop) {
-      console.log('[ROBOTS-TXT] ERROR: Missing shop');
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
@@ -558,9 +511,6 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
     
     const settings = await aiDiscoveryService.getSettings(shop, session);
     const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
-    
-    console.log('[ROBOTS-TXT] Generated length:', robotsTxt?.length);
-    console.log('[ROBOTS-TXT] First 100 chars:', robotsTxt?.substring(0, 100));
     
     // ВАЖНО: Върнете като plain text, не JSON!
     res.type('text/plain').send(robotsTxt);
@@ -777,8 +727,6 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
  * @returns {Promise<object>} Result object with success/error status
  */
 async function applyRobotsTxt(shop, robotsTxt) {
-  console.log('[ROBOTS DEBUG] Starting applyRobotsTxt for shop:', shop);
-  
   // Check if plan supports auto robots
   try {
     const Q = `
@@ -862,19 +810,13 @@ async function applyRobotsTxt(shop, robotsTxt) {
       }
     };
     
-    console.log('[ROBOTS DEBUG] Mutation variables:', JSON.stringify(variables, null, 2));
-    
     const result = await originalShopGraphQL(null, shop, mutation, variables);
-    
-    console.log('[ROBOTS DEBUG] Mutation result:', JSON.stringify(result, null, 2));
     
     if (result.themeFilesUpsert?.userErrors?.length > 0) {
       const error = result.themeFilesUpsert.userErrors[0];
       
       // Ако има проблем с input типа, пробвай алтернативен подход
       if (error.message.includes('OnlineStoreThemeFileBodyInput')) {
-        console.log('[ROBOTS DEBUG] Trying alternative mutation structure...');
-        
         // Алтернативна мутация - inline структура
         const altMutation = `
           mutation CreateOrUpdateRobotsTxt($themeId: ID!) {
@@ -905,7 +847,6 @@ async function applyRobotsTxt(shop, robotsTxt) {
           themeId: mainTheme.node.id
         };
         
-        console.log('[ROBOTS DEBUG] Trying alternative mutation...');
         const altResult = await originalShopGraphQL(null, shop, altMutation, altVariables);
         
         if (altResult.themeFilesUpsert?.userErrors?.length > 0) {
@@ -939,8 +880,6 @@ async function applyRobotsTxt(shop, robotsTxt) {
     
     // Последен опит - използвай themeFileCreate мутация
     if (error.message.includes('themeFilesUpsert') || error.message.includes('OnlineStoreThemeFileBodyInput')) {
-      console.log('[ROBOTS DEBUG] Trying themeFileCreate mutation...');
-      
       try {
         const themesQuery = `{
           themes(first: 10) {
@@ -976,7 +915,6 @@ async function applyRobotsTxt(shop, robotsTxt) {
         `;
         
         await originalShopGraphQL(null, shop, deleteMutation, { themeId: mainTheme.node.id });
-        console.log('[ROBOTS DEBUG] Existing file deleted (if any)');
         
         // След това създай нов файл
         const createMutation = `
