@@ -4,13 +4,8 @@
 import shopify from '../utils/shopifyApi.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 
-// Debug: Check if shopify is properly initialized
-console.log('[SHOPIFY-AUTH] shopify object:', typeof shopify);
-console.log('[SHOPIFY-AUTH] shopify.auth:', typeof shopify?.auth);
-
 // Middleware for OAuth authentication
 export function authBegin() {
-  console.log('[SHOPIFY-AUTH] authBegin called, shopify.auth.begin type:', typeof shopify.auth.begin);
   return async (req, res, next) => {
     try {
       const middleware = await shopify.auth.begin({
@@ -18,16 +13,12 @@ export function authBegin() {
         callbackPath: '/api/auth/callback',
         afterAuth: async (ctx) => {
           const { session } = ctx;
-          console.log('[SHOPIFY-AUTH] OAuth completed for shop:', session.shop);
           
           // Redirect to app after successful authentication
           const redirectUrl = `${process.env.APP_URL}/?shop=${session.shop}&host=${ctx.query.host}`;
           ctx.redirect(redirectUrl);
         }
       });
-      console.log('[SHOPIFY-AUTH] authBegin middleware type:', typeof middleware);
-      console.log('[SHOPIFY-AUTH] authBegin middleware constructor:', middleware?.constructor?.name);
-      console.log('[SHOPIFY-AUTH] authBegin middleware is Promise:', middleware instanceof Promise);
       return middleware(req, res, next);
     } catch (error) {
       console.error('[SHOPIFY-AUTH] Error in authBegin:', error);
@@ -43,8 +34,6 @@ export function authCallback() {
       const middleware = await shopify.auth.callback({
         afterAuth: async (ctx) => {
           const { session } = ctx;
-          console.log('[SHOPIFY-AUTH] Session stored for shop:', session.shop);
-          console.log('[SHOPIFY-AUTH] Access token received:', session.accessToken ? 'YES' : 'NO');
           
           // CRITICAL: Save access token to MongoDB for our tokenResolver
           if (session.accessToken) {
@@ -68,9 +57,6 @@ export function authCallback() {
                 },
                 { upsert: true, new: true }
               );
-              
-              console.log('[SHOPIFY-AUTH] ✅ Access token saved to MongoDB for shop:', session.shop);
-              console.log('[SHOPIFY-AUTH] Token prefix:', session.accessToken.substring(0, 10) + '...');
             } catch (error) {
               console.error('[SHOPIFY-AUTH] ❌ Failed to save access token to MongoDB:', error);
             }
@@ -111,13 +97,11 @@ export function validateSession() {
       // Load session from storage
       const session = await shopify.config.sessionStorage.loadSession(shop);
       if (!session || !session.accessToken) {
-        console.log('[SHOPIFY-AUTH] No valid session found for shop:', shop);
         return res.status(401).json({ error: 'App not installed or session expired' });
       }
 
       // Check if session is expired
       if (session.expires && new Date(session.expires) < new Date()) {
-        console.log('[SHOPIFY-AUTH] Session expired for shop:', shop);
         return res.status(401).json({ error: 'Session expired' });
       }
 
@@ -129,7 +113,6 @@ export function validateSession() {
       // Attach to res.locals for compatibility
       res.locals.shopify = { session };
 
-      console.log('[SHOPIFY-AUTH] Valid session for shop:', shop);
       next();
     } catch (error) {
       console.error('[SHOPIFY-AUTH] Session validation error:', error);
