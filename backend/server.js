@@ -53,31 +53,22 @@ const planOverrides = new Map(); // key: shop, value: 'starter'|'professional'|'
 app.locals.planOverrides = planOverrides;
 
 app.locals.setPlanOverride = (shop, plan) => {
-  console.log(`[DEBUG] setPlanOverride called with shop: ${shop}, plan: ${plan}`);
   if (!shop) {
-    console.log(`[DEBUG] No shop provided, returning null`);
     return null;
   }
   if (!plan) {
-    console.log(`[DEBUG] No plan provided, deleting override for shop: ${shop}`);
     planOverrides.delete(shop);
     return null;
   }
-  console.log(`[DEBUG] Setting override for shop: ${shop} -> plan: ${plan}`);
   planOverrides.set(shop, plan);
-  console.log(`[DEBUG] Current overrides:`, Array.from(planOverrides.entries()));
   return plan;
 };
 
 app.locals.getPlanOverride = (shop) => {
-  console.log(`[DEBUG] getPlanOverride called with shop: ${shop}`);
   if (!shop) {
-    console.log(`[DEBUG] No shop provided, returning null`);
     return null;
   }
   const override = planOverrides.get(shop) || null;
-  console.log(`[DEBUG] Found override for shop ${shop}:`, override);
-  console.log(`[DEBUG] Current overrides:`, Array.from(planOverrides.entries()));
   return override;
 };
 
@@ -257,19 +248,6 @@ app.get('/api/whoami', attachShop, async (req, res) => {
 });
 
 // DEBUG: Log all incoming requests
-app.use((req, res, next) => {
-  if (req.url.includes('/api/schema/generate-all')) {
-    console.log('[SERVER] ============================================');
-    console.log('[SERVER] Incoming request to /api/schema/generate-all');
-    console.log('[SERVER] Method:', req.method);
-    console.log('[SERVER] URL:', req.url);
-    console.log('[SERVER] Headers:', req.headers);
-    console.log('[SERVER] Body (before parsing):', req.body);
-    console.log('[SERVER] ============================================');
-  }
-  next();
-});
-
 // Normalize shop domain for all requests
 app.use(attachShop);
 
@@ -281,20 +259,14 @@ app.use('/collections', attachIdToken);
 // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
 app.use('/api', async (req, res, next) => {
   try {
-    console.log('[API-RESOLVER] ===== API MIDDLEWARE CALLED =====');
-    console.log('[API-RESOLVER] URL:', req.originalUrl);
-    console.log('[API-RESOLVER] Method:', req.method);
-    
     // Skip authentication for public sitemap endpoints и token exchange
     if ((req.originalUrl.includes('/sitemap/') || 
          req.originalUrl.includes('/debug/') ||
          req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
-      console.log('[API-RESOLVER] Skipping authentication for public endpoint');
       return next();
     }
     
     const shop = req.shopDomain;
-    console.log('[API-RESOLVER] Using normalized shop:', shop);
     
     if (!shop) return res.status(400).json({ error: 'Missing or invalid shop domain' });
     
@@ -317,7 +289,6 @@ app.use('/api', async (req, res, next) => {
       return next();
       
     } catch (tokenError) {
-      console.log('[API-RESOLVER] Token error:', tokenError.message);
       
       // Ако грешката е "Token exchange required", върни специален код
       if (tokenError.message.includes('Token exchange required') || 
@@ -344,12 +315,6 @@ app.use('/api', async (req, res, next) => {
 
 // App Proxy routes for sitemap (MUST be very early to avoid catch-all)
 
-
-// Debug middleware
-app.use((req, res, next) => {
-  console.log(`[REQUEST] ${req.method} ${req.url}`);
-  next();
-});
 
 // ---------------------------------------------------------------------------
 /** Health / debug */
@@ -382,8 +347,6 @@ app.post('/test/set-token-balance', async (req, res) => {
     const oldBalance = tokenBalance.balance;
     tokenBalance.balance = balance !== undefined ? balance : 0;
     await tokenBalance.save();
-    
-    console.log(`[TEST] Token balance updated for ${shop}: ${oldBalance} → ${tokenBalance.balance}`);
     
     res.json({ 
       success: true, 
@@ -445,7 +408,6 @@ app.get('/test/get-token-balance', async (req, res) => {
 
 // Test sitemap endpoint
 app.get('/test-sitemap.xml', (req, res) => {
-  console.log('[TEST_SITEMAP] Test sitemap endpoint called!');
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.send('<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://test.com</loc></url></urlset>');
 });
@@ -453,7 +415,6 @@ app.get('/test-sitemap.xml', (req, res) => {
 // Test MongoDB connection
 app.get('/test-mongo', async (req, res) => {
   try {
-    console.log('[TEST_MONGO] Testing MongoDB connection...');
     const Sitemap = (await import('./db/Sitemap.js')).default;
     const Shop = (await import('./db/Shop.js')).default;
     
@@ -489,8 +450,6 @@ app.get('/test-mongo', async (req, res) => {
 // Generate direct OAuth URL for testing
 app.get('/generate-oauth-url', (req, res) => {
   try {
-    console.log('[GENERATE_OAUTH_URL] Generating direct OAuth URL...');
-    
     const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
     const state = 'test-state-' + Date.now();
     
@@ -500,8 +459,6 @@ app.get('/generate-oauth-url', (req, res) => {
       redirect_uri: `${process.env.APP_URL}/auth/callback`,
       state: state
     }).toString();
-    
-    console.log('[GENERATE_OAUTH_URL] Generated OAuth URL:', oauthUrl);
     
     res.json({ 
       success: true, 
@@ -522,7 +479,6 @@ app.get('/generate-oauth-url', (req, res) => {
 
 // Simple test endpoint without any imports
 app.get('/simple-test', (req, res) => {
-  console.log('[SIMPLE_TEST] Simple test endpoint called!');
   res.json({ 
     success: true, 
     message: 'Simple test endpoint works!',
@@ -696,15 +652,13 @@ const root = {
 
   async regenerateSitemap({ shop }, ctx) {
     try {
-      console.log('[GRAPHQL] Background sitemap regeneration requested for shop:', shop);
-      
       // Import the core sitemap generation logic
       const { generateSitemapCore } = await import('./controllers/sitemapController.js');
       
       // Call the core function directly without Express req/res
       generateSitemapCore(shop)
         .then((result) => {
-          console.log('[GRAPHQL] Background sitemap generation completed:', result);
+          // Sitemap regeneration completed successfully
         })
         .catch((error) => {
           console.error('[GRAPHQL] Background sitemap generation failed:', error);
@@ -729,8 +683,6 @@ const root = {
 
   async products({ shop, first = 1 }, ctx) {
     try {
-      console.log('[GRAPHQL] Checking products for shop:', shop);
-      
       const { normalizeShop } = await import('./utils/shop.js');
       const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
@@ -786,8 +738,6 @@ const root = {
 
   async collections({ shop, first = 1 }, ctx) {
     try {
-      console.log('[GRAPHQL] Checking collections for shop:', shop);
-      
       const { normalizeShop } = await import('./utils/shop.js');
       const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
@@ -843,8 +793,6 @@ const root = {
 
   async storeMetadata({ shop }, ctx) {
     try {
-      console.log('[GRAPHQL] Checking store metadata for shop:', shop);
-      
       const { normalizeShop } = await import('./utils/shop.js');
       const { executeShopifyGraphQL } = await import('./utils/tokenResolver.js');
       
@@ -881,14 +829,6 @@ const root = {
       
       const hasAnyMetadata = hasSeoMetadata || hasOrganizationMetadata || hasAiMetadata; // || hasLocalBusinessMetadata;
       
-      console.log('[GRAPHQL] Store metadata check:', {
-        shop: normalizedShop,
-        hasSeoMetadata,
-        hasOrganizationMetadata,
-        hasAiMetadata,
-        hasAnyMetadata
-      });
-      
       return {
         shopName: hasAnyMetadata ? data.shop?.name : null,
         description: hasSeoMetadata ? JSON.parse(data.shop?.metafield?.value || '{}').metaDescription || data.shop?.description : null,
@@ -910,8 +850,6 @@ const root = {
 
   async welcomePage({ shop }, ctx) {
     try {
-      console.log('[GRAPHQL] Checking welcome page for shop:', shop);
-      
       // For now, return a simple welcome page structure
       // In the future, this could check for actual generated welcome page content
       return {
@@ -932,9 +870,6 @@ const root = {
 app.post('/graphql', express.json(), async (req, res) => {
   try {
     const { query, variables } = req.body || {};
-    console.log(`[DEBUG] GraphQL request - query:`, query);
-    console.log(`[DEBUG] GraphQL request - variables:`, variables);
-    console.log(`[DEBUG] GraphQL request - body:`, req.body);
     
     if (!query) {
       console.error(`[DEBUG] GraphQL error: No query provided`);
@@ -948,8 +883,6 @@ app.post('/graphql', express.json(), async (req, res) => {
       contextValue: { req, res, app },
       variableValues: variables || {},
     });
-    
-    console.log(`[DEBUG] GraphQL result:`, result);
     
     if (result.errors?.length) {
       console.error(`[DEBUG] GraphQL errors:`, result.errors);
@@ -984,13 +917,7 @@ app.use('/api/sitemap', sitemapRouter);
 
 
 // Store metadata routes
-app.use('/api/store', (req, res, next) => {
-  console.log('[STORE-ROUTER] Request to:', req.method, req.url);
-  console.log('[STORE-ROUTER] Full path:', req.path);
-  console.log('[STORE-ROUTER] Params:', req.params);
-  console.log('[STORE-ROUTER] Query:', req.query);
-  next();
-}, storeRouter);
+app.use('/api/store', storeRouter);
 
 // ---------------------------------------------------------------------------
 // Webhook registration endpoint
@@ -998,10 +925,6 @@ app.use('/api/store', (req, res, next) => {
 app.post('/api/admin/register-webhooks', attachShop, async (req, res) => {
   try {
     const shop = req.shopDomain || req.query.shop;
-    
-    console.log('[WEBHOOK-REGISTER-ENDPOINT] Shop from req.shopDomain:', req.shopDomain);
-    console.log('[WEBHOOK-REGISTER-ENDPOINT] Shop from req.query.shop:', req.query.shop);
-    console.log('[WEBHOOK-REGISTER-ENDPOINT] Final shop:', shop);
     
     if (!shop) {
       return res.status(400).json({ 
@@ -1223,18 +1146,14 @@ async function mountOptionalRouters(app) {
 
 // Handle Shopify's app routes - both by handle and by API key
 app.get('/apps/:app_identifier', (req, res) => {
-  console.log('[APP] Request for app:', req.params.app_identifier);
   res.set('Cache-Control', 'no-store');
   res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
 app.get('/apps/:app_identifier/*', (req, res, next) => {
-  console.log('[APP] Request for app route:', req.url);
-  
   // Skip our App Proxy routes
   if (req.params.app_identifier === 'new-ai-seo') {
-    console.log('[APP] Skipping new-ai-seo app proxy route');
     return next();
   }
   
@@ -1249,9 +1168,6 @@ app.get('/apps/:app_identifier/*', (req, res, next) => {
 // ---------------------------------------------------------------------------
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
 
-console.log('[STATIC] Serving from:', distPath);
-console.log('[STATIC] Files in dist:', fs.readdirSync(distPath));
-
 // Блокирайте достъп до root index.html
 app.use((req, res, next) => {
   // Блокирайте достъп до root index.html
@@ -1264,9 +1180,6 @@ app.use((req, res, next) => {
 // Handle root request - this is the App URL endpoint
 app.get('/', async (req, res) => {
   const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
-  
-  console.log('[APP URL] Request with params:', req.query);
-  console.log('[APP URL] Headers:', req.headers);
   
   // If no shop parameter, show install form
   if (!shop) {
@@ -1318,7 +1231,6 @@ app.get('/', async (req, res) => {
         </style>
         <script>
           window.__SHOPIFY_API_KEY = '${process.env.SHOPIFY_API_KEY}';
-          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
         </script>
         <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
       </head>
@@ -1354,22 +1266,14 @@ app.get('/', async (req, res) => {
   
   try {
     const ShopModel = (await import('./db/Shop.js')).default;
-    console.log('[APP URL] Looking for shop:', shop);
     let existingShop = await ShopModel.findOne({ shop }).lean();
-    console.log('[APP URL] Found shop:', !!existingShop);
     
     // Handle JWT token if present
     if (id_token) {
-      console.log('[APP URL] Found id_token, processing JWT flow...');
-      
       if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'jwt-pending' || 
           existingShop.appApiKey !== process.env.SHOPIFY_API_KEY) {
-        console.log('[APP URL] No valid access token found, performing immediate token exchange...');
-        
         // НАПРАВИ TOKEN EXCHANGE ВЕДНАГА НА СЪРВЪРА
         try {
-          console.log('[APP URL] Exchanging JWT for access token:', shop);
-          
           const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1383,8 +1287,6 @@ app.get('/', async (req, res) => {
             }),
           });
 
-          console.log('[APP URL] Token exchange response status:', tokenResponse.status);
-          
           if (tokenResponse.ok) {
             const tokenData = await tokenResponse.json();
             const accessToken = tokenData.access_token;
@@ -1404,8 +1306,6 @@ app.get('/', async (req, res) => {
                 },
                 { upsert: true, new: true }
               );
-              
-              console.log('[APP URL] ✅ Token exchange successful, access token saved');
             } else {
               console.error('[APP URL] No access token in response');
             }
@@ -1418,18 +1318,9 @@ app.get('/', async (req, res) => {
         }
       }
       
-      // Webhook регистрацията ще се направи в token-exchange endpoint-а след запазването на токена
-      console.log('[APP URL] Webhook registration will be handled by token-exchange endpoint');
-      
-      console.log('[APP URL] Serving embedded app with token exchange completed');
-    }
-    
-        console.log('[APP URL] Processing embedded app with JWT token');
-        
-        // For embedded apps, we use Token Exchange to get Admin API access tokens
-        // The tokenResolver will handle JWT -> Admin token exchange automatically
-        if (id_token || embedded === '1') {
-          console.log('[APP URL] Serving embedded app - Token Exchange will handle authentication');
+      // For embedded apps, we use Token Exchange to get Admin API access tokens
+      // The tokenResolver will handle JWT -> Admin token exchange automatically
+      if (id_token || embedded === '1') {
           
           const indexPath = path.join(distPath, 'index.html');
           let html = fs.readFileSync(indexPath, 'utf8');
@@ -1438,50 +1329,26 @@ app.get('/', async (req, res) => {
           const appVersion = Date.now();
           html = html.replace(/%BUILD_TIME%/g, appVersion);
           html = html.replace(/%CACHE_BUST%/g, appVersion);
-          console.log('[SERVER] Cache bust version:', appVersion);
           
           // Inject the Shopify API key and other data into the HTML
           const apiKey = process.env.SHOPIFY_API_KEY || '';
-          console.log('[SERVER] API Key from env:', apiKey ? 'SET' : 'MISSING');
-          console.log('[SERVER] API Key length:', apiKey.length);
-          console.log('[SERVER] HTML before injection length:', html.length);
           
           // First, replace the placeholder in the existing meta tag
-          console.log('[SERVER] Before placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
-          console.log('[SERVER] API Key to inject:', apiKey ? 'SET (' + apiKey.length + ' chars)' : 'MISSING');
           html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
-          console.log('[SERVER] After placeholder replacement - contains placeholder:', html.includes('%VITE_SHOPIFY_API_KEY%'));
-          console.log('[SERVER] After placeholder replacement - contains API key:', html.includes(apiKey));
-          console.log('[SERVER] Replaced VITE_SHOPIFY_API_KEY placeholder');
           
           // Find the closing </head> tag and inject our script before it
           const headEndIndex = html.indexOf('</head>');
-          console.log('[SERVER] Head end index:', headEndIndex);
           
           if (headEndIndex !== -1) {
             const injection = `
               <script>
-                console.log('[SERVER INJECTED] Starting injection...');
                 window.__SHOPIFY_API_KEY = '${apiKey}';
                 window.__SHOPIFY_SHOP = '${shop}';
                 window.__SHOPIFY_HOST = '${host || ''}';
-                console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
-                console.log('[SERVER INJECTED] API Key value:', window.__SHOPIFY_API_KEY);
-                console.log('[SERVER INJECTED] Shop:', window.__SHOPIFY_SHOP);
-                console.log('[SERVER INJECTED] Host:', window.__SHOPIFY_HOST);
-                console.log('[SERVER INJECTED] Injection complete!');
               </script>
               <meta name="shopify-api-key" content="${apiKey}">
-              <script>
-                // Test if injection worked
-                setTimeout(() => {
-                  console.log('[SERVER INJECTED] Delayed check - API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
-                }, 100);
-              </script>
             `;
             html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
-            console.log('[SERVER] HTML after injection length:', html.length);
-            console.log('[SERVER] Injection added successfully');
           } else {
             console.error('[SERVER] Could not find </head> tag in HTML!');
           }
@@ -1490,8 +1357,6 @@ app.get('/', async (req, res) => {
     }
     
     // No JWT token and app not installed - redirect to OAuth
-    console.log('[APP URL] App not installed, redirecting to /auth');
-    
     // Handle Partners Dashboard redirect specially
     if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
       const authUrl = `/auth?${new URLSearchParams(req.query).toString()}`;
@@ -1539,7 +1404,6 @@ app.get('/', async (req, res) => {
 
 // Partners може да очаква /api endpoint
 app.get('/api', (req, res) => {
-  console.log('[API] Partners check:', req.query);
   res.json({ 
     status: 'ok',
     app: 'NEW AI SEO',
@@ -1549,7 +1413,6 @@ app.get('/api', (req, res) => {
 
 // Или може да търси health endpoint
 app.get('/health', (req, res) => {
-  console.log('[HEALTH] Check from:', req.headers.referer);
   res.json({ 
     status: 'healthy',
     timestamp: Date.now()
@@ -1559,17 +1422,7 @@ app.get('/health', (req, res) => {
 // Debug route за да видим всички заявки
 app.use((req, res, next) => {
   if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
-    console.log('[PARTNERS REQUEST]', {
-      method: req.method,
-      url: req.url,
-      path: req.path,
-      query: req.query,
-      headers: {
-        'user-agent': req.headers['user-agent'],
-        'referer': req.headers.referer,
-        'x-frame-options': req.headers['x-frame-options']
-      }
-    });
+    // Partners request detected
   }
   next();
 });
@@ -1608,7 +1461,6 @@ const spaRoutes = [
         const injection = `
         <script>
           window.__SHOPIFY_API_KEY = '${apiKey}';
-          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
         </script>
         <meta name="shopify-api-key" content="${apiKey}">
       `;
@@ -1637,7 +1489,6 @@ app.get('/ai-seo*', (req, res, next) => {
     const injection = `
       <script>
         window.__SHOPIFY_API_KEY = '${apiKey}';
-        console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
       </script>
       <meta name="shopify-api-key" content="${apiKey}">
     `;
@@ -1702,7 +1553,6 @@ async function start() {
     }
 
   // DEBUG ENDPOINTS (MUST be first, before all other middleware)
-  console.log('[SERVER] Registering debug endpoints...');
   app.get('/debug/env', (req, res) => {
     const key = process.env.SHOPIFY_API_KEY || '';
     res.json({
@@ -1801,17 +1651,11 @@ async function start() {
   });
 
   // APP PROXY ROUTES (MUST be first, before all other middleware)
-  console.log('[SERVER] Registering App Proxy routes...');
   app.use('/apps/new-ai-seo', appProxyRouter);
 
     // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
-    console.log('[SERVER] Registering public sitemap endpoints...');
-    
     // Direct public sitemap endpoint - no authentication required
     app.get('/public-sitemap', async (req, res) => {
-      console.log('[PUBLIC_SITEMAP_DIRECT] ===== PUBLIC SITEMAP DIRECT REQUEST =====');
-      console.log('[PUBLIC_SITEMAP_DIRECT] Query:', req.query);
-      
       try {
         // Import required modules
         const Sitemap = (await import('./db/Sitemap.js')).default;
@@ -1834,14 +1678,10 @@ async function start() {
           return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
         }
         
-        console.log('[PUBLIC_SITEMAP_DIRECT] Processing for shop:', shop);
-        
         // Get saved sitemap with content
         const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-        console.log('[PUBLIC_SITEMAP_DIRECT] Found sitemap:', !!sitemapDoc);
         
         if (!sitemapDoc || !sitemapDoc.content) {
-          console.log('[PUBLIC_SITEMAP_DIRECT] No sitemap found, returning instructions');
           return res.status(404).send(`
 Sitemap not found for shop: ${shop}
 
@@ -1855,7 +1695,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
         }
         
         // Serve the saved sitemap
-        console.log('[PUBLIC_SITEMAP_DIRECT] Serving sitemap for shop:', shop);
         res.set({
           'Content-Type': 'application/xml; charset=utf-8',
           'Cache-Control': 'public, max-age=21600', // 6 hours
@@ -1921,13 +1760,8 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
     );
 
     // Public sitemap endpoints (MUST be before catch-all)
-    console.log('[SERVER] Registering public sitemap endpoints...');
-    
     // Simple public sitemap endpoint - no authentication required
     app.get('/sitemap.xml', async (req, res) => {
-      console.log('[PUBLIC_SITEMAP] ===== PUBLIC SITEMAP REQUEST =====');
-      console.log('[PUBLIC_SITEMAP] Query:', req.query);
-      
       try {
         // Import required modules
         const Sitemap = (await import('./db/Sitemap.js')).default;
@@ -1950,14 +1784,10 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
           return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
         }
         
-        console.log('[PUBLIC_SITEMAP] Processing for shop:', shop);
-        
         // Get saved sitemap with content
         const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-        console.log('[PUBLIC_SITEMAP] Found sitemap:', !!sitemapDoc);
         
         if (!sitemapDoc || !sitemapDoc.content) {
-          console.log('[PUBLIC_SITEMAP] No sitemap found, returning instructions');
           return res.status(404).send(`
 Sitemap not found for shop: ${shop}
 
@@ -1971,7 +1801,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
         }
         
         // Serve the saved sitemap
-        console.log('[PUBLIC_SITEMAP] Serving sitemap for shop:', shop);
         res.set({
           'Content-Type': 'application/xml; charset=utf-8',
           'Cache-Control': 'public, max-age=21600', // 6 hours
@@ -1990,9 +1819,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
     
     // Products sitemap endpoint (alias for /sitemap.xml for AI Testing compatibility)
     app.get('/sitemap_products.xml', async (req, res) => {
-      console.log('[PRODUCTS_SITEMAP] ===== PRODUCTS SITEMAP REQUEST =====');
-      console.log('[PRODUCTS_SITEMAP] Query:', req.query);
-      
       try {
         // Import required modules
         const Sitemap = (await import('./db/Sitemap.js')).default;
@@ -2015,16 +1841,10 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
           return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
         }
         
-        console.log('[PRODUCTS_SITEMAP] Processing for shop:', shop);
-        
         // Get saved sitemap with content
         const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-        console.log('[PRODUCTS_SITEMAP] Found sitemap:', !!sitemapDoc);
-        console.log('[PRODUCTS_SITEMAP] Has content:', !!(sitemapDoc?.content));
-        console.log('[PRODUCTS_SITEMAP] Content length:', sitemapDoc?.content?.length || 0);
         
         if (!sitemapDoc || !sitemapDoc.content) {
-          console.log('[PRODUCTS_SITEMAP] No sitemap found for shop:', shop);
           return res.status(404).type('text/plain').send('Sitemap not found for this shop. Please generate it first.');
         }
         
@@ -2040,9 +1860,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
     
     // Alternative public sitemap endpoint
     app.get('/public-sitemap.xml', async (req, res) => {
-      console.log('[PUBLIC_SITEMAP_ALT] ===== ALTERNATIVE PUBLIC SITEMAP REQUEST =====');
-      console.log('[PUBLIC_SITEMAP_ALT] Query:', req.query);
-      
       try {
         // Import required modules
         const Sitemap = (await import('./db/Sitemap.js')).default;
@@ -2065,14 +1882,10 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
           return res.status(400).send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
         }
         
-        console.log('[PUBLIC_SITEMAP_ALT] Processing for shop:', shop);
-        
         // Get saved sitemap with content
         const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
-        console.log('[PUBLIC_SITEMAP_ALT] Found sitemap:', !!sitemapDoc);
         
         if (!sitemapDoc || !sitemapDoc.content) {
-          console.log('[PUBLIC_SITEMAP_ALT] No sitemap found, returning instructions');
           return res.status(404).send(`
 Sitemap not found for shop: ${shop}
 
@@ -2086,7 +1899,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
         }
         
         // Serve the saved sitemap
-        console.log('[PUBLIC_SITEMAP_ALT] Serving sitemap for shop:', shop);
         res.set({
           'Content-Type': 'application/xml; charset=utf-8',
           'Cache-Control': 'public, max-age=21600', // 6 hours
@@ -2105,7 +1917,6 @@ App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURI
 
 // Contact Support route - MUST be before catch-all
 app.get('/contact-support', (req, res) => {
-  console.log('[CONTACT-SUPPORT] Serving contact support page');
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
   res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
@@ -2113,9 +1924,6 @@ app.get('/contact-support', (req, res) => {
 
 // Catch-all for any unmatched routes - MUST be last
 app.get('*', (req, res) => {
-  console.log('[CATCH-ALL] ===== CATCH-ALL CALLED =====');
-  console.log('[CATCH-ALL] Unmatched route:', req.url);
-  console.log('[CATCH-ALL] Method:', req.method);
   // Check if it's an app request
   if (req.url.includes('/apps/')) {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
@@ -2131,7 +1939,6 @@ app.get('*', (req, res) => {
       const injection = `
         <script>
           window.__SHOPIFY_API_KEY = '${apiKey}';
-          console.log('[SERVER INJECTED] API Key:', window.__SHOPIFY_API_KEY ? 'SET' : 'MISSING');
         </script>
         <meta name="shopify-api-key" content="${apiKey}">
       `;
