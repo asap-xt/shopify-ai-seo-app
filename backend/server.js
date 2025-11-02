@@ -1093,7 +1093,11 @@ async function mountOptionalRouters(app) {
   // GDPR Compliance Webhooks (mandatory for Shopify App Store)
   // 3 separate endpoints matching shopify.app.toml URIs
   try {
+    // Use createRequire to load CommonJS module in ES Module context
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
     const gdprCompliance = require('./webhooks/gdpr-compliance.cjs');
+    
     app.use('/webhooks', gdprCompliance);
     console.log('✔ GDPR compliance webhooks mounted:');
     console.log('  - POST /webhooks/customers/data_request');
