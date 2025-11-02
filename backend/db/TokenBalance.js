@@ -149,7 +149,6 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   if (difference > 0) {
     // Refund: actual was less than estimated
     this.balance += difference;
-    console.log(`[TokenBalance] Refunded ${difference} tokens from reservation ${reservationId}`);
   } else if (difference < 0) {
     // Deduct more: actual was more than estimated (should rarely happen with 10% margin)
     this.balance += difference; // difference is negative, so this deducts
@@ -216,16 +215,6 @@ tokenBalanceSchema.methods.setIncludedTokens = function(tokens, planName, shopif
   // New balance = new included tokens + purchased tokens
   const newBalance = tokens + purchasedTokens;
   const difference = newBalance - this.balance;
-  
-  console.log('[TokenBalance] Setting included tokens:', {
-    shop: this.shop,
-    oldBalance: this.balance,
-    currentIncluded,
-    purchasedTokens,
-    newIncluded: tokens,
-    newBalance,
-    difference
-  });
   
   // Set the new balance
   this.balance = newBalance;
