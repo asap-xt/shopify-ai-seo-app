@@ -1093,7 +1093,7 @@ async function mountOptionalRouters(app) {
   // GDPR Compliance Webhooks (mandatory for Shopify App Store)
   // 3 separate endpoints matching shopify.app.toml URIs
   try {
-    const gdprCompliance = require('./webhooks/gdpr-compliance');
+    const gdprCompliance = require('./webhooks/gdpr-compliance.cjs');
     app.use('/webhooks', gdprCompliance);
     console.log('✔ GDPR compliance webhooks mounted:');
     console.log('  - POST /webhooks/customers/data_request');
