@@ -1356,6 +1356,8 @@ app.get('/', async (req, res) => {
       return res.send(html);
     }
     
+  } // End of if (id_token) block
+    
     // No JWT token and app not installed - redirect to OAuth
     // Handle Partners Dashboard redirect specially
     if (req.headers.referer && req.headers.referer.includes('partners.shopify.com')) {
