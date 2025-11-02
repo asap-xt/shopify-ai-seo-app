@@ -1,11 +1,9 @@
 # shopify.app.toml
 # Public App Configuration for Shopify App Store Distribution
 
-[application]
-type = "public"
+# Root-level configuration (required by Shopify CLI)
+name = "indexAIze - Unlock AI Search"
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
-name = "NEW AI SEO"
-handle = "new-ai-seo"
 application_url = "https://indexaize-aiseo-app-production.up.railway.app"
 embedded = true
 
@@ -34,18 +32,12 @@ redirect_urls = [
 ]
 
 [access_scopes]
-scopes = "read_products,write_products,read_themes,read_translations,write_translations,read_locales,read_metafields,write_metafields,read_metaobjects,write_metaobjects,read_markets"
+scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metaobjects,write_metaobjects,read_content,write_content,write_script_tags,read_markets"
 
 # App Proxy Configuration for Sitemap
 [app_proxy]
-# This is the *destination* on your server that Shopify will call.
-# You already mount your router there in server.js:
-#   app.use('/apps/new-ai-seo', appProxyRouter)
 url = "https://indexaize-aiseo-app-production.up.railway.app/apps"
-
-# Merchant-facing URL on the storefront:
-# https://{shop}.myshopify.com/apps/new-ai-seo/<anything>
-subpath_prefix = "apps"
+prefix = "apps"
 subpath = "new-ai-seo"
 
 [pos]
