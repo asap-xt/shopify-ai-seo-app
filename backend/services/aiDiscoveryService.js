@@ -145,9 +145,6 @@ class AIDiscoveryService {
           const res = await planResponse.json();
           if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
           const planData = res?.data?.plansMe;
-          console.log('[PLAN DEBUG] Raw plan:', planData.plan);
-          console.log('[PLAN DEBUG] Plan config:', planData);
-          console.log('[PLAN DEBUG] Final planKey:', planData.planKey);
           settings.plan = planData.plan;
           settings.planKey = planData.planKey;
           settings.availableBots = this.getAvailableBotsForPlan(planData.planKey);
@@ -375,7 +372,6 @@ class AIDiscoveryService {
       // Get shop record for access token
       const shopRecord = await Shop.findOne({ shop });
       if (!shopRecord || !shopRecord.accessToken) {
-        console.log('[ROBOTS] No shop record or access token found for:', shop);
         return 'User-agent: *\nDisallow: /';
       }
       
@@ -391,7 +387,6 @@ class AIDiscoveryService {
       );
       
       if (!response.ok) {
-        console.log('[ROBOTS] Failed to fetch settings from metafields:', response.status);
         return 'User-agent: *\nDisallow: /';
       }
       
@@ -410,11 +405,8 @@ class AIDiscoveryService {
       
       // If no settings, use defaults
       if (!settings) {
-        console.log('[ROBOTS] No settings found for shop:', shop);
         settings = this.getDefaultSettings();
       }
-      
-      console.log('[ROBOTS] Settings found:', JSON.stringify(settings, null, 2));
       
       // Get enabled bots
       const enabledBots = Object.entries(settings.bots || {})
@@ -423,7 +415,6 @@ class AIDiscoveryService {
 
       // If no bots are enabled, block everything
       if (enabledBots.length === 0) {
-        console.log('[ROBOTS] No AI bots enabled');
         return 'User-agent: *\nDisallow: /';
       }
 

@@ -9,8 +9,6 @@ import { resolveAdminToken } from './tokenResolver.js';
  * This provides factual information about the store to prevent hallucinations
  */
 export async function buildStoreContext(shop, options = {}) {
-  console.log(`[STORE-CONTEXT] Building context for ${shop}`);
-  
   try {
     // Get access token
     const accessToken = await resolveAdminToken({ shopDomain: shop });
@@ -159,7 +157,6 @@ async function fetchStorePolicies(shop, accessToken, storeMetadata) {
   const metadataReturns = storeMetadata?.returnPolicy || storeMetadata?.returns;
   
   if (metadataShipping || metadataReturns) {
-    console.log('[STORE-CONTEXT] Using Store Metadata policies (priority)');
     return {
       shipping: metadataShipping || null,
       refund: metadataReturns || null,
@@ -168,7 +165,6 @@ async function fetchStorePolicies(shop, accessToken, storeMetadata) {
   }
   
   // PRIORITY 2: Shopify policies (fallback)
-  console.log('[STORE-CONTEXT] Fetching Shopify policies (fallback)');
   const query = `
     query {
       shop {
@@ -448,8 +444,6 @@ GUIDELINES:
  * Returns detailed status about what's missing
  */
 export async function checkStoreMetadataStatus(shop) {
-  console.log(`[STORE-CONTEXT] Checking metadata status for ${shop}`);
-  
   try {
     const accessToken = await resolveAdminToken({ shopDomain: shop });
     if (!accessToken) {
@@ -518,7 +512,6 @@ export async function getCachedStoreContext(shop, options = {}) {
   const cached = contextCache.get(cacheKey);
   
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[STORE-CONTEXT] Using cached context');
     return cached.context;
   }
   
