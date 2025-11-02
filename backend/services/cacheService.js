@@ -110,7 +110,6 @@ class CacheService {
       const keys = await this.redis.keys(pattern);
       if (keys.length > 0) {
         await this.redis.del(...keys);
-        console.log(`[CACHE] 🗑️  Deleted ${keys.length} keys matching pattern: ${pattern}`);
         return keys.length;
       }
       return 0;
@@ -145,10 +144,6 @@ class CacheService {
     for (const pattern of patterns) {
       const deleted = await this.delPattern(pattern);
       totalDeleted += deleted;
-    }
-    
-    if (totalDeleted > 0) {
-      console.log(`[CACHE] 🗑️  Invalidated ${totalDeleted} cache entries for shop: ${shop}`);
     }
     
     return totalDeleted;
