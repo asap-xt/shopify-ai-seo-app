@@ -8,10 +8,6 @@
  * @returns {Object} Validated and filtered response
  */
 export function validateAIResponse(aiResponse, productData, allowedFields = []) {
-  console.log('[AI-VALIDATOR] Validating AI response...');
-  console.log('[AI-VALIDATOR] AI Response:', JSON.stringify(aiResponse, null, 2));
-  console.log('[AI-VALIDATOR] Product Data:', JSON.stringify(productData, null, 2));
-  
   const validated = {};
   
   // Validate bullets
@@ -29,7 +25,6 @@ export function validateAIResponse(aiResponse, productData, allowedFields = []) 
     validated.attributes = validateAttributes(aiResponse.attributes, productData, allowedFields);
   }
   
-  console.log('[AI-VALIDATOR] Validated response:', JSON.stringify(validated, null, 2));
   return validated;
 }
 
@@ -50,14 +45,12 @@ function validateBullets(bullets, productData) {
     // Check against suspicious patterns
     for (const { pattern, reason } of suspiciousPatterns) {
       if (pattern.test(bullet)) {
-        console.log(`[AI-VALIDATOR] Rejected bullet: "${bullet}" - ${reason}`);
         return false;
       }
     }
     
     // Check if bullet is too generic (but allow short valid ones)
     if (bullet.length < 10 || bullet.length > 200) {
-      console.log(`[AI-VALIDATOR] Rejected bullet (length): "${bullet}"`);
       return false;
     }
     
@@ -72,7 +65,6 @@ function validateFAQ(faq, productData) {
   const validFaqs = faq.filter(item => {
     // Ensure FAQ has both question and answer
     if (!item.q || !item.a) {
-      console.log('[AI-VALIDATOR] Rejected FAQ (missing q/a):', item);
       return false;
     }
     
@@ -86,14 +78,12 @@ function validateFAQ(faq, productData) {
     
     for (const pattern of suspiciousAnswers) {
       if (pattern.test(item.a)) {
-        console.log(`[AI-VALIDATOR] Rejected FAQ answer (hallucination): "${item.a}"`);
         return false;
       }
     }
     
     // Check length constraints
     if (item.q.length < 3 || item.q.length > 160 || item.a.length < 3 || item.a.length > 400) {
-      console.log(`[AI-VALIDATOR] Rejected FAQ (length): q=${item.q.length}, a=${item.a.length}`);
       return false;
     }
     
@@ -102,7 +92,6 @@ function validateFAQ(faq, productData) {
   
   // FALLBACK: If all FAQs were rejected, create a generic one to meet schema requirements
   if (validFaqs.length === 0 && productData.title) {
-    console.log('[AI-VALIDATOR] All FAQs rejected, adding fallback generic FAQ');
     validFaqs.push({
       q: `What is ${productData.title}?`,
       a: productData.description || productData.existingSeo?.metaDescription || 'A quality product designed to meet your needs.'
@@ -120,7 +109,6 @@ function validateAttributes(attributes, productData, allowedFields) {
   
   for (const [key, value] of Object.entries(attributes)) {
     if (!allowedFields.includes(key)) {
-      console.log(`[AI-VALIDATOR] Rejected attribute (not allowed): ${key}`);
       continue;
     }
     
@@ -168,7 +156,6 @@ function validateMaterial(material, productData) {
   const foundMaterial = materialKeywords.find(keyword => productText.includes(keyword));
   
   if (!foundMaterial) {
-    console.log(`[AI-VALIDATOR] Rejected material (not in product data): ${material}`);
     return false;
   }
   
@@ -190,7 +177,6 @@ function validateColor(color, productData) {
   const foundColor = colorKeywords.find(keyword => productText.includes(keyword));
   
   if (!foundColor) {
-    console.log(`[AI-VALIDATOR] Rejected color (not in product data): ${color}`);
     return false;
   }
   
@@ -208,7 +194,6 @@ function validateSize(size, productData) {
   const foundSize = sizeKeywords.find(keyword => variantTitles.toLowerCase().includes(keyword));
   
   if (!foundSize) {
-    console.log(`[AI-VALIDATOR] Rejected size (not in product data): ${size}`);
     return false;
   }
   
