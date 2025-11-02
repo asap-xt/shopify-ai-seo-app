@@ -22,8 +22,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'Shop parameter required' });
   }
   
-  console.log('[AI-TESTING] Running tests for shop:', shop);
-  
   // Get shop record for access token
   const shopRecord = await Shop.findOne({ shop });
   if (!shopRecord) {
@@ -42,15 +40,9 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     'seoStatus.optimized': true 
   });
   
-  console.log('[AI-TESTING] Stats:', {
-    products: `${optimizedProducts}/${totalProducts}`,
-    collections: `${optimizedCollections}/${totalCollections}`
-  });
-  
   // Get user's plan
   const subscription = await Subscription.findOne({ shop });
   const userPlan = subscription?.plan?.toLowerCase().replace(' ', '_') || 'starter';
-  console.log('[AI-TESTING] User plan:', userPlan);
   
   // Endpoints ordered by plan: Starter → Professional → Growth → Growth Extra → Enterprise
   const endpoints = [
@@ -116,8 +108,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   
   for (const endpoint of endpoints) {
     try {
-      console.log('[AI-TESTING] Testing endpoint:', endpoint.key, endpoint.url);
-      
       // Check plan requirements
       if (endpoint.requiresPlan && !endpoint.requiresPlan.includes(userPlan)) {
         results[endpoint.key] = {
@@ -125,7 +115,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           message: `Requires ${endpoint.requiresPlan.map(p => p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())).join(' or ')} plan`,
           name: endpoint.name
         };
-        console.log('[AI-TESTING] Locked:', endpoint.key);
         continue;
       }
       
@@ -136,8 +125,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
         },
         timeout: 10000 // 10 second timeout
       });
-      
-      console.log('[AI-TESTING] Response status:', response.status);
       
       if (response.ok) {
         const contentType = response.headers.get('content-type');
@@ -258,8 +245,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           // For theme files, we need to read from Shopify API, not public URL
           if (endpoint.key === 'schemaData') {
             try {
-              console.log('[SCHEMA-DATA-VALIDATION] Fetching theme.liquid from Shopify API...');
-              
               // Get published theme ID
               const themesQuery = `{ themes(first: 1, roles: MAIN) { edges { node { id name } } } }`;
               const themesResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
@@ -286,8 +271,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
                 continue;
               }
               
-              console.log('[SCHEMA-DATA-VALIDATION] Found theme ID:', themeId);
-              
               // Get theme.liquid asset
               const assetUrl = `https://${shop}/admin/api/2025-07/themes/${themeId}/assets.json?asset[key]=layout/theme.liquid`;
               const assetResponse = await fetch(assetUrl, {
@@ -306,9 +289,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               const assetData = await assetResponse.json();
               const themeContent = assetData?.asset?.value || '';
               
-              console.log('[SCHEMA-DATA-VALIDATION] theme.liquid length:', themeContent.length);
-              console.log('[SCHEMA-DATA-VALIDATION] First 500 chars:', themeContent.substring(0, 500));
-              
               // Look for schema.org structured data
               const hasLdJson = themeContent.includes('application/ld+json') || themeContent.includes('application\\/ld+json');
               const hasSchemaOrg = themeContent.includes('schema.org') || themeContent.includes('schema\\.org');
@@ -318,12 +298,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
                                  themeContent.includes('"@type":"WebSite"');
               const hasAiSeoComment = themeContent.includes('AI SEO App') || 
                                        themeContent.includes('Organization & WebSite Schema');
-              
-              console.log('[SCHEMA-DATA-VALIDATION] hasLdJson:', hasLdJson);
-              console.log('[SCHEMA-DATA-VALIDATION] hasSchemaOrg:', hasSchemaOrg);
-              console.log('[SCHEMA-DATA-VALIDATION] hasOrganization:', hasOrganization);
-              console.log('[SCHEMA-DATA-VALIDATION] hasWebSite:', hasWebSite);
-              console.log('[SCHEMA-DATA-VALIDATION] hasAiSeoComment:', hasAiSeoComment);
               
               if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
@@ -366,8 +340,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             dataSize: dataSize,
             contentType: contentType
           };
-          
-          console.log('[AI-TESTING]', validationStatus === 'warning' ? 'Warning:' : 'Success:', endpoint.key, 'Size:', dataSize);
         } catch (parseError) {
           console.error('[AI-TESTING] Parse error:', parseError);
           results[endpoint.key] = {
@@ -426,8 +398,6 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     }
   }
   
-  console.log('[AI-TESTING] Test results:', JSON.stringify(results, null, 2));
-  
   res.json({
     shop,
     timestamp: new Date().toISOString(),
@@ -451,12 +421,9 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     return res.status(400).json({ error: 'No endpoint results provided. Run basic tests first.' });
   }
   
-  console.log('[AI-VALIDATION] Starting AI validation for shop:', shop);
-  
   try {
     // Get token balance
     const tokenBalance = await TokenBalance.getOrCreate(shop);
-    console.log('[AI-VALIDATION] Token balance:', tokenBalance.balance);
     
     // Check if enough tokens (estimate ~50 tokens total)
     const estimatedTokens = 50;
@@ -481,15 +448,10 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
       ([key, result]) => result.status === 'success' || result.status === 'warning'
     );
     
-    console.log('[AI-VALIDATION] Processing', successfulEndpoints.length, 'endpoints');
-    
     for (const [key, result] of successfulEndpoints) {
       try {
-        console.log('[AI-VALIDATION] Validating:', key);
-        
         // Skip theme files - they're validated in basic tests only
         if (key === 'robotsTxt' || key === 'schemaData') {
-          console.log('[AI-VALIDATION] Skipping theme file:', key);
           continue;
         }
         
@@ -618,8 +580,6 @@ Format:
           temperature: 0.3
         });
         
-        console.log('[AI-VALIDATION] AI response for', key, ':', aiResponse);
-        
         // Parse AI response (handle markdown code blocks and various formats)
         try {
           // Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
@@ -635,8 +595,6 @@ Format:
           if (jsonMatch) {
             cleanResponse = jsonMatch[0];
           }
-          
-          console.log('[AI-VALIDATION] Cleaned response for', key, ':', cleanResponse);
           
           const parsed = JSON.parse(cleanResponse);
           results[key] = {
@@ -675,8 +633,6 @@ Format:
     await tokenBalance.finalizeReservation(totalTokensUsed, 'ai-validation', {
       endpointsAnalyzed: successfulEndpoints.length
     });
-    
-    console.log('[AI-VALIDATION] Validation completed. Tokens used:', totalTokensUsed);
     
     res.json({
       shop,
