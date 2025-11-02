@@ -111,9 +111,6 @@ router.get('/ai/products.json', async (req, res) => {
     const optimizedProducts = [];
     const totalProducts = data.data.products.edges.length;
     
-    console.log('[PRODUCTS-JSON] Total products from Shopify:', totalProducts);
-    console.log('[PRODUCTS-JSON] Checking for metafields in namespace "seo_ai"...');
-    
     let productsWithMetafields = 0;
     
     // Извличаме само продуктите с metafields
@@ -149,9 +146,6 @@ router.get('/ai/products.json', async (req, res) => {
         optimizedProducts.push(productData);
       }
     });
-    
-    console.log('[PRODUCTS-JSON] Products with seo_ai metafields:', productsWithMetafields);
-    console.log('[PRODUCTS-JSON] Optimized products count:', optimizedProducts.length);
 
     if (optimizedProducts.length === 0) {
       return res.json({
@@ -744,11 +738,6 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     const data = await response.json();
     const shopData = data.data.shop;
     
-    console.log('[STORE-METADATA] ===== DEBUG METAFIELDS =====');
-    console.log('[STORE-METADATA] Has seoMetafield:', !!shopData.seoMetafield?.value);
-    console.log('[STORE-METADATA] Has organizationMetafield:', !!shopData.organizationMetafield?.value);
-    console.log('[STORE-METADATA] Has aiMetafield:', !!shopData.aiMetafield?.value);
-    
     // Parse metafields (same logic as GraphQL resolver)
     let seoMetadata = null;
     let aiMetadata = null;
@@ -757,7 +746,6 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     if (shopData.seoMetafield?.value) {
       try {
         seoMetadata = JSON.parse(shopData.seoMetafield.value);
-        console.log('[STORE-METADATA] Parsed seoMetadata successfully');
       } catch (e) {
         console.error('[STORE-METADATA] Failed to parse seoMetadata');
       }
@@ -766,7 +754,6 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     if (shopData.aiMetafield?.value) {
       try {
         aiMetadata = JSON.parse(shopData.aiMetafield.value);
-        console.log('[STORE-METADATA] Parsed aiMetadata successfully');
       } catch (e) {
         console.error('[STORE-METADATA] Failed to parse aiMetadata');
       }
@@ -775,21 +762,10 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     if (shopData.organizationMetafield?.value) {
       try {
         organizationSchema = JSON.parse(shopData.organizationMetafield.value);
-        console.log('[STORE-METADATA] Parsed organizationSchema successfully');
       } catch (e) {
         console.error('[STORE-METADATA] Failed to parse organizationSchema');
       }
     }
-    
-    console.log('[STORE-METADATA] Has seoMetadata:', !!seoMetadata);
-    console.log('[STORE-METADATA] Has aiMetadata:', !!aiMetadata);
-    console.log('[STORE-METADATA] Has organizationSchema:', !!organizationSchema);
-    
-    // DEBUG: Log actual values
-    console.log('[STORE-METADATA] ===== ACTUAL VALUES =====');
-    console.log('[STORE-METADATA] seoMetadata:', JSON.stringify(seoMetadata, null, 2));
-    console.log('[STORE-METADATA] aiMetadata:', JSON.stringify(aiMetadata, null, 2));
-    console.log('[STORE-METADATA] organizationSchema:', JSON.stringify(organizationSchema, null, 2));
     
     // Check if store metadata exists
     if (!seoMetadata && !organizationSchema && !aiMetadata) {
@@ -915,7 +891,6 @@ router.get('/ai/sitemap-feed.xml', async (req, res) => {
 // Advanced Schema Data endpoint (alias for /schema-data.json for consistency)
 router.get('/ai/schema-data.json', async (req, res) => {
   const shop = req.query.shop;
-  console.log('[ADVANCED-SCHEMA] Request for shop:', shop);
   
   if (!shop) {
     return res.status(400).json({ error: 'Shop required' });
@@ -924,11 +899,8 @@ router.get('/ai/schema-data.json', async (req, res) => {
   try {
     // Check if feature is enabled (Enterprise only)
     const subscription = await Subscription.findOne({ shop });
-    console.log('[ADVANCED-SCHEMA] Subscription found:', !!subscription);
-    console.log('[ADVANCED-SCHEMA] Plan:', subscription?.plan);
     
     if (!subscription || subscription.plan.toLowerCase() !== 'enterprise') {
-      console.log('[ADVANCED-SCHEMA] Not Enterprise plan, returning 403');
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Enterprise plan',
         current_plan: subscription?.plan || 'None'
@@ -936,10 +908,7 @@ router.get('/ai/schema-data.json', async (req, res) => {
     }
     
     // Fetch schema data from database
-    console.log('[ADVANCED-SCHEMA] Fetching from AdvancedSchema collection...');
     const schemaData = await AdvancedSchema.findOne({ shop });
-    console.log('[ADVANCED-SCHEMA] Found data:', !!schemaData);
-    console.log('[ADVANCED-SCHEMA] Schemas count:', schemaData?.schemas?.length || 0);
     
     if (!schemaData || !schemaData.schemas?.length) {
       return res.json({
