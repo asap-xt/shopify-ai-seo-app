@@ -21,10 +21,22 @@ function validateWebhook(req) {
     .update(rawBody, 'utf8')
     .digest('base64');
   
-  return crypto.timingSafeEqual(
-    Buffer.from(hmacHeader),
-    Buffer.from(hash)
-  );
+  try {
+    // timingSafeEqual requires buffers of same length
+    const hmacBuffer = Buffer.from(hmacHeader);
+    const hashBuffer = Buffer.from(hash);
+    
+    // If lengths differ, HMAC is invalid
+    if (hmacBuffer.length !== hashBuffer.length) {
+      return false;
+    }
+    
+    return crypto.timingSafeEqual(hmacBuffer, hashBuffer);
+  } catch (error) {
+    // Any error means invalid HMAC
+    console.error('[GDPR] HMAC validation error:', error.message);
+    return false;
+  }
 }
 
 // POST /webhooks/customers/data_request
