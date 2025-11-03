@@ -724,7 +724,8 @@ async function generateSitemapCore(shop) {
         size: xml.length,
         plan: plan,
         status: 'completed',
-        content: xml
+        content: xml,
+        isAiEnhanced: isAISitemapEnabled
       },
       { upsert: true, new: true }
     );
@@ -846,7 +847,8 @@ async function handleInfo(req, res) {
       generated: !!existingSitemap,
       generatedAt: existingSitemap?.generatedAt || null,
       lastProductCount: existingSitemap?.productCount || 0,
-      size: existingSitemap?.size || 0
+      size: existingSitemap?.size || 0,
+      isAiEnhanced: existingSitemap?.isAiEnhanced || false
     };
     
     return res.json(response);

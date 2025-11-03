@@ -22,6 +22,10 @@ const SitemapSchema = new mongoose.Schema({
     default: 'completed'
   },
   error: String,
+  isAiEnhanced: {
+    type: Boolean,
+    default: false
+  },
   content: {
     type: String,
     select: false // Don't return content by default in queries
