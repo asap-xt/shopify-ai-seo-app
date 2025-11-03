@@ -826,8 +826,6 @@ export default function Settings() {
   };
 
   const saveSettings = async () => {
-    console.log('[SETTINGS] ===== SAVE SETTINGS CALLED =====');
-    console.log('[SETTINGS] Current settings:', settings);
     setSaving(true);
     try {
       await api(`/api/ai-discovery/settings?shop=${shop}`, {
@@ -840,69 +838,47 @@ export default function Settings() {
         }
       });
       
-      // Don't show toast here - will show appropriate toast based on AI sitemap status
-      setHasUnsavedChanges(false); // Clear unsaved changes flag
-      setOriginalSettings(settings); // Update original settings
-      generateRobotsTxt(); // Regenerate robots.txt
+      setHasUnsavedChanges(false);
+      setOriginalSettings(settings);
+      generateRobotsTxt();
       
-      // Background sitemap regeneration if AI Sitemap is enabled
-      // Plans: Growth Extra/Enterprise (unlimited) OR Plus plans (need tokens)
       const normalizedPlan = normalizePlan(settings?.plan);
       const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
       const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
       
-      // For Plus plans, check if they have tokens
       const isPlusPlan = plusPlans.includes(normalizedPlan);
       const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
       
-      console.log('[SETTINGS] ===== AI SITEMAP REGENERATION CHECK =====');
-      console.log('[SETTINGS] settings.features?.aiSitemap:', settings.features?.aiSitemap);
-      console.log('[SETTINGS] normalizedPlan:', normalizedPlan);
-      console.log('[SETTINGS] isPlusPlan:', isPlusPlan);
-      console.log('[SETTINGS] hasUnlimitedAccess:', hasUnlimitedAccess);
-      
-      // AI Sitemap regeneration (if enabled)
       if (settings.features?.aiSitemap) {
-        // Check if plan allows this feature
         if (!hasUnlimitedAccess && !isPlusPlan) {
-          console.log('[SETTINGS] ⚠️ AI Sitemap requires Growth Extra+ or Plus plan');
           setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
-          return; // Stop here
+          return;
         }
         
-        // For Plus plans, fetch FRESH token balance (not cached from settings)
         if (isPlusPlan) {
-          console.log('[SETTINGS] 🔍 Plus plan detected, fetching FRESH token balance...');
           try {
             const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
             const currentTokenBalance = tokenData.balance || 0;
             const hasTokens = currentTokenBalance > 0;
             
-            console.log('[SETTINGS] Fresh token balance:', currentTokenBalance);
-            console.log('[SETTINGS] hasTokens:', hasTokens);
-            
             if (!hasTokens) {
-              console.log('[SETTINGS] ⚠️ Plus plan needs tokens for AI Sitemap');
               setTokenModalData({
                 feature: 'ai-sitemap-optimized',
-                tokensRequired: 3000, // Estimated per product
+                tokensRequired: 3000,
                 tokensAvailable: currentTokenBalance,
                 tokensNeeded: 3000
               });
               setShowInsufficientTokensModal(true);
-              return; // Stop here, show buy tokens modal
+              return;
             }
           } catch (error) {
-            console.error('[SETTINGS] ❌ Failed to fetch token balance:', error);
+            console.error('[SETTINGS] Failed to fetch token balance:', error);
             setToast('Failed to check token balance');
             return;
           }
         }
         
-        console.log('[SETTINGS] ✅ All checks passed, proceeding with AI Sitemap regeneration');
-        console.log('[SETTINGS] ===== END AI SITEMAP CHECK =====');
         try {
-          
           const REGENERATE_SITEMAP_MUTATION = `
             mutation RegenerateSitemap($shop: String!) {
               regenerateSitemap(shop: $shop) {
@@ -913,9 +889,6 @@ export default function Settings() {
             }
           `;
           
-          console.log('[SETTINGS] GraphQL mutation:', REGENERATE_SITEMAP_MUTATION);
-          console.log('[SETTINGS] Variables:', { shop });
-          
           const result = await api('/graphql', {
             method: 'POST',
             body: JSON.stringify({
@@ -925,63 +898,31 @@ export default function Settings() {
             shop: shop
           });
           
-          console.log('[SETTINGS] GraphQL sitemap regeneration result:', result);
-          
           if (result?.data?.regenerateSitemap?.success) {
-            console.log('[SETTINGS] Background regeneration started successfully');
-            console.log('[SETTINGS] Setting toast for AI sitemap regeneration with delay...');
-            
-            // Clear any existing toast first
             setToast('');
-            
-          // Set success toast after a short delay to avoid conflicts
-          setTimeout(() => {
-            setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-            console.log('[SETTINGS] Success toast set after delay');
-            
-            // Start polling to check when background regeneration completes
-            startPollingForCompletion();
-          }, 100);
-            
+            setTimeout(() => {
+              setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
+              startPollingForCompletion();
+            }, 100);
           } else {
-            console.log('[SETTINGS] Background regeneration failed:', result?.data?.regenerateSitemap);
-            console.log('[SETTINGS] Setting toast for failed regeneration...');
-            
-            // Clear any existing toast first
             setToast('');
-            
-            // Set error toast after a short delay
             setTimeout(() => {
               setToast('Settings saved, but sitemap regeneration failed');
-              console.log('[SETTINGS] Error toast set after delay');
             }, 100);
           }
-          
-          console.log('[SETTINGS] ===== AI SITEMAP BACKGROUND REGENERATION END =====');
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
           setToast('Settings saved, but sitemap regeneration failed');
         }
       } else {
-        console.log('[SETTINGS] AI Sitemap disabled, skipping background regeneration');
-        console.log('[SETTINGS] Setting toast for basic save with delay...');
-        
-        // Clear any existing toast first
         setToast('');
-        
-        // Set basic success toast after a short delay
         setTimeout(() => {
-          // Check if any bots are enabled to show robots.txt reminder
           const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
           if (hasEnabledBots) {
             setToast('Settings saved! Scroll down to configure robots.txt (REQUIRED for AI Discovery).');
           } else {
             setToast('Settings saved successfully');
           }
-          console.log('[SETTINGS] Basic success toast set after delay');
-          
-          // Don't show View buttons for basic save - only for AI features
-          console.log('[SETTINGS] Basic save completed, not showing View buttons');
         }, 100);
       }
     } catch (error) {
@@ -2071,15 +2012,7 @@ export default function Settings() {
           primary
           size="large"
           loading={saving}
-          onClick={() => {
-            console.log('[SETTINGS] ===== SAVE BUTTON CLICKED =====');
-            console.log('[SETTINGS] settings:', settings);
-            console.log('[SETTINGS] settings.features:', settings?.features);
-            console.log('[SETTINGS] settings.features.aiSitemap:', settings?.features?.aiSitemap);
-            console.log('[SETTINGS] shop:', shop);
-            console.log('[SETTINGS] Calling saveSettings()...');
-            saveSettings();
-          }}
+          onClick={saveSettings}
         >
           Save Settings
         </Button>
