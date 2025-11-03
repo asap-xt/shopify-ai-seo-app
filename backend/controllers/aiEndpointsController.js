@@ -2,6 +2,7 @@
 import express from 'express';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
+import Product from '../db/Product.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 
