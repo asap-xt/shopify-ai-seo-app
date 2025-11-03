@@ -415,6 +415,14 @@ router.post('/product', validateRequest(), async (req, res) => {
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
+      
+      // Invalidate cache so new token balance is immediately visible
+      try {
+        const cacheService = await import('../services/cacheService.js');
+        await cacheService.default.invalidateShop(shop);
+      } catch (cacheErr) {
+        console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+      }
     }
     // === END TOKEN FINALIZATION ===
     
@@ -669,6 +677,14 @@ Output JSON with:
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
+      
+      // Invalidate cache so new token balance is immediately visible
+      try {
+        const cacheService = await import('../services/cacheService.js');
+        await cacheService.default.invalidateShop(shop);
+      } catch (cacheErr) {
+        console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+      }
     }
     // === END TOKEN FINALIZATION ===
     
@@ -950,6 +966,14 @@ Guidelines:
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, totalActualTokens);
+      
+      // Invalidate cache so new token balance is immediately visible
+      try {
+        const cacheService = await import('../services/cacheService.js');
+        await cacheService.default.invalidateShop(shop);
+      } catch (cacheErr) {
+        console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+      }
     }
     // === END TOKEN FINALIZATION ===
     
