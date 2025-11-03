@@ -342,11 +342,11 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
     });
 
     return {
-      summary: typeof summaryResult === 'string' ? summaryResult : summaryResult?.data || summaryResult,
-      semanticTags: semanticTagsResult?.data || semanticTagsResult,
-      contextHints: contextHintsResult?.data || contextHintsResult,
-      qa: qaResult?.data || qaResult,
-      sentiment: sentimentResult?.data || sentimentResult,
+      summary: summaryResult?.data || null,
+      semanticTags: semanticTagsResult?.data || null,
+      contextHints: contextHintsResult?.data || null,
+      qa: qaResult?.data || null,
+      sentiment: sentimentResult?.data || null,
       relatedProducts,
       usage: totalUsage
     };
