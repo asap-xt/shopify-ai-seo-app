@@ -1855,8 +1855,26 @@ export default function Settings() {
                       } catch (apiError) {
                         console.error('[SCHEMA-GEN] ❌ API call failed:', apiError);
                         console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
-                        console.error('[SCHEMA-GEN] ❌ API error stack:', apiError.stack);
-                        throw apiError; // Re-throw to be caught by outer catch
+                        console.error('[SCHEMA-GEN] ❌ Full error object:', apiError);
+                        
+                        // Check if error has requiresPurchase flag (402 status)
+                        if (apiError.requiresPurchase) {
+                          console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing modal');
+                          setTokenModalData({
+                            feature: apiError.feature || 'ai-schema-advanced',
+                            tokensRequired: apiError.tokensRequired || 0,
+                            tokensAvailable: apiError.tokensAvailable || 0,
+                            tokensNeeded: apiError.tokensNeeded || 0,
+                            needsUpgrade: apiError.needsUpgrade || false,
+                            currentPlan: apiError.currentPlan || '',
+                            minimumPlanForFeature: apiError.minimumPlanForFeature || null
+                          });
+                          setShowInsufficientTokensModal(true);
+                          setSchemaGenerating(false);
+                          return; // Don't re-throw, modal handles it
+                        }
+                        
+                        throw apiError; // Re-throw for other errors
                       }
                       
                       console.log('[SCHEMA-GEN] POST response:', data);
