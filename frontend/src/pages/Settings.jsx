@@ -2071,7 +2071,15 @@ export default function Settings() {
           primary
           size="large"
           loading={saving}
-          onClick={saveSettings}
+          onClick={() => {
+            console.log('[SETTINGS] ===== SAVE BUTTON CLICKED =====');
+            console.log('[SETTINGS] settings:', settings);
+            console.log('[SETTINGS] settings.features:', settings?.features);
+            console.log('[SETTINGS] settings.features.aiSitemap:', settings?.features?.aiSitemap);
+            console.log('[SETTINGS] shop:', shop);
+            console.log('[SETTINGS] Calling saveSettings()...');
+            saveSettings();
+          }}
         >
           Save Settings
         </Button>
