@@ -43,6 +43,8 @@ export default async function productsWebhook(req, res) {
         productId: numericProductId 
       });
       
+      console.log(`[WH] ${numericProductId}: exist=${!!existingProduct}`);
+      
       // Track whether content changed (initialize outside if block)
       let titleChanged = false;
       let descriptionChanged = false;
@@ -57,8 +59,9 @@ export default async function productsWebhook(req, res) {
         titleChanged = referenceTitle !== payload.title;
         descriptionChanged = referenceDescription !== payload.body_html;
         
+        console.log(`[WH] ${numericProductId}: T=${titleChanged} D=${descriptionChanged} refD=${referenceDescription?.length || 0} payloadD=${payload.body_html?.length || 0}`);
+        
         if (titleChanged || descriptionChanged) {
-          console.log(`[WH-PROD] ${numericProductId}: T=${titleChanged} D=${descriptionChanged}`);
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
           
