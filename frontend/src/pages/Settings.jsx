@@ -845,35 +845,50 @@ export default function Settings() {
       setOriginalSettings(settings); // Update original settings
       generateRobotsTxt(); // Regenerate robots.txt
       
-      // Background sitemap regeneration if AI Sitemap is enabled AND plan allows it
-      // Check if plan supports AI Sitemap (Growth Extra+ or Plus plans with tokens)
+      // Background sitemap regeneration if AI Sitemap is enabled
+      // Plans: Growth Extra/Enterprise (unlimited) OR Plus plans (need tokens)
       const normalizedPlan = normalizePlan(settings?.plan);
-      const plansWithAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
+      const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
       const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
       
-      // Check token balance - fetch from settings or default to 0
+      // Check token balance
       const currentTokenBalance = settings?.tokenBalance?.available || 0;
       
-      const hasAISitemapAccess = plansWithAISitemap.includes(normalizedPlan) || 
-                                  (plusPlans.includes(normalizedPlan) && currentTokenBalance > 0);
+      // For Plus plans, check if they have tokens
+      const isPlusPlan = plusPlans.includes(normalizedPlan);
+      const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
+      const hasTokens = currentTokenBalance > 0;
       
-      // ===== DEBUG: LOG ALL VALUES BEFORE IF CHECK =====
       console.log('[SETTINGS] ===== AI SITEMAP REGENERATION CHECK =====');
-      console.log('[SETTINGS] settings.features:', settings.features);
       console.log('[SETTINGS] settings.features?.aiSitemap:', settings.features?.aiSitemap);
-      console.log('[SETTINGS] settings.plan:', settings?.plan);
       console.log('[SETTINGS] normalizedPlan:', normalizedPlan);
+      console.log('[SETTINGS] isPlusPlan:', isPlusPlan);
+      console.log('[SETTINGS] hasUnlimitedAccess:', hasUnlimitedAccess);
       console.log('[SETTINGS] currentTokenBalance:', currentTokenBalance);
-      console.log('[SETTINGS] plansWithAISitemap:', plansWithAISitemap);
-      console.log('[SETTINGS] plusPlans:', plusPlans);
-      console.log('[SETTINGS] plansWithAISitemap.includes(normalizedPlan):', plansWithAISitemap.includes(normalizedPlan));
-      console.log('[SETTINGS] plusPlans.includes(normalizedPlan):', plusPlans.includes(normalizedPlan));
-      console.log('[SETTINGS] hasAISitemapAccess:', hasAISitemapAccess);
-      console.log('[SETTINGS] CONDITION: (settings.features?.aiSitemap && hasAISitemapAccess):', (settings.features?.aiSitemap && hasAISitemapAccess));
+      console.log('[SETTINGS] hasTokens:', hasTokens);
       console.log('[SETTINGS] ===== END AI SITEMAP CHECK =====');
-      // ===== END DEBUG =====
       
-      if (settings.features?.aiSitemap && hasAISitemapAccess) {
+      // AI Sitemap regeneration (if enabled)
+      if (settings.features?.aiSitemap) {
+        // Check if plan allows this feature
+        if (!hasUnlimitedAccess && !isPlusPlan) {
+          console.log('[SETTINGS] ⚠️ AI Sitemap requires Growth Extra+ or Plus plan');
+          setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
+          return; // Stop here
+        }
+        
+        // For Plus plans, check tokens
+        if (isPlusPlan && !hasTokens) {
+          console.log('[SETTINGS] ⚠️ Plus plan needs tokens for AI Sitemap');
+          setTokenModalData({
+            feature: 'ai-sitemap-optimized',
+            tokensRequired: 3000, // Estimated per product
+            tokensAvailable: currentTokenBalance,
+            tokensNeeded: 3000
+          });
+          setShowInsufficientTokensModal(true);
+          return; // Stop here, show buy tokens modal
+        }
         try {
           
           const REGENERATE_SITEMAP_MUTATION = `
