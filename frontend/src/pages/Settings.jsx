@@ -101,6 +101,8 @@ export default function Settings() {
     }
   });
   const [schemaComplete, setSchemaComplete] = useState(false);
+  const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
+  const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
@@ -530,19 +532,19 @@ export default function Settings() {
       const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
       
-      // Check for errors (e.g., no optimized products)
-      if (statusData.error === 'NO_OPTIMIZED_PRODUCTS') {
-        console.log('[PROGRESS-CHECK] ❌ No optimized products found!');
+      // Check for errors (e.g., no optimized products or only basic SEO)
+      if (statusData.error === 'NO_OPTIMIZED_PRODUCTS' || statusData.error === 'ONLY_BASIC_SEO') {
+        console.log('[PROGRESS-CHECK] ❌ Schema error:', statusData.error);
         
         // Stop checking
         isGeneratingRef.current = false;
         checkCountRef.current = 0;
         setSchemaGenerating(false);
         
-        // Show modal with options to optimize products
+        // Show modal with appropriate options
         setToast(null); // Clear any previous toasts
-        // TODO: Show modal with 2 buttons - will implement modal below
-        alert('No optimized products found!\n\nPlease run SEO optimization first:\n1. Basic SEO (free)\n2. AI-Enhanced SEO (requires tokens)');
+        setSchemaErrorType(statusData.error);
+        setShowSchemaErrorModal(true);
         
         return; // Stop checking
       }
@@ -2455,6 +2457,129 @@ export default function Settings() {
                   Structured schemas are now generated and help AI bots better understand your products.
                 </Text>
               </Box>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Error Modal - No Optimized Products */}
+      {showSchemaErrorModal && schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' && (
+        <Modal
+          open={true}
+          title="No Optimized Products Found"
+          onClose={() => {
+            setShowSchemaErrorModal(false);
+            setSchemaErrorType(null);
+          }}
+          primaryAction={{
+            content: 'Go to Search Optimization',
+            onAction: () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              // Navigate to SEO generation page with current params (embedded=1, shop, host, etc.)
+              const currentParams = new URLSearchParams(window.location.search);
+              const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+              window.location.href = `/seo-generate${paramString}`;
+            }
+          }}
+          secondaryActions={[{
+            content: 'Cancel',
+            onAction: () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="warning">
+                <p>No optimized products were found in your store.</p>
+              </Banner>
+              
+              <Text>
+                Advanced Schema Data requires at least basic SEO optimization on your products. 
+                Please run SEO optimization first, then try generating schemas again.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                You can choose:
+              </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Basic AISEO</strong> - Free SEO optimization</Text>
+                <Text>• <strong>AI-Enhanced SEO</strong> - Advanced optimization (requires tokens)</Text>
+              </BlockStack>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Error Modal - Only Basic SEO */}
+      {showSchemaErrorModal && schemaErrorType === 'ONLY_BASIC_SEO' && (
+        <Modal
+          open={true}
+          title="AI-Enhanced Optimization Recommended"
+          onClose={() => {
+            setShowSchemaErrorModal(false);
+            setSchemaErrorType(null);
+          }}
+          primaryAction={{
+            content: 'Generate AI-Enhanced Add-ons',
+            onAction: () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              // Navigate to SEO generation page with current params (embedded=1, shop, host, etc.)
+              const currentParams = new URLSearchParams(window.location.search);
+              const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+              window.location.href = `/seo-generate${paramString}`;
+            }
+          }}
+          secondaryActions={[{
+            content: 'Proceed with Basic AISEO',
+            onAction: async () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              
+              // Trigger schema generation anyway (with basic SEO products)
+              try {
+                setSchemaGenerating(true);
+                setSchemaComplete(false);
+                isGeneratingRef.current = true;
+                checkCountRef.current = 0;
+                
+                await api(`/api/schema/generate-all?shop=${shop}`, {
+                  method: 'POST'
+                });
+                
+                // Start checking progress
+                setTimeout(() => {
+                  checkGenerationProgress();
+                }, 3000);
+              } catch (err) {
+                console.error('[SCHEMA-GEN] Error:', err);
+                setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
+                setSchemaGenerating(false);
+              }
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="info">
+                <p>Only basic SEO optimization was found on your products.</p>
+              </Banner>
+              
+              <Text>
+                For best results with Advanced Schema Data, we recommend running AI-Enhanced 
+                optimization first. This will provide richer product data for schema generation.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                What would you like to do?
+              </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Generate AI-Enhanced Add-ons</strong> - Get the best results (requires tokens)</Text>
+                <Text>• <strong>Proceed with Basic AISEO</strong> - Continue with current optimization</Text>
+              </BlockStack>
             </BlockStack>
           </Modal.Section>
         </Modal>

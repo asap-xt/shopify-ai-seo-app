@@ -1405,22 +1405,37 @@ async function generateAllSchemas(shop) {
       }
     }
     
-    // Get products with any SEO optimization (basic or AI-enhanced)
-    console.log(`[SCHEMA] Fetching optimized products (basic or AI-enhanced)...`);
-    const products = await Product.find({
-      shop,
-      $or: [
-        { 'seoStatus.optimized': true },      // Basic SEO optimization
-        { 'seoStatus.aiEnhanced': true }      // AI-enhanced SEO
-      ]
-    }).limit(500);
-    console.log(`[SCHEMA] Found ${products.length} optimized products`);
+    // Check for optimized products
+    console.log(`[SCHEMA] Checking product optimization status...`);
     
-    // If no optimized products, return error
-    if (products.length === 0) {
+    // Count basic and AI-enhanced products separately
+    const basicProducts = await Product.find({
+      shop,
+      'seoStatus.optimized': true
+    }).limit(500);
+    
+    const aiEnhancedProducts = await Product.find({
+      shop,
+      'seoStatus.aiEnhanced': true
+    }).limit(500);
+    
+    console.log(`[SCHEMA] Found ${basicProducts.length} basic SEO products, ${aiEnhancedProducts.length} AI-enhanced products`);
+    
+    // Case 1: No products at all
+    if (basicProducts.length === 0 && aiEnhancedProducts.length === 0) {
       console.log(`[SCHEMA] ❌ No optimized products found. User needs to run SEO optimization first.`);
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
+    
+    // Case 2: Only basic products, no AI-enhanced
+    if (basicProducts.length > 0 && aiEnhancedProducts.length === 0) {
+      console.log(`[SCHEMA] ⚠️ Only basic SEO found. Recommending AI-enhanced optimization.`);
+      throw new Error('ONLY_BASIC_SEO');
+    }
+    
+    // Use AI-enhanced products if available, otherwise use basic
+    const products = aiEnhancedProducts.length > 0 ? aiEnhancedProducts : basicProducts;
+    console.log(`[SCHEMA] Using ${products.length} products for schema generation`);
     
     // Collect all generated schemas
     const allProductSchemas = [];
@@ -1609,6 +1624,14 @@ router.post('/generate-all', async (req, res) => {
           currentProduct: '',
           error: 'NO_OPTIMIZED_PRODUCTS',
           errorMessage: 'No optimized products found. Please run SEO optimization first.'
+        });
+      } else if (err.message === 'ONLY_BASIC_SEO') {
+        generationStatus.set(shop, { 
+          generating: false, 
+          progress: '0%', 
+          currentProduct: '',
+          error: 'ONLY_BASIC_SEO',
+          errorMessage: 'Only basic SEO found. AI-enhanced optimization is recommended for better results.'
         });
       } else {
         generationStatus.set(shop, { 
