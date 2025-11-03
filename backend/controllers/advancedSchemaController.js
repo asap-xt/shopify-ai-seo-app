@@ -1473,13 +1473,15 @@ async function generateAllSchemas(shop) {
     });
     
   } catch (error) {
-    console.error(`[SCHEMA] Fatal error for ${shop}:`, error);
+    console.error(`[SCHEMA] ❌ Fatal error for ${shop}:`, error);
+    console.error(`[SCHEMA] ❌ Error message:`, error.message);
+    console.error(`[SCHEMA] ❌ Error stack:`, error.stack);
     
     // Mark generation as failed
     generationStatus.set(shop, { 
       generating: false, 
       progress: '0%', 
-      currentProduct: 'Generation failed' 
+      currentProduct: `Generation failed: ${error.message}` 
     });
     
     throw error;
