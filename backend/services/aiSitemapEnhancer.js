@@ -315,13 +315,25 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
   try {
     // Run all enhancements in parallel for speed
     // Note: Each function now returns {data, usage} from getGeminiResponse
-    const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = await Promise.all([
+    // Use Promise.allSettled to prevent one failure from breaking all
+    const results = await Promise.allSettled([
       enableSummary ? generateAISummary(product) : Promise.resolve({data: null, usage: null}),
       enableSemanticTags ? generateSemanticTags(product) : Promise.resolve({data: null, usage: null}),
       enableContextHints ? generateContextHints(product) : Promise.resolve({data: null, usage: null}),
       enableQA ? generateProductQA(product) : Promise.resolve({data: null, usage: null}),
       enableSentiment ? analyzeSentiment(product) : Promise.resolve({data: null, usage: null})
     ]);
+
+    // Extract successful results
+    const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        const names = ['summary', 'semanticTags', 'contextHints', 'qa', 'sentiment'];
+        console.error(`[AI-SITEMAP] Failed to generate ${names[index]} for ${product.title}:`, result.reason);
+        return {data: null, usage: null};
+      }
+    });
 
     // Find related products (synchronous, fast)
     const relatedProducts = enableRelated ? findRelatedProducts(product, allProducts) : [];
@@ -341,7 +353,7 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
       }
     });
 
-    return {
+    const enhancedData = {
       summary: summaryResult?.data || null,
       semanticTags: semanticTagsResult?.data || null,
       contextHints: contextHintsResult?.data || null,
@@ -350,8 +362,21 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
       relatedProducts,
       usage: totalUsage
     };
+
+    // DEBUG: Log what we're returning
+    console.log('[AI-SITEMAP-ENHANCER] Returning data for', product.title);
+    console.log('[AI-SITEMAP-ENHANCER] Has summary:', !!enhancedData.summary);
+    console.log('[AI-SITEMAP-ENHANCER] Has semanticTags:', !!enhancedData.semanticTags);
+    console.log('[AI-SITEMAP-ENHANCER] Has contextHints:', !!enhancedData.contextHints);
+    console.log('[AI-SITEMAP-ENHANCER] Has qa:', !!enhancedData.qa, 'count:', enhancedData.qa?.length || 0);
+    console.log('[AI-SITEMAP-ENHANCER] Has sentiment:', !!enhancedData.sentiment);
+    console.log('[AI-SITEMAP-ENHANCER] Related products:', enhancedData.relatedProducts?.length || 0);
+    console.log('[AI-SITEMAP-ENHANCER] Total tokens:', totalUsage.total_tokens);
+
+    return enhancedData;
   } catch (error) {
-    console.error('[AI-SITEMAP] Error enhancing product:', error);
+    console.error('[AI-SITEMAP] Fatal error enhancing product:', error);
+    console.error('[AI-SITEMAP] Error stack:', error.stack);
     return null;
   }
 }

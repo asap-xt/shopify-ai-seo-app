@@ -475,9 +475,21 @@ async function generateSitemapCore(shop, options = {}) {
               enableRelated: true
             });
             
-            // Set timeout to avoid blocking
-            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+            // Set timeout to avoid blocking (15s for 6 parallel AI calls)
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 15000));
             const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
+            
+            // DEBUG: Log AI enhancements result
+            console.log('[SITEMAP-AI-DEBUG] Product:', product.handle);
+            console.log('[SITEMAP-AI-DEBUG] aiEnhancements:', aiEnhancements ? 'RECEIVED' : 'NULL/TIMEOUT');
+            if (aiEnhancements) {
+              console.log('[SITEMAP-AI-DEBUG] Has summary:', !!aiEnhancements.summary);
+              console.log('[SITEMAP-AI-DEBUG] Has semanticTags:', !!aiEnhancements.semanticTags);
+              console.log('[SITEMAP-AI-DEBUG] Has contextHints:', !!aiEnhancements.contextHints);
+              console.log('[SITEMAP-AI-DEBUG] Has qa:', !!aiEnhancements.qa);
+              console.log('[SITEMAP-AI-DEBUG] Has sentiment:', !!aiEnhancements.sentiment);
+              console.log('[SITEMAP-AI-DEBUG] Has relatedProducts:', !!aiEnhancements.relatedProducts);
+            }
             
             // Track AI token usage
             if (aiEnhancements?.usage) {
