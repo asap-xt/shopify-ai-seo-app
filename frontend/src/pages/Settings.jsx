@@ -857,6 +857,22 @@ export default function Settings() {
       const hasAISitemapAccess = plansWithAISitemap.includes(normalizedPlan) || 
                                   (plusPlans.includes(normalizedPlan) && currentTokenBalance > 0);
       
+      // ===== DEBUG: LOG ALL VALUES BEFORE IF CHECK =====
+      console.log('[SETTINGS] ===== AI SITEMAP REGENERATION CHECK =====');
+      console.log('[SETTINGS] settings.features:', settings.features);
+      console.log('[SETTINGS] settings.features?.aiSitemap:', settings.features?.aiSitemap);
+      console.log('[SETTINGS] settings.plan:', settings?.plan);
+      console.log('[SETTINGS] normalizedPlan:', normalizedPlan);
+      console.log('[SETTINGS] currentTokenBalance:', currentTokenBalance);
+      console.log('[SETTINGS] plansWithAISitemap:', plansWithAISitemap);
+      console.log('[SETTINGS] plusPlans:', plusPlans);
+      console.log('[SETTINGS] plansWithAISitemap.includes(normalizedPlan):', plansWithAISitemap.includes(normalizedPlan));
+      console.log('[SETTINGS] plusPlans.includes(normalizedPlan):', plusPlans.includes(normalizedPlan));
+      console.log('[SETTINGS] hasAISitemapAccess:', hasAISitemapAccess);
+      console.log('[SETTINGS] CONDITION: (settings.features?.aiSitemap && hasAISitemapAccess):', (settings.features?.aiSitemap && hasAISitemapAccess));
+      console.log('[SETTINGS] ===== END AI SITEMAP CHECK =====');
+      // ===== END DEBUG =====
+      
       if (settings.features?.aiSitemap && hasAISitemapAccess) {
         try {
           
