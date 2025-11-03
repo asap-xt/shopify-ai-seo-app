@@ -1511,7 +1511,18 @@ router.post('/generate-all', async (req, res) => {
     const hasIncludedAccess = includedTokensPlans.includes(normalizedPlan);
     const isPlusPlan = plusPlans.includes(normalizedPlan);
     
+    console.log('[SCHEMA-DEBUG] Plan check:', {
+      shop,
+      rawPlan: subscription?.plan,
+      normalizedPlan,
+      hasIncludedAccess,
+      isPlusPlan,
+      includedTokensPlans,
+      plusPlans
+    });
+    
     if (!hasIncludedAccess && !isPlusPlan) {
+      console.log('[SCHEMA-DEBUG] Access denied for plan:', normalizedPlan);
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Growth Extra, Enterprise, or Plus plans with tokens',
         currentPlan: subscription?.plan || 'none',
