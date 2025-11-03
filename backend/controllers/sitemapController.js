@@ -611,49 +611,46 @@ async function generateSitemapCore(shop, options = {}) {
           xml += '    <changefreq>weekly</changefreq>\n';
           xml += '    <priority>0.8</priority>\n';
           
-          // Add AI metadata ONLY if AI sitemap is enabled
-          if (isAISitemapEnabled) {
-            xml += '    <ai:product>\n';
-            xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
-            xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
-            xml += '      <ai:language>' + lang + '</ai:language>\n';
-            
-            // Add localized AI bullets and FAQ
-            try {
-              const localizedSeo = await getProductLocalizedContent(normalizedShop, product.id, lang);
-              if (localizedSeo) {
-                // Add localized bullets
-                if (localizedSeo.bullets && Array.isArray(localizedSeo.bullets) && localizedSeo.bullets.length > 0) {
-                  xml += '      <ai:features>\n';
-                  localizedSeo.bullets.forEach(bullet => {
-                    if (bullet && bullet.trim()) {
-                      xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
-                    }
-                  });
-                  xml += '      </ai:features>\n';
-                }
-                
-                // Add localized FAQ
-                if (localizedSeo.faq && Array.isArray(localizedSeo.faq) && localizedSeo.faq.length > 0) {
-                  xml += '      <ai:faq>\n';
-                  localizedSeo.faq.forEach(item => {
-                    if (item && item.q && item.a) {
-                      xml += '        <ai:qa>\n';
-                      xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
-                      xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
-                      xml += '        </ai:qa>\n';
-                    }
-                  });
-                  xml += '      </ai:faq>\n';
+          // Always add AI metadata for multilingual URLs (to be consistent with main product URL)
+          xml += '    <ai:product>\n';
+          xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
+          xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
+          xml += '      <ai:language>' + lang + '</ai:language>\n';
+          
+          // Add localized AI bullets and FAQ from seo_ai metafields (if available)
+          try {
+            const hasLocalizedSeo = await getProductLocalizedContent(normalizedShop, product.id, lang);
+            if (hasLocalizedSeo) {
+              // Add localized bullets
+              if (hasLocalizedSeo.bullets && Array.isArray(hasLocalizedSeo.bullets) && hasLocalizedSeo.bullets.length > 0) {
+                xml += '      <ai:features>\n';
+                hasLocalizedSeo.bullets.forEach(bullet => {
+                  if (bullet && bullet.trim()) {
+                    xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+                  }
+                });
+                xml += '      </ai:features>\n';
+              }
+              
+              // Add localized FAQ
+              if (hasLocalizedSeo.faq && Array.isArray(hasLocalizedSeo.faq) && hasLocalizedSeo.faq.length > 0) {
+                xml += '      <ai:faq>\n';
+                hasLocalizedSeo.faq.forEach(item => {
+                  if (item && item.q && item.a) {
+                    xml += '        <ai:qa>\n';
+                    xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
+                    xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
+                    xml += '        </ai:qa>\n';
+                  }
+                });
+                xml += '      </ai:faq>\n';
               }
             }
           } catch (err) {
-            // Could not get localized AI content
-          }
-            
-            xml += '    </ai:product>\n';
+            // Could not get localized AI content, continue with basic metadata
           }
           
+          xml += '    </ai:product>\n';
           xml += '  </url>\n';
         }
       }
