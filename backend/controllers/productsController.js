@@ -4,6 +4,7 @@
 import express from 'express';
 import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
+import Product from '../db/Product.js';
 
 const router = express.Router();
 
@@ -389,6 +390,42 @@ router.post('/sync', async (req, res) => {
       success: false,
       error: error.message || 'Product sync failed',
       shop: req.auth.shop
+    });
+  }
+});
+
+/**
+ * DELETE /api/products/reset-shop
+ * Delete all products from MongoDB for a specific shop
+ * Useful for testing or clean slate after schema changes
+ */
+router.delete('/reset-shop', requireAuth, async (req, res) => {
+  try {
+    const shop = req.auth.shop;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+    
+    // Count products before deletion
+    const countBefore = await Product.countDocuments({ shop });
+    
+    // Delete all products for this shop
+    const result = await Product.deleteMany({ shop });
+    
+    return res.json({
+      success: true,
+      shop,
+      deletedCount: result.deletedCount,
+      countBefore,
+      message: `Successfully deleted ${result.deletedCount} products from MongoDB for ${shop}`
+    });
+    
+  } catch (error) {
+    console.error('[RESET-SHOP] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to reset shop products'
     });
   }
 });
