@@ -310,8 +310,6 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
     enableRelated = true
   } = options;
 
-  console.log('[AI-SITEMAP] Enhancing product:', product.title);
-
   try {
     // Run all enhancements in parallel for speed
     // Note: Each function now returns {data, usage} from getGeminiResponse
@@ -362,16 +360,6 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
       relatedProducts,
       usage: totalUsage
     };
-
-    // DEBUG: Log what we're returning
-    console.log('[AI-SITEMAP-ENHANCER] Returning data for', product.title);
-    console.log('[AI-SITEMAP-ENHANCER] Has summary:', !!enhancedData.summary);
-    console.log('[AI-SITEMAP-ENHANCER] Has semanticTags:', !!enhancedData.semanticTags);
-    console.log('[AI-SITEMAP-ENHANCER] Has contextHints:', !!enhancedData.contextHints);
-    console.log('[AI-SITEMAP-ENHANCER] Has qa:', !!enhancedData.qa, 'count:', enhancedData.qa?.length || 0);
-    console.log('[AI-SITEMAP-ENHANCER] Has sentiment:', !!enhancedData.sentiment);
-    console.log('[AI-SITEMAP-ENHANCER] Related products:', enhancedData.relatedProducts?.length || 0);
-    console.log('[AI-SITEMAP-ENHANCER] Total tokens:', totalUsage.total_tokens);
 
     return enhancedData;
   } catch (error) {
