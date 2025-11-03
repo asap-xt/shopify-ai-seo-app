@@ -857,6 +857,7 @@ async function generateProductSchemas(shop, productDoc) {
   // Get SEO data for all languages
   const languages = productDoc.seoStatus?.languages || [];
   const schemas = [];
+  let totalProductUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
   for (const lang of languages) {
     if (!lang.optimized) continue;
@@ -882,8 +883,15 @@ async function generateProductSchemas(shop, productDoc) {
     const seoData = JSON.parse(mfData.product.metafield.value);
     
     // Generate schemas for this language
-    const langSchemas = await generateLangSchemas(product, seoData, shop, lang.code);
-    schemas.push({ language: lang.code, schemas: langSchemas });
+    const result = await generateLangSchemas(product, seoData, shop, lang.code);
+    schemas.push({ language: lang.code, schemas: result.schemas });
+    
+    // Collect usage
+    if (result.usage) {
+      totalProductUsage.prompt_tokens += result.usage.prompt_tokens || 0;
+      totalProductUsage.completion_tokens += result.usage.completion_tokens || 0;
+      totalProductUsage.total_tokens += result.usage.total_tokens || 0;
+    }
   }
   
   // Collect all schemas from all languages
@@ -925,15 +933,16 @@ async function generateProductSchemas(shop, productDoc) {
   // Update optimization summary metafield
   await updateOptimizationSummary(shop, productDoc.productId);
   
-  // Return schemas for MongoDB storage
+  // Return schemas and usage for MongoDB storage and token tracking
   // console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
-  return allSchemas;
+  return { schemas: allSchemas, usage: totalProductUsage };
 }
 
 // Generate schemas for specific language
 async function generateLangSchemas(product, seoData, shop, language) {
   const shopUrl = `https://${shop}`;
   const productUrl = `${shopUrl}/products/${product.handle}`;
+  let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
@@ -1073,9 +1082,14 @@ async function generateLangSchemas(product, seoData, shop, language) {
   // Add enhanced description if enabled
   if (richAttributesSettings.enhancedDescription) {
     try {
-      const enhancedDesc = await generateEnhancedDescription(product, seoData, language);
-      if (enhancedDesc) {
-        productSchema.description = enhancedDesc;
+      const result = await generateEnhancedDescription(product, seoData, language);
+      if (result.description) {
+        productSchema.description = result.description;
+      }
+      if (result.usage) {
+        totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
+        totalUsage.completion_tokens += result.usage.completion_tokens || 0;
+        totalUsage.total_tokens += result.usage.total_tokens || 0;
       }
     } catch (error) {
       console.error('[SCHEMA] Failed to generate enhanced description:', error);
@@ -1091,8 +1105,15 @@ async function generateLangSchemas(product, seoData, shop, language) {
   // Add Review schemas if enabled
   if (richAttributesSettings.reviews) {
     try {
-      const reviewSchemas = await generateReviewSchemas(product, seoData, language);
-      baseSchemas.push(...reviewSchemas);
+      const result = await generateReviewSchemas(product, seoData, language);
+      if (result.schemas) {
+        baseSchemas.push(...result.schemas);
+      }
+      if (result.usage) {
+        totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
+        totalUsage.completion_tokens += result.usage.completion_tokens || 0;
+        totalUsage.total_tokens += result.usage.total_tokens || 0;
+      }
     } catch (error) {
       console.error('[SCHEMA] Failed to generate review schemas:', error);
     }
@@ -1101,8 +1122,15 @@ async function generateLangSchemas(product, seoData, shop, language) {
   // Add Rating schemas if enabled
   if (richAttributesSettings.ratings) {
     try {
-      const ratingSchemas = await generateRatingSchemas(product, seoData, language);
-      baseSchemas.push(...ratingSchemas);
+      const result = await generateRatingSchemas(product, seoData, language);
+      if (result.schemas) {
+        baseSchemas.push(...result.schemas);
+      }
+      if (result.usage) {
+        totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
+        totalUsage.completion_tokens += result.usage.completion_tokens || 0;
+        totalUsage.total_tokens += result.usage.total_tokens || 0;
+      }
     } catch (error) {
       console.error('[SCHEMA] Failed to generate rating schemas:', error);
     }
@@ -1121,7 +1149,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
   }
   
   // console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
-  return baseSchemas;
+  return { schemas: baseSchemas, usage: totalUsage };
 }
 
 // Install Script Tag for auto-injection
@@ -1300,7 +1328,30 @@ async function generateAllSchemas(shop) {
     currentProduct: 'Initializing...' 
   });
   
+  // === TOKEN RESERVATION ===
+  let reservationId = null;
+  let totalAITokens = 0;
+  
   try {
+    // Check if this feature requires tokens and reserve
+    const { estimateTokensWithMargin, requiresTokens, calculateActualTokens } = await import('../billing/tokenConfig.js');
+    const feature = 'ai-schema-advanced';
+    
+    if (requiresTokens(feature)) {
+      // Estimate tokens (rough estimate: 500 products * 4 AI calls * 500 tokens each = 1M tokens)
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 }); // Conservative estimate
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop });
+        reservationId = reservation.reservationId;
+        await reservation.save();
+      } else {
+        throw new Error('Insufficient token balance for Advanced Schema generation');
+      }
+    }
+    // === END TOKEN RESERVATION ===
+    
     // Using theme snippet approach (no script tags needed)
     
     // Load shop context
@@ -1312,7 +1363,11 @@ async function generateAllSchemas(shop) {
     // Generate site-wide FAQ
     const faqResult = await generateSiteFAQ(shop, shopContext);
     const siteFAQ = faqResult.schema;
-    const usageDetails = faqResult.usage ? [{ feature: 'site-faq', usage: faqResult.usage }] : [];
+    
+    // Track tokens from FAQ generation
+    if (faqResult.usage) {
+      totalAITokens += faqResult.usage.total_tokens || 0;
+    }
     
     // First, sync products from Shopify to MongoDB if needed
     const totalProductsInMongo = await Product.countDocuments({ shop });
@@ -1353,9 +1408,14 @@ async function generateAllSchemas(shop) {
             currentProduct: `Processing ${product.title || product.productId}...`
           });
           
-          const productSchemas = await generateProductSchemas(shop, product);
-          if (productSchemas && productSchemas.length > 0) {
-            allProductSchemas.push(...productSchemas);
+          const result = await generateProductSchemas(shop, product);
+          if (result?.schemas && result.schemas.length > 0) {
+            allProductSchemas.push(...result.schemas);
+          }
+          
+          // Track tokens from this product
+          if (result?.usage) {
+            totalAITokens += result.usage.total_tokens || 0;
           }
         } catch (err) {
           console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
@@ -1386,6 +1446,25 @@ async function generateAllSchemas(shop) {
       throw err;
     }
     
+    // === FINALIZE TOKEN USAGE ===
+    if (reservationId && totalAITokens > 0) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        await tokenBalance.finalizeReservation(reservationId, totalAITokens);
+        
+        // Invalidate cache so new token balance is immediately visible
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[SCHEMA] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[SCHEMA] Error finalizing token usage:', tokenErr);
+      }
+    }
+    // === END TOKEN FINALIZATION ===
+    
     // Mark generation as complete
     generationStatus.set(shop, { 
       generating: false, 
@@ -1414,14 +1493,39 @@ router.post('/generate-all', async (req, res) => {
   try {
     const shop = req.shopDomain || requireShop(req);
     
-    // Check Enterprise plan
+    // Check plan access: Enterprise/Growth Extra (included tokens) OR Plus plans (with purchased tokens)
     const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan?.toLowerCase().replace(/\s+/g, '_') || '';
     
-    if (subscription?.plan !== 'enterprise') {
+    // Plans with included tokens that have unlimited access
+    const includedTokensPlans = ['enterprise', 'growth_extra'];
+    
+    // Plus plans that can access with purchased tokens
+    const plusPlans = ['professional_plus', 'growth_plus'];
+    
+    // Check if plan has access
+    const hasIncludedAccess = includedTokensPlans.includes(planKey) || subscription?.plan === 'growth extra';
+    const isPlusPlan = plusPlans.includes(planKey) || 
+                       subscription?.plan === 'professional plus' || 
+                       subscription?.plan === 'growth plus';
+    
+    if (!hasIncludedAccess && !isPlusPlan) {
       return res.status(403).json({ 
-        error: 'Advanced Schema Data requires Enterprise plan',
+        error: 'Advanced Schema Data requires Growth Extra, Enterprise, or Plus plans with tokens',
         currentPlan: subscription?.plan || 'none'
       });
+    }
+    
+    // For Plus plans, check if they have tokens (will be tracked during generation)
+    if (isPlusPlan) {
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      if (tokenBalance.balance <= 0) {
+        return res.status(403).json({ 
+          error: 'Insufficient tokens. Please purchase tokens to use Advanced Schema Data.',
+          currentPlan: subscription?.plan || 'none',
+          tokenBalance: 0
+        });
+      }
     }
     
     // Return immediately
