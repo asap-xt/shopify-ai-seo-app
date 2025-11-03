@@ -5,6 +5,7 @@ import { validateRequest } from '../middleware/shopifyAuth.js';
 import { verifyRequest } from '../middleware/verifyRequest.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
+import Product from '../db/Product.js';
 import { validateAIResponse, createFactualPrompt } from '../utils/aiValidator.js';
 import { getCachedStoreContext } from '../utils/storeContextBuilder.js';
 import { 
