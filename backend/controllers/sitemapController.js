@@ -497,32 +497,44 @@ async function generateSitemapCore(shop, options = {}) {
             }
             
             if (aiEnhancements) {
+              console.log('[SITEMAP-XML-DEBUG] About to add AI enhancements to XML for:', product.handle);
+              
               // Add AI-generated summary
               if (aiEnhancements.summary) {
+                console.log('[SITEMAP-XML-DEBUG] Adding summary:', aiEnhancements.summary.substring(0, 50) + '...');
                 xml += '      <ai:summary><![CDATA[' + aiEnhancements.summary + ']]></ai:summary>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No summary to add');
               }
               
               // Add semantic tags
               if (aiEnhancements.semanticTags) {
+                console.log('[SITEMAP-XML-DEBUG] Adding semanticTags');
                 xml += '      <ai:semantic_tags>\n';
                 xml += '        <ai:category_hierarchy>' + escapeXml(aiEnhancements.semanticTags.categoryHierarchy) + '</ai:category_hierarchy>\n';
                 xml += '        <ai:use_case>' + escapeXml(aiEnhancements.semanticTags.useCase) + '</ai:use_case>\n';
                 xml += '        <ai:skill_level>' + escapeXml(aiEnhancements.semanticTags.skillLevel) + '</ai:skill_level>\n';
                 xml += '        <ai:season>' + escapeXml(aiEnhancements.semanticTags.season) + '</ai:season>\n';
                 xml += '      </ai:semantic_tags>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No semanticTags to add');
               }
               
               // Add context hints
               if (aiEnhancements.contextHints) {
+                console.log('[SITEMAP-XML-DEBUG] Adding contextHints');
                 xml += '      <ai:context>\n';
                 xml += '        <ai:best_for>' + escapeXml(aiEnhancements.contextHints.bestFor) + '</ai:best_for>\n';
                 xml += '        <ai:key_differentiator>' + escapeXml(aiEnhancements.contextHints.keyDifferentiator) + '</ai:key_differentiator>\n';
                 xml += '        <ai:target_audience>' + escapeXml(aiEnhancements.contextHints.targetAudience) + '</ai:target_audience>\n';
                 xml += '      </ai:context>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No contextHints to add');
               }
               
               // Add AI-generated Q&A
               if (aiEnhancements.qa && aiEnhancements.qa.length > 0) {
+                console.log('[SITEMAP-XML-DEBUG] Adding generated_faq, count:', aiEnhancements.qa.length);
                 xml += '      <ai:generated_faq>\n';
                 aiEnhancements.qa.forEach(qa => {
                   xml += '        <ai:qa>\n';
@@ -531,22 +543,34 @@ async function generateSitemapCore(shop, options = {}) {
                   xml += '        </ai:qa>\n';
                 });
                 xml += '      </ai:generated_faq>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No qa to add');
               }
               
               // Add sentiment/tone
               if (aiEnhancements.sentiment) {
+                console.log('[SITEMAP-XML-DEBUG] Adding sentiment/tone');
                 xml += '      <ai:tone>' + escapeXml(aiEnhancements.sentiment.tone) + '</ai:tone>\n';
                 xml += '      <ai:target_emotion>' + escapeXml(aiEnhancements.sentiment.targetEmotion) + '</ai:target_emotion>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No sentiment to add');
               }
               
               // Add related products
               if (aiEnhancements.relatedProducts && aiEnhancements.relatedProducts.length > 0) {
+                console.log('[SITEMAP-XML-DEBUG] Adding related products, count:', aiEnhancements.relatedProducts.length);
                 xml += '      <ai:related>\n';
                 aiEnhancements.relatedProducts.forEach(related => {
                   xml += '        <ai:product_link>' + primaryDomain + '/products/' + related.handle + '</ai:product_link>\n';
                 });
                 xml += '      </ai:related>\n';
+              } else {
+                console.log('[SITEMAP-XML-DEBUG] ⚠️ No relatedProducts to add');
               }
+              
+              console.log('[SITEMAP-XML-DEBUG] ✅ Finished adding AI enhancements to XML');
+            } else {
+              console.log('[SITEMAP-XML-DEBUG] ❌ aiEnhancements is null/undefined, skipping XML additions');
             }
           } catch (aiError) {
             console.error('[SITEMAP-CORE] Error in AI enhancement for', product.handle, ':', aiError.message);
