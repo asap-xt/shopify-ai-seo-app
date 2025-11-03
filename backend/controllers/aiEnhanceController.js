@@ -434,12 +434,22 @@ router.post('/product', validateRequest(), async (req, res) => {
     // If any language was successfully enhanced, mark product as aiEnhanced
     if (successfulLanguages > 0) {
       try {
-        await Product.findOneAndUpdate(
-          { shop, productId },
+        // Extract numeric ID from GID if needed
+        const numericProductId = productId.includes('gid://') 
+          ? productId.split('/').pop() 
+          : productId;
+        
+        const result = await Product.findOneAndUpdate(
+          { shop, productId: numericProductId },
           { 'seoStatus.aiEnhanced': true },
           { new: true }
         );
-        console.log(`[AI-ENHANCE] ✅ Marked product ${productId} as AI-enhanced in MongoDB`);
+        
+        if (result) {
+          console.log(`[AI-ENHANCE] ✅ Marked product ${numericProductId} as AI-enhanced in MongoDB`);
+        } else {
+          console.error(`[AI-ENHANCE] ⚠️ Product ${numericProductId} NOT FOUND in MongoDB!`);
+        }
       } catch (e) {
         console.error('[AI-ENHANCE] Failed to mark product as AI-enhanced:', e);
       }
