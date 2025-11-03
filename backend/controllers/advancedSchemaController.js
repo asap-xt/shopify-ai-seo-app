@@ -1405,13 +1405,22 @@ async function generateAllSchemas(shop) {
       }
     }
     
-    // Get all products with SEO
-    console.log(`[SCHEMA] Fetching optimized products...`);
+    // Get products with any SEO optimization (basic or AI-enhanced)
+    console.log(`[SCHEMA] Fetching optimized products (basic or AI-enhanced)...`);
     const products = await Product.find({
       shop,
-      'seoStatus.optimized': true
+      $or: [
+        { 'seoStatus.optimized': true },      // Basic SEO optimization
+        { 'seoStatus.aiEnhanced': true }      // AI-enhanced SEO
+      ]
     }).limit(500);
     console.log(`[SCHEMA] Found ${products.length} optimized products`);
+    
+    // If no optimized products, return error
+    if (products.length === 0) {
+      console.log(`[SCHEMA] ❌ No optimized products found. User needs to run SEO optimization first.`);
+      throw new Error('NO_OPTIMIZED_PRODUCTS');
+    }
     
     // Collect all generated schemas
     const allProductSchemas = [];
@@ -1590,6 +1599,26 @@ router.post('/generate-all', async (req, res) => {
     // Start background process
     generateAllSchemas(shop).catch(err => {
       console.error('[SCHEMA] ❌ Background generation failed:', err);
+      console.error('[SCHEMA] ❌ Error message:', err.message);
+      
+      // Update status with error
+      if (err.message === 'NO_OPTIMIZED_PRODUCTS') {
+        generationStatus.set(shop, { 
+          generating: false, 
+          progress: '0%', 
+          currentProduct: '',
+          error: 'NO_OPTIMIZED_PRODUCTS',
+          errorMessage: 'No optimized products found. Please run SEO optimization first.'
+        });
+      } else {
+        generationStatus.set(shop, { 
+          generating: false, 
+          progress: '0%', 
+          currentProduct: '',
+          error: 'GENERATION_FAILED',
+          errorMessage: err.message || 'Schema generation failed'
+        });
+      }
     });
     
   } catch (error) {
@@ -1677,6 +1706,8 @@ router.get('/status', async (req, res) => {
       generating: isActuallyGenerating,
       progress: isActuallyGenerating ? currentStatus.progress : '100%',
       currentProduct: currentStatus.currentProduct,
+      error: currentStatus.error || null,
+      errorMessage: currentStatus.errorMessage || null,
       hasSiteFAQ: hasFAQ,
       productsWithSchema: productsWithSchema,
       // Add this flag to help frontend know data is ready

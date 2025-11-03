@@ -530,6 +530,23 @@ export default function Settings() {
       const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
       
+      // Check for errors (e.g., no optimized products)
+      if (statusData.error === 'NO_OPTIMIZED_PRODUCTS') {
+        console.log('[PROGRESS-CHECK] ❌ No optimized products found!');
+        
+        // Stop checking
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0;
+        setSchemaGenerating(false);
+        
+        // Show modal with options to optimize products
+        setToast(null); // Clear any previous toasts
+        // TODO: Show modal with 2 buttons - will implement modal below
+        alert('No optimized products found!\n\nPlease run SEO optimization first:\n1. Basic SEO (free)\n2. AI-Enhanced SEO (requires tokens)');
+        
+        return; // Stop checking
+      }
+      
       // Check the new dataReady flag - this is the source of truth
       if (statusData.dataReady) {
         // Data is ready, generation is complete
