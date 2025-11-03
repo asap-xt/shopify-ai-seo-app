@@ -186,6 +186,7 @@ export async function getGeminiResponse(prompt, options = {}) {
       ],
       temperature,
       max_tokens: maxTokens,
+      response_format: { type: 'json_object' }
     }),
     timeout: 30_000,
   });
@@ -202,5 +203,9 @@ export async function getGeminiResponse(prompt, options = {}) {
   const content = data?.choices?.[0]?.message?.content || '';
   console.log('[GEMINI] Response length:', content.length, 'chars');
   
-  return content;
+  // Return both content and usage
+  return {
+    content,
+    usage: data?.usage || null
+  };
 }

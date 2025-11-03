@@ -21,12 +21,12 @@ Brand: ${product.vendor || 'N/A'}
 
 Format: Plain text, no markdown, concise and informative. Maximum 3 sentences.`;
 
-    const response = await getGeminiResponse(prompt, {
+    const result = await getGeminiResponse(prompt, {
       maxTokens: 200,
       temperature: 0.3 // Lower temperature for consistency
     });
 
-    return response.trim();
+    return result.content.trim();
   } catch (error) {
     console.error('[AI-SITEMAP] Error generating summary:', error);
     // Fallback to basic description
@@ -62,13 +62,13 @@ Format as JSON:
   "season": "string"
 }`;
 
-    const response = await getGeminiResponse(prompt, {
+    const result = await getGeminiResponse(prompt, {
       maxTokens: 300,
       temperature: 0.2
     });
 
     // Parse JSON response
-    const cleaned = response.trim().replace(/```json\n?|\n?```/g, '');
+    const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
     const parsed = JSON.parse(cleaned);
     
     return {
@@ -116,12 +116,12 @@ Format as JSON:
   "target_audience": "string"
 }`;
 
-    const response = await getGeminiResponse(prompt, {
+    const result = await getGeminiResponse(prompt, {
       maxTokens: 400,
       temperature: 0.3
     });
 
-    const cleaned = response.trim().replace(/```json\n?|\n?```/g, '');
+    const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
     const parsed = JSON.parse(cleaned);
     
     return {
@@ -169,12 +169,12 @@ Format as JSON array:
   }
 ]`;
 
-    const response = await getGeminiResponse(prompt, {
+    const result = await getGeminiResponse(prompt, {
       maxTokens: 800,
       temperature: 0.4
     });
 
-    const cleaned = response.trim().replace(/```json\n?|\n?```/g, '');
+    const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
     const parsed = JSON.parse(cleaned);
     
     return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
@@ -207,12 +207,12 @@ Format as JSON:
   "target_emotion": "string"
 }`;
 
-    const response = await getGeminiResponse(prompt, {
+    const result = await getGeminiResponse(prompt, {
       maxTokens: 150,
       temperature: 0.2
     });
 
-    const cleaned = response.trim().replace(/```json\n?|\n?```/g, '');
+    const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
     const parsed = JSON.parse(cleaned);
     
     return {
