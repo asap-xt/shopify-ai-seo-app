@@ -13,9 +13,6 @@ import { createAllMetafieldDefinitions } from './metafieldDefinitions.js';
  * @returns {Promise<Object>} - Registration result
  */
 export async function registerProductsUpdateWebhook(req, shop, callbackUrl) {
-  console.log(`[WEBHOOK-REG] Registering products/update webhook for ${shop}`);
-  console.log(`[WEBHOOK-REG] Callback URL: ${callbackUrl}`);
-  
   try {
     const accessToken = await resolveAdminToken(req, shop);
     if (!accessToken) {
@@ -53,7 +50,6 @@ export async function registerProductsUpdateWebhook(req, shop, callbackUrl) {
     });
     
     if (ourWebhook) {
-      console.log(`[WEBHOOK-REG] Webhook already registered: ${ourWebhook.node.id}`);
       return { 
         success: true, 
         alreadyExists: true, 
@@ -103,7 +99,6 @@ export async function registerProductsUpdateWebhook(req, shop, callbackUrl) {
     }
     
     const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
-    console.log(`[WEBHOOK-REG] ✅ Successfully registered webhook: ${webhook.id}`);
     
     return {
       success: true,
@@ -128,8 +123,6 @@ export async function registerProductsUpdateWebhook(req, shop, callbackUrl) {
  * @returns {Promise<Object>} - Registration result
  */
 export async function registerCollectionsUpdateWebhook(req, shop, callbackUrl) {
-  console.log(`[WEBHOOK-REG] Registering collections/update webhook for ${shop}`);
-  console.log(`[WEBHOOK-REG] Callback URL: ${callbackUrl}`);
   
   try {
     const accessToken = await resolveAdminToken(req, shop);
@@ -168,7 +161,6 @@ export async function registerCollectionsUpdateWebhook(req, shop, callbackUrl) {
     });
     
     if (ourWebhook) {
-      console.log(`[WEBHOOK-REG] Webhook already registered: ${ourWebhook.node.id}`);
       return { 
         success: true, 
         alreadyExists: true, 
@@ -218,7 +210,6 @@ export async function registerCollectionsUpdateWebhook(req, shop, callbackUrl) {
     }
     
     const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
-    console.log(`[WEBHOOK-REG] ✅ Successfully registered webhook: ${webhook.id}`);
     
     return {
       success: true,
@@ -243,8 +234,6 @@ export async function registerCollectionsUpdateWebhook(req, shop, callbackUrl) {
  * @returns {Promise<Object>} - Registration result
  */
 export async function registerAppUninstalledWebhook(req, shop, callbackUrl) {
-  console.log(`[WEBHOOK-REG] Registering app/uninstalled webhook for ${shop}`);
-  console.log(`[WEBHOOK-REG] Callback URL: ${callbackUrl}`);
   
   try {
     const accessToken = await resolveAdminToken(req, shop);
@@ -283,7 +272,6 @@ export async function registerAppUninstalledWebhook(req, shop, callbackUrl) {
     });
     
     if (ourWebhook) {
-      console.log(`[WEBHOOK-REG] Webhook already registered: ${ourWebhook.node.id}`);
       return { 
         success: true, 
         alreadyExists: true, 
@@ -333,7 +321,6 @@ export async function registerAppUninstalledWebhook(req, shop, callbackUrl) {
     }
     
     const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
-    console.log(`[WEBHOOK-REG] ✅ Successfully registered webhook: ${webhook.id}`);
     
     return {
       success: true,
@@ -359,8 +346,6 @@ export async function registerAppUninstalledWebhook(req, shop, callbackUrl) {
  * @returns {Promise<Object>} - Registration result
  */
 export async function registerSubscriptionUpdateWebhook(req, shop, callbackUrl) {
-  console.log(`[WEBHOOK-REG] Registering APP_SUBSCRIPTIONS_UPDATE webhook for ${shop}`);
-  console.log(`[WEBHOOK-REG] Callback URL: ${callbackUrl}`);
   
   try {
     const accessToken = await resolveAdminToken(req, shop);
@@ -399,7 +384,6 @@ export async function registerSubscriptionUpdateWebhook(req, shop, callbackUrl) 
     });
     
     if (ourWebhook) {
-      console.log(`[WEBHOOK-REG] Webhook already registered: ${ourWebhook.node.id}`);
       return { 
         success: true, 
         alreadyExists: true, 
@@ -449,7 +433,6 @@ export async function registerSubscriptionUpdateWebhook(req, shop, callbackUrl) 
     }
     
     const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
-    console.log(`[WEBHOOK-REG] ✅ Successfully registered webhook: ${webhook.id}`);
     
     return {
       success: true,
@@ -475,7 +458,6 @@ export async function registerSubscriptionUpdateWebhook(req, shop, callbackUrl) 
  * @returns {Promise<Object>} - Registration results
  */
 export async function registerAllWebhooks(req, shop, appUrl) {
-  console.log(`[WEBHOOK-REG] Registering all webhooks for ${shop}`);
   
   const results = {};
   
@@ -496,7 +478,6 @@ export async function registerAllWebhooks(req, shop, appUrl) {
   results.subscriptionUpdate = await registerSubscriptionUpdateWebhook(req, shop, subscriptionUpdateUrl);
   
   // Create metafield definitions (makes metafields visible in Product → Metafields)
-  console.log(`[WEBHOOK-REG] Creating metafield definitions for ${shop}`);
   results.metafieldDefinitions = await createAllMetafieldDefinitions(req, shop);
   
   return results;

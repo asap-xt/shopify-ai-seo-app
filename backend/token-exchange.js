@@ -11,15 +11,10 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   try {
     const { shop, id_token } = req.body;
-    console.log('[TOKEN_EXCHANGE] Starting for shop:', shop);
-    console.log('[TOKEN_EXCHANGE] Has id_token:', !!id_token);
     
     if (!shop || !id_token) {
       return res.status(400).json({ error: 'Missing required parameters: shop and id_token' });
     }
-
-    console.log('[TOKEN_EXCHANGE] Exchanging JWT for access token:', shop);
-    console.log('[TOKEN_EXCHANGE] Request URL:', `https://${shop}/admin/oauth/access_token`);
 
     // КРИТИЧНО: Правилните Shopify параметри според документацията
     const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -34,12 +29,10 @@ router.post('/', async (req, res) => {
         requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token' // SHOPIFY-специфичен!
       }),
     });
-
-    console.log('[TOKEN_EXCHANGE] Response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.log('[TOKEN_EXCHANGE] Response text:', errorText);
+      console.error('[TOKEN_EXCHANGE] Failed:', response.status, errorText);
       return res.status(response.status).json({ error: 'Token exchange failed', details: errorText });
     }
 
@@ -64,7 +57,6 @@ router.post('/', async (req, res) => {
         },
         { upsert: true, new: true }
       );
-      console.log(`✅ Token saved to database for shop: ${shop}`);
       
       // Регистрирай webhook-ите след успешното запазване на токена
       try {
@@ -73,8 +65,7 @@ router.post('/', async (req, res) => {
           session: { accessToken },
           shopDomain: shop
         };
-        const webhookResults = await registerAllWebhooks(mockReq, shop, process.env.APP_URL);
-        console.log('[TOKEN_EXCHANGE] Webhook registration results:', JSON.stringify(webhookResults, null, 2));
+        await registerAllWebhooks(mockReq, shop, process.env.APP_URL);
       } catch (webhookError) {
         console.error('[TOKEN_EXCHANGE] Webhook registration failed:', webhookError.message);
         // Не блокираме token exchange-а ако webhook регистрацията се провали
@@ -84,7 +75,6 @@ router.post('/', async (req, res) => {
       throw new Error(`Database save failed: ${dbError.message}`);
     }
 
-    console.log(`✅ Token exchange successful for shop: ${shop}`);
     return res.status(200).json({ 
       status: 'ok', 
       shop,

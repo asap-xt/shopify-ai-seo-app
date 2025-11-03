@@ -1320,8 +1320,6 @@ async function installThemeSnippet(shop) {
 
 // Main background process
 async function generateAllSchemas(shop, forceBasicSeo = false) {
-  console.log(`[SCHEMA] 🚀 Starting generateAllSchemas for shop: ${shop}, forceBasicSeo: ${forceBasicSeo}`);
-  
   // Set generation status
   generationStatus.set(shop, { 
     generating: true, 
@@ -1329,13 +1327,9 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     currentProduct: 'Initializing...' 
   });
   
-  console.log(`[SCHEMA] Generation status set: generating=true`);
-  
   // === TOKEN RESERVATION ===
   let reservationId = null;
   let totalAITokens = 0;
-  
-  console.log(`[SCHEMA] Starting token reservation check...`);
   
   try {
     // Check if this feature requires tokens and reserve
@@ -1343,70 +1337,48 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     const feature = 'ai-schema-advanced';
     
     if (requiresTokens(feature)) {
-      console.log(`[SCHEMA] Feature requires tokens. Estimating...`);
       // Estimate tokens (rough estimate: 500 products * 4 AI calls * 500 tokens each = 1M tokens)
       const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 }); // Conservative estimate
-      console.log(`[SCHEMA] Token estimate:`, tokenEstimate);
       
       const tokenBalance = await TokenBalance.getOrCreate(shop);
-      console.log(`[SCHEMA] Token balance:`, tokenBalance.balance);
       
       if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-        console.log(`[SCHEMA] Sufficient tokens. Reserving ${tokenEstimate.withMargin}...`);
         const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop });
         reservationId = reservation.reservationId;
         await reservation.save();
-        console.log(`[SCHEMA] Tokens reserved! Reservation ID: ${reservationId}`);
       } else {
         console.error(`[SCHEMA] Insufficient tokens! Need: ${tokenEstimate.withMargin}, Have: ${tokenBalance.balance}`);
         throw new Error('Insufficient token balance for Advanced Schema generation');
       }
-    } else {
-      console.log(`[SCHEMA] Feature does NOT require tokens`);
     }
     // === END TOKEN RESERVATION ===
     
-    console.log(`[SCHEMA] Token reservation complete. Loading shop context...`);
-    
-    // Using theme snippet approach (no script tags needed)
-    
     // Load shop context
     const shopContext = await loadShopContext(shop);
-    console.log(`[SCHEMA] Shop context loaded:`, shopContext ? 'SUCCESS' : 'FAILED');
     if (!shopContext) {
       throw new Error('Failed to load shop context');
     }
     
     // Generate site-wide FAQ
-    console.log(`[SCHEMA] Generating site-wide FAQ...`);
     const faqResult = await generateSiteFAQ(shop, shopContext);
     const siteFAQ = faqResult.schema;
-    console.log(`[SCHEMA] Site-wide FAQ generated. Tokens used:`, faqResult.usage?.total_tokens || 0);
     
     // Track tokens from FAQ generation
     if (faqResult.usage) {
       totalAITokens += faqResult.usage.total_tokens || 0;
     }
-    console.log(`[SCHEMA] Total AI tokens so far:`, totalAITokens);
     
     // First, sync products from Shopify to MongoDB if needed
-    console.log(`[SCHEMA] Checking product sync...`);
     const totalProductsInMongo = await Product.countDocuments({ shop });
-    console.log(`[SCHEMA] Products in MongoDB:`, totalProductsInMongo);
     
     if (totalProductsInMongo === 0) {
-      console.log(`[SCHEMA] No products found. Syncing from Shopify...`);
       try {
-        const syncResult = await syncProductsToMongoDB(shop);
-        console.log(`[SCHEMA] Product sync completed:`, syncResult);
+        await syncProductsToMongoDB(shop);
       } catch (error) {
         console.error('[SCHEMA] ❌ Failed to sync products:', error);
         // Continue anyway, maybe some products exist
       }
     }
-    
-    // Check for optimized products
-    console.log(`[SCHEMA] Checking product optimization status...`);
     
     // Get ALL optimized products (basic + AI-enhanced together)
     const allProducts = await Product.find({
@@ -1420,35 +1392,19 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       'seoStatus.aiEnhanced': true
     });
     
-    // DEBUG: Show actual aiEnhanced values from products
-    const debugProducts = await Product.find({ shop, 'seoStatus.optimized': true })
-      .select('productId title seoStatus.optimized seoStatus.aiEnhanced')
-      .limit(10);
-    console.log(`[SCHEMA-DEBUG] Sample products:`, debugProducts.map(p => ({
-      id: p.productId,
-      title: p.title?.substring(0, 30),
-      optimized: p.seoStatus?.optimized,
-      aiEnhanced: p.seoStatus?.aiEnhanced
-    })));
-    
-    console.log(`[SCHEMA] Found ${allProducts.length} optimized products (${aiEnhancedCount} with AI-enhanced content)`);
-    
     // Case 1: No products at all
     if (allProducts.length === 0) {
-      console.log(`[SCHEMA] ❌ No optimized products found. User needs to run SEO optimization first.`);
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
     // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
     // Show recommendation modal, but don't block generation
     if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
-      console.log(`[SCHEMA] ⚠️ Only basic AISEO found. Recommending AI-enhanced optimization.`);
       throw new Error('ONLY_BASIC_SEO');
     }
     
     // Use ALL optimized products (mix of basic + AI-enhanced)
     const products = allProducts;
-    console.log(`[SCHEMA] Using ${products.length} products for schema generation (${aiEnhancedCount} have AI-enhanced content)`);
     
     // Collect all generated schemas
     const allProductSchemas = [];
@@ -1575,18 +1531,7 @@ router.post('/generate-all', async (req, res) => {
     const hasIncludedAccess = includedTokensPlans.includes(normalizedPlan);
     const isPlusPlan = plusPlans.includes(normalizedPlan);
     
-    console.log('[SCHEMA-DEBUG] Plan check:', {
-      shop,
-      rawPlan: subscription?.plan,
-      normalizedPlan,
-      hasIncludedAccess,
-      isPlusPlan,
-      includedTokensPlans,
-      plusPlans
-    });
-    
     if (!hasIncludedAccess && !isPlusPlan) {
-      console.log('[SCHEMA-DEBUG] Access denied for plan:', normalizedPlan);
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Growth Extra, Enterprise, or Plus plans with tokens',
         currentPlan: subscription?.plan || 'none',
@@ -1626,7 +1571,6 @@ router.post('/generate-all', async (req, res) => {
     
     // Get forceBasicSeo parameter from request body
     const forceBasicSeo = req.body?.forceBasicSeo === true;
-    console.log(`[SCHEMA] forceBasicSeo parameter: ${forceBasicSeo}`);
     
     // Start background process
     generateAllSchemas(shop, forceBasicSeo).catch(err => {

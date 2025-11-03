@@ -10,7 +10,6 @@ import { resolveAdminToken } from './tokenResolver.js';
  * Format: "✅ Optimized | Languages: EN, BG | Last: 2025-10-16 | Schema: Product, Review"
  */
 export async function createOptimizationSummaryDefinition(req, shop) {
-  console.log(`[METAFIELD-DEF] Creating optimization_summary definition for ${shop}`);
   
   try {
     const accessToken = await resolveAdminToken(req, shop);
@@ -36,7 +35,6 @@ export async function createOptimizationSummaryDefinition(req, shop) {
     const existingDefs = checkResult?.metafieldDefinitions?.nodes || [];
     
     if (existingDefs.length > 0) {
-      console.log(`[METAFIELD-DEF] optimization_summary definition already exists: ${existingDefs[0].id}`);
       return { 
         success: true, 
         alreadyExists: true, 
@@ -88,7 +86,6 @@ export async function createOptimizationSummaryDefinition(req, shop) {
     }
     
     const definition = createResult?.metafieldDefinitionCreate?.createdDefinition;
-    console.log(`[METAFIELD-DEF] ✅ Successfully created optimization_summary definition: ${definition.id}`);
     
     return {
       success: true,
@@ -111,7 +108,6 @@ export async function createOptimizationSummaryDefinition(req, shop) {
  * Format: JSON array of schema objects
  */
 export async function createSchemaDefinitions(req, shop) {
-  console.log(`[METAFIELD-DEF] Creating schema definitions for ${shop}`);
   
   try {
     const accessToken = await resolveAdminToken(req, shop);
@@ -139,7 +135,6 @@ export async function createSchemaDefinitions(req, shop) {
       .map(l => l.locale.toLowerCase().split('-')[0]) // Extract language code (e.g., 'en' from 'en-US')
       .filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
     
-    console.log(`[METAFIELD-DEF] Shop published languages:`, languages);
     
     const results = {};
     
@@ -164,7 +159,6 @@ export async function createSchemaDefinitions(req, shop) {
       const existingDefs = checkResult?.metafieldDefinitions?.nodes || [];
       
       if (existingDefs.length > 0) {
-        console.log(`[METAFIELD-DEF] ${key} definition already exists: ${existingDefs[0].id}`);
         results[lang] = { 
           success: true, 
           alreadyExists: true, 
@@ -218,7 +212,6 @@ export async function createSchemaDefinitions(req, shop) {
       }
       
       const definition = createResult?.metafieldDefinitionCreate?.createdDefinition;
-      console.log(`[METAFIELD-DEF] ✅ Successfully created ${key} definition: ${definition.id}`);
       
       results[lang] = {
         success: true,
@@ -243,14 +236,12 @@ export async function createSchemaDefinitions(req, shop) {
  * Called automatically on app installation
  */
 export async function createAllMetafieldDefinitions(req, shop) {
-  console.log(`[METAFIELD-DEF] Creating all metafield definitions for ${shop}`);
   
   const results = {
     optimizationSummary: await createOptimizationSummaryDefinition(req, shop),
     schemas: await createSchemaDefinitions(req, shop)
   };
   
-  console.log(`[METAFIELD-DEF] ✅ All metafield definitions created/verified`);
   return results;
 }
 
