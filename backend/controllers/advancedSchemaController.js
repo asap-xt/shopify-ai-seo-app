@@ -1378,32 +1378,40 @@ async function generateAllSchemas(shop) {
     }
     
     // Generate site-wide FAQ
+    console.log(`[SCHEMA] Generating site-wide FAQ...`);
     const faqResult = await generateSiteFAQ(shop, shopContext);
     const siteFAQ = faqResult.schema;
+    console.log(`[SCHEMA] Site-wide FAQ generated. Tokens used:`, faqResult.usage?.total_tokens || 0);
     
     // Track tokens from FAQ generation
     if (faqResult.usage) {
       totalAITokens += faqResult.usage.total_tokens || 0;
     }
+    console.log(`[SCHEMA] Total AI tokens so far:`, totalAITokens);
     
     // First, sync products from Shopify to MongoDB if needed
+    console.log(`[SCHEMA] Checking product sync...`);
     const totalProductsInMongo = await Product.countDocuments({ shop });
+    console.log(`[SCHEMA] Products in MongoDB:`, totalProductsInMongo);
     
     if (totalProductsInMongo === 0) {
+      console.log(`[SCHEMA] No products found. Syncing from Shopify...`);
       try {
         const syncResult = await syncProductsToMongoDB(shop);
+        console.log(`[SCHEMA] Product sync completed:`, syncResult);
       } catch (error) {
-        console.error('[SCHEMA] Failed to sync products:', error);
+        console.error('[SCHEMA] ❌ Failed to sync products:', error);
         // Continue anyway, maybe some products exist
       }
     }
     
     // Get all products with SEO
-    
+    console.log(`[SCHEMA] Fetching optimized products...`);
     const products = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
+    console.log(`[SCHEMA] Found ${products.length} optimized products`);
     
     // Collect all generated schemas
     const allProductSchemas = [];
