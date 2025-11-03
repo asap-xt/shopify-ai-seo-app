@@ -1320,6 +1320,7 @@ async function installThemeSnippet(shop) {
 
 // Main background process
 async function generateAllSchemas(shop) {
+  console.log(`[SCHEMA] 🚀 Starting generateAllSchemas for shop: ${shop}`);
   
   // Set generation status
   generationStatus.set(shop, { 
@@ -1328,9 +1329,13 @@ async function generateAllSchemas(shop) {
     currentProduct: 'Initializing...' 
   });
   
+  console.log(`[SCHEMA] Generation status set: generating=true`);
+  
   // === TOKEN RESERVATION ===
   let reservationId = null;
   let totalAITokens = 0;
+  
+  console.log(`[SCHEMA] Starting token reservation check...`);
   
   try {
     // Check if this feature requires tokens and reserve
@@ -1338,24 +1343,36 @@ async function generateAllSchemas(shop) {
     const feature = 'ai-schema-advanced';
     
     if (requiresTokens(feature)) {
+      console.log(`[SCHEMA] Feature requires tokens. Estimating...`);
       // Estimate tokens (rough estimate: 500 products * 4 AI calls * 500 tokens each = 1M tokens)
       const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 }); // Conservative estimate
+      console.log(`[SCHEMA] Token estimate:`, tokenEstimate);
+      
       const tokenBalance = await TokenBalance.getOrCreate(shop);
+      console.log(`[SCHEMA] Token balance:`, tokenBalance.balance);
       
       if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        console.log(`[SCHEMA] Sufficient tokens. Reserving ${tokenEstimate.withMargin}...`);
         const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop });
         reservationId = reservation.reservationId;
         await reservation.save();
+        console.log(`[SCHEMA] Tokens reserved! Reservation ID: ${reservationId}`);
       } else {
+        console.error(`[SCHEMA] Insufficient tokens! Need: ${tokenEstimate.withMargin}, Have: ${tokenBalance.balance}`);
         throw new Error('Insufficient token balance for Advanced Schema generation');
       }
+    } else {
+      console.log(`[SCHEMA] Feature does NOT require tokens`);
     }
     // === END TOKEN RESERVATION ===
+    
+    console.log(`[SCHEMA] Token reservation complete. Loading shop context...`);
     
     // Using theme snippet approach (no script tags needed)
     
     // Load shop context
     const shopContext = await loadShopContext(shop);
+    console.log(`[SCHEMA] Shop context loaded:`, shopContext ? 'SUCCESS' : 'FAILED');
     if (!shopContext) {
       throw new Error('Failed to load shop context');
     }
