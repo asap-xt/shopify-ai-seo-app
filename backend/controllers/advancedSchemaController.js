@@ -1496,24 +1496,26 @@ router.post('/generate-all', async (req, res) => {
     
     // Check plan access: Enterprise/Growth Extra (included tokens) OR Plus plans (with purchased tokens)
     const subscription = await Subscription.findOne({ shop });
-    const planKey = subscription?.plan?.toLowerCase().replace(/\s+/g, '_') || '';
+    
+    // Normalize plan name: "Professional Plus" → "professional_plus"
+    const normalizePlan = (plan) => (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+    const normalizedPlan = normalizePlan(subscription?.plan);
     
     // Plans with included tokens that have unlimited access
     const includedTokensPlans = ['enterprise', 'growth_extra'];
     
     // Plus plans that can access with purchased tokens
-    const plusPlans = ['professional_plus', 'growth_plus'];
+    const plusPlans = ['professional_plus', 'growth_plus', 'starter_plus'];
     
     // Check if plan has access
-    const hasIncludedAccess = includedTokensPlans.includes(planKey) || subscription?.plan === 'growth extra';
-    const isPlusPlan = plusPlans.includes(planKey) || 
-                       subscription?.plan === 'professional plus' || 
-                       subscription?.plan === 'growth plus';
+    const hasIncludedAccess = includedTokensPlans.includes(normalizedPlan);
+    const isPlusPlan = plusPlans.includes(normalizedPlan);
     
     if (!hasIncludedAccess && !isPlusPlan) {
       return res.status(403).json({ 
         error: 'Advanced Schema Data requires Growth Extra, Enterprise, or Plus plans with tokens',
-        currentPlan: subscription?.plan || 'none'
+        currentPlan: subscription?.plan || 'none',
+        normalizedPlan // debug info
       });
     }
     
