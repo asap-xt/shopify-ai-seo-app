@@ -8,10 +8,28 @@ export default async function productsUpdateWebhook(req, res) {
     const formatted = formatProductForAI(product);
     const shopDomain = req.headers['x-shopify-shop-domain'];
 
+    // Get existing product to check if it exists and preserve seoStatus
+    const existingProduct = await Product.findOne({ 
+      shop: shopDomain, 
+      productId: product.id 
+    });
+
+    // Prepare update data
+    const updateData = {
+      ...formatted,
+      shop: shopDomain,
+      syncedAt: new Date()
+    };
+
+    // CRITICAL: Always preserve existing seoStatus
+    if (existingProduct?.seoStatus) {
+      updateData.seoStatus = existingProduct.seoStatus;
+    }
+
     await Product.findOneAndUpdate(
       { shop: shopDomain, productId: product.id },
-      { ...formatted, shop: shopDomain, syncedAt: new Date() },
-      { upsert: true }
+      updateData,
+      { upsert: true, new: true }
     );
 
     res.status(200).send('Webhook processed');
