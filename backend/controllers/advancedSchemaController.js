@@ -1420,6 +1420,17 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       'seoStatus.aiEnhanced': true
     });
     
+    // DEBUG: Show actual aiEnhanced values from products
+    const debugProducts = await Product.find({ shop, 'seoStatus.optimized': true })
+      .select('productId title seoStatus.optimized seoStatus.aiEnhanced')
+      .limit(10);
+    console.log(`[SCHEMA-DEBUG] Sample products:`, debugProducts.map(p => ({
+      id: p.productId,
+      title: p.title?.substring(0, 30),
+      optimized: p.seoStatus?.optimized,
+      aiEnhanced: p.seoStatus?.aiEnhanced
+    })));
+    
     console.log(`[SCHEMA] Found ${allProducts.length} optimized products (${aiEnhancedCount} with AI-enhanced content)`);
     
     // Case 1: No products at all
