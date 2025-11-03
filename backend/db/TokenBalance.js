@@ -100,8 +100,12 @@ tokenBalanceSchema.methods.reserveTokens = function(estimatedAmount, feature, me
     throw new Error('Insufficient token balance');
   }
   
+  console.log('[TokenBalance] BEFORE reserve - Balance:', this.balance, 'Deducting:', estimatedAmount);
+  
   // Temporarily deduct the estimated amount (with margin)
   this.balance -= estimatedAmount;
+  
+  console.log('[TokenBalance] AFTER reserve - Balance:', this.balance);
   
   const reservationId = new Date().getTime().toString() + Math.random().toString(36).substr(2, 9);
   
@@ -139,6 +143,8 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   const estimatedAmount = reservation.metadata.estimatedAmount || reservation.tokensUsed;
   const difference = estimatedAmount - actualTokensUsed;
   
+  console.log('[TokenBalance] BEFORE finalize - Balance:', this.balance, 'Estimated:', estimatedAmount, 'Actual:', actualTokensUsed, 'Difference:', difference);
+  
   // Update the usage record
   this.usage[reservationIndex].tokensUsed = actualTokensUsed;
   this.usage[reservationIndex].metadata.status = 'finalized';
@@ -149,6 +155,7 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   if (difference > 0) {
     // Refund: actual was less than estimated
     this.balance += difference;
+    console.log('[TokenBalance] Refunding', difference, 'tokens');
   } else if (difference < 0) {
     // Deduct more: actual was more than estimated (should rarely happen with 10% margin)
     this.balance += difference; // difference is negative, so this deducts
@@ -158,6 +165,8 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   // Update total used to reflect actual usage
   // We add the actualTokensUsed because reserveTokens() doesn't update totalUsed
   this.totalUsed += actualTokensUsed;
+  
+  console.log('[TokenBalance] AFTER finalize - Balance:', this.balance, 'TotalUsed:', this.totalUsed);
   
   return this.save();
 };
