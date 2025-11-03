@@ -118,15 +118,26 @@ router.post('/shop/redact', async (req, res) => {
     });
     
     try {
-      // Import models
-      const Shop = require('../db/Shop');
-      const Product = require('../db/Product');
-      const Subscription = require('../db/Subscription');
-      const TokenBalance = require('../db/TokenBalance');
-      const Sitemap = require('../db/Sitemap');
-      const SyncLog = require('../db/SyncLog');
-      const AdvancedSchema = require('../db/AdvancedSchema');
-      const AIDiscoverySettings = require('../db/AIDiscoverySettings');
+      // Import models using dynamic import() for ES modules
+      const [
+        { default: Shop },
+        { default: Product },
+        { default: Subscription },
+        { default: TokenBalance },
+        { default: Sitemap },
+        { default: SyncLog },
+        { default: AdvancedSchema },
+        { default: AIDiscoverySettings }
+      ] = await Promise.all([
+        import('../db/Shop.js'),
+        import('../db/Product.js'),
+        import('../db/Subscription.js'),
+        import('../db/TokenBalance.js'),
+        import('../db/Sitemap.js'),
+        import('../db/SyncLog.js'),
+        import('../db/AdvancedSchema.js'),
+        import('../db/AIDiscoverySettings.js')
+      ]);
       
       // Delete all shop data from MongoDB
       const deletionResults = await Promise.allSettled([

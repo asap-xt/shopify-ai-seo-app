@@ -1408,34 +1408,36 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     // Check for optimized products
     console.log(`[SCHEMA] Checking product optimization status...`);
     
-    // Count basic and AI-enhanced products separately
-    const basicProducts = await Product.find({
+    // Get ALL optimized products (basic + AI-enhanced together)
+    const allProducts = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
     
-    const aiEnhancedProducts = await Product.find({
+    // Also count how many have AI-enhanced
+    const aiEnhancedCount = await Product.countDocuments({
       shop,
       'seoStatus.aiEnhanced': true
-    }).limit(500);
+    });
     
-    console.log(`[SCHEMA] Found ${basicProducts.length} basic SEO products, ${aiEnhancedProducts.length} AI-enhanced products`);
+    console.log(`[SCHEMA] Found ${allProducts.length} optimized products (${aiEnhancedCount} with AI-enhanced content)`);
     
     // Case 1: No products at all
-    if (basicProducts.length === 0 && aiEnhancedProducts.length === 0) {
+    if (allProducts.length === 0) {
       console.log(`[SCHEMA] ❌ No optimized products found. User needs to run SEO optimization first.`);
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
     // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
-    if (basicProducts.length > 0 && aiEnhancedProducts.length === 0 && !forceBasicSeo) {
+    // Show recommendation modal, but don't block generation
+    if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
       console.log(`[SCHEMA] ⚠️ Only basic AISEO found. Recommending AI-enhanced optimization.`);
       throw new Error('ONLY_BASIC_SEO');
     }
     
-    // Use AI-enhanced products if available, otherwise use basic
-    const products = aiEnhancedProducts.length > 0 ? aiEnhancedProducts : basicProducts;
-    console.log(`[SCHEMA] Using ${products.length} products for schema generation (AI-enhanced: ${aiEnhancedProducts.length > 0})`);
+    // Use ALL optimized products (mix of basic + AI-enhanced)
+    const products = allProducts;
+    console.log(`[SCHEMA] Using ${products.length} products for schema generation (${aiEnhancedCount} have AI-enhanced content)`);
     
     // Collect all generated schemas
     const allProductSchemas = [];
