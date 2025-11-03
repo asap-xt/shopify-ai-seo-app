@@ -208,6 +208,9 @@ async function generateSitemapCore(shop) {
     
     // Check AI Discovery settings for AI-Optimized Sitemap
     let isAISitemapEnabled = false;
+    let reservationId = null;
+    let totalAITokens = 0; // Track total tokens used
+    
     try {
       const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
       const { default: Shop } = await import('../db/Shop.js');
@@ -237,6 +240,31 @@ async function generateSitemapCore(shop) {
         }
         
         isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
+        
+        // === TOKEN RESERVATION FOR AI-SITEMAP ===
+        if (isAISitemapEnabled) {
+          const { estimateTokensWithMargin, requiresTokens } = await import('../billing/tokenConfig.js');
+          const { default: TokenBalance } = await import('../db/TokenBalance.js');
+          const feature = 'ai-sitemap-optimized';
+          
+          if (requiresTokens(feature)) {
+            // Estimate based on product count (limit)
+            const tokenEstimate = estimateTokensWithMargin(feature, { products: limit });
+            const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+            
+            // Check if sufficient tokens
+            if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+              // Reserve tokens
+              const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
+              reservationId = reservation.reservationId;
+              await reservation.save();
+            } else {
+              // Not enough tokens - disable AI sitemap
+              isAISitemapEnabled = false;
+            }
+          }
+        }
+        // === END TOKEN RESERVATION ===
       }
     } catch (error) {
       // Could not fetch AI Discovery settings, using basic sitemap
@@ -445,6 +473,11 @@ async function generateSitemapCore(shop) {
           // Set timeout to avoid blocking
           const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
           const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
+          
+          // Track AI token usage
+          if (aiEnhancements?.usage) {
+            totalAITokens += aiEnhancements.usage.total_tokens || 0;
+          }
           
           if (aiEnhancements) {
             // Add AI-generated summary
@@ -657,6 +690,18 @@ async function generateSitemapCore(shop) {
     }
     
     xml += '</urlset>\n';
+    
+    // === FINALIZE TOKEN USAGE ===
+    if (reservationId && totalAITokens > 0) {
+      try {
+        const { default: TokenBalance } = await import('../db/TokenBalance.js');
+        const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+        await tokenBalance.finalizeReservation(reservationId, totalAITokens);
+      } catch (tokenErr) {
+        console.error('[AI-SITEMAP] Error finalizing token usage:', tokenErr);
+      }
+    }
+    // === END TOKEN FINALIZATION ===
     
     // Save to database
     

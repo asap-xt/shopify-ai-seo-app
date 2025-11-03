@@ -26,11 +26,11 @@ Format: Plain text, no markdown, concise and informative. Maximum 3 sentences.`;
       temperature: 0.3 // Lower temperature for consistency
     });
 
-    return result.content.trim();
+    return { data: result.content.trim(), usage: result.usage };
   } catch (error) {
     console.error('[AI-SITEMAP] Error generating summary:', error);
     // Fallback to basic description
-    return product.description?.substring(0, 200) || product.title;
+    return { data: product.description?.substring(0, 200) || product.title, usage: null };
   }
 }
 
@@ -72,19 +72,25 @@ Format as JSON:
     const parsed = JSON.parse(cleaned);
     
     return {
-      categoryHierarchy: parsed.category_hierarchy || product.productType || 'General',
-      useCase: parsed.use_case || 'General Use',
-      skillLevel: parsed.skill_level || 'All Levels',
-      season: parsed.season || 'Year-Round'
+      data: {
+        categoryHierarchy: parsed.category_hierarchy || product.productType || 'General',
+        useCase: parsed.use_case || 'General Use',
+        skillLevel: parsed.skill_level || 'All Levels',
+        season: parsed.season || 'Year-Round'
+      },
+      usage: result.usage
     };
   } catch (error) {
     console.error('[AI-SITEMAP] Error generating semantic tags:', error);
     // Fallback to basic tags
     return {
-      categoryHierarchy: product.productType || 'General',
-      useCase: 'General Use',
-      skillLevel: 'All Levels',
-      season: 'Year-Round'
+      data: {
+        categoryHierarchy: product.productType || 'General',
+        useCase: 'General Use',
+        skillLevel: 'All Levels',
+        season: 'Year-Round'
+      },
+      usage: null
     };
   }
 }
@@ -125,16 +131,22 @@ Format as JSON:
     const parsed = JSON.parse(cleaned);
     
     return {
-      bestFor: parsed.best_for || `Ideal for ${product.productType || 'general'} needs`,
-      keyDifferentiator: parsed.key_differentiator || `Quality ${product.productType || 'product'} from ${product.vendor || 'trusted brand'}`,
-      targetAudience: parsed.target_audience || 'General consumers'
+      data: {
+        bestFor: parsed.best_for || `Ideal for ${product.productType || 'general'} needs`,
+        keyDifferentiator: parsed.key_differentiator || `Quality ${product.productType || 'product'} from ${product.vendor || 'trusted brand'}`,
+        targetAudience: parsed.target_audience || 'General consumers'
+      },
+      usage: result.usage
     };
   } catch (error) {
     console.error('[AI-SITEMAP] Error generating context hints:', error);
     return {
-      bestFor: `Ideal for ${product.productType || 'general'} needs`,
-      keyDifferentiator: `Quality ${product.productType || 'product'}`,
-      targetAudience: 'General consumers'
+      data: {
+        bestFor: `Ideal for ${product.productType || 'general'} needs`,
+        keyDifferentiator: `Quality ${product.productType || 'product'}`,
+        targetAudience: 'General consumers'
+      },
+      usage: null
     };
   }
 }
@@ -177,10 +189,10 @@ Format as JSON array:
     const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
     const parsed = JSON.parse(cleaned);
     
-    return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+    return { data: Array.isArray(parsed) ? parsed.slice(0, 5) : [], usage: result.usage };
   } catch (error) {
     console.error('[AI-SITEMAP] Error generating Q&A:', error);
-    return [];
+    return { data: [], usage: null };
   }
 }
 
@@ -216,14 +228,20 @@ Format as JSON:
     const parsed = JSON.parse(cleaned);
     
     return {
-      tone: parsed.tone || 'professional',
-      targetEmotion: parsed.target_emotion || 'confidence'
+      data: {
+        tone: parsed.tone || 'professional',
+        targetEmotion: parsed.target_emotion || 'confidence'
+      },
+      usage: result.usage
     };
   } catch (error) {
     console.error('[AI-SITEMAP] Error analyzing sentiment:', error);
     return {
-      tone: 'professional',
-      targetEmotion: 'confidence'
+      data: {
+        tone: 'professional',
+        targetEmotion: 'confidence'
+      },
+      usage: null
     };
   }
 }
@@ -296,24 +314,41 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
 
   try {
     // Run all enhancements in parallel for speed
-    const [summary, semanticTags, contextHints, qa, sentiment] = await Promise.all([
-      enableSummary ? generateAISummary(product) : Promise.resolve(null),
-      enableSemanticTags ? generateSemanticTags(product) : Promise.resolve(null),
-      enableContextHints ? generateContextHints(product) : Promise.resolve(null),
-      enableQA ? generateProductQA(product) : Promise.resolve(null),
-      enableSentiment ? analyzeSentiment(product) : Promise.resolve(null)
+    // Note: Each function now returns {data, usage} from getGeminiResponse
+    const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = await Promise.all([
+      enableSummary ? generateAISummary(product) : Promise.resolve({data: null, usage: null}),
+      enableSemanticTags ? generateSemanticTags(product) : Promise.resolve({data: null, usage: null}),
+      enableContextHints ? generateContextHints(product) : Promise.resolve({data: null, usage: null}),
+      enableQA ? generateProductQA(product) : Promise.resolve({data: null, usage: null}),
+      enableSentiment ? analyzeSentiment(product) : Promise.resolve({data: null, usage: null})
     ]);
 
     // Find related products (synchronous, fast)
     const relatedProducts = enableRelated ? findRelatedProducts(product, allProducts) : [];
 
+    // Collect total usage
+    const totalUsage = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    };
+    
+    [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult].forEach(result => {
+      if (result?.usage) {
+        totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
+        totalUsage.completion_tokens += result.usage.completion_tokens || 0;
+        totalUsage.total_tokens += result.usage.total_tokens || 0;
+      }
+    });
+
     return {
-      summary,
-      semanticTags,
-      contextHints,
-      qa,
-      sentiment,
-      relatedProducts
+      summary: typeof summaryResult === 'string' ? summaryResult : summaryResult?.data || summaryResult,
+      semanticTags: semanticTagsResult?.data || semanticTagsResult,
+      contextHints: contextHintsResult?.data || contextHintsResult,
+      qa: qaResult?.data || qaResult,
+      sentiment: sentimentResult?.data || sentimentResult,
+      relatedProducts,
+      usage: totalUsage
     };
   } catch (error) {
     console.error('[AI-SITEMAP] Error enhancing product:', error);
