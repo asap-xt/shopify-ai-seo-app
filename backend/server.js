@@ -653,22 +653,31 @@
 
       async regenerateSitemap({ shop }, ctx) {
         try {
+          console.log('[GRAPHQL] ===== REGENERATE SITEMAP MUTATION CALLED =====');
+          console.log('[GRAPHQL] Shop:', shop);
+          console.log('[GRAPHQL] enableAIEnhancement: true');
+          
           // Import the core sitemap generation logic
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
+          console.log('[GRAPHQL] ✅ generateSitemapCore imported successfully');
           
           // ===== CRITICAL: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
+          console.log('[GRAPHQL] 🚀 Starting background sitemap generation...');
           generateSitemapCore(shop, { enableAIEnhancement: true })
             .then((result) => {
-              // Sitemap regeneration completed successfully
+              console.log('[GRAPHQL] ✅ Background sitemap generation completed successfully!');
+              console.log('[GRAPHQL] Result:', result);
             })
             .catch((error) => {
-              console.error('[GRAPHQL] Background sitemap generation failed:', error);
+              console.error('[GRAPHQL] ❌ Background sitemap generation failed:', error);
+              console.error('[GRAPHQL] Error stack:', error.stack);
             });
           
           // Return immediately
+          console.log('[GRAPHQL] 📤 Returning immediate success response');
           return {
             success: true,
             message: 'AI-Optimized Sitemap regeneration started in background',
@@ -676,7 +685,8 @@
           };
           
         } catch (error) {
-          console.error('[GRAPHQL] Error starting sitemap regeneration:', error);
+          console.error('[GRAPHQL] ❌ Error starting sitemap regeneration:', error);
+          console.error('[GRAPHQL] Error stack:', error.stack);
           return {
             success: false,
             message: error.message,
