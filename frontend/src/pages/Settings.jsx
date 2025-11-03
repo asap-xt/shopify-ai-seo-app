@@ -2476,10 +2476,10 @@ export default function Settings() {
             onAction: () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
-              // Navigate to SEO generation page with current params (embedded=1, shop, host, etc.)
+              // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-              window.location.href = `/seo-generate${paramString}`;
+              window.location.href = `/ai-seo${paramString}`;
             }
           }}
           secondaryActions={[{
@@ -2497,16 +2497,16 @@ export default function Settings() {
               </Banner>
               
               <Text>
-                Advanced Schema Data requires at least basic SEO optimization on your products. 
-                Please run SEO optimization first, then try generating schemas again.
+                Advanced Schema Data requires at least basic AISEO optimization on your products. 
+                Please run AISEO optimization first, then try generating schemas again.
               </Text>
               
               <Text variant="bodyMd" fontWeight="semibold">
                 You can choose:
               </Text>
               <BlockStack gap="200">
-                <Text>• <strong>Basic AISEO</strong> - Free SEO optimization</Text>
-                <Text>• <strong>AI-Enhanced SEO</strong> - Advanced optimization (requires tokens)</Text>
+                <Text>• <strong>Basic AISEO</strong> - Free AISEO optimization</Text>
+                <Text>• <strong>AI-Enhanced AISEO</strong> - Advanced optimization (requires tokens)</Text>
               </BlockStack>
             </BlockStack>
           </Modal.Section>
@@ -2527,10 +2527,10 @@ export default function Settings() {
             onAction: () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
-              // Navigate to SEO generation page with current params (embedded=1, shop, host, etc.)
+              // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-              window.location.href = `/seo-generate${paramString}`;
+              window.location.href = `/ai-seo${paramString}`;
             }
           }}
           secondaryActions={[{
@@ -2539,7 +2539,7 @@ export default function Settings() {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
               
-              // Trigger schema generation anyway (with basic SEO products)
+              // Trigger schema generation anyway (with basic AISEO products)
               try {
                 setSchemaGenerating(true);
                 setSchemaComplete(false);
@@ -2547,7 +2547,9 @@ export default function Settings() {
                 checkCountRef.current = 0;
                 
                 await api(`/api/schema/generate-all?shop=${shop}`, {
-                  method: 'POST'
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ forceBasicSeo: true })
                 });
                 
                 // Start checking progress
@@ -2565,12 +2567,12 @@ export default function Settings() {
           <Modal.Section>
             <BlockStack gap="400">
               <Banner status="info">
-                <p>Only basic SEO optimization was found on your products.</p>
+                <p>Only basic AISEO optimization was found on your products.</p>
               </Banner>
               
               <Text>
                 For best results with Advanced Schema Data, we recommend running AI-Enhanced 
-                optimization first. This will provide richer product data for schema generation.
+                AISEO optimization first. This will provide richer product data for schema generation.
               </Text>
               
               <Text variant="bodyMd" fontWeight="semibold">
@@ -2578,7 +2580,7 @@ export default function Settings() {
               </Text>
               <BlockStack gap="200">
                 <Text>• <strong>Generate AI-Enhanced Add-ons</strong> - Get the best results (requires tokens)</Text>
-                <Text>• <strong>Proceed with Basic AISEO</strong> - Continue with current optimization</Text>
+                <Text>• <strong>Proceed with Basic AISEO</strong> - Continue with current basic AISEO</Text>
               </BlockStack>
             </BlockStack>
           </Modal.Section>

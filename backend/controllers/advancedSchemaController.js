@@ -1319,8 +1319,8 @@ async function installThemeSnippet(shop) {
 }
 
 // Main background process
-async function generateAllSchemas(shop) {
-  console.log(`[SCHEMA] 🚀 Starting generateAllSchemas for shop: ${shop}`);
+async function generateAllSchemas(shop, forceBasicSeo = false) {
+  console.log(`[SCHEMA] 🚀 Starting generateAllSchemas for shop: ${shop}, forceBasicSeo: ${forceBasicSeo}`);
   
   // Set generation status
   generationStatus.set(shop, { 
@@ -1427,15 +1427,15 @@ async function generateAllSchemas(shop) {
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
-    // Case 2: Only basic products, no AI-enhanced
-    if (basicProducts.length > 0 && aiEnhancedProducts.length === 0) {
-      console.log(`[SCHEMA] ⚠️ Only basic SEO found. Recommending AI-enhanced optimization.`);
+    // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
+    if (basicProducts.length > 0 && aiEnhancedProducts.length === 0 && !forceBasicSeo) {
+      console.log(`[SCHEMA] ⚠️ Only basic AISEO found. Recommending AI-enhanced optimization.`);
       throw new Error('ONLY_BASIC_SEO');
     }
     
     // Use AI-enhanced products if available, otherwise use basic
     const products = aiEnhancedProducts.length > 0 ? aiEnhancedProducts : basicProducts;
-    console.log(`[SCHEMA] Using ${products.length} products for schema generation`);
+    console.log(`[SCHEMA] Using ${products.length} products for schema generation (AI-enhanced: ${aiEnhancedProducts.length > 0})`);
     
     // Collect all generated schemas
     const allProductSchemas = [];
@@ -1611,8 +1611,12 @@ router.post('/generate-all', async (req, res) => {
       message: 'Advanced schema generation started in background' 
     });
     
+    // Get forceBasicSeo parameter from request body
+    const forceBasicSeo = req.body?.forceBasicSeo === true;
+    console.log(`[SCHEMA] forceBasicSeo parameter: ${forceBasicSeo}`);
+    
     // Start background process
-    generateAllSchemas(shop).catch(err => {
+    generateAllSchemas(shop, forceBasicSeo).catch(err => {
       console.error('[SCHEMA] ❌ Background generation failed:', err);
       console.error('[SCHEMA] ❌ Error message:', err.message);
       
@@ -1623,7 +1627,7 @@ router.post('/generate-all', async (req, res) => {
           progress: '0%', 
           currentProduct: '',
           error: 'NO_OPTIMIZED_PRODUCTS',
-          errorMessage: 'No optimized products found. Please run SEO optimization first.'
+          errorMessage: 'No optimized products found. Please run AISEO optimization first.'
         });
       } else if (err.message === 'ONLY_BASIC_SEO') {
         generationStatus.set(shop, { 
@@ -1631,7 +1635,7 @@ router.post('/generate-all', async (req, res) => {
           progress: '0%', 
           currentProduct: '',
           error: 'ONLY_BASIC_SEO',
-          errorMessage: 'Only basic SEO found. AI-enhanced optimization is recommended for better results.'
+          errorMessage: 'Only basic AISEO found. AI-enhanced optimization is recommended for better results.'
         });
       } else {
         generationStatus.set(shop, { 
