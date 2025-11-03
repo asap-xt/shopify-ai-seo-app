@@ -14,8 +14,6 @@ import { resolveAdminToken } from './tokenResolver.js';
  * @returns {Promise<Object>} - { success: boolean, deletedCount: number, errors: array }
  */
 export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
-  console.log(`[SEO-METAFIELD-UTILS] Deleting ALL SEO metafields for product: ${productGid}`);
-  
   try {
     // Resolve access token
     const accessToken = await resolveAdminToken(req, shop);
@@ -44,7 +42,6 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
     const fetchResult = await makeShopifyGraphQLRequest(shop, accessToken, fetchQuery, { id: productGid });
     
     if (!fetchResult?.product?.metafields?.edges) {
-      console.log(`[SEO-METAFIELD-UTILS] No metafields found for product ${productGid}`);
       return { success: true, deletedCount: 0, errors: [] };
     }
     
@@ -57,11 +54,8 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
       .filter(mf => mf.key); // Remove any nulls
     
     if (metafields.length === 0) {
-      console.log(`[SEO-METAFIELD-UTILS] No SEO metafields to delete for ${productGid}`);
       return { success: true, deletedCount: 0, errors: [] };
     }
-    
-    console.log(`[SEO-METAFIELD-UTILS] Found ${metafields.length} metafields to delete`);
     
     // 2. Delete all metafields using ownerId, namespace, key
     const deleteMutation = `
@@ -91,15 +85,12 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
     const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
     
     if (errors.length > 0) {
-      console.error(`[SEO-METAFIELD-UTILS] Errors deleting metafields:`, errors);
       return {
         success: false,
         deletedCount: deletedMetafields.length,
         errors: errors.map(e => e.message)
       };
     }
-    
-    console.log(`[SEO-METAFIELD-UTILS] Successfully deleted ${deletedMetafields.length} metafields`);
     
     return {
       success: true,
@@ -108,7 +99,6 @@ export async function deleteAllSeoMetafieldsForProduct(req, shop, productGid) {
     };
     
   } catch (error) {
-    console.error(`[SEO-METAFIELD-UTILS] Error in deleteAllSeoMetafieldsForProduct:`, error);
     return {
       success: false,
       deletedCount: 0,
@@ -141,15 +131,8 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
       { new: true }
     );
     
-    if (result) {
-      console.log(`[SEO-METAFIELD-UTILS] Cleared SEO status in MongoDB for product ${productId}`);
-      return true;
-    } else {
-      console.log(`[SEO-METAFIELD-UTILS] Product ${productId} not found in MongoDB`);
-      return false;
-    }
+    return !!result;
   } catch (error) {
-    console.error(`[SEO-METAFIELD-UTILS] Error clearing SEO status in MongoDB:`, error);
     return false;
   }
 }
@@ -164,8 +147,6 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
  * @returns {Promise<Object>} - { success: boolean, deletedCount: number, errors: array }
  */
 export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionGid) {
-  console.log(`[SEO-METAFIELD-UTILS] Deleting ALL SEO metafields for collection: ${collectionGid}`);
-  
   try {
     // Resolve access token
     const accessToken = await resolveAdminToken(req, shop);
@@ -194,7 +175,6 @@ export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionG
     const fetchResult = await makeShopifyGraphQLRequest(shop, accessToken, fetchQuery, { id: collectionGid });
     
     if (!fetchResult?.collection?.metafields?.edges) {
-      console.log(`[SEO-METAFIELD-UTILS] No metafields found for collection ${collectionGid}`);
       return { success: true, deletedCount: 0, errors: [] };
     }
     
@@ -207,11 +187,8 @@ export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionG
       .filter(mf => mf.key); // Remove any nulls
     
     if (metafields.length === 0) {
-      console.log(`[SEO-METAFIELD-UTILS] No SEO metafields to delete for ${collectionGid}`);
       return { success: true, deletedCount: 0, errors: [] };
     }
-    
-    console.log(`[SEO-METAFIELD-UTILS] Found ${metafields.length} metafields to delete`);
     
     // 2. Delete all metafields using ownerId, namespace, key
     const deleteMutation = `
@@ -238,15 +215,12 @@ export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionG
     const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
     
     if (errors.length > 0) {
-      console.error(`[SEO-METAFIELD-UTILS] Errors deleting metafields:`, errors);
       return {
         success: false,
         deletedCount: deletedMetafields.length,
         errors: errors.map(e => e.message)
       };
     }
-    
-    console.log(`[SEO-METAFIELD-UTILS] Successfully deleted ${deletedMetafields.length} metafields`);
     
     return {
       success: true,
@@ -255,7 +229,6 @@ export async function deleteAllSeoMetafieldsForCollection(req, shop, collectionG
     };
     
   } catch (error) {
-    console.error(`[SEO-METAFIELD-UTILS] Error in deleteAllSeoMetafieldsForCollection:`, error);
     return {
       success: false,
       deletedCount: 0,
@@ -288,15 +261,8 @@ export async function clearCollectionSeoStatusInMongoDB(shop, collectionId) {
       { new: true }
     );
     
-    if (result) {
-      console.log(`[SEO-METAFIELD-UTILS] Cleared SEO status in MongoDB for collection ${collectionId}`);
-      return true;
-    } else {
-      console.log(`[SEO-METAFIELD-UTILS] Collection ${collectionId} not found in MongoDB`);
-      return false;
-    }
+    return !!result;
   } catch (error) {
-    console.error(`[SEO-METAFIELD-UTILS] Error clearing collection SEO status in MongoDB:`, error);
     return false;
   }
 }
