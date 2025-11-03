@@ -399,12 +399,12 @@ router.post('/sync', async (req, res) => {
  * Delete all products from MongoDB for a specific shop
  * Useful for testing or clean slate after schema changes
  */
-router.delete('/reset-shop', requireAuth, async (req, res) => {
+router.delete('/reset-shop', async (req, res) => {
   try {
-    const shop = req.auth.shop;
+    const shop = req.query.shop;
     
     if (!shop) {
-      return res.status(400).json({ error: 'Shop parameter required' });
+      return res.status(400).json({ error: 'Shop parameter required in query string' });
     }
     
     // Count products before deletion
