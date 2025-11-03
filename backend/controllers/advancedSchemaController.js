@@ -1489,6 +1489,7 @@ async function generateAllSchemas(shop) {
 // Routes
 
 // POST /api/schema/generate-all - Start background generation
+// Returns 402 with requiresPurchase:true for Plus plans without tokens
 router.post('/generate-all', async (req, res) => {
   try {
     const shop = req.shopDomain || requireShop(req);
