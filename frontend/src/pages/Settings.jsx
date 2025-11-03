@@ -851,22 +851,15 @@ export default function Settings() {
       const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
       const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
       
-      // Check token balance
-      const currentTokenBalance = settings?.tokenBalance?.available || 0;
-      
       // For Plus plans, check if they have tokens
       const isPlusPlan = plusPlans.includes(normalizedPlan);
       const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
-      const hasTokens = currentTokenBalance > 0;
       
       console.log('[SETTINGS] ===== AI SITEMAP REGENERATION CHECK =====');
       console.log('[SETTINGS] settings.features?.aiSitemap:', settings.features?.aiSitemap);
       console.log('[SETTINGS] normalizedPlan:', normalizedPlan);
       console.log('[SETTINGS] isPlusPlan:', isPlusPlan);
       console.log('[SETTINGS] hasUnlimitedAccess:', hasUnlimitedAccess);
-      console.log('[SETTINGS] currentTokenBalance:', currentTokenBalance);
-      console.log('[SETTINGS] hasTokens:', hasTokens);
-      console.log('[SETTINGS] ===== END AI SITEMAP CHECK =====');
       
       // AI Sitemap regeneration (if enabled)
       if (settings.features?.aiSitemap) {
@@ -877,18 +870,37 @@ export default function Settings() {
           return; // Stop here
         }
         
-        // For Plus plans, check tokens
-        if (isPlusPlan && !hasTokens) {
-          console.log('[SETTINGS] ⚠️ Plus plan needs tokens for AI Sitemap');
-          setTokenModalData({
-            feature: 'ai-sitemap-optimized',
-            tokensRequired: 3000, // Estimated per product
-            tokensAvailable: currentTokenBalance,
-            tokensNeeded: 3000
-          });
-          setShowInsufficientTokensModal(true);
-          return; // Stop here, show buy tokens modal
+        // For Plus plans, fetch FRESH token balance (not cached from settings)
+        if (isPlusPlan) {
+          console.log('[SETTINGS] 🔍 Plus plan detected, fetching FRESH token balance...');
+          try {
+            const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
+            const currentTokenBalance = tokenData.balance || 0;
+            const hasTokens = currentTokenBalance > 0;
+            
+            console.log('[SETTINGS] Fresh token balance:', currentTokenBalance);
+            console.log('[SETTINGS] hasTokens:', hasTokens);
+            
+            if (!hasTokens) {
+              console.log('[SETTINGS] ⚠️ Plus plan needs tokens for AI Sitemap');
+              setTokenModalData({
+                feature: 'ai-sitemap-optimized',
+                tokensRequired: 3000, // Estimated per product
+                tokensAvailable: currentTokenBalance,
+                tokensNeeded: 3000
+              });
+              setShowInsufficientTokensModal(true);
+              return; // Stop here, show buy tokens modal
+            }
+          } catch (error) {
+            console.error('[SETTINGS] ❌ Failed to fetch token balance:', error);
+            setToast('Failed to check token balance');
+            return;
+          }
         }
+        
+        console.log('[SETTINGS] ✅ All checks passed, proceeding with AI Sitemap regeneration');
+        console.log('[SETTINGS] ===== END AI SITEMAP CHECK =====');
         try {
           
           const REGENERATE_SITEMAP_MUTATION = `
@@ -2060,7 +2072,6 @@ export default function Settings() {
           size="large"
           loading={saving}
           onClick={saveSettings}
-          disabled={!settings}
         >
           Save Settings
         </Button>
