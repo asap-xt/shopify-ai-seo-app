@@ -117,15 +117,13 @@ export default async function productsWebhook(req, res) {
           totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
           gid: productGid,
           syncedAt: new Date(),
-          // Only update lastShopifyUpdate if content didn't change
-          // If content changed, lastShopifyUpdate preserves the OLD state for comparison
-          ...(contentChanged ? {} : {
-            lastShopifyUpdate: {
-              title: payload.title,
-              description: payload.body_html,
-              updatedAt: new Date()
-            }
-          })
+          // CRITICAL: ALWAYS update lastShopifyUpdate with current webhook data
+          // This is our reference point for detecting future changes
+          lastShopifyUpdate: {
+            title: payload.title,
+            description: payload.body_html,
+            updatedAt: new Date()
+          }
         },
         { upsert: true, new: true }
       );
