@@ -84,6 +84,11 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
 
     const isFreshShop = allFeaturesFalse && hasRecentDefaultTimestamp;
 
+    // Check if AI-Optimized Sitemap exists in database
+    const { default: Sitemap } = await import('../db/Sitemap.js');
+    const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced updatedAt').lean();
+    const hasAiSitemap = existingSitemap && existingSitemap.isAiEnhanced === true;
+
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
@@ -91,7 +96,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       features: isFreshShop ? defaultFeatures : savedSettings.features,
       richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
-      updatedAt: savedSettings.updatedAt || new Date().toISOString()
+      updatedAt: savedSettings.updatedAt || new Date().toISOString(),
+      hasAiSitemap: hasAiSitemap // NEW: indicate if AI sitemap exists
     };
 
     res.json(mergedSettings);

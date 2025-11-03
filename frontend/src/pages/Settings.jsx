@@ -703,12 +703,19 @@ export default function Settings() {
       console.log('[SETTINGS] Setting settings state...');
       console.log('[SETTINGS] Data to set:', data);
       console.log('[SETTINGS] Store Metadata in data:', data?.features?.storeMetadata);
+      console.log('[SETTINGS] Has AI Sitemap:', data?.hasAiSitemap);
       setSettings(data);
       setOriginalSettings(data); // Save original settings
       console.log('[SETTINGS] Settings state set successfully');
       
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
+      
+      // Show AI Sitemap View button if AI sitemap exists
+      if (data.hasAiSitemap) {
+        console.log('[SETTINGS] AI Sitemap exists in database, showing View button');
+        setShowAiSitemapView(true);
+      }
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
@@ -877,6 +884,9 @@ export default function Settings() {
             return;
           }
         }
+        
+        // Hide View button while regenerating
+        setShowAiSitemapView(false);
         
         try {
           const REGENERATE_SITEMAP_MUTATION = `
