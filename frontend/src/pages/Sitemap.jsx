@@ -11,6 +11,7 @@ import {
   Banner,
   Icon,
   Spinner,
+  Modal,
 } from '@shopify/polaris';
 import { CheckIcon, AlertCircleIcon, ClockIcon, ExternalIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
@@ -38,7 +39,6 @@ export default function SitemapPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   const [info, setInfo] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [viewingSitemap, setViewingSitemap] = useState(false);
   const [toast, setToast] = useState('');
   // plan banner state (restored)
   const [plan, setPlan] = useState(null);
@@ -46,6 +46,11 @@ export default function SitemapPage({ shop: shopProp }) {
   const [queueStatus, setQueueStatus] = useState(null);
   const [polling, setPolling] = useState(false);
   const api = useMemo(() => makeSessionFetch(), []);
+  
+  // Modal states (copied from Settings.jsx)
+  const [sitemapModalOpen, setSitemapModalOpen] = useState(false);
+  const [sitemapModalContent, setSitemapModalContent] = useState(null);
+  const [loadingSitemap, setLoadingSitemap] = useState(false);
 
   const loadInfo = useCallback(async () => {
     if (!shop) return;
@@ -167,24 +172,37 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [polling, checkStatus]);
 
+  // View Sitemap in Modal (copied from Settings.jsx viewJson function)
   const viewSitemap = useCallback(async () => {
     if (!shop) return;
-    setViewingSitemap(true);
+    
+    setSitemapModalOpen(true);
+    setLoadingSitemap(true);
+    setSitemapModalContent(null);
     
     try {
-      // Open sitemap in new tab
-      const sitemapUrl = `/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`;
-      const newWindow = window.open(sitemapUrl, '_blank');
+      console.log('[SITEMAP] Loading Sitemap XML...');
+      // Fetch sitemap as text since it's XML
+      const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+        }
+      });
       
-      // Simulate loading time - in reality, the XML will load in the new tab
-      // We'll show loader for a reasonable time to indicate the process
-      setTimeout(() => {
-        setViewingSitemap(false);
-      }, 2000); // Show loader for 2 seconds
-      
-    } catch (e) {
-      setViewingSitemap(false);
-      setToast('Failed to open sitemap');
+      if (response.ok) {
+        console.log('[SITEMAP] Sitemap XML loaded successfully');
+        const xmlContent = await response.text();
+        setSitemapModalContent(xmlContent);
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('[SITEMAP] Error loading sitemap:', error);
+      setSitemapModalContent(`Error loading sitemap: ${error.message}`);
+    } finally {
+      setLoadingSitemap(false);
     }
   }, [shop]);
 
@@ -311,18 +329,8 @@ export default function SitemapPage({ shop: shopProp }) {
                       <Button
                         fullWidth
                         onClick={viewSitemap}
-                        loading={viewingSitemap}
-                        disabled={viewingSitemap}
-                        icon={ExternalIcon}
                       >
-                        {viewingSitemap ? (
-                          <InlineStack gap="200" align="center">
-                            <Spinner size="small" />
-                            <Text>Loading sitemap...</Text>
-                          </InlineStack>
-                        ) : (
-                          'View Sitemap'
-                        )}
+                        View Sitemap
                       </Button>
                     </Box>
                   </BlockStack>
@@ -376,6 +384,55 @@ export default function SitemapPage({ shop: shopProp }) {
           </Box>
         </BlockStack>
       </Box>
+      
+      {/* Sitemap View Modal (copied from Settings.jsx) */}
+      {sitemapModalOpen && (
+        <Modal
+          open={sitemapModalOpen}
+          onClose={() => {
+            setSitemapModalOpen(false);
+            setSitemapModalContent(null);
+          }}
+          title="AI-Optimized Sitemap"
+          primaryAction={{
+            content: 'Copy',
+            onAction: () => {
+              navigator.clipboard.writeText(sitemapModalContent);
+              setToast('Copied to clipboard!');
+            },
+            disabled: loadingSitemap
+          }}
+          secondaryActions={[{
+            content: 'Close',
+            onAction: () => {
+              setSitemapModalOpen(false);
+              setSitemapModalContent(null);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+              {loadingSitemap ? (
+                <InlineStack align="center" gap="200">
+                  <Spinner size="small" />
+                  <Text variant="bodyMd">Loading sitemap XML... This may take a moment for large stores.</Text>
+                </InlineStack>
+              ) : (
+                <pre style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  margin: 0,
+                  overflow: 'auto',
+                  maxHeight: '400px'
+                }}>
+                  {sitemapModalContent}
+                </pre>
+              )}
+            </Box>
+          </Modal.Section>
+        </Modal>
+      )}
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </Card>
