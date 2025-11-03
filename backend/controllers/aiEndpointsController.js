@@ -616,10 +616,16 @@ router.get('/ai/welcome', async (req, res) => {
  */
 router.post('/ai/update-product', async (req, res) => {
   try {
-    const { shop, productId } = req.body;
+    const { shop, productId, aiEnhanced } = req.body;
     
-    // For now, just invalidate cache
-    // In production, you might want to update specific product in cache
+    // Update product's aiEnhanced flag in MongoDB if provided
+    if (aiEnhanced !== undefined && productId) {
+      await Product.findOneAndUpdate(
+        { shop, productId },
+        { 'seoStatus.aiEnhanced': aiEnhanced },
+        { new: true }
+      );
+    }
     
     res.json({ success: true, message: 'Product updated in AI feed' });
   } catch (error) {

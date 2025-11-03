@@ -428,6 +428,21 @@ router.post('/product', validateRequest(), async (req, res) => {
     
     // Prepare response summary
     const successfulLanguages = results.filter(r => !r.error && !r.skipped).length;
+    
+    // === MARK PRODUCT AS AI-ENHANCED ===
+    // If any language was successfully enhanced, mark product as aiEnhanced
+    if (successfulLanguages > 0) {
+      try {
+        await fetch(`${process.env.APP_URL}/ai/update-product`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop, productId, aiEnhanced: true })
+        });
+      } catch (e) {
+        console.error('[AI-ENHANCE] Failed to mark product as AI-enhanced:', e);
+      }
+    }
+    // === END MARK AI-ENHANCED ===
     const failedLanguages = results.filter(r => r.error && !r.skipped).length;
     const alreadyEnhanced = results.filter(r => r.skipped && r.reason === 'Already enhanced').length;
     const noBasicSeo = results.filter(r => r.skipped && !r.reason).length;

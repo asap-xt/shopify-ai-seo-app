@@ -27,6 +27,7 @@ const productSchema = new mongoose.Schema({
   // SEO optimization status tracking
   seoStatus: {
     optimized: { type: Boolean, default: false },
+    aiEnhanced: { type: Boolean, default: false }, // Flag for AI-enhanced products
     languages: [{
       code: String,
       optimized: Boolean,
@@ -108,6 +109,7 @@ productSchema.path('availableLanguages').set(normalizeLangs);
 
 // NEW INDEXES for better query performance
 productSchema.index({ shop: 1, 'seoStatus.optimized': 1 });
+productSchema.index({ shop: 1, 'seoStatus.aiEnhanced': 1 }); // Index for AI-enhanced products
 productSchema.index({ shop: 1, status: 1 });
 productSchema.index({ shop: 1, tags: 1 });
 productSchema.index({ shop: 1, createdAt: -1 });
