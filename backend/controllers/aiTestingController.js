@@ -634,6 +634,14 @@ Format:
       endpointsAnalyzed: successfulEndpoints.length
     });
     
+    // Invalidate cache so new token balance is immediately visible
+    try {
+      const cacheService = await import('../services/cacheService.js');
+      await cacheService.default.invalidateShop(shop);
+    } catch (cacheErr) {
+      console.error('[AI-TESTING] Failed to invalidate cache:', cacheErr);
+    }
+    
     res.json({
       shop,
       timestamp: new Date().toISOString(),

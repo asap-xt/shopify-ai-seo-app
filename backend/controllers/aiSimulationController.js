@@ -243,6 +243,14 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       // Finalize the reservation with actual usage
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.finalizeReservation(reservationId, actual.totalTokens);
+      
+      // Invalidate cache so new token balance is immediately visible
+      try {
+        const cacheService = await import('../services/cacheService.js');
+        await cacheService.default.invalidateShop(shop);
+      } catch (cacheErr) {
+        console.error('[AI-SIMULATION] Failed to invalidate cache:', cacheErr);
+      }
     }
     // === END TOKEN FINALIZATION ===
     

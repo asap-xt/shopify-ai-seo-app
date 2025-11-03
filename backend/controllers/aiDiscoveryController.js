@@ -447,6 +447,14 @@ Generate a helpful response.`;
         await tokenBalance.save();
       }
     }
+    
+    // Invalidate cache so new token balance is immediately visible
+    try {
+      const cacheService = await import('../services/cacheService.js');
+      await cacheService.default.invalidateShop(shop);
+    } catch (cacheErr) {
+      console.error('[AI-DISCOVERY] Failed to invalidate cache:', cacheErr);
+    }
     // === END TOKEN TRACKING ===
     
     res.json({ response: generatedResponse });
