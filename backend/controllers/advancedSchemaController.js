@@ -1519,11 +1519,23 @@ router.post('/generate-all', async (req, res) => {
     // For Plus plans, check if they have tokens (will be tracked during generation)
     if (isPlusPlan) {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
-      if (tokenBalance.balance <= 0) {
-        return res.status(403).json({ 
-          error: 'Insufficient tokens. Please purchase tokens to use Advanced Schema Data.',
+      
+      // Estimate tokens needed for Advanced Schema
+      const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
+      const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: 100 });
+      
+      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        return res.status(402).json({ 
+          error: 'Insufficient token balance',
+          requiresPurchase: true,
+          needsUpgrade: false, // Plus plans don't need upgrade, just tokens
           currentPlan: subscription?.plan || 'none',
-          tokenBalance: 0
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+          feature: 'ai-schema-advanced',
+          message: 'You need more tokens to generate Advanced Schema Data'
         });
       }
     }
