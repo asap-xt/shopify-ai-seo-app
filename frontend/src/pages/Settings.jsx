@@ -1104,8 +1104,9 @@ export default function Settings() {
       };
 
       if (feature === 'aiSitemap') {
-        console.log('[SETTINGS] Loading AI Sitemap XML...');
-        // For sitemap, fetch as text since it's XML
+        console.log('[SETTINGS] Loading existing AI-Optimized Sitemap from database...');
+        // Read existing sitemap from database (does NOT regenerate)
+        // Uses force=true to trigger the "view existing" code path in backend
         const response = await fetch(endpoints[feature], {
           method: 'GET',
           credentials: 'include',

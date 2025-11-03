@@ -612,7 +612,6 @@ async function generateSitemapCore(shop, options = {}) {
           xml += '    <priority>0.8</priority>\n';
           
           // Always add AI metadata for multilingual URLs (to be consistent with main product URL)
-          console.log(`[SITEMAP-MULTILANG] Adding <ai:product> for ${lang} URL: ${product.handle}`);
           xml += '    <ai:product>\n';
           xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
           xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';

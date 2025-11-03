@@ -181,8 +181,9 @@ export default function SitemapPage({ shop: shopProp }) {
     setSitemapModalContent(null);
     
     try {
-      console.log('[SITEMAP] Loading Sitemap XML...');
-      // Fetch sitemap as text since it's XML
+      console.log('[SITEMAP] Loading existing sitemap from database...');
+      // Read existing sitemap from database (does NOT regenerate)
+      // Uses force=true to trigger the "view existing" code path in backend
       const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`, {
         method: 'GET',
         credentials: 'include',
