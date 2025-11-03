@@ -656,8 +656,11 @@
           // Import the core sitemap generation logic
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
           
-          // Call the core function directly without Express req/res
-          generateSitemapCore(shop)
+          // ===== CRITICAL: AI Enhancement enabled from Settings =====
+          // When called from Settings, we enable AI enhancement (real-time AI calls)
+          // This is the ONLY place where AI enhancement happens
+          // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
+          generateSitemapCore(shop, { enableAIEnhancement: true })
             .then((result) => {
               // Sitemap regeneration completed successfully
             })
@@ -668,7 +671,7 @@
           // Return immediately
           return {
             success: true,
-            message: 'Sitemap regeneration started in background',
+            message: 'AI-Optimized Sitemap regeneration started in background',
             shop: shop
           };
           

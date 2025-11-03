@@ -197,7 +197,11 @@ function cleanHtmlForXml(html) {
 }
 
 // Core sitemap generation function (without Express req/res dependencies)
-async function generateSitemapCore(shop) {
+// Main sitemap generation function
+// options.enableAIEnhancement: if true, makes real-time AI calls for each product (Enterprise/Growth Extra only)
+async function generateSitemapCore(shop, options = {}) {
+  const { enableAIEnhancement = false } = options;
+  
   try {
     const normalizedShop = normalizeShop(shop);
     if (!normalizedShop) {
@@ -206,68 +210,67 @@ async function generateSitemapCore(shop) {
     
     const { limit, plan } = await getPlanLimits(normalizedShop);
     
-    // Check AI Discovery settings for AI-Optimized Sitemap
+    // AI Enhancement state (only used if enableAIEnhancement is true)
     let isAISitemapEnabled = false;
     let reservationId = null;
-    let totalAITokens = 0; // Track total tokens used
+    let totalAITokens = 0;
     
-    try {
-      const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
-      const { default: Shop } = await import('../db/Shop.js');
-      
-      const shopRecord = await Shop.findOne({ shop: normalizedShop });
-      if (shopRecord?.accessToken) {
-        const session = { accessToken: shopRecord.accessToken };
-        const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
+    // Check AI Discovery settings ONLY if enableAIEnhancement is requested
+    if (enableAIEnhancement) {
+      try {
+        const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
+        const { default: Shop } = await import('../db/Shop.js');
         
-        // CRITICAL: AI-Optimized Sitemap eligibility check
-        const planKey = (settings?.planKey || plan || 'starter').toLowerCase().replace(/\s+/g, '_');
-        const plansWithAccess = ['growth_extra', 'enterprise'];
-        const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
-        
-        let isEligiblePlan = plansWithAccess.includes(planKey);
-        
-        // Plus plans: Check if they have tokens
-        if (plusPlansRequireTokens.includes(planKey)) {
-          const { default: TokenBalance } = await import('../db/TokenBalance.js');
-          const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+        const shopRecord = await Shop.findOne({ shop: normalizedShop });
+        if (shopRecord?.accessToken) {
+          const session = { accessToken: shopRecord.accessToken };
+          const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
           
-          if (tokenBalance.balance > 0) {
-            isEligiblePlan = true; // Has tokens - eligible
-          } else {
-            isEligiblePlan = false; // No tokens - not eligible
-          }
-        }
-        
-        isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
-        
-        // === TOKEN RESERVATION FOR AI-SITEMAP ===
-        if (isAISitemapEnabled) {
-          const { estimateTokensWithMargin, requiresTokens } = await import('../billing/tokenConfig.js');
-          const { default: TokenBalance } = await import('../db/TokenBalance.js');
-          const feature = 'ai-sitemap-optimized';
+          // Check eligibility for AI-enhanced sitemap
+          const planKey = (settings?.planKey || plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+          const plansWithAccess = ['growth_extra', 'enterprise'];
+          const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
           
-          if (requiresTokens(feature)) {
-            // Estimate based on product count (limit)
-            const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
+          let isEligiblePlan = plansWithAccess.includes(planKey);
+          
+          // Plus plans: Check if they have tokens
+          if (plusPlansRequireTokens.includes(planKey)) {
+            const { default: TokenBalance } = await import('../db/TokenBalance.js');
             const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
             
-            // Check if sufficient tokens
-            if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-              // Reserve tokens
-              const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
-              reservationId = reservation.reservationId;
-              await reservation.save();
+            if (tokenBalance.balance > 0) {
+              isEligiblePlan = true;
             } else {
-              // Not enough tokens - disable AI sitemap
-              isAISitemapEnabled = false;
+              isEligiblePlan = false;
             }
           }
+          
+          isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
+          
+          // === TOKEN RESERVATION FOR AI-SITEMAP ===
+          if (isAISitemapEnabled) {
+            const { estimateTokensWithMargin, requiresTokens } = await import('../billing/tokenConfig.js');
+            const { default: TokenBalance } = await import('../db/TokenBalance.js');
+            const feature = 'ai-sitemap-optimized';
+            
+            if (requiresTokens(feature)) {
+              const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
+              const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+              
+              if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+                const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
+                reservationId = reservation.reservationId;
+                await reservation.save();
+              } else {
+                isAISitemapEnabled = false; // Not enough tokens
+              }
+            }
+          }
+          // === END TOKEN RESERVATION ===
         }
-        // === END TOKEN RESERVATION ===
+      } catch (error) {
+        // Could not fetch AI Discovery settings, continue with basic sitemap
       }
-    } catch (error) {
-      // Could not fetch AI Discovery settings, using basic sitemap
     }
     
     // Get shop info and languages
@@ -379,8 +382,24 @@ async function generateSitemapCore(shop) {
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.8</priority>\n';
       
-      // Add AI metadata ONLY if AI sitemap is enabled
-      if (isAISitemapEnabled) {
+      // Check if product has seo_ai metafield (basic SEO data)
+      let hasSeoAI = false;
+      let bullets = null;
+      let faq = null;
+      
+      if (product.metafield_seo_ai?.value) {
+        try {
+          const seoData = JSON.parse(product.metafield_seo_ai.value);
+          bullets = seoData.bullets || null;
+          faq = seoData.faq || null;
+          hasSeoAI = true;
+        } catch (e) {
+          // Could not parse seo_ai metafield
+        }
+      }
+      
+      // Add AI metadata structure if we have SEO data OR if AI sitemap is enabled
+      if (hasSeoAI || isAISitemapEnabled) {
         xml += '    <ai:product>\n';
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
         xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
@@ -401,17 +420,7 @@ async function generateSitemapCore(shop) {
           xml += '      <ai:tags>' + escapeXml(product.tags.join(', ')) + '</ai:tags>\n';
         }
         
-        // Add AI-generated bullets from main SEO metafield
-        let bullets = null;
-        if (product.metafield_seo_ai?.value) {
-          try {
-            const seoData = JSON.parse(product.metafield_seo_ai.value);
-            bullets = seoData.bullets || null;
-          } catch (e) {
-            // Could not parse bullets
-          }
-        }
-        
+        // Add bullets from seo_ai metafield (if available)
         if (bullets && Array.isArray(bullets) && bullets.length > 0) {
           xml += '      <ai:features>\n';
           bullets.forEach(bullet => {
@@ -422,17 +431,7 @@ async function generateSitemapCore(shop) {
           xml += '      </ai:features>\n';
         }
         
-        // Add AI-generated FAQ from main SEO metafield
-        let faq = null;
-        if (product.metafield_seo_ai?.value) {
-          try {
-            const seoData = JSON.parse(product.metafield_seo_ai.value);
-            faq = seoData.faq || null;
-          } catch (e) {
-            // Could not parse FAQ
-          }
-        }
-        
+        // Add FAQ from seo_ai metafield (if available)
         if (faq && Array.isArray(faq) && faq.length > 0) {
           xml += '      <ai:faq>\n';
           faq.forEach(item => {
@@ -446,7 +445,12 @@ async function generateSitemapCore(shop) {
           xml += '      </ai:faq>\n';
         }
         
-        // ===== AI-ENHANCED METADATA (only if enabled) =====
+        // ===== AI-ENHANCED METADATA (REAL-TIME AI GENERATION - Enterprise/Growth Extra only) =====
+        // NOTE: This block makes AI API calls to generate advanced metadata
+        // It only runs when:
+        // 1. User has Enterprise or Growth Extra plan (or Plus plan with tokens)
+        // 2. "AI-Optimized Sitemap" feature is enabled in settings
+        // 3. User has sufficient token balance
         if (isAISitemapEnabled) {
           try {
             // Prepare product data for AI enhancement
