@@ -90,7 +90,7 @@ export const TOKEN_COSTS = {
   
   'ai-sitemap-optimized': {
     base: 5000,           // One-time per generation
-    perProduct: 1000,     // Cost per product in sitemap (increased from 100)
+    perProduct: 3000,     // Cost per product in sitemap (realistic avg: 2,159 tokens)
     description: 'AI-optimized sitemap generation'
   }
 };
