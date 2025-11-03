@@ -133,8 +133,10 @@ Guidelines:
 - For products with minimal descriptions, use product type, vendor, tags, and price to create relevant generic FAQs
 - Examples for minimal data: "What is this ${productType} suitable for?", "How do I care for my ${productType}?", "What makes this ${vendor} product special?"
 - Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
-- bullets: array of 5 strings
-- faq: array of 3-5 objects with "q" and "a" keys`
+- bullets: array of EXACTLY 5 strings (NO MORE, NO LESS) - this is mandatory!
+- faq: array of 3-5 objects with "q" and "a" keys
+
+**CRITICAL:** You MUST return exactly 5 bullets. If you can't generate 5 unique bullets, repeat/rephrase similar points.`
     },
     {
       role: 'user',
@@ -162,8 +164,27 @@ Guidelines:
     existingSeo: existingSeo
   }, ['bullets', 'faq']);
   
+  // STRICT VALIDATION: Ensure EXACTLY 5 bullets
+  let bullets = validated.bullets || [];
+  if (bullets.length < 5) {
+    // Pad with generic bullets if needed
+    const genericBullets = [
+      `High-quality ${productType || 'product'} from ${vendor || 'trusted brand'}`,
+      `Perfect for ${productType || 'everyday use'}`,
+      `Great value at competitive pricing`,
+      `Available in multiple options`,
+      `Satisfaction guaranteed`
+    ];
+    while (bullets.length < 5) {
+      bullets.push(genericBullets[bullets.length] || `Feature ${bullets.length + 1}`);
+    }
+  } else if (bullets.length > 5) {
+    // Trim to exactly 5
+    bullets = bullets.slice(0, 5);
+  }
+  
   return {
-    bullets: validated.bullets || [],
+    bullets: bullets,
     faq: validated.faq || [],
     usage
   };

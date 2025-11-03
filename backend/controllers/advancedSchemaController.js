@@ -375,7 +375,7 @@ function sanitizeAIResponse(response, knownFacts) {
     category: false,
     audience: false,
     reviews: false,
-    ratings: false,
+    ratings: true, // ✅ ENABLED BY DEFAULT for better SEO
     enhancedDescription: false,
     organization: false
   };
@@ -686,36 +686,46 @@ async function generateSiteFAQ(shop, shopContext) {
     "What is your privacy policy?"
   ];
   
-  const systemPrompt = `You are generating FAQ answers for a real e-commerce store.
+  const systemPrompt = `You are an expert copywriter creating unique, store-specific FAQ answers for an e-commerce website.
+
 CRITICAL RULES:
-- Base answers ONLY on provided information
-- If information is missing, use the provided fallback text
-- Do NOT make up specific policies, prices, timeframes, or percentages
-- Be helpful but truthful
-- Include the actual store URL when relevant
-- For languages question, use EXACTLY the provided language list
-Output JSON with structure: { "faqs": [{"q": "question", "a": "answer"}] }`;
+1. Generate UNIQUE, PERSONALIZED answers that match the store's brand and products
+2. Include the store name (${shopContext.shop.name}) naturally in answers where relevant
+3. Reference specific store features, policies, and contact methods when provided
+4. Use a friendly, conversational tone that matches e-commerce customer service
+5. For policy questions, direct users to the actual policy URL provided
+6. Do NOT use generic templates - make each answer feel authentic and specific to this store
+7. Keep answers concise (2-4 sentences) but informative
+8. Include actionable next steps (e.g., "visit our page", "contact us at email")
+
+Output format: { "faqs": [{"q": "question", "a": "unique answer"}] }`;
   
-  const prompt = `Generate FAQ answers for this REAL store:
-Store Name: ${shopContext.shop.name}
-Store URL: ${shopUrl}
-Available Languages: ${languages.join(', ')} (Primary: ${primaryLanguage})
-Currency: ${shopContext.shop.currencyCode}
-${shopContext.shop.description ? `Description: ${shopContext.shop.description}` : ''}
-${shopContext.shop.contactEmail ? `Contact Email: ${shopContext.shop.contactEmail}` : ''}
-Refund Policy URL: ${shopUrl}/policies/refund-policy
-Shipping Policy URL: ${shopUrl}/policies/shipping-policy
-Privacy Policy URL: ${shopUrl}/policies/privacy-policy
+  const prompt = `Create FAQ answers for: **${shopContext.shop.name}**
 
-Payment Methods: Various payment methods
-Digital Wallets: ${shopContext.shop.paymentSettings?.supportedDigitalWallets?.join(', ') || 'Multiple options'}
+Store Details:
+- URL: ${shopUrl}
+- Currency: ${shopContext.shop.currencyCode}
+${shopContext.shop.description ? `- About: ${shopContext.shop.description}` : ''}
+${shopContext.shop.contactEmail ? `- Contact: ${shopContext.shop.contactEmail}` : ''}
+- Payment Options: ${shopContext.shop.paymentSettings?.supportedDigitalWallets?.join(', ') || 'Multiple payment methods'}
 
-Questions: ${JSON.stringify(fixedQuestions)}
+Policy URLs:
+- Returns: ${shopUrl}/policies/refund-policy
+- Shipping: ${shopUrl}/policies/shipping-policy
+- Privacy: ${shopUrl}/policies/privacy-policy
 
-IMPORTANT: For the languages question, respond with: "Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website."
+Questions to answer:
+${JSON.stringify(fixedQuestions)}
 
-Use these fallbacks when specific information is missing:
-${JSON.stringify(FAQ_FALLBACKS, null, 2)}`;
+SPECIAL INSTRUCTION for "languages" question: 
+Answer: "Our store is available in ${languages.length} language${languages.length > 1 ? 's' : ''}: ${languages.join(', ')}. You can switch languages using the language selector on our website."
+
+For OTHER questions:
+- Reference the store name naturally
+- Link to the specific policy URLs provided
+- Mention the contact email if provided
+- If specific information is not provided, suggest customers visit ${shopUrl} or contact ${shopContext.shop.contactEmail || 'customer support'}
+- Make each answer feel personalized to ${shopContext.shop.name}`;
   
   try {
     const result = await generateWithAI(prompt, systemPrompt);
