@@ -798,13 +798,11 @@ async function handleGenerate(req, res) {
     const forceSync = req.query.force === 'true';
     
     if (forceSync) {
-      // Generate synchronously and return XML (for viewing)
-      const result = await generateSitemapCore(shop);
-      
-      // Return XML directly
+      // View existing sitemap (DO NOT regenerate - it would overwrite AI-enhanced version!)
+      // Simply read from database and return
       const sitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean();
       if (!sitemapDoc?.content) {
-        return res.status(500).json({ error: 'Sitemap generation failed' });
+        return res.status(404).json({ error: 'No sitemap found. Please generate one first from Settings.' });
       }
       
       res.set({
