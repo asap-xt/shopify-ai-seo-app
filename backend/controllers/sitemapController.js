@@ -249,7 +249,7 @@ async function generateSitemapCore(shop) {
           
           if (requiresTokens(feature)) {
             // Estimate based on product count (limit)
-            const tokenEstimate = estimateTokensWithMargin(feature, { products: limit });
+            const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
             const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
             
             // Check if sufficient tokens
