@@ -243,20 +243,14 @@ async function generateSitemapCore(shop) {
         
         // === TOKEN RESERVATION FOR AI-SITEMAP ===
         if (isAISitemapEnabled) {
-          console.log('[AI-SITEMAP] Token reservation starting...');
           const { estimateTokensWithMargin, requiresTokens } = await import('../billing/tokenConfig.js');
           const { default: TokenBalance } = await import('../db/TokenBalance.js');
           const feature = 'ai-sitemap-optimized';
           
-          console.log('[AI-SITEMAP] Feature:', feature, 'Requires tokens:', requiresTokens(feature));
-          
           if (requiresTokens(feature)) {
             // Estimate based on product count (limit)
             const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
-            console.log('[AI-SITEMAP] Token estimate:', tokenEstimate);
-            
             const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
-            console.log('[AI-SITEMAP] Current balance:', tokenBalance.balance);
             
             // Check if sufficient tokens
             if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
@@ -264,10 +258,8 @@ async function generateSitemapCore(shop) {
               const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
               reservationId = reservation.reservationId;
               await reservation.save();
-              console.log('[AI-SITEMAP] ✅ Reserved tokens:', tokenEstimate.withMargin, 'Reservation ID:', reservationId);
             } else {
               // Not enough tokens - disable AI sitemap
-              console.log('[AI-SITEMAP] ❌ Insufficient tokens. Need:', tokenEstimate.withMargin, 'Have:', tokenBalance.balance);
               isAISitemapEnabled = false;
             }
           }
@@ -702,16 +694,20 @@ async function generateSitemapCore(shop) {
     // === FINALIZE TOKEN USAGE ===
     if (reservationId && totalAITokens > 0) {
       try {
-        console.log('[AI-SITEMAP] Finalizing token usage. ReservationId:', reservationId, 'Tokens used:', totalAITokens);
         const { default: TokenBalance } = await import('../db/TokenBalance.js');
         const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
         await tokenBalance.finalizeReservation(reservationId, totalAITokens);
-        console.log('[AI-SITEMAP] ✅ Tokens finalized successfully');
+        
+        // CRITICAL: Invalidate cache so new token balance is immediately visible
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(normalizedShop);
+        } catch (cacheErr) {
+          console.error('[AI-SITEMAP] Failed to invalidate cache:', cacheErr);
+        }
       } catch (tokenErr) {
-        console.error('[AI-SITEMAP] ❌ Error finalizing token usage:', tokenErr);
+        console.error('[AI-SITEMAP] Error finalizing token usage:', tokenErr);
       }
-    } else {
-      console.log('[AI-SITEMAP] ⚠️ Skipping finalization. ReservationId:', reservationId, 'TotalAITokens:', totalAITokens);
     }
     // === END TOKEN FINALIZATION ===
     
