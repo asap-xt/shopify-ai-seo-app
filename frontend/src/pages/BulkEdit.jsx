@@ -186,10 +186,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Auto-close upgrade modal if selection is now within limit
   useEffect(() => {
     if (showPlanUpgradeModal && plan) {
-      const planLimit = getProductLimitByPlan(plan);
       const currentSelection = selectAllPages ? totalCount : selectedItems.length;
       
-      if (currentSelection <= planLimit) {
+      if (currentSelection <= productLimit) {
         setShowPlanUpgradeModal(false);
         setTokenError(null);
       }
@@ -454,19 +453,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
 
     // Check product limit before processing
-    const planLimit = getProductLimitByPlan(plan);
     const selectedCount = selectedWithSEO.length;
     
-    if (selectedCount > planLimit) {
+    if (selectedCount > productLimit) {
       // Show upgrade modal instead of processing
       const nextPlan = getNextPlanForLimit(selectedCount);
       setTokenError({
         error: `Product limit exceeded`,
-        message: `Your ${plan} plan supports up to ${planLimit} products for AI Enhancement. You have selected ${selectedCount} products with Basic SEO.`,
+        message: `Your ${plan} plan supports up to ${productLimit} products for AI Enhancement. You have selected ${selectedCount} products with Basic SEO.`,
         minimumPlanRequired: nextPlan,
         currentPlan: plan,
         features: [
-          `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
+          `Optimize up to ${productLimit} products`,
           'All features from your current plan',
           nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons at no extra cost' : 'Access to AI-enhanced add-ons',
           nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
@@ -763,10 +761,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       }
       
       // Check if selection exceeds plan limit BEFORE processing
-      const planLimit = getProductLimitByPlan(plan);
       const selectedCount = productsToProcess.length;
       
-      if (selectedCount > planLimit) {
+      if (selectedCount > productLimit) {
         setIsProcessing(false);
         setProgress({ current: 0, total: 0, percent: 0 });
         setShowLanguageModal(false); // Close language modal
@@ -775,11 +772,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const nextPlan = getNextPlanForLimit(selectedCount);
         setTokenError({
           error: `Product limit exceeded`,
-          message: `Your ${currentPlan} plan supports up to ${planLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
+          message: `Your ${currentPlan} plan supports up to ${productLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
           minimumPlanRequired: nextPlan,
           currentPlan: currentPlan,
           features: [
-            `Optimize up to ${getProductLimitByPlan(nextPlan)} products`,
+            `Optimize more products`,
             'All features from your current plan',
             nextPlan === 'Growth Extra' || nextPlan === 'Enterprise' ? 'AI-enhanced add-ons at no extra cost' : 'Access to AI-enhanced add-ons',
             nextPlan === 'Enterprise' ? 'Advanced Schema Data' : null
@@ -1654,7 +1651,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       onClick={() => {
                         setTokenError({
                           error: `Product limit exceeded`,
-                          message: `Your ${plan} plan supports up to ${getProductLimitByPlan(plan)} products. Upgrade to ${getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)} to optimize more products.`,
+                          message: `Your ${plan} plan supports up to ${productLimit} products. Upgrade to ${getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)} to optimize more products.`,
                           minimumPlanRequired: getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)
                         });
                         setShowPlanUpgradeModal(true);
