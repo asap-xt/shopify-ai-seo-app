@@ -80,7 +80,9 @@ async function fetchPlan(shop, app = null) {
     const planMappings = {
       'starter': { plan: 'Starter', queryLimit: 50, queryCount: 0, productLimit: 70 },
       'professional': { plan: 'Professional', queryLimit: 600, queryCount: 0, productLimit: 200 },
+      'professional_plus': { plan: 'Professional Plus', queryLimit: 600, queryCount: 0, productLimit: 200 },
       'growth': { plan: 'Growth', queryLimit: 1500, queryCount: 0, productLimit: 450 },
+      'growth_plus': { plan: 'Growth Plus', queryLimit: 1500, queryCount: 0, productLimit: 450 },
       'growth_extra': { plan: 'Growth Extra', queryLimit: 4000, queryCount: 0, productLimit: 750 },
       'enterprise': { plan: 'Enterprise', queryLimit: 10000, queryCount: 0, productLimit: 1200 }
     };
