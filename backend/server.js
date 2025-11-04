@@ -554,6 +554,8 @@
         planKey: String
         priceUsd: Float
         product_limit: Int
+        collection_limit: Int
+        language_limit: Int
         providersAllowed: [String!]
         modelsSuggested: [String!]
         autosyncCron: String

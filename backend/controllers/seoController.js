@@ -80,6 +80,8 @@ export async function getPlansMeForShop(app, shop) {
     
     // Limits (from plan config, not subscription)
     product_limit: planConfig.productLimit,
+    collection_limit: planConfig.collectionLimit,
+    language_limit: planConfig.languageLimit,
     
     // Features
     providersAllowed: planConfig.providersAllowed,

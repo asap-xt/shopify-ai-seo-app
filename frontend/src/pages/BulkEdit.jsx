@@ -48,50 +48,12 @@ const extractNumericId = (gid) => {
   return match ? match[1] : gid;
 };
 
-// Helper function to get product limits by plan
-const getProductLimitByPlan = (planName) => {
-  // Debug mode: check URL parameter for testing
-  const isDebugMode = new URLSearchParams(window.location.search).get('debug_limits') === 'true';
-  
-  if (isDebugMode) {
-    // Reduced limits for testing with 20 products
-    switch (planName?.toLowerCase()) {
-      case 'starter': return 5;
-      case 'growth': return 10;
-      case 'growth extra': return 15;
-      case 'professional': return 12;
-      case 'enterprise': return 25;
-      default: return 5;
-    }
-  }
-  
-  // Production limits
-  switch (planName?.toLowerCase()) {
-    case 'starter': return 100;
-    case 'professional': return 350;
-    case 'growth': return 1000;
-    case 'growth extra': return 2500;
-    case 'enterprise': return 6000;
-    default: return 100;
-  }
-};
-
 // Helper function to suggest next plan based on product count
 const getNextPlanForLimit = (count) => {
-  const isDebugMode = new URLSearchParams(window.location.search).get('debug_limits') === 'true';
-  
-  if (isDebugMode) {
-    if (count <= 5) return 'Starter';
-    if (count <= 10) return 'Growth';
-    if (count <= 12) return 'Professional';
-    if (count <= 15) return 'Growth Extra';
-    return 'Enterprise';
-  }
-  
-  if (count <= 100) return 'Starter';
-  if (count <= 350) return 'Professional';
-  if (count <= 1000) return 'Growth';
-  if (count <= 2500) return 'Growth Extra';
+  if (count <= 70) return 'Starter';
+  if (count <= 200) return 'Professional';
+  if (count <= 450) return 'Growth';
+  if (count <= 750) return 'Growth Extra';
   return 'Enterprise';
 };
 
@@ -163,6 +125,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
+  const [productLimit, setProductLimit] = useState(70); // Default to Starter limit
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [hasVisitedProducts, setHasVisitedProducts] = useState(
@@ -243,6 +206,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           planKey
           modelsSuggested
           product_limit
+          language_limit
         }
       }
     `;
@@ -260,21 +224,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setPlan(data?.plan || 'starter');
         setCurrentPlan(data?.planKey || 'starter');
         
-        // Set language limit based on plan
-        const planKey = (data?.planKey || 'starter').toLowerCase();
-        const limits = {
-          'starter': 1,
-          'professional': 2,
-          'professional plus': 2,
-          'professional_plus': 2,
-          'growth': 3,
-          'growth plus': 3,
-          'growth_plus': 3,
-          'growth extra': 6,
-          'growth_extra': 6,
-          'enterprise': 10
-        };
-        setLanguageLimit(limits[planKey] || 1);
+        // Set limits from API response (dynamic from backend/plans.js)
+        setProductLimit(data?.product_limit || 70);
+        setLanguageLimit(data?.language_limit || 1);
       })
       .catch((e) => console.error('[BULK-EDIT] GraphQL plansMe failed:', e));
   }, [shop, api]);
@@ -1660,14 +1612,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 <InlineStack gap="200" align="space-between">
                   <Text>
                     Your <strong>{plan}</strong> plan includes up to{' '}
-                    <strong>{getProductLimitByPlan(plan)}</strong> products for SEO optimization.
-                    {totalCount > getProductLimitByPlan(plan) && (
-                      <> You have {totalCount} products, so only the first {getProductLimitByPlan(plan)} will be processed.</>
+                    <strong>{productLimit}</strong> products for SEO optimization.
+                    {totalCount > productLimit && (
+                      <> You have {totalCount} products, so only the first {productLimit} will be processed.</>
                     )}
                   </Text>
                   {(selectedItems.length > 0 || selectAllPages) && (
                     <Text>
-                      Selected: {selectAllPages ? Math.min(totalCount, getProductLimitByPlan(plan)) : selectedItems.length}/{getProductLimitByPlan(plan)}
+                      Selected: {selectAllPages ? Math.min(totalCount, productLimit) : selectedItems.length}/{productLimit}
                     </Text>
                   )}
                 </InlineStack>
@@ -1675,14 +1627,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             )}
             
             {/* Plan Limit Warning Banner */}
-            {plan && (selectedItems.length > getProductLimitByPlan(plan) || (selectAllPages && totalCount > getProductLimitByPlan(plan))) && (
+            {plan && (selectedItems.length > productLimit || (selectAllPages && totalCount > productLimit)) && (
               <Banner tone="critical">
                 <BlockStack gap="200">
                   <Text variant="bodyMd" fontWeight="semibold">
                     Product limit exceeded
                   </Text>
                   <Text>
-                    Your <strong>{plan}</strong> plan supports up to <strong>{getProductLimitByPlan(plan)}</strong> products. 
+                    Your <strong>{plan}</strong> plan supports up to <strong>{productLimit}</strong> products. 
                     You have selected <strong>{selectAllPages ? totalCount : selectedItems.length}</strong> products.
                   </Text>
                   <Text>

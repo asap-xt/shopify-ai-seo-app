@@ -18,23 +18,6 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
-// Helper: Get plan limits dynamically
-const getPlanLimits = (planName) => {
-  const normalized = (planName || 'starter').toLowerCase().replace(/\s+/g, '_');
-  
-  const limits = {
-    starter: { products: 100, languages: 1 },
-    professional: { products: 250, languages: 2 },
-    professional_plus: { products: 250, languages: 2 },
-    growth: { products: 700, languages: 3 },
-    growth_plus: { products: 700, languages: 3 },
-    growth_extra: { products: 1000, languages: 6 },
-    enterprise: { products: 2500, languages: 10 }
-  };
-  
-  return limits[normalized] || limits.starter;
-};
-
 export default function SitemapPage({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   const [info, setInfo] = useState(null);
@@ -75,6 +58,8 @@ export default function SitemapPage({ shop: shopProp }) {
             planKey
             priceUsd
             product_limit
+            collection_limit
+            language_limit
             providersAllowed
             modelsSuggested
             autosyncCron
@@ -221,16 +206,13 @@ export default function SitemapPage({ shop: shopProp }) {
             <p>
               Your {plan?.plan || 'Starter'} plan includes up to{' '}
               <strong>
-                {(() => {
-                  const limits = getPlanLimits(plan?.plan);
-                  return `${limits.products.toLocaleString()} products in up to ${limits.languages} language${limits.languages > 1 ? 's' : ''}`;
-                })()}
+                {plan?.product_limit?.toLocaleString() || '70'} products in up to {plan?.language_limit || 1} language{(plan?.language_limit || 1) > 1 ? 's' : ''}
               </strong>
               .
-              {info?.productCount &&
-                (info.productCount > getPlanLimits(plan?.plan).products) && (
+              {info?.productCount && plan?.product_limit &&
+                (info.productCount > plan.product_limit) && (
                   <> You have {info.productCount} products, so only the first{' '}
-                    {getPlanLimits(plan?.plan).products.toLocaleString()}{' '}
+                    {plan.product_limit.toLocaleString()}{' '}
                     will be included in the sitemap.</>
                 )}
             </p>
