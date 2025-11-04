@@ -78,11 +78,11 @@ async function fetchPlan(shop, app = null) {
   const envPlan = process.env.APP_PLAN;
   if (envPlan) {
     const planMappings = {
-      'starter': { plan: 'Starter', queryLimit: 50, queryCount: 0, productLimit: 50 },
-      'professional': { plan: 'Professional', queryLimit: 600, queryCount: 0, productLimit: 300 },
-      'growth': { plan: 'Growth', queryLimit: 1500, queryCount: 0, productLimit: 1000 },
-      'growth_extra': { plan: 'Growth Extra', queryLimit: 4000, queryCount: 0, productLimit: 2000 },
-      'enterprise': { plan: 'Enterprise', queryLimit: 10000, queryCount: 0, productLimit: 10000 }
+      'starter': { plan: 'Starter', queryLimit: 50, queryCount: 0, productLimit: 70 },
+      'professional': { plan: 'Professional', queryLimit: 600, queryCount: 0, productLimit: 200 },
+      'growth': { plan: 'Growth', queryLimit: 1500, queryCount: 0, productLimit: 450 },
+      'growth_extra': { plan: 'Growth Extra', queryLimit: 4000, queryCount: 0, productLimit: 750 },
+      'enterprise': { plan: 'Enterprise', queryLimit: 10000, queryCount: 0, productLimit: 1200 }
     };
     
     if (planMappings[envPlan.toLowerCase()]) {

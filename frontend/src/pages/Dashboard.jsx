@@ -258,16 +258,16 @@ export default function Dashboard({ shop: shopProp }) {
   // Plan recommendation logic
   const getPlanLimits = (planKey) => {
     switch (planKey) {
-      case 'starter': return { products: 100, languages: 1 };
-      case 'professional': return { products: 250, languages: 2 };
+      case 'starter': return { products: 70, languages: 1 };
+      case 'professional': return { products: 200, languages: 2 };
       case 'professional_plus':
-      case 'professional plus': return { products: 250, languages: 2 };
-      case 'growth': return { products: 700, languages: 3 };
+      case 'professional plus': return { products: 200, languages: 2 };
+      case 'growth': return { products: 450, languages: 3 };
       case 'growth_plus':
-      case 'growth plus': return { products: 700, languages: 3 };
+      case 'growth plus': return { products: 450, languages: 3 };
       case 'growth_extra':
-      case 'growth extra': return { products: 1000, languages: 6 };
-      case 'enterprise': return { products: 2500, languages: 10 };
+      case 'growth extra': return { products: 750, languages: 6 };
+      case 'enterprise': return { products: 1200, languages: 10 };
       default: return { products: 0, languages: 0 };
     }
   };

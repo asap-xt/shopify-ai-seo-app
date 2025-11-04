@@ -103,7 +103,7 @@ const PLAN_PRESETS = {
     plan: 'Starter',
     planKey: 'starter',
     queryLimit: 200,
-    productLimit: 100,
+    productLimit: 70,
     providersAllowed: ['openai', 'anthropic'],
     modelsSuggested: [
       'openai/gpt-4o-mini',
@@ -116,7 +116,7 @@ const PLAN_PRESETS = {
     plan: 'Professional',
     planKey: 'professional',
     queryLimit: 700,
-    productLimit: 350,
+    productLimit: 200,
     providersAllowed: ['openai', 'anthropic', 'gemini'],
     modelsSuggested: [
       'google/gemini-1.5-flash',
@@ -129,7 +129,7 @@ const PLAN_PRESETS = {
     plan: 'Growth',
     planKey: 'growth',
     queryLimit: 2000,
-    productLimit: 1000,
+    productLimit: 450,
     providersAllowed: ['claude', 'openai', 'gemini'],
     modelsSuggested: [
       'google/gemini-1.5-flash',  // Cheapest

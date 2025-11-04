@@ -106,14 +106,14 @@ async function getPlanLimits(shop) {
   try {
     const sub = await Subscription.findOne({ shop }).lean().exec();
     
-    if (!sub) return { limit: 100, plan: 'starter' };
+    if (!sub) return { limit: 70, plan: 'starter' };
     
     const planLimits = {
-      'starter': 100,
-      'professional': 350,
-      'growth': 1000,
-      'growth_extra': 2500,
-      'enterprise': 6000
+      'starter': 70,
+      'professional': 200,
+      'growth': 450,
+      'growth_extra': 750,
+      'enterprise': 1200
     };
     
     const limit = planLimits[sub.plan?.toLowerCase()] || 100;
@@ -121,7 +121,7 @@ async function getPlanLimits(shop) {
     return result;
   } catch (e) {
     console.error('[APP_PROXY] Error getting plan limits:', e.message);
-    return { limit: 100, plan: 'starter' };
+    return { limit: 70, plan: 'starter' };
   }
 }
 

@@ -171,7 +171,7 @@ async function getPlanLimits(shop) {
     };
   } catch (e) {
     console.error('[SITEMAP] Error getting plan limits:', e.message);
-    return { limit: 100, collections: 0, plan: 'starter' };
+    return { limit: 70, collections: 0, plan: 'starter' };
   }
 }
 
