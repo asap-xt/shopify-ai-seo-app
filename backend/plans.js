@@ -8,7 +8,7 @@ export const PLANS = {
     name: "Starter",
     priceUsd: 9.99,
     queryLimit: 50,
-    productLimit: 100,
+    productLimit: 70,
     collectionLimit: 0, // No collections
     languageLimit: 1, // Only default language
     providersAllowed: ["deepseek", "llama"],
@@ -18,7 +18,7 @@ export const PLANS = {
     name: "Professional",
     priceUsd: 15.99,
     queryLimit: 600,
-    productLimit: 250,
+    productLimit: 200,
     collectionLimit: 20,
     languageLimit: 2, // Max 2 languages
     providersAllowed: ["openai", "llama", "deepseek"],
@@ -28,7 +28,7 @@ export const PLANS = {
     name: "Professional Plus",
     priceUsd: 19.99,
     queryLimit: 600,
-    productLimit: 250,
+    productLimit: 200,
     collectionLimit: 20,
     languageLimit: 2, // Max 2 languages
     providersAllowed: ["openai", "llama", "deepseek"],
@@ -39,7 +39,7 @@ export const PLANS = {
     name: "Growth",
     priceUsd: 29.99,
     queryLimit: 1500,
-    productLimit: 700,
+    productLimit: 450,
     collectionLimit: 40,
     languageLimit: 3, // Max 3 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
@@ -49,7 +49,7 @@ export const PLANS = {
     name: "Growth Plus",
     priceUsd: 35.99,
     queryLimit: 1500,
-    productLimit: 700,
+    productLimit: 450,
     collectionLimit: 40,
     languageLimit: 3, // Max 3 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,3),
@@ -60,7 +60,7 @@ export const PLANS = {
     name: "Growth Extra",
     priceUsd: 79.99,
     queryLimit: 4000,
-    productLimit: 1000,
+    productLimit: 750,
     collectionLimit: 999, // Unlimited (practical limit)
     languageLimit: 6, // Max 6 languages
     providersAllowed: ["claude", "openai", "gemini", "llama", "deepseek"].slice(0,4),
@@ -71,7 +71,7 @@ export const PLANS = {
     name: "Enterprise",
     priceUsd: 139.99,
     queryLimit: 10000,
-    productLimit: 2500,
+    productLimit: 1200,
     collectionLimit: 999, // Unlimited (practical limit)
     languageLimit: 10, // Max 10 languages
     providersAllowed: ["claude", "openai", "gemini", "deepseek", "llama"],
