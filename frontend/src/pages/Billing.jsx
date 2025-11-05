@@ -235,6 +235,13 @@ export default function Billing({ shop }) {
                         )}
                       </InlineStack>
                       
+                      {/* Plan Badge */}
+                      {plan.badge && (
+                        <Text variant="bodySm" tone="subdued" fontWeight="medium">
+                          {plan.badge}
+                        </Text>
+                      )}
+                      
                       <Text variant="heading2xl">${plan.price}</Text>
                       <Text variant="bodySm" tone="subdued">per month</Text>
                       

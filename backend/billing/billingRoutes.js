@@ -25,6 +25,20 @@ import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 
+// Helper: Get badge text for a plan
+function getPlanBadge(planKey) {
+  const badges = {
+    'starter': 'Best for: Boutique stores & new brands',
+    'professional': 'Best for: Growing stores ready to scale',
+    'professional plus': 'Best for: Stores unlocking full AI discovery',
+    'growth': 'RECOMMENDED - Best value for expansion',
+    'growth plus': 'Best for: Advanced AI-driven commerce',
+    'growth extra': 'Best for: Large catalogs & multilingual stores',
+    'enterprise': 'Best for: Global AI-powered reach'
+  };
+  return badges[planKey] || null;
+}
+
 // Helper: Get features for a plan
 function getPlanFeatures(planKey) {
   const features = [];
@@ -202,6 +216,7 @@ router.get('/info', verifyRequest, async (req, res) => {
             providersAllowed: PLANS[key].providersAllowed?.length || 0,
             languageLimit: PLANS[key].languageLimit || 1,
             includedTokens: included.tokens || 0,
+            badge: getPlanBadge(key),
             features: getPlanFeatures(key)
           };
         })
