@@ -1934,9 +1934,6 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
             { $set: updateFields },
             { new: true, runValidators: true }
           );
-          
-          console.log('[SEO-COLLECTIONS] Updated collection:', numericId, 
-            'seoStatus.optimized:', updatedCollection?.seoStatus?.optimized);
         } else {
           // Create new collection record
           const newCollection = {
