@@ -16,7 +16,7 @@ export const PLANS = {
   },
   professional: {
     name: "Professional",
-    priceUsd: 15.99,
+    priceUsd: 19.99,
     queryLimit: 600,
     productLimit: 200,
     collectionLimit: 20,
@@ -26,7 +26,7 @@ export const PLANS = {
   },
   "professional plus": {
     name: "Professional Plus",
-    priceUsd: 19.99,
+    priceUsd: 25.99,
     queryLimit: 600,
     productLimit: 200,
     collectionLimit: 20,
@@ -37,7 +37,7 @@ export const PLANS = {
   },
   growth: {
     name: "Growth",
-    priceUsd: 29.99,
+    priceUsd: 35.99,
     queryLimit: 1500,
     productLimit: 450,
     collectionLimit: 40,
@@ -47,7 +47,7 @@ export const PLANS = {
   },
   "growth plus": {
     name: "Growth Plus",
-    priceUsd: 35.99,
+    priceUsd: 45.99,
     queryLimit: 1500,
     productLimit: 450,
     collectionLimit: 40,
@@ -58,7 +58,7 @@ export const PLANS = {
   },
   "growth extra": {
     name: "Growth Extra",
-    priceUsd: 79.99,
+    priceUsd: 89.99,
     queryLimit: 4000,
     productLimit: 750,
     collectionLimit: 999, // Unlimited (practical limit)
@@ -69,7 +69,7 @@ export const PLANS = {
   },
   enterprise: {
     name: "Enterprise",
-    priceUsd: 139.99,
+    priceUsd: 159.99,
     queryLimit: 10000,
     productLimit: 1200,
     collectionLimit: 999, // Unlimited (practical limit)
