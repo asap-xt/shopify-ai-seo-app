@@ -1929,11 +1929,14 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
           }
           
           // Update the collection
-          await Collection.findOneAndUpdate(
+          const updatedCollection = await Collection.findOneAndUpdate(
             { shop, collectionId: numericId },
             { $set: updateFields },
             { new: true, runValidators: true }
           );
+          
+          console.log('[SEO-COLLECTIONS] Updated collection:', numericId, 
+            'seoStatus.optimized:', updatedCollection?.seoStatus?.optimized);
         } else {
           // Create new collection record
           const newCollection = {
