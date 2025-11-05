@@ -358,17 +358,11 @@ async function generateSitemapCore(shop, options = {}) {
       cursor = products.edges[products.edges.length - 1]?.cursor;
     }
     
-    // Generate XML
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
-    xml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"';
+    // Track if we have any AI-enhanced products (to decide if xmlns:ai is needed)
+    let hasAnyAIProducts = false;
     
-    // Add AI namespace only if AI sitemap is enabled
-    if (isAISitemapEnabled) {
-      xml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
-    }
-    
-    xml += '>\n';
+    // Build product/collection entries first (we'll add XML header after checking for AI products)
+    let xml = '';
     
     // Add products
     for (const edge of allProducts) {
@@ -400,6 +394,7 @@ async function generateSitemapCore(shop, options = {}) {
       
       // Add AI metadata structure if we have SEO data OR if AI sitemap is enabled
       if (hasSeoAI || isAISitemapEnabled) {
+        hasAnyAIProducts = true; // Track that we have at least one AI product
         xml += '    <ai:product>\n';
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
         xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
@@ -576,6 +571,7 @@ async function generateSitemapCore(shop, options = {}) {
           xml += '    <priority>0.8</priority>\n';
           
           // Always add AI metadata for multilingual URLs (to be consistent with main product URL)
+          hasAnyAIProducts = true; // Track that we have at least one AI product
           xml += '    <ai:product>\n';
           xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
           xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
@@ -692,7 +688,22 @@ async function generateSitemapCore(shop, options = {}) {
       // Could not fetch pages
     }
     
-    xml += '</urlset>\n';
+    // Now build the final XML with proper header (including xmlns:ai if needed)
+    let finalXml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    finalXml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
+    finalXml += '        xmlns:xhtml="http://www.w3.org/1999/xhtml"';
+    
+    // Add AI namespace if we have AI-enhanced products OR if AI sitemap is explicitly enabled
+    if (hasAnyAIProducts || isAISitemapEnabled) {
+      finalXml += '\n        xmlns:ai="http://www.aidata.org/schemas/sitemap/1.0"';
+    }
+    
+    finalXml += '>\n';
+    finalXml += xml; // Add all product/collection/page entries
+    finalXml += '</urlset>\n';
+    
+    // Replace xml with finalXml
+    xml = finalXml;
     
     // === FINALIZE TOKEN USAGE ===
     if (reservationId && totalAITokens > 0) {
