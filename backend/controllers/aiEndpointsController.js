@@ -576,7 +576,7 @@ router.get('/ai/welcome', async (req, res) => {
         <li>All endpoints support caching with ETags</li>
         <li>Rate limits: 60 requests per minute</li>
         <li>Authentication: Public access for approved AI bots</li>
-        <li>Data freshness: Updated every ${effectivePlan === 'enterprise' ? '2 hours' : effectivePlan === 'growth_extra' ? '12 hours' : '24 hours'}</li>
+        <li>Data freshness: Updated every ${planKey === 'enterprise' ? '2 hours' : planKey === 'growth_extra' ? '12 hours' : '24 hours'}</li>
       </ul>
     </div>
     
