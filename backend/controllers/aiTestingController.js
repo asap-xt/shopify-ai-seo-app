@@ -582,8 +582,13 @@ Format:
         
         // Parse AI response (handle markdown code blocks and various formats)
         try {
+          // Extract content from response object if needed
+          let responseText = typeof aiResponse === 'object' && aiResponse.content 
+            ? aiResponse.content 
+            : aiResponse;
+          
           // Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
-          let cleanResponse = aiResponse.trim();
+          let cleanResponse = responseText.trim();
           
           // Method 1: Remove markdown code blocks
           if (cleanResponse.startsWith('```')) {
@@ -606,16 +611,20 @@ Format:
         } catch (parseError) {
           console.error('[AI-VALIDATION] Parse error for', key, ':', parseError.message);
           console.error('[AI-VALIDATION] Raw response:', aiResponse);
-          console.error('[AI-VALIDATION] Response length:', aiResponse.length);
           console.error('[AI-VALIDATION] Response type:', typeof aiResponse);
           
+          // Extract content from response object if needed
+          let responseText = typeof aiResponse === 'object' && aiResponse.content 
+            ? aiResponse.content 
+            : (typeof aiResponse === 'string' ? aiResponse : JSON.stringify(aiResponse));
+          
           // Try to extract feedback from plain text response
-          const feedbackMatch = aiResponse.match(/feedback["\s:]+([^"}\n]+)/i);
-          const ratingMatch = aiResponse.match(/rating["\s:]+([a-z]+)/i);
+          const feedbackMatch = responseText.match(/feedback["\s:]+([^"}\n]+)/i);
+          const ratingMatch = responseText.match(/rating["\s:]+([a-z]+)/i);
           
           results[key] = {
             rating: ratingMatch ? ratingMatch[1] : 'good',
-            feedback: feedbackMatch ? feedbackMatch[1].trim() : aiResponse.substring(0, 100),
+            feedback: feedbackMatch ? feedbackMatch[1].trim() : responseText.substring(0, 100),
             suggestions: null
           };
         }
