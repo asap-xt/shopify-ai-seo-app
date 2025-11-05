@@ -413,7 +413,7 @@ ${JSON.stringify(allSchemas, null, 2)}
 
                           <Box background="bg-surface-secondary" padding="200" borderRadius="200">
                             <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-{`{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
+{`{% comment %} Organization & WebSite Schema - indexAIze: Unlock AI Search {% endcomment %}
 ${schemaScript}
 
 {% comment %} Product Schema - Dynamic {% endcomment %}
@@ -434,7 +434,7 @@ ${schemaScript}
                           <InlineStack align="end">
                             <Button 
                               onClick={() => {
-                                const code = `{% comment %} Organization & WebSite Schema - AI SEO App {% endcomment %}
+                                const code = `{% comment %} Organization & WebSite Schema - indexAIze: Unlock AI Search {% endcomment %}
 ${schemaScript}
 
 {% comment %} Product Schema - Dynamic {% endcomment %}
