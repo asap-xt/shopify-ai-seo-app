@@ -230,7 +230,7 @@ export default function Billing({ shop }) {
                     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '400px', gap: '12px' }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
-                        {subscription?.plan === plan.key && (
+                        {subscription?.plan === plan.key && subscription?.status === 'active' && (
                           <Badge tone="success">Current</Badge>
                         )}
                       </InlineStack>
@@ -269,7 +269,7 @@ export default function Billing({ shop }) {
                       {/* Spacer to push button to bottom */}
                       <div style={{ flexGrow: 1 }} />
                       
-                      {subscription?.plan === plan.key ? (
+                      {subscription?.plan === plan.key && subscription?.status === 'active' ? (
                         <Box 
                           background="bg-surface-secondary" 
                           padding="300" 
