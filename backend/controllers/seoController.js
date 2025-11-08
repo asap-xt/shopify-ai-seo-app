@@ -94,7 +94,10 @@ export async function getPlansMeForShop(app, shop) {
       active: true,
       ends_at: trialEnd,
       days_left: Math.ceil((trialEnd - now) / (24 * 60 * 60 * 1000))
-    } : null
+    } : null,
+    
+    // Subscription status (for billing flow redirect)
+    subscriptionStatus: subscription.status || 'pending'
   };
 }
 

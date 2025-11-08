@@ -748,6 +748,7 @@ export default function App() {
               product_limit
               providersAllowed
               modelsSuggested
+              subscriptionStatus
               trial {
                 active
                 ends_at
@@ -783,6 +784,16 @@ export default function App() {
         const pm = plansData?.data?.plansMe;
         if (pm) {
           setPlan(pm);
+          
+          // CHECK: If subscription is pending, redirect to billing page
+          if (pm.subscriptionStatus === 'pending') {
+            console.log('[APP] Subscription is pending, redirecting to billing...');
+            // Use client-side navigation for embedded apps
+            const currentUrl = new URL(window.location.href);
+            currentUrl.pathname = currentUrl.pathname.replace(/\/$/, '') + '/billing';
+            window.history.pushState({}, '', currentUrl);
+            window.location.reload();
+          }
         }
         
       } catch (error) {

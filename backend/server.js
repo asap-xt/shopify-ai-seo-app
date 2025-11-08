@@ -560,6 +560,7 @@
         modelsSuggested: [String!]
         autosyncCron: String
         trial: TrialInfo
+        subscriptionStatus: String
       }
       type TrialInfo {
         active: Boolean!
