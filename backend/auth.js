@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import fetch from 'node-fetch';
 import express from 'express';
 import Shop from './db/Shop.js';
+import Subscription from './db/Subscription.js';
 
 const router = express.Router();
 
@@ -318,15 +319,38 @@ router.get('/callback', async (req, res) => {
     // 8) Clear state cookie
     res.clearCookie('shopify_oauth_state');
 
-    // 9) Redirect to embedded app
+    // 9) Check for active subscription
+    console.log('[AUTH] Checking for active subscription...');
+    const subscription = await Subscription.findOne({ shop }).lean();
+    
+    const hasActiveSubscription = subscription && 
+      subscription.status === 'ACTIVE' && 
+      !subscription.cancelledAt;
+    
+    console.log('[AUTH] Subscription status:', {
+      exists: !!subscription,
+      status: subscription?.status,
+      plan: subscription?.plan,
+      hasActive: hasActiveSubscription
+    });
+
+    // 10) Redirect to appropriate page
     const finalHost = host
       ? host.toString()
       : base64UrlEncode(`${shop}/admin`);
     
     const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, '');
-    const embeddedUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/`;
     
-    console.log('[AUTH] OAuth completed successfully, redirecting to:', embeddedUrl);
+    // If no active subscription, redirect to billing page to select plan
+    if (!hasActiveSubscription) {
+      const billingUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/billing`;
+      console.log('[AUTH] No active subscription, redirecting to billing:', billingUrl);
+      return res.redirect(302, billingUrl);
+    }
+    
+    // Otherwise, redirect to dashboard
+    const embeddedUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/`;
+    console.log('[AUTH] Active subscription found, redirecting to dashboard:', embeddedUrl);
     return res.redirect(302, embeddedUrl);
     
   } catch (error) {
