@@ -35,10 +35,12 @@ if (!hostName) {
 // Create session storage
 let sessionStorage;
 if (process.env.MONGODB_URI) {
-  // Use MongoDB for session storage in production
+  // IMPORTANT: MongoDBSessionStorage will use the EXISTING mongoose connection
+  // Second parameter is DATABASE NAME - must match mongoose connection!
+  // Railway MongoDB URI doesn't specify DB, so it uses 'test' by default
   sessionStorage = new MongoDBSessionStorage(
-    process.env.MONGODB_URI,
-    'shopify_sessions' // database name
+    process.env.MONGODB_URI
+    // NO database name - will use default from URI (Railway default is 'test')
   );
   console.log('✅ Using MongoDB session storage');
 } else {
