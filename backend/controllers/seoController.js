@@ -24,19 +24,20 @@ export async function getPlansMeForShop(app, shop) {
   // 1. First check Subscription (this is the truth)
   let subscription = await Subscription.findOne({ shop });
   
-  // 2. If no subscription, create trial
+  // 2. If no subscription, create PENDING subscription (requires plan selection)
   if (!subscription) {
     const shopRecord = await Shop.findOne({ shop });
     if (!shopRecord) {
       throw new Error('Shop not found');
     }
     
-    // Create trial subscription
+    // Create PENDING subscription - merchant must select plan in billing page
     subscription = await Subscription.create({
       shop,
-      plan: 'starter', // trial plan - start with Starter
+      plan: 'starter', // default plan (will be updated after selection)
+      status: 'pending', // NOT active until merchant selects plan
       queryLimit: 50,
-      productLimit: 50,
+      productLimit: 70,
       trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
     });
   }

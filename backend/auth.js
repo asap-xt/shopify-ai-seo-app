@@ -324,7 +324,7 @@ router.get('/callback', async (req, res) => {
     const subscription = await Subscription.findOne({ shop }).lean();
     
     const hasActiveSubscription = subscription && 
-      subscription.status === 'ACTIVE' && 
+      subscription.status === 'active' && 
       !subscription.cancelledAt;
     
     console.log('[AUTH] Subscription status:', {
