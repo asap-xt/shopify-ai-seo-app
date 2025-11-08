@@ -10,6 +10,7 @@ import { useEffect, useState, useMemo } from 'react';
 // import { useAppBridge } from './providers/AppBridgeProvider.jsx'; // Removed - using App Bridge v4
 import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
+import { trackPageView, initGA4, initFBPixel } from './utils/analytics.js';
 
 import AppHeader from './components/AppHeader.jsx';
 const Dashboard = React.lazy(() => import('./pages/Dashboard.jsx'));
@@ -62,6 +63,9 @@ function useRoute() {
       const normalized = normalizePath(window.location.pathname);
       console.log('[useRoute] Location changed to:', normalized);
       setPath(normalized);
+      
+      // Track page view in GA4
+      trackPageView(normalized);
     };
     
     // Listen for popstate (browser back/forward)
@@ -82,6 +86,13 @@ function useRoute() {
       clearInterval(checkPath);
     };
   }, []);
+  
+  // Track initial page view
+  useEffect(() => {
+    initGA4();
+    initFBPixel();
+    trackPageView(path);
+  }, []); // Only on mount
   
   return { path };
 }
