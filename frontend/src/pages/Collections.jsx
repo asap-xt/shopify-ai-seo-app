@@ -1034,7 +1034,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     console.log(`[COLLECTIONS] Rendering collection "${collection.title}":`, {
       optimizedLanguages,
       availableLanguages,
-      hasSeoData: collection.hasSeoData
+      hasSeoData: collection.hasSeoData,
+      aiEnhanced: collection.aiEnhanced  // ← DEBUG: Check if aiEnhanced is present
     });
     
     const media = (
