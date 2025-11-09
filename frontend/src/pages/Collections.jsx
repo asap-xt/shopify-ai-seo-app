@@ -36,7 +36,6 @@ const qs = (k, d = '') => {
 
 export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const shop = shopProp || qs('shop', '');
-  console.log('[COLLECTIONS] Component initialized with shop:', shop, 'shopProp:', shopProp);
   // Единен session-aware fetch за компонента
   const api = useMemo(() => makeSessionFetch(), []);
   // Collection list state
@@ -223,12 +222,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   // Load shop languages
   useEffect(() => {
     if (!shop) return;
-    console.log('[COLLECTIONS] Loading languages for shop:', shop);
     api(`/api/languages/shop/${shop}?shop=${shop}`)
       .then((data) => {
-        console.log('[COLLECTIONS] Languages API data:', data);
         const langs = data?.shopLanguages || ['en'];
-        console.log('[COLLECTIONS] Extracted languages:', langs);
         setAvailableLanguages(langs);
         setSelectedLanguages([]);
       })
@@ -243,14 +239,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const handleSyncCollections = async () => {
     try {
       setSyncing(true);
-      console.log('[COLLECTIONS] Starting collections sync...');
       
       const response = await api(`/api/collections/sync?shop=${shop}`, {
         method: 'POST'
       });
       
       if (response?.success) {
-        console.log('[COLLECTIONS] Sync successful:', response);
         setToast('Collections synced successfully!');
         
         // Reload collections after sync
@@ -271,10 +265,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const loadCollections = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('[COLLECTIONS] Shop value:', shop);
-      console.log('[COLLECTIONS] Shop prop:', shopProp);
-      console.log('[COLLECTIONS] URL search params:', window.location.search);
-      
       const params = new URLSearchParams({
         shop,
         ...(searchValue && { search: searchValue }),
@@ -286,17 +276,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       // Use GraphQL endpoint (from seoController.js, NOT collectionsController.js)
       const endpoint = `/collections/list-graphql?${params}`;
       
-      console.log('[COLLECTIONS] Using GraphQL endpoint:', endpoint);
-      
       // URL вече съдържа shop → не подаваме {shop}, за да не дублираме
       const data = await api(endpoint);
-      console.log('[COLLECTIONS] API Response data:', data);
-      
-      // Debug: log first collection's optimizedLanguages
-      if (data?.collections?.length > 0) {
-        console.log('[COLLECTIONS] First collection optimizedLanguages:', data.collections[0].optimizedLanguages);
-        console.log('[COLLECTIONS] First collection full data:', data.collections[0]);
-      }
       
       // Apply client-side filtering for search
       let filteredCollections = data.collections || [];
@@ -430,8 +411,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   // AI Enhancement function - same logic as Products
   const handleStartEnhancement = async () => {
-    console.log('[AI-ENHANCE] Starting enhancement...');
-    
     // Get selected collections with Basic SEO
     const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
     const selectedWithSEO = selectedCollections.filter(c => 
@@ -442,8 +421,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setToast('Please select collections with Basic SEO optimization');
       return;
     }
-
-    console.log('[AI-ENHANCE] Collections to enhance:', selectedWithSEO.length);
 
     // Start AI Enhancement with progress tracking
     setShowAIEnhanceModal(true);
@@ -471,12 +448,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         const languagesToEnhance = collection.optimizedLanguages || [];
         
         if (languagesToEnhance.length === 0) {
-          console.log(`[AI-ENHANCE] No languages for ${collection.title}, skipping`);
           results.skipped++;
           continue;
         }
-
-        console.log(`[AI-ENHANCE] Enhancing ${collection.title} for languages:`, languagesToEnhance);
         
         // Call AI Enhancement endpoint
         const enhanceData = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
@@ -490,14 +464,11 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         
         if (enhanceData && enhanceData.ok) {
           results.successful++;
-          console.log(`[AI-ENHANCE] Success for ${collection.title}`);
         } else {
           results.failed++;
-          console.log(`[AI-ENHANCE] Failed for ${collection.title}`);
         }
         
       } catch (error) {
-        console.error('[AI-ENHANCE] Error:', error);
         
         // Check if it's a 403 error (plan restriction - Collections require Professional+)
         if (error.status === 403) {
@@ -567,123 +538,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       c.optimizedLanguages?.length > 0
     );
     
-    // Debug version of AI enhancement with detailed logging
-    const handleAIActionDebug = async (collection) => {
-      console.log('=== AI_ENHANCE DEBUG START ===');
-      console.log('1. Collection:', collection);
-      console.log('2. Selected collections:', selectedCollections);
-      console.log('3. Shop:', shop);
-      
-      try {
-        // Check eligibility
-        console.log('4. Checking eligibility...');
-        const eligibility = await api('/ai-enhance/check-eligibility', {
-          method: 'POST',
-          shop,
-          body: { shop },
-        });
-        console.log('5. Eligibility response:', eligibility);
-        
-        if (!eligibility.eligible) {
-          console.log('6. Not eligible - showing error');
-          setToast('AI Enhanced add-ons not available for your plan');
-          return;
-        }
-
-        console.log('7. Eligible! Proceeding...');
-        
-        // Process selected collections or single collection
-        const collectionsToProcess = selectedCollections.length > 0 
-          ? collections.filter(c => selectedCollections.includes(c.id))
-          : [collection];
-        
-        console.log('8. Collections to process:', collectionsToProcess);
-        
-        if (collectionsToProcess.length === 0) {
-          console.log('9. No collections to process - showing info');
-          setToast('Please select collections to enhance');
-          return;
-        }
-
-        setIsProcessing(true);
-        const results = { successful: 0, failed: 0, skipped: 0 };
-        const errors = [];
-
-        // Process each collection
-        for (const col of collectionsToProcess) {
-          console.log(`10. Processing collection: ${col.title} (${col.id})`);
-          
-          try {
-            // Get selected languages from collection
-            const languagesToEnhance = col.optimizedLanguages || ['en'];
-            console.log(`11. Languages to enhance for ${col.title}:`, languagesToEnhance);
-            
-            // Make the API call with correct endpoint format
-            console.log(`12. Collection ID: ${col.id}`);
-            console.log(`12.1. Encoded ID: ${encodeURIComponent(col.id)}`);
-            const endpoint = `/ai-enhance/collection/${encodeURIComponent(col.id)}`;
-            console.log(`12.2. Calling endpoint: ${endpoint}`);
-            console.log('13. Request body:', { shop, languages: languagesToEnhance });
-            
-            const enhanceData = await api(endpoint, {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                languages: languagesToEnhance,
-              },
-            });
-            
-            console.log(`14. Enhance response for ${col.title}:`, enhanceData);
-            
-            if (enhanceData.ok) {  // Променено от .success на .ok
-              results.successful++;
-              console.log(`15. Success for ${col.title}`);
-            } else {
-              results.failed++;
-              errors.push(`${col.title}: ${enhanceData.error || 'Unknown error'}`);
-              console.log(`16. Failed for ${col.title}:`, enhanceData.error);
-            }
-          } catch (error) {
-            console.error(`17. Error enhancing ${col.title}:`, error);
-            results.failed++;
-            errors.push(`${col.title}: ${error.message}`);
-          }
-        }
-
-        setIsProcessing(false);
-        console.log('18. Final results:', results);
-        console.log('19. Errors:', errors);
-
-        // Show results modal
-        const message = `AI Enhancement Complete\n\nSuccessful: ${results.successful}\nFailed: ${results.failed}\nSkipped: ${results.skipped}${
-          errors.length > 0 ? '\n\nErrors:\n' + errors.join('\n') : ''
-        }`;
-        
-        console.log('20. Showing modal with message:', message);
-        alert(message);
-
-        // Reload collections if any were successful
-        if (results.successful > 0) {
-          console.log('21. Reloading collections...');
-          await loadCollections();
-        }
-        
-      } catch (error) {
-        console.error('22. AI enhance error:', error);
-        setIsProcessing(false);
-        setToast(error.message || 'Enhancement failed');
-      } finally {
-        console.log('=== AI_ENHANCE DEBUG END ===');
-      }
-    };
+    // This debug function is not used - using handleStartEnhancement instead
 
     
     const handleClose = () => {
       // Save results BEFORE resetting state
       const results = aiEnhanceProgress.results;
-      
-      console.log('[COLLECTIONS-CLOSE] handleClose called, results:', results);
       
       setShowAIEnhanceModal(false);
       setAIEnhanceProgress({
@@ -696,16 +556,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       
       // Refresh collections list if any were successfully enhanced
       if (results && results.successful > 0) {
-        console.log('[COLLECTIONS-CLOSE] Scheduling refresh in 1.5s...');
         // Backend already invalidated Redis cache (invalidateShop)
         // Use setTimeout to avoid async race condition with modal close
         setTimeout(() => {
-          console.log('[COLLECTIONS-CLOSE] Executing refresh now!');
           setCollections([]); // Clear current collections to force re-render
           loadCollections(); // Cache already invalidated by backend
         }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
-      } else {
-        console.log('[COLLECTIONS-CLOSE] Skipping refresh, no successful results');
       }
     };
     
@@ -881,10 +737,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         setCurrentCollection(collection.title);
         
         try {
-          console.log('Applying SEO for collection:', collectionId);
-          console.log('Result data:', result.data);
-          console.log('Results array:', result.data?.results);
-          
           // Проверка на структурата
           if (!result.data?.results || !Array.isArray(result.data.results)) {
             throw new Error('Invalid results structure');
@@ -940,9 +792,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   
   // Delete SEO for a single language
   const deleteSeoForLanguage = async (collectionId, language) => {
-    console.log('[DELETE-SEO] ===== DELETE REQUEST START =====');
-    console.log('[DELETE-SEO] Parameters:', { collectionId, language, shop });
-    
     setIsDeleting(true);
     setDeleteError('');
     try {
@@ -951,8 +800,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         shop,
         body: { shop, collectionId, language },
       });
-      
-      console.log('[DELETE-SEO] Response received:', response);
       
       setToast(`Deleted ${language.toUpperCase()} optimization successfully`);
       setShowDeleteModal(false);
@@ -965,18 +812,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       console.error('[DELETE-SEO] Error:', err);
       setToast(`Delete error: ${err.message}`);
     } finally {
-      console.log('[DELETE-SEO] ===== DELETE REQUEST END =====');
       setIsDeleting(false);
     }
   };
   
   // Bulk delete SEO for selected collections and languages
   const deleteSeoBulk = async (deleteLanguages = []) => {
-    console.log('[DELETE-SEO-BULK] ===== BULK DELETE START =====');
-    console.log('[DELETE-SEO-BULK] Languages to delete:', deleteLanguages);
-    console.log('[DELETE-SEO-BULK] Selected items:', selectedItems);
-    console.log('[DELETE-SEO-BULK] Select all pages:', selectAllPages);
-    
     setIsDeletingBulk(true);
     setDeleteError('');
     try {
@@ -991,13 +832,11 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       for (const collection of collectionsToProcess) {
         for (const language of deleteLanguages) {
           try {
-            console.log(`[DELETE-SEO-BULK] Deleting ${language} for ${collection.title} (${collection.id})`);
             const response = await api('/collections/delete-seo', {
               method: 'DELETE',
               shop,
               body: { shop, collectionId: collection.id, language },
             });
-            console.log(`[DELETE-SEO-BULK] Success for ${collection.title} - ${language}:`, response);
           } catch (err) {
             console.error(`[DELETE-SEO-BULK] Failed to delete ${language} for ${collection.title}:`, err);
             errors.push({ id: collection.id, title: collection.title, message: err.message });
@@ -1023,7 +862,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       console.error('[DELETE-SEO-BULK] Error:', err);
       setToast(`Delete error: ${err.message}`);
     } finally {
-      console.log('[DELETE-SEO-BULK] ===== BULK DELETE END =====');
       setIsDeletingBulk(false);
       setPendingDeleteLanguages([]);
       setDeleteLanguages([]);
@@ -1036,13 +874,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     const seoData = results[collection.id]?.data || appliedSeoData[collection.id];
     const optimizedLanguages = collection.optimizedLanguages || [];
     
-    // Debug: log optimizedLanguages for each collection
-    console.log(`[COLLECTIONS] Rendering collection "${collection.title}":`, {
-      optimizedLanguages,
-      availableLanguages,
-      hasSeoData: collection.hasSeoData,
-      aiEnhanced: collection.aiEnhanced  // ← DEBUG: Check if aiEnhanced is present
-    });
     
     const media = (
       <Box width="40px" height="40px" background="surface-neutral" borderRadius="200" />
@@ -1053,14 +884,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         id={collection.id}
         media={media}
         accessibilityLabel={`View details for ${collection.title}`}
-        onClick={(e) => {
-          console.log('[Collections-ResourceItem] ===== CLICK ON RESOURCE ITEM =====');
-          console.log('[Collections-ResourceItem] e.target:', e.target);
-          console.log('[Collections-ResourceItem] e.target.tagName:', e.target.tagName);
-          console.log('[Collections-ResourceItem] e.target.closest("input"):', e.target.closest('input'));
-          console.log('[Collections-ResourceItem] e.target.closest("a"):', e.target.closest('a'));
-          console.log('[Collections-ResourceItem] Event bubbling up...');
-        }}
       >
         <InlineStack gap="400" align="center" blockAlign="center" wrap={false}>
           <Box style={{ flex: '1 1 30%', minWidth: '200px' }}>
@@ -1085,15 +908,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                       {lang.toUpperCase()}
                     </Badge>
                   ))}
-                  {(() => {
-                    // Debug: log aiEnhanced flag
-                    if (collection.aiEnhanced) {
-                      console.log(`[COLLECTIONS-BADGE] Collection "${collection.title}" has aiEnhanced:`, collection.aiEnhanced);
-                    }
-                    return collection.aiEnhanced && (
-                      <Badge tone="info" size="small">AI✨</Badge>
-                    );
-                  })()}
+                  {collection.aiEnhanced && (
+                    <Badge tone="info" size="small">AI✨</Badge>
+                  )}
                 </>
               ) : (
                 <Badge tone="subdued">No AI Search Optimisation</Badge>

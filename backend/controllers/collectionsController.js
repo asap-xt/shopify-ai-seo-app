@@ -118,7 +118,6 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
 router.get('/list-graphql', async (req, res) => {
   try {
     const shop = req.auth.shop;
-    console.log(`[COLLECTIONS-API] ===== ENDPOINT CALLED for ${shop} =====`);
     
     // Generate unique cache key
     const cacheKey = `collections:list:all`;

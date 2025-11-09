@@ -501,16 +501,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         }));
         
         try {
-          // REMOVED: check-eligibility - token checking happens in enhancement endpoint
-          
           const productGid = product.gid || toProductGID(product.id);
-          console.log(`[AI-ENHANCE] Product #${i+1}:`, {
-            title: product.title,
-            id: product.id,
-            gid: product.gid,
-            calculatedGid: productGid,
-            languages: product.optimizationSummary?.optimizedLanguages
-          });
           
           if (!productGid) {
             console.error('[AI-ENHANCE] Missing product GID, skipping:', product);
@@ -563,21 +554,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             results.failed++;
           }
         } catch (error) {
-          console.error('❌ [AI-ENHANCE] Enhancement error:', error);
-          console.error('🔍 [AI-ENHANCE DEBUG] Error type:', typeof error);
-          console.error('🔍 [AI-ENHANCE DEBUG] Error.status:', error.status, 'Type:', typeof error.status);
-          console.error('🔍 [AI-ENHANCE DEBUG] Error.requiresPurchase:', error.requiresPurchase);
-          console.error('🔍 [AI-ENHANCE DEBUG] Error.trialRestriction:', error.trialRestriction);
-          console.error('🔍 [AI-ENHANCE DEBUG] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-          console.error('🔍 [AI-ENHANCE DEBUG] Error details:', {
-            status: error.status,
-            trialRestriction: error.trialRestriction,
-            needsUpgrade: error.needsUpgrade,
-            requiresPurchase: error.requiresPurchase,
-            message: error.message,
-            currentPlan: error.currentPlan
-          });
-          
           // Check if it's a 403 error (plan restriction - Products require Professional+)
           if (error.status === 403) {
             // Stop processing
