@@ -118,6 +118,7 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
 router.get('/list-graphql', async (req, res) => {
   try {
     const shop = req.auth.shop;
+    console.log(`[COLLECTIONS-API] ===== ENDPOINT CALLED for ${shop} =====`);
     
     // Generate unique cache key
     const cacheKey = `collections:list:all`;
@@ -162,16 +163,21 @@ router.get('/list-graphql', async (req, res) => {
     });
     
     // Step 2: Get AI-enhanced status from MongoDB (NOT cached!)
+    console.log(`[COLLECTIONS-API] Step 2: Fetching AI-enhanced status from MongoDB...`);
     const Collection = (await import('../db/Collection.js')).default;
     const collectionIds = cachedResult.collections.map(c => {
       const id = c.id || '';
       return id.includes('gid://') ? id.split('/').pop() : id;
     }).filter(Boolean);
     
+    console.log(`[COLLECTIONS-API] Collection IDs to query:`, collectionIds);
+    
     const mongoCollections = await Collection.find({
       shop,
       collectionId: { $in: collectionIds }
     }).select('collectionId seoStatus.aiEnhanced').lean();
+    
+    console.log(`[COLLECTIONS-API] MongoDB returned ${mongoCollections.length} collections`);
     
     const aiEnhancedMap = {};
     mongoCollections.forEach(mc => {
