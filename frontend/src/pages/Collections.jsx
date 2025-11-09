@@ -1074,7 +1074,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     </Badge>
                   ))}
                   {collection.aiEnhanced && (
-                    <Badge tone="magic" size="small">AI+</Badge>
+                    <Badge tone="info" size="small">AI✨</Badge>
                   )}
                 </>
               ) : (

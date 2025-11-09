@@ -1181,7 +1181,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           </Box>
           
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
-            <InlineStack gap="100">
+            <InlineStack gap="100" wrap>
               {(() => {
                 
                 if (availableLanguages.length > 0) {
@@ -1209,16 +1209,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   ));
                 }
               })()}
+              {product.optimizationSummary?.aiEnhanced && (
+                <Badge tone="info" size="small">AI✨</Badge>
+              )}
             </InlineStack>
           </Box>
           
           <Box style={{ flex: '0 0 20%', minWidth: '120px', textAlign: 'center' }}>
-            <InlineStack gap="100" align="center">
-              <Badge tone="success">Active</Badge>
-              {product.optimizationSummary?.aiEnhanced && (
-                <Badge tone="magic">AI+</Badge>
-              )}
-            </InlineStack>
+            <Badge tone="success">Active</Badge>
           </Box>
         </InlineStack>
       </ResourceItem>
