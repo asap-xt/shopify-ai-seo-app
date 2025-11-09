@@ -34,13 +34,14 @@ if (!hostName) {
 
 // Create session storage
 let sessionStorage;
-if (process.env.MONGODB_URI) {
-  // IMPORTANT: MongoDBSessionStorage will use the EXISTING mongoose connection
-  // Second parameter is DATABASE NAME - must match mongoose connection!
-  // Railway MongoDB URI doesn't specify DB, so it uses 'test' by default
+
+// CRITICAL FIX: MongoDBSessionStorage causes timeout on Railway
+// Use memory storage instead (sessions are temporary for OAuth flow only)
+// MongoDB is used for permanent data (Shop, Subscription, Products, etc.)
+if (false && process.env.MONGODB_URI) {
+  // DISABLED: MongoDBSessionStorage has connection issues on Railway
   sessionStorage = new MongoDBSessionStorage(
     process.env.MONGODB_URI
-    // NO database name - will use default from URI (Railway default is 'test')
   );
   console.log('✅ Using MongoDB session storage');
 } else {
