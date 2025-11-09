@@ -683,6 +683,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       // Save results BEFORE resetting state
       const results = aiEnhanceProgress.results;
       
+      console.log('[COLLECTIONS-CLOSE] handleClose called, results:', results);
+      
       setShowAIEnhanceModal(false);
       setAIEnhanceProgress({
         processing: false,
@@ -694,12 +696,16 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       
       // Refresh collections list if any were successfully enhanced
       if (results && results.successful > 0) {
+        console.log('[COLLECTIONS-CLOSE] Scheduling refresh in 1.5s...');
         // Backend already invalidated Redis cache (invalidateShop)
         // Use setTimeout to avoid async race condition with modal close
         setTimeout(() => {
+          console.log('[COLLECTIONS-CLOSE] Executing refresh now!');
           setCollections([]); // Clear current collections to force re-render
           loadCollections(); // Cache already invalidated by backend
         }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
+      } else {
+        console.log('[COLLECTIONS-CLOSE] Skipping refresh, no successful results');
       }
     };
     
