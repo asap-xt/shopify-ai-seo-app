@@ -179,6 +179,7 @@ router.get('/list-graphql', async (req, res) => {
     });
     
     // Step 3: Add AI-enhanced flag to collections
+    // Force Railway redeploy - Sun Nov 9 23:02:00 EET 2025
     const collectionsWithAI = cachedResult.collections.map(collection => {
       const numericId = collection.id.includes('gid://') ? collection.id.split('/').pop() : collection.id;
       const aiEnhanced = aiEnhancedMap[numericId] || false;
