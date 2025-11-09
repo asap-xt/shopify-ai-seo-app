@@ -652,7 +652,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     };
 
   // Close AI Enhancement modal
-  const handleCloseAIEnhancement = async () => {
+  const handleCloseAIEnhancement = () => {
+    // Save results BEFORE resetting state
+    const results = aiEnhanceProgress.results;
+    
     setShowAIEnhanceModal(false);
     setAIEnhanceProgress({
       processing: false,
@@ -663,36 +666,13 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     });
     
     // Refresh product list if any products were successfully enhanced
-    if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
-      // Add delay to ensure MongoDB writes are propagated (AI-enhanced flag)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Force refresh with cache bypass to show updated AI✨ badges
-      const params = new URLSearchParams({
-        shop,
-        page: 1,
-        limit: 50,
-        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(searchValue && { search: searchValue }),
-        ...(languageFilter && { languageFilter }),
-        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
-        sortBy,
-        sortOrder,
-        _t: Date.now() // Cache buster
-      });
-      
-      const data = await api(`/api/products/list?${params}`, { 
-        shop,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      setProducts(data.products || []);
-      setPage(1);
-      setHasMore(data.pagination?.hasNext || false);
-      setTotalCount(data.pagination?.total || 0);
+    if (results && results.successful > 0) {
+      // Backend already invalidated Redis cache (invalidateShop)
+      // Use setTimeout to avoid async race condition with modal close
+      setTimeout(() => {
+        setProducts([]); // Clear current products to force re-render
+        loadProducts(1, false, Date.now()); // Cache already invalidated by backend
+      }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
     }
   };
 
