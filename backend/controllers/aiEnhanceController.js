@@ -206,6 +206,21 @@ router.post('/product', validateRequest(), async (req, res) => {
     const shop = req.shopDomain;
     const { productId, languages = [] } = req.body;
     
+    // Validate required parameters
+    if (!productId) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: productId',
+        message: 'Product ID is required for AI enhancement'
+      });
+    }
+    
+    if (!languages || languages.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter: languages',
+        message: 'At least one language is required for AI enhancement'
+      });
+    }
+    
     // Get subscription
     const subscription = await Subscription.findOne({ shop });
     const planKey = subscription?.plan || '';

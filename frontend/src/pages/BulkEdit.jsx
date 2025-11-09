@@ -503,12 +503,27 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         try {
           // REMOVED: check-eligibility - token checking happens in enhancement endpoint
           
+          const productGid = product.gid || toProductGID(product.id);
+          console.log(`[AI-ENHANCE] Product #${i+1}:`, {
+            title: product.title,
+            id: product.id,
+            gid: product.gid,
+            calculatedGid: productGid,
+            languages: product.optimizationSummary?.optimizedLanguages
+          });
+          
+          if (!productGid) {
+            console.error('[AI-ENHANCE] Missing product GID, skipping:', product);
+            results.failed++;
+            continue;
+          }
+          
           const enhanceData = await api('/ai-enhance/product', {
             method: 'POST',
             shop,
             body: {
               shop,
-              productId: product.gid || toProductGID(product.id),
+              productId: productGid,
               languages: product.optimizationSummary.optimizedLanguages,
             },
           });
@@ -647,6 +662,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       results: null
     });
     
+    // Refresh product list if any products were successfully enhanced
     if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
       // Add delay to ensure MongoDB writes are propagated (AI-enhanced flag)
       await new Promise(resolve => setTimeout(resolve, 1000));
