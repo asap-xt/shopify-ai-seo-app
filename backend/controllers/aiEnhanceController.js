@@ -1000,6 +1000,30 @@ Guidelines:
       }
     }
     
+    // === MARK COLLECTION AS AI-ENHANCED ===
+    // If any language was successfully enhanced, mark collection as aiEnhanced
+    if (results.enhanced > 0) {
+      try {
+        const Collection = (await import('../db/Collection.js')).default;
+        const numericCollectionId = collectionId.includes('gid://') 
+          ? collectionId.split('/').pop() 
+          : collectionId;
+        
+        const result = await Collection.findOneAndUpdate(
+          { shop, collectionId: numericCollectionId },
+          { 'seoStatus.aiEnhanced': true },
+          { new: true }
+        );
+        
+        if (result) {
+          console.log(`[AI-ENHANCE] ✅ Marked collection ${numericCollectionId} as AI-enhanced in MongoDB`);
+        }
+      } catch (e) {
+        console.error('[AI-ENHANCE] Failed to mark collection as AI-enhanced:', e);
+      }
+    }
+    // === END MARK AI-ENHANCED ===
+    
     // === FINALIZE TOKEN USAGE ===
     // Calculate actual tokens used from all AI requests
     if (reservationId && requiresTokens(feature) && usageDetails.length > 0) {

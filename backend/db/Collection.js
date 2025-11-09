@@ -19,6 +19,7 @@ const CollectionSchema = new mongoose.Schema({
   // SEO optimization status
   seoStatus: {
     optimized: { type: Boolean, default: false },
+    aiEnhanced: { type: Boolean, default: false }, // Flag for AI-enhanced collections
     languages: [{
       code: String,
       optimized: Boolean,

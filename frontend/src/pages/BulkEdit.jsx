@@ -1212,8 +1212,13 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             </InlineStack>
           </Box>
           
-          <Box style={{ flex: '0 0 20%', minWidth: '100px', textAlign: 'center' }}>
-            <Badge tone="success">Active</Badge>
+          <Box style={{ flex: '0 0 20%', minWidth: '120px', textAlign: 'center' }}>
+            <InlineStack gap="100" align="center">
+              <Badge tone="success">Active</Badge>
+              {product.optimizationSummary?.aiEnhanced && (
+                <Badge tone="magic">AI+</Badge>
+              )}
+            </InlineStack>
           </Box>
         </InlineStack>
       </ResourceItem>

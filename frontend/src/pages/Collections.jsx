@@ -1061,21 +1061,26 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           </Box>
           
           <Box style={{ flex: '0 0 25%', minWidth: '160px' }}>
-            {collection.hasSeoData ? (
-              <InlineStack gap="100">
-                {availableLanguages.map(lang => (
-                  <Badge
-                    key={lang}
-                    tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
-                    size="small"
-                  >
-                    {lang.toUpperCase()}
-                  </Badge>
-                ))}
-              </InlineStack>
-            ) : (
-              <Badge tone="subdued">No AI Search Optimisation</Badge>
-            )}
+            <InlineStack gap="100" wrap>
+              {collection.hasSeoData ? (
+                <>
+                  {availableLanguages.map(lang => (
+                    <Badge
+                      key={lang}
+                      tone={optimizedLanguages.includes(lang) ? 'success' : 'subdued'}
+                      size="small"
+                    >
+                      {lang.toUpperCase()}
+                    </Badge>
+                  ))}
+                  {collection.aiEnhanced && (
+                    <Badge tone="magic" size="small">AI+</Badge>
+                  )}
+                </>
+              ) : (
+                <Badge tone="subdued">No AI Search Optimisation</Badge>
+              )}
+            </InlineStack>
           </Box>
           
           <Box style={{ flex: '0 0 15%', minWidth: '120px' }}>

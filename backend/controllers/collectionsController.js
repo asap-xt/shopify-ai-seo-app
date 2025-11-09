@@ -161,6 +161,34 @@ router.get('/list-graphql', async (req, res) => {
       };
     });
     
+    // Step 2: Get AI-enhanced status from MongoDB (NOT cached!)
+    const Collection = (await import('../db/Collection.js')).default;
+    const collectionIds = cachedResult.collections.map(c => {
+      const id = c.id || '';
+      return id.includes('gid://') ? id.split('/').pop() : id;
+    }).filter(Boolean);
+    
+    const mongoCollections = await Collection.find({
+      shop,
+      collectionId: { $in: collectionIds }
+    }).select('collectionId seoStatus.aiEnhanced').lean();
+    
+    const aiEnhancedMap = {};
+    mongoCollections.forEach(mc => {
+      aiEnhancedMap[mc.collectionId] = mc.seoStatus?.aiEnhanced || false;
+    });
+    
+    // Step 3: Add AI-enhanced flag to collections
+    const collectionsWithAI = cachedResult.collections.map(collection => {
+      const numericId = collection.id.includes('gid://') ? collection.id.split('/').pop() : collection.id;
+      return {
+        ...collection,
+        aiEnhanced: aiEnhancedMap[numericId] || false
+      };
+    });
+    
+    cachedResult.collections = collectionsWithAI;
+    
     // Return cached or fresh data
     return res.json({
       ...cachedResult,

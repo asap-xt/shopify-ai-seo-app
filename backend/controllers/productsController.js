@@ -258,13 +258,36 @@ router.get('/list', async (req, res) => {
       }
     });
     
-    // Step 3: Merge cached products with fresh optimization status
+    // Step 3: Get AI-enhanced status from MongoDB
+    const productNumericIds = cachedResult.products.map(p => {
+      const id = p.id || '';
+      return id.includes('gid://') ? id.split('/').pop() : id;
+    }).filter(Boolean);
+    
+    const mongoProducts = await Product.find({
+      shop,
+      productId: { $in: productNumericIds }
+    }).select('productId seoStatus.aiEnhanced').lean();
+    
+    const aiEnhancedMap = {};
+    mongoProducts.forEach(mp => {
+      aiEnhancedMap[mp.productId] = mp.seoStatus?.aiEnhanced || false;
+    });
+    
+    // Step 4: Merge cached products with fresh optimization status + AI-enhanced flag
     let products = cachedResult.products.map(product => {
       const metafields = freshMetafields[product.id] || { edges: [] };
       const optimizationSummary = processProductMetafields(metafields);
+      
+      const numericId = product.id.includes('gid://') ? product.id.split('/').pop() : product.id;
+      const aiEnhanced = aiEnhancedMap[numericId] || false;
+      
       return {
         ...product,
-        optimizationSummary,
+        optimizationSummary: {
+          ...optimizationSummary,
+          aiEnhanced // Add AI-enhanced flag to summary
+        },
         metafields // Include fresh metafields for debugging
       };
     });
