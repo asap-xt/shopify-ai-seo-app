@@ -91,6 +91,7 @@ const productSchema = new mongoose.Schema({
 
 // Existing index
 productSchema.index({ shop: 1, shopifyProductId: 1 }, { unique: true });
+productSchema.index({ shop: 1, productId: 1 }); // For aiEnhanced queries
 productSchema.index({ shop: 1, handle: 1 });
 
 // Normalization function for backward compatibility
