@@ -181,13 +181,17 @@ router.get('/list-graphql', async (req, res) => {
     // Step 3: Add AI-enhanced flag to collections
     const collectionsWithAI = cachedResult.collections.map(collection => {
       const numericId = collection.id.includes('gid://') ? collection.id.split('/').pop() : collection.id;
+      const aiEnhanced = aiEnhancedMap[numericId] || false;
+      console.log(`[COLLECTIONS-API] Collection ${collection.title} (${numericId}): aiEnhanced=${aiEnhanced}`);
       return {
         ...collection,
-        aiEnhanced: aiEnhancedMap[numericId] || false
+        aiEnhanced
       };
     });
     
     cachedResult.collections = collectionsWithAI;
+    
+    console.log(`[COLLECTIONS-API] Returning ${collectionsWithAI.length} collections, aiEnhancedMap:`, aiEnhancedMap);
     
     // Return cached or fresh data
     return res.json({
