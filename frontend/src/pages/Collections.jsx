@@ -283,8 +283,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         sortOrder
       });
       
-      // Use GraphQL endpoint
-      const endpoint = `/collections/list-graphql?${params}`;
+      // Use GraphQL endpoint (mounted at /api/collections)
+      const endpoint = `/api/collections/list-graphql?${params}`;
       
       console.log('[COLLECTIONS] Using GraphQL endpoint:', endpoint);
       

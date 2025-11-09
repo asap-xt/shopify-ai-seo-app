@@ -1558,7 +1558,9 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list-graphql - New GraphQL version
+// GET /collections/list-graphql - DISABLED: Moved to collectionsController.js
+// This endpoint was causing conflicts - the new version is at /api/collections/list-graphql
+/*
 router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -1660,6 +1662,7 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+*/
 
 // POST /seo/generate-collection
 router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
