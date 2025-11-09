@@ -1122,6 +1122,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       ...prod.optimizationSummary,
                       optimizedLanguages: newOptimized,
                       optimized: newOptimized.length > 0,
+                      aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary.aiEnhanced : false, // Reset AI badge if all languages deleted
                       lastOptimized: newOptimized.length > 0 
                         ? prod.optimizationSummary.lastOptimized 
                         : null

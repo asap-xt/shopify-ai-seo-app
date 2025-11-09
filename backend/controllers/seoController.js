@@ -2710,7 +2710,8 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
           { 
             $set: { 
               'seoStatus.languages': updatedLanguages,
-              'seoStatus.optimized': updatedLanguages.some(l => l.optimized)
+              'seoStatus.optimized': updatedLanguages.some(l => l.optimized),
+              'seoStatus.aiEnhanced': updatedLanguages.length > 0 ? product.seoStatus.aiEnhanced : false // Reset AI flag if all languages deleted
             },
             $unset: { 
               'lastShopifyUpdate': 1  // Delete the entire lastShopifyUpdate field
