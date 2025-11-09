@@ -162,46 +162,8 @@ router.get('/list-graphql', async (req, res) => {
       };
     });
     
-    // Step 2: Get AI-enhanced status from MongoDB (NOT cached!)
-    console.log(`[COLLECTIONS-API] Step 2: Fetching AI-enhanced status from MongoDB...`);
-    const Collection = (await import('../db/Collection.js')).default;
-    const collectionIds = cachedResult.collections.map(c => {
-      const id = c.id || '';
-      return id.includes('gid://') ? id.split('/').pop() : id;
-    }).filter(Boolean);
-    
-    console.log(`[COLLECTIONS-API] Collection IDs to query:`, collectionIds);
-    
-    const mongoCollections = await Collection.find({
-      shop,
-      collectionId: { $in: collectionIds }
-    }).select('collectionId seoStatus.aiEnhanced').lean();
-    
-    console.log(`[COLLECTIONS-API] MongoDB returned ${mongoCollections.length} collections`);
-    
-    const aiEnhancedMap = {};
-    mongoCollections.forEach(mc => {
-      aiEnhancedMap[mc.collectionId] = mc.seoStatus?.aiEnhanced || false;
-    });
-    
-    // Step 3: Add AI-enhanced flag to collections
-    // Force Railway redeploy - Sun Nov 9 23:02:00 EET 2025
-    const collectionsWithAI = cachedResult.collections.map(collection => {
-      const numericId = collection.id.includes('gid://') ? collection.id.split('/').pop() : collection.id;
-      const aiEnhanced = aiEnhancedMap[numericId] || false;
-      console.log(`[COLLECTIONS-API] Collection ${collection.title} (${numericId}): aiEnhanced=${aiEnhanced}`);
-      return {
-        ...collection,
-        aiEnhanced
-      };
-    });
-    
-    cachedResult.collections = collectionsWithAI;
-    
-    console.log(`[COLLECTIONS-API] Returning ${collectionsWithAI.length} collections, aiEnhancedMap:`, aiEnhancedMap);
-    
-    // Ensure logs are flushed before response
-    await new Promise(resolve => setImmediate(resolve));
+    // NOTE: AI-enhanced flag is NOT added here - frontend uses /collections/list-graphql from seoController.js
+    // This endpoint is kept for future use but currently not used by frontend
     
     // Return cached or fresh data
     return res.json({

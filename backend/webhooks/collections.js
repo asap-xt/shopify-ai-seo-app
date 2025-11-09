@@ -97,9 +97,47 @@ export default async function collectionsWebhook(req, res) {
       const contentChanged = titleChanged || descriptionChanged;
       
       try {
+        // CRITICAL: Preserve existing seoStatus (including aiEnhanced flag)
+        const updateData = {
+          shopifyCollectionId: collectionId,
+          collectionId,
+          gid: collectionGid,
+          title: payload.title,
+          description: payload.body_html || '',
+          descriptionHtml: payload.body_html || '',
+          handle: payload.handle,
+          productsCount: payload.products_count || 0,
+          // Only update lastShopifyUpdate if content didn't change
+          // If content changed, lastShopifyUpdate preserves the OLD state for comparison
+          ...(contentChanged ? {} : {
+            lastShopifyUpdate: {
+              title: payload.title,
+              description: payload.body_html || '',
+              updatedAt: new Date()
+            }
+          }),
+          updatedAt: new Date(),
+          syncedAt: new Date()
+        };
+        
+        // CRITICAL: Preserve seoStatus if it exists
+        if (existingCollection?.seoStatus) {
+          updateData.seoStatus = existingCollection.seoStatus;
+        }
+        
         await Collection.findOneAndUpdate(
           { shop, collectionId },
-          {
+          updateData,
+          { upsert: true, new: true }
+        );
+        console.log('[Webhook-Collections] ✅ MongoDB updated successfully');
+      } catch (mongoError) {
+        if (mongoError.code === 11000) {
+          // Duplicate key error - try to update existing record
+          console.log('[Webhook-Collections] Duplicate key error, updating existing record...');
+          
+          // CRITICAL: Preserve seoStatus for duplicate key case too
+          const updateDataDupe = {
             shopifyCollectionId: collectionId,
             collectionId,
             gid: collectionGid,
@@ -109,7 +147,6 @@ export default async function collectionsWebhook(req, res) {
             handle: payload.handle,
             productsCount: payload.products_count || 0,
             // Only update lastShopifyUpdate if content didn't change
-            // If content changed, lastShopifyUpdate preserves the OLD state for comparison
             ...(contentChanged ? {} : {
               lastShopifyUpdate: {
                 title: payload.title,
@@ -119,36 +156,16 @@ export default async function collectionsWebhook(req, res) {
             }),
             updatedAt: new Date(),
             syncedAt: new Date()
-          },
-          { upsert: true, new: true }
-        );
-        console.log('[Webhook-Collections] ✅ MongoDB updated successfully');
-      } catch (mongoError) {
-        if (mongoError.code === 11000) {
-          // Duplicate key error - try to update existing record
-          console.log('[Webhook-Collections] Duplicate key error, updating existing record...');
+          };
+          
+          // CRITICAL: Preserve seoStatus if it exists
+          if (existingCollection?.seoStatus) {
+            updateDataDupe.seoStatus = existingCollection.seoStatus;
+          }
+          
           await Collection.findOneAndUpdate(
             { shop, handle: payload.handle },
-            {
-              shopifyCollectionId: collectionId,
-              collectionId,
-              gid: collectionGid,
-              title: payload.title,
-              description: payload.body_html || '',
-              descriptionHtml: payload.body_html || '',
-              handle: payload.handle,
-              productsCount: payload.products_count || 0,
-              // Only update lastShopifyUpdate if content didn't change
-              ...(contentChanged ? {} : {
-                lastShopifyUpdate: {
-                  title: payload.title,
-                  description: payload.body_html || '',
-                  updatedAt: new Date()
-                }
-              }),
-              updatedAt: new Date(),
-              syncedAt: new Date()
-            },
+            updateDataDupe,
             { new: true }
           );
           console.log('[Webhook-Collections] ✅ MongoDB updated existing record successfully');

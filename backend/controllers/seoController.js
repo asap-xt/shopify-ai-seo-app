@@ -1558,9 +1558,7 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 
 // ==================== COLLECTIONS ENDPOINTS ====================
 
-// GET /collections/list-graphql - DISABLED: Moved to collectionsController.js
-// This endpoint was causing conflicts - the new version is at /api/collections/list-graphql
-/*
+// GET /collections/list-graphql - RE-ENABLED: Contains critical logic for collections
 router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -1651,8 +1649,32 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
         seo: c.seo || null,
         hasSeoData: hasSeoData,
         optimizedLanguages: optimizedLanguages,
-        updatedAt: c.updatedAt
+        updatedAt: c.updatedAt,
+        aiEnhanced: false // Will be updated from MongoDB below
       };
+    });
+    
+    // Get AI-enhanced status from MongoDB
+    const Collection = (await import('../db/Collection.js')).default;
+    const collectionIds = collectionsWithData.map(c => {
+      const id = c.id || '';
+      return id.includes('gid://') ? id.split('/').pop() : id;
+    }).filter(Boolean);
+    
+    const mongoCollections = await Collection.find({
+      shop,
+      collectionId: { $in: collectionIds }
+    }).select('collectionId seoStatus.aiEnhanced').lean();
+    
+    const aiEnhancedMap = {};
+    mongoCollections.forEach(mc => {
+      aiEnhancedMap[mc.collectionId] = mc.seoStatus?.aiEnhanced || false;
+    });
+    
+    // Add aiEnhanced flag to collections
+    collectionsWithData.forEach(collection => {
+      const numericId = collection.id.includes('gid://') ? collection.id.split('/').pop() : collection.id;
+      collection.aiEnhanced = aiEnhancedMap[numericId] || false;
     });
     
     res.json({ collections: collectionsWithData });
@@ -1662,7 +1684,6 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-*/
 
 // POST /seo/generate-collection
 router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
@@ -1804,7 +1825,7 @@ router.post('/seo/apply-collection', validateRequest(), async (req, res) => {
       
       const mutation = `
         mutation UpdateCollection($input: CollectionInput!) {
-          collectionUpdate(collection: $input) {
+          collectionUpdate(input: $input) {
             collection { id }
             userErrors { field message }
           }
@@ -2292,7 +2313,7 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
           
           const mutation = `
             mutation UpdateCollection($input: CollectionInput!) {
-              collectionUpdate(collection: $input) {
+              collectionUpdate(input: $input) {
                 collection { id }
                 userErrors { field message }
               }
