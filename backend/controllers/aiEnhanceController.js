@@ -148,9 +148,19 @@ Guidelines:
   
   let enhanced;
   try {
-    enhanced = JSON.parse(content);
+    // Strip markdown code blocks if present (```json ... ``` or ``` ... ```)
+    let cleanContent = content.trim();
+    if (cleanContent.startsWith('```')) {
+      // Remove opening ```json or ```
+      cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+      // Remove closing ```
+      cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+    }
+    
+    enhanced = JSON.parse(cleanContent);
   } catch (parseError) {
     console.error(`[AI-ENHANCE] JSON parse error for ${language}:`, parseError);
+    console.error(`[AI-ENHANCE] Raw content:`, content.substring(0, 200));
     throw new Error('Invalid JSON from AI');
   }
   
@@ -691,8 +701,17 @@ Output JSON with:
         
         let enhanced;
         try {
-          enhanced = JSON.parse(content);
-        } catch {
+          // Strip markdown code blocks if present
+          let cleanContent = content.trim();
+          if (cleanContent.startsWith('```')) {
+            cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+            cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+          }
+          
+          enhanced = JSON.parse(cleanContent);
+        } catch (parseErr) {
+          console.error(`[AI-ENHANCE] Collection JSON parse error:`, parseErr.message);
+          console.error(`[AI-ENHANCE] Raw content:`, content.substring(0, 200));
           throw new Error('Invalid JSON from AI');
         }
         
@@ -953,9 +972,17 @@ Guidelines:
         
         let enhanced;
         try {
-          enhanced = JSON.parse(content);
+          // Strip markdown code blocks if present
+          let cleanContent = content.trim();
+          if (cleanContent.startsWith('```')) {
+            cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+            cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+          }
+          
+          enhanced = JSON.parse(cleanContent);
         } catch (parseErr) {
-          console.error(`[AI-ENHANCE] Failed to parse AI response:`, content);
+          console.error(`[AI-ENHANCE] Failed to parse AI response:`, parseErr.message);
+          console.error(`[AI-ENHANCE] Raw content:`, content.substring(0, 200));
           throw new Error('Invalid JSON from AI');
         }
         
