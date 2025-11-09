@@ -194,6 +194,9 @@ router.get('/list-graphql', async (req, res) => {
     
     console.log(`[COLLECTIONS-API] Returning ${collectionsWithAI.length} collections, aiEnhancedMap:`, aiEnhancedMap);
     
+    // Ensure logs are flushed before response
+    await new Promise(resolve => setImmediate(resolve));
+    
     // Return cached or fresh data
     return res.json({
       ...cachedResult,
