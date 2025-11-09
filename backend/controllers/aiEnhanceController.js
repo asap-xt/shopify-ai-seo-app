@@ -1053,8 +1053,16 @@ Guidelines:
         
         const result = await Collection.findOneAndUpdate(
           { shop, collectionId: numericCollectionId },
-          { 'seoStatus.aiEnhanced': true },
-          { new: true }
+          { 
+            $set: { 'seoStatus.aiEnhanced': true },
+            $setOnInsert: { 
+              shop, 
+              collectionId: numericCollectionId,
+              'seoStatus.optimized': false,
+              'seoStatus.languages': []
+            }
+          },
+          { upsert: true, new: true }
         );
         
         if (result) {

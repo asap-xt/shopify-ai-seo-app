@@ -558,11 +558,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     }));
     
     setToast(`AI enhancement complete! ${results.successful} collections enhanced.`);
-    
-    // Reload collections if any were successful
-    if (results.successful > 0) {
-      await loadCollections();
-    }
   };
   
   // AI Enhancement Modal - използва Polaris компоненти като другите модали
@@ -685,6 +680,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
 
     
     const handleClose = () => {
+      // Save results BEFORE resetting state
+      const results = aiEnhanceProgress.results;
+      
       setShowAIEnhanceModal(false);
       setAIEnhanceProgress({
         processing: false,
@@ -693,8 +691,15 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         currentItem: '',
         results: null
       });
-      if (aiEnhanceProgress.results && aiEnhanceProgress.results.successful > 0) {
-        loadCollections();
+      
+      // Refresh collections list if any were successfully enhanced
+      if (results && results.successful > 0) {
+        // Backend already invalidated Redis cache (invalidateShop)
+        // Use setTimeout to avoid async race condition with modal close
+        setTimeout(() => {
+          setCollections([]); // Clear current collections to force re-render
+          loadCollections(); // Cache already invalidated by backend
+        }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
       }
     };
     
@@ -1073,9 +1078,15 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                       {lang.toUpperCase()}
                     </Badge>
                   ))}
-                  {collection.aiEnhanced && (
-                    <Badge tone="info" size="small">AI✨</Badge>
-                  )}
+                  {(() => {
+                    // Debug: log aiEnhanced flag
+                    if (collection.aiEnhanced) {
+                      console.log(`[COLLECTIONS-BADGE] Collection "${collection.title}" has aiEnhanced:`, collection.aiEnhanced);
+                    }
+                    return collection.aiEnhanced && (
+                      <Badge tone="info" size="small">AI✨</Badge>
+                    );
+                  })()}
                 </>
               ) : (
                 <Badge tone="subdued">No AI Search Optimisation</Badge>

@@ -2944,6 +2944,33 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
       errors.push(`Metafield deletion failed: ${e.message}`);
     }
     
+    // Update MongoDB - check if all languages are deleted, reset aiEnhanced flag
+    try {
+      const numericId = parseInt(collectionId.replace('gid://shopify/Collection/', ''));
+      const Collection = (await import('../db/Collection.js')).default;
+      
+      const collection = await Collection.findOne({ shop, collectionId: numericId });
+      
+      if (collection && collection.seoStatus?.languages) {
+        const langCode = language.toLowerCase();
+        const updatedLanguages = collection.seoStatus.languages.filter(l => l.code !== langCode);
+        
+        await Collection.findOneAndUpdate(
+          { shop, collectionId: numericId },
+          { 
+            $set: { 
+              'seoStatus.languages': updatedLanguages,
+              'seoStatus.optimized': updatedLanguages.some(l => l.optimized),
+              'seoStatus.aiEnhanced': updatedLanguages.length > 0 ? collection.seoStatus.aiEnhanced : false
+            }
+          },
+          { new: true }
+        );
+      }
+    } catch (e) {
+      console.error('[DELETE-COLLECTION-SEO] MongoDB update failed:', e.message);
+    }
+    
     // Return response
     if (errors.length === 0) {
       res.json({ 
