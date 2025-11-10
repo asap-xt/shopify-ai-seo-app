@@ -685,7 +685,6 @@ export default function App() {
   const shop = qs('shop', '');
   const [plan, setPlan] = useState(null);
   const [forceBillingPage, setForceBillingPage] = useState(false); // Force billing for pending subscription
-  const [isLoadingBillingStatus, setIsLoadingBillingStatus] = useState(true); // Prevent render until subscriptionStatus is checked
   // App is installed via Shopify Install Modal, no frontend install button needed
 
   // Token exchange logic
@@ -796,9 +795,6 @@ export default function App() {
         
       } catch (error) {
         console.error('[APP] Error loading initial data:', error);
-      } finally {
-        // CRITICAL: Stop loading state to allow render (after subscriptionStatus check)
-        setIsLoadingBillingStatus(false);
       }
     };
     
@@ -871,10 +867,10 @@ export default function App() {
     }
   };
 
-  // CRITICAL: Show loading ONLY on first load (when plan is not yet fetched)
+  // CRITICAL: Show loading ONLY while plan data is being fetched (first load)
   // This prevents Dashboard from flashing before redirecting to Billing
-  // After first load, never show loading again (even if navigating between pages)
-  if (isLoadingBillingStatus && !plan) {
+  // Once plan is loaded, never show this loading screen again
+  if (!plan) {
     return (
       <AppProvider i18n={I18N}>
         <Frame>
