@@ -684,6 +684,7 @@ export default function App() {
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
   const [plan, setPlan] = useState(null);
+  const [forceBillingPage, setForceBillingPage] = useState(false); // Force billing for pending subscription
   // App is installed via Shopify Install Modal, no frontend install button needed
 
   // Token exchange logic
@@ -785,17 +786,10 @@ export default function App() {
         if (pm) {
           setPlan(pm);
           
-          // CRITICAL: If subscription is pending, redirect to billing IMMEDIATELY
+          // CRITICAL: If subscription is pending, force billing page to show
           if (pm.subscriptionStatus === 'pending') {
-            console.log('[APP] Subscription pending, redirecting to billing...');
-            if (window.shopify?.navigate) {
-              // Use App Bridge v4 navigate API (works in embedded apps)
-              window.shopify.navigate('/billing');
-            } else {
-              // Fallback for non-embedded context
-              window.location.href = '/billing';
-            }
-            return; // Stop further execution
+            console.log('[APP] Subscription pending, forcing billing page...');
+            setForceBillingPage(true); // This will make getPageComponent() return <Billing />
           }
         }
         
@@ -820,6 +814,11 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
+    // CRITICAL: Force billing page if subscription is pending (overrides all other routes)
+    if (forceBillingPage) {
+      return <Billing shop={shop} />;
+    }
+    
     // Dashboard
     if (path === '/' || path === '/dashboard') {
       return <Dashboard shop={shop} />;
