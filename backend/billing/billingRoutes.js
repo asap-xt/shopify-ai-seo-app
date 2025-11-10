@@ -324,38 +324,37 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       updatedAt: now
     };
     
+    // CRITICAL: DON'T create subscription before Shopify approval!
+    // For plan changes, update existing subscription
+    // For new subscriptions, return confirmationUrl WITHOUT creating in MongoDB
+    // Subscription will be created by webhook callback after merchant approves
+    
+    let subscription;
+    
     if (existingSub) {
-      // Plan change: Keep old plan, set new plan as pending
+      // Plan change: Update existing subscription, set new plan as pending
       updateData.pendingPlan = plan;
       // Don't update 'plan' field - it stays as old plan until approval
+      
+      subscription = await Subscription.findOneAndUpdate(
+        { shop },
+        updateData,
+        { new: true }  // NO upsert - subscription must already exist
+      );
+      
+      console.log('[BILLING] Plan change - updated existing subscription:', {
+        oldPlan: existingSub.plan,
+        pendingPlan: plan
+      });
     } else {
-      // First install: Set plan immediately
-      updateData.plan = plan;
-      updateData.pendingPlan = null;
+      // First install: DON'T create subscription yet!
+      // Just return confirmationUrl - subscription will be created by webhook
+      console.log('[BILLING] First install - NOT creating subscription (waiting for approval)');
+      subscription = null;
     }
-    
-    const subscription = await Subscription.findOneAndUpdate(
-      { shop },
-      updateData,
-      { upsert: true, new: true }
-    );
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
-    
-    // In TEST MODE: Set included tokens immediately ONLY for new subscriptions
-    // For plan changes, tokens are set in callback after approval
-    if (isTestMode && !existingSub) {
-      const included = getIncludedTokens(subscription.plan);
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
-      
-      // Use setIncludedTokens instead of addIncludedTokens to avoid accumulation
-      await tokenBalance.setIncludedTokens(
-        included.tokens, 
-        subscription.plan, 
-        shopifySubscription.id
-      );
-    }
     
     res.json({
       confirmationUrl,
@@ -385,6 +384,7 @@ router.get('/callback', async (req, res) => {
     const currentSub = await Subscription.findOne({ shop });
     
     const updateData = {
+      shop,
       status: 'active',
       pendingActivation: false,
       activatedAt: new Date()
@@ -394,15 +394,27 @@ router.get('/callback', async (req, res) => {
     if (currentSub?.pendingPlan) {
       updateData.plan = currentSub.pendingPlan;
       updateData.pendingPlan = null; // Clear pending
+      console.log('[BILLING-CALLBACK] Activating pending plan:', currentSub.pendingPlan);
     } else if (plan && PLANS[plan]) {
-      // Fallback: If plan is provided in callback, ensure it's updated
+      // First subscription: Create subscription NOW (after approval)
       updateData.plan = plan;
+      updateData.pendingPlan = null;
+      
+      // Set trial end date (from TRIAL_DAYS)
+      const now = new Date();
+      updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+      
+      console.log('[BILLING-CALLBACK] First subscription approved - creating:', {
+        plan,
+        trialEndsAt: updateData.trialEndsAt
+      });
     }
     
+    // UPSERT: Create subscription if doesn't exist (first install)
     const subscription = await Subscription.findOneAndUpdate(
       { shop },
       updateData,
-      { new: true }
+      { upsert: true, new: true }  // UPSERT allowed here - AFTER approval
     );
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
