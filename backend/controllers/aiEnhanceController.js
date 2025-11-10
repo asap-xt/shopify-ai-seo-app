@@ -258,6 +258,10 @@ router.post('/product', validateRequest(), async (req, res) => {
     const feature = 'ai-seo-product-enhanced';
     let reservationId = null;
     
+    // CRITICAL: Check trial period BEFORE token check
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
       // Estimate required tokens with 10% safety margin
@@ -265,6 +269,20 @@ router.post('/product', validateRequest(), async (req, res) => {
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // TRIAL RESTRICTION: Block AI-enhanced features during trial UNLESS tokens are purchased
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        return res.status(402).json({
+          error: 'AI-enhanced features are not available during trial period',
+          inTrial: true,
+          trialEndsAt: subscription.trialEndsAt,
+          requiresPurchase: true,
+          message: 'Purchase tokens or wait until your trial ends to use AI-enhanced features',
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
+          feature
+        });
+      }
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
@@ -588,6 +606,10 @@ router.post('/collection', validateRequest(), async (req, res) => {
     const feature = 'ai-seo-collection';
     let reservationId = null;
     
+    // CRITICAL: Check trial period BEFORE token check
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
       // Estimate required tokens with 10% safety margin
@@ -595,6 +617,20 @@ router.post('/collection', validateRequest(), async (req, res) => {
       
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // TRIAL RESTRICTION: Block AI-enhanced features during trial UNLESS tokens are purchased
+      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        return res.status(402).json({
+          error: 'AI-enhanced features are not available during trial period',
+          inTrial: true,
+          trialEndsAt: subscription.trialEndsAt,
+          requiresPurchase: true,
+          message: 'Purchase tokens or wait until your trial ends to use AI-enhanced features',
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
+          feature
+        });
+      }
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {

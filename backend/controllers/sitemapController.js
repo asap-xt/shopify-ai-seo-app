@@ -247,9 +247,16 @@ async function generateSitemapCore(shop, options = {}) {
           
           isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
           
+          // === TRIAL PERIOD CHECK ===
+          // Block AI sitemap during trial UNLESS tokens are purchased
+          const { default: Subscription } = await import('../db/Subscription.js');
+          const subscription = await Subscription.findOne({ shop: normalizedShop });
+          const now = new Date();
+          const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          
           // === TOKEN RESERVATION FOR AI-SITEMAP ===
           if (isAISitemapEnabled) {
-            const { estimateTokensWithMargin, requiresTokens } = await import('../billing/tokenConfig.js');
+            const { estimateTokensWithMargin, requiresTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
             const { default: TokenBalance } = await import('../db/TokenBalance.js');
             const feature = 'ai-sitemap-optimized';
             
@@ -257,7 +264,11 @@ async function generateSitemapCore(shop, options = {}) {
               const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
-              if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+              // TRIAL RESTRICTION: Block AI sitemap during trial UNLESS tokens are purchased
+              if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+                console.log('[SITEMAP] AI sitemap blocked during trial - no tokens purchased');
+                isAISitemapEnabled = false;
+              } else if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
                 const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
                 reservationId = reservation.reservationId;
                 await reservation.save();
