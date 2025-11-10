@@ -871,9 +871,10 @@ export default function App() {
     }
   };
 
-  // CRITICAL: Don't render anything until we check subscriptionStatus
+  // CRITICAL: Show loading ONLY on first load (when plan is not yet fetched)
   // This prevents Dashboard from flashing before redirecting to Billing
-  if (isLoadingBillingStatus) {
+  // After first load, never show loading again (even if navigating between pages)
+  if (isLoadingBillingStatus && !plan) {
     return (
       <AppProvider i18n={I18N}>
         <Frame>
