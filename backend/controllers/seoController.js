@@ -32,13 +32,14 @@ export async function getPlansMeForShop(app, shop) {
     }
     
     // Create PENDING subscription - merchant must select plan in billing page
+    // NO trialEndsAt - trial is managed by Shopify Billing API, not our database
     subscription = await Subscription.create({
       shop,
-      plan: 'starter', // default plan (will be updated after selection)
-      status: 'pending', // NOT active until merchant selects plan
+      plan: 'starter', // temporary placeholder (will be updated after merchant selects plan)
+      status: 'pending', // NOT active until merchant confirms plan in Shopify
       queryLimit: 50,
-      productLimit: 70,
-      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
+      productLimit: 70
+      // NOTE: trialEndsAt is set by Shopify after AppSubscriptionCreate with trial_days
     });
   }
   

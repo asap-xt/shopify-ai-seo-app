@@ -785,11 +785,17 @@ export default function App() {
         if (pm) {
           setPlan(pm);
           
-          // CRITICAL: If subscription is pending, redirect to billing using App Bridge
-          if (pm.subscriptionStatus === 'pending' && window.shopify?.navigate) {
-            console.log('[APP] Subscription pending, redirecting to billing via App Bridge...');
-            // Use App Bridge v4 navigate API (works in embedded apps)
-            window.shopify.navigate('/billing');
+          // CRITICAL: If subscription is pending, redirect to billing IMMEDIATELY
+          if (pm.subscriptionStatus === 'pending') {
+            console.log('[APP] Subscription pending, redirecting to billing...');
+            if (window.shopify?.navigate) {
+              // Use App Bridge v4 navigate API (works in embedded apps)
+              window.shopify.navigate('/billing');
+            } else {
+              // Fallback for non-embedded context
+              window.location.href = '/billing';
+            }
+            return; // Stop further execution
           }
         }
         
@@ -814,12 +820,6 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
-    // CRITICAL: If subscription is pending, always show billing page (force plan selection)
-    if (plan?.subscriptionStatus === 'pending' && path !== '/billing') {
-      console.log('[APP] Subscription pending, showing Billing page for plan selection');
-      return <Billing shop={shop} />;
-    }
-    
     // Dashboard
     if (path === '/' || path === '/dashboard') {
       return <Dashboard shop={shop} />;
