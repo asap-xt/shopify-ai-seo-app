@@ -550,7 +550,7 @@
       enum PlanEnum { starter professional growth growth_extra enterprise }
       type PlansMe {
         shop: String! 
-        plan: String!
+        plan: String
         planKey: String
         priceUsd: Float
         product_limit: Int
