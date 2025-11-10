@@ -2394,6 +2394,47 @@ router.post('/seo/apply-collection-multi', validateRequest(), async (req, res) =
       }
     }
     
+    // Update MongoDB with lastShopifyUpdate AFTER successful metafields update
+    // This prevents webhook from detecting false-positive changes
+    if (updated.length > 0) {
+      try {
+        const Collection = (await import('../db/Collection.js')).default;
+        const numericId = collectionId.replace('gid://shopify/Collection/', '');
+        
+        // Fetch current collection data from Shopify
+        const collectionQuery = `
+          query GetCollection($id: ID!) {
+            collection(id: $id) {
+              id
+              title
+              descriptionHtml
+            }
+          }
+        `;
+        
+        const collectionData = await shopGraphQL(req, shop, collectionQuery, { id: collectionId });
+        const currentCollection = collectionData?.collection;
+        
+        if (currentCollection) {
+          await Collection.findOneAndUpdate(
+            { shop, collectionId: numericId },
+            {
+              $set: {
+                lastShopifyUpdate: {
+                  title: currentCollection.title,
+                  description: currentCollection.descriptionHtml || '',
+                  updatedAt: new Date()
+                }
+              }
+            },
+            { upsert: false }
+          );
+        }
+      } catch (e) {
+        console.error('[APPLY-COLLECTION-MULTI] Failed to update lastShopifyUpdate:', e.message);
+      }
+    }
+    
     res.json({
       ok: errors.length === 0,
       collectionId,

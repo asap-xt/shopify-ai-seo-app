@@ -67,8 +67,12 @@ export default async function collectionsWebhook(req, res) {
         console.log('[Webhook-Collections] New description:', payload.body_html?.substring(0, 100) + '...');
         
         // 3. Detect if title or description changed
+        // NOTE: Compare first 500 chars only - Shopify webhook payload may truncate long descriptions
         titleChanged = referenceTitle !== payload.title;
-        descriptionChanged = referenceDescription !== (payload.body_html || '');
+        const newDescription = payload.body_html || '';
+        const refDescTrunc = referenceDescription.substring(0, 500);
+        const newDescTrunc = newDescription.substring(0, 500);
+        descriptionChanged = refDescTrunc !== newDescTrunc;
         
         if (titleChanged || descriptionChanged) {
           console.log('[Webhook-Collections] 🚨 CONTENT CHANGED DETECTED!');
@@ -107,15 +111,13 @@ export default async function collectionsWebhook(req, res) {
           descriptionHtml: payload.body_html || '',
           handle: payload.handle,
           productsCount: payload.products_count || 0,
-          // Only update lastShopifyUpdate if content didn't change
-          // If content changed, lastShopifyUpdate preserves the OLD state for comparison
-          ...(contentChanged ? {} : {
-            lastShopifyUpdate: {
-              title: payload.title,
-              description: payload.body_html || '',
-              updatedAt: new Date()
-            }
-          }),
+          // CRITICAL: ALWAYS update lastShopifyUpdate with current webhook data
+          // This is our reference point for detecting FUTURE changes
+          lastShopifyUpdate: {
+            title: payload.title,
+            description: payload.body_html || '',
+            updatedAt: new Date()
+          },
           updatedAt: new Date(),
           syncedAt: new Date()
         };
@@ -146,14 +148,12 @@ export default async function collectionsWebhook(req, res) {
             descriptionHtml: payload.body_html || '',
             handle: payload.handle,
             productsCount: payload.products_count || 0,
-            // Only update lastShopifyUpdate if content didn't change
-            ...(contentChanged ? {} : {
-              lastShopifyUpdate: {
-                title: payload.title,
-                description: payload.body_html || '',
-                updatedAt: new Date()
-              }
-            }),
+            // CRITICAL: ALWAYS update lastShopifyUpdate (same as main update)
+            lastShopifyUpdate: {
+              title: payload.title,
+              description: payload.body_html || '',
+              updatedAt: new Date()
+            },
             updatedAt: new Date(),
             syncedAt: new Date()
           };
