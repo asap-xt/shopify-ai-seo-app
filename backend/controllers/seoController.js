@@ -31,20 +31,14 @@ export async function getPlansMeForShop(app, shop) {
       throw new Error('Shop not found');
     }
     
-    // Create PENDING subscription - merchant must select plan in billing page
-    // NO trialEndsAt - trial is managed by Shopify Billing API, not our database
-    subscription = await Subscription.create({
-      shop,
-      plan: 'starter', // temporary placeholder (will be updated after merchant selects plan)
-      status: 'pending', // NOT active until merchant confirms plan in Shopify
-      queryLimit: 50,
-      productLimit: 70
-      // NOTE: trialEndsAt is set by Shopify after AppSubscriptionCreate with trial_days
-    });
+    // DON'T create subscription here!
+    // Subscription will be created ONLY after merchant selects plan and approves in Shopify
+    // This prevents "free Starter plan" exploitation if merchant clicks Cancel
+    subscription = null;
   }
   
   // 3. Get configuration
-  let plan = subscription.plan;
+  let plan = subscription?.plan || null;
   
   // Apply in-memory test override if any:
   try {
@@ -54,6 +48,24 @@ export async function getPlansMeForShop(app, shop) {
     }
   } catch (e) {
     // no-op
+  }
+  
+  // If no subscription, return minimal response to force billing page
+  if (!subscription) {
+    return {
+      shop,
+      plan: null,
+      planKey: null,
+      priceUsd: 0,
+      product_limit: 0,
+      collection_limit: 0,
+      language_limit: 0,
+      providersAllowed: [],
+      modelsSuggested: [],
+      autosyncCron: null,
+      trial: null,
+      subscriptionStatus: 'pending'
+    };
   }
   
   const planConfig = getPlanConfig(plan);
