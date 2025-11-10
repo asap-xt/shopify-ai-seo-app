@@ -261,7 +261,30 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     
     // Save subscription to MongoDB
     const now = new Date();
-    const trialEndsAt = trialDays > 0 ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000) : null;
+    
+    // CRITICAL: Get existing subscription to preserve trial period on plan changes
+    const existingSub = await Subscription.findOne({ shop });
+    
+    // TRIAL PERIOD LOGIC (Shopify Best Practice):
+    // 1. First subscription (install): Set trialEndsAt = now + TRIAL_DAYS
+    // 2. Plan change (upgrade/downgrade): PRESERVE original trialEndsAt
+    // 3. This ensures trial countdown continues regardless of plan changes
+    let trialEndsAt = null;
+    if (existingSub && existingSub.trialEndsAt) {
+      // Plan change: Preserve original trial end date
+      trialEndsAt = existingSub.trialEndsAt;
+      console.log('[BILLING] Plan change - preserving trial:', {
+        originalTrialEndsAt: existingSub.trialEndsAt,
+        daysRemaining: Math.ceil((existingSub.trialEndsAt - now) / (24 * 60 * 60 * 1000))
+      });
+    } else if (trialDays > 0) {
+      // First subscription: Calculate new trial end date
+      trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+      console.log('[BILLING] First subscription - setting trial:', {
+        trialDays,
+        trialEndsAt
+      });
+    }
     
     // TEST MODE DETECTION:
     // - Shopify subscriptions created with test:true should activate immediately
@@ -271,9 +294,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // In TEST MODE: Activate immediately for development convenience
     // In PRODUCTION: Wait for APP_SUBSCRIPTIONS_UPDATE webhook to confirm payment
     const initialStatus = isTestMode ? 'active' : 'pending';
-    
-    // CRITICAL: Get existing subscription to preserve current plan if exists
-    const existingSub = await Subscription.findOne({ shop });
     
     // LOGIC:
     // - If new subscription (no existing): plan = plan (first install)
