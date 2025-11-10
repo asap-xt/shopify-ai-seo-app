@@ -33,6 +33,7 @@ export default function Billing({ shop }) {
   const [selectedAmount, setSelectedAmount] = useState(PRESET_AMOUNTS[0]);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState(null);
+  const [isActivatingPlan, setIsActivatingPlan] = useState(false); // Track if user is ending trial early
 
   // Fetch billing info
   const fetchBillingInfo = useCallback(async () => {
@@ -92,7 +93,7 @@ export default function Billing({ shop }) {
         body: JSON.stringify({
           shop,
           plan,
-          endTrial: billingInfo?.subscription?.inTrial || false
+          endTrial: isActivatingPlan // Only end trial if user clicked "Activate Plan" button
         })
       });
       
@@ -112,6 +113,7 @@ export default function Billing({ shop }) {
     } finally {
       setPurchasing(false);
       setShowPlanModal(false);
+      setIsActivatingPlan(false); // Reset activation flag
     }
   };
 
@@ -223,7 +225,10 @@ export default function Billing({ shop }) {
               tone="info"
               action={{
                 content: 'Activate Plan',
-                onAction: () => setShowPlanModal(true)
+                onAction: () => {
+                  setIsActivatingPlan(true); // Mark as ending trial early
+                  setShowPlanModal(true);
+                }
               }}
             >
               <p>
@@ -416,6 +421,7 @@ export default function Billing({ shop }) {
         onClose={() => {
           setShowPlanModal(false);
           setSelectedPlan(null);
+          setIsActivatingPlan(false); // Reset activation flag
         }}
         title="Confirm Plan Selection"
         primaryAction={{
@@ -429,6 +435,7 @@ export default function Billing({ shop }) {
             onAction: () => {
               setShowPlanModal(false);
               setSelectedPlan(null);
+              setIsActivatingPlan(false); // Reset activation flag
             }
           }
         ]}
@@ -438,7 +445,7 @@ export default function Billing({ shop }) {
             <Text>
               You are about to subscribe to the <strong>{selectedPlan?.name || subscription?.plan}</strong> plan.
             </Text>
-            {subscription?.inTrial && (
+            {subscription?.inTrial && isActivatingPlan && (
               <Banner tone="warning">
                 <p>This will end your trial period and start billing immediately.</p>
               </Banner>
