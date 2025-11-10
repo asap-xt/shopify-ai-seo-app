@@ -250,8 +250,24 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'Shop not found' });
     }
     
+    // CRITICAL: Check if this is a plan change (existing subscription)
+    const existingSubCheck = await Subscription.findOne({ shop });
+    
+    // TRIAL DAYS LOGIC:
+    // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days)
+    // 2. Plan change (upgrade/downgrade): trialDays = 0 (no new trial)
+    // 3. This prevents Shopify from creating a new trial period on plan changes
+    let trialDays = TRIAL_DAYS;
+    if (endTrial) {
+      trialDays = 0; // User clicked "End Trial" button
+    } else if (existingSubCheck) {
+      trialDays = 0; // Plan change: Don't create new trial in Shopify
+      console.log('[BILLING] Plan change detected - setting trialDays to 0 (preserving existing trial in MongoDB)');
+    } else {
+      console.log('[BILLING] First subscription - setting trialDays to', TRIAL_DAYS);
+    }
+    
     // Create subscription with Shopify
-    const trialDays = endTrial ? 0 : TRIAL_DAYS;
     const { confirmationUrl, subscription: shopifySubscription } = await createSubscription(
       shop,
       plan,
@@ -262,8 +278,8 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // Save subscription to MongoDB
     const now = new Date();
     
-    // CRITICAL: Get existing subscription to preserve trial period on plan changes
-    const existingSub = await Subscription.findOne({ shop });
+    // Use existingSubCheck from above (already fetched at line 254)
+    const existingSub = existingSubCheck;
     
     // TRIAL PERIOD LOGIC (Shopify Best Practice):
     // 1. First subscription (install): Set trialEndsAt = now + TRIAL_DAYS
