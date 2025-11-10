@@ -683,7 +683,15 @@ export default function App() {
   const { lang, setLang, t } = useI18n();
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
-  const [plan, setPlan] = useState(null);
+  // Persist plan in sessionStorage to survive React remounts (StrictMode, navigation)
+  const [plan, setPlan] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem(`plan_${shop}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [forceBillingPage, setForceBillingPage] = useState(false); // Force billing for pending subscription
   // App is installed via Shopify Install Modal, no frontend install button needed
 
@@ -785,6 +793,12 @@ export default function App() {
         const pm = plansData?.data?.plansMe;
         if (pm) {
           setPlan(pm);
+          // Persist plan in sessionStorage to survive React remounts
+          try {
+            sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
+          } catch (e) {
+            console.error('[APP] Failed to cache plan:', e);
+          }
           
           // CRITICAL: If subscription is pending, force billing page to show
           if (pm.subscriptionStatus === 'pending') {
