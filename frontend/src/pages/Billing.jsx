@@ -214,7 +214,7 @@ export default function Billing({ shop }) {
             >
               <p>
                 Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. 
-                Activate a plan to continue using all features after {new Date(subscription.trialEndsAt).toLocaleDateString()}.
+                Enjoy full access until then — billing starts automatically after.
               </p>
             </Banner>
           </Layout.Section>
