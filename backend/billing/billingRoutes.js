@@ -295,7 +295,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     );
     
     // Save subscription to MongoDB
-    const now = new Date();
+    // (now already declared at line 262)
     
     // Use existingSubCheck from above (already fetched at line 254)
     const existingSub = existingSubCheck;
