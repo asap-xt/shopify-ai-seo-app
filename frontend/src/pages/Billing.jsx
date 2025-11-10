@@ -62,7 +62,21 @@ export default function Billing({ shop }) {
 
   useEffect(() => {
     fetchBillingInfo();
-  }, [fetchBillingInfo]);
+    
+    // Check for success callback from Shopify (after plan activation)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      // Clear success param from URL
+      const newUrl = window.location.pathname + '?shop=' + shop;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Refresh billing info after 1 second to ensure backend updates are reflected
+      setTimeout(() => {
+        console.log('[Billing] Refreshing after successful activation...');
+        fetchBillingInfo();
+      }, 1000);
+    }
+  }, [fetchBillingInfo, shop]);
 
   // Subscribe to a plan
   const handleSubscribe = async (plan) => {

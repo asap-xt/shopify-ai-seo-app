@@ -255,14 +255,33 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     
     // TRIAL DAYS LOGIC:
     // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days)
-    // 2. Plan change (upgrade/downgrade): trialDays = 0 (no new trial)
-    // 3. This prevents Shopify from creating a new trial period on plan changes
+    // 2. Plan change during trial: trialDays = REMAINING DAYS (preserve trial in Shopify)
+    // 3. Plan change after trial: trialDays = 0 (no trial)
+    // 4. User clicks "End Trial": trialDays = 0
     let trialDays = TRIAL_DAYS;
+    const now = new Date();
+    
     if (endTrial) {
-      trialDays = 0; // User clicked "End Trial" button
+      trialDays = 0; // User explicitly ended trial
+      console.log('[BILLING] User ended trial - setting trialDays to 0');
     } else if (existingSubCheck) {
-      trialDays = 0; // Plan change: Don't create new trial in Shopify
-      console.log('[BILLING] Plan change detected - setting trialDays to 0 (preserving existing trial in MongoDB)');
+      // Plan change: Check if trial is still active
+      const trialEnd = existingSubCheck.trialEndsAt ? new Date(existingSubCheck.trialEndsAt) : null;
+      
+      if (trialEnd && now < trialEnd) {
+        // Still in trial - calculate remaining days and preserve in Shopify
+        const msRemaining = trialEnd - now;
+        const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
+        trialDays = daysRemaining;
+        console.log('[BILLING] Plan change during trial - preserving remaining days:', {
+          trialEndsAt: trialEnd,
+          daysRemaining
+        });
+      } else {
+        // Trial already ended - no trial for new subscription
+        trialDays = 0;
+        console.log('[BILLING] Plan change after trial - setting trialDays to 0');
+      }
     } else {
       console.log('[BILLING] First subscription - setting trialDays to', TRIAL_DAYS);
     }
