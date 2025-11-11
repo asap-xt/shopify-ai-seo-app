@@ -256,7 +256,12 @@ export default function Billing({ shop }) {
 
   const subscription = billingInfo?.subscription;
   const tokens = billingInfo?.tokens;
-  const plans = billingInfo?.plans || [];
+  const allPlans = billingInfo?.plans || [];
+  
+  // Filter out Starter & Growth plans (hidden temporarily)
+  const plans = allPlans.filter(plan => 
+    !['starter', 'growth'].includes(plan.key)
+  );
   
   // Debug: Log subscription plan
   console.log('[Billing] Current plan:', subscription?.plan, 'Type:', typeof subscription?.plan);
