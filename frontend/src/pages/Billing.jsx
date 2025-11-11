@@ -17,7 +17,10 @@ import {
   Box,
   BlockStack,
   InlineStack,
-  Divider
+  Divider,
+  SkeletonPage,
+  SkeletonBodyText,
+  SkeletonDisplayText
 } from '@shopify/polaris';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100];
@@ -56,14 +59,7 @@ export default function Billing({ shop }) {
       setBillingInfo(data);
       
       // Show welcome banner ONLY on first load (no active subscription)
-      const shouldShow = data.subscription?.status === 'pending' || !data.subscription;
-      console.log('[Billing] Welcome banner check:', {
-        subscription: data.subscription,
-        status: data.subscription?.status,
-        shouldShow
-      });
-      
-      if (shouldShow) {
+      if (data.subscription?.status === 'pending' || !data.subscription) {
         setShowWelcomeBanner(true);
       }
     } catch (err) {
@@ -190,23 +186,38 @@ export default function Billing({ shop }) {
     return tokens;
   };
 
-  // Render loading state
+  // Render skeleton loader while fetching data
   if (loading) {
     return (
-      <>
+      <SkeletonPage title="Plans & Billing" primaryAction>
         <Layout>
           <Layout.Section>
             <Card>
-              <Box padding="800">
-                <InlineStack align="center" blockAlign="center">
-                  <Spinner size="large" />
-                  <Text variant="bodyMd">Loading billing information...</Text>
-                </InlineStack>
-              </Box>
+              <BlockStack gap="400">
+                <SkeletonDisplayText size="small" />
+                <SkeletonBodyText lines={3} />
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <SkeletonDisplayText size="medium" />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                  {[1, 2, 3, 4].map((i) => (
+                    <Card key={i}>
+                      <BlockStack gap="200">
+                        <SkeletonDisplayText size="small" />
+                        <SkeletonBodyText lines={5} />
+                      </BlockStack>
+                    </Card>
+                  ))}
+                </div>
+              </BlockStack>
             </Card>
           </Layout.Section>
         </Layout>
-      </>
+      </SkeletonPage>
     );
   }
 
@@ -244,6 +255,9 @@ export default function Billing({ shop }) {
               <BlockStack gap="200">
                 <p>
                   Traditional SEO isn't enough anymore. AI assistants like ChatGPT, Gemini & Perplexity need structured data to recommend your products.
+                </p>
+                <p>
+                  indexAIze transforms your product data into structured formats optimized for AI search engines, making it easy for ChatGPT, Gemini, Perplexity and others to find and recommend your products.
                 </p>
                 <p>
                   <strong>✅ Smart approach:</strong> Start with a smaller plan to test optimization. Upgrade anytime to scale across your entire catalog.
