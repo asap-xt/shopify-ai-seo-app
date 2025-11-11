@@ -800,8 +800,17 @@ export default function App() {
             console.error('[APP] Failed to cache plan:', e);
           }
           
-          // Note: Backend (auth.js) already redirects to /billing if subscription is pending
-          // No need to force billing page here - backend handles initial routing
+          // CRITICAL: Redirect to billing if subscription is pending
+          // Note: Backend redirect only works on first install (OAuth flow)
+          // On reinstall, Shopify skips OAuth and loads app directly → must check here
+          if (pm.subscriptionStatus === 'pending' || !pm.plan) {
+            console.log('[APP] No active subscription, redirecting to billing...');
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            const embedded = params.get('embedded');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            return; // Stop execution
+          }
         }
         
       } catch (error) {
