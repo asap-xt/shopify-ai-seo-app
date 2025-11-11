@@ -232,8 +232,8 @@ export default function Billing({ shop }) {
               }}
             >
               <p>
-                Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. 
-                Enjoy full access until then — billing starts automatically after.
+                Trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. 
+                Advanced AI features are locked during trial. Activate your {subscription.plan} plan to use them now.
               </p>
             </Banner>
           </Layout.Section>
