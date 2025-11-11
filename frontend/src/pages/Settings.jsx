@@ -963,6 +963,23 @@ export default function Settings() {
           }
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
+          
+          // Check if error is trial restriction (402 with trialRestriction flag)
+          if (error.trialRestriction && error.requiresActivation) {
+            console.log('[SITEMAP] 🔒 Trial restriction - plan not activated');
+            setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
+            setSaving(false);
+            
+            // Navigate to billing page after 2 seconds
+            setTimeout(() => {
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }, 2000);
+            return;
+          }
+          
           setToast('Settings saved, but sitemap regeneration failed');
         }
       } else {
