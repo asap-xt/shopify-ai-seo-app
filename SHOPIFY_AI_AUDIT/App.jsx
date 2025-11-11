@@ -692,7 +692,7 @@ export default function App() {
       return null;
     }
   });
-  // Removed forceBillingPage - backend (auth.js) now redirects to /billing directly
+  const [forceBillingPage, setForceBillingPage] = useState(false); // Force billing for pending subscription
   // App is installed via Shopify Install Modal, no frontend install button needed
 
   // Token exchange logic
@@ -800,8 +800,11 @@ export default function App() {
             console.error('[APP] Failed to cache plan:', e);
           }
           
-          // Note: Backend (auth.js) already redirects to /billing if subscription is pending
-          // No need to force billing page here - backend handles initial routing
+          // CRITICAL: If subscription is pending, force billing page to show
+          if (pm.subscriptionStatus === 'pending') {
+            console.log('[APP] Subscription pending, forcing billing page...');
+            setForceBillingPage(true); // This will make getPageComponent() return <Billing />
+          }
         }
         
       } catch (error) {
@@ -825,6 +828,11 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
+    // CRITICAL: Force billing page if subscription is pending (overrides all other routes)
+    if (forceBillingPage) {
+      return <Billing shop={shop} />;
+    }
+    
     // Dashboard
     if (path === '/' || path === '/dashboard') {
       return <Dashboard shop={shop} />;

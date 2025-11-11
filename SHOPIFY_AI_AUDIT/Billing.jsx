@@ -38,7 +38,6 @@ export default function Billing({ shop }) {
   const [error, setError] = useState(null);
   const [isActivatingPlan, setIsActivatingPlan] = useState(false); // Track if user is ending trial early
   const [showWelcomeBanner, setShowWelcomeBanner] = useState(false); // Welcome banner for first-time users
-  const [isRedirecting, setIsRedirecting] = useState(false); // Show redirecting state
 
   // Fetch billing info
   const fetchBillingInfo = useCallback(async () => {
@@ -72,29 +71,28 @@ export default function Billing({ shop }) {
   }, [shop]);
 
   useEffect(() => {
-    // Check for success callback FIRST (before fetching billing info)
+    fetchBillingInfo();
+    
+    // Check for success callback from Shopify (after plan activation)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('success') === 'true') {
       const host = urlParams.get('host');
       const embedded = urlParams.get('embedded');
       
-      // Show redirecting state immediately (hide billing UI)
-      setIsRedirecting(true);
-      
       // Only redirect if we have embedded params (second load from Shopify)
       if (host && embedded) {
-        console.log('[Billing] Plan activated, redirecting to Dashboard...');
+        console.log('[Billing] Plan activated, redirecting to Dashboard with embedded params...');
         
-        // Immediate redirect (no delay for faster UX)
-        const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-        window.location.href = dashboardUrl;
+        // Clear success param and redirect to Dashboard
+        setTimeout(() => {
+          const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          console.log('[Billing] Redirecting to:', dashboardUrl);
+          window.location.href = dashboardUrl;
+        }, 1000);
       } else {
         console.log('[Billing] Waiting for Shopify to reload with embedded params...');
-        // Do nothing - Shopify will reload the page with params
+        // Do nothing - Shopify will reload the page with proper params
       }
-    } else {
-      // Normal billing page load
-      fetchBillingInfo();
     }
   }, [fetchBillingInfo, shop]);
 
@@ -195,29 +193,6 @@ export default function Billing({ shop }) {
     const tokens = Math.floor(tokensInMillions * 1_000_000);
     return tokens;
   };
-
-  // Show elegant redirecting state after plan activation
-  if (isRedirecting) {
-    return (
-      <Layout>
-        <Layout.Section>
-          <Card>
-            <Box padding="800">
-              <BlockStack gap="400" align="center">
-                <Spinner size="large" />
-                <Text variant="headingMd" alignment="center">
-                  Plan Activated Successfully! 🎉
-                </Text>
-                <Text variant="bodyMd" tone="subdued" alignment="center">
-                  Redirecting to your Dashboard...
-                </Text>
-              </BlockStack>
-            </Box>
-          </Card>
-        </Layout.Section>
-      </Layout>
-    );
-  }
 
   // Render skeleton loader while fetching data
   if (loading) {

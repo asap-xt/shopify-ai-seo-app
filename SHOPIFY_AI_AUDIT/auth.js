@@ -341,21 +341,17 @@ router.get('/callback', async (req, res) => {
     
     const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, '');
     
-    // Redirect to appropriate page with embedded params
-    // CRITICAL: Include embedded=1 and host for proper iframe loading
-    const baseUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}`;
-    
+    // If no active subscription, redirect to billing page to select plan
     if (!hasActiveSubscription) {
-      // No subscription → Billing page (plan selection)
-      const billingUrl = `${baseUrl}/billing?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
+      const billingUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/billing`;
       console.log('[AUTH] No active subscription, redirecting to billing:', billingUrl);
       return res.redirect(302, billingUrl);
     }
     
-    // Active subscription → Dashboard
-    const dashboardUrl = `${baseUrl}/?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
-    console.log('[AUTH] Active subscription found, redirecting to dashboard:', dashboardUrl);
-    return res.redirect(302, dashboardUrl);
+    // Otherwise, redirect to dashboard
+    const embeddedUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}/`;
+    console.log('[AUTH] Active subscription found, redirecting to dashboard:', embeddedUrl);
+    return res.redirect(302, embeddedUrl);
     
   } catch (error) {
     console.error('[AUTH] OAuth callback error:', error);
