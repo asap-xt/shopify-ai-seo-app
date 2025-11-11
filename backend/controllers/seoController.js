@@ -411,8 +411,10 @@ async function ensureMetafieldDefinition(req, shop, language) {
     
     if (result?.metafieldDefinitionCreate?.userErrors?.length > 0) {
       const errors = result.metafieldDefinitionCreate.userErrors;
-      // If error is "already exists", that's OK
-      if (errors.some(e => e.message.includes('already exists') || e.message.includes('taken'))) {
+      // If error is "already exists" or "in use", that's OK (silently return)
+      if (errors.some(e => e.message.includes('already exists') || 
+                           e.message.includes('taken') || 
+                           e.message.includes('in use'))) {
         return { exists: true };
       }
       console.error(`[PRODUCT METAFIELDS] Errors:`, errors);
@@ -423,7 +425,14 @@ async function ensureMetafieldDefinition(req, shop, language) {
       return { created: true };
     }
   } catch (e) {
-    console.error(`[PRODUCT METAFIELDS] Exception:`, e.message);
+    // Suppress "Key is in use" errors (expected when definition already exists)
+    // These are caught by the userErrors check above and are harmless
+    // Only log unexpected errors
+    if (!e.message?.includes('in use') && 
+        !e.message?.includes('already exists') &&
+        !e.message?.includes('userErrors')) {
+      console.error(`[PRODUCT METAFIELDS] Exception:`, e.message);
+    }
     // Continue - metafield will still work
   }
   
@@ -882,7 +891,12 @@ function fixupAndValidate(payload) {
 
   const ok = validateSeo(p);
   if (!ok) {
-    console.error('[VALIDATION] Schema validation failed:', validateSeo.errors);
+    // Suppress validation errors for AI Enhancement (only has bullets/FAQ)
+    // Only log if it's NOT an AI Enhancement with missing basic SEO fields
+    const hasOnlyBulletsFAQ = p.seo?.bullets && p.seo?.faq && !p.seo?.title && !p.seo?.metaDescription;
+    if (!hasOnlyBulletsFAQ) {
+      console.error('[VALIDATION] Schema validation failed:', validateSeo.errors);
+    }
   }
   return { ok, value: p, issues: ok ? [] : (validateSeo.errors || []).map((e) => `${e.instancePath} ${e.message}`) };
 }

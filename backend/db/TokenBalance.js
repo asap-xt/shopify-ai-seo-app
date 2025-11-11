@@ -152,7 +152,8 @@ tokenBalanceSchema.methods.finalizeReservation = function(reservationId, actualT
   } else if (difference < 0) {
     // Deduct more: actual was more than estimated (should rarely happen with 10% margin)
     this.balance += difference; // difference is negative, so this deducts
-    console.warn(`[TokenBalance] Extra ${Math.abs(difference)} tokens deducted (exceeded estimate)`);
+    // Suppressed log - this is normal behavior (AI responses vary in length)
+    // console.log(`[TokenBalance] Extra ${Math.abs(difference)} tokens deducted (exceeded estimate)`);
   }
   
   // Update total used to reflect actual usage
