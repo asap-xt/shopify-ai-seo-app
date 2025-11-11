@@ -531,6 +531,8 @@ export default function Settings() {
       // Check generation status from backend
       const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
+      console.log('[PROGRESS-CHECK] Status data.error:', statusData?.error);
+      console.log('[PROGRESS-CHECK] Status data.errorMessage:', statusData?.errorMessage);
       
       // Check for errors (e.g., no optimized products, only basic SEO, trial restriction, insufficient tokens)
       if (statusData.error === 'NO_OPTIMIZED_PRODUCTS' || statusData.error === 'ONLY_BASIC_SEO') {
