@@ -56,7 +56,14 @@ export default function Billing({ shop }) {
       setBillingInfo(data);
       
       // Show welcome banner ONLY on first load (no active subscription)
-      if (data.subscription?.status === 'pending' || !data.subscription) {
+      const shouldShow = data.subscription?.status === 'pending' || !data.subscription;
+      console.log('[Billing] Welcome banner check:', {
+        subscription: data.subscription,
+        status: data.subscription?.status,
+        shouldShow
+      });
+      
+      if (shouldShow) {
         setShowWelcomeBanner(true);
       }
     } catch (err) {
