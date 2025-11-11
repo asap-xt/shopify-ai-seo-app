@@ -532,7 +532,7 @@ export default function Settings() {
       const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
       
-      // Check for errors (e.g., no optimized products or only basic SEO)
+      // Check for errors (e.g., no optimized products, only basic SEO, trial restriction, insufficient tokens)
       if (statusData.error === 'NO_OPTIMIZED_PRODUCTS' || statusData.error === 'ONLY_BASIC_SEO') {
         console.log('[PROGRESS-CHECK] ❌ Schema error:', statusData.error);
         
@@ -545,6 +545,41 @@ export default function Settings() {
         setToast(null); // Clear any previous toasts
         setSchemaErrorType(statusData.error);
         setShowSchemaErrorModal(true);
+        
+        return; // Stop checking
+      }
+      
+      // Check for TRIAL_RESTRICTION error
+      if (statusData.error === 'TRIAL_RESTRICTION') {
+        console.log('[PROGRESS-CHECK] 🔒 Trial restriction detected');
+        
+        // Stop checking
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0;
+        setSchemaGenerating(false);
+        
+        // Show toast and redirect to billing (same as AI Sitemap behavior)
+        setToast(statusData.errorMessage || 'Advanced Schema Data is locked during trial. Please activate your plan to use included tokens.');
+        
+        // Navigate to billing page after 2 seconds
+        setTimeout(() => {
+          window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
+        }, 2000);
+        
+        return; // Stop checking
+      }
+      
+      // Check for INSUFFICIENT_TOKENS error
+      if (statusData.error === 'INSUFFICIENT_TOKENS') {
+        console.log('[PROGRESS-CHECK] 💰 Insufficient tokens detected');
+        
+        // Stop checking
+        isGeneratingRef.current = false;
+        checkCountRef.current = 0;
+        setSchemaGenerating(false);
+        
+        // Show toast message
+        setToast(statusData.errorMessage || 'Insufficient token balance for Advanced Schema generation. Please purchase tokens.');
         
         return; // Stop checking
       }

@@ -1337,13 +1337,13 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     currentProduct: 'Initializing...' 
   });
   
-  // === TOKEN RESERVATION ===
+  // === TOKEN RESERVATION & TRIAL CHECK ===
   let reservationId = null;
   let totalAITokens = 0;
   
   try {
     // Check if this feature requires tokens and reserve
-    const { estimateTokensWithMargin, requiresTokens, calculateActualTokens } = await import('../billing/tokenConfig.js');
+    const { estimateTokensWithMargin, requiresTokens, calculateActualTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
     if (requiresTokens(feature)) {
@@ -1352,16 +1352,37 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
+      // === TRIAL RESTRICTION CHECK ===
+      // Get subscription to check trial status
+      const Subscription = (await import('../db/Subscription.js')).default;
+      const subscription = await Subscription.findOne({ shop });
+      
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isActive = subscription?.status === 'active';
+      
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // CRITICAL: Block during trial ONLY for plans with included tokens
+      if (hasIncludedTokens && inTrial && !isActive && isBlockedInTrial(feature)) {
+        console.log('[SCHEMA] 🔒 Advanced Schema blocked - trial period with included tokens, plan not activated');
+        throw new Error('TRIAL_RESTRICTION: Advanced Schema Data is locked during trial period. Activate your plan to unlock.');
+      }
+      
+      // Check token balance
       if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop });
         reservationId = reservation.reservationId;
         await reservation.save();
       } else {
         console.error(`[SCHEMA] Insufficient tokens! Need: ${tokenEstimate.withMargin}, Have: ${tokenBalance.balance}`);
-        throw new Error('Insufficient token balance for Advanced Schema generation');
+        throw new Error('INSUFFICIENT_TOKENS: Insufficient token balance for Advanced Schema generation');
       }
     }
-    // === END TOKEN RESERVATION ===
+    // === END TOKEN RESERVATION & TRIAL CHECK ===
     
     // Load shop context
     const shopContext = await loadShopContext(shop);
@@ -1635,6 +1656,24 @@ router.post('/generate-all', async (req, res) => {
           currentProduct: '',
           error: 'ONLY_BASIC_SEO',
           errorMessage: 'Only basic AISEO found. AI-enhanced optimization is recommended for better results.'
+        });
+      } else if (err.message.startsWith('TRIAL_RESTRICTION:')) {
+        // Trial restriction error
+        generationStatus.set(shop, { 
+          generating: false, 
+          progress: '0%', 
+          currentProduct: '',
+          error: 'TRIAL_RESTRICTION',
+          errorMessage: err.message.replace('TRIAL_RESTRICTION: ', '')
+        });
+      } else if (err.message.startsWith('INSUFFICIENT_TOKENS:')) {
+        // Token balance error
+        generationStatus.set(shop, { 
+          generating: false, 
+          progress: '0%', 
+          currentProduct: '',
+          error: 'INSUFFICIENT_TOKENS',
+          errorMessage: err.message.replace('INSUFFICIENT_TOKENS: ', '')
         });
       } else {
         generationStatus.set(shop, { 
