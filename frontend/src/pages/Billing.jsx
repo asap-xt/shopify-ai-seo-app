@@ -34,6 +34,7 @@ export default function Billing({ shop }) {
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState(null);
   const [isActivatingPlan, setIsActivatingPlan] = useState(false); // Track if user is ending trial early
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(false); // Welcome banner for first-time users
 
   // Fetch billing info
   const fetchBillingInfo = useCallback(async () => {
@@ -53,6 +54,11 @@ export default function Billing({ shop }) {
       
       const data = await response.json();
       setBillingInfo(data);
+      
+      // Show welcome banner ONLY on first load (no active subscription)
+      if (data.subscription?.status === 'pending' || !data.subscription) {
+        setShowWelcomeBanner(true);
+      }
     } catch (err) {
       console.error('[Billing] Error fetching info:', err);
       setError('Failed to load billing information');
@@ -71,45 +77,6 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
-      // Try to expand Shopify Admin sidebar (collapsed after billing redirect)
-      // FINAL ATTEMPT: 3x persistent clicks to override Shopify's auto-close
-      const attemptSidebarExpand = () => {
-        try {
-          const navMenu = document.querySelector('ui-nav-menu');
-          if (navMenu) {
-            navMenu.open = true;
-            navMenu.setAttribute('open', '');
-            navMenu.dispatchEvent(new Event('open', { bubbles: true }));
-            return true;
-          }
-          return false;
-        } catch (e) {
-          console.warn('[Billing] Sidebar expand error:', e);
-          return false;
-        }
-      };
-      
-      // Attempt 1: After 300ms
-      setTimeout(() => {
-        if (attemptSidebarExpand()) {
-          console.log('[Billing] Sidebar expand attempt 1/3');
-        }
-      }, 300);
-      
-      // Attempt 2: After 600ms (catch Shopify's auto-close)
-      setTimeout(() => {
-        if (attemptSidebarExpand()) {
-          console.log('[Billing] Sidebar expand attempt 2/3');
-        }
-      }, 600);
-      
-      // Attempt 3: After 900ms (final override)
-      setTimeout(() => {
-        if (attemptSidebarExpand()) {
-          console.log('[Billing] Sidebar expand attempt 3/3 - FINAL');
-        }
-      }, 900);
-      
       // Refresh billing info after 1 second to ensure backend updates are reflected
       setTimeout(() => {
         console.log('[Billing] Refreshing after successful activation...');
@@ -123,6 +90,9 @@ export default function Billing({ shop }) {
     try {
       setPurchasing(true);
       setError(null);
+      
+      // Hide welcome banner when user selects a plan
+      setShowWelcomeBanner(false);
       
       const response = await fetch('/api/billing/subscribe', {
         method: 'POST',
@@ -252,6 +222,26 @@ export default function Billing({ shop }) {
               onDismiss={() => setError(null)}
             >
               <p>{error}</p>
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {/* Welcome Banner - ONLY on first load (no active subscription) */}
+        {showWelcomeBanner && (
+          <Layout.Section>
+            <Banner
+              title="🤖 Future-Proof Your Product Discovery"
+              tone="success"
+              onDismiss={() => setShowWelcomeBanner(false)}
+            >
+              <BlockStack gap="200">
+                <p>
+                  Traditional SEO isn't enough anymore. AI assistants like ChatGPT, Gemini & Perplexity need structured data to recommend your products.
+                </p>
+                <p>
+                  <strong>✅ Smart approach:</strong> Start with a smaller plan to test optimization. Upgrade anytime to scale across your entire catalog.
+                </p>
+              </BlockStack>
             </Banner>
           </Layout.Section>
         )}
