@@ -504,6 +504,7 @@ export default function Settings() {
   const maxChecks = 30; // Maximum 30 checks (90 seconds)
   
   const checkGenerationProgress = useCallback(async () => {
+    console.log('[PROGRESS-CHECK] ===== CHECK CALLED =====');
     console.log('[PROGRESS-CHECK] Starting check...');
     console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
     console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
