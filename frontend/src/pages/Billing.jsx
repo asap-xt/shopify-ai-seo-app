@@ -86,11 +86,20 @@ export default function Billing({ shop }) {
       // Redirect to Dashboard after successful plan activation using App Bridge
       setTimeout(() => {
         console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
-        if (app) {
-          const redirect = Redirect.create(app);
-          redirect.dispatch(Redirect.Action.APP, '/');
-        } else {
-          console.warn('[Billing] App Bridge not available, using fallback redirect');
+        console.log('[Billing] App Bridge instance:', app);
+        
+        try {
+          if (app) {
+            const redirect = Redirect.create(app);
+            console.log('[Billing] Redirect instance created:', redirect);
+            redirect.dispatch(Redirect.Action.APP, '/');
+            console.log('[Billing] Redirect.dispatch called with Redirect.Action.APP, "/"');
+          } else {
+            console.warn('[Billing] App Bridge not available, using fallback redirect');
+            window.location.href = `/?shop=${encodeURIComponent(shop)}`;
+          }
+        } catch (error) {
+          console.error('[Billing] Redirect error:', error);
           window.location.href = `/?shop=${encodeURIComponent(shop)}`;
         }
       }, 1500);
