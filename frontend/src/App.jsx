@@ -803,7 +803,10 @@ export default function App() {
           // CRITICAL: Redirect to billing if subscription is pending
           // Note: Backend redirect only works on first install (OAuth flow)
           // On reinstall, Shopify skips OAuth and loads app directly → must check here
-          if (pm.subscriptionStatus === 'pending' || !pm.plan) {
+          const currentPath = window.location.pathname;
+          const isAlreadyOnBilling = currentPath.includes('/billing');
+          
+          if ((pm.subscriptionStatus === 'pending' || !pm.plan) && !isAlreadyOnBilling) {
             console.log('[APP] No active subscription, redirecting to billing...');
             const params = new URLSearchParams(window.location.search);
             const host = params.get('host');
