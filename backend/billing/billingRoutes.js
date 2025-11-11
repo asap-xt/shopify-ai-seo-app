@@ -89,7 +89,7 @@ function getPlanFeatures(planKey) {
     features.push('Product Optimization for AI search');
     features.push('Collections optimization');
     features.push('Sitemap generation');
-    features.push('AI Bot Access: Meta AI, Claude, Gemini, ChatGPT (OpenAI)');
+    features.push('✓ AI Bot Access: + ChatGPT (OpenAI)');
     features.push('AI Welcome Page (included)');
     features.push('Collections JSON Feed (included)');
     features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
