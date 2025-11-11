@@ -124,6 +124,7 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
       { 
         $set: {
           'seoStatus.optimized': false,
+          'seoStatus.aiEnhanced': false, // CRITICAL: Reset AI badge when product content changes
           'seoStatus.languages': [],
           'seoStatus.lastCheckedAt': new Date()
         }
@@ -254,6 +255,7 @@ export async function clearCollectionSeoStatusInMongoDB(shop, collectionId) {
       { 
         $set: {
           'seoStatus.optimized': false,
+          'seoStatus.aiEnhanced': false, // CRITICAL: Reset AI badge when collection content changes
           'seoStatus.languages': [],
           'seoStatus.lastCheckedAt': new Date()
         }
