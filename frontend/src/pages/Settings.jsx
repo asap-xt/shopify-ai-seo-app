@@ -956,6 +956,23 @@ export default function Settings() {
               startPollingForCompletion();
             }, 100);
           } else {
+            // Check if error message indicates trial restriction
+            const errorMessage = result?.data?.regenerateSitemap?.message || '';
+            if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
+              console.log('[SITEMAP] 🔒 Trial restriction detected in GraphQL response');
+              setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
+              setSaving(false);
+              
+              // Navigate to billing page after 2 seconds
+              setTimeout(() => {
+                const params = new URLSearchParams(window.location.search);
+                const host = params.get('host');
+                const embedded = params.get('embedded');
+                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              }, 2000);
+              return;
+            }
+            
             setToast('');
             setTimeout(() => {
               setToast('Settings saved, but sitemap regeneration failed');

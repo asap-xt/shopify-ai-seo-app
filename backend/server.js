@@ -660,6 +660,27 @@
           console.log('[GRAPHQL] Shop:', shop);
           console.log('[GRAPHQL] enableAIEnhancement: true');
           
+          // === TRIAL RESTRICTION CHECK ===
+          const { default: Subscription } = await import('./db/Subscription.js');
+          const subscription = await Subscription.findOne({ shop });
+          
+          const now = new Date();
+          const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          
+          const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+          const includedTokensPlans = ['growth_extra', 'enterprise'];
+          const hasIncludedTokens = includedTokensPlans.includes(planKey);
+          
+          // Import isBlockedInTrial
+          const { isBlockedInTrial } = await import('./billing/tokenConfig.js');
+          const feature = 'ai-sitemap-optimized';
+          
+          // CRITICAL: Block during trial ONLY for plans with included tokens
+          if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+            console.log('[GRAPHQL] 🔒 AI sitemap blocked - trial period with included tokens');
+            throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
+          }
+          
           // Import the core sitemap generation logic
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
           console.log('[GRAPHQL] ✅ generateSitemapCore imported successfully');
