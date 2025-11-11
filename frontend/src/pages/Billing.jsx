@@ -86,22 +86,29 @@ export default function Billing({ shop }) {
       // Redirect to Dashboard after successful plan activation using App Bridge
       setTimeout(() => {
         console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
+        console.log('[Billing] App instance:', app);
+        console.log('[Billing] Current pathname:', window.location.pathname);
         
         try {
+          const appHandle = window.location.pathname.split('/')[2];
+          const targetPath = `/apps/${appHandle}/dashboard`;
+          console.log('[Billing] App handle:', appHandle);
+          console.log('[Billing] Target path:', targetPath);
+          
           if (app) {
+            console.log('[Billing] Creating redirect...');
             const redirect = Redirect.create(app);
-            // Use ADMIN_PATH to stay within Shopify Admin iframe
-            redirect.dispatch(
-              Redirect.Action.ADMIN_PATH,
-              `/apps/${window.location.pathname.split('/')[2]}/dashboard`
-            );
-            console.log('[Billing] Redirected to dashboard via ADMIN_PATH');
+            console.log('[Billing] Redirect instance created:', redirect);
+            
+            console.log('[Billing] Dispatching ADMIN_PATH to:', targetPath);
+            redirect.dispatch(Redirect.Action.ADMIN_PATH, targetPath);
+            console.log('[Billing] Redirect dispatched successfully!');
           } else {
-            console.warn('[Billing] App Bridge not available');
-            // No fallback - must be embedded
+            console.warn('[Billing] App Bridge not available (app is null/undefined)');
           }
         } catch (error) {
           console.error('[Billing] Redirect error:', error);
+          console.error('[Billing] Error stack:', error.stack);
         }
       }, 1500);
     }
