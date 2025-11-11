@@ -72,30 +72,43 @@ export default function Billing({ shop }) {
       window.history.replaceState({}, '', newUrl);
       
       // Try to expand Shopify Admin sidebar (collapsed after billing redirect)
-      setTimeout(() => {
+      // FINAL ATTEMPT: 3x persistent clicks to override Shopify's auto-close
+      const attemptSidebarExpand = () => {
         try {
-          // Shopify's new navigation uses <ui-nav-menu> web component
           const navMenu = document.querySelector('ui-nav-menu');
           if (navMenu) {
-            console.log('[Billing] Found ui-nav-menu, attempting to expand...');
-            
-            // Set 'open' property directly on the web component
             navMenu.open = true;
-            
-            // Also set attribute (fallback for older versions)
             navMenu.setAttribute('open', '');
-            
-            // Dispatch 'open' event to trigger Shopify's internal handlers
             navMenu.dispatchEvent(new Event('open', { bubbles: true }));
-            
-            console.log('[Billing] Sidebar expand attempted');
-          } else {
-            console.warn('[Billing] ui-nav-menu not found in DOM');
+            return true;
           }
+          return false;
         } catch (e) {
-          console.warn('[Billing] Could not expand sidebar:', e);
+          console.warn('[Billing] Sidebar expand error:', e);
+          return false;
         }
-      }, 500);
+      };
+      
+      // Attempt 1: After 300ms
+      setTimeout(() => {
+        if (attemptSidebarExpand()) {
+          console.log('[Billing] Sidebar expand attempt 1/3');
+        }
+      }, 300);
+      
+      // Attempt 2: After 600ms (catch Shopify's auto-close)
+      setTimeout(() => {
+        if (attemptSidebarExpand()) {
+          console.log('[Billing] Sidebar expand attempt 2/3');
+        }
+      }, 600);
+      
+      // Attempt 3: After 900ms (final override)
+      setTimeout(() => {
+        if (attemptSidebarExpand()) {
+          console.log('[Billing] Sidebar expand attempt 3/3 - FINAL');
+        }
+      }, 900);
       
       // Refresh billing info after 1 second to ensure backend updates are reflected
       setTimeout(() => {
