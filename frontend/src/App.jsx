@@ -808,6 +808,14 @@ export default function App() {
           
           if ((pm.subscriptionStatus === 'pending' || !pm.plan) && !isAlreadyOnBilling) {
             console.log('[APP] No active subscription, redirecting to billing...');
+            
+            // Clear localStorage to reset Getting Started card state
+            try {
+              localStorage.removeItem(`onboardingOpen_${shop}`);
+            } catch (e) {
+              console.error('[APP] Failed to clear onboarding state:', e);
+            }
+            
             const params = new URLSearchParams(window.location.search);
             const host = params.get('host');
             const embedded = params.get('embedded');
