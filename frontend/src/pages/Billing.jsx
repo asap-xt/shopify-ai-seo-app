@@ -45,11 +45,15 @@ export default function Billing({ shop }) {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/billing/info?shop=${shop}`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Start loading and minimum delay in parallel
+      const [response] = await Promise.all([
+        fetch(`/api/billing/info?shop=${shop}`, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }),
+        new Promise(resolve => setTimeout(resolve, 600)) // Minimum 600ms for skeleton visibility
+      ]);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
