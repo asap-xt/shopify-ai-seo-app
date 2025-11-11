@@ -76,24 +76,23 @@ export default function Billing({ shop }) {
     // Check for success callback from Shopify (after plan activation)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('success') === 'true') {
-      // Clear success param from URL
-      const newUrl = window.location.pathname + '?shop=' + shop;
-      window.history.replaceState({}, '', newUrl);
+      const host = urlParams.get('host');
+      const embedded = urlParams.get('embedded');
       
-      // Redirect to Dashboard after successful plan activation
-      // Using window.location (recommended by Shopify Community for post-billing redirects)
-      setTimeout(() => {
-        console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
-        const params = new URLSearchParams(window.location.search);
-        const host = params.get('host');
-        const embedded = params.get('embedded');
+      // Only redirect if we have embedded params (second load from Shopify)
+      if (host && embedded) {
+        console.log('[Billing] Plan activated, redirecting to Dashboard with embedded params...');
         
-        // Preserve embedded params for proper iframe navigation
-        const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-        console.log('[Billing] Redirecting to:', dashboardUrl);
-        
-        window.location.href = dashboardUrl;
-      }, 1000);
+        // Clear success param and redirect to Dashboard
+        setTimeout(() => {
+          const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          console.log('[Billing] Redirecting to:', dashboardUrl);
+          window.location.href = dashboardUrl;
+        }, 1000);
+      } else {
+        console.log('[Billing] Waiting for Shopify to reload with embedded params...');
+        // Do nothing - Shopify will reload the page with proper params
+      }
     }
   }, [fetchBillingInfo, shop]);
 
