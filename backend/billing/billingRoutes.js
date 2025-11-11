@@ -51,11 +51,12 @@ function getPlanFeatures(planKey) {
     return features;
   }
   
-  // Professional - all from Starter plus:
+  // Professional - updated features:
   if (planKey === 'professional') {
-    features.push('All from Starter plus');
+    features.push('Product Optimization for AI search');
+    features.push('Sitemap generation');
+    features.push('AI Bot Access: Meta AI, Claude (Anthropic), Gemini (Google)');
     features.push('Pay-per-use tokens');
-    features.push('AI Bot Access: + Gemini (Google)');
     features.push('AI-enhanced add-ons for products (pay-per-use tokens required)');
     return features;
   }
@@ -83,9 +84,14 @@ function getPlanFeatures(planKey) {
     return features;
   }
   
-  // Growth Plus - all from Growth plus:
+  // Growth Plus - includes Growth features + AI Discovery:
   if (planKey === 'growth plus') {
-    features.push('All from Growth plus');
+    features.push('Product Optimization for AI search');
+    features.push('Collections optimization');
+    features.push('Sitemap generation');
+    features.push('AI Bot Access: Meta AI, Claude, Gemini, ChatGPT (OpenAI)');
+    features.push('AI Welcome Page (included)');
+    features.push('Collections JSON Feed (included)');
     features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
     features.push('AI-Optimized Sitemap (pay-per-use tokens)');
     features.push('Store Metadata (pay-per-use tokens)');
