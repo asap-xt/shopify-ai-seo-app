@@ -378,7 +378,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     if (items.length === 0) {
       setSelectAllPages(false);
     }
-  }, [products]);
+  }, []); // Remove products dependency - not needed for this callback
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
