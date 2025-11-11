@@ -80,11 +80,11 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
-      // Refresh billing info after 1 second to ensure backend updates are reflected
+      // Redirect to Dashboard after successful plan activation
       setTimeout(() => {
-        console.log('[Billing] Refreshing after successful activation...');
-        fetchBillingInfo();
-      }, 1000);
+        console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
+        window.shopify.navigate('/');
+      }, 1500);
     }
   }, [fetchBillingInfo, shop]);
 
