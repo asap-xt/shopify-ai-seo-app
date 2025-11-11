@@ -303,9 +303,14 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // TRIAL PERIOD LOGIC (Shopify Best Practice):
     // 1. First subscription (install): Set trialEndsAt = now + TRIAL_DAYS
     // 2. Plan change (upgrade/downgrade): PRESERVE original trialEndsAt
-    // 3. This ensures trial countdown continues regardless of plan changes
+    // 3. User ends trial early: Set trialEndsAt = null (trial ended)
+    // 4. This ensures trial countdown continues regardless of plan changes
     let trialEndsAt = null;
-    if (existingSub && existingSub.trialEndsAt) {
+    if (endTrial) {
+      // User explicitly ended trial - clear trialEndsAt
+      trialEndsAt = null;
+      console.log('[BILLING] Trial ended by user - clearing trialEndsAt');
+    } else if (existingSub && existingSub.trialEndsAt) {
       // Plan change: Preserve original trial end date
       trialEndsAt = existingSub.trialEndsAt;
       console.log('[BILLING] Plan change - preserving trial:', {
