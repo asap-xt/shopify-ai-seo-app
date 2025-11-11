@@ -74,31 +74,28 @@ export default function Billing({ shop }) {
       // Try to expand Shopify Admin sidebar (collapsed after billing redirect)
       setTimeout(() => {
         try {
-          // Try multiple possible selectors for sidebar toggle button
-          const selectors = [
-            '[data-polaris-app-nav-toggle]',
-            'button[aria-label*="navigation"]',
-            'button[aria-label*="menu"]',
-            '.Polaris-TopBar__NavigationIcon',
-            'ui-nav-menu'
-          ];
-          
-          for (const selector of selectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-              console.log('[Billing] Found sidebar element:', selector);
-              if (typeof element.click === 'function') {
-                element.click();
-              } else if (element.setAttribute) {
-                element.setAttribute('open', 'true');
-              }
-              break; // Stop after first successful attempt
-            }
+          // Shopify's new navigation uses <ui-nav-menu> web component
+          const navMenu = document.querySelector('ui-nav-menu');
+          if (navMenu) {
+            console.log('[Billing] Found ui-nav-menu, attempting to expand...');
+            
+            // Set 'open' property directly on the web component
+            navMenu.open = true;
+            
+            // Also set attribute (fallback for older versions)
+            navMenu.setAttribute('open', '');
+            
+            // Dispatch 'open' event to trigger Shopify's internal handlers
+            navMenu.dispatchEvent(new Event('open', { bubbles: true }));
+            
+            console.log('[Billing] Sidebar expand attempted');
+          } else {
+            console.warn('[Billing] ui-nav-menu not found in DOM');
           }
         } catch (e) {
           console.warn('[Billing] Could not expand sidebar:', e);
         }
-      }, 300);
+      }, 500);
       
       // Refresh billing info after 1 second to ensure backend updates are reflected
       setTimeout(() => {
