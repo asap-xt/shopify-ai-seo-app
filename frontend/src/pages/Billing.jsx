@@ -22,13 +22,10 @@ import {
   SkeletonBodyText,
   SkeletonDisplayText
 } from '@shopify/polaris';
-import { Redirect } from '@shopify/app-bridge/actions';
-import { useAppBridge } from '@shopify/app-bridge-react';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100];
 
 export default function Billing({ shop }) {
-  const app = useAppBridge(); // Shopify App Bridge instance
   const [loading, setLoading] = useState(true);
   const [billingInfo, setBillingInfo] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -83,34 +80,20 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
-      // Redirect to Dashboard after successful plan activation using App Bridge
+      // Redirect to Dashboard after successful plan activation
+      // Using window.location (recommended by Shopify Community for post-billing redirects)
       setTimeout(() => {
         console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
-        console.log('[Billing] App instance:', app);
-        console.log('[Billing] Current pathname:', window.location.pathname);
+        const params = new URLSearchParams(window.location.search);
+        const host = params.get('host');
+        const embedded = params.get('embedded');
         
-        try {
-          const appHandle = window.location.pathname.split('/')[2];
-          const targetPath = `/apps/${appHandle}/dashboard`;
-          console.log('[Billing] App handle:', appHandle);
-          console.log('[Billing] Target path:', targetPath);
-          
-          if (app) {
-            console.log('[Billing] Creating redirect...');
-            const redirect = Redirect.create(app);
-            console.log('[Billing] Redirect instance created:', redirect);
-            
-            console.log('[Billing] Dispatching ADMIN_PATH to:', targetPath);
-            redirect.dispatch(Redirect.Action.ADMIN_PATH, targetPath);
-            console.log('[Billing] Redirect dispatched successfully!');
-          } else {
-            console.warn('[Billing] App Bridge not available (app is null/undefined)');
-          }
-        } catch (error) {
-          console.error('[Billing] Redirect error:', error);
-          console.error('[Billing] Error stack:', error.stack);
-        }
-      }, 1500);
+        // Preserve embedded params for proper iframe navigation
+        const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+        console.log('[Billing] Redirecting to:', dashboardUrl);
+        
+        window.location.href = dashboardUrl;
+      }, 1000);
     }
   }, [fetchBillingInfo, shop]);
 
