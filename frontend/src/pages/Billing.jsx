@@ -71,6 +71,35 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
+      // Try to expand Shopify Admin sidebar (collapsed after billing redirect)
+      setTimeout(() => {
+        try {
+          // Try multiple possible selectors for sidebar toggle button
+          const selectors = [
+            '[data-polaris-app-nav-toggle]',
+            'button[aria-label*="navigation"]',
+            'button[aria-label*="menu"]',
+            '.Polaris-TopBar__NavigationIcon',
+            'ui-nav-menu'
+          ];
+          
+          for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              console.log('[Billing] Found sidebar element:', selector);
+              if (typeof element.click === 'function') {
+                element.click();
+              } else if (element.setAttribute) {
+                element.setAttribute('open', 'true');
+              }
+              break; // Stop after first successful attempt
+            }
+          }
+        } catch (e) {
+          console.warn('[Billing] Could not expand sidebar:', e);
+        }
+      }, 300);
+      
       // Refresh billing info after 1 second to ensure backend updates are reflected
       setTimeout(() => {
         console.log('[Billing] Refreshing after successful activation...');
