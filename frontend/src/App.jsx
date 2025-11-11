@@ -793,14 +793,8 @@ export default function App() {
         const pm = plansData?.data?.plansMe;
         if (pm) {
           setPlan(pm);
-          // Persist plan in sessionStorage to survive React remounts
-          try {
-            sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
-          } catch (e) {
-            console.error('[APP] Failed to cache plan:', e);
-          }
           
-          // CRITICAL: Redirect to billing if subscription is pending
+          // CRITICAL: Redirect to billing if subscription is pending (BEFORE caching)
           // Note: Backend redirect only works on first install (OAuth flow)
           // On reinstall, Shopify skips OAuth and loads app directly → must check here
           const currentPath = window.location.pathname;
@@ -808,11 +802,27 @@ export default function App() {
           
           if ((pm.subscriptionStatus === 'pending' || !pm.plan) && !isAlreadyOnBilling) {
             console.log('[APP] No active subscription, redirecting to billing...');
+            // Clear stale sessionStorage
+            try {
+              sessionStorage.removeItem(`plan_${shop}`);
+            } catch (e) {
+              console.error('[APP] Failed to clear plan cache:', e);
+            }
+            
             const params = new URLSearchParams(window.location.search);
             const host = params.get('host');
             const embedded = params.get('embedded');
             window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
             return; // Stop execution
+          }
+          
+          // Only cache plan if subscription is active (prevent stale cache on reinstall)
+          if (pm.subscriptionStatus === 'active' || pm.plan) {
+            try {
+              sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
+            } catch (e) {
+              console.error('[APP] Failed to cache plan:', e);
+            }
           }
         }
         
