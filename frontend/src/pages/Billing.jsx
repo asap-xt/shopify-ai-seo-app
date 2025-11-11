@@ -22,10 +22,13 @@ import {
   SkeletonBodyText,
   SkeletonDisplayText
 } from '@shopify/polaris';
+import { Redirect } from '@shopify/app-bridge/actions';
+import { useAppBridge } from '@shopify/app-bridge-react';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100];
 
 export default function Billing({ shop }) {
+  const app = useAppBridge(); // Shopify App Bridge instance
   const [loading, setLoading] = useState(true);
   const [billingInfo, setBillingInfo] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -80,10 +83,16 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
-      // Redirect to Dashboard after successful plan activation
+      // Redirect to Dashboard after successful plan activation using App Bridge
       setTimeout(() => {
         console.log('[Billing] Plan activated successfully, redirecting to Dashboard...');
-        window.shopify.navigate('/');
+        if (app) {
+          const redirect = Redirect.create(app);
+          redirect.dispatch(Redirect.Action.APP, '/');
+        } else {
+          console.warn('[Billing] App Bridge not available, using fallback redirect');
+          window.location.href = `/?shop=${encodeURIComponent(shop)}`;
+        }
       }, 1500);
     }
   }, [fetchBillingInfo, shop]);
