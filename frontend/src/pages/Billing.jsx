@@ -90,15 +90,18 @@ export default function Billing({ shop }) {
         try {
           if (app) {
             const redirect = Redirect.create(app);
-            redirect.dispatch(Redirect.Action.APP, '/dashboard');
-            console.log('[Billing] Redirected to /dashboard via App Bridge');
+            // Use ADMIN_PATH to stay within Shopify Admin iframe
+            redirect.dispatch(
+              Redirect.Action.ADMIN_PATH,
+              `/apps/${window.location.pathname.split('/')[2]}/dashboard`
+            );
+            console.log('[Billing] Redirected to dashboard via ADMIN_PATH');
           } else {
-            console.warn('[Billing] App Bridge not available, using fallback redirect');
-            window.location.href = `/dashboard?shop=${encodeURIComponent(shop)}`;
+            console.warn('[Billing] App Bridge not available');
+            // No fallback - must be embedded
           }
         } catch (error) {
           console.error('[Billing] Redirect error:', error);
-          window.location.href = `/dashboard?shop=${encodeURIComponent(shop)}`;
         }
       }, 1500);
     }
