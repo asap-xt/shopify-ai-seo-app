@@ -1369,7 +1369,6 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       // CRITICAL: Block during trial ONLY for plans with included tokens
       // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
       if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
-        console.log('[SCHEMA] 🔒 Advanced Schema blocked - trial period with included tokens, plan not activated yet');
         throw new Error('TRIAL_RESTRICTION: Advanced Schema Data is locked during trial period. Activate your plan to unlock.');
       }
       

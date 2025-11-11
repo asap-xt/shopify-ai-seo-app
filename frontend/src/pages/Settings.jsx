@@ -504,7 +504,6 @@ export default function Settings() {
   const maxChecks = 30; // Maximum 30 checks (90 seconds)
   
   const checkGenerationProgress = useCallback(async () => {
-    console.log('[PROGRESS-CHECK] ===== CHECK CALLED =====');
     console.log('[PROGRESS-CHECK] Starting check...');
     console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
     console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
@@ -532,8 +531,6 @@ export default function Settings() {
       // Check generation status from backend
       const statusData = await api(`/api/schema/status?shop=${shop}`);
       console.log('[PROGRESS-CHECK] Status data:', statusData);
-      console.log('[PROGRESS-CHECK] Status data.error:', statusData?.error);
-      console.log('[PROGRESS-CHECK] Status data.errorMessage:', statusData?.errorMessage);
       
       // Check for errors (e.g., no optimized products, only basic SEO, trial restriction, insufficient tokens)
       if (statusData.error === 'NO_OPTIMIZED_PRODUCTS' || statusData.error === 'ONLY_BASIC_SEO') {
@@ -554,8 +551,6 @@ export default function Settings() {
       
       // Check for TRIAL_RESTRICTION error
       if (statusData.error === 'TRIAL_RESTRICTION') {
-        console.log('[PROGRESS-CHECK] 🔒 Trial restriction detected');
-        
         // Stop checking
         isGeneratingRef.current = false;
         checkCountRef.current = 0;
@@ -577,8 +572,6 @@ export default function Settings() {
       
       // Check for INSUFFICIENT_TOKENS error
       if (statusData.error === 'INSUFFICIENT_TOKENS') {
-        console.log('[PROGRESS-CHECK] 💰 Insufficient tokens detected');
-        
         // Stop checking
         isGeneratingRef.current = false;
         checkCountRef.current = 0;
@@ -959,7 +952,6 @@ export default function Settings() {
             // Check if error message indicates trial restriction
             const errorMessage = result?.data?.regenerateSitemap?.message || '';
             if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
-              console.log('[SITEMAP] 🔒 Trial restriction detected in GraphQL response');
               setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
               setSaving(false);
               
@@ -983,7 +975,6 @@ export default function Settings() {
           
           // Check if error is trial restriction (402 with trialRestriction flag)
           if (error.trialRestriction && error.requiresActivation) {
-            console.log('[SITEMAP] 🔒 Trial restriction - plan not activated');
             setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
             setSaving(false);
             

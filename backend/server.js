@@ -677,7 +677,6 @@
           
           // CRITICAL: Block during trial ONLY for plans with included tokens
           if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
-            console.log('[GRAPHQL] 🔒 AI sitemap blocked - trial period with included tokens');
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
