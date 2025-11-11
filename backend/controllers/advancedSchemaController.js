@@ -1550,14 +1550,16 @@ router.post('/generate-all', async (req, res) => {
     }
     
     // === TRIAL RESTRICTION CHECK ===
+    // IMPORTANT: Only for plans with INCLUDED tokens (Growth Extra, Enterprise)
+    // Plus plans use PURCHASED tokens → no trial restriction
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
     const isActive = subscription?.status === 'active';
     const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
-    // CRITICAL: Block during trial if plan is NOT active (even if has included tokens)
-    if (inTrial && !isActive && isBlockedInTrial(feature)) {
+    // CRITICAL: Block during trial ONLY for plans with included tokens
+    if (hasIncludedAccess && inTrial && !isActive && isBlockedInTrial(feature)) {
       // Get token info for Trial Activation Modal
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
       const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 });
@@ -1574,12 +1576,12 @@ router.post('/generate-all', async (req, res) => {
         tokensWithMargin: tokenEstimate.withMargin,
         tokensAvailable: tokenBalance.balance,
         tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
-        message: 'Activate your plan or purchase tokens to generate Advanced Schema Data'
+        message: 'Activate your plan to unlock Advanced Schema Data with included tokens'
       });
     }
     
-    // === TOKEN BALANCE CHECK (for active plans or after trial) ===
-    // For Plus plans, check if they have tokens
+    // === TOKEN BALANCE CHECK ===
+    // For Plus plans (purchased tokens) OR active included-tokens plans
     if (isPlusPlan) {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
@@ -1598,7 +1600,7 @@ router.post('/generate-all', async (req, res) => {
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature: 'ai-schema-advanced',
-          message: 'You need more tokens to generate Advanced Schema Data'
+          message: 'Purchase tokens to generate Advanced Schema Data'
         });
       }
     }

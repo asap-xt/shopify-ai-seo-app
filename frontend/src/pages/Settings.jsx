@@ -1871,6 +1871,19 @@ export default function Settings() {
                         console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
                         console.error('[SCHEMA-GEN] ❌ Full error object:', apiError);
                         
+                        // Check if error is trial restriction (402 with trialRestriction flag)
+                        if (apiError.trialRestriction && apiError.requiresActivation) {
+                          console.log('[SCHEMA-GEN] 🔒 Trial restriction - plan not activated');
+                          setToast('Advanced Schema Data is locked during trial. Please activate your plan to use included tokens.');
+                          setSchemaGenerating(false);
+                          
+                          // Navigate to billing page
+                          setTimeout(() => {
+                            window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
+                          }, 2000);
+                          return;
+                        }
+                        
                         // Check if error has requiresPurchase flag (402 status)
                         if (apiError.requiresPurchase) {
                           console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing modal');

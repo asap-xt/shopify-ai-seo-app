@@ -264,13 +264,18 @@ async function generateSitemapCore(shop, options = {}) {
               const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
-              // CRITICAL: Block AI sitemap during trial if plan is NOT active
-              // Even if user has included tokens (Growth Extra/Enterprise), they must activate plan first
-              if (inTrial && !isActive && isBlockedInTrial(feature)) {
-                console.log('[SITEMAP] AI sitemap blocked - trial period, plan not activated');
+              // Determine plan type
+              const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+              const includedTokensPlans = ['growth_extra', 'enterprise'];
+              const hasIncludedTokens = includedTokensPlans.includes(planKey);
+              
+              // CRITICAL: Trial restriction ONLY for plans with included tokens
+              // Plus plans can use purchased tokens during trial without activating plan
+              if (hasIncludedTokens && inTrial && !isActive && isBlockedInTrial(feature)) {
+                console.log('[SITEMAP] AI sitemap blocked - trial period with included tokens, plan not activated');
                 isAISitemapEnabled = false;
               } else if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-                // Has tokens AND (active plan OR trial ended) → Reserve tokens
+                // Has tokens AND (plan active OR trial ended OR purchased tokens) → Reserve tokens
                 const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
                 reservationId = reservation.reservationId;
                 await reservation.save();
