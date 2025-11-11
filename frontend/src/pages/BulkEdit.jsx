@@ -1189,10 +1189,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 if (availableLanguages.length > 0) {
                   return availableLanguages.map(lang => {
                     const isOptimized = optimizedLanguages.includes(lang);
+                    const isDraft = product.status === 'DRAFT';
                     return (
                       <Badge
                         key={lang}
-                        tone={isOptimized ? 'success' : 'subdued'}
+                        tone={isDraft ? 'subdued' : (isOptimized ? 'success' : 'subdued')}
                         size="small"
                       >
                         {lang.toUpperCase()}
@@ -1200,10 +1201,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     );
                   });
                 } else {
+                  const isDraft = product.status === 'DRAFT';
                   return optimizedLanguages.map(lang => (
                     <Badge
                       key={lang}
-                      tone="success"
+                      tone={isDraft ? 'subdued' : 'success'}
                       size="small"
                     >
                       {lang.toUpperCase()}
@@ -1211,14 +1213,22 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   ));
                 }
               })()}
-              {product.optimizationSummary?.aiEnhanced && (
+              {product.optimizationSummary?.aiEnhanced && product.status !== 'DRAFT' && (
                 <Badge tone="info" size="small">AI✨</Badge>
               )}
             </InlineStack>
           </Box>
           
           <Box style={{ flex: '0 0 20%', minWidth: '120px', textAlign: 'center' }}>
-            <Badge tone="success">Active</Badge>
+            {product.status === 'ACTIVE' ? (
+              <Badge tone="success">Active</Badge>
+            ) : product.status === 'DRAFT' ? (
+              <Badge>Draft</Badge>
+            ) : product.status === 'ARCHIVED' ? (
+              <Badge tone="warning">Archived</Badge>
+            ) : (
+              <Badge>{product.status || 'Unknown'}</Badge>
+            )}
           </Box>
         </InlineStack>
       </ResourceItem>
