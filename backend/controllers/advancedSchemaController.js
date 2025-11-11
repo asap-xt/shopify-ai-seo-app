@@ -1549,7 +1549,37 @@ router.post('/generate-all', async (req, res) => {
       });
     }
     
-    // For Plus plans, check if they have tokens (will be tracked during generation)
+    // === TRIAL RESTRICTION CHECK ===
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const isActive = subscription?.status === 'active';
+    const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
+    const feature = 'ai-schema-advanced';
+    
+    // CRITICAL: Block during trial if plan is NOT active (even if has included tokens)
+    if (inTrial && !isActive && isBlockedInTrial(feature)) {
+      // Get token info for Trial Activation Modal
+      const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 });
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      return res.status(402).json({
+        error: 'Advanced Schema Data is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true, // ← Show Trial Activation Modal
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        tokensRequired: tokenEstimate.estimated,
+        tokensWithMargin: tokenEstimate.withMargin,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+        message: 'Activate your plan or purchase tokens to generate Advanced Schema Data'
+      });
+    }
+    
+    // === TOKEN BALANCE CHECK (for active plans or after trial) ===
+    // For Plus plans, check if they have tokens
     if (isPlusPlan) {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
@@ -1560,8 +1590,8 @@ router.post('/generate-all', async (req, res) => {
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
         return res.status(402).json({ 
           error: 'Insufficient token balance',
-          requiresPurchase: true,
-          needsUpgrade: false, // Plus plans don't need upgrade, just tokens
+          requiresPurchase: true, // ← Show Insufficient Tokens Modal
+          needsUpgrade: false,
           currentPlan: subscription?.plan || 'none',
           tokensRequired: tokenEstimate.estimated,
           tokensWithMargin: tokenEstimate.withMargin,

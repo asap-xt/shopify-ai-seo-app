@@ -248,11 +248,11 @@ async function generateSitemapCore(shop, options = {}) {
           isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
           
           // === TRIAL PERIOD CHECK ===
-          // Block AI sitemap during trial UNLESS tokens are purchased
           const { default: Subscription } = await import('../db/Subscription.js');
           const subscription = await Subscription.findOne({ shop: normalizedShop });
           const now = new Date();
           const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          const isActive = subscription?.status === 'active';
           
           // === TOKEN RESERVATION FOR AI-SITEMAP ===
           if (isAISitemapEnabled) {
@@ -264,16 +264,19 @@ async function generateSitemapCore(shop, options = {}) {
               const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
-              // TRIAL RESTRICTION: Block AI sitemap during trial UNLESS tokens are purchased
-              if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-                console.log('[SITEMAP] AI sitemap blocked during trial - no tokens purchased');
+              // CRITICAL: Block AI sitemap during trial if plan is NOT active
+              // Even if user has included tokens (Growth Extra/Enterprise), they must activate plan first
+              if (inTrial && !isActive && isBlockedInTrial(feature)) {
+                console.log('[SITEMAP] AI sitemap blocked - trial period, plan not activated');
                 isAISitemapEnabled = false;
               } else if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+                // Has tokens AND (active plan OR trial ended) → Reserve tokens
                 const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
                 reservationId = reservation.reservationId;
                 await reservation.save();
               } else {
-                isAISitemapEnabled = false; // Not enough tokens
+                // Insufficient tokens
+                isAISitemapEnabled = false;
               }
             }
           }
