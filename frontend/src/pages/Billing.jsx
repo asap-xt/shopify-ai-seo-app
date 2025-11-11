@@ -71,6 +71,16 @@ export default function Billing({ shop }) {
       const newUrl = window.location.pathname + '?shop=' + shop;
       window.history.replaceState({}, '', newUrl);
       
+      // Force expand Shopify Admin sidebar (collapsed after external redirect)
+      try {
+        const navMenu = document.querySelector('ui-nav-menu');
+        if (navMenu) {
+          navMenu.setAttribute('open', 'true');
+        }
+      } catch (e) {
+        console.warn('[Billing] Could not expand nav menu:', e);
+      }
+      
       // Refresh billing info after 1 second to ensure backend updates are reflected
       setTimeout(() => {
         console.log('[Billing] Refreshing after successful activation...');
