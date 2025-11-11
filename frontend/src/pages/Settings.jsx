@@ -566,7 +566,10 @@ export default function Settings() {
         
         // Navigate to billing page after 2 seconds
         setTimeout(() => {
-          window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
+          const params = new URLSearchParams(window.location.search);
+          const host = params.get('host');
+          const embedded = params.get('embedded');
+          window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
         }, 2000);
         
         return; // Stop checking
