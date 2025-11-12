@@ -21,6 +21,15 @@ export default async function uninstallWebhook(req, res) {
     console.log('[Webhook] Starting MongoDB cleanup...');
     console.log('[Webhook] Note: Shopify metafield definitions will remain (Shopify revokes access before webhook)');
     
+    // CRITICAL: Invalidate Redis cache FIRST (before MongoDB cleanup)
+    try {
+      const { default: cacheService } = await import('../services/cacheService.js');
+      await cacheService.invalidateShop(shop);
+      console.log('[Webhook] ✅ Invalidated Redis cache for:', shop);
+    } catch (e) {
+      console.error('[Webhook] ❌ Error invalidating Redis cache:', e.message);
+    }
+    
     // Изтриваме shop записа от MongoDB
     const result = await Shop.deleteOne({ shop });
     console.log(`[Webhook] Deleted shop ${shop} from database:`, result.deletedCount > 0 ? 'SUCCESS' : 'NOT FOUND');
@@ -29,6 +38,17 @@ export default async function uninstallWebhook(req, res) {
     try {
       // Ако имате Subscription модел
       const { default: Subscription } = await import('../db/Subscription.js');
+      
+      // DEBUG: Check what exists before delete
+      const existingSub = await Subscription.findOne({ shop });
+      console.log(`[Webhook] 🔍 Subscription check for ${shop}:`, existingSub ? {
+        plan: existingSub.plan,
+        status: existingSub.status,
+        shopifySubscriptionId: existingSub.shopifySubscriptionId,
+        activatedAt: existingSub.activatedAt,
+        trialEndsAt: existingSub.trialEndsAt
+      } : 'NOT FOUND');
+      
       const subResult = await Subscription.deleteOne({ shop });
       console.log(`[Webhook] Deleted subscription for ${shop}: ${subResult.deletedCount} records deleted`);
       if (subResult.deletedCount === 0) {
