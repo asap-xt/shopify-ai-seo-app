@@ -47,7 +47,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   
   // Get user's plan
   const subscription = await Subscription.findOne({ shop });
-  const userPlan = subscription?.plan?.toLowerCase().replace(' ', '_') || 'starter';
+  const userPlan = normalizePlan(subscription?.plan);
   
   // Endpoints ordered by plan: Starter → Professional → Growth → Growth Extra → Enterprise
   const endpoints = [
@@ -513,17 +513,9 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     let totalTokensUsed = 0;
     
     // Process successful and warning endpoints (skip locked and failed)
-    const successfulEndpoints = Object.entries(endpointResults).filter(
-      ([key, result]) => result.status === 'success' || result.status === 'warning'
-    );
-    
+    // Note: successfulEndpoints already filtered on line 436 (excludes robotsTxt & schemaData)
     for (const [key, result] of successfulEndpoints) {
       try {
-        // Skip theme files - they're validated in basic tests only
-        if (key === 'robotsTxt' || key === 'schemaData') {
-          continue;
-        }
-        
         // Map endpoint keys to correct URLs (from run-tests endpoint definitions)
         const endpointUrls = {
           productsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`,
