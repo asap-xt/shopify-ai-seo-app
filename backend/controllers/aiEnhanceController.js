@@ -270,17 +270,26 @@ router.post('/product', validateRequest(), async (req, res) => {
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // TRIAL RESTRICTION: Block AI-enhanced features during trial UNLESS tokens are purchased
-      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // TRIAL RESTRICTION: Different logic for included vs purchased tokens
+      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+        // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
-          error: 'AI-enhanced features are not available during trial period',
-          inTrial: true,
+          error: 'AI-enhanced product optimization is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
           trialEndsAt: subscription.trialEndsAt,
-          requiresPurchase: true,
-          message: 'Purchase tokens or wait until your trial ends to use AI-enhanced features',
+          currentPlan: subscription.plan,
+          feature,
           tokensRequired: tokenEstimate.estimated,
           tokensWithMargin: tokenEstimate.withMargin,
-          feature
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+          message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
         });
       }
       
@@ -618,17 +627,26 @@ router.post('/collection', validateRequest(), async (req, res) => {
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // TRIAL RESTRICTION: Block AI-enhanced features during trial UNLESS tokens are purchased
-      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // TRIAL RESTRICTION: Different logic for included vs purchased tokens
+      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+        // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
-          error: 'AI-enhanced features are not available during trial period',
-          inTrial: true,
+          error: 'AI-enhanced collection optimization is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
           trialEndsAt: subscription.trialEndsAt,
-          requiresPurchase: true,
-          message: 'Purchase tokens or wait until your trial ends to use AI-enhanced features',
+          currentPlan: subscription.plan,
+          feature,
           tokensRequired: tokenEstimate.estimated,
           tokensWithMargin: tokenEstimate.withMargin,
-          feature
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+          message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
         });
       }
       

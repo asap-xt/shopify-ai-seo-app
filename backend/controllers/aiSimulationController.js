@@ -90,20 +90,26 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // If in trial AND insufficient tokens → Block with trial activation modal
-      if (inTrial && isBlockedInTrial(feature) && !tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const normalizedPlanKey = planKey.toLowerCase().replace(/\s+/g, '_');
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
+      
+      // TRIAL RESTRICTION: Different logic for included vs purchased tokens
+      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+        // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
-          error: 'Feature not available during trial without tokens',
+          error: 'AI Testing is locked during trial period',
           trialRestriction: true,
           requiresActivation: true,
           trialEndsAt: subscription.trialEndsAt,
-          currentPlan: planKey,
+          currentPlan: subscription.plan,
           feature,
           tokensRequired: tokenEstimate.estimated,
           tokensWithMargin: tokenEstimate.withMargin,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
-          message: 'AI Testing requires plan activation or token purchase'
+          tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+          message: 'Activate your plan to unlock AI Testing with included tokens'
         });
       }
       
