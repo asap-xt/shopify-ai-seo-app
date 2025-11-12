@@ -10,8 +10,10 @@ export default async function uninstallWebhook(req, res) {
     console.log('[Webhook] Body:', req.body);
     console.log('[Webhook] Query:', req.query);
     
-    const shop = (req.get('x-shopify-shop-domain') || req.query.shop || '').replace(/^https?:\/\//, '');
+    const shop = (req.get('x-shopify-shop-domain') || req.query.shop || '').replace(/^https?:\/\//, '').trim().toLowerCase();
     console.log('[Webhook] Extracted shop:', shop);
+    console.log('[Webhook] Shop length:', shop.length);
+    console.log('[Webhook] Shop bytes:', Buffer.from(shop).toString('hex'));
 
     if (!shop) {
       console.error('[Webhook] No shop domain in uninstall webhook');
@@ -48,6 +50,14 @@ export default async function uninstallWebhook(req, res) {
         activatedAt: existingSub.activatedAt,
         trialEndsAt: existingSub.trialEndsAt
       } : 'NOT FOUND');
+      
+      // DEBUG: Check ALL subscriptions in DB
+      const allSubs = await Subscription.find({});
+      console.log(`[Webhook] 🔍 ALL Subscriptions in DB (${allSubs.length}):`, allSubs.map(s => ({
+        shop: s.shop,
+        plan: s.plan,
+        shopMatch: s.shop === shop
+      })));
       
       const subResult = await Subscription.deleteOne({ shop });
       console.log(`[Webhook] Deleted subscription for ${shop}: ${subResult.deletedCount} records deleted`);
