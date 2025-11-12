@@ -18,6 +18,8 @@ import {
   Layout
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -40,6 +42,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [customQuestion, setCustomQuestion] = useState('');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
   const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
@@ -304,6 +307,13 @@ export default function AiTesting({ shop: shopProp }) {
       
       // Check for 402 status (payment required)
       if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+          setTokenError(error);
+          setShowTrialActivationModal(true);
+          return;
+        }
+        
         if (error.requiresUpgrade) {
           setTokenError(error);
           setShowUpgradeModal(true);
@@ -345,6 +355,14 @@ export default function AiTesting({ shop: shopProp }) {
       
       // Check for 402 status (payment required)
       if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+          setTokenError(error);
+          setShowTrialActivationModal(true);
+          setAiSimulationResponse('');
+          return;
+        }
+        
         // Plan upgrade required (Starter plan)
         if (error.requiresUpgrade) {
           setTokenError(error);
@@ -1093,6 +1111,35 @@ export default function AiTesting({ shop: shopProp }) {
           </BlockStack>
         </Modal.Section>
       </Modal>
+      
+      {/* Trial Activation Modal for Growth Extra/Enterprise */}
+      {tokenError && (
+        <TrialActivationModal
+          open={showTrialActivationModal}
+          onClose={() => {
+            setShowTrialActivationModal(false);
+            setTokenError(null);
+          }}
+          feature={tokenError.feature || 'ai-testing-simulation'}
+          trialEndsAt={tokenError.trialEndsAt}
+          currentPlan={tokenError.currentPlan || currentPlan}
+          tokensRequired={tokenError.tokensRequired || 0}
+          onActivatePlan={() => {
+            // Navigate to billing page to activate plan
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            const embedded = params.get('embedded');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          }}
+          onPurchaseTokens={() => {
+            // Navigate to billing page to purchase tokens
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            const embedded = params.get('embedded');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          }}
+        />
+      )}
     </>
   );
 }
