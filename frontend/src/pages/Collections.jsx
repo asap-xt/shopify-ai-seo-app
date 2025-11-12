@@ -27,6 +27,7 @@ import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
@@ -116,6 +117,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
@@ -502,8 +504,11 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           setCurrentPlan(error.currentPlan || currentPlan || 'starter');
           
           // Show appropriate modal based on error type
-          if (error.trialRestriction) {
-            // Trial user trying to use token feature → Show upgrade modal
+          if (error.trialRestriction && error.requiresActivation) {
+            // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+            setShowTrialActivationModal(true);
+          } else if (error.trialRestriction) {
+            // Old trial restriction logic (fallback)
             setShowUpgradeModal(true);
           } else {
             // Insufficient tokens (with or without upgrade suggestion)
@@ -1706,21 +1711,49 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       />
       
       {tokenError && (
-        <InsufficientTokensModal
-          open={showInsufficientTokensModal}
-          onClose={() => {
-            setShowInsufficientTokensModal(false);
-            setTokenError(null);
-          }}
-          tokensRequired={tokenError.tokensRequired || 0}
-          tokensAvailable={tokenError.tokensAvailable || 0}
-          tokensNeeded={tokenError.tokensNeeded || 0}
-          feature="ai-seo-collection"
-          shop={shop}
-          needsUpgrade={tokenError.needsUpgrade || false}
-          minimumPlan={tokenError.minimumPlanForFeature || null}
-          currentPlan={tokenError.currentPlan || currentPlan}
-        />
+        <>
+          <InsufficientTokensModal
+            open={showInsufficientTokensModal}
+            onClose={() => {
+              setShowInsufficientTokensModal(false);
+              setTokenError(null);
+            }}
+            tokensRequired={tokenError.tokensRequired || 0}
+            tokensAvailable={tokenError.tokensAvailable || 0}
+            tokensNeeded={tokenError.tokensNeeded || 0}
+            feature="ai-seo-collection"
+            shop={shop}
+            needsUpgrade={tokenError.needsUpgrade || false}
+            minimumPlan={tokenError.minimumPlanForFeature || null}
+            currentPlan={tokenError.currentPlan || currentPlan}
+          />
+          
+          <TrialActivationModal
+            open={showTrialActivationModal}
+            onClose={() => {
+              setShowTrialActivationModal(false);
+              setTokenError(null);
+            }}
+            feature={tokenError.feature || 'ai-seo-collection'}
+            trialEndsAt={tokenError.trialEndsAt}
+            currentPlan={tokenError.currentPlan || currentPlan}
+            tokensRequired={tokenError.tokensRequired || 0}
+            onActivatePlan={() => {
+              // Navigate to billing page to activate plan
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }}
+            onPurchaseTokens={() => {
+              // Navigate to billing page to purchase tokens
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }}
+          />
+        </>
       )}
       
       {toast && (
