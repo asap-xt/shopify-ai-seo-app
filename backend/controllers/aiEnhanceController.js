@@ -925,6 +925,10 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
     let reservationId = null;
     const usageDetails = []; // Track usage for each language
     
+    // CRITICAL: Check trial period BEFORE token check
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
       // Estimate required tokens with 10% safety margin
@@ -933,6 +937,38 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       // Check token balance
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const normalizedPlanKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
+      
+      // TRIAL RESTRICTION: Different logic for included vs purchased tokens
+      console.log('[AI-ENHANCE-COLLECTIONS-ROUTE2] 🔒 Trial check:', {
+        hasIncludedTokens,
+        inTrial,
+        isBlockedInTrial: isBlockedInTrial(feature),
+        normalizedPlanKey,
+        trialEndsAt: subscription?.trialEndsAt,
+        now: now.toISOString()
+      });
+      
+      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+        // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
+        console.log('[AI-ENHANCE-COLLECTIONS-ROUTE2] 🚫 Blocking - Trial restriction active!');
+        return res.status(402).json({
+          error: 'AI-enhanced collection optimization is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature,
+          tokensRequired: tokenEstimate.estimated,
+          tokensWithMargin: tokenEstimate.withMargin,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+          message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
+        });
+      }
       
       // Check if sufficient tokens are available (with margin)
       if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
