@@ -11,6 +11,11 @@ import Shop from '../db/Shop.js';
 
 const router = express.Router();
 
+// Helper function to normalize plan names
+const normalizePlan = (plan) => {
+  return (plan || 'starter').toLowerCase().replace(' ', '_');
+};
+
 /**
  * POST /api/ai-testing/run-tests
  * Run automated tests for AI Discovery endpoints
@@ -422,23 +427,61 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
   }
   
   try {
-    // Get token balance
-    const tokenBalance = await TokenBalance.getOrCreate(shop);
-    
-    // Check if enough tokens (estimate ~50 tokens total)
+    // === TOKEN CHECKING WITH TRIAL RESTRICTION ===
+    const feature = 'ai-testing-validation';
     const estimatedTokens = 50;
-    if (!tokenBalance.hasBalance(estimatedTokens)) {
-      return res.status(402).json({
-        error: 'Insufficient tokens',
-        requiresPurchase: true,
-        message: `You need at least ${estimatedTokens} tokens to run AI validation`,
-        tokenCost: estimatedTokens,
-        currentBalance: tokenBalance.balance
-      });
-    }
     
-    // Reserve tokens
-    await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
+    // Get subscription and check trial status
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = normalizePlan(subscription?.plan);
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    
+    // Check if plan has included tokens (Growth Extra, Enterprise)
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(planKey);
+    const isActivated = !!subscription?.activatedAt;
+    
+    // Check if feature requires tokens
+    const { requiresTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
+    if (requiresTokens(feature)) {
+      // Get token balance
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // TRIAL RESTRICTION: Different logic for included vs purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && isBlockedInTrial(feature)) {
+        // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+        return res.status(402).json({
+          error: 'AI-Powered Validation is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature,
+          tokensRequired: estimatedTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: Math.max(0, estimatedTokens - tokenBalance.balance),
+          message: 'Activate your plan to unlock AI-Powered Validation with included tokens'
+        });
+      }
+      
+      // Check if sufficient tokens are available
+      if (!tokenBalance.hasBalance(estimatedTokens)) {
+        // For Professional/Growth/Plus → Show "Insufficient Tokens" modal
+        return res.status(402).json({
+          error: 'Insufficient tokens',
+          requiresPurchase: true,
+          message: `You need at least ${estimatedTokens} tokens to run AI validation`,
+          tokensRequired: estimatedTokens,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: estimatedTokens - tokenBalance.balance,
+          feature
+        });
+      }
+      
+      // Reserve tokens
+      await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
+    }
     
     const results = {};
     let totalTokensUsed = 0;

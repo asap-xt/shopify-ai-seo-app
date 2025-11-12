@@ -251,9 +251,10 @@ export default function AiTesting({ shop: shopProp }) {
 
   // Run AI-powered validation
   const runAiValidation = async () => {
-    // Check if Professional+ plan
-    const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
-    const currentIndex = planHierarchy.indexOf(currentPlan);
+    // Check if Professional+ plan (case-insensitive)
+    const planHierarchy = ['starter', 'professional', 'growth', 'growth extra', 'enterprise'];
+    const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
+    const currentIndex = planHierarchy.indexOf(normalizedPlan);
     
     if (currentIndex < 1) { // Less than Professional
       setTokenError({
