@@ -126,9 +126,12 @@ export default function TrialActivationModal({
             >
               <BlockStack gap="200">
                 <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    ✅ End Trial & Activate Plan
-                  </Text>
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text variant="bodyLg">{action === 'plan' ? '✅' : '⬜'}</Text>
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      End Trial & Activate Plan
+                    </Text>
+                  </InlineStack>
                   {action === 'plan' && <Badge tone="success">Selected</Badge>}
                 </InlineStack>
                 <Text variant="bodySm" tone="subdued">
@@ -160,9 +163,12 @@ export default function TrialActivationModal({
             >
               <BlockStack gap="200">
                 <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    💰 Purchase Tokens Only
-                  </Text>
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text variant="bodyLg">{action === 'tokens' ? '✅' : '⬜'}</Text>
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      Purchase Tokens Only
+                    </Text>
+                  </InlineStack>
                   {action === 'tokens' && <Badge tone="success">Selected</Badge>}
                 </InlineStack>
                 <Text variant="bodySm" tone="subdued">
