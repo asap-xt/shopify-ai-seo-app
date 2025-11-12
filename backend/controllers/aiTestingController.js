@@ -442,11 +442,12 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     const hasIncludedTokens = includedTokensPlans.includes(planKey);
     const isActivated = !!subscription?.activatedAt;
     
+    // Get token balance (needed for all paths)
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
     // Check if feature requires tokens
     const { requiresTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     if (requiresTokens(feature)) {
-      // Get token balance
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
       if (hasIncludedTokens && inTrial && !isActivated && isBlockedInTrial(feature)) {
