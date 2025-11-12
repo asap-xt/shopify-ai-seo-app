@@ -429,7 +429,15 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
   try {
     // === TOKEN CHECKING WITH TRIAL RESTRICTION ===
     const feature = 'ai-testing-validation';
-    const estimatedTokens = 50;
+    
+    // Estimate tokens based on endpoint count
+    // Real usage: ~1,300 tokens per endpoint (average from logs)
+    // Reserve 20% more for safety margin
+    const successfulEndpoints = Object.entries(endpointResults).filter(
+      ([key, result]) => (result.status === 'success' || result.status === 'warning') 
+        && key !== 'robotsTxt' && key !== 'schemaData'
+    );
+    const estimatedTokens = successfulEndpoints.length * 1500; // Conservative estimate
     
     // Get subscription and check trial status
     const subscription = await Subscription.findOne({ shop });
@@ -668,7 +676,10 @@ Format:
             feedback: parsed.feedback || 'Data appears well-structured.',
             suggestions: parsed.suggestions || null
           };
-          totalTokensUsed += 10; // Estimate 10 tokens per endpoint
+          
+          // Use actual token usage from AI response
+          const tokensUsed = aiResponse?.usage?.total_tokens || 150;
+          totalTokensUsed += tokensUsed;
         } catch (parseError) {
           console.error('[AI-VALIDATION] Parse error for', key, ':', parseError.message);
           console.error('[AI-VALIDATION] Raw response:', aiResponse);
@@ -688,6 +699,10 @@ Format:
             feedback: feedbackMatch ? feedbackMatch[1].trim() : responseText.substring(0, 100),
             suggestions: null
           };
+          
+          // Use actual token usage from AI response (even if parsing failed)
+          const tokensUsed = aiResponse?.usage?.total_tokens || 150;
+          totalTokensUsed += tokensUsed;
         }
       } catch (error) {
         console.error('[AI-VALIDATION] Error validating', key, ':', error);
@@ -696,6 +711,8 @@ Format:
           feedback: 'Could not complete AI analysis for this endpoint.',
           suggestions: null
         };
+        // Estimate tokens if request failed entirely
+        totalTokensUsed += 150;
       }
     }
     
