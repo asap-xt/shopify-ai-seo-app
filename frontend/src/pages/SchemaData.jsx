@@ -19,6 +19,7 @@ import {
   Modal
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import { PLAN_HIERARCHY, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -84,10 +85,9 @@ export default function SchemaData({ shop: shopProp }) {
       return false;
     }
     
-    const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Plus', 'Growth Extra', 'Enterprise'];
-    const currentPlanIndex = planHierarchy.indexOf(currentPlan);
+    const currentPlanIndex = getPlanIndex(currentPlan);
     
-    console.log('[SCHEMA-DATA] Plan hierarchy:', planHierarchy);
+    console.log('[SCHEMA-DATA] Plan hierarchy:', PLAN_HIERARCHY);
     console.log('[SCHEMA-DATA] Current plan index:', currentPlanIndex);
     
     switch (feature) {

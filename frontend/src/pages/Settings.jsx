@@ -23,6 +23,7 @@ import {
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 export default function Settings() {
   console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
@@ -1038,17 +1039,20 @@ export default function Settings() {
 
   const isFeatureAvailable = (featureKey) => {
     const plan = normalizePlan(settings?.plan);
+    const planIndex = getPlanIndex(plan);
     
-    const availability = {
-      productsJson: ['starter', 'professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
-      storeMetadata: ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'], // Included for Professional+
-      welcomePage: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
-      collectionsJson: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
-      aiSitemap: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'], // Requires tokens for Plus plans
-      schemaData: ['professional_plus', 'growth_plus', 'enterprise'] // Requires tokens for Plus plans
+    // Plan requirements by feature (index in PLAN_HIERARCHY)
+    const requirements = {
+      productsJson: 0,        // Starter+
+      storeMetadata: 1,       // Professional+
+      welcomePage: 2,         // Professional Plus+
+      collectionsJson: 2,     // Professional Plus+
+      aiSitemap: 2,           // Professional Plus+ (requires tokens for Plus plans)
+      schemaData: 2           // Professional Plus+ (requires tokens for Plus plans, Enterprise gets more)
     };
     
-    return availability[featureKey]?.includes(plan) || false;
+    const requiredIndex = requirements[featureKey];
+    return requiredIndex !== undefined && planIndex >= requiredIndex;
   };
 
   // Get upgrade text for unavailable features
@@ -1842,8 +1846,8 @@ export default function Settings() {
       {/* Advanced Schema Data Management - shows for Professional Plus, Growth Plus, and Enterprise plans if enabled */}
       {(() => {
         const plan = normalizePlan(settings?.plan);
-        const allowedPlans = ['professional_plus', 'growth_plus', 'enterprise'];
-        const planCheck = allowedPlans.includes(plan);
+        const planIndex = getPlanIndex(plan);
+        const planCheck = planIndex >= 2; // Professional Plus+ (index 2)
         const settingsCheck = settings?.features?.schemaData;
         const originalCheck = originalSettings?.features?.schemaData;
         

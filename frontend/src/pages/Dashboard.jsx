@@ -18,6 +18,7 @@ import {
   Checkbox
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 // Query string helper
 const qs = (k, d = '') => {
@@ -233,10 +234,11 @@ export default function Dashboard({ shop: shopProp }) {
     : 0;
 
   // Check feature availability
-  const hasCollections = ['growth', 'growth_plus', 'growth plus', 'growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
-  const hasStoreMetadata = ['professional', 'professional_plus', 'professional plus', 'growth', 'growth_plus', 'growth plus', 'growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
-  const hasAdvancedSchema = subscription?.plan === 'enterprise';
-  const hasAiSitemap = ['growth_extra', 'growth extra', 'enterprise'].includes(subscription?.plan);
+  const planIndex = getPlanIndex(subscription?.plan);
+  const hasCollections = planIndex >= 3; // Growth+ (index 3)
+  const hasStoreMetadata = planIndex >= 1; // Professional+ (index 1)
+  const hasAdvancedSchema = planIndex >= 6; // Enterprise (index 6)
+  const hasAiSitemap = planIndex >= 5; // Growth Extra+ (index 5)
 
   // Plan price fallback mapping (if backend doesn't provide price)
   const planPriceFallback = useMemo(() => ({
@@ -297,7 +299,7 @@ export default function Dashboard({ shop: shopProp }) {
     const currentPlanOrder = getPlanOrder(currentPlan);
 
     // Find the most suitable plan based on store data
-    const plans = ['starter', 'professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    const plans = PLAN_HIERARCHY_LOWERCASE;
     let recommendedPlan = null;
 
     for (const plan of plans) {
