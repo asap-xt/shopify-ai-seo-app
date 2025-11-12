@@ -82,6 +82,11 @@ export const TOKEN_COSTS = {
     description: 'AI testing and simulation'
   },
   
+  'ai-testing-validation': {
+    base: 50,             // AI validation of endpoints
+    description: 'AI-powered validation of endpoint data'
+  },
+  
   'ai-schema-advanced': {
     base: 3000,           // Complex schema generation
     perProduct: 2500,
@@ -153,6 +158,7 @@ export const TOKEN_REQUIRED_FEATURES = [
   'ai-seo-product-enhanced',   // Requires tokens (bullets/FAQ)
   'ai-seo-collection',          // Requires tokens
   'ai-testing-simulation',      // Requires tokens
+  'ai-testing-validation',      // Requires tokens
   'ai-schema-advanced',         // Requires tokens
   'ai-sitemap-optimized'        // Requires tokens
 ];
@@ -163,6 +169,7 @@ export const TRIAL_BLOCKED_FEATURES = [
   'ai-seo-product-enhanced',   // Blocked in trial
   'ai-seo-collection',          // Blocked in trial
   'ai-testing-simulation',      // Blocked in trial
+  'ai-testing-validation',      // Blocked in trial
   'ai-schema-advanced',         // Blocked in trial
   'ai-sitemap-optimized'        // Blocked in trial
 ];
