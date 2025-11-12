@@ -29,10 +29,13 @@ export default async function uninstallWebhook(req, res) {
     try {
       // Ако имате Subscription модел
       const { default: Subscription } = await import('../db/Subscription.js');
-      await Subscription.deleteOne({ shop });
-      console.log(`[Webhook] Deleted subscription for ${shop}`);
+      const subResult = await Subscription.deleteOne({ shop });
+      console.log(`[Webhook] Deleted subscription for ${shop}: ${subResult.deletedCount} records deleted`);
+      if (subResult.deletedCount === 0) {
+        console.warn(`[Webhook] ⚠️ No subscription found to delete for ${shop}`);
+      }
     } catch (e) {
-      // Ако няма Subscription модел, продължаваме
+      console.error(`[Webhook] ❌ Error deleting subscription for ${shop}:`, e.message);
     }
 
     // Опционално: изтрий продукти ако ги кеширате
@@ -83,10 +86,13 @@ export default async function uninstallWebhook(req, res) {
     // Изтрий Token Balances
     try {
       const { default: TokenBalance } = await import('../db/TokenBalance.js');
-      await TokenBalance.deleteOne({ shop });
-      console.log(`[Webhook] Deleted Token Balance for ${shop}`);
+      const tokenResult = await TokenBalance.deleteOne({ shop });
+      console.log(`[Webhook] Deleted Token Balance for ${shop}: ${tokenResult.deletedCount} records deleted`);
+      if (tokenResult.deletedCount === 0) {
+        console.warn(`[Webhook] ⚠️ No token balance found to delete for ${shop}`);
+      }
     } catch (e) {
-      console.log(`[Webhook] Could not delete Token Balance for ${shop}:`, e.message);
+      console.error(`[Webhook] ❌ Error deleting Token Balance for ${shop}:`, e.message);
     }
 
     console.log('[Webhook] ===== UNINSTALL CLEANUP COMPLETED =====');

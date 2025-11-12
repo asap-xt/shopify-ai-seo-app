@@ -86,10 +86,15 @@ export default function AiTesting({ shop: shopProp }) {
     try {
       // Use REST API instead of GraphQL to avoid Redis cache issues
       const data = await api(`/api/billing/info?shop=${shop}`);
-      console.log('[AI-TESTING] Billing info:', data);
+      console.log('[AI-TESTING] 📋 Billing info received:', data);
+      console.log('[AI-TESTING] 📋 Raw plan from API:', data?.subscription?.plan);
+      console.log('[AI-TESTING] 📋 Plan type:', typeof data?.subscription?.plan);
+      
+      const planFromApi = data?.subscription?.plan || 'Starter';
+      console.log('[AI-TESTING] 📋 Setting plan to:', planFromApi);
       
       // Set plan, token balance, and trial info from single API call
-      setCurrentPlan(data?.subscription?.plan || 'Starter');
+      setCurrentPlan(planFromApi);
       setTokenBalance(data?.tokens?.balance || 0);
       setTrialEndsAt(data?.subscription?.trialEndsAt || null);
     } catch (err) {
@@ -245,10 +250,18 @@ export default function AiTesting({ shop: shopProp }) {
 
   // Run AI-powered validation
   const runAiValidation = async () => {
+    console.log('[AI-TESTING] 🎯 runAiValidation called');
+    console.log('[AI-TESTING] 🎯 Current plan from state:', currentPlan);
+    console.log('[AI-TESTING] 🎯 Plan type:', typeof currentPlan);
+    
     // Check if Professional+ plan (case-insensitive)
     const planHierarchy = ['starter', 'professional', 'professional plus', 'growth', 'growth extra', 'enterprise'];
     const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
     const currentIndex = planHierarchy.indexOf(normalizedPlan);
+    
+    console.log('[AI-TESTING] 🎯 Normalized plan:', normalizedPlan);
+    console.log('[AI-TESTING] 🎯 Plan hierarchy:', planHierarchy);
+    console.log('[AI-TESTING] 🎯 Current index in hierarchy:', currentIndex);
     
     if (currentIndex < 1) { // Less than Professional
       setTokenError({

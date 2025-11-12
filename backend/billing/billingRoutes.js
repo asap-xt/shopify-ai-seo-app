@@ -191,6 +191,11 @@ router.get('/info', verifyRequest, async (req, res) => {
       const subscription = await Subscription.findOne({ shop });
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
+      console.log('[BILLING-INFO] 📋 Shop:', shop);
+      console.log('[BILLING-INFO] 📋 Subscription found:', !!subscription);
+      console.log('[BILLING-INFO] 📋 Plan from DB:', subscription?.plan);
+      console.log('[BILLING-INFO] 📋 Plan type:', typeof subscription?.plan);
+      
       const now = new Date();
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
       
