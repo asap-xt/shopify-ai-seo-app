@@ -416,8 +416,9 @@ router.get('/callback', async (req, res) => {
     const updateData = {
       shop,
       status: 'active',
-      pendingActivation: false,
-      activatedAt: new Date()
+      pendingActivation: false
+      // NOTE: activatedAt is NOT set here - only set when user clicks "Activate Plan" button
+      // This allows trial restrictions to work correctly for Growth Extra/Enterprise plans
     };
     
     // If there's a pendingPlan, activate it now (user approved!)
