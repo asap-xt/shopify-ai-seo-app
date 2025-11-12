@@ -20,6 +20,7 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import { PLAN_HIERARCHY, PLAN_HIERARCHY_LOWERCASE, getPlanIndex, isPlanAtLeast } from '../hooks/usePlanHierarchy.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -120,8 +121,7 @@ export default function AiTesting({ shop: shopProp }) {
   const isFeatureAvailable = (feature) => {
     if (!currentPlan) return false;
     
-    const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Extra', 'Enterprise'];
-    const currentPlanIndex = planHierarchy.indexOf(currentPlan);
+    const currentPlanIndex = getPlanIndex(currentPlan);
     
     switch (feature) {
       // AI Discovery Features (synced with Settings.jsx)
@@ -192,9 +192,8 @@ export default function AiTesting({ shop: shopProp }) {
   // Open endpoint with plan check
   const openEndpoint = (url, endpointName, requiredPlan = null) => {
     if (requiredPlan) {
-      const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Extra', 'Enterprise'];
-      const currentIndex = planHierarchy.indexOf(currentPlan);
-      const requiredIndex = planHierarchy.indexOf(requiredPlan);
+      const currentIndex = getPlanIndex(currentPlan);
+      const requiredIndex = getPlanIndex(requiredPlan);
       
       if (currentIndex < requiredIndex) {
         setEndpointUpgradeInfo({
@@ -255,12 +254,9 @@ export default function AiTesting({ shop: shopProp }) {
     console.log('[AI-TESTING] 🎯 Plan type:', typeof currentPlan);
     
     // Check if Professional+ plan (case-insensitive)
-    const planHierarchy = ['starter', 'professional', 'professional plus', 'growth', 'growth extra', 'enterprise'];
-    const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
-    const currentIndex = planHierarchy.indexOf(normalizedPlan);
+    const currentIndex = getPlanIndex(currentPlan);
     
-    console.log('[AI-TESTING] 🎯 Normalized plan:', normalizedPlan);
-    console.log('[AI-TESTING] 🎯 Plan hierarchy:', planHierarchy);
+    console.log('[AI-TESTING] 🎯 Plan hierarchy:', PLAN_HIERARCHY);
     console.log('[AI-TESTING] 🎯 Current index in hierarchy:', currentIndex);
     
     if (currentIndex < 1) { // Less than Professional
@@ -277,6 +273,7 @@ export default function AiTesting({ shop: shopProp }) {
     // Special case: Growth Extra/Enterprise in trial with 0 tokens (included tokens locked)
     // → Skip client check, let backend handle (will show TrialActivationModal)
     const includedTokensPlans = ['growth extra', 'enterprise'];
+    const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
     const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
     const inTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
     const skipClientCheck = hasIncludedTokens && inTrial && tokenBalance === 0;

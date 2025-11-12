@@ -297,7 +297,7 @@ export default function Dashboard({ shop: shopProp }) {
     const currentPlanOrder = getPlanOrder(currentPlan);
 
     // Find the most suitable plan based on store data
-    const plans = ['starter', 'professional', 'growth', 'growth_extra', 'enterprise'];
+    const plans = ['starter', 'professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
     let recommendedPlan = null;
 
     for (const plan of plans) {

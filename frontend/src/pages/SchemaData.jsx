@@ -84,7 +84,7 @@ export default function SchemaData({ shop: shopProp }) {
       return false;
     }
     
-    const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+    const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Plus', 'Growth Extra', 'Enterprise'];
     const currentPlanIndex = planHierarchy.indexOf(currentPlan);
     
     console.log('[SCHEMA-DATA] Plan hierarchy:', planHierarchy);

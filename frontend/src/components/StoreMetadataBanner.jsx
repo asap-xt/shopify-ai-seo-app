@@ -50,7 +50,7 @@ export function StoreMetadataBanner({ globalPlan }) {
   
   // Check if plan is Professional or higher
   const planKey = globalPlan?.planKey?.toLowerCase() || '';
-  const isProfessionalOrHigher = ['professional', 'growth', 'growth_extra', 'enterprise'].includes(planKey);
+  const isProfessionalOrHigher = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'].includes(planKey);
   
   // Don't show if:
   // - Loading
