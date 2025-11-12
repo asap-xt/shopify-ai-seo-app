@@ -57,6 +57,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestProgress, setAiTestProgress] = useState(0);
   const [tokenBalance, setTokenBalance] = useState(null);
+  const [trialEndsAt, setTrialEndsAt] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -110,8 +111,9 @@ export default function AiTesting({ shop: shopProp }) {
     try {
       const data = await api(`/api/billing/info?shop=${shop}`);
       console.log('[AI-TESTING] Token balance data:', data);
-      // API returns: { tokens: { balance, totalPurchased, totalUsed } }
+      // API returns: { tokens: { balance }, subscription: { trialEndsAt } }
       setTokenBalance(data?.tokens?.balance || 0);
+      setTrialEndsAt(data?.subscription?.trialEndsAt || null);
     } catch (err) {
       console.error('[AI-TESTING] Error loading token balance:', err);
     }
@@ -266,7 +268,15 @@ export default function AiTesting({ shop: shopProp }) {
     }
     
     // Check token balance
-    if (!tokenBalance || tokenBalance < 50) {
+    // Special case: Growth Extra/Enterprise in trial with 0 tokens (included tokens locked)
+    // → Skip client check, let backend handle (will show TrialActivationModal)
+    const includedTokensPlans = ['growth extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
+    const inTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
+    const skipClientCheck = hasIncludedTokens && inTrial && tokenBalance === 0;
+    
+    if (!skipClientCheck && (!tokenBalance || tokenBalance < 50)) {
+      // All other cases: Not enough tokens → Show "Insufficient Tokens"
       setTokenError({
         message: 'You need at least 50 tokens to run AI validation',
         tokenCost: 50,
