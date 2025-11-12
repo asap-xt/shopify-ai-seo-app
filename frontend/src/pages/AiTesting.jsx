@@ -84,34 +84,26 @@ export default function AiTesting({ shop: shopProp }) {
 
   const loadPlan = async () => {
     try {
-      const query = `
-        query PlansMe($shop:String!) {
-          plansMe(shop:$shop) {
-            shop
-            plan
-            planKey
-          }
-        }
-      `;
+      // Use REST API instead of GraphQL to avoid Redis cache issues
+      const data = await api(`/api/billing/info?shop=${shop}`);
+      console.log('[AI-TESTING] Billing info:', data);
       
-      const data = await api('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables: { shop } })
-      });
-      
-      console.log('[AI-TESTING] Plan data:', data);
-      setCurrentPlan(data?.data?.plansMe?.plan);
+      // Set plan, token balance, and trial info from single API call
+      setCurrentPlan(data?.subscription?.plan || 'Starter');
+      setTokenBalance(data?.tokens?.balance || 0);
+      setTrialEndsAt(data?.subscription?.trialEndsAt || null);
     } catch (err) {
-      console.error('[AI-TESTING] Error loading plan:', err);
+      console.error('[AI-TESTING] Error loading billing info:', err);
+      setCurrentPlan('Starter'); // Fallback
+      setTokenBalance(0);
     }
   };
 
   const loadTokenBalance = async () => {
     try {
       const data = await api(`/api/billing/info?shop=${shop}`);
-      console.log('[AI-TESTING] Token balance data:', data);
-      // API returns: { tokens: { balance }, subscription: { trialEndsAt } }
+      console.log('[AI-TESTING] Token balance refresh:', data);
+      // Only update token balance (plan doesn't change frequently)
       setTokenBalance(data?.tokens?.balance || 0);
       setTrialEndsAt(data?.subscription?.trialEndsAt || null);
     } catch (err) {
@@ -123,7 +115,7 @@ export default function AiTesting({ shop: shopProp }) {
   const isFeatureAvailable = (feature) => {
     if (!currentPlan) return false;
     
-    const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+    const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Extra', 'Enterprise'];
     const currentPlanIndex = planHierarchy.indexOf(currentPlan);
     
     switch (feature) {
@@ -195,7 +187,7 @@ export default function AiTesting({ shop: shopProp }) {
   // Open endpoint with plan check
   const openEndpoint = (url, endpointName, requiredPlan = null) => {
     if (requiredPlan) {
-      const planHierarchy = ['Starter', 'Professional', 'Growth', 'Growth Extra', 'Enterprise'];
+      const planHierarchy = ['Starter', 'Professional', 'Professional Plus', 'Growth', 'Growth Extra', 'Enterprise'];
       const currentIndex = planHierarchy.indexOf(currentPlan);
       const requiredIndex = planHierarchy.indexOf(requiredPlan);
       
@@ -254,14 +246,15 @@ export default function AiTesting({ shop: shopProp }) {
   // Run AI-powered validation
   const runAiValidation = async () => {
     // Check if Professional+ plan (case-insensitive)
-    const planHierarchy = ['starter', 'professional', 'growth', 'growth extra', 'enterprise'];
+    const planHierarchy = ['starter', 'professional', 'professional plus', 'growth', 'growth extra', 'enterprise'];
     const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
     const currentIndex = planHierarchy.indexOf(normalizedPlan);
     
     if (currentIndex < 1) { // Less than Professional
       setTokenError({
         message: 'AI-powered validation requires Professional plan or higher',
-        requiredPlan: 'Professional'
+        requiredPlan: 'Professional',
+        currentPlan: currentPlan || 'Starter'
       });
       setShowUpgradeModal(true);
       return;
