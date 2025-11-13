@@ -821,10 +821,13 @@ router.post('/activate', verifyRequest, async (req, res) => {
       // CRITICAL: End trial in Shopify to start billing NOW!
       // Otherwise Shopify will auto-charge after 5 days even if features were locked!
       try {
-        const shopDoc = await Shop.findOne({ domain: shop });
+        const shopDoc = await Shop.findOne({ shop });
         if (!shopDoc || !shopDoc.accessToken) {
+          console.error('[BILLING-ACTIVATE] ❌ Shop not found in DB:', { shop, found: !!shopDoc });
           throw new Error('Shop access token not found');
         }
+        
+        console.log('[BILLING-ACTIVATE] ✅ Shop found, access token present');
         
         // Use appSubscriptionCancel + immediate recreate to end trial
         // This is the recommended Shopify approach for ending trials early
