@@ -884,12 +884,22 @@ router.post('/activate', verifyRequest, async (req, res) => {
           confirmationUrl: confirmationUrl ? 'Generated' : 'None'
         });
         
+        // CRITICAL: Update MongoDB FIRST before returning confirmationUrl!
+        // Otherwise callback will read old data (activatedAt: undefined)
+        console.log('[BILLING-ACTIVATE] 💾 Saving activation to MongoDB BEFORE redirect...');
+        
+        await Subscription.updateOne({ shop }, { $set: updateData });
+        
+        console.log('[BILLING-ACTIVATE] ✅ MongoDB updated with activatedAt:', updateData.activatedAt);
+        
         // If confirmationUrl exists, merchant needs to approve the charge
         if (confirmationUrl) {
           console.log('[BILLING-ACTIVATE] ⚠️  Merchant must approve charge at:', confirmationUrl);
           
-          // Return confirmation URL so frontend can redirect
+          // Invalidate cache so callback reads fresh data
           await cacheService.invalidateShop(shop);
+          
+          // Return confirmation URL so frontend can redirect
           return res.json({
             success: true,
             requiresApproval: true,
