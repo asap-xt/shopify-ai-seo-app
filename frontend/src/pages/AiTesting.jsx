@@ -269,26 +269,8 @@ export default function AiTesting({ shop: shopProp }) {
       return;
     }
     
-    // Check token balance
-    // Special case: Growth Extra/Enterprise in trial with 0 tokens (included tokens locked)
-    // → Skip client check, let backend handle (will show TrialActivationModal)
-    const includedTokensPlans = ['growth extra', 'enterprise'];
-    const normalizedPlan = currentPlan?.toLowerCase() || 'starter';
-    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
-    const inTrial = trialEndsAt && new Date(trialEndsAt) > new Date();
-    const skipClientCheck = hasIncludedTokens && inTrial && tokenBalance === 0;
-    
-    if (!skipClientCheck && (!tokenBalance || tokenBalance < 50)) {
-      // All other cases: Not enough tokens → Show "Insufficient Tokens"
-      setTokenError({
-        message: 'You need at least 50 tokens to run AI validation',
-        tokensRequired: 50,
-        tokensAvailable: tokenBalance || 0,
-        tokensNeeded: Math.max(0, 50 - (tokenBalance || 0))
-      });
-      setShowTokenModal(true);
-      return;
-    }
+    // Token balance check removed - let backend calculate exact cost
+    // Backend will return accurate token estimation based on enabled endpoints
     
     setAiTesting(true);
     setAiTestProgress(0);
