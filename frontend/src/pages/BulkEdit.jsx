@@ -2128,7 +2128,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   method: 'POST',
                   body: {
                     shop,
-                    endTrial: true
+                    endTrial: true,
+                    returnTo: '/bulk-edit' // Return to Bulk Edit after approval
                   }
                 });
                 

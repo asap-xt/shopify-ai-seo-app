@@ -1147,7 +1147,8 @@ export default function AiTesting({ shop: shopProp }) {
                 method: 'POST',
                 body: JSON.stringify({
                   shop,
-                  endTrial: true
+                  endTrial: true,
+                  returnTo: '/ai-testing' // Return to AI Testing after approval
                 })
               });
               

@@ -20,6 +20,8 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   }
   
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
+  const returnTo = options.returnTo || '/billing'; // Default to billing page
+  
   // ALWAYS use test mode until we go live with real payments
   // This allows instant activation without waiting for webhooks
   const isTest = true;
@@ -73,7 +75,7 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   
   const variables = {
     name: `${planConfig.name} Plan`,
-    returnUrl: `${process.env.APP_URL}/billing/callback?shop=${encodeURIComponent(shop)}&plan=${plan}`,
+    returnUrl: `${process.env.APP_URL}/billing/callback?shop=${encodeURIComponent(shop)}&plan=${plan}&returnTo=${encodeURIComponent(returnTo)}`,
     trialDays,
     test: isTest,
     lineItems: [

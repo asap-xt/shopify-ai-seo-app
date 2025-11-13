@@ -419,7 +419,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
  */
 router.get('/callback', async (req, res) => {
   try {
-    const { shop, plan, charge_id } = req.query;
+    const { shop, plan, charge_id, returnTo } = req.query;
     
     if (!shop) {
       return res.status(400).send('Missing shop parameter');
@@ -547,8 +547,11 @@ router.get('/callback', async (req, res) => {
     // NOTE: For production mode (real webhooks), tokens would also be added by APP_SUBSCRIPTIONS_UPDATE webhook
     // This callback handles test mode and user-approved subscriptions
     
-    // Redirect back to app
-    res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&success=true`);
+    // Redirect back to app (use returnTo if provided, otherwise default to billing)
+    const redirectPath = returnTo || '/billing';
+    console.log('[BILLING-CALLBACK] 🔄 Redirecting to:', redirectPath);
+    
+    res.redirect(`/apps/new-ai-seo${redirectPath}?shop=${shop}&success=true`);
   } catch (error) {
     console.error('[Billing] Callback error:', error);
     res.status(500).send('Failed to process subscription');
@@ -814,11 +817,12 @@ router.post('/cancel', verifyRequest, async (req, res) => {
 router.post('/activate', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { endTrial } = req.body;
+    const { endTrial, returnTo } = req.body;
     
     console.log('[BILLING-ACTIVATE] 🔓 Activation request:', {
       shop,
       endTrial,
+      returnTo: returnTo || '/billing',
       timestamp: new Date().toISOString()
     });
     
@@ -871,7 +875,10 @@ router.post('/activate', verifyRequest, async (req, res) => {
           shop,
           subscription.plan,
           shopDoc.accessToken,
-          { trialDays: 0 } // NO trial - start billing NOW!
+          { 
+            trialDays: 0, // NO trial - start billing NOW!
+            returnTo: returnTo || '/billing' // Where to redirect after approval
+          }
         );
         
         // Update shopifySubscriptionId with new subscription
