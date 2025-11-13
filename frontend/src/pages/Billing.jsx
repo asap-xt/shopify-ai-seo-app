@@ -339,8 +339,10 @@ export default function Billing({ shop }) {
                     
                     console.log('[Billing] ✅ Plan activated:', data);
                     
-                    // Reload page to reflect changes
-                    window.location.reload();
+                    // Clear cache and reload to reflect changes
+                    // Add cache buster to force fresh data
+                    const cacheBuster = Date.now();
+                    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&_t=${cacheBuster}&embedded=${new URLSearchParams(window.location.search).get('embedded')}&host=${encodeURIComponent(new URLSearchParams(window.location.search).get('host')|| '')}`;
                     
                   } catch (err) {
                     console.error('[Billing] Activation error:', err);
