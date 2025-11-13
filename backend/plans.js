@@ -18,9 +18,9 @@ export const PLANS = {
     name: "Professional",
     priceUsd: 19.99,
     queryLimit: 600,
-    productLimit: 200,
+    productLimit: 70,
     collectionLimit: 20,
-    languageLimit: 2, // Max 2 languages
+    languageLimit: 1, // Max 1 language
     providersAllowed: ["openai", "llama", "deepseek"],
     autosyncCron: "0 */48 * * *", // every 48 hours (minute 0)
   },
