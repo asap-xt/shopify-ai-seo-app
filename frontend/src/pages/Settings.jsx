@@ -1041,6 +1041,14 @@ export default function Settings() {
     const plan = normalizePlan(settings?.plan);
     const planIndex = getPlanIndex(plan);
     
+    console.log('[SETTINGS] 🔍 isFeatureAvailable check:', {
+      featureKey,
+      rawPlan: settings?.plan,
+      normalizedPlan: plan,
+      planIndex,
+      PLAN_HIERARCHY_LOWERCASE
+    });
+    
     // Plan requirements by feature (index in PLAN_HIERARCHY)
     const requirements = {
       productsJson: 0,        // Starter+
@@ -1052,7 +1060,11 @@ export default function Settings() {
     };
     
     const requiredIndex = requirements[featureKey];
-    return requiredIndex !== undefined && planIndex >= requiredIndex;
+    const isAvailable = requiredIndex !== undefined && planIndex >= requiredIndex;
+    
+    console.log('[SETTINGS] 🔍 Result:', { requiredIndex, planIndex, isAvailable });
+    
+    return isAvailable;
   };
 
   // Get upgrade text for unavailable features
