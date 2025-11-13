@@ -821,11 +821,25 @@ router.post('/activate', verifyRequest, async (req, res) => {
     
     await Subscription.updateOne({ shop }, { $set: updateData });
     
+    // Add included tokens for plans with them (Growth Extra/Enterprise)
+    const included = getIncludedTokens(subscription.plan);
+    if (included > 0) {
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      await tokenBalance.addIncludedTokens(included, subscription.plan);
+      
+      console.log('[BILLING-ACTIVATE] 💰 Added included tokens:', {
+        plan: subscription.plan,
+        tokens: included,
+        newBalance: tokenBalance.balance
+      });
+    }
+    
     console.log('[BILLING-ACTIVATE] ✅ Plan activated:', {
       shop,
       plan: subscription.plan,
       activatedAt: updateData.activatedAt,
-      trialEnded: endTrial
+      trialEnded: endTrial,
+      tokensAdded: included
     });
     
     // Invalidate cache
@@ -836,7 +850,8 @@ router.post('/activate', verifyRequest, async (req, res) => {
       success: true,
       plan: subscription.plan,
       activatedAt: updateData.activatedAt,
-      trialEnded: endTrial
+      trialEnded: endTrial,
+      tokensAdded: included
     });
     
   } catch (error) {
