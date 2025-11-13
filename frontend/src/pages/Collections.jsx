@@ -1726,6 +1726,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             needsUpgrade={tokenError.needsUpgrade || false}
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || currentPlan}
+            returnTo="/ai-seo/collections"
           />
           
           <TrialActivationModal
