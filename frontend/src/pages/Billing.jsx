@@ -145,6 +145,10 @@ export default function Billing({ shop }) {
       setPurchasing(true);
       setError(null);
       
+      // Get returnTo from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo') || '/billing';
+      
       const response = await fetch('/api/billing/tokens/purchase', {
         method: 'POST',
         headers: {
@@ -152,7 +156,8 @@ export default function Billing({ shop }) {
         },
         body: JSON.stringify({
           shop,
-          amount: parseFloat(amount)
+          amount: parseFloat(amount),
+          returnTo: returnTo
         })
       });
       

@@ -1084,7 +1084,9 @@ export default function AiTesting({ shop: shopProp }) {
           onAction: () => {
             const currentParams = new URLSearchParams(window.location.search);
             const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-            window.location.href = `/billing${paramString}`;
+            // Add returnTo so user returns to AI Testing after purchase
+            const separator = paramString ? '&' : '?';
+            window.location.href = `/billing${paramString}${separator}returnTo=${encodeURIComponent('/ai-testing')}`;
           }
         }}
         secondaryActions={[
@@ -1177,11 +1179,11 @@ export default function AiTesting({ shop: shopProp }) {
             }
           }}
           onPurchaseTokens={() => {
-            // Navigate to billing page to purchase tokens
+            // Navigate to billing page to purchase tokens (with returnTo)
             const params = new URLSearchParams(window.location.search);
             const host = params.get('host');
             const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-testing')}`;
           }}
         />
       )}

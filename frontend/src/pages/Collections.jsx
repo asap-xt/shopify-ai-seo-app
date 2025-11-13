@@ -1777,11 +1777,11 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               }
             }}
             onPurchaseTokens={() => {
-              // Navigate to billing page to purchase tokens
+              // Navigate to billing page to purchase tokens (with returnTo)
               const params = new URLSearchParams(window.location.search);
               const host = params.get('host');
               const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-seo/collections')}`;
             }}
           />
         </>

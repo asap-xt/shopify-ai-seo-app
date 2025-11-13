@@ -28,14 +28,17 @@ export default function InsufficientTokensModal({
   shop,
   needsUpgrade = false,
   minimumPlan = null,
-  currentPlan = null
+  currentPlan = null,
+  returnTo = '/billing' // Where to return after purchase
 }) {
   // Navigate to billing page within Shopify iframe
   const handleBuyTokens = () => {
     // Copy ALL current URL parameters (including embedded=1, shop, host, etc.)
     const currentParams = new URLSearchParams(window.location.search);
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-    window.location.href = `/billing${paramString}`;
+    // Add returnTo so user returns to origin page after purchase
+    const separator = paramString ? '&' : '?';
+    window.location.href = `/billing${paramString}${separator}returnTo=${encodeURIComponent(returnTo)}`;
   };
 
   const featureNames = {
