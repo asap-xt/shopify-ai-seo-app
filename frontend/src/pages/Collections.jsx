@@ -132,39 +132,16 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     if (globalPlan.planKey && globalPlan.planKey !== '') {
       setCurrentPlan(globalPlan.planKey);
       
-      // Also update languageLimit based on plan
-      const limits = {
-        'starter': 1,
-        'professional': 2,
-        'professional plus': 2,
-        'professional_plus': 2,
-        'growth': 3,
-        'growth plus': 3,
-        'growth_plus': 3,
-        'growth extra': 6,
-        'growth_extra': 6,
-        'enterprise': 10
-      };
-      const newLimit = limits[globalPlan.planKey.toLowerCase()] || 1;
+      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+      const newLimit = globalPlan.language_limit || 1;
       setLanguageLimit(newLimit);
     } else if (globalPlan.plan && globalPlan.plan !== '') {
       // Fallback: if planKey is missing, try to derive it from plan name
       const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
       setCurrentPlan(planKey);
       
-      const limits = {
-        'starter': 1,
-        'professional': 2,
-        'professional plus': 2,
-        'professional_plus': 2,
-        'growth': 3,
-        'growth plus': 3,
-        'growth_plus': 3,
-        'growth extra': 6,
-        'growth_extra': 6,
-        'enterprise': 10
-      };
-      const newLimit = limits[planKey] || 1;
+      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+      const newLimit = globalPlan.language_limit || 1;
       setLanguageLimit(newLimit);
     }
   }, [globalPlan]);
@@ -202,21 +179,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         setModel(models[0]);
         setCurrentPlan(data?.planKey || 'starter');
         
-        // Set language limit based on plan
-        const planKey = (data?.planKey || 'starter').toLowerCase();
-        const limits = {
-          'starter': 1,
-          'professional': 2,
-          'professional plus': 2,
-          'professional_plus': 2,
-          'growth': 3,
-          'growth plus': 3,
-          'growth_plus': 3,
-          'growth extra': 6,
-          'growth_extra': 6,
-          'enterprise': 10
-        };
-        setLanguageLimit(limits[planKey] || 1);
+        // Get languageLimit dynamically from backend data (snake_case from GraphQL)
+        const newLimit = data?.language_limit || 1;
+        setLanguageLimit(newLimit);
       })
       .catch((err) => setToast(`Error loading models: ${err.message}`));
   }, [shop, api]);

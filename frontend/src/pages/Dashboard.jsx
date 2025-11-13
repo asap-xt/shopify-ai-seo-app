@@ -258,10 +258,11 @@ export default function Dashboard({ shop: shopProp }) {
     : (subscription?.plan ? planPriceFallback[subscription.plan] : undefined);
 
   // Plan recommendation logic
+  // NOTE: These limits should match backend/plans.js
   const getPlanLimits = (planKey) => {
     switch (planKey) {
       case 'starter': return { products: 70, languages: 1 };
-      case 'professional': return { products: 200, languages: 2 };
+      case 'professional': return { products: 70, languages: 1 };
       case 'professional_plus':
       case 'professional plus': return { products: 200, languages: 2 };
       case 'growth': return { products: 450, languages: 3 };
