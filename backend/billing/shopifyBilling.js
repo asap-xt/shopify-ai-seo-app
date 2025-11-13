@@ -136,9 +136,10 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
  * @param {string} shop - Shop domain
  * @param {number} usdAmount - Amount in USD
  * @param {string} accessToken - Shop access token
+ * @param {object} options - Optional params (returnTo)
  * @returns {Promise<{confirmationUrl: string, charge: object}>}
  */
-export async function purchaseTokens(shop, usdAmount, accessToken) {
+export async function purchaseTokens(shop, usdAmount, accessToken, options = {}) {
   if (!TOKEN_CONFIG.isValidAmount(usdAmount)) {
     throw new Error(`Invalid amount: must be between $${TOKEN_CONFIG.minimumPurchase} and $${TOKEN_CONFIG.maximumPurchase}, in increments of $${TOKEN_CONFIG.increment}`);
   }
@@ -182,13 +183,17 @@ export async function purchaseTokens(shop, usdAmount, accessToken) {
     }
   `;
   
+  // Build returnUrl with returnTo parameter
+  const returnTo = options.returnTo || '/billing';
+  const returnUrl = `${process.env.APP_URL}/billing/tokens/callback?shop=${encodeURIComponent(shop)}&amount=${usdAmount}&returnTo=${encodeURIComponent(returnTo)}`;
+  
   const variables = {
     name: `AI Tokens Purchase (${tokens.toLocaleString()} tokens)`,
     price: {
       amount: usdAmount,
       currencyCode: 'USD'
     },
-    returnUrl: `${process.env.APP_URL}/billing/tokens/callback?shop=${encodeURIComponent(shop)}&amount=${usdAmount}`,
+    returnUrl: returnUrl,
     test: isTest
   };
   
