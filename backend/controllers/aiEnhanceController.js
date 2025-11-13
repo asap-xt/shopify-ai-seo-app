@@ -276,18 +276,8 @@ router.post('/product', validateRequest(), async (req, res) => {
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      console.log('[AI-ENHANCE-PRODUCTS] 🔒 Trial check:', {
-        hasIncludedTokens,
-        inTrial,
-        isBlockedInTrial: isBlockedInTrial(feature),
-        planKey,
-        trialEndsAt: subscription?.trialEndsAt,
-        now: now.toISOString()
-      });
-      
       if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        console.log('[AI-ENHANCE-PRODUCTS] 🚫 Blocking - Trial restriction active!');
         return res.status(402).json({
           error: 'AI-enhanced product optimization is locked during trial period',
           trialRestriction: true,
@@ -643,18 +633,8 @@ router.post('/collection', validateRequest(), async (req, res) => {
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      console.log('[AI-ENHANCE-COLLECTIONS] 🔒 Trial check:', {
-        hasIncludedTokens,
-        inTrial,
-        isBlockedInTrial: isBlockedInTrial(feature),
-        planKey,
-        trialEndsAt: subscription?.trialEndsAt,
-        now: now.toISOString()
-      });
-      
       if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        console.log('[AI-ENHANCE-COLLECTIONS] 🚫 Blocking - Trial restriction active!');
         return res.status(402).json({
           error: 'AI-enhanced collection optimization is locked during trial period',
           trialRestriction: true,
@@ -943,18 +923,8 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      console.log('[AI-ENHANCE-COLLECTIONS-ROUTE2] 🔒 Trial check:', {
-        hasIncludedTokens,
-        inTrial,
-        isBlockedInTrial: isBlockedInTrial(feature),
-        normalizedPlanKey,
-        trialEndsAt: subscription?.trialEndsAt,
-        now: now.toISOString()
-      });
-      
       if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        console.log('[AI-ENHANCE-COLLECTIONS-ROUTE2] 🚫 Blocking - Trial restriction active!');
         return res.status(402).json({
           error: 'AI-enhanced collection optimization is locked during trial period',
           trialRestriction: true,

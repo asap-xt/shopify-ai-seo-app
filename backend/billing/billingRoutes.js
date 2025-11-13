@@ -191,17 +191,6 @@ router.get('/info', verifyRequest, async (req, res) => {
       const subscription = await Subscription.findOne({ shop });
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      console.log('[BILLING-INFO] 📋 Shop:', shop);
-      console.log('[BILLING-INFO] 📋 Shop normalized:', shop?.trim()?.toLowerCase());
-      console.log('[BILLING-INFO] 📋 Subscription found:', !!subscription);
-      if (subscription) {
-        console.log('[BILLING-INFO] 📋 Subscription._id:', subscription._id);
-        console.log('[BILLING-INFO] 📋 Subscription.shop:', subscription.shop);
-        console.log('[BILLING-INFO] 📋 Shop match:', subscription.shop === shop);
-      }
-      console.log('[BILLING-INFO] 📋 Plan from DB:', subscription?.plan);
-      console.log('[BILLING-INFO] 📋 Plan type:', typeof subscription?.plan);
-      
       const now = new Date();
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
       
@@ -280,7 +269,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     
     if (endTrial) {
       trialDays = 0; // User explicitly ended trial
-      console.log('[BILLING] User ended trial - setting trialDays to 0');
     } else if (existingSubCheck) {
       // Plan change: Check if trial is still active
       const trialEnd = existingSubCheck.trialEndsAt ? new Date(existingSubCheck.trialEndsAt) : null;
@@ -290,17 +278,10 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         const msRemaining = trialEnd - now;
         const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
         trialDays = daysRemaining;
-        console.log('[BILLING] Plan change during trial - preserving remaining days:', {
-          trialEndsAt: trialEnd,
-          daysRemaining
-        });
       } else {
         // Trial already ended - no trial for new subscription
         trialDays = 0;
-        console.log('[BILLING] Plan change after trial - setting trialDays to 0');
       }
-    } else {
-      console.log('[BILLING] First subscription - setting trialDays to', TRIAL_DAYS);
     }
     
     // Create subscription with Shopify
@@ -326,29 +307,13 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     if (endTrial) {
       // User explicitly ended trial - clear trialEndsAt
       trialEndsAt = null;
-      console.log('[BILLING] Trial ended by user - clearing trialEndsAt');
     } else if (existingSub && existingSub.trialEndsAt) {
       // Plan change: Preserve original trial end date
       trialEndsAt = existingSub.trialEndsAt;
-      console.log('[BILLING] Plan change - preserving trial:', {
-        originalTrialEndsAt: existingSub.trialEndsAt,
-        daysRemaining: Math.ceil((existingSub.trialEndsAt - now) / (24 * 60 * 60 * 1000))
-      });
     } else if (trialDays > 0) {
       // First subscription: Calculate new trial end date
       trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
-      console.log('[BILLING] First subscription - setting trial:', {
-        trialDays,
-        trialEndsAt
-      });
     }
-    
-    console.log('[BILLING] 📦 Shopify subscription created:', {
-      id: shopifySubscription.id,
-      test: shopifySubscription.test,
-      status: shopifySubscription.status,
-      trialDays: shopifySubscription.trialDays
-    });
     
     // CRITICAL: DON'T create subscription before Shopify approval!
     // For plan changes, update existing subscription
@@ -375,27 +340,9 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         { new: true }  // NO upsert - subscription must already exist
       );
       
-      const trialStillActive = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
-      const trialDaysLeft = subscription.trialEndsAt 
-        ? Math.ceil((new Date(subscription.trialEndsAt) - now) / (24 * 60 * 60 * 1000))
-        : 0;
-      
-      console.log('[BILLING] 🔄 Plan change - pending approval:', {
-        shop,
-        oldPlan: existingSub.plan,
-        newPlan: plan,
-        pendingPlan: subscription.pendingPlan,
-        trialEndsAt: subscription.trialEndsAt,
-        trialActive: trialStillActive,
-        trialDaysLeft,
-        activatedAt: subscription.activatedAt,
-        isActivated: !!subscription.activatedAt,
-        willBlockFeaturesInTrial: trialStillActive && !subscription.activatedAt
-      });
     } else {
       // First install: DON'T create subscription yet!
       // Just return confirmationUrl - subscription will be created by webhook
-      console.log('[BILLING] First install - NOT creating subscription (waiting for approval)');
       subscription = null;
     }
     
@@ -429,18 +376,6 @@ router.get('/callback', async (req, res) => {
     // Get current subscription to check for pendingPlan
     const currentSub = await Subscription.findOne({ shop });
     
-    console.log('[BILLING-CALLBACK] 🔄 Plan change analysis:', {
-      shop,
-      newPlan: plan,
-      existingSubscription: !!currentSub,
-      currentPlan: currentSub?.plan,
-      pendingPlan: currentSub?.pendingPlan,
-      currentTrialEndsAt: currentSub?.trialEndsAt,
-      currentActivatedAt: currentSub?.activatedAt,
-      isFirstInstall: !currentSub,
-      isPlanChange: !!currentSub?.pendingPlan
-    });
-    
     const updateData = {
       shop,
       status: 'active',
@@ -459,21 +394,7 @@ router.get('/callback', async (req, res) => {
       // PRESERVE TRIAL if still active!
       if (currentSub.trialEndsAt && now < new Date(currentSub.trialEndsAt)) {
         updateData.trialEndsAt = currentSub.trialEndsAt; // Keep existing trial end
-        console.log('[BILLING-CALLBACK] ✅ Plan upgrade DURING trial - preserving trial:', {
-          oldPlan: currentSub.plan,
-          newPlan: currentSub.pendingPlan,
-          trialEndsAt: currentSub.trialEndsAt,
-          trialRemaining: Math.ceil((new Date(currentSub.trialEndsAt) - now) / (24 * 60 * 60 * 1000)) + ' days'
-        });
-      } else {
-        console.log('[BILLING-CALLBACK] ⏰ Plan upgrade AFTER trial ended:', {
-          oldPlan: currentSub.plan,
-          newPlan: currentSub.pendingPlan,
-          trialEndedAt: currentSub.trialEndsAt
-        });
       }
-      
-      console.log('[BILLING-CALLBACK] Activating pending plan:', currentSub.pendingPlan);
     } else if (plan && PLANS[plan]) {
       // Check if this is an ACTIVATION (user clicked "Activate Plan")
       const isActivation = currentSub?.activatedAt && !currentSub?.pendingPlan;
@@ -481,11 +402,6 @@ router.get('/callback', async (req, res) => {
       if (isActivation) {
         // This is an ACTIVATION callback - user already activated plan in /activate
         // DON'T overwrite activatedAt or add trial!
-        console.log('[BILLING-CALLBACK] 🔓 Activation callback - preserving activatedAt:', {
-          plan,
-          activatedAt: currentSub.activatedAt,
-          skipTrialSet: true
-        });
         
         // Only update plan if it changed
         if (currentSub.plan !== plan) {
@@ -503,12 +419,6 @@ router.get('/callback', async (req, res) => {
         
         // Set trial end date (from TRIAL_DAYS)
         updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-        
-        console.log('[BILLING-CALLBACK] 🆕 First subscription approved - creating:', {
-          plan,
-          trialEndsAt: updateData.trialEndsAt,
-          trialDays: TRIAL_DAYS
-        });
       }
     }
     
@@ -535,12 +445,6 @@ router.get('/callback', async (req, res) => {
           subscription.plan, 
           subscription.shopifySubscriptionId
         );
-        
-        console.log('[BILLING-CALLBACK] 💰 Tokens set for activation:', {
-          plan: subscription.plan,
-          tokens: included.tokens,
-          balance: tokenBalance.balance
-        });
       }
     }
     
@@ -549,7 +453,6 @@ router.get('/callback', async (req, res) => {
     
     // Redirect back to app (use returnTo if provided, otherwise default to billing)
     const redirectPath = returnTo || '/billing';
-    console.log('[BILLING-CALLBACK] 🔄 Redirecting to:', redirectPath);
     
     res.redirect(`/apps/new-ai-seo${redirectPath}?shop=${shop}&success=true`);
   } catch (error) {
@@ -821,13 +724,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
     const shop = req.shopDomain;
     const { endTrial, returnTo } = req.body;
     
-    console.log('[BILLING-ACTIVATE] 🔓 Activation request:', {
-      shop,
-      endTrial,
-      returnTo: returnTo || '/billing',
-      timestamp: new Date().toISOString()
-    });
-    
     // Get current subscription
     const subscription = await Subscription.findOne({ shop });
     
@@ -835,15 +731,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
       console.error('[BILLING-ACTIVATE] ❌ No subscription found for:', shop);
       return res.status(404).json({ error: 'No active subscription found' });
     }
-    
-    console.log('[BILLING-ACTIVATE] 📋 Current subscription:', {
-      plan: subscription.plan,
-      status: subscription.status,
-      inTrial: subscription.trialEndsAt && new Date() < new Date(subscription.trialEndsAt),
-      trialEndsAt: subscription.trialEndsAt,
-      activatedAt: subscription.activatedAt,
-      pendingActivation: subscription.pendingActivation
-    });
     
     // Update subscription
     const updateData = {
@@ -854,7 +741,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
     // If ending trial, clear trialEndsAt AND end trial in Shopify
     if (endTrial) {
       updateData.trialEndsAt = null;
-      console.log('[BILLING-ACTIVATE] ⏭️ Ending trial - clearing trialEndsAt');
       
       // CRITICAL: End trial in Shopify to start billing NOW!
       // Otherwise Shopify will auto-charge after 5 days even if features were locked!
@@ -865,13 +751,9 @@ router.post('/activate', verifyRequest, async (req, res) => {
           throw new Error('Shop access token not found');
         }
         
-        console.log('[BILLING-ACTIVATE] ✅ Shop found, access token present');
-        
         // Use appSubscriptionCancel + immediate recreate to end trial
         // This is the recommended Shopify approach for ending trials early
         const { createSubscription } = await import('./shopifyBilling.js');
-        
-        console.log('[BILLING-ACTIVATE] 📞 Creating new subscription with trialDays: 0 to end trial in Shopify');
         
         const { confirmationUrl, subscription: newShopifySubscription } = await createSubscription(
           shop,
@@ -886,24 +768,12 @@ router.post('/activate', verifyRequest, async (req, res) => {
         // Update shopifySubscriptionId with new subscription
         updateData.shopifySubscriptionId = newShopifySubscription.id;
         
-        console.log('[BILLING-ACTIVATE] ✅ New Shopify subscription created (trial ended):', {
-          oldId: subscription.shopifySubscriptionId,
-          newId: newShopifySubscription.id,
-          status: newShopifySubscription.status,
-          confirmationUrl: confirmationUrl ? 'Generated' : 'None'
-        });
-        
         // CRITICAL: Update MongoDB FIRST before returning confirmationUrl!
         // Otherwise callback will read old data (activatedAt: undefined)
-        console.log('[BILLING-ACTIVATE] 💾 Saving activation to MongoDB BEFORE redirect...');
-        
         await Subscription.updateOne({ shop }, { $set: updateData });
-        
-        console.log('[BILLING-ACTIVATE] ✅ MongoDB updated with activatedAt:', updateData.activatedAt);
         
         // If confirmationUrl exists, merchant needs to approve the charge
         if (confirmationUrl) {
-          console.log('[BILLING-ACTIVATE] ⚠️  Merchant must approve charge at:', confirmationUrl);
           
           // Invalidate cache so callback reads fresh data
           await cacheService.invalidateShop(shop);
@@ -925,39 +795,14 @@ router.post('/activate', verifyRequest, async (req, res) => {
       }
     }
     
-    const result = await Subscription.updateOne({ shop }, { $set: updateData });
-    
-    console.log('[BILLING-ACTIVATE] 📝 Update result:', {
-      matchedCount: result.matchedCount,
-      modifiedCount: result.modifiedCount,
-      acknowledged: result.acknowledged
-    });
+    await Subscription.updateOne({ shop }, { $set: updateData });
     
     // Add included tokens for plans with them (Growth Extra/Enterprise)
     const includedTokenInfo = getIncludedTokens(subscription.plan);
     if (includedTokenInfo.tokens > 0) {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.addIncludedTokens(includedTokenInfo.tokens, subscription.plan);
-      
-      console.log('[BILLING-ACTIVATE] 💰 Added included tokens:', {
-        plan: subscription.plan,
-        tokens: includedTokenInfo.tokens,
-        newBalance: tokenBalance.balance
-      });
     }
-    
-    // Fetch updated subscription to verify
-    const updatedSub = await Subscription.findOne({ shop });
-    
-    console.log('[BILLING-ACTIVATE] ✅ Plan activated:', {
-      shop,
-      plan: subscription.plan,
-      activatedAt: updateData.activatedAt,
-      trialEnded: endTrial,
-      tokensAdded: includedTokenInfo.tokens,
-      verifiedActivatedAt: updatedSub?.activatedAt,
-      verifiedTrialEndsAt: updatedSub?.trialEndsAt
-    });
     
     // Invalidate cache
     await cacheService.invalidateShop(shop);

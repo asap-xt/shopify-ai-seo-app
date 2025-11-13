@@ -442,32 +442,16 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     const hasIncludedTokens = includedTokensPlans.includes(planKey);
     const isActivated = !!subscription?.activatedAt;
     
-    console.log('[AI-TESTING-VALIDATE] 🔒 Trial check:', {
-      planKey,
-      hasIncludedTokens,
-      inTrial,
-      isActivated,
-      trialEndsAt: subscription?.trialEndsAt,
-      activatedAt: subscription?.activatedAt,
-      now: now.toISOString()
-    });
-    
     // Get token balance (needed for all paths)
     const tokenBalance = await TokenBalance.getOrCreate(shop);
     
     // Check if feature requires tokens
     const { requiresTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     
-    console.log('[AI-TESTING-VALIDATE] 💰 Token config:', {
-      requiresTokens: requiresTokens(feature),
-      isBlockedInTrial: isBlockedInTrial(feature)
-    });
-    
     if (requiresTokens(feature)) {
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
       if (hasIncludedTokens && inTrial && !isActivated && isBlockedInTrial(feature)) {
-        console.log('[AI-TESTING-VALIDATE] 🚫 BLOCKING - Trial restriction!');
         // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
         return res.status(402).json({
           error: 'AI-Powered Validation is locked during trial period',
@@ -508,11 +492,6 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
       const reservation = await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
       reservationId = reservation.reservationId; // Extract ID from object
       await reservation.save(); // Save the reservation
-      
-      console.log('[AI-TESTING-VALIDATE] 💰 Tokens reserved:', {
-        reservationId,
-        amount: estimatedTokens
-      });
     }
     
     // Process successful and warning endpoints (skip locked and failed)
@@ -713,15 +692,7 @@ Format:
     
     // Finalize token usage (only if tokens were reserved)
     if (reservationId) {
-      console.log('[AI-TESTING-VALIDATE] 💰 Finalizing reservation:', {
-        reservationId,
-        totalTokensUsed,
-        endpointsAnalyzed: successfulEndpoints.length
-      });
-      
       await tokenBalance.finalizeReservation(reservationId, totalTokensUsed);
-    } else {
-      console.log('[AI-TESTING-VALIDATE] ⚠️ No reservation to finalize (feature may not require tokens)');
     }
     
     // Invalidate cache so new token balance is immediately visible

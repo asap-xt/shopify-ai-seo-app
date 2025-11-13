@@ -71,7 +71,6 @@ export default function AiTesting({ shop: shopProp }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && shop) {
-        console.log('[AI-TESTING] Page visible, refreshing token balance...');
         loadTokenBalance();
       }
     };
@@ -87,12 +86,7 @@ export default function AiTesting({ shop: shopProp }) {
     try {
       // Use REST API instead of GraphQL to avoid Redis cache issues
       const data = await api(`/api/billing/info?shop=${shop}`);
-      console.log('[AI-TESTING] 📋 Billing info received:', data);
-      console.log('[AI-TESTING] 📋 Raw plan from API:', data?.subscription?.plan);
-      console.log('[AI-TESTING] 📋 Plan type:', typeof data?.subscription?.plan);
-      
       const planFromApi = data?.subscription?.plan || 'Starter';
-      console.log('[AI-TESTING] 📋 Setting plan to:', planFromApi);
       
       // Set plan, token balance, and trial info from single API call
       setCurrentPlan(planFromApi);
@@ -108,7 +102,6 @@ export default function AiTesting({ shop: shopProp }) {
   const loadTokenBalance = async () => {
     try {
       const data = await api(`/api/billing/info?shop=${shop}`);
-      console.log('[AI-TESTING] Token balance refresh:', data);
       // Only update token balance (plan doesn't change frequently)
       setTokenBalance(data?.tokens?.balance || 0);
       setTrialEndsAt(data?.subscription?.trialEndsAt || null);
@@ -222,15 +215,11 @@ export default function AiTesting({ shop: shopProp }) {
     setTestResults({});
     
     try {
-      console.log('[AI-TESTING] Starting tests for shop:', shop);
-      
       // Call backend endpoint to run tests
       const response = await api('/api/ai-testing/run-tests', {
         method: 'POST',
         body: { shop }
       });
-      
-      console.log('[AI-TESTING] Test results:', response);
       
       if (response.results) {
         setTestResults(response.results);
@@ -249,15 +238,8 @@ export default function AiTesting({ shop: shopProp }) {
 
   // Run AI-powered validation
   const runAiValidation = async () => {
-    console.log('[AI-TESTING] 🎯 runAiValidation called');
-    console.log('[AI-TESTING] 🎯 Current plan from state:', currentPlan);
-    console.log('[AI-TESTING] 🎯 Plan type:', typeof currentPlan);
-    
     // Check if Professional+ plan (case-insensitive)
     const currentIndex = getPlanIndex(currentPlan);
-    
-    console.log('[AI-TESTING] 🎯 Plan hierarchy:', PLAN_HIERARCHY);
-    console.log('[AI-TESTING] 🎯 Current index in hierarchy:', currentIndex);
     
     if (currentIndex < 1) { // Less than Professional
       setTokenError({
@@ -277,8 +259,6 @@ export default function AiTesting({ shop: shopProp }) {
     setAiTestResults({});
     
     try {
-      console.log('[AI-TESTING] Starting AI validation for shop:', shop);
-      
       // Call backend endpoint to run AI validation
       const response = await api('/api/ai-testing/ai-validate', {
         method: 'POST',
@@ -287,8 +267,6 @@ export default function AiTesting({ shop: shopProp }) {
           endpointResults: testResults // Pass basic test results
         }
       });
-      
-      console.log('[AI-TESTING] AI validation results:', response);
       
       if (response.results) {
         setAiTestResults(response.results);
@@ -346,9 +324,6 @@ export default function AiTesting({ shop: shopProp }) {
       setAiSimulationResponse(response.response || 'No response generated');
     } catch (error) {
       console.error('[AI-TESTING] Simulation error:', error);
-      console.log('[AI-TESTING] Error status:', error.status);
-      console.log('[AI-TESTING] Error requiresUpgrade:', error.requiresUpgrade);
-      console.log('[AI-TESTING] Error requiresPurchase:', error.requiresPurchase);
       
       // Check for 402 status (payment required)
       if (error.status === 402) {
@@ -485,10 +460,7 @@ export default function AiTesting({ shop: shopProp }) {
                         )}
                         <Button 
                           size="micro" 
-                          onClick={() => {
-                            console.log('[AI-TESTING] Manual token refresh...');
-                            loadTokenBalance();
-                          }}
+                          onClick={() => loadTokenBalance()}
                           accessibilityLabel="Refresh token balance"
                         >
                           🔄
@@ -1086,8 +1058,6 @@ export default function AiTesting({ shop: shopProp }) {
           onActivatePlan={async () => {
             // Direct API call to activate plan (no billing page redirect)
             try {
-              console.log('[AI-TESTING] 🔓 Activating plan directly...');
-              
               const response = await api('/api/billing/activate', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1097,18 +1067,14 @@ export default function AiTesting({ shop: shopProp }) {
                 })
               });
               
-              console.log('[AI-TESTING] ✅ Activation response:', response);
-              
               // Check if Shopify approval is required
               if (response.requiresApproval && response.confirmationUrl) {
-                console.log('[AI-TESTING] 🔐 Redirecting to Shopify approval...');
                 // Direct redirect to Shopify approval page
                 window.top.location.href = response.confirmationUrl;
                 return;
               }
               
               // Plan activated successfully without approval (shouldn't happen for trial end)
-              console.log('[AI-TESTING] ✅ Plan activated, reloading page...');
               window.location.reload();
               
             } catch (error) {

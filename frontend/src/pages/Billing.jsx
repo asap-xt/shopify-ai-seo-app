@@ -83,14 +83,9 @@ export default function Billing({ shop }) {
       
       // Only redirect if we have embedded params (second load from Shopify)
       if (host && embedded) {
-        console.log('[Billing] Plan activated, redirecting to Dashboard...');
-        
         // Immediate redirect (no delay for faster UX)
         const dashboardUrl = `/dashboard?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
         window.location.href = dashboardUrl;
-      } else {
-        console.log('[Billing] Waiting for Shopify to reload with embedded params...');
-        // Do nothing - Shopify will reload the page with params
       }
     } else {
       // Normal billing page load
@@ -267,9 +262,6 @@ export default function Billing({ shop }) {
   const plans = allPlans.filter(plan => 
     !['starter', 'growth'].includes(plan.key)
   );
-  
-  // Debug: Log subscription plan
-  console.log('[Billing] Current plan:', subscription?.plan, 'Type:', typeof subscription?.plan);
 
   return (
     <>
@@ -323,8 +315,6 @@ export default function Billing({ shop }) {
                     setPurchasing(true);
                     setError(null);
                     
-                    console.log('[Billing] 🔓 Activating plan...');
-                    
                     const response = await fetch('/api/billing/activate', {
                       method: 'POST',
                       headers: {
@@ -342,11 +332,8 @@ export default function Billing({ shop }) {
                       throw new Error(data.error || 'Failed to activate plan');
                     }
                     
-                    console.log('[Billing] ✅ Plan activated:', data);
-                    
                     // Check if Shopify approval is required (ending trial early)
                     if (data.requiresApproval && data.confirmationUrl) {
-                      console.log('[Billing] 🔐 Shopify approval required - redirecting to:', data.confirmationUrl);
                       // Redirect to Shopify to approve charge (ending trial = new charge)
                       window.top.location.href = data.confirmationUrl;
                       return;
@@ -473,22 +460,14 @@ export default function Billing({ shop }) {
               </Text>
               {(() => {
                 const planKey = subscription?.plan?.toLowerCase().trim();
-                console.log('[Billing] Current plan key:', planKey);
                 const isGrowthExtra = planKey === 'growth extra';
                 const isEnterprise = planKey === 'enterprise';
-                const shouldShow = isGrowthExtra || isEnterprise;
                 
-                console.log('[Billing] Is growth extra?', isGrowthExtra);
-                console.log('[Billing] Is enterprise?', isEnterprise);
-                console.log('[Billing] Condition result:', shouldShow);
-                
-                if (!shouldShow) {
-                  console.log('[Billing] NOT rendering tokens text');
+                if (!isGrowthExtra && !isEnterprise) {
                   return null;
                 }
                 
                 const tokensText = isGrowthExtra ? '100M' : '300M';
-                console.log('[Billing] Rendering tokens text:', tokensText);
                 
                 return (
                   <Text variant="bodySm" tone="subdued" alignment="center" fontWeight="medium">
@@ -519,13 +498,10 @@ export default function Billing({ shop }) {
                   variant="primary"
                   fullWidth
                   onClick={() => {
-                    console.log('[Billing] Buy Tokens clicked. Plan:', subscription?.plan, 'Comparison:', subscription?.plan === 'starter');
                     // Starter plan cannot buy tokens - show upgrade modal
                     if (subscription?.plan === 'starter') {
-                      console.log('[Billing] Showing upgrade modal for Starter plan');
                       setShowTokenUpgradeModal(true);
                     } else {
-                      console.log('[Billing] Showing token purchase modal');
                       setShowTokenModal(true);
                     }
                   }}
