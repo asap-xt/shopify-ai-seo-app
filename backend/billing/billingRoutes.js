@@ -566,7 +566,7 @@ router.get('/callback', async (req, res) => {
 router.post('/tokens/purchase', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { amount } = req.body;
+    const { amount, returnTo } = req.body;
     
     const usdAmount = parseFloat(amount);
     
@@ -586,7 +586,8 @@ router.post('/tokens/purchase', verifyRequest, async (req, res) => {
     const { confirmationUrl, charge, tokens } = await purchaseTokens(
       shop,
       usdAmount,
-      shopDoc.accessToken
+      shopDoc.accessToken,
+      { returnTo: returnTo || '/billing' }
     );
     
     // Save pending purchase
