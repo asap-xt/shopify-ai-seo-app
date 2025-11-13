@@ -819,27 +819,38 @@ router.post('/activate', verifyRequest, async (req, res) => {
       console.log('[BILLING-ACTIVATE] ⏭️ Ending trial - clearing trialEndsAt');
     }
     
-    await Subscription.updateOne({ shop }, { $set: updateData });
+    const result = await Subscription.updateOne({ shop }, { $set: updateData });
+    
+    console.log('[BILLING-ACTIVATE] 📝 Update result:', {
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      acknowledged: result.acknowledged
+    });
     
     // Add included tokens for plans with them (Growth Extra/Enterprise)
-    const included = getIncludedTokens(subscription.plan);
-    if (included > 0) {
+    const includedTokenInfo = getIncludedTokens(subscription.plan);
+    if (includedTokenInfo.tokens > 0) {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
-      await tokenBalance.addIncludedTokens(included, subscription.plan);
+      await tokenBalance.addIncludedTokens(includedTokenInfo.tokens, subscription.plan);
       
       console.log('[BILLING-ACTIVATE] 💰 Added included tokens:', {
         plan: subscription.plan,
-        tokens: included,
+        tokens: includedTokenInfo.tokens,
         newBalance: tokenBalance.balance
       });
     }
+    
+    // Fetch updated subscription to verify
+    const updatedSub = await Subscription.findOne({ shop });
     
     console.log('[BILLING-ACTIVATE] ✅ Plan activated:', {
       shop,
       plan: subscription.plan,
       activatedAt: updateData.activatedAt,
       trialEnded: endTrial,
-      tokensAdded: included
+      tokensAdded: includedTokenInfo.tokens,
+      verifiedActivatedAt: updatedSub?.activatedAt,
+      verifiedTrialEndsAt: updatedSub?.trialEndsAt
     });
     
     // Invalidate cache
@@ -851,7 +862,7 @@ router.post('/activate', verifyRequest, async (req, res) => {
       plan: subscription.plan,
       activatedAt: updateData.activatedAt,
       trialEnded: endTrial,
-      tokensAdded: included
+      tokensAdded: includedTokenInfo.tokens
     });
     
   } catch (error) {
