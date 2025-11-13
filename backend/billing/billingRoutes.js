@@ -617,11 +617,11 @@ router.post('/tokens/purchase', verifyRequest, async (req, res) => {
 
 /**
  * Callback after token purchase approval
- * GET /billing/tokens/callback?shop={shop}&amount={amount}&charge_id={id}
+ * GET /billing/tokens/callback?shop={shop}&amount={amount}&charge_id={id}&returnTo={path}
  */
 router.get('/tokens/callback', async (req, res) => {
   try {
-    const { shop, amount, charge_id } = req.query;
+    const { shop, amount, charge_id, returnTo } = req.query;
     
     if (!shop || !amount) {
       return res.status(400).send('Missing parameters');
@@ -639,8 +639,9 @@ router.get('/tokens/callback', async (req, res) => {
     // CRITICAL: Invalidate cache so new token balance is immediately visible
     await cacheService.invalidateShop(shop);
     
-    // Redirect back to app
-    res.redirect(`/apps/new-ai-seo/billing?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
+    // Redirect to returnTo path or default to /billing
+    const redirectPath = returnTo || '/billing';
+    res.redirect(`/apps/new-ai-seo${redirectPath}?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
   } catch (error) {
     console.error('[Billing] Token callback error:', error);
     res.status(500).send('Failed to process token purchase');
