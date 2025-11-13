@@ -54,7 +54,11 @@ router.get('/ai/products.json', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
-    if (!settings?.features?.productsJson) {
+    // Allow AI Testing Bot to bypass feature check (for testing purposes)
+    const userAgent = req.get('User-Agent') || '';
+    const isTestingBot = userAgent.includes('AI-SEO-Testing-Bot');
+    
+    if (!isTestingBot && !settings?.features?.productsJson) {
       return res.status(403).json({ 
         error: 'Products JSON feature is not enabled. Please enable it in settings.' 
       });
@@ -192,7 +196,11 @@ router.get('/ai/collections-feed.json', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
-    if (!settings?.features?.collectionsJson) {
+    // Allow AI Testing Bot to bypass feature check (for testing purposes)
+    const userAgent = req.get('User-Agent') || '';
+    const isTestingBot = userAgent.includes('AI-SEO-Testing-Bot');
+    
+    if (!isTestingBot && !settings?.features?.collectionsJson) {
       return res.status(403).json({ 
         error: 'Collections JSON feature is not enabled. Please enable it in settings.' 
       });
@@ -342,8 +350,12 @@ router.get('/ai/welcome', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
+    // Allow AI Testing Bot to bypass feature check (for testing purposes)
+    const userAgent = req.get('User-Agent') || '';
+    const isTestingBot = userAgent.includes('AI-SEO-Testing-Bot');
+    
     // Check if feature is enabled
-    if (!settings?.features?.welcomePage) {
+    if (!isTestingBot && !settings?.features?.welcomePage) {
       return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
     }
 
@@ -685,8 +697,12 @@ router.get('/ai/store-metadata.json', async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
+    // Allow AI Testing Bot to bypass feature check (for testing purposes)
+    const userAgent = req.get('User-Agent') || '';
+    const isTestingBot = userAgent.includes('AI-SEO-Testing-Bot');
+    
     // Check if feature is enabled
-    if (!settings?.features?.storeMetadata) {
+    if (!isTestingBot && !settings?.features?.storeMetadata) {
       return res.status(403).json({ 
         error: 'Store Metadata feature is not enabled. Please enable it in settings.' 
       });
