@@ -38,7 +38,8 @@ export const PLAN_HIERARCHY_LOWERCASE = PLAN_HIERARCHY.map(p => p.toLowerCase())
  */
 export function getPlanIndex(planName) {
   if (!planName) return -1;
-  const normalized = planName.toLowerCase();
+  // Handle both formats: "growth extra" (space) and "growth_extra" (underscore)
+  const normalized = planName.toLowerCase().replace(/_/g, ' ');
   return PLAN_HIERARCHY_LOWERCASE.indexOf(normalized);
 }
 

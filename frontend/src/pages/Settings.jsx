@@ -1038,13 +1038,12 @@ export default function Settings() {
   };
 
   const isFeatureAvailable = (featureKey) => {
-    const plan = normalizePlan(settings?.plan);
-    const planIndex = getPlanIndex(plan);
+    // Use getPlanIndex directly (it handles case-insensitivity and spaces)
+    const planIndex = getPlanIndex(settings?.plan);
     
     console.log('[SETTINGS] 🔍 isFeatureAvailable check:', {
       featureKey,
       rawPlan: settings?.plan,
-      normalizedPlan: plan,
       planIndex,
       PLAN_HIERARCHY_LOWERCASE
     });

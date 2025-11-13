@@ -1,1 +1,0 @@
-const t=["Starter","Professional","Professional Plus","Growth","Growth Plus","Growth Extra","Enterprise"],e=t.map(r=>r.toLowerCase());function s(r){if(!r)return-1;const o=r.toLowerCase();return e.indexOf(o)}export{e as P,t as a,s as g};
