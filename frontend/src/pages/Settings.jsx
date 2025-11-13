@@ -26,8 +26,6 @@ import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 export default function Settings() {
-  console.log('[SETTINGS] ===== SETTINGS COMPONENT LOADED =====');
-  console.log('[SETTINGS] Starting component initialization...');
   
   // ===== 1. ÐšÐžÐÐ¡Ð¢ÐÐÐ¢Ð˜ Ð˜ HELPERS (Ð‘Ð•Ð— HOOKS) =====
   const qs = (k, d = '') => {
@@ -37,11 +35,6 @@ export default function Settings() {
 
   const normalizePlan = (plan) => {
     return (plan || 'starter').toLowerCase().replace(' ', '_');
-  };
-
-  // Debug helper
-  const debugLog = (message, data = null) => {
-    console.log(`[SETTINGS DEBUG] ${message}`, data || '');
   };
 
   // ===== 2. Ð˜Ð—Ð’Ð›Ð˜Ð§ÐÐÐ• ÐÐ shop =====
@@ -108,10 +101,6 @@ export default function Settings() {
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
   
-  console.log('[SETTINGS] ===== SHOP EXTRACTION DEBUG =====');
-  console.log('[SETTINGS] Extracted shop:', shop);
-  console.log('[SETTINGS] API function created:', typeof api);
-  console.log('[SETTINGS] makeSessionFetch function:', typeof makeSessionFetch);
   
   
   // ===== 6. Ð“Ð›ÐÐ’ÐÐÐ¢Ð Ð¤Ð£ÐÐšÐ¦Ð˜Ð¯ (Ð¡Ð›Ð•Ð” helper Ñ„ÑƒÐ½ÐºÑ†Ð¸Ð¸Ñ‚Ðµ) =====
@@ -119,11 +108,9 @@ export default function Settings() {
   
   // ===== 7. useEffect (ÐŸÐžÐ¡Ð›Ð•Ð”Ð•Ð) =====
   
-  // Debug toast state changes
+  // Auto-clear toast after 5 seconds
   useEffect(() => {
     if (toast) {
-      console.log('[SETTINGS] Toast state changed to:', toast);
-      
       // Clear existing timeout
       if (toastTimeout) {
         clearTimeout(toastTimeout);
@@ -131,7 +118,6 @@ export default function Settings() {
       
       // Set new timeout to clear toast after 5 seconds
       const timeout = setTimeout(() => {
-        console.log('[SETTINGS] Auto-clearing toast after 5 seconds');
         setToast('');
       }, 5000);
       
@@ -141,7 +127,6 @@ export default function Settings() {
   
   // Function to start polling for background regeneration completion
   const startPollingForCompletion = () => {
-    console.log('[SETTINGS] Starting polling for background regeneration completion...');
     
     // Clear any existing polling
     if (pollingInterval) {
@@ -158,7 +143,6 @@ export default function Settings() {
       try {
         // Check sitemap info to see if it was recently updated
         const info = await api(`/api/sitemap/info?shop=${shop}`);
-        console.log('[SETTINGS] Sitemap info:', info);
         
         if (info && info.generatedAt) {
           const generatedTime = new Date(info.generatedAt).getTime();
@@ -167,7 +151,6 @@ export default function Settings() {
           
           // If sitemap was generated within the last 2 minutes, consider it complete
           if (timeDiff < 120000) { // 2 minutes
-            console.log('[SETTINGS] Background regeneration completed!');
             clearInterval(interval);
             setPollingInterval(null);
             
@@ -175,7 +158,6 @@ export default function Settings() {
               setToast('AI-Optimized Sitemap regeneration completed successfully!');
               
               // Show View button only for AI Sitemap
-              console.log('[SETTINGS] Setting showAiSitemapView to true for AI sitemap regeneration completion');
               setShowAiSitemapView(true);
               return;
           }
@@ -183,7 +165,6 @@ export default function Settings() {
         
         // If we've reached max attempts, stop polling
         if (attempts >= maxAttempts) {
-          console.log('[SETTINGS] Polling timeout reached');
           clearInterval(interval);
           setPollingInterval(null);
           setToast('Background regeneration is taking longer than expected. Please check the sitemap manually.');
@@ -203,22 +184,15 @@ export default function Settings() {
   // ===== 5. HELPER Ð¤Ð£ÐÐšÐ¦Ð˜Ð˜ (ÐºÐ¾Ð¸Ñ‚Ð¾ ÐÐ• Ð—ÐÐ’Ð˜Ð¡Ð¯Ð¢ Ð¾Ñ‚ Ð´Ñ€ÑƒÐ³Ð¸ callbacks) =====
   const checkProductsData = useCallback(async () => {
     try {
-      console.log('[SETTINGS DEBUG] ===== CHECKING PRODUCTS DATA =====');
-      console.log('[SETTINGS DEBUG] Shop:', shop);
       
       // Use API endpoint instead of GraphQL
       const result = await api(`/api/products/list?shop=${shop}&limit=10&optimized=true`);
       
-      console.log('[SETTINGS DEBUG] API Result:', result);
-      console.log('[SETTINGS DEBUG] Products length:', result?.products?.length);
-      console.log('[SETTINGS DEBUG] Products:', result?.products);
       
       // Check if any product has optimized languages
       const hasOptimizedProducts = result?.products?.some(product => 
         product?.optimizationSummary?.optimizedLanguages?.length > 0
       );
-      console.log('[SETTINGS DEBUG] Has optimized products:', hasOptimizedProducts);
-      console.log('[SETTINGS DEBUG] ===== PRODUCTS CHECK COMPLETE =====');
       
       return hasOptimizedProducts;
     } catch (error) {
@@ -229,22 +203,15 @@ export default function Settings() {
 
   const checkCollectionsData = useCallback(async () => {
     try {
-      console.log('[SETTINGS DEBUG] ===== CHECKING COLLECTIONS DATA =====');
-      console.log('[SETTINGS DEBUG] Shop:', shop);
       
       // Use API endpoint instead of GraphQL
       const result = await api(`/collections/list-graphql?shop=${shop}`);
       
-      console.log('[SETTINGS DEBUG] API Result:', result);
-      console.log('[SETTINGS DEBUG] Collections length:', result?.collections?.length);
-      console.log('[SETTINGS DEBUG] Collections:', result?.collections);
       
       // Check if any collection has optimized languages
       const hasOptimizedCollections = result?.collections?.some(collection => 
         collection?.optimizedLanguages?.length > 0
       );
-      console.log('[SETTINGS DEBUG] Has optimized collections:', hasOptimizedCollections);
-      console.log('[SETTINGS DEBUG] ===== COLLECTIONS CHECK COMPLETE =====');
       
       return hasOptimizedCollections;
     } catch (error) {
@@ -255,8 +222,6 @@ export default function Settings() {
 
   const checkStoreMetadata = useCallback(async () => {
     try {
-      console.log('[SETTINGS DEBUG] ===== CHECKING STORE METADATA =====');
-      console.log('[SETTINGS DEBUG] Shop:', shop);
       
       const STORE_METADATA_CHECK_QUERY = `
         query CheckStoreMetadata($shop: String!) {
@@ -267,8 +232,6 @@ export default function Settings() {
         }
       `;
       
-      console.log('[SETTINGS DEBUG] GraphQL Query:', STORE_METADATA_CHECK_QUERY);
-      console.log('[SETTINGS DEBUG] Variables:', { shop });
       
       const result = await api('/graphql', {
         method: 'POST',
@@ -279,14 +242,8 @@ export default function Settings() {
         shop: shop
       });
       
-      console.log('[SETTINGS DEBUG] GraphQL Result:', result);
-      console.log('[SETTINGS DEBUG] Result data:', result?.data);
-      console.log('[SETTINGS DEBUG] Store metadata:', result?.data?.storeMetadata);
-      console.log('[SETTINGS DEBUG] Shop name:', result?.data?.storeMetadata?.shopName);
       
       const hasMetadata = !!result?.data?.storeMetadata?.shopName;
-      console.log('[SETTINGS DEBUG] Has metadata:', hasMetadata);
-      console.log('[SETTINGS DEBUG] ===== STORE METADATA CHECK COMPLETE =====');
       
       return hasMetadata;
     } catch (error) {
@@ -298,31 +255,19 @@ export default function Settings() {
 
   const checkWelcomePage = useCallback(async () => {
     try {
-      console.log('[SETTINGS DEBUG] ===== CHECKING WELCOME PAGE =====');
-      console.log('[SETTINGS DEBUG] Shop:', shop);
-      console.log('[SETTINGS DEBUG] Current settings features:', settings?.features);
-      console.log('[SETTINGS DEBUG] Welcome page feature enabled:', settings?.features?.welcomePage);
-      console.log('[SETTINGS DEBUG] Current plan:', settings?.plan);
       
       // Check if welcome page endpoint is accessible
       const result = await api(`/ai/welcome?shop=${shop}`);
       
-      console.log('[SETTINGS DEBUG] Welcome page result:', result);
-      console.log('[SETTINGS DEBUG] Result type:', typeof result);
-      console.log('[SETTINGS DEBUG] Result keys:', result ? Object.keys(result) : 'null');
       
       // Check if it's an error response (JSON with error field)
       if (result?.error && typeof result.error === 'string' && !result.error.includes('<!DOCTYPE html>')) {
-        console.log('[SETTINGS DEBUG] Welcome page error:', result.error);
-        console.log('[SETTINGS DEBUG] Error debug info:', result.debug);
         return false;
       }
       
       // If we get HTML content (either as string or in error field), the page exists
       const hasWelcomePage = (typeof result === 'string' && result.includes('<!DOCTYPE html>')) ||
                             (result?.error && typeof result.error === 'string' && result.error.includes('<!DOCTYPE html>'));
-      console.log('[SETTINGS DEBUG] Has welcome page:', hasWelcomePage);
-      console.log('[SETTINGS DEBUG] ===== WELCOME PAGE CHECK COMPLETE =====');
       
       return hasWelcomePage;
     } catch (error) {
@@ -333,68 +278,39 @@ export default function Settings() {
 
   // ===== 6. ГЛАВНАТА ФУНКЦИЯ =====
   const checkGeneratedData = useCallback(async () => {
-    console.log('[SETTINGS] ===== checkGeneratedData CALLED =====');
-    console.log('[SETTINGS] checkGeneratedData - shop:', shop);
-    console.log('[SETTINGS] checkGeneratedData - settings:', settings);
-    console.log('[SETTINGS] checkGeneratedData - settings?.features:', settings?.features);
-    console.log('[SETTINGS] checkGeneratedData - Store Metadata feature:', settings?.features?.storeMetadata);
-    console.log('[SETTINGS] checkGeneratedData - Store Metadata type:', typeof settings?.features?.storeMetadata);
-    console.log('[SETTINGS] checkGeneratedData - Store Metadata enabled:', !!settings?.features?.storeMetadata);
     try {
-      console.log('[SETTINGS] ===== CHECKING GENERATED DATA =====');
       
       // Check Products JSON Feed
       if (settings?.features?.productsJson) {
-        console.log('[SETTINGS] ===== CHECKING PRODUCTS JSON FEATURE =====');
-        console.log('[SETTINGS] Products JSON feature is enabled:', settings?.features?.productsJson);
         const hasProductsData = await checkProductsData();
-        console.log('[SETTINGS] Setting showProductsJsonView to:', hasProductsData);
         setShowProductsJsonView(hasProductsData);
-        console.log('[SETTINGS] Products JSON data exists:', hasProductsData);
       } else {
-        console.log('[SETTINGS] Products JSON feature is disabled');
       }
       
       // Check Collections JSON Feed  
       if (settings?.features?.collectionsJson) {
-        console.log('[SETTINGS] ===== CHECKING COLLECTIONS JSON FEATURE =====');
-        console.log('[SETTINGS] Collections JSON feature is enabled:', settings?.features?.collectionsJson);
         const hasCollectionsData = await checkCollectionsData();
-        console.log('[SETTINGS] Setting showCollectionsJsonView to:', hasCollectionsData);
         setShowCollectionsJsonView(hasCollectionsData);
-        console.log('[SETTINGS] Collections JSON data exists:', hasCollectionsData);
       } else {
-        console.log('[SETTINGS] Collections JSON feature is disabled');
       }
       
       // Check Store Metadata
       if (settings?.features?.storeMetadata) {
-        console.log('[SETTINGS] ===== CHECKING STORE METADATA IN checkGeneratedData =====');
-        console.log('[SETTINGS] Store Metadata feature is enabled:', settings?.features?.storeMetadata);
-        console.log('[SETTINGS] About to call checkStoreMetadata...');
         
         const hasStoreMetadata = await checkStoreMetadata();
         
-        console.log('[SETTINGS] checkStoreMetadata returned:', hasStoreMetadata);
-        console.log('[SETTINGS] Setting showStoreMetadataView to:', hasStoreMetadata);
         
         setShowStoreMetadataView(hasStoreMetadata);
         
-        console.log('[SETTINGS] Store Metadata exists:', hasStoreMetadata);
-        console.log('[SETTINGS] ===== STORE METADATA CHECK COMPLETE =====');
       } else {
-        console.log('[SETTINGS] Store Metadata feature is NOT enabled:', settings?.features?.storeMetadata);
       }
       
       // Check Welcome Page
       if (settings?.features?.welcomePage) {
-        console.log('[SETTINGS] Checking Welcome Page data...');
         const hasWelcomePage = await checkWelcomePage();
         setShowWelcomePageView(hasWelcomePage);
-        console.log('[SETTINGS] Welcome Page exists:', hasWelcomePage);
       }
       
-      console.log('[SETTINGS] ===== GENERATED DATA CHECK COMPLETE =====');
     } catch (error) {
       console.error('[SETTINGS] Error checking generated data:', error);
     }
@@ -402,19 +318,8 @@ export default function Settings() {
   
   // Debug useEffect dependencies
   useEffect(() => {
-    console.log('[SETTINGS DEBUG] ===== useEffect DEPENDENCIES DEBUG =====');
-    console.log('[SETTINGS DEBUG] settings?.features:', settings?.features);
-    console.log('[SETTINGS DEBUG] settings exists:', !!settings);
-    console.log('[SETTINGS DEBUG] settings type:', typeof settings);
-    console.log('[SETTINGS DEBUG] checkProductsData exists:', !!checkProductsData);
-    console.log('[SETTINGS DEBUG] checkCollectionsData exists:', !!checkCollectionsData);
-    console.log('[SETTINGS DEBUG] checkStoreMetadata exists:', !!checkStoreMetadata);
-    console.log('[SETTINGS DEBUG] checkWelcomePage exists:', !!checkWelcomePage);
-    console.log('[SETTINGS DEBUG] ===== END useEffect DEPENDENCIES DEBUG =====');
   }, [settings?.features, checkProductsData, checkCollectionsData, checkStoreMetadata, checkWelcomePage]);
   
-  console.log('[SETTINGS] State variables initialized successfully');
-  console.log('[SETTINGS] About to create useEffect hooks...');
 
   // --- GraphQL helper for this page (minimal, local) ---
   const runGQL = async (query, variables) => {
@@ -440,29 +345,17 @@ export default function Settings() {
   };
   
 
-  console.log('[SETTINGS] Creating loadSettings useEffect...');
-  console.log('[SETTINGS] Current shop value:', shop);
-  console.log('[SETTINGS] Shop type:', typeof shop);
-  console.log('[SETTINGS] Shop length:', shop?.length);
   
   useEffect(() => {
-    console.log('[SETTINGS] ===== LOAD SETTINGS useEffect TRIGGERED =====');
-    console.log('[SETTINGS] Shop:', shop);
-    console.log('[SETTINGS] API function:', typeof api);
-    console.log('[SETTINGS] useEffect dependencies - shop:', shop);
-    console.log('[SETTINGS] useEffect dependencies - api:', typeof api);
     
     if (!shop) {
-      console.log('[SETTINGS] No shop, setting loading to false');
       setLoading(false);
       return;
     }
     
-    console.log('[SETTINGS] Shop available, calling loadSettings...');
     loadSettings();
   }, [shop, api]);
   
-  console.log('[SETTINGS] loadSettings useEffect created successfully');
 
 
   // Check schema status when enabled
@@ -710,52 +603,27 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      console.log('[SETTINGS] ===== STARTING LOAD SETTINGS =====');
-      console.log('[SETTINGS] Shop:', shop);
-      console.log('[SETTINGS] API function:', typeof api);
-      console.log('[SETTINGS] Calling API...');
       
       const data = await api(`/api/ai-discovery/settings?shop=${shop}`);
       
-      console.log('[SETTINGS] ===== SETTINGS LOADED =====');
-      console.log('[SETTINGS] Raw data:', data);
-      console.log('[SETTINGS] Settings plan:', data?.plan);
-      console.log('[SETTINGS] Normalized plan:', normalizePlan(data?.plan));
-      console.log('[SETTINGS] Features:', data?.features);
-      console.log('[SETTINGS] Products JSON feature:', data?.features?.productsJson);
-      console.log('[SETTINGS] Collections JSON feature:', data?.features?.collectionsJson);
-      console.log('[SETTINGS] AI Sitemap feature:', data?.features?.aiSitemap);
-      console.log('[SETTINGS] Welcome Page feature:', data?.features?.welcomePage);
-      console.log('[SETTINGS] Store Metadata feature:', data?.features?.storeMetadata);
-      console.log('[SETTINGS] Schema Data feature:', data?.features?.schemaData);
-      console.log('[SETTINGS] Auto Robots Txt feature:', data?.features?.autoRobotsTxt);
       
       // Debug: Check if any features are true
       const trueFeatures = Object.entries(data?.features || {}).filter(([key, value]) => value === true);
-      console.log('[SETTINGS] Features that are TRUE:', trueFeatures);
-      console.log('[SETTINGS] Number of true features:', trueFeatures.length);
       
-      console.log('[SETTINGS] Setting settings state...');
-      console.log('[SETTINGS] Data to set:', data);
-      console.log('[SETTINGS] Store Metadata in data:', data?.features?.storeMetadata);
-      console.log('[SETTINGS] Has AI Sitemap:', data?.hasAiSitemap);
       setSettings(data);
       setOriginalSettings(data); // Save original settings
-      console.log('[SETTINGS] Settings state set successfully');
       
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
       
       // Show AI Sitemap View button if AI sitemap exists
       if (data.hasAiSitemap) {
-        console.log('[SETTINGS] AI Sitemap exists in database, showing View button');
         setShowAiSitemapView(true);
       }
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
       
-      console.log('[SETTINGS] ===== LOAD SETTINGS COMPLETE =====');
     } catch (error) {
       console.error('[SETTINGS] ===== LOAD SETTINGS ERROR =====');
       console.error('[SETTINGS] Failed to load settings:', error);
@@ -789,7 +657,6 @@ export default function Settings() {
   };
 
   // Test log to check if generateRobotsTxt function exists (after definition)
-  console.log('[SETTINGS DEBUG] generateRobotsTxt function exists:', typeof generateRobotsTxt);
 
   const toggleBot = (botKey) => {
     if (!settings?.availableBots?.includes(botKey)) {
@@ -1041,13 +908,6 @@ export default function Settings() {
     // Use getPlanIndex directly (it handles case-insensitivity and spaces)
     const planIndex = getPlanIndex(settings?.plan);
     
-    console.log('[SETTINGS] 🔍 isFeatureAvailable check:', {
-      featureKey,
-      rawPlan: settings?.plan,
-      planIndex,
-      PLAN_HIERARCHY_LOWERCASE
-    });
-    
     // Plan requirements by feature (index in PLAN_HIERARCHY)
     const requirements = {
       productsJson: 0,        // Starter+
@@ -1061,7 +921,6 @@ export default function Settings() {
     const requiredIndex = requirements[featureKey];
     const isAvailable = requiredIndex !== undefined && planIndex >= requiredIndex;
     
-    console.log('[SETTINGS] 🔍 Result:', { requiredIndex, planIndex, isAvailable });
     
     return isAvailable;
   };
@@ -1195,7 +1054,6 @@ export default function Settings() {
       };
 
       if (feature === 'aiSitemap') {
-        console.log('[SETTINGS] Loading existing AI-Optimized Sitemap from database...');
         // Read existing sitemap from database (does NOT regenerate)
         // Uses force=true to trigger the "view existing" code path in backend
         const response = await fetch(endpoints[feature], {
@@ -1207,14 +1065,12 @@ export default function Settings() {
         });
         
         if (response.ok) {
-          console.log('[SETTINGS] AI Sitemap XML loaded successfully');
           const xmlContent = await response.text();
           setJsonModalContent(xmlContent);
         } else {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
       } else if (feature === 'welcomePage') {
-        console.log('[SETTINGS] Loading AI Welcome Page HTML...');
         // For welcome page, fetch as text since it's HTML
         const response = await fetch(endpoints[feature], {
           method: 'GET',
@@ -1225,7 +1081,6 @@ export default function Settings() {
         });
         
         if (response.ok) {
-          console.log('[SETTINGS] AI Welcome Page HTML loaded successfully');
           const htmlContent = await response.text();
           setJsonModalContent(htmlContent);
         } else {
@@ -1247,73 +1102,44 @@ export default function Settings() {
   // ===== 8. useEffect HOOKS (В КРАЯ!) =====
   // Debug showViewButtons state changes
   useEffect(() => {
-    console.log('[SETTINGS] showViewButtons state changed to:', showViewButtons);
   }, [showViewButtons]);
   
   // Reset showViewButtons on component mount to prevent showing from previous sessions
   useEffect(() => {
-    console.log('[SETTINGS] Resetting showViewButtons on component mount');
     setShowViewButtons(false);
     
     // Also reset schema generation states
-    console.log('[SETTINGS] Resetting schema generation states on component mount');
     setSchemaGenerating(false);
     setSchemaComplete(false);
     
     // CRITICAL: Reset refs to prevent infinite loops from previous sessions
-    console.log('[SETTINGS] Resetting refs to prevent infinite loops');
     isGeneratingRef.current = false;
     checkCountRef.current = 0;
   }, []); // Run only on mount
 
   // Check generated data when settings change
-  console.log('[SETTINGS] Creating checkGeneratedData useEffect...');
-  console.log('[SETTINGS] Current settings:', settings);
-  console.log('[SETTINGS] Current settings features:', settings?.features);
   
   useEffect(() => {
-    console.log('[SETTINGS DEBUG] ===== useEffect TRIGGERED =====');
-    console.log('[SETTINGS DEBUG] Settings:', settings);
-    console.log('[SETTINGS DEBUG] Settings features:', settings?.features);
-    console.log('[SETTINGS DEBUG] Shop:', shop);
-    console.log('[SETTINGS DEBUG] Conditions check:');
-    console.log('[SETTINGS DEBUG] - settings?.features exists:', !!settings?.features);
-    console.log('[SETTINGS DEBUG] - shop exists:', !!shop);
-    console.log('[SETTINGS DEBUG] - Both conditions met:', !!(settings?.features && shop));
     
     if (settings?.features && shop) {
-      console.log('[SETTINGS] Checking for generated data...');
       checkGeneratedData();
     } else {
-      console.log('[SETTINGS] Skipping checkGeneratedData - conditions not met');
     }
   }, [settings?.features, shop, checkGeneratedData]);
   
-  console.log('[SETTINGS] checkGeneratedData useEffect created successfully');
 
   // Force check on mount
   useEffect(() => {
-    console.log('[SETTINGS] ===== FORCE CHECK ON MOUNT =====');
-    console.log('[SETTINGS] Shop:', shop);
-    console.log('[SETTINGS] Settings:', settings);
-    console.log('[SETTINGS] Settings features:', settings?.features);
-    console.log('[SETTINGS] checkGeneratedData function:', typeof checkGeneratedData);
-    console.log('[SETTINGS] isGeneratingRef.current:', isGeneratingRef.current);
     
     // If we're in a generating state but there's no active generation, reset it
     if (isGeneratingRef.current && !schemaGenerating) {
-      console.log('[SETTINGS] ⚠️ Found stale generating state, resetting...');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
     }
     
     if (shop && settings?.features) {
-      console.log('[SETTINGS] Both shop and settings available, calling checkGeneratedData...');
       checkGeneratedData();
     } else {
-      console.log('[SETTINGS] Missing shop or settings, skipping checkGeneratedData');
-      console.log('[SETTINGS] - shop exists:', !!shop);
-      console.log('[SETTINGS] - settings?.features exists:', !!settings?.features);
     }
   }, []); // Run only on mount
 
@@ -1675,10 +1501,6 @@ export default function Settings() {
                         
                         {/* Products JSON View button */}
                         {feature.key === 'productsJson' && (() => {
-                          console.log('[SETTINGS DEBUG] Products JSON button check:');
-                          console.log('[SETTINGS DEBUG] - feature.key === productsJson:', feature.key === 'productsJson');
-                          console.log('[SETTINGS DEBUG] - showProductsJsonView:', showProductsJsonView);
-                          console.log('[SETTINGS DEBUG] - Should show button:', feature.key === 'productsJson' && showProductsJsonView);
                           return feature.key === 'productsJson' && showProductsJsonView;
                         })() && (
                           <Button
@@ -1691,10 +1513,6 @@ export default function Settings() {
                         
                         {/* Collections JSON View button */}
                         {feature.key === 'collectionsJson' && (() => {
-                          console.log('[SETTINGS DEBUG] Collections JSON button check:');
-                          console.log('[SETTINGS DEBUG] - feature.key === collectionsJson:', feature.key === 'collectionsJson');
-                          console.log('[SETTINGS DEBUG] - showCollectionsJsonView:', showCollectionsJsonView);
-                          console.log('[SETTINGS DEBUG] - Should show button:', feature.key === 'collectionsJson' && showCollectionsJsonView);
                           return feature.key === 'collectionsJson' && showCollectionsJsonView;
                         })() && (
                           <Button
@@ -1707,13 +1525,6 @@ export default function Settings() {
                         
                         {/* Store Metadata - View button or Configure button */}
                         {feature.key === 'storeMetadata' && (() => {
-                          console.log('[SETTINGS DEBUG] ===== STORE METADATA BUTTON RENDER =====');
-                          console.log('[SETTINGS DEBUG] feature.key === storeMetadata:', feature.key === 'storeMetadata');
-                          console.log('[SETTINGS DEBUG] isEnabled:', isEnabled);
-                          console.log('[SETTINGS DEBUG] showStoreMetadataView:', showStoreMetadataView);
-                          console.log('[SETTINGS DEBUG] Should show button:', feature.key === 'storeMetadata' && isEnabled);
-                          console.log('[SETTINGS DEBUG] Button type:', showStoreMetadataView ? 'View' : 'Configure');
-                          console.log('[SETTINGS DEBUG] ===== END STORE METADATA BUTTON DEBUG =====');
                           
                           return feature.key === 'storeMetadata' && isEnabled;
                         })() && (
@@ -1729,7 +1540,6 @@ export default function Settings() {
                               size="slim"
                               variant="primary"
                               onClick={async () => {
-                                console.log('[SETTINGS DEBUG] Configure button clicked!');
                                 
                                 // Check tokens first for Plus plans
                                 const canProceed = await checkTokensBeforeAction('storeMetadata');
@@ -1739,7 +1549,6 @@ export default function Settings() {
                                 
                                 // Open Store Metadata tab in new window
                                 const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
-                                console.log('[SETTINGS DEBUG] Opening URL:', storeMetadataUrl);
                                 window.open(storeMetadataUrl, '_blank');
                               }}
                             >
@@ -2363,13 +2172,6 @@ export default function Settings() {
           </Modal.Section>
         </Modal>
       )}
-
-      {/* Debug log for modal state */}
-      {debugLog('Modal states', { 
-        schemaGenerating, 
-        schemaComplete,
-        modalShouldShow: schemaGenerating && !schemaComplete 
-      })}
 
       {/* Simple test modal */}
       {schemaGenerating && !schemaComplete && (
