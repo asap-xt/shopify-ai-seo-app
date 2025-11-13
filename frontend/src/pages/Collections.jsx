@@ -1748,7 +1748,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                   body: JSON.stringify({
                     shop,
                     endTrial: true,
-                    returnTo: '/collections' // Return to Collections after approval
+                    returnTo: '/ai-seo/collections' // Return to Collections after approval
                   })
                 });
                 
