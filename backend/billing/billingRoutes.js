@@ -475,18 +475,41 @@ router.get('/callback', async (req, res) => {
       
       console.log('[BILLING-CALLBACK] Activating pending plan:', currentSub.pendingPlan);
     } else if (plan && PLANS[plan]) {
-      // First subscription: Create subscription NOW (after approval)
-      updateData.plan = plan;
-      updateData.pendingPlan = null;
+      // Check if this is an ACTIVATION (user clicked "Activate Plan")
+      const isActivation = currentSub?.activatedAt && !currentSub?.pendingPlan;
       
-      // Set trial end date (from TRIAL_DAYS)
-      updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-      
-      console.log('[BILLING-CALLBACK] 🆕 First subscription approved - creating:', {
-        plan,
-        trialEndsAt: updateData.trialEndsAt,
-        trialDays: TRIAL_DAYS
-      });
+      if (isActivation) {
+        // This is an ACTIVATION callback - user already activated plan in /activate
+        // DON'T overwrite activatedAt or add trial!
+        console.log('[BILLING-CALLBACK] 🔓 Activation callback - preserving activatedAt:', {
+          plan,
+          activatedAt: currentSub.activatedAt,
+          skipTrialSet: true
+        });
+        
+        // Only update plan if it changed
+        if (currentSub.plan !== plan) {
+          updateData.plan = plan;
+        }
+        
+        // PRESERVE activatedAt and trialEndsAt (already null from /activate)
+        updateData.activatedAt = currentSub.activatedAt;
+        updateData.trialEndsAt = currentSub.trialEndsAt; // Should be null
+        
+      } else {
+        // First subscription: Create subscription NOW (after approval)
+        updateData.plan = plan;
+        updateData.pendingPlan = null;
+        
+        // Set trial end date (from TRIAL_DAYS)
+        updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        
+        console.log('[BILLING-CALLBACK] 🆕 First subscription approved - creating:', {
+          plan,
+          trialEndsAt: updateData.trialEndsAt,
+          trialDays: TRIAL_DAYS
+        });
+      }
     }
     
     // UPSERT: Create subscription if doesn't exist (first install)
@@ -499,17 +522,26 @@ router.get('/callback', async (req, res) => {
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
     
-    // If plan was activated (pendingPlan → plan), set included tokens
-    if (currentSub?.pendingPlan && subscription.plan) {
+    // If plan was activated (pendingPlan → plan OR activation callback), set included tokens
+    if ((currentSub?.pendingPlan || currentSub?.activatedAt) && subscription.plan) {
       const included = getIncludedTokens(subscription.plan);
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
       
-      // Use setIncludedTokens to replace old included tokens (keeps purchased)
-      await tokenBalance.setIncludedTokens(
-        included.tokens, 
-        subscription.plan, 
-        subscription.shopifySubscriptionId
-      );
+      if (included.tokens > 0) {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Use setIncludedTokens to replace old included tokens (keeps purchased)
+        await tokenBalance.setIncludedTokens(
+          included.tokens, 
+          subscription.plan, 
+          subscription.shopifySubscriptionId
+        );
+        
+        console.log('[BILLING-CALLBACK] 💰 Tokens set for activation:', {
+          plan: subscription.plan,
+          tokens: included.tokens,
+          balance: tokenBalance.balance
+        });
+      }
     }
     
     // NOTE: For production mode (real webhooks), tokens would also be added by APP_SUBSCRIPTIONS_UPDATE webhook
