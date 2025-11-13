@@ -716,10 +716,18 @@ Format:
       }
     }
     
-    // Finalize token usage
-    await tokenBalance.finalizeReservation(totalTokensUsed, 'ai-validation', {
-      endpointsAnalyzed: successfulEndpoints.length
-    });
+    // Finalize token usage (only if tokens were reserved)
+    if (reservationId) {
+      console.log('[AI-TESTING-VALIDATE] 💰 Finalizing reservation:', {
+        reservationId,
+        totalTokensUsed,
+        endpointsAnalyzed: successfulEndpoints.length
+      });
+      
+      await tokenBalance.finalizeReservation(reservationId, totalTokensUsed);
+    } else {
+      console.log('[AI-TESTING-VALIDATE] ⚠️ No reservation to finalize (feature may not require tokens)');
+    }
     
     // Invalidate cache so new token balance is immediately visible
     try {
