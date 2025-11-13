@@ -313,9 +313,41 @@ export default function Billing({ shop }) {
               tone="info"
               action={{
                 content: 'Activate Plan',
-                onAction: () => {
-                  setIsActivatingPlan(true); // Mark as ending trial early
-                  setShowPlanModal(true);
+                onAction: async () => {
+                  try {
+                    setPurchasing(true);
+                    setError(null);
+                    
+                    console.log('[Billing] 🔓 Activating plan...');
+                    
+                    const response = await fetch('/api/billing/activate', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        shop,
+                        endTrial: true // End trial and activate immediately
+                      })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                      throw new Error(data.error || 'Failed to activate plan');
+                    }
+                    
+                    console.log('[Billing] ✅ Plan activated:', data);
+                    
+                    // Reload page to reflect changes
+                    window.location.reload();
+                    
+                  } catch (err) {
+                    console.error('[Billing] Activation error:', err);
+                    setError(err.message);
+                  } finally {
+                    setPurchasing(false);
+                  }
                 }
               }}
             >

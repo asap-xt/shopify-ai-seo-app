@@ -774,5 +774,76 @@ router.post('/cancel', verifyRequest, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/billing/activate
+ * Activate a plan (end trial and set activatedAt)
+ * Body: { endTrial: boolean }
+ */
+router.post('/activate', verifyRequest, async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { endTrial } = req.body;
+    
+    console.log('[BILLING-ACTIVATE] 🔓 Activation request:', {
+      shop,
+      endTrial,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Get current subscription
+    const subscription = await Subscription.findOne({ shop });
+    
+    if (!subscription) {
+      console.error('[BILLING-ACTIVATE] ❌ No subscription found for:', shop);
+      return res.status(404).json({ error: 'No active subscription found' });
+    }
+    
+    console.log('[BILLING-ACTIVATE] 📋 Current subscription:', {
+      plan: subscription.plan,
+      status: subscription.status,
+      inTrial: subscription.trialEndsAt && new Date() < new Date(subscription.trialEndsAt),
+      trialEndsAt: subscription.trialEndsAt,
+      activatedAt: subscription.activatedAt,
+      pendingActivation: subscription.pendingActivation
+    });
+    
+    // Update subscription
+    const updateData = {
+      activatedAt: new Date(),
+      pendingActivation: false
+    };
+    
+    // If ending trial, clear trialEndsAt
+    if (endTrial) {
+      updateData.trialEndsAt = null;
+      console.log('[BILLING-ACTIVATE] ⏭️ Ending trial - clearing trialEndsAt');
+    }
+    
+    await Subscription.updateOne({ shop }, { $set: updateData });
+    
+    console.log('[BILLING-ACTIVATE] ✅ Plan activated:', {
+      shop,
+      plan: subscription.plan,
+      activatedAt: updateData.activatedAt,
+      trialEnded: endTrial
+    });
+    
+    // Invalidate cache
+    await cacheService.invalidateShop(shop);
+    
+    // Return success
+    res.json({
+      success: true,
+      plan: subscription.plan,
+      activatedAt: updateData.activatedAt,
+      trialEnded: endTrial
+    });
+    
+  } catch (error) {
+    console.error('[BILLING-ACTIVATE] ❌ Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to activate plan' });
+  }
+});
+
 export default router;
 
