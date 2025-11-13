@@ -282,8 +282,9 @@ export default function AiTesting({ shop: shopProp }) {
       // All other cases: Not enough tokens → Show "Insufficient Tokens"
       setTokenError({
         message: 'You need at least 50 tokens to run AI validation',
-        tokenCost: 50,
-        currentBalance: tokenBalance || 0
+        tokensRequired: 50,
+        tokensAvailable: tokenBalance || 0,
+        tokensNeeded: Math.max(0, 50 - (tokenBalance || 0))
       });
       setShowTokenModal(true);
       return;
@@ -1071,62 +1072,22 @@ export default function AiTesting({ shop: shopProp }) {
       </Modal>
 
       {/* Buy Tokens Modal (Professional/Growth) */}
-      <Modal
+      <InsufficientTokensModal
         open={showTokenModal}
         onClose={() => {
           setShowTokenModal(false);
+          setTokenError(null);
           // Refresh token balance when closing modal (in case user bought tokens in another tab)
           loadTokenBalance();
         }}
-        title="Insufficient Tokens"
-        primaryAction={{
-          content: 'Buy Tokens',
-          onAction: () => {
-            const currentParams = new URLSearchParams(window.location.search);
-            const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-            // Add returnTo so user returns to AI Testing after purchase
-            const separator = paramString ? '&' : '?';
-            window.location.href = `/billing${paramString}${separator}returnTo=${encodeURIComponent('/ai-testing')}`;
-          }
-        }}
-        secondaryActions={[
-          {
-            content: 'Cancel',
-            onAction: () => {
-              setShowTokenModal(false);
-              // Refresh token balance on cancel too
-              loadTokenBalance();
-            }
-          }
-        ]}
-      >
-        <Modal.Section>
-          <BlockStack gap="300">
-            <Text variant="bodyMd">
-              You need more tokens to use AI Testing.
-            </Text>
-            <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-              <BlockStack gap="200">
-                <InlineStack align="space-between">
-                  <Text variant="bodySm">Required:</Text>
-                  <Text variant="bodySm" fontWeight="semibold">{tokenError?.tokensRequired?.toLocaleString() || 0} tokens</Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text variant="bodySm">Available:</Text>
-                  <Text variant="bodySm">{tokenError?.tokensAvailable?.toLocaleString() || 0} tokens</Text>
-                </InlineStack>
-                <InlineStack align="space-between">
-                  <Text variant="bodySm">Needed:</Text>
-                  <Text variant="bodySm" fontWeight="semibold" tone="critical">{tokenError?.tokensNeeded?.toLocaleString() || 0} tokens</Text>
-                </InlineStack>
-              </BlockStack>
-            </Box>
-            <Banner tone="info">
-              <Text>Purchase tokens to continue using AI features. Tokens never expire.</Text>
-            </Banner>
-          </BlockStack>
-        </Modal.Section>
-      </Modal>
+        tokensRequired={tokenError?.tokensRequired || 0}
+        tokensAvailable={tokenError?.tokensAvailable || 0}
+        tokensNeeded={tokenError?.tokensNeeded || 0}
+        feature="ai-testing-simulation"
+        shop={shop}
+        needsUpgrade={false}
+        returnTo="/ai-testing"
+      />
       
       {/* Trial Activation Modal for Growth Extra/Enterprise */}
       {tokenError && (
