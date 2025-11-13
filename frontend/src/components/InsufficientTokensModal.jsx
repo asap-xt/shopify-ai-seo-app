@@ -35,6 +35,8 @@ export default function InsufficientTokensModal({
   const handleBuyTokens = () => {
     // Copy ALL current URL parameters (including embedded=1, shop, host, etc.)
     const currentParams = new URLSearchParams(window.location.search);
+    // Remove existing returnTo if present (avoid overwriting the new one)
+    currentParams.delete('returnTo');
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
     // Add returnTo so user returns to origin page after purchase
     const separator = paramString ? '&' : '?';
