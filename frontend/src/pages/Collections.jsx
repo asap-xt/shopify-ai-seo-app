@@ -1738,12 +1738,42 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             trialEndsAt={tokenError.trialEndsAt}
             currentPlan={tokenError.currentPlan || currentPlan}
             tokensRequired={tokenError.tokensRequired || 0}
-            onActivatePlan={() => {
-              // Navigate to billing page to activate plan
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            onActivatePlan={async () => {
+              // Direct API call to activate plan (no billing page redirect)
+              try {
+                console.log('[COLLECTIONS] 🔓 Activating plan directly...');
+                
+                const response = await api('/api/billing/activate', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    shop,
+                    endTrial: true
+                  })
+                });
+                
+                console.log('[COLLECTIONS] ✅ Activation response:', response);
+                
+                // Check if Shopify approval is required
+                if (response.requiresApproval && response.confirmationUrl) {
+                  console.log('[COLLECTIONS] 🔐 Redirecting to Shopify approval...');
+                  // Direct redirect to Shopify approval page
+                  window.top.location.href = response.confirmationUrl;
+                  return;
+                }
+                
+                // Plan activated successfully without approval
+                console.log('[COLLECTIONS] ✅ Plan activated, reloading page...');
+                window.location.reload();
+                
+              } catch (error) {
+                console.error('[COLLECTIONS] ❌ Activation failed:', error);
+                
+                // Fallback: Navigate to billing page
+                const params = new URLSearchParams(window.location.search);
+                const host = params.get('host');
+                const embedded = params.get('embedded');
+                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              }
             }}
             onPurchaseTokens={() => {
               // Navigate to billing page to purchase tokens
