@@ -505,12 +505,20 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
         });
       }
       
-      // Reserve tokens
-      await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
     }
     
     const results = {};
     let totalTokensUsed = 0;
+    let reservationId = null; // Will be set if tokens were reserved
+    
+    // Reserve tokens if feature requires them
+    if (requiresTokens(feature)) {
+      reservationId = await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
+      console.log('[AI-TESTING-VALIDATE] 💰 Tokens reserved:', {
+        reservationId,
+        amount: estimatedTokens
+      });
+    }
     
     // Process successful and warning endpoints (skip locked and failed)
     // Note: successfulEndpoints already filtered on line 436 (excludes robotsTxt & schemaData)
