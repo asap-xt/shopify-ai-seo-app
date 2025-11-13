@@ -133,7 +133,7 @@ const PLAN_PRESETS = {
     plan: 'Professional',
     planKey: 'professional',
     queryLimit: 700,
-    productLimit: 200,
+    productLimit: 70,
     providersAllowed: ['openai', 'anthropic', 'gemini'],
     modelsSuggested: [
       'google/gemini-1.5-flash',

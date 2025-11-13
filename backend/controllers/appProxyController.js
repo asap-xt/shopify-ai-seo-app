@@ -110,7 +110,7 @@ async function getPlanLimits(shop) {
     
     const planLimits = {
       'starter': 70,
-      'professional': 200,
+      'professional': 70,
       'professional_plus': 200,
       'professional plus': 200,
       'growth': 450,
