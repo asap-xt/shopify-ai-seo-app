@@ -513,7 +513,10 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     
     // Reserve tokens if feature requires them
     if (requiresTokens(feature)) {
-      reservationId = await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
+      const reservation = await tokenBalance.reserveTokens(estimatedTokens, 'ai-validation');
+      reservationId = reservation.reservationId; // Extract ID from object
+      await reservation.save(); // Save the reservation
+      
       console.log('[AI-TESTING-VALIDATE] 💰 Tokens reserved:', {
         reservationId,
         amount: estimatedTokens
