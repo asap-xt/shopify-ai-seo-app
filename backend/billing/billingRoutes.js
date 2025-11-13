@@ -813,10 +813,62 @@ router.post('/activate', verifyRequest, async (req, res) => {
       pendingActivation: false
     };
     
-    // If ending trial, clear trialEndsAt
+    // If ending trial, clear trialEndsAt AND end trial in Shopify
     if (endTrial) {
       updateData.trialEndsAt = null;
       console.log('[BILLING-ACTIVATE] ⏭️ Ending trial - clearing trialEndsAt');
+      
+      // CRITICAL: End trial in Shopify to start billing NOW!
+      // Otherwise Shopify will auto-charge after 5 days even if features were locked!
+      try {
+        const shopDoc = await Shop.findOne({ domain: shop });
+        if (!shopDoc || !shopDoc.accessToken) {
+          throw new Error('Shop access token not found');
+        }
+        
+        // Use appSubscriptionCancel + immediate recreate to end trial
+        // This is the recommended Shopify approach for ending trials early
+        const { createSubscription } = await import('./shopifyBilling.js');
+        
+        console.log('[BILLING-ACTIVATE] 📞 Creating new subscription with trialDays: 0 to end trial in Shopify');
+        
+        const { confirmationUrl, subscription: newShopifySubscription } = await createSubscription(
+          shop,
+          subscription.plan,
+          shopDoc.accessToken,
+          { trialDays: 0 } // NO trial - start billing NOW!
+        );
+        
+        // Update shopifySubscriptionId with new subscription
+        updateData.shopifySubscriptionId = newShopifySubscription.id;
+        
+        console.log('[BILLING-ACTIVATE] ✅ New Shopify subscription created (trial ended):', {
+          oldId: subscription.shopifySubscriptionId,
+          newId: newShopifySubscription.id,
+          status: newShopifySubscription.status,
+          confirmationUrl: confirmationUrl ? 'Generated' : 'None'
+        });
+        
+        // If confirmationUrl exists, merchant needs to approve the charge
+        if (confirmationUrl) {
+          console.log('[BILLING-ACTIVATE] ⚠️  Merchant must approve charge at:', confirmationUrl);
+          
+          // Return confirmation URL so frontend can redirect
+          await cacheService.invalidateShop(shop);
+          return res.json({
+            success: true,
+            requiresApproval: true,
+            confirmationUrl,
+            plan: subscription.plan,
+            message: 'Please approve the charge to activate your plan'
+          });
+        }
+        
+      } catch (shopifyError) {
+        console.error('[BILLING-ACTIVATE] ❌ Failed to end trial in Shopify:', shopifyError);
+        // Continue anyway - at least we cleared trialEndsAt in MongoDB
+        // Worst case: Shopify will charge after 5 days, but user can use features now
+      }
     }
     
     const result = await Subscription.updateOne({ shop }, { $set: updateData });

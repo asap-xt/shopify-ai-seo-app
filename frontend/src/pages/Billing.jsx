@@ -339,6 +339,14 @@ export default function Billing({ shop }) {
                     
                     console.log('[Billing] ✅ Plan activated:', data);
                     
+                    // Check if Shopify approval is required (ending trial early)
+                    if (data.requiresApproval && data.confirmationUrl) {
+                      console.log('[Billing] 🔐 Shopify approval required - redirecting to:', data.confirmationUrl);
+                      // Redirect to Shopify to approve charge (ending trial = new charge)
+                      window.top.location.href = data.confirmationUrl;
+                      return;
+                    }
+                    
                     // Clear cache and reload to reflect changes
                     // Add cache buster to force fresh data
                     const cacheBuster = Date.now();
