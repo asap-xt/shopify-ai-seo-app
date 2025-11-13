@@ -2126,10 +2126,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 
                 const response = await api('/api/billing/activate', {
                   method: 'POST',
-                  body: JSON.stringify({
+                  body: {
                     shop,
                     endTrial: true
-                  })
+                  }
                 });
                 
                 console.log('[BULK-EDIT] ✅ Activation response:', response);
