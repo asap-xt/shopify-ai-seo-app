@@ -49,10 +49,16 @@ async function readJson(response) {
 
 // -------- Simple routing hook
 function useRoute() {
-  // Normalize path - remove /apps/new-ai-seo prefix for embedded apps
+  // Normalize path - remove app prefix for embedded apps
   const normalizePath = (pathname) => {
-    // Remove /apps/new-ai-seo or /apps/2749a2f6d38ff5796ed256b5c9dc70a1 prefix
-    const normalized = pathname.replace(/^\/apps\/[^/]+/, '') || '/';
+    // Remove app prefixes:
+    // - /apps/new-ai-seo (dev)
+    // - /apps/2749a2f6d38ff5796ed256b5c9dc70a1 (embedded)
+    // - /indexaize-unlock-ai-search (production custom handle)
+    const normalized = pathname
+      .replace(/^\/apps\/[^/]+/, '') // Remove /apps/* prefix
+      .replace(/^\/indexaize-unlock-ai-search/, '') // Remove custom handle prefix
+      || '/';
     return normalized;
   };
   
