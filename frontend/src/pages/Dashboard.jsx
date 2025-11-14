@@ -735,8 +735,7 @@ export default function Dashboard({ shop: shopProp }) {
             onDismiss={handleDismissTokenBanner}
           >
             <Text>
-              Your current plan uses pay-per-use tokens. Purchase tokens to access AI-enhanced optimization features 
-              like SEO generation, bulk editing, and AI Discovery.
+              Purchase tokens to access AI-enhanced optimization features like AEO generation, AI Discovery and more.
             </Text>
           </Banner>
         </Layout.Section>

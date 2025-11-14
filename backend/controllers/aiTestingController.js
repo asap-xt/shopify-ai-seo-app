@@ -610,6 +610,183 @@ Format:
   "feedback": "Your feedback here",
   "suggestions": "Your suggestions here (or null if everything is good)"
 }`;
+        } else if (key === 'collectionsJson') {
+          prompt = `You are an AI SEO expert analyzing Collections JSON Feed for an e-commerce store.
+
+Data sample:
+${data}
+
+Analyze this data focusing on:
+
+Collection Quality:
+- Are titles descriptive and SEO-friendly?
+- Are descriptions present and informative (not empty/generic)?
+- Do collections have clear product categorization?
+- Are URLs and handles SEO-optimized?
+
+Completeness:
+- Are meta_title and meta_description fields populated?
+- Are image_url and product_url fields present?
+- Is collection hierarchy logical?
+
+Rating Guidelines:
+- excellent: Rich descriptions, complete metadata, good SEO structure
+- good: Decent data, minor improvements possible (missing some fields)
+- fair: Basic structure, but missing descriptions or metadata
+- poor: Minimal data, missing critical fields or very generic content
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'aiSitemap') {
+          prompt = `You are an AI SEO expert analyzing AI-Enhanced Sitemap for an e-commerce store.
+
+Data sample (XML):
+${data}
+
+Analyze the AI enhancements focusing on:
+
+AI Product Tags:
+- Are <ai:product> tags present with rich metadata?
+- Are product titles unique and descriptive (not generic/truncated)?
+- Are descriptions fully populated (not truncated or cut off)?
+- Are key features and benefits clearly stated?
+
+Data Quality:
+- Is pricing information complete?
+- Are availability status tags present?
+- Is the data well-structured and parseable?
+
+Rating Guidelines:
+- excellent: Rich AI metadata, unique descriptions, complete product data
+- good: AI tags present, but some descriptions could be more detailed
+- fair: AI tags present but generic titles or truncated descriptions
+- poor: Missing AI tags OR mostly placeholder/generic content
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'basicSitemap') {
+          prompt = `You are an SEO expert analyzing XML Sitemap for an e-commerce store.
+
+Data sample (XML):
+${data}
+
+Analyze this sitemap focusing on:
+
+Structure & Completeness:
+- Are all required XML elements present (<url>, <loc>, <lastmod>)?
+- Is the structure valid and well-formed?
+- Are URLs properly formatted?
+- Is lastmod date present and recent?
+
+Best Practices:
+- Is priority set appropriately?
+- Is changefreq specified?
+- Are there any errors or warnings in structure?
+
+Rating Guidelines:
+- excellent: Perfect XML structure, all best practices followed
+- good: Valid sitemap with minor improvements possible
+- fair: Valid but missing some optional fields or best practices
+- poor: Structural issues or missing critical elements
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'welcomePage') {
+          prompt = `You are an AI expert analyzing AI Welcome Page for an e-commerce store.
+
+Data sample (HTML):
+${data}
+
+Analyze this welcome page focusing on:
+
+Content Quality:
+- Is there clear brand messaging and value proposition?
+- Is navigation helpful for AI bots?
+- Are product categories clearly outlined?
+- Is contact information easily accessible?
+
+Technical SEO:
+- Are meta tags present and descriptive?
+- Is structured data (Schema.org) properly implemented?
+- Is the HTML semantic and well-structured?
+- Are headings (H1, H2) used correctly?
+
+AI Readability:
+- Is content organized logically for crawlers?
+- Are there clear calls-to-action?
+- Is important information easily parseable?
+
+Rating Guidelines:
+- excellent: Clear messaging, rich structured data, perfect HTML
+- good: Good content and structure, minor SEO improvements possible
+- fair: Basic content present but missing key elements or poor structure
+- poor: Minimal content, poor structure, or missing critical elements
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'advancedSchemaApi') {
+          prompt = `You are a structured data expert analyzing Advanced Schema Data for an e-commerce store.
+
+Data sample (JSON-LD):
+${data}
+
+Analyze this structured data focusing on:
+
+Schema Completeness:
+- Are required properties present for each schema type?
+- Are relationships between entities properly defined?
+- Is the data rich and detailed (not minimal)?
+
+Schema Types Coverage:
+- Product schemas with offers, reviews, ratings?
+- FAQ schemas properly structured?
+- HowTo schemas with clear steps?
+- Organization/LocalBusiness data complete?
+
+Validity & Best Practices:
+- Is JSON-LD syntax valid?
+- Are Schema.org types used correctly?
+- Are values appropriate for their properties?
+- Is rich snippet eligibility maximized?
+
+Rating Guidelines:
+- excellent: Complete schemas, all recommended properties, rich data
+- good: Valid schemas with good coverage, minor improvements possible
+- fair: Basic schemas present but missing recommended properties
+- poor: Minimal schemas OR invalid structure OR missing key types
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
         } else {
           // Generic prompt for other endpoints
           prompt = `You are an AI SEO expert analyzing endpoint data for e-commerce stores.
