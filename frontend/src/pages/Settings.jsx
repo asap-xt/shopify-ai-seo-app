@@ -1576,8 +1576,7 @@ export default function Settings() {
                             </Text>
                             {feature.requiredPlan && (
                               <Badge tone="info" size="small">
-                                {feature.requiredPlan}
-                                {feature.requiredPlan !== 'Enterprise' && '+'} 
+                                Upgrade
                               </Badge>
                             )}
                           </InlineStack>
