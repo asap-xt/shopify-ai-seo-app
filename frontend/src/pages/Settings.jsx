@@ -1249,7 +1249,7 @@ export default function Settings() {
                               </Text>
                               {!isAvailable && requiredPlan && (
                                 <Badge tone="info" size="small">
-                                  {requiredPlan}+
+                                  Upgrade
                                 </Badge>
                               )}
                             </InlineStack>
@@ -1310,7 +1310,7 @@ export default function Settings() {
                               </Text>
                               {!isAvailable && requiredPlan && (
                                 <Badge tone="info" size="small">
-                                  {requiredPlan}+
+                                  Upgrade
                                 </Badge>
                               )}
                             </InlineStack>
@@ -1371,7 +1371,7 @@ export default function Settings() {
                               </Text>
                               {!isAvailable && requiredPlan && (
                                 <Badge tone="info" size="small">
-                                  {requiredPlan}+
+                                  Upgrade
                                 </Badge>
                               )}
                             </InlineStack>

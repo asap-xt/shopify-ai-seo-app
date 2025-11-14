@@ -707,7 +707,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('meta')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
@@ -724,7 +724,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('claude')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
@@ -741,7 +741,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('gemini')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
@@ -759,7 +759,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('chatgpt')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
@@ -777,7 +777,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('perplexity')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
@@ -794,7 +794,7 @@ export default function AiTesting({ shop: shopProp }) {
                         </Button>
                       ) : (
                         <Button disabled size="slim">
-                          {getRequiredPlan('deepseek')}+ Required
+                          Plan upgrade required
                         </Button>
                       )}
                     </InlineStack>
