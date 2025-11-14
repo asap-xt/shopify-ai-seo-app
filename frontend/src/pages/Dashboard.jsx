@@ -555,7 +555,7 @@ export default function Dashboard({ shop: shopProp }) {
                             height: '100%',
                             border: 'none'
                           }}
-                          src="https://www.youtube.com/embed/tfzlaRjvvEY"
+                          src="https://www.youtube-nocookie.com/embed/tfzlaRjvvEY"
                           title="Video Tutorial"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
