@@ -506,6 +506,8 @@ export default function AiTesting({ shop: shopProp }) {
                                 {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                                 {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                                 {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.productsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                                {aiTestResults.productsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
                               <Text variant="bodySm">
                                 {aiTestResults.productsJson.feedback}
@@ -532,6 +534,8 @@ export default function AiTesting({ shop: shopProp }) {
                                 {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
                               <Text variant="bodySm">
                                 {aiTestResults.storeMetadata.feedback}
@@ -558,6 +562,8 @@ export default function AiTesting({ shop: shopProp }) {
                                 {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                                 {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                                 {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.welcomePage.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                                {aiTestResults.welcomePage.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
                               <Text variant="bodySm">
                                 {aiTestResults.welcomePage.feedback}
@@ -584,6 +590,8 @@ export default function AiTesting({ shop: shopProp }) {
                                 {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
                               <Text variant="bodySm">
                                 {aiTestResults.collectionsJson.feedback}
@@ -610,6 +618,8 @@ export default function AiTesting({ shop: shopProp }) {
                                 {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
                               <Text variant="bodySm">
                                 {aiTestResults.aiSitemap.feedback}
@@ -635,6 +645,8 @@ export default function AiTesting({ shop: shopProp }) {
                               {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
                               {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
                               {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              {aiTestResults.schemaData.rating === 'locked' && <Badge>🔒 Locked</Badge>}
+                              {aiTestResults.schemaData.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                             </InlineStack>
                             <Text variant="bodySm">
                               {aiTestResults.schemaData.feedback}

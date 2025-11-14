@@ -888,6 +888,32 @@ Format:
       await tokenBalance.finalizeReservation(reservationId, totalTokensUsed);
     }
     
+    // Add "Cannot validate" message for failed/error/locked endpoints
+    // (these were not processed in the AI validation loop)
+    for (const [key, result] of Object.entries(endpointResults)) {
+      // Skip robotsTxt and schemaData (theme files, not API endpoints)
+      if (key === 'robotsTxt' || key === 'schemaData') {
+        continue;
+      }
+      
+      // If endpoint was not validated (failed/error/locked), add appropriate message
+      if (!results[key]) {
+        if (result.status === 'locked') {
+          results[key] = {
+            rating: 'locked',
+            feedback: 'This endpoint requires a higher plan. Upgrade to access AI validation.',
+            suggestions: null
+          };
+        } else if (result.status === 'error' || result.status === 'failed') {
+          results[key] = {
+            rating: 'unavailable',
+            feedback: 'Cannot validate - endpoint not available',
+            suggestions: 'Fix the endpoint issue first, then run AI validation.'
+          };
+        }
+      }
+    }
+    
     // Invalidate cache so new token balance is immediately visible
     try {
       const cacheService = await import('../services/cacheService.js');
