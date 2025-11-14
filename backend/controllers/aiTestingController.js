@@ -13,7 +13,7 @@ const router = express.Router();
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
-  return (plan || 'starter').toLowerCase().replace(' ', '_');
+  return (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
 };
 
 /**
@@ -74,33 +74,38 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `https://${shop}`,
       themeFile: true
     },
-    // Growth plan features
+    // Growth plan features (+ Plus plans with tokens)
     { 
       key: 'welcomePage', 
       name: 'AI Welcome Page (Growth+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
+      requiresPlan: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise']
     },
     { 
       key: 'collectionsJson', 
       name: 'Collections JSON Feed (Growth+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
+      requiresPlan: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise']
     },
-    // Growth Extra plan features
+    // Growth Extra plan features (+ Plus plans with tokens)
     { 
       key: 'storeMetadata', 
       name: 'Store Metadata (Growth Extra+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
+      requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     },
     { 
       key: 'aiSitemap', 
-      name: 'AI-Optimized Sitemap (Growth Extra+)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`
+      name: 'AI-Enhanced Sitemap (Growth Extra+)', 
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+      requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     },
-    // Enterprise plan features
+    // Enterprise plan features (+ Plus plans with tokens)
     { 
       key: 'advancedSchemaApi', 
       name: 'Advanced Schema Data (Enterprise)', 
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
+      requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     }
   ];
   
@@ -108,8 +113,15 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   
   for (const endpoint of endpoints) {
     try {
-      // Skip plan requirements check - let endpoints handle with AI-SEO-Testing-Bot bypass
-      // This allows AI Testing to validate ALL endpoints and provide recommendations
+      // Check plan requirements
+      if (endpoint.requiresPlan && !endpoint.requiresPlan.includes(userPlan)) {
+        results[endpoint.key] = {
+          status: 'locked',
+          message: `Requires ${endpoint.requiresPlan.map(p => p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())).join(' or ')} plan`,
+          name: endpoint.name
+        };
+        continue;
+      }
       
       const response = await fetch(endpoint.url, {
         method: 'GET',
@@ -208,15 +220,23 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             }
           }
           
+          // Basic Sitemap validation
+          if (endpoint.key === 'basicSitemap' && data) {
+            if (typeof data === 'string') {
+              validationMessage = 'Sitemap is working correctly';
+            }
+          }
+          
           // AI-Enhanced Sitemap validation (checks for AI metadata)
           if (endpoint.key === 'aiSitemap' && data) {
             if (typeof data === 'string') {
               const hasAIMetadata = data.includes('xmlns:ai=') && data.includes('<ai:product>');
-              if (!hasAIMetadata) {
-                validationStatus = 'warning';
-                validationMessage = 'Sitemap OK, but no AI enhancements detected';
-              } else {
+              
+              if (hasAIMetadata) {
                 validationMessage = 'AI-enhanced sitemap is working correctly';
+              } else {
+                validationStatus = 'warning';
+                validationMessage = 'Sitemap exists, but AI enhancements not enabled. Enable in Settings → AI Discovery.';
               }
             }
           }
@@ -342,20 +362,16 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           };
         }
       } else if (response.status === 403) {
-        // Feature not enabled - still validate and provide recommendations
         results[endpoint.key] = {
-          status: 'warning',
-          message: 'Feature not enabled - Enable in Settings to improve AI discoverability',
-          name: endpoint.name,
-          recommendation: 'This endpoint can help AI bots discover your content. Enable it in Settings → AI Discovery.'
+          status: 'locked',
+          message: 'Feature not enabled or plan upgrade required',
+          name: endpoint.name
         };
       } else if (response.status === 402) {
-        // Plan upgrade required - still validate and provide recommendations
         results[endpoint.key] = {
-          status: 'warning',
-          message: 'Plan upgrade required - Upgrade to unlock this AI feature',
-          name: endpoint.name,
-          recommendation: 'This endpoint requires a higher plan. Upgrade to improve AI discoverability and SEO performance.'
+          status: 'locked',
+          message: 'Plan upgrade required',
+          name: endpoint.name
         };
       } else if (response.status === 404) {
         // Special messages for sitemaps
@@ -366,7 +382,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           notFoundMessage = 'Sitemap not generated yet. Please generate it first in Search Optimization for AI → Sitemap';
           actionLink = '/ai-seo/sitemap';
         } else if (endpoint.key === 'aiSitemap') {
-          notFoundMessage = 'Endpoint not found, please generate it first in Settings';
+          notFoundMessage = 'AI-Enhanced Sitemap not generated yet. Enable in Settings → AI Discovery and generate sitemap.';
           actionLink = '/ai-seo/settings';
         }
         
@@ -502,10 +518,10 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
         const endpointUrls = {
           productsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`,
           basicSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
+          aiSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
           storeMetadata: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
           welcomePage: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
           collectionsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
-          aiSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
           advancedSchemaApi: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`
         };
         
