@@ -555,8 +555,9 @@ export default function Dashboard({ shop: shopProp }) {
                             height: '100%',
                             border: 'none'
                           }}
-                          src="https://www.youtube-nocookie.com/embed/tfzlaRjvvEY"
+                          src="https://www.youtube-nocookie.com/embed/tfzlaRjvvEY?origin=https://admin.shopify.com"
                           title="Video Tutorial"
+                          referrerPolicy="no-referrer-when-downgrade"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
                         />
