@@ -554,10 +554,10 @@ export default function Dashboard({ shop: shopProp }) {
                             width: '100%',
                             height: '100%'
                           }}
-                          src="https://www.youtube.com/embed/tfzlaRjvvEY"
+                          src="https://www.youtube.com/embed/tfzlaRjvvEY?enablejsapi=1&origin=https://admin.shopify.com&rel=0"
                           title="Video Tutorial"
                           frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen
                         />
                       </div>
