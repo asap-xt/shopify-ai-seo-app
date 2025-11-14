@@ -538,14 +538,29 @@ export default function Dashboard({ shop: shopProp }) {
                       background="bg-surface-secondary"
                       borderRadius="200"
                     >
-                      <BlockStack gap="200" inlineAlign="center">
-                        <Text variant="bodyMd" tone="subdued" alignment="center">
-                          Video tutorial coming soon
-                        </Text>
-                        <Text variant="bodySm" tone="subdued" alignment="center">
-                          [Embedded video will be added here]
-                        </Text>
-                      </BlockStack>
+                      <div style={{
+                        position: 'relative',
+                        paddingBottom: '56.25%', // 16:9 aspect ratio
+                        height: 0,
+                        overflow: 'hidden',
+                        maxWidth: '100%',
+                        borderRadius: '8px'
+                      }}>
+                        <iframe
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%'
+                          }}
+                          src="https://www.youtube.com/embed/tfzlaRjvvEY"
+                          title="Video Tutorial"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
                     </Box>
                   </BlockStack>
                   
