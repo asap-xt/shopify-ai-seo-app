@@ -87,7 +87,7 @@
     app.use((_, res, next) => {
       res.setHeader(
         'Content-Security-Policy',
-        'frame-ancestors https://admin.shopify.com https://*.myshopify.com;'
+        'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be'
       );
       next();
     });
@@ -1184,7 +1184,7 @@
     // Handle Shopify's app routes - both by handle and by API key
     app.get('/apps/:app_identifier', (req, res) => {
       res.set('Cache-Control', 'no-store');
-      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
     });
 
@@ -1195,7 +1195,7 @@
       }
       
       res.set('Cache-Control', 'no-store');
-      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
     });
 
@@ -1297,7 +1297,7 @@
       res.set({
         'Content-Type': 'text/html; charset=utf-8',
         'X-Frame-Options': 'ALLOWALL',
-        'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://partners.shopify.com",
+        'Content-Security-Policy': "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://partners.shopify.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be",
         'Cache-Control': 'no-store, no-cache, must-revalidate'
       });
       
@@ -1957,7 +1957,7 @@
     // Contact Support route - MUST be before catch-all
     app.get('/contact-support', (req, res) => {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+      res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
     });
 
@@ -1966,7 +1966,7 @@
       // Check if it's an app request
       if (req.url.includes('/apps/')) {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
-        res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com;');
+        res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
         let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
         
         // Inject API key
