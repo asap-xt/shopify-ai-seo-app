@@ -77,33 +77,33 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     // Growth plan features (+ Plus plans with tokens)
     { 
       key: 'welcomePage', 
-      name: 'AI Welcome Page (Growth+)', 
+      name: 'AI Welcome Page', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise']
     },
     { 
       key: 'collectionsJson', 
-      name: 'Collections JSON Feed (Growth+)', 
+      name: 'Collections JSON Feed', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise']
     },
     // Growth Extra plan features (+ Plus plans with tokens)
     { 
       key: 'storeMetadata', 
-      name: 'Store Metadata (Growth Extra+)', 
+      name: 'Store Metadata', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     },
     { 
       key: 'aiSitemap', 
-      name: 'AI-Enhanced Sitemap (Growth Extra+)', 
+      name: 'AI-Enhanced Sitemap', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     },
     // Enterprise plan features (+ Plus plans with tokens)
     { 
       key: 'advancedSchemaApi', 
-      name: 'Advanced Schema Data (Enterprise)', 
+      name: 'Advanced Schema Data', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     }
@@ -117,7 +117,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       if (endpoint.requiresPlan && !endpoint.requiresPlan.includes(userPlan)) {
         results[endpoint.key] = {
           status: 'locked',
-          message: `Requires ${endpoint.requiresPlan.map(p => p.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())).join(' or ')} plan`,
+          message: 'Plan upgrade required',
           name: endpoint.name
         };
         continue;
@@ -901,7 +901,7 @@ Format:
         if (result.status === 'locked') {
           results[key] = {
             rating: 'locked',
-            feedback: 'This endpoint requires a higher plan. Upgrade to access AI validation.',
+            feedback: 'Plan upgrade required',
             suggestions: null
           };
         } else if (result.status === 'error' || result.status === 'failed') {
