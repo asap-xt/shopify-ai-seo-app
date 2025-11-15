@@ -777,6 +777,13 @@ router.post('/activate', verifyRequest, async (req, res) => {
     const shop = req.shopDomain;
     const { endTrial, returnTo } = req.body;
     
+    console.log('[BILLING-ACTIVATE] 🚀 START - Activate plan request:', {
+      shop,
+      endTrial,
+      returnTo,
+      timestamp: new Date().toISOString()
+    });
+    
     // Get current subscription
     const subscription = await Subscription.findOne({ shop });
     
@@ -785,14 +792,31 @@ router.post('/activate', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
     
+    console.log('[BILLING-ACTIVATE] 📊 Current subscription state:', {
+      shop,
+      plan: subscription.plan,
+      activatedAt: subscription.activatedAt,
+      shopifySubscriptionId: subscription.shopifySubscriptionId,
+      trialEndsAt: subscription.trialEndsAt,
+      endTrial: endTrial
+    });
+    
     // FIX: If user has activatedAt but subscription wasn't approved in Shopify,
     // clear activatedAt to allow new activation
+    // This check happens BEFORE creating new subscription, so it validates the OLD subscription ID
     if (subscription.activatedAt && endTrial) {
+      console.log('[BILLING-ACTIVATE] 🔍 CHECK - Found activatedAt, validating subscription in Shopify...');
       const activatedSubscriptionId = subscription.shopifySubscriptionId;
+      
+      console.log('[BILLING-ACTIVATE] 🔍 Validating subscription ID:', {
+        shop,
+        activatedSubscriptionId,
+        activatedAt: subscription.activatedAt
+      });
       
       // If no shopifySubscriptionId, definitely not approved
       if (!activatedSubscriptionId) {
-        console.log('[BILLING-ACTIVATE] ⚠️ Clearing activatedAt with no shopifySubscriptionId:', {
+        console.log('[BILLING-ACTIVATE] ⚠️ No shopifySubscriptionId found - clearing activatedAt:', {
           shop,
           activatedAt: subscription.activatedAt
         });
@@ -807,28 +831,43 @@ router.post('/activate', verifyRequest, async (req, res) => {
         if (updatedSub) {
           Object.assign(subscription, updatedSub.toObject());
         }
+        
+        console.log('[BILLING-ACTIVATE] ✅ Cleared activatedAt (no shopifySubscriptionId)');
       } else {
         const shopDoc = await Shop.findOne({ shop });
         if (shopDoc?.accessToken) {
+          console.log('[BILLING-ACTIVATE] 🔍 Checking if subscription exists in Shopify...');
+          
           // Check if activated subscription exists in Shopify
           // getCurrentSubscription returns only ACTIVE subscriptions, so if it exists, it's approved
           const { getCurrentSubscription } = await import('./shopifyBilling.js');
           const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+          
+          console.log('[BILLING-ACTIVATE] 🔍 Shopify subscription check result:', {
+            shop,
+            expectedId: activatedSubscriptionId,
+            foundInShopify: !!shopifySub,
+            shopifySubId: shopifySub?.id,
+            shopifySubStatus: shopifySub?.status,
+            idsMatch: shopifySub?.id === activatedSubscriptionId
+          });
+          
           const isApproved = shopifySub && shopifySub.id === activatedSubscriptionId;
           
           if (!isApproved) {
             // Activated plan wasn't approved - clear activatedAt to allow new activation
-            console.log('[BILLING-ACTIVATE] ⚠️ Clearing unapproved activatedAt:', {
+            console.log('[BILLING-ACTIVATE] ⚠️ Subscription NOT approved in Shopify - clearing activatedAt:', {
               shop,
               activatedAt: subscription.activatedAt,
               shopifySubscriptionId: activatedSubscriptionId,
               foundInShopify: !!shopifySub,
-              shopifyStatus: shopifySub?.status
+              shopifySubId: shopifySub?.id,
+              reason: shopifySub ? 'ID mismatch' : 'Subscription not found'
             });
             
             await Subscription.updateOne(
               { shop },
-              { $unset: { activatedAt: '', trialEndsAt: '' } }
+              { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
             );
             
             // Reload subscription without activatedAt
@@ -836,9 +875,17 @@ router.post('/activate', verifyRequest, async (req, res) => {
             if (updatedSub) {
               Object.assign(subscription, updatedSub.toObject());
             }
+            
+            console.log('[BILLING-ACTIVATE] ✅ Cleared activatedAt (subscription not approved)');
+          } else {
+            console.log('[BILLING-ACTIVATE] ✅ Subscription IS approved in Shopify - keeping activatedAt');
           }
+        } else {
+          console.log('[BILLING-ACTIVATE] ⚠️ No shop access token found, skipping validation');
         }
       }
+    } else {
+      console.log('[BILLING-ACTIVATE] ℹ️ No activatedAt found or endTrial=false, proceeding with activation');
     }
     
     // Update subscription
@@ -847,9 +894,17 @@ router.post('/activate', verifyRequest, async (req, res) => {
       pendingActivation: false
     };
     
+    console.log('[BILLING-ACTIVATE] 📝 Setting activatedAt:', {
+      shop,
+      activatedAt: updateData.activatedAt,
+      endTrial: endTrial
+    });
+    
     // If ending trial, clear trialEndsAt AND end trial in Shopify
     if (endTrial) {
       updateData.trialEndsAt = null;
+      
+      console.log('[BILLING-ACTIVATE] 🔄 Ending trial - creating new subscription in Shopify...');
       
       // CRITICAL: End trial in Shopify to start billing NOW!
       // Otherwise Shopify will auto-charge after 5 days even if features were locked!
@@ -864,6 +919,8 @@ router.post('/activate', verifyRequest, async (req, res) => {
         // This is the recommended Shopify approach for ending trials early
         const { createSubscription } = await import('./shopifyBilling.js');
         
+        console.log('[BILLING-ACTIVATE] 🔄 Creating new subscription in Shopify (trialDays: 0)...');
+        
         const { confirmationUrl, subscription: newShopifySubscription } = await createSubscription(
           shop,
           subscription.plan,
@@ -874,20 +931,45 @@ router.post('/activate', verifyRequest, async (req, res) => {
           }
         );
         
+        console.log('[BILLING-ACTIVATE] ✅ New subscription created in Shopify:', {
+          shop,
+          newSubscriptionId: newShopifySubscription.id,
+          confirmationUrl: !!confirmationUrl,
+          plan: subscription.plan
+        });
+        
         // Update shopifySubscriptionId with new subscription
         updateData.shopifySubscriptionId = newShopifySubscription.id;
+        
+        console.log('[BILLING-ACTIVATE] 💾 Saving to MongoDB:', {
+          shop,
+          activatedAt: updateData.activatedAt,
+          shopifySubscriptionId: updateData.shopifySubscriptionId,
+          trialEndsAt: updateData.trialEndsAt
+        });
         
         // CRITICAL: Update MongoDB FIRST before returning confirmationUrl!
         // Otherwise callback will read old data (activatedAt: undefined)
         await Subscription.updateOne({ shop }, { $set: updateData });
         
+        console.log('[BILLING-ACTIVATE] ✅ Saved to MongoDB successfully');
+        
         // If confirmationUrl exists, merchant needs to approve the charge
         if (confirmationUrl) {
+          console.log('[BILLING-ACTIVATE] 🔐 Confirmation URL required - user must approve:', {
+            shop,
+            newSubscriptionId: newShopifySubscription.id,
+            note: 'If user clicks Back, on next /activate call, validation will check this NEW subscription ID'
+          });
           
           // Invalidate cache so callback reads fresh data
           await cacheService.invalidateShop(shop);
           
           // Return confirmation URL so frontend can redirect
+          // NOTE: activatedAt and new shopifySubscriptionId are set in MongoDB
+          // If user clicks Back without approving, on next /activate call,
+          // the check at the beginning of this function will validate the NEW subscription ID
+          // and clear activatedAt if it doesn't exist in Shopify
           return res.json({
             success: true,
             requiresApproval: true,
@@ -904,17 +986,36 @@ router.post('/activate', verifyRequest, async (req, res) => {
       }
     }
     
+    console.log('[BILLING-ACTIVATE] 💾 Saving updateData to MongoDB (no endTrial or no confirmationUrl):', {
+      shop,
+      updateData
+    });
+    
     await Subscription.updateOne({ shop }, { $set: updateData });
     
     // Add included tokens for plans with them (Growth Extra/Enterprise)
     const includedTokenInfo = getIncludedTokens(subscription.plan);
     if (includedTokenInfo.tokens > 0) {
+      console.log('[BILLING-ACTIVATE] 🪙 Adding included tokens:', {
+        shop,
+        plan: subscription.plan,
+        tokens: includedTokenInfo.tokens
+      });
+      
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       await tokenBalance.addIncludedTokens(includedTokenInfo.tokens, subscription.plan);
     }
     
     // Invalidate cache
     await cacheService.invalidateShop(shop);
+    
+    console.log('[BILLING-ACTIVATE] ✅ SUCCESS - Plan activated:', {
+      shop,
+      plan: subscription.plan,
+      activatedAt: updateData.activatedAt,
+      trialEnded: endTrial,
+      tokensAdded: includedTokenInfo.tokens
+    });
     
     // Return success
     res.json({
@@ -926,7 +1027,11 @@ router.post('/activate', verifyRequest, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[BILLING-ACTIVATE] ❌ Error:', error);
+    console.error('[BILLING-ACTIVATE] ❌ ERROR:', {
+      shop: req.shopDomain,
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message || 'Failed to activate plan' });
   }
 });
