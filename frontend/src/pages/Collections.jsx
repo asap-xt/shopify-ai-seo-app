@@ -121,30 +121,51 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
+  const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
+  // NOTE: This should only be used as fallback - GraphQL query is primary source
   useEffect(() => {
     // Only update if globalPlan has valid data (not empty strings)
     if (!globalPlan || typeof globalPlan !== 'object') {
       return;
     }
     
-    if (globalPlan.planKey && globalPlan.planKey !== '') {
-      setCurrentPlan(globalPlan.planKey);
-      
-      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-      const newLimit = globalPlan.language_limit || 1;
-      setLanguageLimit(newLimit);
-    } else if (globalPlan.plan && globalPlan.plan !== '') {
-      // Fallback: if planKey is missing, try to derive it from plan name
-      const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
-      setCurrentPlan(planKey);
-      
-      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-      const newLimit = globalPlan.language_limit || 1;
-      setLanguageLimit(newLimit);
+    // CRITICAL: Only use globalPlan if GraphQL hasn't loaded yet
+    // This prevents overwriting correct data from GraphQL with stale cache
+    if (!graphqlDataLoaded && currentPlan === 'starter') {
+      if (globalPlan.planKey && globalPlan.planKey !== '') {
+        console.log('[COLLECTIONS] Using globalPlan as fallback (GraphQL not loaded yet):', {
+          planKey: globalPlan.planKey,
+          language_limit: globalPlan.language_limit
+        });
+        setCurrentPlan(globalPlan.planKey);
+        
+        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+        const newLimit = globalPlan.language_limit || 1;
+        setLanguageLimit(newLimit);
+      } else if (globalPlan.plan && globalPlan.plan !== '') {
+        // Fallback: if planKey is missing, try to derive it from plan name
+        const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
+        console.log('[COLLECTIONS] Using globalPlan.plan as fallback (GraphQL not loaded yet):', {
+          plan: globalPlan.plan,
+          derivedPlanKey: planKey,
+          language_limit: globalPlan.language_limit
+        });
+        setCurrentPlan(planKey);
+        
+        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+        const newLimit = globalPlan.language_limit || 1;
+        setLanguageLimit(newLimit);
+      }
+    } else if (graphqlDataLoaded) {
+      console.log('[COLLECTIONS] Skipping globalPlan update - GraphQL data already loaded:', {
+        currentPlan,
+        globalPlanPlanKey: globalPlan.planKey,
+        globalPlanLanguageLimit: globalPlan.language_limit
+      });
     }
-  }, [globalPlan]);
+  }, [globalPlan, currentPlan, graphqlDataLoaded]);
   
   const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
     processing: false,
@@ -176,16 +197,42 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       .then((res) => {
         if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
         const data = res?.data?.plansMe;
+        
+        // DEBUG: Log GraphQL response for growth plus plans
+        if (data?.planKey?.includes('growth') || data?.plan?.toLowerCase().includes('growth')) {
+          console.log('[COLLECTIONS] GraphQL plansMe response:', {
+            plan: data?.plan,
+            planKey: data?.planKey,
+            language_limit: data?.language_limit,
+            product_limit: data?.product_limit
+          });
+        }
+        
         const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
         setCurrentPlan(data?.planKey || 'starter');
         
-        // Get languageLimit dynamically from backend data (snake_case from GraphQL)
+        // Set limits from API response (dynamic from backend/plans.js)
+        // CRITICAL: Always use GraphQL response as source of truth
         const newLimit = data?.language_limit || 1;
+        
+        console.log('[COLLECTIONS] Setting limits from GraphQL:', {
+          languageLimit: newLimit,
+          planKey: data?.planKey
+        });
+        
         setLanguageLimit(newLimit);
+        
+        // Mark GraphQL data as loaded to prevent globalPlan from overwriting
+        setGraphqlDataLoaded(true);
       })
-      .catch((err) => setToast(`Error loading models: ${err.message}`));
+      .catch((err) => {
+        console.error('[COLLECTIONS] GraphQL plansMe failed:', err);
+        setToast(`Error loading models: ${err.message}`);
+        // Even on error, mark as loaded to prevent infinite fallback attempts
+        setGraphqlDataLoaded(true);
+      });
   }, [shop, api]);
   
   // Load shop languages
