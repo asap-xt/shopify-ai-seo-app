@@ -61,6 +61,7 @@ export default function Settings() {
   const [jsonModalOpen, setJsonModalOpen] = useState(false);
   const [jsonModalTitle, setJsonModalTitle] = useState('');
   const [jsonModalContent, setJsonModalContent] = useState(null);
+  const [jsonModalFeature, setJsonModalFeature] = useState(null); // Track which feature is being viewed
   const [loadingJson, setLoadingJson] = useState(false);
   const [originalSettings, setOriginalSettings] = useState(null);
   const [advancedSchemaEnabled, setAdvancedSchemaEnabled] = useState(false);
@@ -1042,6 +1043,7 @@ export default function Settings() {
     }
     
     setJsonModalTitle(title);
+    setJsonModalFeature(feature); // Track which feature is being viewed
     setJsonModalOpen(true);
     setLoadingJson(true);
     setJsonModalContent(null);
@@ -2129,6 +2131,7 @@ export default function Settings() {
           onClose={() => {
             setJsonModalOpen(false);
             setJsonModalContent(null);
+            setJsonModalFeature(null);
           }}
           title={jsonModalTitle}
           primaryAction={{
@@ -2144,6 +2147,7 @@ export default function Settings() {
             onAction: () => {
               setJsonModalOpen(false);
               setJsonModalContent(null);
+              setJsonModalFeature(null);
             }
           }]}
         >
@@ -2158,6 +2162,27 @@ export default function Settings() {
                       : 'Loading...'}
                   </Text>
                 </InlineStack>
+              ) : jsonModalFeature === 'welcomePage' ? (
+                // HTML Preview for Welcome Page
+                <div style={{
+                  border: '1px solid #e1e3e5',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  maxHeight: '600px',
+                  backgroundColor: '#fff'
+                }}>
+                  <iframe
+                    srcDoc={jsonModalContent}
+                    style={{
+                      width: '100%',
+                      height: '600px',
+                      border: 'none',
+                      display: 'block'
+                    }}
+                    title="AI Welcome Page Preview"
+                    sandbox="allow-same-origin"
+                  />
+                </div>
               ) : (
                 <pre style={{ 
                   whiteSpace: 'pre-wrap', 
