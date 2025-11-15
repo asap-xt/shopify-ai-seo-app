@@ -186,24 +186,64 @@ router.get('/info', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    // FIX: Validate activatedAt before returning billing info
+    // If user has activatedAt but subscription wasn't approved in Shopify,
+    // clear activatedAt to allow new activation (this happens when user clicks Back)
+    const subscription = await Subscription.findOne({ shop });
+    if (subscription?.activatedAt && subscription?.shopifySubscriptionId) {
+      const shopDoc = await Shop.findOne({ shop });
+      if (shopDoc?.accessToken) {
+        const { getCurrentSubscription } = await import('./shopifyBilling.js');
+        const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+        const isApproved = shopifySub && shopifySub.id === subscription.shopifySubscriptionId;
+        
+        if (!isApproved) {
+          // activatedAt exists but subscription wasn't approved - clear it
+          console.log('[BILLING-INFO] ⚠️ Clearing unapproved activatedAt:', {
+            shop,
+            activatedAt: subscription.activatedAt,
+            shopifySubscriptionId: subscription.shopifySubscriptionId,
+            foundInShopify: !!shopifySub,
+            shopifySubId: shopifySub?.id
+          });
+          
+          await Subscription.updateOne(
+            { shop },
+            { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
+          );
+          
+          // Invalidate cache so fresh data is loaded
+          await cacheService.invalidateShop(shop);
+          
+          // Reload subscription without activatedAt
+          const updatedSub = await Subscription.findOne({ shop });
+          if (updatedSub) {
+            Object.assign(subscription, updatedSub.toObject());
+          }
+        }
+      }
+    }
+    
     // Cache billing info for 5 minutes (PHASE 3: Caching)
     const billingInfo = await withShopCache(shop, 'billing:info', CACHE_TTL.SHORT, async () => {
-      const subscription = await Subscription.findOne({ shop });
+      // Use subscription from above (may have been updated)
+      const subForInfo = await Subscription.findOne({ shop });
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       const now = new Date();
-      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const inTrial = subForInfo?.trialEndsAt && now < new Date(subForInfo.trialEndsAt);
       
       // Note: subscription.price is now a virtual property that auto-computes from plans.js
       
       return {
-        subscription: subscription ? {
-          plan: subscription.plan,
-          status: subscription.status || 'active',
-          price: subscription.price, // Virtual property from Subscription model
-          trialEndsAt: subscription.trialEndsAt,
+        subscription: subForInfo ? {
+          plan: subForInfo.plan,
+          status: subForInfo.status || 'active',
+          price: subForInfo.price, // Virtual property from Subscription model
+          trialEndsAt: subForInfo.trialEndsAt,
           inTrial,
-          shopifySubscriptionId: subscription.shopifySubscriptionId
+          shopifySubscriptionId: subForInfo.shopifySubscriptionId,
+          activatedAt: subForInfo.activatedAt
         } : null,
         tokens: {
           balance: tokenBalance.balance,
