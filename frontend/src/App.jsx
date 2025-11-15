@@ -690,10 +690,27 @@ export default function App() {
   const isEmbedded = !!(new URLSearchParams(window.location.search).get('host'));
   const shop = qs('shop', '');
   // Persist plan in sessionStorage to survive React remounts (StrictMode, navigation)
+  // CRITICAL: Only use cached plan if it has language_limit (new format)
+  // Old cached plans without language_limit will cause incorrect display
   const [plan, setPlan] = useState(() => {
     try {
       const cached = sessionStorage.getItem(`plan_${shop}`);
-      return cached ? JSON.parse(cached) : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // If cached plan doesn't have language_limit, it's stale - ignore it
+        if (!parsed || typeof parsed.language_limit === 'undefined') {
+          console.log('[APP] Ignoring stale cached plan (missing language_limit):', parsed);
+          // Clear stale cache
+          sessionStorage.removeItem(`plan_${shop}`);
+          return null;
+        }
+        console.log('[APP] Using cached plan from sessionStorage:', {
+          planKey: parsed.planKey,
+          language_limit: parsed.language_limit
+        });
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
