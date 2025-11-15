@@ -989,6 +989,31 @@ router.post('/activate', verifyRequest, async (req, res) => {
           throw new Error('Shop access token not found');
         }
         
+        // CRITICAL: Cancel OLD subscription before creating new one!
+        // If user has an existing active subscription (with trial), we must cancel it first
+        // Otherwise we'll have TWO subscriptions active at once
+        const oldSubscriptionId = subscription.shopifySubscriptionId;
+        if (oldSubscriptionId) {
+          console.log('[BILLING-ACTIVATE] 🔄 Canceling old subscription before creating new one:', {
+            shop,
+            oldSubscriptionId
+          });
+          
+          const cancelSuccess = await cancelSubscription(
+            shop,
+            oldSubscriptionId,
+            shopDoc.accessToken
+          );
+          
+          if (cancelSuccess) {
+            console.log('[BILLING-ACTIVATE] ✅ Old subscription canceled successfully');
+          } else {
+            console.warn('[BILLING-ACTIVATE] ⚠️ Failed to cancel old subscription - continuing anyway');
+          }
+        } else {
+          console.log('[BILLING-ACTIVATE] ℹ️ No old subscription to cancel - first activation');
+        }
+        
         // Use appSubscriptionCancel + immediate recreate to end trial
         // This is the recommended Shopify approach for ending trials early
         const { createSubscription } = await import('./shopifyBilling.js');
