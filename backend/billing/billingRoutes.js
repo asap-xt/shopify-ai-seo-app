@@ -202,8 +202,14 @@ router.get('/info', verifyRequest, async (req, res) => {
       plan: subscription?.plan
     });
     
+    // CRITICAL: If we have activatedAt, we need to validate it BEFORE cache check
+    // Invalidate cache first to force fresh data load
     if (subscription?.activatedAt && subscription?.shopifySubscriptionId) {
       console.log('[BILLING-INFO] 🔍 Found activatedAt - validating subscription in Shopify...');
+      
+      // Invalidate cache FIRST to ensure we check against fresh Shopify data
+      await cacheService.invalidateShop(shop);
+      console.log('[BILLING-INFO] 🔄 Invalidated cache for validation check');
       
       const shopDoc = await Shop.findOne({ shop });
       if (shopDoc?.accessToken) {
@@ -237,11 +243,10 @@ router.get('/info', verifyRequest, async (req, res) => {
             { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
           );
           
-          // CRITICAL: Invalidate cache BEFORE fetching billing info
-          // This ensures fresh data is loaded without activatedAt
+          // Cache already invalidated above, but invalidate again to be safe
           await cacheService.invalidateShop(shop);
           
-          console.log('[BILLING-INFO] ✅ Cleared activatedAt and invalidated cache successfully');
+          console.log('[BILLING-INFO] ✅ Cleared activatedAt successfully');
         } else {
           console.log('[BILLING-INFO] ✅ Subscription IS approved in Shopify - keeping activatedAt');
         }
