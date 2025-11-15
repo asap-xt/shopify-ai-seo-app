@@ -9,7 +9,7 @@ import mongoose from 'mongoose';
 import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 import TokenBalance from '../db/TokenBalance.js';
-import { getPlanConfig, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
+import { getPlanConfig, resolvePlanKey, DEFAULT_MODELS, vendorFromModel, TRIAL_DAYS } from '../plans.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { calculateFeatureCost, requiresTokens, isBlockedInTrial } from '../billing/tokenConfig.js';
 
@@ -39,6 +39,16 @@ export async function getPlansMeForShop(app, shop) {
   
   // 3. Get configuration
   let plan = subscription?.plan || null;
+  
+  // DEBUG: Log plan from MongoDB
+  if (plan && plan.toLowerCase().includes('growth')) {
+    console.log('[PLANS-ME] 🔍 Plan from MongoDB:', {
+      shop,
+      planFromDB: plan,
+      planType: typeof plan,
+      planLength: plan.length
+    });
+  }
   
   // Apply in-memory test override if any:
   try {
@@ -70,7 +80,19 @@ export async function getPlansMeForShop(app, shop) {
   
   const planConfig = getPlanConfig(plan);
   if (!planConfig) {
+    console.error('[PLANS-ME] ❌ Failed to get plan config:', { shop, plan, resolved: resolvePlanKey(plan) });
     throw new Error('Invalid plan');
+  }
+  
+  // DEBUG: Log plan config for "growth plus" to verify languageLimit
+  if (plan && (plan.toLowerCase().includes('growth plus') || planConfig.key === 'growth plus')) {
+    console.log('[PLANS-ME] 🔍 Growth Plus plan detected:', {
+      shop,
+      planFromDB: plan,
+      planConfigKey: planConfig.key,
+      languageLimit: planConfig.languageLimit,
+      fullPlanConfig: planConfig
+    });
   }
   
   // 4. Prepare response
@@ -83,7 +105,7 @@ export async function getPlansMeForShop(app, shop) {
   const trialEnd = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
   const isInTrial = trialEnd && now < trialEnd;
   
-  return {
+  const response = {
     // Shop info
     shop,
     
@@ -112,6 +134,18 @@ export async function getPlansMeForShop(app, shop) {
     // Subscription status (for billing flow redirect)
     subscriptionStatus: subscription.status || 'pending'
   };
+  
+  // DEBUG: Log response for "growth plus" to verify language_limit
+  if (plan && (plan.toLowerCase().includes('growth plus') || response.planKey === 'growth plus')) {
+    console.log('[PLANS-ME] 📤 Returning response for Growth Plus:', {
+      shop,
+      language_limit: response.language_limit,
+      planKey: response.planKey,
+      plan: response.plan
+    });
+  }
+  
+  return response;
 }
 
 /* --------------------------- Plan presets (unchanged) --------------------------- */
