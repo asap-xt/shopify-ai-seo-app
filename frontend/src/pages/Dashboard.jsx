@@ -527,30 +527,58 @@ export default function Dashboard({ shop: shopProp }) {
                         These features require additional tokens unless you're on Growth Extra or Enterprise plans.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">7. Configure Settings</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">7. Configure AI Discovery Settings</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Visit "Settings" to configure app preferences, view JSON feeds, manage AI providers, 
-                        and access advanced features like AI-enhanced sitemap generation. Settings are crucial for 
-                        fine-tuning how your store data is presented to AI search engines.
+                        Visit "Settings" to configure AI Discovery features:
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>AI Bot Access Control:</strong> Select which AI bots (OpenAI, Claude, Google, etc.) can access your store's structured data
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page, AI-Enhanced Sitemap, and Advanced Schema Data
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • Click <strong>"Save Settings"</strong> to save your configuration
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">8. Manual Setup Required</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">8. Install robots.txt (REQUIRED)</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        <strong>Important:</strong> Some features require manual setup in your Shopify theme:
+                        <strong>Critical:</strong> After saving Settings, you must manually install robots.txt in your theme for AI bots to access your endpoints:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>Schema Data:</strong> Copy the generated schema markup from Settings → Schema Data 
-                        and paste it into your theme's product templates (Enterprise plan)
+                        • In Settings, scroll to "robots.txt Configuration" section and click <strong>"View & Copy robots.txt Code"</strong>
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>robots.txt.liquid:</strong> Add the generated robots.txt content to your theme's 
-                        templates/layout/robots.txt.liquid file to help AI crawlers discover your content
+                        • Copy the generated robots.txt content
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        These manual steps are essential for full AI search engine optimization.
+                        • Go to <strong>Online Store → Themes</strong> → <strong>Actions → Edit code</strong> on your active theme
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • Click <strong>"Add a new file"</strong> and type: <code>templates/robots.txt.liquid</code>
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • Paste the copied content and click <strong>Save</strong>
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        <strong>Without this step, AI bots cannot discover your store's endpoints!</strong>
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">9. Monitor & Improve</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">9. Optional: Advanced Features</Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        Additional features available in Settings:
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>Advanced Schema Data:</strong> Generate rich structured data markup for your products (Professional Plus/Enterprise plans)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+ plans)
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        These features may require additional tokens depending on your plan.
+                      </Text>
+                      
+                      <Text variant="bodyMd" fontWeight="semibold">10. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Return to Dashboard regularly to track optimization progress, monitor token usage, 
                         and review plan recommendations.
