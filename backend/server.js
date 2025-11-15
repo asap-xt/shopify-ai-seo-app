@@ -1,5 +1,5 @@
     // backend/server.js
-    // Express server for the Shopify AI SEO app (ESM).
+    // Express server for indexAIze - Unlock AI Search (ESM).
     // All comments are in English.
     // Railway trigger: GDPR webhook fix + AI enhanced product tracking
 
@@ -1224,7 +1224,7 @@
           <!DOCTYPE html>
           <html>
           <head>
-            <title>Install NEW AI SEO</title>
+            <title>Install indexAIze - Unlock AI Search</title>
             <style>
               body { 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1273,7 +1273,7 @@
           </head>
           <body>
             <div class="container">
-              <h1>Install NEW AI SEO</h1>
+              <h1>Install indexAIze - Unlock AI Search</h1>
               <p>Enter your shop domain to install the app:</p>
               <form action="/auth" method="GET">
                 <input 
@@ -1445,7 +1445,7 @@
     app.get('/api', (req, res) => {
       res.json({ 
         status: 'ok',
-        app: 'NEW AI SEO',
+        app: 'indexAIze - Unlock AI Search',
         version: '1.0.0'
       });
     });
@@ -1725,7 +1725,7 @@
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the NEW AI SEO app in your Shopify admin
+    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
@@ -1831,7 +1831,7 @@
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the NEW AI SEO app in your Shopify admin
+    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
@@ -1929,7 +1929,7 @@
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the NEW AI SEO app in your Shopify admin
+    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
