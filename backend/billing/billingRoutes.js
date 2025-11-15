@@ -992,11 +992,30 @@ router.post('/activate', verifyRequest, async (req, res) => {
         // CRITICAL: Cancel OLD subscription before creating new one!
         // If user has an existing active subscription (with trial), we must cancel it first
         // Otherwise we'll have TWO subscriptions active at once
-        const oldSubscriptionId = subscription.shopifySubscriptionId;
+        // IMPORTANT: Check BOTH MongoDB AND Shopify for active subscriptions
+        let oldSubscriptionId = subscription.shopifySubscriptionId;
+        
+        // If no subscription ID in MongoDB, check Shopify for any active subscription
+        if (!oldSubscriptionId) {
+          console.log('[BILLING-ACTIVATE] 🔍 No subscription ID in MongoDB - checking Shopify for active subscription...');
+          const { getCurrentSubscription } = await import('./shopifyBilling.js');
+          const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+          
+          if (shopifySub?.id) {
+            oldSubscriptionId = shopifySub.id;
+            console.log('[BILLING-ACTIVATE] 🔍 Found active subscription in Shopify (not in MongoDB):', {
+              shop,
+              shopifySubscriptionId: oldSubscriptionId,
+              status: shopifySub.status
+            });
+          }
+        }
+        
         if (oldSubscriptionId) {
           console.log('[BILLING-ACTIVATE] 🔄 Canceling old subscription before creating new one:', {
             shop,
-            oldSubscriptionId
+            oldSubscriptionId,
+            source: subscription.shopifySubscriptionId ? 'MongoDB' : 'Shopify (orphaned)'
           });
           
           const cancelSuccess = await cancelSubscription(
@@ -1011,7 +1030,7 @@ router.post('/activate', verifyRequest, async (req, res) => {
             console.warn('[BILLING-ACTIVATE] ⚠️ Failed to cancel old subscription - continuing anyway');
           }
         } else {
-          console.log('[BILLING-ACTIVATE] ℹ️ No old subscription to cancel - first activation');
+          console.log('[BILLING-ACTIVATE] ℹ️ No old subscription found (checked MongoDB and Shopify) - first activation');
         }
         
         // Use appSubscriptionCancel + immediate recreate to end trial
