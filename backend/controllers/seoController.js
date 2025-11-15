@@ -78,20 +78,32 @@ export async function getPlansMeForShop(app, shop) {
     };
   }
   
+  // DEBUG: Log plan normalization BEFORE getPlanConfig
+  if (plan && plan.toLowerCase().includes('growth')) {
+    const resolvedKey = resolvePlanKey(plan);
+    console.log('[PLANS-ME] 🔍 Plan normalization:', {
+      shop,
+      planFromDB: plan,
+      resolvedKey,
+      willUsePlanConfig: !!resolvedKey
+    });
+  }
+  
   const planConfig = getPlanConfig(plan);
   if (!planConfig) {
     console.error('[PLANS-ME] ❌ Failed to get plan config:', { shop, plan, resolved: resolvePlanKey(plan) });
     throw new Error('Invalid plan');
   }
   
-  // DEBUG: Log plan config for "growth plus" to verify languageLimit
-  if (plan && (plan.toLowerCase().includes('growth plus') || planConfig.key === 'growth plus')) {
-    console.log('[PLANS-ME] 🔍 Growth Plus plan detected:', {
+  // DEBUG: Log plan config for ALL growth plans to verify languageLimit
+  if (plan && plan.toLowerCase().includes('growth')) {
+    console.log('[PLANS-ME] 🔍 Growth plan detected:', {
       shop,
       planFromDB: plan,
       planConfigKey: planConfig.key,
+      planConfigName: planConfig.name,
       languageLimit: planConfig.languageLimit,
-      fullPlanConfig: planConfig
+      expectedLimit: planConfig.key === 'growth plus' ? 3 : planConfig.key === 'growth extra' ? 6 : planConfig.key === 'growth' ? 3 : 'unknown'
     });
   }
   
