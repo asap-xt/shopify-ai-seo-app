@@ -40,16 +40,6 @@ export async function getPlansMeForShop(app, shop) {
   // 3. Get configuration
   let plan = subscription?.plan || null;
   
-  // DEBUG: Log plan from MongoDB
-  if (plan && plan.toLowerCase().includes('growth')) {
-    console.log('[PLANS-ME] 🔍 Plan from MongoDB:', {
-      shop,
-      planFromDB: plan,
-      planType: typeof plan,
-      planLength: plan.length
-    });
-  }
-  
   // Apply in-memory test override if any:
   try {
     const override = app?.locals?.planOverrides?.get?.(shop);
@@ -78,33 +68,10 @@ export async function getPlansMeForShop(app, shop) {
     };
   }
   
-  // DEBUG: Log plan normalization BEFORE getPlanConfig
-  if (plan && plan.toLowerCase().includes('growth')) {
-    const resolvedKey = resolvePlanKey(plan);
-    console.log('[PLANS-ME] 🔍 Plan normalization:', {
-      shop,
-      planFromDB: plan,
-      resolvedKey,
-      willUsePlanConfig: !!resolvedKey
-    });
-  }
-  
   const planConfig = getPlanConfig(plan);
   if (!planConfig) {
     console.error('[PLANS-ME] ❌ Failed to get plan config:', { shop, plan, resolved: resolvePlanKey(plan) });
     throw new Error('Invalid plan');
-  }
-  
-  // DEBUG: Log plan config for ALL growth plans to verify languageLimit
-  if (plan && plan.toLowerCase().includes('growth')) {
-    console.log('[PLANS-ME] 🔍 Growth plan detected:', {
-      shop,
-      planFromDB: plan,
-      planConfigKey: planConfig.key,
-      planConfigName: planConfig.name,
-      languageLimit: planConfig.languageLimit,
-      expectedLimit: planConfig.key === 'growth plus' ? 3 : planConfig.key === 'growth extra' ? 6 : planConfig.key === 'growth' ? 3 : 'unknown'
-    });
   }
   
   // 4. Prepare response
@@ -146,16 +113,6 @@ export async function getPlansMeForShop(app, shop) {
     // Subscription status (for billing flow redirect)
     subscriptionStatus: subscription.status || 'pending'
   };
-  
-  // DEBUG: Log response for "growth plus" to verify language_limit
-  if (plan && (plan.toLowerCase().includes('growth plus') || response.planKey === 'growth plus')) {
-    console.log('[PLANS-ME] 📤 Returning response for Growth Plus:', {
-      shop,
-      language_limit: response.language_limit,
-      planKey: response.planKey,
-      plan: response.plan
-    });
-  }
   
   return response;
 }

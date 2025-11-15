@@ -135,10 +135,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     // This prevents overwriting correct data from GraphQL with stale cache
     if (!graphqlDataLoaded && currentPlan === 'starter') {
       if (globalPlan.planKey && globalPlan.planKey !== '') {
-        console.log('[COLLECTIONS] Using globalPlan as fallback (GraphQL not loaded yet):', {
-          planKey: globalPlan.planKey,
-          language_limit: globalPlan.language_limit
-        });
         setCurrentPlan(globalPlan.planKey);
         
         // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
@@ -147,23 +143,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       } else if (globalPlan.plan && globalPlan.plan !== '') {
         // Fallback: if planKey is missing, try to derive it from plan name
         const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
-        console.log('[COLLECTIONS] Using globalPlan.plan as fallback (GraphQL not loaded yet):', {
-          plan: globalPlan.plan,
-          derivedPlanKey: planKey,
-          language_limit: globalPlan.language_limit
-        });
         setCurrentPlan(planKey);
         
         // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
         const newLimit = globalPlan.language_limit || 1;
         setLanguageLimit(newLimit);
       }
-    } else if (graphqlDataLoaded) {
-      console.log('[COLLECTIONS] Skipping globalPlan update - GraphQL data already loaded:', {
-        currentPlan,
-        globalPlanPlanKey: globalPlan.planKey,
-        globalPlanLanguageLimit: globalPlan.language_limit
-      });
     }
   }, [globalPlan, currentPlan, graphqlDataLoaded]);
   
@@ -198,16 +183,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
         const data = res?.data?.plansMe;
         
-        // DEBUG: Log GraphQL response for growth plus plans
-        if (data?.planKey?.includes('growth') || data?.plan?.toLowerCase().includes('growth')) {
-          console.log('[COLLECTIONS] GraphQL plansMe response:', {
-            plan: data?.plan,
-            planKey: data?.planKey,
-            language_limit: data?.language_limit,
-            product_limit: data?.product_limit
-          });
-        }
-        
         const models = data?.modelsSuggested || ['google/gemini-1.5-flash'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
@@ -216,11 +191,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         // Set limits from API response (dynamic from backend/plans.js)
         // CRITICAL: Always use GraphQL response as source of truth
         const newLimit = data?.language_limit || 1;
-        
-        console.log('[COLLECTIONS] Setting limits from GraphQL:', {
-          languageLimit: newLimit,
-          planKey: data?.planKey
-        });
         
         setLanguageLimit(newLimit);
         
@@ -1767,18 +1737,14 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                   })
                 });
                 
-                console.log('[COLLECTIONS] ✅ Activation response:', response);
-                
                 // Check if Shopify approval is required
                 if (response.requiresApproval && response.confirmationUrl) {
-                  console.log('[COLLECTIONS] 🔐 Redirecting to Shopify approval...');
                   // Direct redirect to Shopify approval page
                   window.top.location.href = response.confirmationUrl;
                   return;
                 }
                 
                 // Plan activated successfully without approval
-                console.log('[COLLECTIONS] ✅ Plan activated, reloading page...');
                 window.location.reload();
                 
               } catch (error) {

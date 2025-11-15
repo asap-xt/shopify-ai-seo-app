@@ -699,15 +699,10 @@ export default function App() {
         const parsed = JSON.parse(cached);
         // If cached plan doesn't have language_limit, it's stale - ignore it
         if (!parsed || typeof parsed.language_limit === 'undefined') {
-          console.log('[APP] Ignoring stale cached plan (missing language_limit):', parsed);
           // Clear stale cache
           sessionStorage.removeItem(`plan_${shop}`);
           return null;
         }
-        console.log('[APP] Using cached plan from sessionStorage:', {
-          planKey: parsed.planKey,
-          language_limit: parsed.language_limit
-        });
         return parsed;
       }
       return null;
@@ -817,25 +812,10 @@ export default function App() {
         const plansData = await plansResponse.json();
         const pm = plansData?.data?.plansMe;
         if (pm) {
-          // DEBUG: Log plan data for growth plus plans
-          if (pm?.planKey?.includes('growth') || pm?.plan?.toLowerCase().includes('growth')) {
-            console.log('[APP] GraphQL plansMe response:', {
-              plan: pm?.plan,
-              planKey: pm?.planKey,
-              language_limit: pm?.language_limit,
-              product_limit: pm?.product_limit
-            });
-          }
-          
           setPlan(pm);
           // Persist plan in sessionStorage to survive React remounts
           try {
             sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
-            console.log('[APP] Plan saved to sessionStorage:', {
-              shop,
-              planKey: pm?.planKey,
-              language_limit: pm?.language_limit
-            });
           } catch (e) {
             console.error('[APP] Failed to cache plan:', e);
           }
