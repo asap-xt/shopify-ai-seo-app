@@ -349,12 +349,14 @@ function processMetafields(metafields) {
   if (!metafields?.edges || metafields.edges.length === 0) {
     return {
       optimized: false,
+      aiEnhanced: false,
       languages: [],
       lastCheckedAt: new Date()
     };
   }
 
   const languages = [];
+  let hasAiEnhanced = false;
   
   metafields.edges.forEach(({ node }) => {
     if (node.key && node.key.startsWith('seo__')) {
@@ -369,6 +371,11 @@ function processMetafields(metafields) {
               lastOptimizedAt: seoData.updatedAt ? new Date(seoData.updatedAt) : new Date()
             });
           }
+          
+          // Check if this language has AI-enhanced content (has enhancedAt timestamp)
+          if (seoData.enhancedAt) {
+            hasAiEnhanced = true;
+          }
         }
       } catch (error) {
         console.warn(`[SYNC] Failed to parse metafield ${node.key}`);
@@ -378,6 +385,7 @@ function processMetafields(metafields) {
 
   return {
     optimized: languages.length > 0,
+    aiEnhanced: hasAiEnhanced, // Set aiEnhanced flag based on enhancedAt in metafields
     languages,
     lastCheckedAt: new Date()
   };

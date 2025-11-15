@@ -505,6 +505,7 @@ router.post('/product', validateRequest(), async (req, res) => {
     
     // === MARK PRODUCT AS AI-ENHANCED ===
     // If any language was successfully enhanced, mark product as aiEnhanced
+    // Also update lastShopifyUpdate to prevent webhook from detecting false-positive changes
     if (successfulLanguages > 0) {
       try {
         // Extract numeric ID from GID if needed
@@ -512,16 +513,62 @@ router.post('/product', validateRequest(), async (req, res) => {
           ? productId.split('/').pop() 
           : productId;
         
+        // Fetch current product data from Shopify for lastShopifyUpdate reference
+        const productQuery = `
+          query GetProduct($id: ID!) {
+            product(id: $id) {
+              id
+              title
+              descriptionHtml
+            }
+          }
+        `;
+        
+        let currentProduct = null;
+        try {
+          const productData = await shopGraphQL(req, shop, productQuery, { id: productId });
+          currentProduct = productData?.product;
+        } catch (fetchError) {
+          console.error('[AI-ENHANCE] Error fetching product for lastShopifyUpdate:', fetchError.message);
+        }
+        
+        const updateData = {
+          $set: { 'seoStatus.aiEnhanced': true }
+        };
+        
+        // CRITICAL: Update lastShopifyUpdate to prevent webhook from detecting false-positive changes
+        if (currentProduct) {
+          updateData.$set.lastShopifyUpdate = {
+            title: currentProduct.title,
+            description: currentProduct.descriptionHtml || '',
+            updatedAt: new Date()
+          };
+        }
+        
+        // CRITICAL: Use upsert: true to create product record if it doesn't exist (e.g., after uninstall/reinstall)
         const result = await Product.findOneAndUpdate(
           { shop, productId: numericProductId },
-          { 'seoStatus.aiEnhanced': true },
-          { new: true }
+          {
+            ...updateData,
+            $setOnInsert: {
+              shop,
+              productId: numericProductId,
+              shopifyProductId: numericProductId,
+              gid: productId,
+              title: currentProduct?.title || '',
+              description: currentProduct?.descriptionHtml || '',
+              'seoStatus.optimized': false,
+              'seoStatus.languages': []
+            }
+          },
+          { upsert: true, new: true }
         );
         
         if (result) {
           console.log(`[AI-ENHANCE] ✅ Marked product ${numericProductId} as AI-enhanced in MongoDB`);
-        } else {
-          console.error(`[AI-ENHANCE] ⚠️ Product ${numericProductId} NOT FOUND in MongoDB!`);
+          if (currentProduct) {
+            console.log(`[AI-ENHANCE] ✅ Updated lastShopifyUpdate to prevent false webhook changes`);
+          }
         }
       } catch (e) {
         console.error('[AI-ENHANCE] Failed to mark product as AI-enhanced:', e);
