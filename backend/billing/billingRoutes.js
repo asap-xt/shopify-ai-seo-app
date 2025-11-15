@@ -188,9 +188,9 @@ router.get('/info', verifyRequest, async (req, res) => {
     
     console.log('[BILLING-INFO] 🚀 START - Getting billing info:', { shop });
     
-    // FIX: Validate activatedAt before returning billing info
+    // FIX: Validate activatedAt BEFORE checking cache
     // If user has activatedAt but subscription wasn't approved in Shopify,
-    // clear activatedAt to allow new activation (this happens when user clicks Back)
+    // clear activatedAt and invalidate cache to allow new activation (this happens when user clicks Back)
     const subscription = await Subscription.findOne({ shop });
     
     console.log('[BILLING-INFO] 📊 Current subscription state:', {
@@ -237,16 +237,11 @@ router.get('/info', verifyRequest, async (req, res) => {
             { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
           );
           
-          // Invalidate cache so fresh data is loaded
+          // CRITICAL: Invalidate cache BEFORE fetching billing info
+          // This ensures fresh data is loaded without activatedAt
           await cacheService.invalidateShop(shop);
           
-          console.log('[BILLING-INFO] ✅ Cleared activatedAt successfully');
-          
-          // Reload subscription without activatedAt
-          const updatedSub = await Subscription.findOne({ shop });
-          if (updatedSub) {
-            Object.assign(subscription, updatedSub.toObject());
-          }
+          console.log('[BILLING-INFO] ✅ Cleared activatedAt and invalidated cache successfully');
         } else {
           console.log('[BILLING-INFO] ✅ Subscription IS approved in Shopify - keeping activatedAt');
         }
@@ -258,6 +253,7 @@ router.get('/info', verifyRequest, async (req, res) => {
     }
     
     // Cache billing info for 5 minutes (PHASE 3: Caching)
+    // Note: If activatedAt was cleared above, cache was invalidated, so fresh data will be loaded
     const billingInfo = await withShopCache(shop, 'billing:info', CACHE_TTL.SHORT, async () => {
       // Use subscription from above (may have been updated)
       const subForInfo = await Subscription.findOne({ shop });
