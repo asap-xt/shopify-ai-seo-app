@@ -186,15 +186,39 @@ router.get('/info', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    console.log('[BILLING-INFO] 🚀 START - Getting billing info:', { shop });
+    
     // FIX: Validate activatedAt before returning billing info
     // If user has activatedAt but subscription wasn't approved in Shopify,
     // clear activatedAt to allow new activation (this happens when user clicks Back)
     const subscription = await Subscription.findOne({ shop });
+    
+    console.log('[BILLING-INFO] 📊 Current subscription state:', {
+      shop,
+      hasSubscription: !!subscription,
+      activatedAt: subscription?.activatedAt,
+      shopifySubscriptionId: subscription?.shopifySubscriptionId,
+      trialEndsAt: subscription?.trialEndsAt,
+      plan: subscription?.plan
+    });
+    
     if (subscription?.activatedAt && subscription?.shopifySubscriptionId) {
+      console.log('[BILLING-INFO] 🔍 Found activatedAt - validating subscription in Shopify...');
+      
       const shopDoc = await Shop.findOne({ shop });
       if (shopDoc?.accessToken) {
         const { getCurrentSubscription } = await import('./shopifyBilling.js');
         const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+        
+        console.log('[BILLING-INFO] 🔍 Shopify subscription check:', {
+          shop,
+          expectedId: subscription.shopifySubscriptionId,
+          foundInShopify: !!shopifySub,
+          shopifySubId: shopifySub?.id,
+          shopifySubStatus: shopifySub?.status,
+          idsMatch: shopifySub?.id === subscription.shopifySubscriptionId
+        });
+        
         const isApproved = shopifySub && shopifySub.id === subscription.shopifySubscriptionId;
         
         if (!isApproved) {
@@ -204,7 +228,8 @@ router.get('/info', verifyRequest, async (req, res) => {
             activatedAt: subscription.activatedAt,
             shopifySubscriptionId: subscription.shopifySubscriptionId,
             foundInShopify: !!shopifySub,
-            shopifySubId: shopifySub?.id
+            shopifySubId: shopifySub?.id,
+            reason: shopifySub ? 'ID mismatch' : 'Subscription not found'
           });
           
           await Subscription.updateOne(
@@ -215,13 +240,21 @@ router.get('/info', verifyRequest, async (req, res) => {
           // Invalidate cache so fresh data is loaded
           await cacheService.invalidateShop(shop);
           
+          console.log('[BILLING-INFO] ✅ Cleared activatedAt successfully');
+          
           // Reload subscription without activatedAt
           const updatedSub = await Subscription.findOne({ shop });
           if (updatedSub) {
             Object.assign(subscription, updatedSub.toObject());
           }
+        } else {
+          console.log('[BILLING-INFO] ✅ Subscription IS approved in Shopify - keeping activatedAt');
         }
+      } else {
+        console.log('[BILLING-INFO] ⚠️ No shop access token found, skipping validation');
       }
+    } else {
+      console.log('[BILLING-INFO] ℹ️ No activatedAt or shopifySubscriptionId found, skipping validation');
     }
     
     // Cache billing info for 5 minutes (PHASE 3: Caching)
