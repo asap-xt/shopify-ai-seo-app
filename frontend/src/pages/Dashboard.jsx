@@ -58,12 +58,19 @@ export default function Dashboard({ shop: shopProp }) {
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
   
-  // Onboarding state - open by default, persist in localStorage
+  // Onboarding state logic:
+  // 1. First REAL show (with active subscription): open, then mark as seen
+  // 2. Subsequent loads: closed by default (hasBeenSeenOnce = true), but can be toggled manually
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
     try {
-      const saved = localStorage.getItem(`onboardingOpen_${shop}`);
-      // If never set before, default to true (open)
-      return saved === null ? true : saved === 'true';
+      const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
+      if (hasBeenSeenOnce) {
+        // Subsequent loads - check if user manually toggled it
+        const manualToggle = localStorage.getItem(`onboardingOpen_${shop}`);
+        return manualToggle === 'true'; // If manually set to true, respect it; otherwise false
+      }
+      // First time - will be opened when subscription is confirmed (see useEffect below)
+      return true;
     } catch {
       return true; // Default open if localStorage fails
     }
@@ -102,6 +109,25 @@ export default function Dashboard({ shop: shopProp }) {
       }
     };
   }, [shop]);
+  
+  // Mark Getting Started card as "seen" after first REAL show (with active subscription or trial)
+  // This only happens after user activates a plan and sees Dashboard, not on first load before redirect
+  // Works for both active subscriptions and trial period (both have subscription.plan)
+  useEffect(() => {
+    if (!loading && subscription?.plan) {
+      // Dashboard is loaded and has active subscription (including trial) - this is a real view
+      // subscription.plan exists for both active subscriptions and trial period
+      try {
+        const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
+        if (!hasBeenSeenOnce) {
+          // First real show - mark as seen (card will stay open for this session)
+          localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
+        }
+      } catch (error) {
+        console.error('[Dashboard] Error marking Getting Started as seen:', error);
+      }
+    }
+  }, [loading, subscription?.plan, shop]);
   
   // Auto-sync on load if enabled (only once per page load)
   useEffect(() => {
@@ -374,10 +400,13 @@ export default function Dashboard({ shop: shopProp }) {
   };
 
   // Handle onboarding toggle with localStorage persistence
+  // This saves the manual toggle state, but on next load it will default to closed
+  // unless user manually opens it again
   const handleOnboardingToggle = () => {
     const newState = !onboardingOpen;
     setOnboardingOpen(newState);
     try {
+      // Save manual toggle state
       localStorage.setItem(`onboardingOpen_${shop}`, String(newState));
     } catch (error) {
       console.error('[Dashboard] Error saving onboarding state:', error);
