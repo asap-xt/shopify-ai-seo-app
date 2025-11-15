@@ -1991,16 +1991,15 @@ export default function Settings() {
                   <li><strong>Generate & Copy:</strong> Click the button above to see your custom robots.txt code, then copy it</li>
                   <li><strong>Open Theme Editor:</strong> Go to <strong>Online Store → Themes</strong> in Shopify admin</li>
                   <li><strong>Edit Code:</strong> Click <strong>Actions → Edit code</strong> on your active theme</li>
-                  <li><strong>Create New File:</strong> In the left sidebar, click <strong>Add a new file</strong> (top right corner)</li>
-                  <li><strong>Select Location:</strong> Choose <strong>"Create a new template"</strong> from the dropdown</li>
-                  <li><strong>Name the File:</strong> Select template type <strong>"robots"</strong> and it will automatically create <code>templates/robots.txt.liquid</code></li>
-                  <li><strong>Paste Content:</strong> Delete any existing content and paste your copied robots.txt code</li>
+                  <li><strong>Create New File:</strong> In the left sidebar, click <strong>Add a new file</strong> (top right corner of the file browser)</li>
+                  <li><strong>Enter File Path:</strong> In the file name field, type exactly: <code>templates/robots.txt.liquid</code></li>
+                  <li><strong>Create File:</strong> Click <strong>Create file</strong> or press Enter</li>
+                  <li><strong>Paste Content:</strong> Delete any existing content in the new file and paste your copied robots.txt code</li>
                   <li><strong>Save:</strong> Click the green <strong>Save</strong> button (top right)</li>
                 </ol>
                 
                 <Banner tone="info">
-                  <p><strong>📍 Can't find "Create a new template"?</strong></p>
-                  <p>Alternative method: Click <strong>Add a new file</strong>, then manually type: <code>templates/robots.txt.liquid</code> and click Create file.</p>
+                  <p><strong>💡 Tip:</strong> If the file <code>robots.txt.liquid</code> already exists in the <code>templates</code> folder, simply click on it to edit it instead of creating a new one.</p>
                 </Banner>
               </BlockStack>
               
@@ -2053,8 +2052,8 @@ export default function Settings() {
                     <li>Copy the robots.txt content below</li>
                     <li>Go to <strong>Online Store → Themes</strong></li>
                     <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
-                    <li>In the file browser, look for <strong>robots.txt.liquid</strong></li>
-                    <li>If it doesn't exist, click <strong>Add a new template</strong> → Select "robots" → Create</li>
+                    <li>In the file browser, look for <strong>templates/robots.txt.liquid</strong></li>
+                    <li>If it doesn't exist, click <strong>Add a new file</strong> and type: <code>templates/robots.txt.liquid</code></li>
                     <li>Replace the content with what you copied</li>
                     <li>Click <strong>Save</strong></li>
                   </ol>
