@@ -68,6 +68,15 @@ class AIDiscoveryService {
    */
   async getSettings(shop, session) {
     try {
+      // Check cache first
+      const cacheKey = `settings:${shop}`;
+      if (this.cache.has(cacheKey)) {
+        const cached = this.cache.get(cacheKey);
+        if (cached) {
+          return cached;
+        }
+      }
+      
       // Direct GraphQL call using session.accessToken
       const metafieldsQuery = `
         query GetShopMetafields {
@@ -121,7 +130,24 @@ class AIDiscoveryService {
         }
       }
       
-      // Ако няма settings, връщаме defaults
+      // Ако няма settings в Shopify metafields, пробваме MongoDB
+      if (!settings) {
+        try {
+          const mongoSettings = await AIDiscoverySettings.findOne({ shop });
+          if (mongoSettings) {
+            settings = {
+              bots: mongoSettings.bots || {},
+              features: mongoSettings.features || {},
+              richAttributes: mongoSettings.richAttributes || {},
+              advancedSchemaEnabled: mongoSettings.advancedSchemaEnabled || false
+            };
+          }
+        } catch (mongoError) {
+          console.error('[AI-DISCOVERY] Failed to read from MongoDB:', mongoError);
+        }
+      }
+      
+      // Ако все още няма settings, връщаме defaults
       if (!settings) {
         settings = this.getDefaultSettings();
       }
@@ -166,7 +192,8 @@ class AIDiscoveryService {
         settings.advancedSchemaEnabled = false;
       }
       
-      this.cache.set(shop, settings, 300000); // Cache за 5 минути
+      // Cache settings (cacheKey already defined at the beginning of function)
+      this.cache.set(cacheKey, settings, 300000); // Cache за 5 минути
       return settings;
       
     } catch (error) {
