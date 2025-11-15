@@ -259,6 +259,59 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // CRITICAL: Check if this is a plan change (existing subscription)
     const existingSubCheck = await Subscription.findOne({ shop });
     
+    // FIX: If user has pendingPlan but subscription wasn't approved in Shopify,
+    // clear pendingPlan to allow new plan selection
+    if (existingSubCheck?.pendingPlan) {
+      const pendingSubscriptionId = existingSubCheck.shopifySubscriptionId;
+      
+      // If no shopifySubscriptionId, definitely not approved
+      if (!pendingSubscriptionId) {
+        console.log('[BILLING-SUBSCRIBE] ⚠️ Clearing pendingPlan with no shopifySubscriptionId:', {
+          shop,
+          pendingPlan: existingSubCheck.pendingPlan
+        });
+        
+        await Subscription.updateOne(
+          { shop },
+          { $unset: { pendingPlan: '', pendingActivation: '' } }
+        );
+        
+        // Reload subscription without pendingPlan
+        const updatedSub = await Subscription.findOne({ shop });
+        if (updatedSub) {
+          Object.assign(existingSubCheck, updatedSub.toObject());
+        }
+      } else {
+        // Check if pendingPlan's subscriptionId exists in Shopify
+        // getCurrentSubscription returns only ACTIVE subscriptions, so if it exists, it's approved
+        const { getCurrentSubscription } = await import('./shopifyBilling.js');
+        const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+        const isApproved = shopifySub && shopifySub.id === pendingSubscriptionId;
+        
+        if (!isApproved) {
+          // Pending plan wasn't approved - clear it to allow new selection
+          console.log('[BILLING-SUBSCRIBE] ⚠️ Clearing unapproved pendingPlan:', {
+            shop,
+            pendingPlan: existingSubCheck.pendingPlan,
+            shopifySubscriptionId: pendingSubscriptionId,
+            foundInShopify: !!shopifySub,
+            shopifyStatus: shopifySub?.status
+          });
+          
+          await Subscription.updateOne(
+            { shop },
+            { $unset: { pendingPlan: '', pendingActivation: '' } }
+          );
+          
+          // Reload subscription without pendingPlan
+          const updatedSub = await Subscription.findOne({ shop });
+          if (updatedSub) {
+            Object.assign(existingSubCheck, updatedSub.toObject());
+          }
+        }
+      }
+    }
+    
     // TRIAL DAYS LOGIC:
     // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days)
     // 2. Plan change during trial: trialDays = REMAINING DAYS (preserve trial in Shopify)
@@ -730,6 +783,62 @@ router.post('/activate', verifyRequest, async (req, res) => {
     if (!subscription) {
       console.error('[BILLING-ACTIVATE] ❌ No subscription found for:', shop);
       return res.status(404).json({ error: 'No active subscription found' });
+    }
+    
+    // FIX: If user has activatedAt but subscription wasn't approved in Shopify,
+    // clear activatedAt to allow new activation
+    if (subscription.activatedAt && endTrial) {
+      const activatedSubscriptionId = subscription.shopifySubscriptionId;
+      
+      // If no shopifySubscriptionId, definitely not approved
+      if (!activatedSubscriptionId) {
+        console.log('[BILLING-ACTIVATE] ⚠️ Clearing activatedAt with no shopifySubscriptionId:', {
+          shop,
+          activatedAt: subscription.activatedAt
+        });
+        
+        await Subscription.updateOne(
+          { shop },
+          { $unset: { activatedAt: '', trialEndsAt: '' } }
+        );
+        
+        // Reload subscription without activatedAt
+        const updatedSub = await Subscription.findOne({ shop });
+        if (updatedSub) {
+          Object.assign(subscription, updatedSub.toObject());
+        }
+      } else {
+        const shopDoc = await Shop.findOne({ shop });
+        if (shopDoc?.accessToken) {
+          // Check if activated subscription exists in Shopify
+          // getCurrentSubscription returns only ACTIVE subscriptions, so if it exists, it's approved
+          const { getCurrentSubscription } = await import('./shopifyBilling.js');
+          const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+          const isApproved = shopifySub && shopifySub.id === activatedSubscriptionId;
+          
+          if (!isApproved) {
+            // Activated plan wasn't approved - clear activatedAt to allow new activation
+            console.log('[BILLING-ACTIVATE] ⚠️ Clearing unapproved activatedAt:', {
+              shop,
+              activatedAt: subscription.activatedAt,
+              shopifySubscriptionId: activatedSubscriptionId,
+              foundInShopify: !!shopifySub,
+              shopifyStatus: shopifySub?.status
+            });
+            
+            await Subscription.updateOne(
+              { shop },
+              { $unset: { activatedAt: '', trialEndsAt: '' } }
+            );
+            
+            // Reload subscription without activatedAt
+            const updatedSub = await Subscription.findOne({ shop });
+            if (updatedSub) {
+              Object.assign(subscription, updatedSub.toObject());
+            }
+          }
+        }
+      }
     }
     
     // Update subscription
