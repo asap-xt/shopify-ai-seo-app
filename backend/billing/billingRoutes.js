@@ -213,8 +213,16 @@ router.get('/info', verifyRequest, async (req, res) => {
       
       const shopDoc = await Shop.findOne({ shop });
       if (shopDoc?.accessToken) {
-        const { getCurrentSubscription } = await import('./shopifyBilling.js');
-        const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+        // CRITICAL: Use getSubscriptionById instead of getCurrentSubscription
+        // getCurrentSubscription only returns ACTIVE subscriptions
+        // getSubscriptionById checks if subscription exists (even if PENDING)
+        // This is important when subscription is waiting for approval
+        const { getSubscriptionById } = await import('./shopifyBilling.js');
+        const shopifySub = await getSubscriptionById(
+          shop, 
+          subscription.shopifySubscriptionId, 
+          shopDoc.accessToken
+        );
         
         console.log('[BILLING-INFO] 🔍 Shopify subscription check:', {
           shop,
@@ -225,7 +233,14 @@ router.get('/info', verifyRequest, async (req, res) => {
           idsMatch: shopifySub?.id === subscription.shopifySubscriptionId
         });
         
-        const isApproved = shopifySub && shopifySub.id === subscription.shopifySubscriptionId;
+        // Subscription exists if found (even if PENDING - waiting for approval)
+        // Only clear activatedAt if subscription doesn't exist at all (CANCELLED or never created)
+        const subscriptionExists = !!shopifySub;
+        
+        // If subscription exists but is CANCELLED, clear activatedAt
+        const isCancelled = shopifySub?.status === 'CANCELLED';
+        
+        const isApproved = subscriptionExists && !isCancelled;
         
         if (!isApproved) {
           // activatedAt exists but subscription wasn't approved - clear it
@@ -912,10 +927,16 @@ router.post('/activate', verifyRequest, async (req, res) => {
         if (shopDoc?.accessToken) {
           console.log('[BILLING-ACTIVATE] 🔍 Checking if subscription exists in Shopify...');
           
-          // Check if activated subscription exists in Shopify
-          // getCurrentSubscription returns only ACTIVE subscriptions, so if it exists, it's approved
-          const { getCurrentSubscription } = await import('./shopifyBilling.js');
-          const shopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+          // CRITICAL: Use getSubscriptionById instead of getCurrentSubscription
+          // getCurrentSubscription only returns ACTIVE subscriptions
+          // getSubscriptionById checks if subscription exists (even if PENDING)
+          // This is important when subscription is waiting for approval
+          const { getSubscriptionById } = await import('./shopifyBilling.js');
+          const shopifySub = await getSubscriptionById(
+            shop, 
+            activatedSubscriptionId, 
+            shopDoc.accessToken
+          );
           
           console.log('[BILLING-ACTIVATE] 🔍 Shopify subscription check result:', {
             shop,
@@ -926,7 +947,14 @@ router.post('/activate', verifyRequest, async (req, res) => {
             idsMatch: shopifySub?.id === activatedSubscriptionId
           });
           
-          const isApproved = shopifySub && shopifySub.id === activatedSubscriptionId;
+          // Subscription exists if found (even if PENDING - waiting for approval)
+          // Only clear activatedAt if subscription doesn't exist at all (CANCELLED or never created)
+          const subscriptionExists = !!shopifySub;
+          
+          // If subscription exists but is CANCELLED, clear activatedAt
+          const isCancelled = shopifySub?.status === 'CANCELLED';
+          
+          const isApproved = subscriptionExists && !isCancelled;
           
           if (!isApproved) {
             // Activated plan wasn't approved - clear activatedAt to allow new activation

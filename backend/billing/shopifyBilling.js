@@ -301,6 +301,74 @@ export async function getCurrentSubscription(shop, accessToken) {
 }
 
 /**
+ * Get subscription by ID (works for both ACTIVE and PENDING subscriptions)
+ * @param {string} shop - Shop domain
+ * @param {string} subscriptionId - Shopify subscription GID
+ * @param {string} accessToken - Shop access token
+ * @returns {Promise<object|null>}
+ */
+export async function getSubscriptionById(shop, subscriptionId, accessToken) {
+  const query = `
+    query GetSubscriptionById($id: ID!) {
+      node(id: $id) {
+        ... on AppSubscription {
+          id
+          name
+          status
+          test
+          trialDays
+          currentPeriodEnd
+          lineItems {
+            id
+            plan {
+              pricingDetails {
+                __typename
+                ... on AppRecurringPricing {
+                  price {
+                    amount
+                    currencyCode
+                  }
+                  interval
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+  
+  const variables = { id: subscriptionId };
+  
+  const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      query,
+      variables
+    })
+  });
+  
+  if (!response.ok) {
+    console.error('[Shopify Billing] Failed to get subscription by ID:', response.status);
+    return null;
+  }
+  
+  const result = await response.json();
+  
+  if (result.errors || !result.data) {
+    console.error('[Shopify Billing] Query errors:', result.errors);
+    return null;
+  }
+  
+  const subscription = result.data.node;
+  return subscription || null;
+}
+
+/**
  * Cancel subscription (GraphQL)
  * @param {string} shop - Shop domain  
  * @param {string} subscriptionId - Shopify subscription GID
