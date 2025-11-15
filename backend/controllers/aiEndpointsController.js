@@ -361,10 +361,12 @@ router.get('/ai/welcome', async (req, res) => {
       return res.status(403).send('AI Welcome Page feature is not enabled. Please enable it in settings.');
     }
 
+    // Get planKey for both access check and HTML template
+    const planKey = (settings?.planKey || 'starter').toLowerCase().replace(/\s+/g, '_');
+    
     // Check plan access for AI Welcome Page (skip for AI Testing Bot)
     if (!isTestingBot) {
       const subscription = await Subscription.findOne({ shop });
-      const planKey = (settings?.planKey || 'starter').toLowerCase().replace(/\s+/g, '_');
       const plansWithAccess = ['growth', 'growth_extra', 'enterprise'];
       const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
       
