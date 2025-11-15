@@ -255,26 +255,27 @@ export default function Settings() {
 
   const checkWelcomePage = useCallback(async () => {
     try {
+      // Check if welcome page endpoint is accessible (fetch directly, like in viewJson)
+      const response = await fetch(`/ai/welcome?shop=${shop}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+        }
+      });
       
-      // Check if welcome page endpoint is accessible
-      const result = await api(`/ai/welcome?shop=${shop}`);
-      
-      
-      // Check if it's an error response (JSON with error field)
-      if (result?.error && typeof result.error === 'string' && !result.error.includes('<!DOCTYPE html>')) {
-        return false;
+      if (response.ok) {
+        const htmlContent = await response.text();
+        // If we get HTML content with DOCTYPE, the page exists
+        return htmlContent.includes('<!DOCTYPE html>') || htmlContent.includes('<!doctype html>');
       }
       
-      // If we get HTML content (either as string or in error field), the page exists
-      const hasWelcomePage = (typeof result === 'string' && result.includes('<!DOCTYPE html>')) ||
-                            (result?.error && typeof result.error === 'string' && result.error.includes('<!DOCTYPE html>'));
-      
-      return hasWelcomePage;
+      return false;
     } catch (error) {
       console.error('[SETTINGS] Error checking welcome page:', error);
       return false;
     }
-  }, [shop, api, settings]);
+  }, [shop]);
 
   // ===== 6. ГЛАВНАТА ФУНКЦИЯ =====
   const checkGeneratedData = useCallback(async () => {
@@ -309,6 +310,8 @@ export default function Settings() {
       if (settings?.features?.welcomePage) {
         const hasWelcomePage = await checkWelcomePage();
         setShowWelcomePageView(hasWelcomePage);
+      } else {
+        setShowWelcomePageView(false);
       }
       
     } catch (error) {
