@@ -530,12 +530,16 @@ const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
   const path = window.location.pathname;
   
   // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
+  // CRITICAL: Also support paths with /apps/new-ai-seo prefix (from redirects after token purchase)
   const getActiveTab = () => {
-    if (path === '/ai-seo' || path === '/ai-seo/products') return 'products';
-    if (path === '/ai-seo/collections') return 'collections';
-    if (path === '/ai-seo/sitemap') return 'sitemap';
-    if (path === '/ai-seo/store-metadata') return 'store-metadata';
-    if (path === '/ai-seo/schema-data') return 'schema-data';
+    // Normalize path: remove /apps/new-ai-seo prefix if present
+    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    
+    if (normalizedPath === '/ai-seo' || normalizedPath === '/ai-seo/products') return 'products';
+    if (normalizedPath === '/ai-seo/collections') return 'collections';
+    if (normalizedPath === '/ai-seo/sitemap') return 'sitemap';
+    if (normalizedPath === '/ai-seo/store-metadata') return 'store-metadata';
+    if (normalizedPath === '/ai-seo/schema-data') return 'schema-data';
     return 'products'; // default
   };
   
@@ -865,12 +869,15 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
+    // Normalize path: remove /apps/new-ai-seo prefix if present (from redirects)
+    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    
     // Dashboard
-    if (path === '/' || path === '/dashboard') {
+    if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       return <Dashboard shop={shop} />;
     } 
     // Search Optimization for AI и под-страници
-    else if (path.startsWith('/ai-seo')) {
+    else if (normalizedPath.startsWith('/ai-seo')) {
       return <AiSearchOptimisationPanel shop={shop} plan={plan} />;
     } 
     // Billing
