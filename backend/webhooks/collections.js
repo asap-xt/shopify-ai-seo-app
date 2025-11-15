@@ -67,12 +67,28 @@ export default async function collectionsWebhook(req, res) {
         console.log('[Webhook-Collections] New description:', payload.body_html?.substring(0, 100) + '...');
         
         // 3. Detect if title or description changed
-        // NOTE: Compare first 500 chars only - Shopify webhook payload may truncate long descriptions
-        titleChanged = referenceTitle !== payload.title;
+        // CRITICAL: Only detect changes if we have valid reference values
+        // If referenceTitle/referenceDescription are undefined, this is likely first webhook
+        // or collection created via sync - don't treat as change to avoid deleting SEO metafields
+        if (referenceTitle !== undefined && referenceTitle !== null && referenceTitle !== '') {
+          titleChanged = referenceTitle !== payload.title;
+        } else {
+          // No reference title - this is likely first webhook, don't treat as change
+          titleChanged = false;
+          console.log('[Webhook-Collections] No reference title found - treating as first webhook, not a change');
+        }
+        
         const newDescription = payload.body_html || '';
-        const refDescTrunc = referenceDescription.substring(0, 500);
-        const newDescTrunc = newDescription.substring(0, 500);
-        descriptionChanged = refDescTrunc !== newDescTrunc;
+        if (referenceDescription !== undefined && referenceDescription !== null && referenceDescription !== '') {
+          // NOTE: Compare first 500 chars only - Shopify webhook payload may truncate long descriptions
+          const refDescTrunc = referenceDescription.substring(0, 500);
+          const newDescTrunc = newDescription.substring(0, 500);
+          descriptionChanged = refDescTrunc !== newDescTrunc;
+        } else {
+          // No reference description - this is likely first webhook, don't treat as change
+          descriptionChanged = false;
+          console.log('[Webhook-Collections] No reference description found - treating as first webhook, not a change');
+        }
         
         if (titleChanged || descriptionChanged) {
           console.log('[Webhook-Collections] 🚨 CONTENT CHANGED DETECTED!');

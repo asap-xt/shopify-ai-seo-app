@@ -1124,6 +1124,7 @@ Guidelines:
     
     // === MARK COLLECTION AS AI-ENHANCED ===
     // If any language was successfully enhanced, mark collection as aiEnhanced
+    // Also update lastShopifyUpdate to prevent webhook from detecting false-positive changes
     if (results.enhanced > 0) {
       try {
         const Collection = (await import('../db/Collection.js')).default;
@@ -1131,10 +1132,42 @@ Guidelines:
           ? collectionId.split('/').pop() 
           : collectionId;
         
+        // Fetch current collection data from Shopify for lastShopifyUpdate reference
+        const collectionQuery = `
+          query GetCollection($id: ID!) {
+            collection(id: $id) {
+              id
+              title
+              descriptionHtml
+            }
+          }
+        `;
+        
+        let currentCollection = null;
+        try {
+          const collectionData = await shopGraphQL(req, shop, collectionQuery, { id: collectionId });
+          currentCollection = collectionData?.collection;
+        } catch (fetchError) {
+          console.error('[AI-ENHANCE] Error fetching collection for lastShopifyUpdate:', fetchError.message);
+        }
+        
+        const updateData = {
+          $set: { 'seoStatus.aiEnhanced': true }
+        };
+        
+        // CRITICAL: Update lastShopifyUpdate to prevent webhook from detecting false-positive changes
+        if (currentCollection) {
+          updateData.$set.lastShopifyUpdate = {
+            title: currentCollection.title,
+            description: currentCollection.descriptionHtml || '',
+            updatedAt: new Date()
+          };
+        }
+        
         const result = await Collection.findOneAndUpdate(
           { shop, collectionId: numericCollectionId },
           { 
-            $set: { 'seoStatus.aiEnhanced': true },
+            ...updateData,
             $setOnInsert: { 
               shop, 
               collectionId: numericCollectionId,
@@ -1147,6 +1180,9 @@ Guidelines:
         
         if (result) {
           console.log(`[AI-ENHANCE] ✅ Marked collection ${numericCollectionId} as AI-enhanced in MongoDB`);
+          if (currentCollection) {
+            console.log(`[AI-ENHANCE] ✅ Updated lastShopifyUpdate to prevent false webhook changes`);
+          }
         }
       } catch (e) {
         console.error('[AI-ENHANCE] Failed to mark collection as AI-enhanced:', e);
