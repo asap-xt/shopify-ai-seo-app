@@ -1991,15 +1991,18 @@ export default function Settings() {
                   <li><strong>Generate & Copy:</strong> Click the button above to see your custom robots.txt code, then copy it</li>
                   <li><strong>Open Theme Editor:</strong> Go to <strong>Online Store → Themes</strong> in Shopify admin</li>
                   <li><strong>Edit Code:</strong> Click <strong>Actions → Edit code</strong> on your active theme</li>
-                  <li><strong>Create New File:</strong> In the left sidebar, click <strong>Add a new file</strong> (top right corner of the file browser)</li>
-                  <li><strong>Enter File Path:</strong> In the file name field, type exactly: <code>templates/robots.txt.liquid</code></li>
-                  <li><strong>Create File:</strong> Click <strong>Create file</strong> or press Enter</li>
-                  <li><strong>Paste Content:</strong> Delete any existing content in the new file and paste your copied robots.txt code</li>
+                  <li><strong>Check Existing File:</strong> In the file browser, look for <code>templates/robots.txt.liquid</code></li>
+                  <li><strong>If File Exists:</strong> Click on it to edit. <strong>Add</strong> the copied code to the end of the existing content (don't replace it)</li>
+                  <li><strong>If File Doesn't Exist:</strong> Click <strong>Add a new file</strong>, type <code>templates/robots.txt.liquid</code>, and paste the copied code</li>
                   <li><strong>Save:</strong> Click the green <strong>Save</strong> button (top right)</li>
                 </ol>
                 
+                <Banner status="warning">
+                  <p><strong>⚠️ Important:</strong> If you already have a <code>robots.txt.liquid</code> file with custom rules, <strong>add</strong> our code to the end instead of replacing it. This ensures both your existing rules and AI bot access work correctly.</p>
+                </Banner>
+                
                 <Banner tone="info">
-                  <p><strong>💡 Tip:</strong> If the file <code>robots.txt.liquid</code> already exists in the <code>templates</code> folder, simply click on it to edit it instead of creating a new one.</p>
+                  <p><strong>💡 Note:</strong> Our generated robots.txt does NOT block standard search engines (Google, Bing, etc.). It only configures access for AI bots. The default Shopify robots.txt rules will still apply for standard crawlers.</p>
                 </Banner>
               </BlockStack>
               
@@ -2053,8 +2056,8 @@ export default function Settings() {
                     <li>Go to <strong>Online Store → Themes</strong></li>
                     <li>Click <strong>Actions → Edit code</strong> on your active theme</li>
                     <li>In the file browser, look for <strong>templates/robots.txt.liquid</strong></li>
-                    <li>If it doesn't exist, click <strong>Add a new file</strong> and type: <code>templates/robots.txt.liquid</code></li>
-                    <li>Replace the content with what you copied</li>
+                    <li><strong>If file exists:</strong> Add the copied code to the end (don't replace existing content)</li>
+                    <li><strong>If file doesn't exist:</strong> Click <strong>Add a new file</strong>, type <code>templates/robots.txt.liquid</code>, and paste the code</li>
                     <li>Click <strong>Save</strong></li>
                   </ol>
                 </Banner>
