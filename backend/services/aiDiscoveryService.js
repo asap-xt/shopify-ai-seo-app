@@ -69,9 +69,8 @@ class AIDiscoveryService {
   async getSettings(shop, session) {
     try {
       // Check cache first
-      const cacheKey = `settings:${shop}`;
-      if (this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey);
+      if (this.cache.has(shop)) {
+        const cached = this.cache.get(shop);
         if (cached) {
           return cached;
         }
@@ -192,8 +191,8 @@ class AIDiscoveryService {
         settings.advancedSchemaEnabled = false;
       }
       
-      // Cache settings (cacheKey already defined at the beginning of function)
-      this.cache.set(cacheKey, settings, 300000); // Cache за 5 минути
+      // Cache settings
+      this.cache.set(shop, settings, 300000); // Cache за 5 минути
       return settings;
       
     } catch (error) {
@@ -271,8 +270,7 @@ class AIDiscoveryService {
       }
 
       // Invalidate cache
-      const cacheKey = `settings:${shop}`;
-      this.cache.delete(cacheKey);
+      this.cache.delete(shop);
 
       return { success: true };
     } catch (error) {
