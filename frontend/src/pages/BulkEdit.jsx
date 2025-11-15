@@ -137,30 +137,51 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
+  const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
+  // NOTE: This should only be used as fallback - GraphQL query is primary source
   useEffect(() => {
     // Only update if globalPlan has valid data (not empty strings)
     if (!globalPlan || typeof globalPlan !== 'object') {
       return;
     }
     
-    if (globalPlan.planKey && globalPlan.planKey !== '') {
-      setCurrentPlan(globalPlan.planKey);
-      
-      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-      const newLimit = globalPlan.language_limit || 1;
-      setLanguageLimit(newLimit);
-    } else if (globalPlan.plan && globalPlan.plan !== '') {
-      // Fallback: if planKey is missing, try to derive it from plan name
-      const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
-      setCurrentPlan(planKey);
-      
-      // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-      const newLimit = globalPlan.language_limit || 1;
-      setLanguageLimit(newLimit);
+    // CRITICAL: Only use globalPlan if GraphQL hasn't loaded yet
+    // This prevents overwriting correct data from GraphQL with stale cache
+    if (!graphqlDataLoaded && currentPlan === 'starter') {
+      if (globalPlan.planKey && globalPlan.planKey !== '') {
+        console.log('[BULK-EDIT] Using globalPlan as fallback (GraphQL not loaded yet):', {
+          planKey: globalPlan.planKey,
+          language_limit: globalPlan.language_limit
+        });
+        setCurrentPlan(globalPlan.planKey);
+        
+        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+        const newLimit = globalPlan.language_limit || 1;
+        setLanguageLimit(newLimit);
+      } else if (globalPlan.plan && globalPlan.plan !== '') {
+        // Fallback: if planKey is missing, try to derive it from plan name
+        const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
+        console.log('[BULK-EDIT] Using globalPlan.plan as fallback (GraphQL not loaded yet):', {
+          plan,
+          derivedPlanKey: planKey,
+          language_limit: globalPlan.language_limit
+        });
+        setCurrentPlan(planKey);
+        
+        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
+        const newLimit = globalPlan.language_limit || 1;
+        setLanguageLimit(newLimit);
+      }
+    } else if (graphqlDataLoaded) {
+      console.log('[BULK-EDIT] Skipping globalPlan update - GraphQL data already loaded:', {
+        currentPlan,
+        globalPlanPlanKey: globalPlan.planKey,
+        globalPlanLanguageLimit: globalPlan.language_limit
+      });
     }
-  }, [globalPlan]);
+  }, [globalPlan, currentPlan, graphqlDataLoaded]);
   
   // Auto-close upgrade modal if selection is now within limit
   useEffect(() => {
@@ -196,6 +217,17 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       .then((res) => {
         if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
         const data = res?.data?.plansMe;
+        
+        // DEBUG: Log GraphQL response for growth plus plans
+        if (data?.planKey?.includes('growth') || data?.plan?.toLowerCase().includes('growth')) {
+          console.log('[BULK-EDIT] GraphQL plansMe response:', {
+            plan: data?.plan,
+            planKey: data?.planKey,
+            language_limit: data?.language_limit,
+            product_limit: data?.product_limit
+          });
+        }
+        
         const models = data?.modelsSuggested || ['anthropic/claude-3.5-sonnet'];
         setModelOptions(models.map((m) => ({ label: m, value: m })));
         setModel(models[0]);
@@ -203,10 +235,27 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setCurrentPlan(data?.planKey || 'starter');
         
         // Set limits from API response (dynamic from backend/plans.js)
-        setProductLimit(data?.product_limit || 70);
-        setLanguageLimit(data?.language_limit || 1);
+        // CRITICAL: Always use GraphQL response as source of truth
+        const newProductLimit = data?.product_limit || 70;
+        const newLanguageLimit = data?.language_limit || 1;
+        
+        console.log('[BULK-EDIT] Setting limits from GraphQL:', {
+          productLimit: newProductLimit,
+          languageLimit: newLanguageLimit,
+          planKey: data?.planKey
+        });
+        
+        setProductLimit(newProductLimit);
+        setLanguageLimit(newLanguageLimit);
+        
+        // Mark GraphQL data as loaded to prevent globalPlan from overwriting
+        setGraphqlDataLoaded(true);
       })
-      .catch((e) => console.error('[BULK-EDIT] GraphQL plansMe failed:', e));
+      .catch((e) => {
+        console.error('[BULK-EDIT] GraphQL plansMe failed:', e);
+        // Even on error, mark as loaded to prevent infinite fallback attempts
+        setGraphqlDataLoaded(true);
+      });
   }, [shop, api]);
   
   // Load shop languages
