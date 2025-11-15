@@ -163,6 +163,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           plan
           planKey
           modelsSuggested
+          language_limit
+          product_limit
         }
       }
     `;

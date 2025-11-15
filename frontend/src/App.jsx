@@ -761,6 +761,8 @@ export default function App() {
               planKey
               priceUsd
               product_limit
+              language_limit
+              collection_limit
               providersAllowed
               modelsSuggested
               subscriptionStatus
@@ -798,10 +800,25 @@ export default function App() {
         const plansData = await plansResponse.json();
         const pm = plansData?.data?.plansMe;
         if (pm) {
+          // DEBUG: Log plan data for growth plus plans
+          if (pm?.planKey?.includes('growth') || pm?.plan?.toLowerCase().includes('growth')) {
+            console.log('[APP] GraphQL plansMe response:', {
+              plan: pm?.plan,
+              planKey: pm?.planKey,
+              language_limit: pm?.language_limit,
+              product_limit: pm?.product_limit
+            });
+          }
+          
           setPlan(pm);
           // Persist plan in sessionStorage to survive React remounts
           try {
             sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
+            console.log('[APP] Plan saved to sessionStorage:', {
+              shop,
+              planKey: pm?.planKey,
+              language_limit: pm?.language_limit
+            });
           } catch (e) {
             console.error('[APP] Failed to cache plan:', e);
           }
