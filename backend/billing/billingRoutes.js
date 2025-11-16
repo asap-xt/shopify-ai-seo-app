@@ -462,15 +462,13 @@ router.get('/callback', async (req, res) => {
     }
     
     // CRITICAL FIX: Activate pending plan (if user approved subscription)
-    // Get current subscription to check for pendingPlan
+    // Get current subscription to check for pendingPlan and pendingActivation
     const currentSub = await Subscription.findOne({ shop });
     
     const updateData = {
       shop,
       status: 'active',
       pendingActivation: false
-      // NOTE: activatedAt is NOT set here - only set when user clicks "Activate Plan" button
-      // This allows trial restrictions to work correctly for Growth Extra/Enterprise plans
     };
     
     const now = new Date();
@@ -485,21 +483,26 @@ router.get('/callback', async (req, res) => {
         updateData.trialEndsAt = currentSub.trialEndsAt; // Keep existing trial end
       }
     } else if (plan && PLANS[plan]) {
-      // Check if this is an ACTIVATION (user clicked "Activate Plan")
-      const isActivation = currentSub?.activatedAt && !currentSub?.pendingPlan;
+      // Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
+      const isPendingActivation = currentSub?.pendingActivation && !currentSub?.activatedAt;
       
-      if (isActivation) {
-        // This is an ACTIVATION callback - user already activated plan in /activate
-        // DON'T overwrite activatedAt or add trial!
+      if (isPendingActivation) {
+        // CRITICAL: This is an ACTIVATION callback - user approved the charge!
+        // NOW we can set activatedAt (user confirmed in Shopify)
+        updateData.activatedAt = new Date();
+        updateData.plan = plan;
+        updateData.trialEndsAt = null; // Trial ended when user clicked "Activate Plan"
         
+      } else if (currentSub?.activatedAt) {
+        // Already activated - preserve existing activation data
         // Only update plan if it changed
         if (currentSub.plan !== plan) {
           updateData.plan = plan;
         }
         
-        // PRESERVE activatedAt and trialEndsAt (already null from /activate)
+        // PRESERVE activatedAt and trialEndsAt
         updateData.activatedAt = currentSub.activatedAt;
-        updateData.trialEndsAt = currentSub.trialEndsAt; // Should be null
+        updateData.trialEndsAt = currentSub.trialEndsAt;
         
       } else {
         // First subscription: Create subscription NOW (after approval)
@@ -521,8 +524,8 @@ router.get('/callback', async (req, res) => {
     // Invalidate cache after subscription change (PHASE 3: Caching)
     await cacheService.invalidateShop(shop);
     
-    // If plan was activated (pendingPlan → plan OR activation callback), set included tokens
-    if ((currentSub?.pendingPlan || currentSub?.activatedAt) && subscription.plan) {
+    // If plan was activated (pendingPlan → plan OR pendingActivation → activatedAt), set included tokens
+    if ((currentSub?.pendingPlan || currentSub?.pendingActivation || subscription.activatedAt) && subscription.plan) {
       const included = getIncludedTokens(subscription.plan);
       
       if (included.tokens > 0) {
@@ -821,20 +824,20 @@ router.post('/activate', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
     
-    // FIX: If user has activatedAt but subscription wasn't approved in Shopify,
-    // clear activatedAt to allow new activation
+    // FIX: If user has pendingActivation or activatedAt but subscription wasn't approved in Shopify,
+    // clear them to allow new activation
     // This check happens BEFORE creating new subscription, so it validates the OLD subscription ID
-    if (subscription.activatedAt && endTrial) {
-      const activatedSubscriptionId = subscription.shopifySubscriptionId;
+    if ((subscription.pendingActivation || subscription.activatedAt) && endTrial) {
+      const pendingSubscriptionId = subscription.shopifySubscriptionId;
       
       // If no shopifySubscriptionId, definitely not approved
-      if (!activatedSubscriptionId) {
+      if (!pendingSubscriptionId) {
         await Subscription.updateOne(
           { shop },
-          { $unset: { activatedAt: '', trialEndsAt: '' } }
+          { $unset: { activatedAt: '', pendingActivation: '', trialEndsAt: '' } }
         );
         
-        // Reload subscription without activatedAt
+        // Reload subscription without activation flags
         const updatedSub = await Subscription.findOne({ shop });
         if (updatedSub) {
           Object.assign(subscription, updatedSub.toObject());
@@ -849,27 +852,27 @@ router.post('/activate', verifyRequest, async (req, res) => {
           const { getSubscriptionById } = await import('./shopifyBilling.js');
           const shopifySub = await getSubscriptionById(
             shop, 
-            activatedSubscriptionId, 
+            pendingSubscriptionId, 
             shopDoc.accessToken
           );
           
           // Subscription exists if found (even if PENDING - waiting for approval)
-          // Only clear activatedAt if subscription doesn't exist at all (CANCELLED or never created)
+          // Only clear activation flags if subscription doesn't exist at all (CANCELLED or never created)
           const subscriptionExists = !!shopifySub;
           
-          // If subscription exists but is CANCELLED, clear activatedAt
+          // If subscription exists but is CANCELLED, clear activation flags
           const isCancelled = shopifySub?.status === 'CANCELLED';
           
           const isApproved = subscriptionExists && !isCancelled;
           
           if (!isApproved) {
-            // Activated plan wasn't approved - clear activatedAt to allow new activation
+            // Activation wasn't approved (user clicked back) - clear activation flags to allow new activation
             await Subscription.updateOne(
               { shop },
-              { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
+              { $unset: { activatedAt: '', pendingActivation: '', trialEndsAt: '', shopifySubscriptionId: '' } }
             );
             
-            // Reload subscription without activatedAt
+            // Reload subscription without activation flags
             const updatedSub = await Subscription.findOne({ shop });
             if (updatedSub) {
               Object.assign(subscription, updatedSub.toObject());
@@ -880,9 +883,11 @@ router.post('/activate', verifyRequest, async (req, res) => {
     }
     
     // Update subscription
+    // CRITICAL FIX: DO NOT set activatedAt here - only set it in callback AFTER user approves!
+    // This prevents plan from being activated if user clicks "back" without approving
     const updateData = {
-      activatedAt: new Date(),
-      pendingActivation: false
+      pendingActivation: true // Mark as pending - will be activated in callback after approval
+      // NOTE: activatedAt is NOT set here - only set in callback after Shopify approval
     };
     
     // If ending trial, clear trialEndsAt AND end trial in Shopify
@@ -936,11 +941,11 @@ router.post('/activate', verifyRequest, async (req, res) => {
           }
         );
         
-        // Update shopifySubscriptionId with new subscription
+        // CRITICAL: Store shopifySubscriptionId but DO NOT set activatedAt yet!
+        // activatedAt will be set in callback ONLY after user approves
         updateData.shopifySubscriptionId = newShopifySubscription.id;
         
-        // CRITICAL: Update MongoDB FIRST before returning confirmationUrl!
-        // Otherwise callback will read old data (activatedAt: undefined)
+        // Update MongoDB with pending activation (NO activatedAt yet!)
         await Subscription.updateOne({ shop }, { $set: updateData });
         
         // If confirmationUrl exists, merchant needs to approve the charge
@@ -949,10 +954,9 @@ router.post('/activate', verifyRequest, async (req, res) => {
           await cacheService.invalidateShop(shop);
           
           // Return confirmation URL so frontend can redirect
-          // NOTE: activatedAt and new shopifySubscriptionId are set in MongoDB
-          // If user clicks Back without approving, on next /activate call,
-          // the check at the beginning of this function will validate the NEW subscription ID
-          // and clear activatedAt if it doesn't exist in Shopify
+          // NOTE: activatedAt is NOT set yet - only set in callback after approval
+          // If user clicks Back without approving, pendingActivation stays true
+          // and activatedAt remains undefined, so plan is NOT activated
           return res.json({
             success: true,
             requiresApproval: true,
@@ -969,25 +973,23 @@ router.post('/activate', verifyRequest, async (req, res) => {
       }
     }
     
+    // If no confirmationUrl needed (shouldn't happen for endTrial, but handle anyway)
     await Subscription.updateOne({ shop }, { $set: updateData });
     
-    // Add included tokens for plans with them (Growth Extra/Enterprise)
-    const includedTokenInfo = getIncludedTokens(subscription.plan);
-    if (includedTokenInfo.tokens > 0) {
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
-      await tokenBalance.addIncludedTokens(includedTokenInfo.tokens, subscription.plan);
-    }
+    // CRITICAL: DO NOT add tokens here - plan is NOT activated yet!
+    // Tokens will be added in callback AFTER user approves the charge
+    // Only add tokens if activatedAt is set (which it's not - only set in callback)
     
     // Invalidate cache
     await cacheService.invalidateShop(shop);
     
-    // Return success
+    // Return success (but plan is NOT activated yet - pending approval)
     res.json({
       success: true,
       plan: subscription.plan,
-      activatedAt: updateData.activatedAt,
+      pendingActivation: true, // Plan is pending - not activated yet
       trialEnded: endTrial,
-      tokensAdded: includedTokenInfo.tokens
+      message: 'Plan activation pending approval'
     });
     
   } catch (error) {
