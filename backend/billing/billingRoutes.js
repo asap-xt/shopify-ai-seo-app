@@ -414,12 +414,23 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     
     if (existingSub) {
       // Plan change: Set new plan as pending (will be activated in callback)
+      // CRITICAL: Preserve trial end date if trial is still active
+      // This ensures that when switching plans during trial, remaining days are preserved
+      let preservedTrialEndsAt = null;
+      if (existingSub.trialEndsAt) {
+        const trialEnd = new Date(existingSub.trialEndsAt);
+        if (now < trialEnd) {
+          // Trial is still active - preserve the original trial end date
+          preservedTrialEndsAt = existingSub.trialEndsAt;
+        }
+      }
+      
       const planChangeData = {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
         pendingActivation: true,
-        // PRESERVE trial from existing subscription
-        trialEndsAt: existingSub.trialEndsAt,
+        // PRESERVE trial from existing subscription if still active
+        trialEndsAt: preservedTrialEndsAt,
         updatedAt: now
         // NOTE: activatedAt is NOT modified - preserves trial restriction
       };
@@ -480,8 +491,17 @@ router.get('/callback', async (req, res) => {
       updateData.pendingPlan = null; // Clear pending
       
       // PRESERVE TRIAL if still active!
-      if (currentSub.trialEndsAt && now < new Date(currentSub.trialEndsAt)) {
-        updateData.trialEndsAt = currentSub.trialEndsAt; // Keep existing trial end
+      // CRITICAL: When switching plans during trial, preserve the original trial end date
+      // This ensures remaining trial days are preserved, not reset to new trial period
+      if (currentSub.trialEndsAt) {
+        const trialEnd = new Date(currentSub.trialEndsAt);
+        if (now < trialEnd) {
+          // Trial is still active - preserve the original trial end date
+          updateData.trialEndsAt = currentSub.trialEndsAt;
+        } else {
+          // Trial already ended - clear it
+          updateData.trialEndsAt = null;
+        }
       }
     } else if (plan && PLANS[plan]) {
       // Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
