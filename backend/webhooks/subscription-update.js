@@ -45,22 +45,33 @@ export default async function handleSubscriptionUpdate(req, res) {
       shopifySubscriptionId: admin_graphql_api_id 
     });
     
-    // If not found, try to find by shop + pendingActivation
+    // If not found, try to find by shop + pendingActivation or pendingPlan
     // This handles cases where:
     // 1. Webhook arrives before shopifySubscriptionId is saved (race condition)
     // 2. User clicked "back" and subscription was cancelled/declined
     // 3. shopifySubscriptionId doesn't match (shouldn't happen, but safety net)
     if (!subscription) {
-      console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation');
+      console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation or pendingPlan');
+      
+      // Try pendingActivation first (for /activate endpoint)
       subscription = await Subscription.findOne({ 
         shop, 
         pendingActivation: true 
       });
       
+      // If not found, try pendingPlan (for /subscribe endpoint)
+      if (!subscription) {
+        subscription = await Subscription.findOne({ 
+          shop, 
+          pendingPlan: { $exists: true, $ne: null }
+        });
+      }
+      
       if (subscription) {
-        console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation:', {
+        console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation/pendingPlan:', {
           shop,
           plan: subscription.plan,
+          pendingPlan: subscription.pendingPlan,
           shopifySubscriptionId: subscription.shopifySubscriptionId,
           webhookSubscriptionId: admin_graphql_api_id,
           status
