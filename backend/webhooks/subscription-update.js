@@ -111,9 +111,10 @@ export default async function handleSubscriptionUpdate(req, res) {
       // 🎉 SUBSCRIPTION ACTIVATED - Shopify confirmed payment!
       // CRITICAL: Activate if:
       // 1. pendingActivation is true (user approved via /activate endpoint)
-      // 2. OR activatedAt is not set yet (callback might not have run yet, but webhook confirms activation)
+      // 2. OR pendingPlan exists (user approved via /subscribe endpoint)
+      // 3. OR activatedAt is not set yet (callback might not have run yet, but webhook confirms activation)
       // This handles race conditions where webhook arrives before or after callback
-      const shouldActivate = subscription.pendingActivation || !subscription.activatedAt;
+      const shouldActivate = subscription.pendingActivation || subscription.pendingPlan || !subscription.activatedAt;
       
       if (!shouldActivate) {
         console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but subscription already activated - just updating status:', {
@@ -134,6 +135,14 @@ export default async function handleSubscriptionUpdate(req, res) {
       subscription.status = 'active';
       subscription.pendingActivation = false;
       subscription.activatedAt = new Date();
+      
+      // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
+      if (subscription.pendingPlan) {
+        subscription.plan = subscription.pendingPlan;
+        subscription.pendingPlan = null; // Clear pending
+        console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
+      }
+      
       await subscription.save();
       
       // Set included tokens for the plan (replaces old, keeps purchased)
