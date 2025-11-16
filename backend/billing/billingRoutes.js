@@ -1004,10 +1004,24 @@ router.post('/activate', verifyRequest, async (req, res) => {
         
         // CRITICAL: Store shopifySubscriptionId but DO NOT set activatedAt yet!
         // activatedAt will be set in callback ONLY after user approves
+        // CRITICAL: Ensure pendingActivation is true so webhook can find subscription
         updateData.shopifySubscriptionId = newShopifySubscription.id;
+        updateData.pendingActivation = true; // CRITICAL: Set explicitly to handle race conditions
         
         // Update MongoDB with pending activation (NO activatedAt yet!)
-        await Subscription.updateOne({ shop }, { $set: updateData });
+        // Use findOneAndUpdate to ensure atomic update and return updated document
+        const updatedSubscription = await Subscription.findOneAndUpdate(
+          { shop },
+          { $set: updateData },
+          { new: true } // Return updated document
+        );
+        
+        console.log('[BILLING-ACTIVATE] Updated subscription for activation:', {
+          shop,
+          shopifySubscriptionId: newShopifySubscription.id,
+          pendingActivation: updatedSubscription?.pendingActivation,
+          plan: updatedSubscription?.plan
+        });
         
         // If confirmationUrl exists, merchant needs to approve the charge
         if (confirmationUrl) {
