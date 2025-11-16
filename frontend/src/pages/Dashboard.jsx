@@ -19,6 +19,7 @@ import {
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
+import { devLog } from '../utils/devLog.js';
 
 // Query string helper
 const qs = (k, d = '') => {
@@ -132,7 +133,7 @@ export default function Dashboard({ shop: shopProp }) {
   // Auto-sync on load if enabled (only once per page load)
   useEffect(() => {
     if (syncStatus && syncStatus.autoSyncEnabled && !syncing && !autoSyncTriggered.current) {
-      console.log('[Dashboard] Auto-sync is enabled, triggering sync...');
+      devLog('[Dashboard] Auto-sync is enabled, triggering sync...');
       autoSyncTriggered.current = true;
       handleSync();
     }
@@ -191,7 +192,7 @@ export default function Dashboard({ shop: shopProp }) {
     try {
       setSyncing(true);
       const res = await api(`/api/dashboard/sync?shop=${shop}`, { method: 'POST' });
-      console.log('[Dashboard] Sync start response:', res);
+      devLog('[Dashboard] Sync start response:', res);
       
       if (res?.success || res?.inProgress) {
         // Clear any existing poller
@@ -227,7 +228,7 @@ export default function Dashboard({ shop: shopProp }) {
   
   const handleAutoSyncToggle = async (newValue) => {
     try {
-      console.log('[Dashboard] Toggling auto-sync to:', newValue);
+      devLog('[Dashboard] Toggling auto-sync to:', newValue);
       
       // Optimistic UI update
       setAutoSync(newValue);
@@ -237,7 +238,7 @@ export default function Dashboard({ shop: shopProp }) {
         body: { enabled: newValue } 
       });
       
-      console.log('[Dashboard] Auto-sync toggle response:', res);
+      devLog('[Dashboard] Auto-sync toggle response:', res);
       
       if (res?.success) {
         setAutoSync(!!res.autoSyncEnabled);

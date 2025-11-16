@@ -4,15 +4,16 @@
 // - Falls back gracefully for non-embedded scenarios.
 
 import { getSessionToken } from '@shopify/app-bridge-utils';
+import { devLog } from '../utils/devLog.js';
 
 // Simplified for App Bridge v4 - no session token management needed
 async function getAppBridge(debug = false) {
-  if (debug) console.log('[SFETCH] App Bridge v4 - no session token management needed');
+  if (debug) devLog('[SFETCH] App Bridge v4 - no session token management needed');
   return null; // App Bridge v4 doesn't need session token management
 }
 
 async function getTokenFromAppBridge(app, debug = false) {
-  if (debug) console.log('[SFETCH] App Bridge v4 - no session token needed');
+  if (debug) devLog('[SFETCH] App Bridge v4 - no session token needed');
   return null; // App Bridge v4 doesn't use session tokens
 }
 
@@ -33,10 +34,10 @@ export function sessionFetch(shop) {
 
 // Legacy compatibility - синхронна фабрика
 export function makeSessionFetch(debug = true) {
-  if (debug) console.log('[SFETCH] Creating session fetch for App Bridge v4');
+  if (debug) devLog('[SFETCH] Creating session fetch for App Bridge v4');
   
   return async (url, options = {}) => {
-    console.log('[SFETCH] Fetching:', url, options);
+    devLog('[SFETCH] Fetching:', url, options);
     
     const { method = 'GET', headers = {}, body, responseType, ...otherOptions } = options;
     
@@ -50,7 +51,7 @@ export function makeSessionFetch(debug = true) {
     };
 
     const response = await fetch(url, baseInit);
-    console.log('[SFETCH] Response:', response.status, response.statusText);
+    devLog('[SFETCH] Response:', response.status, response.statusText);
     
     // ===== КЛЮЧОВАТА ПРОМЯНА - ПАРСИРАЙ JSON! =====
     let data;

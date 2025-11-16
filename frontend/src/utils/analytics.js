@@ -9,36 +9,38 @@
  * trackFBEvent('Subscribe', { value: 19.99, currency: 'USD' });
  */
 
+import { devLog, devWarn } from './devLog.js';
+
 // Initialize GA4
 export const initGA4 = () => {
   if (typeof window === 'undefined' || !window.gtag) {
-    console.warn('[ANALYTICS] GA4 not loaded');
+    devWarn('[ANALYTICS] GA4 not loaded');
     return;
   }
 
-  console.log('[ANALYTICS] GA4 initialized');
+  devLog('[ANALYTICS] GA4 initialized');
 };
 
 // Initialize Meta Pixel
 export const initFBPixel = () => {
   if (typeof window === 'undefined' || !window.fbq) {
-    console.warn('[ANALYTICS] Meta Pixel not loaded');
+    devWarn('[ANALYTICS] Meta Pixel not loaded');
     return;
   }
 
-  console.log('[ANALYTICS] Meta Pixel initialized');
+  devLog('[ANALYTICS] Meta Pixel initialized');
 };
 
 // Track Facebook Pixel events
 export const trackFBEvent = (eventName, params = {}) => {
   if (typeof window === 'undefined' || !window.fbq) {
-    console.warn('[ANALYTICS] Meta Pixel not available, skipping event:', eventName);
+    devWarn('[ANALYTICS] Meta Pixel not available, skipping event:', eventName);
     return;
   }
 
   try {
     window.fbq('track', eventName, params);
-    console.log('[ANALYTICS] FB Event tracked:', eventName, params);
+    devLog('[ANALYTICS] FB Event tracked:', eventName, params);
   } catch (error) {
     console.error('[ANALYTICS] Error tracking FB event:', error);
   }
@@ -47,7 +49,7 @@ export const trackFBEvent = (eventName, params = {}) => {
 // Track custom events
 export const trackEvent = (eventName, params = {}) => {
   if (typeof window === 'undefined' || !window.gtag) {
-    console.warn('[ANALYTICS] GA4 not available, skipping event:', eventName);
+    devWarn('[ANALYTICS] GA4 not available, skipping event:', eventName);
     return;
   }
 
@@ -57,7 +59,7 @@ export const trackEvent = (eventName, params = {}) => {
       timestamp: new Date().toISOString(),
       app_version: '1.0.0'
     });
-    console.log('[ANALYTICS] Event tracked:', eventName, params);
+    devLog('[ANALYTICS] Event tracked:', eventName, params);
   } catch (error) {
     console.error('[ANALYTICS] Error tracking event:', error);
   }
@@ -66,7 +68,7 @@ export const trackEvent = (eventName, params = {}) => {
 // Track page views (for SPA navigation)
 export const trackPageView = (pagePath, pageTitle = '') => {
   if (typeof window === 'undefined' || !window.gtag) {
-    console.warn('[ANALYTICS] GA4 not available, skipping page view:', pagePath);
+    devWarn('[ANALYTICS] GA4 not available, skipping page view:', pagePath);
     return;
   }
 
@@ -76,7 +78,7 @@ export const trackPageView = (pagePath, pageTitle = '') => {
       page_title: pageTitle || document.title,
       page_location: window.location.href
     });
-    console.log('[ANALYTICS] Page view tracked:', pagePath);
+    devLog('[ANALYTICS] Page view tracked:', pagePath);
   } catch (error) {
     console.error('[ANALYTICS] Error tracking page view:', error);
   }

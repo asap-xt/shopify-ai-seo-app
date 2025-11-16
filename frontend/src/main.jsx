@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { devLog, devError } from './utils/devLog.js';
 
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
@@ -10,41 +11,41 @@ const shop = params.get('shop');
 // Check if we're embedded in Shopify Admin
 const embedded = params.get('embedded') === '1';
 
-console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
-console.log('[MAIN] Full URL:', window.location.href);
+devLog('[MAIN] Public App - Host:', host, 'Shop:', shop);
+devLog('[MAIN] Full URL:', window.location.href);
 
 function ShopifyAppBridgeWrapper() {
   const [isReady, setIsReady] = useState(false);
   
       // Get API key from various sources
       const apiKey = useMemo(() => {
-        console.log('[MAIN] Checking for API key...');
-        console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
-        console.log('[MAIN] import.meta.env.VITE_SHOPIFY_API_KEY:', import.meta.env.VITE_SHOPIFY_API_KEY);
+        devLog('[MAIN] Checking for API key...');
+        devLog('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
+        devLog('[MAIN] import.meta.env.VITE_SHOPIFY_API_KEY:', import.meta.env.VITE_SHOPIFY_API_KEY);
         
         // First try window object (injected by server)
         if (window.__SHOPIFY_API_KEY) {
-          console.log('[MAIN] Using injected API key:', window.__SHOPIFY_API_KEY);
+          devLog('[MAIN] Using injected API key:', window.__SHOPIFY_API_KEY);
           return window.__SHOPIFY_API_KEY;
         }
         
         // Then try environment variable
         if (import.meta.env.VITE_SHOPIFY_API_KEY) {
-          console.log('[MAIN] Using env API key:', import.meta.env.VITE_SHOPIFY_API_KEY);
+          devLog('[MAIN] Using env API key:', import.meta.env.VITE_SHOPIFY_API_KEY);
           return import.meta.env.VITE_SHOPIFY_API_KEY;
         }
         
         // Try to get from meta tag
         const metaTag = document.querySelector('meta[name="shopify-api-key"]');
-        console.log('[MAIN] Meta tag found:', !!metaTag);
+        devLog('[MAIN] Meta tag found:', !!metaTag);
         if (metaTag) {
           const content = metaTag.getAttribute('content');
-          console.log('[MAIN] Using meta tag API key:', content);
+          devLog('[MAIN] Using meta tag API key:', content);
           return content;
         }
         
-        console.error('[MAIN] No API key found!');
-        console.error('[MAIN] Available window properties:', Object.keys(window).filter(k => k.includes('SHOPIFY')));
+        devError('[MAIN] No API key found!');
+        devError('[MAIN] Available window properties:', Object.keys(window).filter(k => k.includes('SHOPIFY')));
         return null;
       }, []);
   
@@ -55,7 +56,7 @@ function ShopifyAppBridgeWrapper() {
   
   // If not embedded or missing required params, show error
   if (!embedded || !host || !shop) {
-    console.log('[MAIN] Not embedded or missing params');
+    devLog('[MAIN] Not embedded or missing params');
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <h1>Error: App must be loaded from Shopify Admin</h1>
@@ -80,7 +81,7 @@ function ShopifyAppBridgeWrapper() {
     );
   }
   
-  console.log('[MAIN] App config:', { 
+  devLog('[MAIN] App config:', { 
     apiKey: apiKey ? 'SET' : 'MISSING', 
     host: host ? 'SET' : 'MISSING',
     shop: shop ? 'SET' : 'MISSING'

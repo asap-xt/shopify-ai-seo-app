@@ -11,6 +11,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useShopApi } from './hooks/useShopApi.js';
 import { makeSessionFetch } from './lib/sessionFetch.js';
 import { trackPageView, initGA4, initFBPixel } from './utils/analytics.js';
+import { devLog } from './utils/devLog.js';
 
 import AppHeader from './components/AppHeader.jsx';
 const Dashboard = React.lazy(() => import('./pages/Dashboard.jsx'));
@@ -20,7 +21,7 @@ const Sitemap = React.lazy(() => import('./pages/Sitemap.jsx'));
 const StoreMetadata = React.lazy(() => import('./pages/StoreMetadata.jsx'));
 const SchemaData = React.lazy(() => import('./pages/SchemaData.jsx'));
 const Settings = React.lazy(() => {
-  console.log('[APP] ===== LOADING SETTINGS COMPONENT =====');
+  devLog('[APP] ===== LOADING SETTINGS COMPONENT =====');
   return import('./pages/Settings.jsx');
 });
 const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
@@ -727,7 +728,7 @@ export default function App() {
       // Първо направи token exchange ако има id_token
       if (shop && idToken) {
         try {
-          console.log('[APP] Performing initial token exchange for shop:', shop);
+          devLog('[APP] Performing initial token exchange for shop:', shop);
           
           const response = await fetch('/token-exchange', {
             method: 'POST',
@@ -747,7 +748,7 @@ export default function App() {
           }
 
           const result = await response.json();
-          console.log('[APP] Token exchange successful:', result);
+          devLog('[APP] Token exchange successful:', result);
           
           // Премахни id_token от URL
           const newUrl = new URL(window.location);
@@ -800,7 +801,7 @@ export default function App() {
           // Трябва token exchange
           const errorData = await plansResponse.json();
           if (errorData.error === 'token_exchange_required') {
-            console.log('[APP] Token exchange required, but no id_token available');
+            devLog('[APP] Token exchange required, but no id_token available');
             // Пренасочи към OAuth flow
             window.location.href = `/auth?shop=${encodeURIComponent(shop)}`;
             return;
@@ -831,7 +832,7 @@ export default function App() {
           const isAlreadyOnBilling = currentPath.includes('/billing');
           
           if ((pm.subscriptionStatus === 'pending' || !pm.plan) && !isAlreadyOnBilling) {
-            console.log('[APP] No active subscription, redirecting to billing...');
+            devLog('[APP] No active subscription, redirecting to billing...');
             
             // Clear localStorage to reset Getting Started card state
             try {
@@ -886,19 +887,19 @@ export default function App() {
     } 
     // Settings
     else if (path === '/settings') {
-      console.log('[APP] ===== RENDERING SETTINGS PAGE =====');
+      devLog('[APP] ===== RENDERING SETTINGS PAGE =====');
       return <Settings shop={shop} />;
     }
     // Contact Support
     else if (path === '/contact-support') {
-      console.log('[APP] ===== RENDERING CONTACT SUPPORT PAGE =====');
+      devLog('[APP] ===== RENDERING CONTACT SUPPORT PAGE =====');
       return <ContactSupport shop={shop} />;
     }
     // AI Testing
     else if (path === '/ai-testing') {
-      console.log('[APP] ===== RENDERING AI TESTING PAGE =====');
-      console.log('[APP] Path:', path);
-      console.log('[APP] Shop:', shop);
+      devLog('[APP] ===== RENDERING AI TESTING PAGE =====');
+      devLog('[APP] Path:', path);
+      devLog('[APP] Shop:', shop);
       return <AiTesting shop={shop} />;
     }
     // Clean & Uninstall
