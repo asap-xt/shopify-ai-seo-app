@@ -428,6 +428,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       
       // CRITICAL: If user had pendingActivation for a different plan, clear it
       // This handles the case where user started activating one plan, clicked back, then chose a different plan
+      // Also clear old shopifySubscriptionId if it exists (from previous pending activation)
       const planChangeData = {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
@@ -437,6 +438,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         updatedAt: now
         // NOTE: activatedAt is NOT modified - preserves trial restriction
         // NOTE: We explicitly set pendingActivation: true to replace any old pendingActivation
+        // NOTE: shopifySubscriptionId is updated to the new subscription ID
       };
       
       subscription = await Subscription.findOneAndUpdate(
@@ -459,13 +461,15 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // First install: Create subscription with pendingPlan so webhook can find it
       // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
       // This allows webhook to find and activate it even if it arrives before callback
+      // CRITICAL: DO NOT set trialEndsAt here - only set it after user approves!
+      // If user clicks "back", subscription should not have trialEndsAt set
       const firstInstallData = {
         shop,
         plan: plan, // Set current plan (will be updated if pendingPlan is different)
         pendingPlan: plan, // Mark plan as pending until approved
         shopifySubscriptionId: shopifySubscription.id,
         status: 'pending', // Will be activated by webhook or callback
-        trialEndsAt: trialEndsAt,
+        // NOTE: trialEndsAt is NOT set here - only set in callback/webhook after approval
         updatedAt: now
       };
       

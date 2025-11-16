@@ -50,6 +50,7 @@ export default async function handleSubscriptionUpdate(req, res) {
     // 1. Webhook arrives before shopifySubscriptionId is saved (race condition)
     // 2. User clicked "back" and subscription was cancelled/declined
     // 3. shopifySubscriptionId doesn't match (shouldn't happen, but safety net)
+    let foundByFallback = false;
     if (!subscription) {
       console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation or pendingPlan');
       
@@ -68,6 +69,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       if (subscription) {
+        foundByFallback = true; // Mark that subscription was found by fallback search
         console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation/pendingPlan:', {
           shop,
           plan: subscription.plan,
@@ -114,7 +116,9 @@ export default async function handleSubscriptionUpdate(req, res) {
     });
     
     // Handle status transitions
-    if (status === 'ACTIVE' && subscription.status !== 'active') {
+    // CRITICAL: Handle ACTIVE status even if subscription is already 'active'
+    // This is needed when subscription.status is 'active' but has pendingPlan or pendingActivation
+    if (status === 'ACTIVE') {
       // 🎉 SUBSCRIPTION ACTIVATED - Shopify confirmed payment!
       // CRITICAL: Activate if:
       // 1. pendingActivation is true (user approved via /activate endpoint)
@@ -123,7 +127,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       // This handles race conditions where webhook arrives before or after callback
       const shouldActivate = subscription.pendingActivation || subscription.pendingPlan || !subscription.activatedAt;
       
-      if (!shouldActivate) {
+      if (!shouldActivate && subscription.status === 'active') {
         console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but subscription already activated - just updating status:', {
           shop,
           plan: subscription.plan,
@@ -135,6 +139,8 @@ export default async function handleSubscriptionUpdate(req, res) {
         await subscription.save();
         return res.status(200).json({ success: true, skipped: 'already activated' });
       }
+      
+      // If subscription.status is not 'active' OR shouldActivate is true, proceed with activation
       
       console.log('[SUBSCRIPTION-UPDATE] 🎉 Activating subscription for:', shop);
       
@@ -148,6 +154,14 @@ export default async function handleSubscriptionUpdate(req, res) {
         subscription.plan = subscription.pendingPlan;
         subscription.pendingPlan = null; // Clear pending
         console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
+      }
+      
+      // CRITICAL: Set trialEndsAt only if not already set (first install after approval)
+      // If trialEndsAt is not set, this is a first install and user just approved - start trial now
+      if (!subscription.trialEndsAt) {
+        const { TRIAL_DAYS } = await import('../plans.js');
+        subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
       }
       
       await subscription.save();
@@ -197,18 +211,30 @@ export default async function handleSubscriptionUpdate(req, res) {
       // We should only clear pendingActivation if the cancelled subscription matches the current one
       const subscriptionIdMatches = subscription.shopifySubscriptionId === admin_graphql_api_id;
       
-      // CRITICAL: If pendingActivation is true AND subscriptionId matches, user clicked "back" without approving
-      // In this case, DON'T change status - just clear pendingActivation and activatedAt
+      // CRITICAL: If pendingActivation OR pendingPlan exists AND (subscriptionId matches OR found by fallback), user clicked "back" without approving
+      // In this case, DON'T change status - just clear pendingActivation, pendingPlan, and activatedAt
       // This keeps the previous plan (starter/trial) visible to the user
-      if (subscription.pendingActivation && subscriptionIdMatches) {
-        console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending activation but keeping previous plan status');
+      // NOTE: If found by fallback, this means the webhook is for this subscription (found by pendingPlan/pendingActivation)
+      const hasPendingState = subscription.pendingActivation || subscription.pendingPlan;
+      const shouldClearPending = subscriptionIdMatches || foundByFallback;
+      
+      if (hasPendingState && shouldClearPending) {
+        console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending state but keeping previous plan status');
         subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
         subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
         subscription.activatedAt = undefined; // CRITICAL: Clear activatedAt if it was set
+        // CRITICAL: If this is a first install (status is 'pending' and no activatedAt),
+        // clear trialEndsAt if it was set (user didn't approve, so trial shouldn't start)
+        // But if status is 'active' or 'cancelled', keep trialEndsAt (trial already started)
+        if (subscription.status === 'pending' && !subscription.activatedAt) {
+          // First install that wasn't approved - clear trialEndsAt if it was set
+          subscription.trialEndsAt = undefined;
+          console.log('[SUBSCRIPTION-UPDATE] Cleared trialEndsAt for unapproved first install');
+        }
         // DON'T change status - keep previous plan (starter/trial)
         await subscription.save();
-        console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending activation, kept previous plan:', subscription.plan, 'status:', subscription.status);
-      } else if (subscription.pendingActivation && !subscriptionIdMatches) {
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
+      } else if (hasPendingState && !subscriptionIdMatches) {
         // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
         // Don't clear pendingActivation - it's for a different subscription!
         console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
