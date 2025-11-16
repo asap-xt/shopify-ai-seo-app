@@ -910,10 +910,87 @@ router.post('/activate', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
     
+    // CRITICAL: If user has pendingPlan for a different plan, clear it before activating current plan
+    // This handles the case where user downgraded (chose different plan) but then tries to activate current plan
+    if (subscription.pendingPlan && subscription.pendingPlan !== subscription.plan) {
+      console.log('[BILLING-ACTIVATE] Clearing pendingPlan for different plan:', {
+        shop,
+        currentPlan: subscription.plan,
+        pendingPlan: subscription.pendingPlan
+      });
+      await Subscription.updateOne(
+        { shop },
+        { $unset: { pendingPlan: '', pendingActivation: '' } }
+      );
+      
+      // Reload subscription without pendingPlan
+      const updatedSub = await Subscription.findOne({ shop });
+      if (updatedSub) {
+        Object.assign(subscription, updatedSub.toObject());
+      }
+    }
+    
+    // CRITICAL: If user has pendingActivation but no pendingPlan (or pendingPlan matches current plan),
+    // and we're trying to activate the current plan, we need to check if the pendingActivation
+    // is for the current plan or for a different plan (from a previous activation attempt)
+    // If pendingActivation exists but pendingPlan is null or matches current plan, it's for current plan - OK
+    // If pendingActivation exists but pendingPlan is different, it's for different plan - clear it
+    if (subscription.pendingActivation && !subscription.pendingPlan && endTrial) {
+      // pendingActivation exists but no pendingPlan - this means it's from a previous activation attempt
+      // We need to check if the subscription in Shopify is still pending or was cancelled
+      // If it was cancelled, clear pendingActivation to allow new activation
+      const pendingSubscriptionId = subscription.shopifySubscriptionId;
+      
+      if (pendingSubscriptionId) {
+        const shopDoc = await Shop.findOne({ shop });
+        if (shopDoc?.accessToken) {
+          const { getSubscriptionById } = await import('./shopifyBilling.js');
+          const shopifySub = await getSubscriptionById(
+            shop, 
+            pendingSubscriptionId, 
+            shopDoc.accessToken
+          );
+          
+          // If subscription doesn't exist or is CANCELLED, clear pendingActivation
+          if (!shopifySub || shopifySub.status === 'CANCELLED') {
+            console.log('[BILLING-ACTIVATE] Clearing pendingActivation for cancelled/non-existent subscription:', {
+              shop,
+              pendingSubscriptionId,
+              shopifySubStatus: shopifySub?.status
+            });
+            await Subscription.updateOne(
+              { shop },
+              { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
+            );
+            
+            // Reload subscription without pendingActivation
+            const updatedSub = await Subscription.findOne({ shop });
+            if (updatedSub) {
+              Object.assign(subscription, updatedSub.toObject());
+            }
+          }
+        }
+      } else {
+        // No shopifySubscriptionId but pendingActivation exists - clear it
+        console.log('[BILLING-ACTIVATE] Clearing pendingActivation with no shopifySubscriptionId:', { shop });
+        await Subscription.updateOne(
+          { shop },
+          { $unset: { pendingActivation: '' } }
+        );
+        
+        // Reload subscription without pendingActivation
+        const updatedSub = await Subscription.findOne({ shop });
+        if (updatedSub) {
+          Object.assign(subscription, updatedSub.toObject());
+        }
+      }
+    }
+    
     // FIX: If user has pendingActivation or activatedAt but subscription wasn't approved in Shopify,
     // clear them to allow new activation
     // This check happens BEFORE creating new subscription, so it validates the OLD subscription ID
-    if ((subscription.pendingActivation || subscription.activatedAt) && endTrial) {
+    // NOTE: Only check if pendingActivation still exists (wasn't cleared by previous checks)
+    if ((subscription.pendingActivation || subscription.activatedAt) && endTrial && !subscription.pendingPlan) {
       const pendingSubscriptionId = subscription.shopifySubscriptionId;
       
       // If no shopifySubscriptionId, definitely not approved
