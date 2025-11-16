@@ -148,14 +148,28 @@ export default async function handleSubscriptionUpdate(req, res) {
       // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)
       console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled/declined for:', shop);
       
-      subscription.status = 'cancelled';
-      subscription.cancelledAt = new Date();
-      subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
-      subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
-      subscription.activatedAt = undefined; // CRITICAL: Clear activatedAt if it was set
-      await subscription.save();
-      
-      console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending activation for:', shop);
+      // CRITICAL: If pendingActivation is true, user clicked "back" without approving
+      // In this case, DON'T change status - just clear pendingActivation and activatedAt
+      // This keeps the previous plan (starter/trial) visible to the user
+      if (subscription.pendingActivation) {
+        console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending activation but keeping previous plan status');
+        subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
+        subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
+        subscription.activatedAt = undefined; // CRITICAL: Clear activatedAt if it was set
+        // DON'T change status - keep previous plan (starter/trial)
+        await subscription.save();
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending activation, kept previous plan:', subscription.plan, 'status:', subscription.status);
+      } else {
+        // Subscription was active and now cancelled by merchant
+        console.log('[SUBSCRIPTION-UPDATE] Active subscription cancelled by merchant');
+        subscription.status = 'cancelled';
+        subscription.cancelledAt = new Date();
+        subscription.pendingPlan = null;
+        subscription.pendingActivation = false;
+        subscription.activatedAt = undefined;
+        await subscription.save();
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Subscription cancelled');
+      }
       
     } else if (status === 'EXPIRED') {
       // ⏰ Subscription expired (payment failed)
