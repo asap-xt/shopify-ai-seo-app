@@ -442,9 +442,31 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       );
       
     } else {
-      // First install: DON'T create subscription yet!
-      // Just return confirmationUrl - subscription will be created by webhook
-      subscription = null;
+      // First install: Create subscription with pendingPlan so webhook can find it
+      // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
+      // This allows webhook to find and activate it even if it arrives before callback
+      const firstInstallData = {
+        shop,
+        plan: plan, // Set current plan (will be updated if pendingPlan is different)
+        pendingPlan: plan, // Mark plan as pending until approved
+        shopifySubscriptionId: shopifySubscription.id,
+        status: 'pending', // Will be activated by webhook or callback
+        trialEndsAt: trialEndsAt,
+        updatedAt: now
+      };
+      
+      subscription = await Subscription.findOneAndUpdate(
+        { shop },
+        firstInstallData,
+        { upsert: true, new: true }  // UPSERT allowed for first install
+      );
+      
+      console.log('[Billing] Created subscription for first install:', {
+        shop,
+        plan,
+        shopifySubscriptionId: shopifySubscription.id,
+        pendingPlan: subscription.pendingPlan
+      });
     }
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
