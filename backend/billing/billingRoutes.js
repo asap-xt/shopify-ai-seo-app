@@ -514,6 +514,15 @@ router.get('/callback', async (req, res) => {
         updateData.plan = plan;
         updateData.trialEndsAt = null; // Trial ended when user clicked "Activate Plan"
         
+        // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
+        // This ensures webhook can find the subscription even if it arrives before callback
+        if (charge_id) {
+          updateData.shopifySubscriptionId = charge_id;
+        } else if (currentSub?.shopifySubscriptionId) {
+          // If no charge_id but we have shopifySubscriptionId from /activate, preserve it
+          updateData.shopifySubscriptionId = currentSub.shopifySubscriptionId;
+        }
+        
       } else if (currentSub?.activatedAt) {
         // Already activated - preserve existing activation data
         // Only update plan if it changed

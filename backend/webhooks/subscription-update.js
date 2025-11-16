@@ -98,18 +98,23 @@ export default async function handleSubscriptionUpdate(req, res) {
     // Handle status transitions
     if (status === 'ACTIVE' && subscription.status !== 'active') {
       // 🎉 SUBSCRIPTION ACTIVATED - Shopify confirmed payment!
-      // CRITICAL: Only activate if pendingActivation is true (user approved the charge)
-      // This prevents activation if webhook arrives before user approval
-      if (!subscription.pendingActivation) {
-        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but pendingActivation is false - skipping activation:', {
+      // CRITICAL: Activate if:
+      // 1. pendingActivation is true (user approved via /activate endpoint)
+      // 2. OR activatedAt is not set yet (callback might not have run yet, but webhook confirms activation)
+      // This handles race conditions where webhook arrives before or after callback
+      const shouldActivate = subscription.pendingActivation || !subscription.activatedAt;
+      
+      if (!shouldActivate) {
+        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but subscription already activated - just updating status:', {
           shop,
           plan: subscription.plan,
-          shopifySubscriptionId: subscription.shopifySubscriptionId
+          shopifySubscriptionId: subscription.shopifySubscriptionId,
+          activatedAt: subscription.activatedAt
         });
-        // Just update status, but don't activate (no tokens, no activatedAt)
+        // Just update status, but don't activate (already activated)
         subscription.status = 'active';
         await subscription.save();
-        return res.status(200).json({ success: true, skipped: 'pendingActivation is false' });
+        return res.status(200).json({ success: true, skipped: 'already activated' });
       }
       
       console.log('[SUBSCRIPTION-UPDATE] 🎉 Activating subscription for:', shop);
