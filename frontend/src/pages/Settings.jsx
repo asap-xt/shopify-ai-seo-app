@@ -25,6 +25,15 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
+// Dev-only debug logger (hidden in production builds)
+const isDev = import.meta.env.DEV;
+const debugLog = (...args) => {
+  if (isDev) {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+};
+
 export default function Settings() {
   
   // ===== 1. ÐšÐžÐÐ¡Ð¢ÐÐÐ¢Ð˜ Ð˜ HELPERS (Ð‘Ð•Ð— HOOKS) =====
@@ -327,11 +336,11 @@ export default function Settings() {
 
   // --- GraphQL helper for this page (minimal, local) ---
   const runGQL = async (query, variables) => {
-    console.log(`[DEBUG] runGQL called with query:`, query);
-    console.log(`[DEBUG] runGQL variables:`, variables);
+    debugLog('[SETTINGS][DEBUG] runGQL called with query:', query);
+    debugLog('[SETTINGS][DEBUG] runGQL variables:', variables);
     
     const body = JSON.stringify({ query, variables });
-    console.log(`[DEBUG] runGQL body:`, body);
+    debugLog('[SETTINGS][DEBUG] runGQL body:', body);
     
     const res = await api('/graphql', {
       method: 'POST',
@@ -339,7 +348,7 @@ export default function Settings() {
       body: body,
     });
     
-    console.log(`[DEBUG] runGQL response:`, res);
+    debugLog('[SETTINGS][DEBUG] runGQL response:', res);
     
     if (res?.errors?.length) {
       console.error(`[DEBUG] GraphQL errors:`, res.errors);
@@ -402,13 +411,13 @@ export default function Settings() {
   const maxChecks = 30; // Maximum 30 checks (90 seconds)
   
   const checkGenerationProgress = useCallback(async () => {
-    console.log('[PROGRESS-CHECK] Starting check...');
-    console.log('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
-    console.log('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
+    debugLog('[PROGRESS-CHECK] Starting check...');
+    debugLog('[PROGRESS-CHECK] isGeneratingRef.current:', isGeneratingRef.current);
+    debugLog('[PROGRESS-CHECK] checkCountRef.current:', checkCountRef.current);
     
     // Safety: Don't check if we're not generating
     if (!isGeneratingRef.current) {
-      console.log('[PROGRESS-CHECK] Not generating (ref is false), stopping check');
+      debugLog('[PROGRESS-CHECK] Not generating (ref is false), stopping check');
       return;
     }
     
@@ -417,7 +426,7 @@ export default function Settings() {
     
     // Check if we've exceeded maximum checks (90 seconds)
     if (checkCountRef.current > 30) {
-      console.log('[PROGRESS-CHECK] ⏰ Maximum checks reached, stopping');
+      debugLog('[PROGRESS-CHECK] ⏰ Maximum checks reached, stopping');
       isGeneratingRef.current = false;
       checkCountRef.current = 0;
       setSchemaGenerating(false);
@@ -428,11 +437,11 @@ export default function Settings() {
     try {
       // Check generation status from backend
       const statusData = await api(`/api/schema/status?shop=${shop}`);
-      console.log('[PROGRESS-CHECK] Status data:', statusData);
+      debugLog('[PROGRESS-CHECK] Status data:', statusData);
       
       // Check for errors (e.g., no optimized products, only basic SEO, trial restriction, insufficient tokens)
       if (statusData.error === 'NO_OPTIMIZED_PRODUCTS' || statusData.error === 'ONLY_BASIC_SEO') {
-        console.log('[PROGRESS-CHECK] ❌ Schema error:', statusData.error);
+        debugLog('[PROGRESS-CHECK] ❌ Schema error:', statusData.error);
         
         // Stop checking
         isGeneratingRef.current = false;
@@ -484,7 +493,7 @@ export default function Settings() {
       // Check the new dataReady flag - this is the source of truth
       if (statusData.dataReady) {
         // Data is ready, generation is complete
-        console.log('[PROGRESS-CHECK] ✅ Data is ready! Generation complete!');
+        debugLog('[PROGRESS-CHECK] ✅ Data is ready! Generation complete!');
         
         // Stop checking
         isGeneratingRef.current = false;
@@ -509,7 +518,7 @@ export default function Settings() {
       
       // Check if still generating
       if (statusData.generating) {
-        console.log('[PROGRESS-CHECK] Still generating, updating progress...');
+        debugLog('[PROGRESS-CHECK] Still generating, updating progress...');
         
         // Parse progress percentage
         let progressPercent = 0;
@@ -536,14 +545,14 @@ export default function Settings() {
         
       } else {
         // Not generating and no data ready - might be an error state
-        console.log('[PROGRESS-CHECK] ⚠️ Not generating but no data ready');
+        debugLog('[PROGRESS-CHECK] ⚠️ Not generating but no data ready');
         
         // Try one more time to check for data directly
         try {
           const finalData = await api(`/ai/schema-data.json?shop=${shop}`);
           
-          if (finalData && finalData.schemas && finalData.schemas.length > 0) {
-            console.log('[PROGRESS-CHECK] Found data on direct check!');
+            if (finalData && finalData.schemas && finalData.schemas.length > 0) {
+              debugLog('[PROGRESS-CHECK] Found data on direct check!');
             
             // Mark as complete
             isGeneratingRef.current = false;
@@ -569,7 +578,7 @@ export default function Settings() {
             
           } else {
             // No data found - generation might have failed
-            console.log('[PROGRESS-CHECK] No data found, generation may have failed');
+            debugLog('[PROGRESS-CHECK] No data found, generation may have failed');
             isGeneratingRef.current = false;
             checkCountRef.current = 0;
             setSchemaGenerating(false);
@@ -589,7 +598,7 @@ export default function Settings() {
       
       // On error, retry a few times before giving up
       if (checkCountRef.current < 5) {
-        console.log('[PROGRESS-CHECK] Retrying after error...');
+        debugLog('[PROGRESS-CHECK] Retrying after error...');
         setTimeout(() => {
           if (isGeneratingRef.current) {
             checkGenerationProgress();
@@ -638,14 +647,14 @@ export default function Settings() {
   };
 
   const generateRobotsTxt = async (currentSettings = settings) => {
-    console.log('[GENERATE ROBOTS] Called with shop:', shop);
+    debugLog('[GENERATE ROBOTS] Called with shop:', shop);
     
     try {
       const txt = await api(`/api/ai-discovery/robots-txt?shop=${shop}`, { 
         responseType: 'text'  // <-- Ð’Ð°Ð¶Ð½Ð¾!
       });
       
-      console.log('[GENERATE ROBOTS] Received:', txt);
+      debugLog('[GENERATE ROBOTS] Received:', txt);
       
       // ÐÐºÐ¾ Ðµ Ð¿Ñ€Ð°Ð·ÐµÐ½ Ð¾Ñ‚Ð³Ð¾Ð²Ð¾Ñ€ (304), Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð°Ð¹ Ð±Ð°Ð·Ð¾Ð² robots.txt
       if (!txt) {

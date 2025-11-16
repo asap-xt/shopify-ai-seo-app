@@ -45,9 +45,12 @@
     const PORT = process.env.PORT || 8080;
     const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
-    // ---------------------------------------------------------------------------
-    const app = express();
-    app.set('trust proxy', 1);
+// ---------------------------------------------------------------------------
+const app = express();
+app.set('trust proxy', 1);
+
+// Environment helpers
+const IS_PROD = process.env.NODE_ENV === 'production';
 
     // --- Test plan overrides (in-memory) ---
     const planOverrides = new Map(); // key: shop, value: 'starter'|'professional'|'growth'|'growth_extra'|'enterprise'
@@ -160,71 +163,74 @@
 
     app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-    // ---- Debug helper: виж какви сесии имаш за shop
-    app.get('/debug/sessions', async (req, res) => {
-      const shop = req.query?.shop;
-      if (!shop) return res.status(400).json({ error: 'Missing shop' });
-      try {
-        const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
-        return res.json({
-          count: sessions?.length || 0,
-          sessions: (sessions || []).map(s => ({
-            id: s.id, shop: s.shop, isOnline: s.isOnline,
-            updatedAt: s.updatedAt, hasToken: !!s.accessToken, scope: s.scope,
-          })),
-        });
-      } catch (e) {
-        console.error('[DEBUG/SESSIONS] error', e);
-        return res.status(500).json({ error: 'Failed to list sessions' });
-      }
-    });
-
-      // Debug route to check shop tokens
-      app.get('/debug/shop-token', attachShop, async (req, res) => {
-        const shop = req.shopDomain;
-        if (!shop) return res.json({ error: 'Missing shop param' });
-        
-        try {
-          const Shop = await import('./db/Shop.js');
-          const shopDoc = await Shop.default.findOne({ shop }).lean();
-          
-          res.json({
-            found: !!shopDoc,
-            shop: shopDoc?.shop,
-            hasToken: !!shopDoc?.accessToken,
-            tokenType: shopDoc?.accessToken?.substring(0, 10),
-            tokenLength: shopDoc?.accessToken?.length,
-            useJWT: shopDoc?.useJWT,
-            hasJWTToken: !!shopDoc?.jwtToken,
-            jwtTokenPrefix: shopDoc?.jwtToken?.substring(0, 20),
-            plan: shopDoc?.plan,
-            createdAt: shopDoc?.createdAt,
-            installedAt: shopDoc?.installedAt
-          });
-        } catch (err) {
-          res.json({ error: err.message });
-        }
+// Debug & test endpoints – only enabled in non-production environments
+if (!IS_PROD) {
+  // ---- Debug helper: виж какви сесии имаш за shop
+  app.get('/debug/sessions', async (req, res) => {
+    const shop = req.query?.shop;
+    if (!shop) return res.status(400).json({ error: 'Missing shop' });
+    try {
+      const sessions = await shopify.config.sessionStorage.findSessionsByShop(shop);
+      return res.json({
+        count: sessions?.length || 0,
+        sessions: (sessions || []).map(s => ({
+          id: s.id, shop: s.shop, isOnline: s.isOnline,
+          updatedAt: s.updatedAt, hasToken: !!s.accessToken, scope: s.scope,
+        })),
       });
+    } catch (e) {
+      console.error('[DEBUG/SESSIONS] error', e);
+      return res.status(500).json({ error: 'Failed to list sessions' });
+    }
+  });
 
-      // Debug route to delete shop record (force reinstall)
-      app.delete('/debug/shop-token', attachShop, async (req, res) => {
-        const shop = req.shopDomain;
-        if (!shop) return res.json({ error: 'Missing shop param' });
-        
-        try {
-          const Shop = await import('./db/Shop.js');
-          const result = await Shop.default.deleteOne({ shop });
-          
-          res.json({
-            success: true,
-            shop: shop,
-            deleted: result.deletedCount > 0,
-            message: result.deletedCount > 0 ? 'Shop record deleted - app needs to be reinstalled' : 'Shop record not found'
-          });
-        } catch (err) {
-          res.json({ error: err.message });
-        }
+  // Debug route to check shop tokens
+  app.get('/debug/shop-token', attachShop, async (req, res) => {
+    const shop = req.shopDomain;
+    if (!shop) return res.json({ error: 'Missing shop param' });
+    
+    try {
+      const Shop = await import('./db/Shop.js');
+      const shopDoc = await Shop.default.findOne({ shop }).lean();
+      
+      res.json({
+        found: !!shopDoc,
+        shop: shopDoc?.shop,
+        hasToken: !!shopDoc?.accessToken,
+        tokenType: shopDoc?.accessToken?.substring(0, 10),
+        tokenLength: shopDoc?.accessToken?.length,
+        useJWT: shopDoc?.useJWT,
+        hasJWTToken: !!shopDoc?.jwtToken,
+        jwtTokenPrefix: shopDoc?.jwtToken?.substring(0, 20),
+        plan: shopDoc?.plan,
+        createdAt: shopDoc?.createdAt,
+        installedAt: shopDoc?.installedAt
       });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
+
+  // Debug route to delete shop record (force reinstall)
+  app.delete('/debug/shop-token', attachShop, async (req, res) => {
+    const shop = req.shopDomain;
+    if (!shop) return res.json({ error: 'Missing shop param' });
+    
+    try {
+      const Shop = await import('./db/Shop.js');
+      const result = await Shop.default.deleteOne({ shop });
+      
+      res.json({
+        success: true,
+        shop: shop,
+        deleted: result.deletedCount > 0,
+        message: result.deletedCount > 0 ? 'Shop record deleted - app needs to be reinstalled' : 'Shop record not found'
+      });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
+}
 
     // Quick sanity endpoint: confirms we can exchange the session token for an Admin API token
     app.get('/api/whoami', attachShop, async (req, res) => {
@@ -322,172 +328,167 @@
     app.get('/healthz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
     app.get('/readyz', (_req, res) => res.status(200).json({ ok: true, ts: Date.now() }));
 
-    // TEST ENDPOINT - Set token balance for testing
-    // Requires TEST_SECRET for security (works in production with secret)
-    app.post('/test/set-token-balance', async (req, res) => {
-      // Security check: require test secret
-      const testSecret = req.headers['x-test-secret'] || req.body.testSecret;
-      const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
+if (!IS_PROD) {
+  // TEST ENDPOINT - Set token balance for testing
+  // Requires TEST_SECRET for security (works in production with secret)
+  app.post('/test/set-token-balance', async (req, res) => {
+    // Security check: require test secret
+    const testSecret = req.headers['x-test-secret'] || req.body.testSecret;
+    const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
+    
+    if (testSecret !== expectedSecret) {
+      return res.status(403).json({ 
+        error: 'Unauthorized. Requires X-Test-Secret header or testSecret in body.' 
+      });
+    }
+    
+    try {
+      const { shop, balance } = req.body;
       
-      if (testSecret !== expectedSecret) {
-        return res.status(403).json({ 
-          error: 'Unauthorized. Requires X-Test-Secret header or testSecret in body.' 
-        });
-      }
-      
-      try {
-        const { shop, balance } = req.body;
-        
-        if (!shop) {
-          return res.status(400).json({ error: 'Shop parameter required' });
-        }
-        
-        const TokenBalance = (await import('./db/TokenBalance.js')).default;
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        
-        const oldBalance = tokenBalance.balance;
-        tokenBalance.balance = balance !== undefined ? balance : 0;
-        await tokenBalance.save();
-        
-        res.json({ 
-          success: true, 
-          shop,
-          oldBalance,
-          newBalance: tokenBalance.balance,
-          message: `Balance updated: ${oldBalance} → ${tokenBalance.balance}`
-        });
-      } catch (error) {
-        console.error('[TEST] Error setting token balance:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // TEST ENDPOINT - Get token balance for testing
-    app.get('/test/get-token-balance', async (req, res) => {
-      const testSecret = req.headers['x-test-secret'] || req.query.testSecret;
-      const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
-      
-      if (testSecret !== expectedSecret) {
-        return res.status(403).json({ 
-          error: 'Unauthorized. Requires X-Test-Secret header or testSecret query param.' 
-        });
+      if (!shop) {
+        return res.status(400).json({ error: 'Shop parameter required' });
       }
       
-      try {
-        const shop = req.query.shop;
-        
-        if (!shop) {
-          return res.status(400).json({ error: 'Shop parameter required' });
-        }
-        
-        const TokenBalance = (await import('./db/TokenBalance.js')).default;
-        const tokenBalance = await TokenBalance.findOne({ shop });
-        
-        if (!tokenBalance) {
-          return res.json({ 
-            success: true,
-            shop,
-            exists: false,
-            message: 'No token balance found for this shop'
-          });
-        }
-        
-        res.json({ 
-          success: true,
-          shop,
-          exists: true,
-          balance: tokenBalance.balance,
-          totalPurchased: tokenBalance.totalPurchased,
-          totalUsed: tokenBalance.totalUsed,
-          lastPurchase: tokenBalance.lastPurchase
-        });
-      } catch (error) {
-        console.error('[TEST] Error getting token balance:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // Test sitemap endpoint
-    app.get('/test-sitemap.xml', (req, res) => {
-      res.set('Content-Type', 'application/xml; charset=utf-8');
-      res.send('<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://test.com</loc></url></urlset>');
-    });
-
-    // Test MongoDB connection
-    app.get('/test-mongo', async (req, res) => {
-      try {
-        const Sitemap = (await import('./db/Sitemap.js')).default;
-        const Shop = (await import('./db/Shop.js')).default;
-        
-        const sitemapCount = await Sitemap.countDocuments();
-        const shopCount = await Shop.countDocuments();
-        
-        // Get all shops
-        const shops = await Shop.find({}).lean();
-        
-        res.json({ 
-          success: true, 
-          message: 'MongoDB connected', 
-          sitemapCount: sitemapCount,
-          shopCount: shopCount,
-          shops: shops.map(s => ({ shop: s.shop, hasAccessToken: !!s.accessToken, createdAt: s.createdAt }))
-        });
-      } catch (error) {
-        console.error('[TEST_MONGO] Error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: error.message 
-        });
-      }
-    });
-
-    // Create test shop record
-    // Removed - Public App doesn't create fake tokens
-
-    // Removed - Public App doesn't need fake shop deletion
-
-    // Removed - Public App uses real OAuth flow only
-
-    // Generate direct OAuth URL for testing
-    app.get('/generate-oauth-url', (req, res) => {
-      try {
-        const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
-        const state = 'test-state-' + Date.now();
-        
-        const oauthUrl = `https://${shop}/admin/oauth/authorize?` + new URLSearchParams({
-          client_id: process.env.SHOPIFY_API_KEY,
-          scope: process.env.SHOPIFY_API_SCOPES || 'read_products,write_products',
-          redirect_uri: `${process.env.APP_URL}/auth/callback`,
-          state: state
-        }).toString();
-        
-        res.json({ 
-          success: true, 
-          message: 'Direct OAuth URL generated', 
-          oauthUrl: oauthUrl,
-          shop: shop,
-          state: state,
-          redirectUri: `${process.env.APP_URL}/auth/callback`
-        });
-      } catch (error) {
-        console.error('[GENERATE_OAUTH_URL] Error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: error.message 
-        });
-      }
-    });
-
-    // Simple test endpoint without any imports
-    app.get('/simple-test', (req, res) => {
+      const TokenBalance = (await import('./db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      const oldBalance = tokenBalance.balance;
+      tokenBalance.balance = balance !== undefined ? balance : 0;
+      await tokenBalance.save();
+      
       res.json({ 
         success: true, 
-        message: 'Simple test endpoint works!',
-        timestamp: new Date().toISOString(),
-        url: req.url,
-        method: req.method
+        shop,
+        oldBalance,
+        newBalance: tokenBalance.balance,
+        message: `Balance updated: ${oldBalance} → ${tokenBalance.balance}`
       });
+    } catch (error) {
+      console.error('[TEST] Error setting token balance:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // TEST ENDPOINT - Get token balance for testing
+  app.get('/test/get-token-balance', async (req, res) => {
+    const testSecret = req.headers['x-test-secret'] || req.query.testSecret;
+    const expectedSecret = process.env.TEST_SECRET || 'dev-test-secret';
+    
+    if (testSecret !== expectedSecret) {
+      return res.status(403).json({ 
+        error: 'Unauthorized. Requires X-Test-Secret header or testSecret query param.' 
+      });
+    }
+    
+    try {
+      const shop = req.query.shop;
+      
+      if (!shop) {
+        return res.status(400).json({ error: 'Shop parameter required' });
+      }
+      
+      const TokenBalance = (await import('./db/TokenBalance.js')).default;
+      const tokenBalance = await TokenBalance.findOne({ shop });
+      
+      if (!tokenBalance) {
+        return res.json({ 
+          success: true,
+          shop,
+          exists: false,
+          message: 'No token balance found for this shop'
+        });
+      }
+      
+      res.json({ 
+        success: true,
+        shop,
+        exists: true,
+        balance: tokenBalance.balance,
+        totalPurchased: tokenBalance.totalPurchased,
+        totalUsed: tokenBalance.totalUsed,
+        lastPurchase: tokenBalance.lastPurchase
+      });
+    } catch (error) {
+      console.error('[TEST] Error getting token balance:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Test sitemap endpoint
+  app.get('/test-sitemap.xml', (req, res) => {
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.send('<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://test.com</loc></url></urlset>');
+  });
+
+  // Test MongoDB connection
+  app.get('/test-mongo', async (req, res) => {
+    try {
+      const Sitemap = (await import('./db/Sitemap.js')).default;
+      const Shop = (await import('./db/Shop.js')).default;
+      
+      const sitemapCount = await Sitemap.countDocuments();
+      const shopCount = await Shop.countDocuments();
+      
+      // Get all shops
+      const shops = await Shop.find({}).lean();
+      
+      res.json({ 
+        success: true, 
+        message: 'MongoDB connected', 
+        sitemapCount: sitemapCount,
+        shopCount: shopCount,
+        shops: shops.map(s => ({ shop: s.shop, hasAccessToken: !!s.accessToken, createdAt: s.createdAt }))
+      });
+    } catch (error) {
+      console.error('[TEST_MONGO] Error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  });
+
+  // Generate direct OAuth URL for testing
+  app.get('/generate-oauth-url', (req, res) => {
+    try {
+      const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
+      const state = 'test-state-' + Date.now();
+      
+      const oauthUrl = `https://${shop}/admin/oauth/authorize?` + new URLSearchParams({
+        client_id: process.env.SHOPIFY_API_KEY,
+        scope: process.env.SHOPIFY_API_SCOPES || 'read_products,write_products',
+        redirect_uri: `${process.env.APP_URL}/auth/callback`,
+        state: state
+      }).toString();
+      
+      res.json({ 
+        success: true, 
+        message: 'Direct OAuth URL generated', 
+        oauthUrl: oauthUrl,
+        shop: shop,
+        state: state,
+        redirectUri: `${process.env.APP_URL}/auth/callback`
+      });
+    } catch (error) {
+      console.error('[GENERATE_OAUTH_URL] Error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  });
+
+  // Simple test endpoint without any imports
+  app.get('/simple-test', (req, res) => {
+    res.json({ 
+      success: true, 
+      message: 'Simple test endpoint works!',
+      timestamp: new Date().toISOString(),
+      url: req.url,
+      method: req.method
     });
+  });
+}
 
     // ---------------------------------------------------------------------------
     // Shopify OAuth Routes for Public App (moved to start function)
@@ -502,7 +503,7 @@
     import seoRouter from './controllers/seoController.js';  // mounts /seo/* (plans/me е премахнат)
     import languageRouter from './controllers/languageController.js';  // mounts /api/languages/*
     import multiSeoRouter from './controllers/multiSeoController.js';  // mounts /api/seo/*
-    import debugRouter from './controllers/debugRouter.js';
+import debugRouter from './controllers/debugRouter.js';
     import productsRouter from './controllers/productsController.js';
     import sitemapRouter from './controllers/sitemapController.js';
     import appProxyRouter from './controllers/appProxyController.js';
@@ -932,7 +933,9 @@
         res.status(500).json({ errors: [{ message: e.message || 'GraphQL error' }] });
       }
     });
-    app.use('/debug', debugRouter);
+if (!IS_PROD) {
+  app.use('/debug', debugRouter);
+}
     app.use('/api/products', productsRouter);
     app.use('/api/dashboard', dashboardRouter);
     app.use(schemaRouter);
@@ -1115,69 +1118,71 @@
       }
 
 
-      // Debug endpoint to check token validity
-      app.get('/api/debug/token/:shop', async (req, res) => {
-        try {
-          const shop = req.params.shop;
-          const { resolveShopToken } = await import('./utils/tokenResolver.js');
-          const Shop = (await import('./db/Shop.js')).default;
-          
-          // Get token from DB
-          const shopDoc = await Shop.findOne({ shop }).lean();
-          
-          // Try to resolve token
-          const token = await resolveShopToken(shop);
-          
-          // Test token with simple GraphQL query
-          const testQuery = `query { shop { name } }`;
-          const testRes = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Shopify-Access-Token': token,
-            },
-            body: JSON.stringify({ query: testQuery }),
-          });
-          
-          const testData = await testRes.json();
-          
-          res.json({
-            shop,
-            tokenInDB: !!shopDoc?.accessToken,
-            tokenType: typeof token,
-            tokenPrefix: token ? token.substring(0, 10) + '...' : null,
-            appApiKey: shopDoc?.appApiKey,
-            currentAppKey: process.env.SHOPIFY_API_KEY,
-            keyMatch: shopDoc?.appApiKey === process.env.SHOPIFY_API_KEY,
-            testStatus: testRes.status,
-            testSuccess: testRes.ok,
-            testData: testData?.data ? 'SUCCESS' : testData?.errors || 'UNKNOWN'
-          });
-        } catch (err) {
-          res.status(500).json({ error: err.message });
-        }
-      });
-
-      // Debug endpoint to force token refresh
-      app.post('/api/debug/refresh-token/:shop', async (req, res) => {
-        try {
-          const shop = req.params.shop;
-          const { invalidateShopToken, resolveShopToken } = await import('./utils/tokenResolver.js');
-          
-          // Clear old token
-          await invalidateShopToken(shop);
-          
-          // Try to get new token (will fail without idToken, but clears cache)
+      if (!IS_PROD) {
+        // Debug endpoint to check token validity
+        app.get('/api/debug/token/:shop', async (req, res) => {
           try {
-            const newToken = await resolveShopToken(shop, { requested: 'offline' });
-            res.json({ success: true, hasNewToken: !!newToken });
-          } catch (e) {
-            res.json({ success: true, cleared: true, note: 'Token cleared, need idToken for new one' });
+            const shop = req.params.shop;
+            const { resolveShopToken } = await import('./utils/tokenResolver.js');
+            const Shop = (await import('./db/Shop.js')).default;
+            
+            // Get token from DB
+            const shopDoc = await Shop.findOne({ shop }).lean();
+            
+            // Try to resolve token
+            const token = await resolveShopToken(shop);
+            
+            // Test token with simple GraphQL query
+            const testQuery = `query { shop { name } }`;
+            const testRes = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Shopify-Access-Token': token,
+              },
+              body: JSON.stringify({ query: testQuery }),
+            });
+            
+            const testData = await testRes.json();
+            
+            res.json({
+              shop,
+              tokenInDB: !!shopDoc?.accessToken,
+              tokenType: typeof token,
+              tokenPrefix: token ? token.substring(0, 10) + '...' : null,
+              appApiKey: shopDoc?.appApiKey,
+              currentAppKey: process.env.SHOPIFY_API_KEY,
+              keyMatch: shopDoc?.appApiKey === process.env.SHOPIFY_API_KEY,
+              testStatus: testRes.status,
+              testSuccess: testRes.ok,
+              testData: testData?.data ? 'SUCCESS' : testData?.errors || 'UNKNOWN'
+            });
+          } catch (err) {
+            res.status(500).json({ error: err.message });
           }
-        } catch (err) {
-          res.status(500).json({ error: err.message });
-        }
-      });
+        });
+
+        // Debug endpoint to force token refresh
+        app.post('/api/debug/refresh-token/:shop', async (req, res) => {
+          try {
+            const shop = req.params.shop;
+            const { invalidateShopToken, resolveShopToken } = await import('./utils/tokenResolver.js');
+            
+            // Clear old token
+            await invalidateShopToken(shop);
+            
+            // Try to get new token (will fail without idToken, but clears cache)
+            try {
+              const newToken = await resolveShopToken(shop, { requested: 'offline' });
+              res.json({ success: true, hasNewToken: !!newToken });
+            } catch (e) {
+              res.json({ success: true, cleared: true, note: 'Token cleared, need idToken for new one' });
+            }
+          } catch (err) {
+            res.status(500).json({ error: err.message });
+          }
+        });
+      }
     }
 
 
@@ -1537,24 +1542,26 @@
       res.send(html);
     });
 
-    // Debug: list all mounted routes
-    app.get('/debug/routes', (req, res) => {
-      const routes = [];
-      app._router.stack.forEach((layer) => {
-        if (layer.route && layer.route.path) {
-          const methods = Object.keys(layer.route.methods).filter((m) => layer.route.methods[m]);
-          routes.push({ methods, path: layer.route.path });
-        } else if (layer.name === 'router' && layer.handle?.stack) {
-          for (const r of layer.handle.stack) {
-            if (r.route?.path) {
-              const methods = Object.keys(r.route.methods).filter((m) => r.route.methods[m]);
-              routes.push({ methods, path: r.route.path });
-            }
+// Debug: list all mounted routes (non-production only)
+if (!IS_PROD) {
+  app.get('/debug/routes', (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((layer) => {
+      if (layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods).filter((m) => layer.route.methods[m]);
+        routes.push({ methods, path: layer.route.path });
+      } else if (layer.name === 'router' && layer.handle?.stack) {
+        for (const r of layer.handle.stack) {
+          if (r.route?.path) {
+            const methods = Object.keys(r.route.methods).filter((m) => r.route.methods[m]);
+            routes.push({ methods, path: r.route.path });
           }
         }
-      });
-      res.status(200).json({ routes });
+      }
     });
+    res.status(200).json({ routes });
+  });
+}
 
     // Старият /test/set-plan endpoint е премахнат - използваме GraphQL версията
 
@@ -1592,86 +1599,88 @@
         }
 
       // DEBUG ENDPOINTS (MUST be first, before all other middleware)
-      app.get('/debug/env', (req, res) => {
-        const key = process.env.SHOPIFY_API_KEY || '';
-        res.json({
-          ok: true,
-          SHOPIFY_API_KEY_present: Boolean(key),
-          SHOPIFY_API_KEY_len: key.length,
-          SHOPIFY_API_KEY_preview: key ? `${key.slice(0,4)}…${key.slice(-4)}` : null,
-          NODE_ENV: process.env.NODE_ENV || null,
-          embedded: true
-        });
-      });
-
-      // Database Indexes Status Endpoint (PHASE 2 - Verification)
-      app.get('/debug/indexes', async (req, res) => {
-        try {
-          const { getIndexStats } = await import('./db/indexes.js');
-          const stats = await getIndexStats();
-          
-          if (!stats) {
-            return res.status(500).json({ error: 'Failed to fetch index stats' });
-          }
-          
+      if (!IS_PROD) {
+        app.get('/debug/env', (req, res) => {
+          const key = process.env.SHOPIFY_API_KEY || '';
           res.json({
-            phase: 'PHASE 2: Database Indexes',
-            status: 'active',
-            indexes: stats,
-            message: 'Indexes created successfully!'
+            ok: true,
+            SHOPIFY_API_KEY_present: Boolean(key),
+            SHOPIFY_API_KEY_len: key.length,
+            SHOPIFY_API_KEY_preview: key ? `${key.slice(0,4)}…${key.slice(-4)}` : null,
+            NODE_ENV: process.env.NODE_ENV || null,
+            embedded: true
           });
-        } catch (error) {
-          res.status(500).json({ 
-            error: 'Failed to get index stats', 
-            message: error.message 
-          });
-        }
-      });
-      
-      // Redis Cache Status Endpoint (PHASE 3 - Verification)
-      app.get('/debug/cache', async (req, res) => {
-        try {
-          const cacheService = (await import('./services/cacheService.js')).default;
-          const stats = await cacheService.getStats();
-          
-          if (!stats) {
-            return res.json({
-              phase: 'PHASE 3: Redis Caching',
-              status: 'disabled',
-              message: 'Redis not configured. Add REDIS_URL environment variable.',
-              enabled: false
+        });
+
+        // Database Indexes Status Endpoint (PHASE 2 - Verification)
+        app.get('/debug/indexes', async (req, res) => {
+          try {
+            const { getIndexStats } = await import('./db/indexes.js');
+            const stats = await getIndexStats();
+            
+            if (!stats) {
+              return res.status(500).json({ error: 'Failed to fetch index stats' });
+            }
+            
+            res.json({
+              phase: 'PHASE 2: Database Indexes',
+              status: 'active',
+              indexes: stats,
+              message: 'Indexes created successfully!'
+            });
+          } catch (error) {
+            res.status(500).json({ 
+              error: 'Failed to get index stats', 
+              message: error.message 
             });
           }
-          
-          res.json({
-            phase: 'PHASE 3: Redis Caching',
-            status: 'active',
-            enabled: true,
-            stats,
-            message: 'Redis caching is operational!'
-          });
-        } catch (error) {
-          res.status(500).json({ 
-            error: 'Failed to get cache stats', 
-            message: error.message 
-          });
-        }
-      });
-
-      app.get('/debug/whoami', (req, res) => {
-        const fromQuery = req.query.shop;
-        const fromHost = (()=>{
+        });
+        
+        // Redis Cache Status Endpoint (PHASE 3 - Verification)
+        app.get('/debug/cache', async (req, res) => {
           try {
-            const host = req.query.host;
-            if (!host) return null;
-            const decoded = Buffer.from(host, 'base64').toString('utf8');
-            const m = decoded.match(/store\/([^/?]+)/);
-            return m ? `${m[1]}.myshopify.com` : null;
-          } catch { return null; }
-        })();
-        const shop = normalizeShop(fromQuery || fromHost || req.session?.shop);
-        res.json({ ok:true, shop, raw: { query: req.query.shop, host: req.query.host }});
-      });
+            const cacheService = (await import('./services/cacheService.js')).default;
+            const stats = await cacheService.getStats();
+            
+            if (!stats) {
+              return res.json({
+                phase: 'PHASE 3: Redis Caching',
+                status: 'disabled',
+                message: 'Redis not configured. Add REDIS_URL environment variable.',
+                enabled: false
+              });
+            }
+            
+            res.json({
+              phase: 'PHASE 3: Redis Caching',
+              status: 'active',
+              enabled: true,
+              stats,
+              message: 'Redis caching is operational!'
+            });
+          } catch (error) {
+            res.status(500).json({ 
+              error: 'Failed to get cache stats', 
+              message: error.message 
+            });
+          }
+        });
+
+        app.get('/debug/whoami', (req, res) => {
+          const fromQuery = req.query.shop;
+          const fromHost = (()=>{
+            try {
+              const host = req.query.host;
+              if (!host) return null;
+              const decoded = Buffer.from(host, 'base64').toString('utf8');
+              const m = decoded.match(/store\/([^/?]+)/);
+              return m ? `${m[1]}.myshopify.com` : null;
+            } catch { return null; }
+          })();
+          const shop = normalizeShop(fromQuery || fromHost || req.session?.shop);
+          res.json({ ok:true, shop, raw: { query: req.query.shop, host: req.query.host }});
+        });
+      }
 
       // App Bridge JavaScript injection endpoint
       app.get('/app-bridge.js', (req, res) => {

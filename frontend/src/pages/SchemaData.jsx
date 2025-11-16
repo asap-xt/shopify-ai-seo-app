@@ -23,13 +23,22 @@ import { PLAN_HIERARCHY, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
+// Dev-only debug logger (hidden in production builds)
+const isDev = import.meta.env.DEV;
+const debugLog = (...args) => {
+  if (isDev) {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+};
+
 export default function SchemaData({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   
-  console.log('[SCHEMA-DATA] shopProp:', shopProp);
-  console.log('[SCHEMA-DATA] qs("shop"):', qs('shop', ''));
-  console.log('[SCHEMA-DATA] final shop:', shop);
-  console.log('[SCHEMA-DATA] window.location.search:', window.location.search);
+  debugLog('[SCHEMA-DATA] shopProp:', shopProp);
+  debugLog('[SCHEMA-DATA] qs("shop"):', qs('shop', ''));
+  debugLog('[SCHEMA-DATA] final shop:', shop);
+  debugLog('[SCHEMA-DATA] window.location.search:', window.location.search);
   
   const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,7 +77,7 @@ export default function SchemaData({ shop: shopProp }) {
         body: JSON.stringify({ query, variables: { shop } })
       });
       
-      console.log('[SCHEMA-DATA] Plan data:', data);
+      debugLog('[SCHEMA-DATA] Plan data:', data);
       setCurrentPlan(data?.data?.plansMe?.plan);
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
@@ -77,18 +86,18 @@ export default function SchemaData({ shop: shopProp }) {
 
   // Plan-based feature availability
   const isFeatureAvailable = (feature) => {
-    console.log('[SCHEMA-DATA] isFeatureAvailable - currentPlan:', currentPlan);
-    console.log('[SCHEMA-DATA] isFeatureAvailable - feature:', feature);
+    debugLog('[SCHEMA-DATA] isFeatureAvailable - currentPlan:', currentPlan);
+    debugLog('[SCHEMA-DATA] isFeatureAvailable - feature:', feature);
     
     if (!currentPlan) {
-      console.log('[SCHEMA-DATA] No current plan, returning false');
+      debugLog('[SCHEMA-DATA] No current plan, returning false');
       return false;
     }
     
     const currentPlanIndex = getPlanIndex(currentPlan);
     
-    console.log('[SCHEMA-DATA] Plan hierarchy:', PLAN_HIERARCHY);
-    console.log('[SCHEMA-DATA] Current plan index:', currentPlanIndex);
+    debugLog('[SCHEMA-DATA] Plan hierarchy:', PLAN_HIERARCHY);
+    debugLog('[SCHEMA-DATA] Current plan index:', currentPlanIndex);
     
     switch (feature) {
       case 'productsJson':
@@ -216,11 +225,11 @@ export default function SchemaData({ shop: shopProp }) {
   const loadSchemas = async () => {
     setLoading(true);
     try {
-      console.log('[SCHEMA-DATA] loadSchemas - shop:', shop);
+      debugLog('[SCHEMA-DATA] loadSchemas - shop:', shop);
       const url = `/api/schema/preview?shop=${encodeURIComponent(shop)}`;
-      console.log('[SCHEMA-DATA] loadSchemas - url:', url);
+      debugLog('[SCHEMA-DATA] loadSchemas - url:', url);
       const data = await api(url, { headers: { 'X-Shop': shop } });
-      console.log('[SCHEMA-DATA] loadSchemas - response:', data);
+      debugLog('[SCHEMA-DATA] loadSchemas - response:', data);
       if (data.ok) {
         setSchemas(data.schemas);
         generateSchemaScript(data.schemas);
@@ -257,15 +266,15 @@ ${JSON.stringify(allSchemas, null, 2)}
   const handleRegenerate = async () => {
     setLoading(true);
     try {
-      console.log('[SCHEMA-DATA] handleRegenerate - shop:', shop);
+      debugLog('[SCHEMA-DATA] handleRegenerate - shop:', shop);
       const url = `/api/schema/generate?shop=${encodeURIComponent(shop)}`;
-      console.log('[SCHEMA-DATA] handleRegenerate - url:', url);
+      debugLog('[SCHEMA-DATA] handleRegenerate - url:', url);
       const data = await api(url, {
         method: 'POST',
         headers: { 'X-Shop': shop },
         body: { shop }
       });
-      console.log('[SCHEMA-DATA] handleRegenerate - response:', data);
+      debugLog('[SCHEMA-DATA] handleRegenerate - response:', data);
       if (data.ok) {
         setToastContent('Schemas regenerated successfully!');
         loadSchemas();
