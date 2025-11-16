@@ -173,10 +173,16 @@ export default async function handleSubscriptionUpdate(req, res) {
       // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)
       console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled/declined for:', shop);
       
-      // CRITICAL: If pendingActivation is true, user clicked "back" without approving
+      // CRITICAL: Only clear pendingActivation if shopifySubscriptionId matches
+      // This prevents clearing pendingActivation for a NEW subscription when an OLD one is cancelled
+      // When /activate is called, a new subscription is created, and the old one is cancelled
+      // We should only clear pendingActivation if the cancelled subscription matches the current one
+      const subscriptionIdMatches = subscription.shopifySubscriptionId === admin_graphql_api_id;
+      
+      // CRITICAL: If pendingActivation is true AND subscriptionId matches, user clicked "back" without approving
       // In this case, DON'T change status - just clear pendingActivation and activatedAt
       // This keeps the previous plan (starter/trial) visible to the user
-      if (subscription.pendingActivation) {
+      if (subscription.pendingActivation && subscriptionIdMatches) {
         console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending activation but keeping previous plan status');
         subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
         subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
@@ -184,6 +190,15 @@ export default async function handleSubscriptionUpdate(req, res) {
         // DON'T change status - keep previous plan (starter/trial)
         await subscription.save();
         console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending activation, kept previous plan:', subscription.plan, 'status:', subscription.status);
+      } else if (subscription.pendingActivation && !subscriptionIdMatches) {
+        // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
+        // Don't clear pendingActivation - it's for a different subscription!
+        console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
+        // Just update the shopifySubscriptionId if it was updated by fallback search
+        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
+          // This shouldn't happen, but if it does, we already updated it in the fallback search
+          await subscription.save();
+        }
       } else {
         // Subscription was active and now cancelled by merchant
         console.log('[SUBSCRIPTION-UPDATE] Active subscription cancelled by merchant');
