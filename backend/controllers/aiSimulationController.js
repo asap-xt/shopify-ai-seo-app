@@ -98,19 +98,24 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
       if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        return res.status(402).json({
-          error: 'AI Testing is locked during trial period',
-          trialRestriction: true,
-          requiresActivation: true,
-          trialEndsAt: subscription.trialEndsAt,
-          currentPlan: subscription.plan,
-          feature,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
-          tokensAvailable: tokenBalance.balance,
-          tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
-          message: 'Activate your plan to unlock AI Testing with included tokens'
-        });
+        // BUT: Allow if user has purchased tokens (can use purchased tokens during trial)
+        // During trial, included tokens are NOT added, so balance = only purchased tokens
+        if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+          return res.status(402).json({
+            error: 'AI Testing is locked during trial period',
+            trialRestriction: true,
+            requiresActivation: true,
+            trialEndsAt: subscription.trialEndsAt,
+            currentPlan: subscription.plan,
+            feature,
+            tokensRequired: tokenEstimate.estimated,
+            tokensWithMargin: tokenEstimate.withMargin,
+            tokensAvailable: tokenBalance.balance, // During trial, balance = only purchased tokens
+            tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
+            message: 'Activate your plan to unlock AI Testing with included tokens, or purchase tokens to use during trial'
+          });
+        }
+        // User has purchased tokens → allow usage (will use purchased tokens only)
       }
       
       // If insufficient tokens → Request token purchase

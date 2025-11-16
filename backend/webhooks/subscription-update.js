@@ -153,28 +153,39 @@ export default async function handleSubscriptionUpdate(req, res) {
       await subscription.save();
       
       // Set included tokens for the plan (replaces old, keeps purchased)
-      const included = getIncludedTokens(subscription.plan);
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
+      const now = new Date();
+      const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isFullyActivated = subscription.activatedAt && !inTrial;
       
-      console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
-        balance: tokenBalance.balance,
-        totalPurchased: tokenBalance.totalPurchased,
-        totalUsed: tokenBalance.totalUsed
-      });
-      
-      // Use setIncludedTokens to replace old included tokens (keeps purchased)
-      await tokenBalance.setIncludedTokens(
-        included.tokens, 
-        subscription.plan, 
-        admin_graphql_api_id
-      );
-      
-      console.log('[SUBSCRIPTION-UPDATE] ✅ Set included tokens:', {
-        shop,
-        plan: subscription.plan,
-        includedTokens: included.tokens,
-        newBalance: tokenBalance.balance
-      });
+      if (isFullyActivated) {
+        // Trial ended and plan is activated → add included tokens
+        const included = getIncludedTokens(subscription.plan);
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
+          balance: tokenBalance.balance,
+          totalPurchased: tokenBalance.totalPurchased,
+          totalUsed: tokenBalance.totalUsed
+        });
+        
+        // Use setIncludedTokens to replace old included tokens (keeps purchased)
+        await tokenBalance.setIncludedTokens(
+          included.tokens, 
+          subscription.plan, 
+          admin_graphql_api_id
+        );
+        
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Set included tokens:', {
+          shop,
+          plan: subscription.plan,
+          includedTokens: included.tokens,
+          newBalance: tokenBalance.balance
+        });
+      } else if (inTrial) {
+        // Still in trial → don't add included tokens yet (user can only use purchased tokens)
+        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Still in trial - not adding included tokens yet. User can only use purchased tokens.');
+      }
       
     } else if (status === 'CANCELLED' || status === 'DECLINED') {
       // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)

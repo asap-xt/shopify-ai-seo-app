@@ -586,18 +586,29 @@ router.get('/callback', async (req, res) => {
     await cacheService.invalidateShop(shop);
     
     // If plan was activated (pendingPlan → plan OR pendingActivation → activatedAt), set included tokens
+    // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
     if ((currentSub?.pendingPlan || currentSub?.pendingActivation || subscription.activatedAt) && subscription.plan) {
-      const included = getIncludedTokens(subscription.plan);
+      const now = new Date();
+      const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isFullyActivated = subscription.activatedAt && !inTrial;
       
-      if (included.tokens > 0) {
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
+      if (isFullyActivated) {
+        // Trial ended and plan is activated → add included tokens
+        const included = getIncludedTokens(subscription.plan);
         
-        // Use setIncludedTokens to replace old included tokens (keeps purchased)
-        await tokenBalance.setIncludedTokens(
-          included.tokens, 
-          subscription.plan, 
-          subscription.shopifySubscriptionId
-        );
+        if (included.tokens > 0) {
+          const tokenBalance = await TokenBalance.getOrCreate(shop);
+          
+          // Use setIncludedTokens to replace old included tokens (keeps purchased)
+          await tokenBalance.setIncludedTokens(
+            included.tokens, 
+            subscription.plan, 
+            subscription.shopifySubscriptionId
+          );
+        }
+      } else if (inTrial) {
+        // Still in trial → don't add included tokens yet (user can only use purchased tokens)
+        console.log('[BILLING-CALLBACK] ⚠️ Still in trial - not adding included tokens yet. User can only use purchased tokens.');
       }
     }
     
