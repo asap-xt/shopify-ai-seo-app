@@ -36,15 +36,37 @@ export default async function handleSubscriptionUpdate(req, res) {
     console.log('[SUBSCRIPTION-UPDATE] Status:', status, '| Test:', test, '| Trial:', trial_days);
     
     // Find subscription in our DB
-    const subscription = await Subscription.findOne({ 
+    // First try to find by shopifySubscriptionId (normal case)
+    let subscription = await Subscription.findOne({ 
       shop, 
       shopifySubscriptionId: admin_graphql_api_id 
     });
     
+    // If not found and status is CANCELLED/DECLINED, try to find by shop + pendingActivation
+    // This handles the case where user clicked "back" and subscription was cancelled
+    // but shopifySubscriptionId might not match (or is undefined)
+    if (!subscription && (status === 'CANCELLED' || status === 'DECLINED')) {
+      console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation');
+      subscription = await Subscription.findOne({ 
+        shop, 
+        pendingActivation: true 
+      });
+      
+      if (subscription) {
+        console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation:', {
+          shop,
+          plan: subscription.plan,
+          shopifySubscriptionId: subscription.shopifySubscriptionId,
+          webhookSubscriptionId: admin_graphql_api_id
+        });
+      }
+    }
+    
     if (!subscription) {
       console.warn('[SUBSCRIPTION-UPDATE] Subscription not found in DB:', {
         shop,
-        shopifySubscriptionId: admin_graphql_api_id
+        shopifySubscriptionId: admin_graphql_api_id,
+        status
       });
       // Respond 200 to avoid retries
       return res.status(200).json({ success: false, error: 'Subscription not found' });
@@ -92,14 +114,18 @@ export default async function handleSubscriptionUpdate(req, res) {
         newBalance: tokenBalance.balance
       });
       
-    } else if (status === 'CANCELLED') {
-      // ❌ Subscription cancelled by merchant or Shopify (or user declined approval)
-      console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled for:', shop);
+    } else if (status === 'CANCELLED' || status === 'DECLINED') {
+      // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)
+      console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled/declined for:', shop);
       
       subscription.status = 'cancelled';
       subscription.cancelledAt = new Date();
       subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
+      subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
+      subscription.activatedAt = undefined; // CRITICAL: Clear activatedAt if it was set
       await subscription.save();
+      
+      console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending activation for:', shop);
       
     } else if (status === 'EXPIRED') {
       // ⏰ Subscription expired (payment failed)
