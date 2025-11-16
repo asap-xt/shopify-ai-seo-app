@@ -5,6 +5,7 @@ import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
+import { buildStoreContext } from '../utils/storeContextBuilder.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -240,152 +241,41 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
       throw new Error('No access token available');
     }
     
-    // Fetch real store data via GraphQL
-    const shopDataQuery = `
-      query GetStoreData {
-        shop {
-          name
-          description
-          url
-          contactEmail
-          currencyCode
-          primaryDomain { url }
-        }
-        products(first: 10) {
-          edges {
-            node {
-              title
-              description
-              productType
-              vendor
-              tags
-              priceRangeV2 {
-                minVariantPrice {
-                  amount
-                  currencyCode
-                }
-              }
-            }
-          }
-        }
-        collections(first: 5) {
-          edges {
-            node {
-              title
-              description
-            }
-          }
-        }
-      }
-    `;
+    // Build comprehensive STORE CONTEXT (includes Store Metadata: shipping, returns, etc.)
+    const contextText = await buildStoreContext(shop, { includeProductAnalysis: true });
     
-    const shopifyGraphQL = async (query) => {
-      const response = await fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Shopify GraphQL error: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.errors) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
-      }
-      
-      return result.data;
-    };
-    
-    const storeData = await shopifyGraphQL(shopDataQuery);
-    
-    // Prepare context for AI based on question type
-    let contextPrompt = '';
-    
+    // Prepare question text based on type
+    let questionText = '';
     switch (type) {
       case 'products':
-        const products = storeData.products.edges.map(e => e.node);
-        const productList = products.map(p => 
-          `- ${p.title} (${p.productType || 'General'}) - ${p.description ? p.description.substring(0, 100) : 'No description'}...`
-        ).join('\n');
-        
-        contextPrompt = `Store: ${storeData.shop.name}
-Products available:
-${productList}
-
-Question: "What products does this store sell?"
-
-Generate a helpful, natural response listing the main products and categories. Be specific about actual products.`;
+        questionText = 'What products does this store sell? Be specific about product types and examples.';
         break;
-        
       case 'business':
-        contextPrompt = `Store: ${storeData.shop.name}
-Description: ${storeData.shop.description || 'E-commerce store'}
-Website: ${storeData.shop.url}
-Currency: ${storeData.shop.currencyCode}
-Contact: ${storeData.shop.contactEmail || 'Available via website'}
-
-Question: "Tell me about this business"
-
-Generate a helpful response about the store's business, what they offer, and how to engage with them.`;
+        questionText = 'Tell me about this business (what it offers, who it serves, key value).';
         break;
-        
       case 'categories':
-        const collections = storeData.collections.edges.map(e => e.node);
-        const categoryList = collections.map(c => 
-          `- ${c.title}: ${c.description ? c.description.substring(0, 80) : 'Product category'}...`
-        ).join('\n');
-        
-        contextPrompt = `Store: ${storeData.shop.name}
-Categories available:
-${categoryList}
-
-Question: "What categories does this store have?"
-
-Generate a helpful response listing the actual categories/collections. Be specific.`;
+        questionText = 'What product categories does this store have?';
         break;
-        
       case 'contact':
-        contextPrompt = `Store: ${storeData.shop.name}
-Website: ${storeData.shop.url}
-Contact Email: ${storeData.shop.contactEmail || 'Not specified'}
-
-Question: "What is this store's contact information?"
-
-Generate a helpful response with contact details. Be specific about what's available.`;
+        questionText = "What is this store's contact information (email, phone, address)?";
         break;
-        
       case 'custom':
-        const customProducts = storeData.products.edges.map(e => e.node);
-        const customCollections = storeData.collections.edges.map(e => e.node);
-        
-        contextPrompt = `Store: ${storeData.shop.name}
-Description: ${storeData.shop.description || 'E-commerce store'}
-Website: ${storeData.shop.url}
-Currency: ${storeData.shop.currencyCode}
-Contact: ${storeData.shop.contactEmail || 'Available via website'}
-
-Products (sample):
-${customProducts.slice(0, 5).map(p => `- ${p.title} (${p.productType || 'General'})`).join('\n')}
-
-Categories:
-${customCollections.map(c => `- ${c.title}`).join('\n')}
-
-Customer Question: "${question}"
-
-Generate a helpful, accurate response based on the provided store information. If the information needed to answer is not available, politely indicate that and suggest how they can find out (e.g., visit the website, contact support).`;
+        questionText = String(question);
         break;
-        
       default:
-        contextPrompt = `Store: ${storeData.shop.name}
-General question about the store.
-Generate a helpful response.`;
+        questionText = 'Provide general information about this store.';
     }
+    
+    // Final prompt for the AI model
+    const contextPrompt = `${contextText}
+
+CUSTOMER QUESTION:
+"${questionText}"
+
+Please answer using ONLY the facts from the STORE CONTEXT above.
+If exact details (e.g., delivery times) are not specified, say:
+"I don’t have that information. Please check the website or contact support."
+Keep the answer concise (2–3 sentences).`;
     
     // Call Gemini Flash Lite for AI response (paid model with tokens)
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -412,7 +302,7 @@ Generate a helpful response.`;
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful AI assistant for an e-commerce store. Answer questions naturally and conversationally based on the provided store data. Be specific and accurate. Keep responses concise (2-3 sentences).'
+            content: 'You are a helpful AI assistant for an e-commerce store. Answer questions naturally and conversationally based on the provided STORE CONTEXT. Be specific and accurate. Keep responses concise (2-3 sentences). Do not invent details.'
           },
           {
             role: 'user',

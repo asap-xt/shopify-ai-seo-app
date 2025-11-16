@@ -2,7 +2,7 @@
 // Build comprehensive store context for AI to prevent hallucinations
 
 import fetch from 'node-fetch';
-import { resolveAdminToken } from './tokenResolver.js';
+import { resolveAdminTokenForShop } from './tokenResolver.js';
 
 /**
  * Build comprehensive store context for AI models
@@ -11,7 +11,7 @@ import { resolveAdminToken } from './tokenResolver.js';
 export async function buildStoreContext(shop, options = {}) {
   try {
     // Get access token
-    const accessToken = await resolveAdminToken({ shopDomain: shop });
+    const accessToken = await resolveAdminTokenForShop(shop);
     if (!accessToken) {
       console.warn('[STORE-CONTEXT] No access token, using minimal context');
       return buildMinimalContext(shop);
@@ -340,7 +340,7 @@ Country: ${country}
 Currency: ${storeData.currencyCode || 'USD'}
 Description: ${storeData.description || 'E-commerce store'}
 `;
-
+  
   // Add custom metadata if exists
   if (storeMetadata.targetAudience || storeMetadata.brandVoice) {
     context += `
@@ -350,7 +350,7 @@ Brand Voice: ${storeMetadata.brandVoice || 'Professional and friendly'}
 Brand Values: ${storeMetadata.brandValues || 'Quality, Service, Value'}
 `;
   }
-
+  
   // Add catalog summary if available
   if (catalogSummary) {
     context += `
@@ -362,7 +362,7 @@ Price Range: ${catalogSummary.minPrice} - ${catalogSummary.maxPrice} ${catalogSu
 Collections: ${catalogSummary.collections.join(', ') || 'Various'}
 `;
   }
-
+  
   // Add policies if available
   if (policies.shipping || policies.refund) {
     context += `
@@ -380,7 +380,7 @@ Collections: ${catalogSummary.collections.join(', ') || 'Various'}
       context += `\n⚠️ These policies are merchant-verified. Use them EXACTLY as stated.\n`;
     }
   }
-
+  
   // Add critical guidelines
   context += `
 ═══════════════════════════════════════════════════════
@@ -398,45 +398,19 @@ Collections: ${catalogSummary.collections.join(', ') || 'Various'}
    - "Standard return policy applies"
    - "See product page for warranty details"
 7. Match the brand voice and tone
-8. Consider the target audience when writing
-9. Stay factual and avoid making claims not supported by data
-
-✅ GOOD EXAMPLES:
-- "High-quality product for everyday use"
-- "Made with durable materials"
-- "Perfect for [target audience from context]"
-- "Shipping options available at checkout"
-
-❌ BAD EXAMPLES (DON'T DO THIS):
-- "30-day money back guarantee" (unless in policies above)
-- "Made in Italy" (unless in product data)
-- "ISO 9001 certified" (unless in product data)
-- "Free shipping worldwide" (unless in policies above)
-- "24/7 customer support" (unless specified above)
-
-═══════════════════════════════════════════════════════
 `;
-
-  return context;
+  
+  return context.trim();
 }
 
 /**
- * Build minimal context when full context is unavailable
+ * Minimal context when we cannot fetch live data
  */
 function buildMinimalContext(shop) {
-  const shopName = shop.split('.')[0];
-  
   return `
-STORE CONTEXT:
---------------
-Store: ${shopName}
-
-GUIDELINES:
-- Use ONLY factual information from product data
-- Do NOT invent warranties, shipping terms, or certifications
-- Keep content generic and factual
-- If unsure, use phrases like "see checkout for details"
-`;
+STORE CONTEXT (Limited)
+Store: ${shop}
+Only minimal information is available.`.trim();
 }
 
 /**
@@ -445,7 +419,7 @@ GUIDELINES:
  */
 export async function checkStoreMetadataStatus(shop) {
   try {
-    const accessToken = await resolveAdminToken({ shopDomain: shop });
+    const accessToken = await resolveAdminTokenForShop(shop);
     if (!accessToken) {
       return {
         hasMetadata: false,
