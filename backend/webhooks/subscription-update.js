@@ -42,10 +42,12 @@ export default async function handleSubscriptionUpdate(req, res) {
       shopifySubscriptionId: admin_graphql_api_id 
     });
     
-    // If not found and status is CANCELLED/DECLINED, try to find by shop + pendingActivation
-    // This handles the case where user clicked "back" and subscription was cancelled
-    // but shopifySubscriptionId might not match (or is undefined)
-    if (!subscription && (status === 'CANCELLED' || status === 'DECLINED')) {
+    // If not found, try to find by shop + pendingActivation
+    // This handles cases where:
+    // 1. Webhook arrives before shopifySubscriptionId is saved (race condition)
+    // 2. User clicked "back" and subscription was cancelled/declined
+    // 3. shopifySubscriptionId doesn't match (shouldn't happen, but safety net)
+    if (!subscription) {
       console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation');
       subscription = await Subscription.findOne({ 
         shop, 
@@ -57,8 +59,19 @@ export default async function handleSubscriptionUpdate(req, res) {
           shop,
           plan: subscription.plan,
           shopifySubscriptionId: subscription.shopifySubscriptionId,
-          webhookSubscriptionId: admin_graphql_api_id
+          webhookSubscriptionId: admin_graphql_api_id,
+          status
         });
+        
+        // CRITICAL: Update shopifySubscriptionId if it doesn't match
+        // This handles race condition where webhook arrives before MongoDB update
+        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
+          console.log('[SUBSCRIPTION-UPDATE] Updating shopifySubscriptionId to match webhook:', {
+            old: subscription.shopifySubscriptionId,
+            new: admin_graphql_api_id
+          });
+          subscription.shopifySubscriptionId = admin_graphql_api_id;
+        }
       }
     }
     
@@ -82,6 +95,20 @@ export default async function handleSubscriptionUpdate(req, res) {
     // Handle status transitions
     if (status === 'ACTIVE' && subscription.status !== 'active') {
       // 🎉 SUBSCRIPTION ACTIVATED - Shopify confirmed payment!
+      // CRITICAL: Only activate if pendingActivation is true (user approved the charge)
+      // This prevents activation if webhook arrives before user approval
+      if (!subscription.pendingActivation) {
+        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but pendingActivation is false - skipping activation:', {
+          shop,
+          plan: subscription.plan,
+          shopifySubscriptionId: subscription.shopifySubscriptionId
+        });
+        // Just update status, but don't activate (no tokens, no activatedAt)
+        subscription.status = 'active';
+        await subscription.save();
+        return res.status(200).json({ success: true, skipped: 'pendingActivation is false' });
+      }
+      
       console.log('[SUBSCRIPTION-UPDATE] 🎉 Activating subscription for:', shop);
       
       // Update subscription to active
