@@ -252,7 +252,8 @@ router.get('/info', verifyRequest, async (req, res) => {
           trialEndsAt: subForInfo.trialEndsAt,
           inTrial,
           shopifySubscriptionId: subForInfo.shopifySubscriptionId,
-          activatedAt: subForInfo.activatedAt
+          activatedAt: subForInfo.activatedAt,
+          pendingActivation: subForInfo.pendingActivation || false
         } : null,
         tokens: {
           balance: tokenBalance.balance,

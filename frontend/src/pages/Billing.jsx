@@ -302,6 +302,60 @@ export default function Billing({ shop }) {
           </Layout.Section>
         )}
 
+        {/* Activate Plan Banner - if pendingActivation or active but no activatedAt */}
+        {subscription && !subscription.inTrial && (subscription.pendingActivation || (subscription.status === 'active' && !subscription.activatedAt)) && (
+          <Layout.Section>
+            <Banner
+              title="Plan Activation Pending"
+              tone="warning"
+              action={{
+                content: 'Complete Activation',
+                onAction: async () => {
+                  try {
+                    setPurchasing(true);
+                    setError(null);
+                    
+                    const response = await fetch('/api/billing/activate', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        shop,
+                        endTrial: true
+                      })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                      throw new Error(data.error || 'Failed to activate plan');
+                    }
+                    
+                    if (data.requiresApproval && data.confirmationUrl) {
+                      window.top.location.href = data.confirmationUrl;
+                      return;
+                    }
+                    
+                    const cacheBuster = Date.now();
+                    window.location.href = `/billing?shop=${encodeURIComponent(shop)}&_t=${cacheBuster}&embedded=${new URLSearchParams(window.location.search).get('embedded')}&host=${encodeURIComponent(new URLSearchParams(window.location.search).get('host')|| '')}`;
+                    
+                  } catch (err) {
+                    console.error('[Billing] Activation error:', err);
+                    setError(err.message);
+                  } finally {
+                    setPurchasing(false);
+                  }
+                }
+              }}
+            >
+              <p>
+                Your {subscription.plan} plan activation is pending. Complete the activation to start using all features.
+              </p>
+            </Banner>
+          </Layout.Section>
+        )}
+
         {/* Trial Info Banner - ONLY if in trial */}
         {subscription?.inTrial && (
           <Layout.Section>
@@ -371,7 +425,7 @@ export default function Billing({ shop }) {
                     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '400px', gap: '12px' }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
-                        {subscription?.plan === plan.key && subscription?.status === 'active' && (
+                        {subscription?.plan === plan.key && subscription?.status === 'active' && subscription?.activatedAt && (
                           <Badge tone="success">Current</Badge>
                         )}
                       </InlineStack>
@@ -410,7 +464,7 @@ export default function Billing({ shop }) {
                       {/* Spacer to push button to bottom */}
                       <div style={{ flexGrow: 1 }} />
                       
-                      {subscription?.plan === plan.key && subscription?.status === 'active' ? (
+                      {subscription?.plan === plan.key && subscription?.status === 'active' && subscription?.activatedAt ? (
                         <Box 
                           background="bg-surface-secondary" 
                           padding="300" 
@@ -419,6 +473,17 @@ export default function Billing({ shop }) {
                         >
                           <Text variant="bodySm" alignment="center" tone="subdued" fontWeight="medium">
                             Current Plan
+                          </Text>
+                        </Box>
+                      ) : subscription?.plan === plan.key && subscription?.status === 'active' && !subscription?.activatedAt ? (
+                        <Box 
+                          background="bg-surface-warning-subdued" 
+                          padding="300" 
+                          borderRadius="200"
+                          style={{ marginTop: 'auto' }}
+                        >
+                          <Text variant="bodySm" alignment="center" tone="warning" fontWeight="medium">
+                            Activation Pending
                           </Text>
                         </Box>
                       ) : (
