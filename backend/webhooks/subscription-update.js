@@ -77,14 +77,21 @@ export default async function handleSubscriptionUpdate(req, res) {
           status
         });
         
-        // CRITICAL: Update shopifySubscriptionId if it doesn't match
-        // This handles race condition where webhook arrives before MongoDB update
-        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
+        // CRITICAL: Only update shopifySubscriptionId if:
+        // 1. It doesn't match AND
+        // 2. This is NOT a CANCELLED webhook for an old subscription when we have a new one pending
+        // This prevents overwriting the new subscription ID with an old one
+        const hasPendingNewSubscription = subscription.pendingActivation && subscription.shopifySubscriptionId && subscription.shopifySubscriptionId !== admin_graphql_api_id;
+        const isCancelledOldSubscription = status === 'CANCELLED' && hasPendingNewSubscription;
+        
+        if (subscription.shopifySubscriptionId !== admin_graphql_api_id && !isCancelledOldSubscription) {
           console.log('[SUBSCRIPTION-UPDATE] Updating shopifySubscriptionId to match webhook:', {
             old: subscription.shopifySubscriptionId,
             new: admin_graphql_api_id
           });
           subscription.shopifySubscriptionId = admin_graphql_api_id;
+        } else if (isCancelledOldSubscription) {
+          console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Not updating shopifySubscriptionId.');
         }
       }
     }
