@@ -25,15 +25,18 @@ export default async function handleSubscriptionUpdate(req, res) {
     }
     
     // Extract subscription details from webhook
+    // Shopify sends data in app_subscription object
+    const appSubscription = webhookData.app_subscription || webhookData;
     const {
       admin_graphql_api_id,
       name,
       status,
       test,
       trial_days
-    } = webhookData;
+    } = appSubscription;
     
     console.log('[SUBSCRIPTION-UPDATE] Status:', status, '| Test:', test, '| Trial:', trial_days);
+    console.log('[SUBSCRIPTION-UPDATE] Admin GraphQL API ID:', admin_graphql_api_id);
     
     // Find subscription in our DB
     // First try to find by shopifySubscriptionId (normal case)
