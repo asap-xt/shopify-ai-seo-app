@@ -93,19 +93,6 @@ tokenBalanceSchema.methods.hasBalance = function(requiredTokens) {
   return this.balance >= requiredTokens;
 };
 
-// Check if user has available balance considering trial restrictions
-// During trial, plans with included tokens (Growth Extra, Enterprise) can only use purchased tokens
-// After trial or for plans without included tokens, can use all tokens (included + purchased)
-tokenBalanceSchema.methods.hasAvailableBalance = function(requiredTokens, inTrial, hasIncludedTokens) {
-  if (inTrial && hasIncludedTokens) {
-    // During trial with included tokens plan → can only use purchased tokens
-    return this.totalPurchased >= requiredTokens;
-  } else {
-    // After trial or no included tokens → can use all tokens (included + purchased)
-    return this.balance >= requiredTokens;
-  }
-};
-
 // Reserve tokens temporarily (with safety margin)
 // Returns reservation ID for later adjustment
 tokenBalanceSchema.methods.reserveTokens = function(estimatedAmount, feature, metadata = {}) {

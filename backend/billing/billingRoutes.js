@@ -253,7 +253,8 @@ router.get('/info', verifyRequest, async (req, res) => {
           inTrial,
           shopifySubscriptionId: subForInfo.shopifySubscriptionId,
           activatedAt: subForInfo.activatedAt,
-          pendingActivation: subForInfo.pendingActivation || false
+          pendingActivation: subForInfo.pendingActivation || false,
+          pendingPlan: subForInfo.pendingPlan || null // Include pendingPlan to check if activation is for current plan
         } : null,
         tokens: {
           balance: tokenBalance.balance,
@@ -425,14 +426,17 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         }
       }
       
+      // CRITICAL: If user had pendingActivation for a different plan, clear it
+      // This handles the case where user started activating one plan, clicked back, then chose a different plan
       const planChangeData = {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
-        pendingActivation: true,
+        pendingActivation: true, // Set new pending activation for the new plan
         // PRESERVE trial from existing subscription if still active
         trialEndsAt: preservedTrialEndsAt,
         updatedAt: now
         // NOTE: activatedAt is NOT modified - preserves trial restriction
+        // NOTE: We explicitly set pendingActivation: true to replace any old pendingActivation
       };
       
       subscription = await Subscription.findOneAndUpdate(
@@ -440,6 +444,16 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         planChangeData,
         { new: true }  // NO upsert - subscription must already exist
       );
+      
+      console.log('[Billing] Plan change - set new pendingPlan:', {
+        shop,
+        oldPlan: existingSub.plan,
+        newPlan: plan,
+        oldPendingActivation: existingSub.pendingActivation,
+        newPendingActivation: subscription.pendingActivation,
+        oldPendingPlan: existingSub.pendingPlan,
+        newPendingPlan: subscription.pendingPlan
+      });
       
     } else {
       // First install: Create subscription with pendingPlan so webhook can find it
