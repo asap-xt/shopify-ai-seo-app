@@ -490,6 +490,15 @@ router.get('/callback', async (req, res) => {
       updateData.plan = currentSub.pendingPlan;
       updateData.pendingPlan = null; // Clear pending
       
+      // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
+      // This ensures webhook can find the subscription even if it arrives before callback
+      if (charge_id) {
+        updateData.shopifySubscriptionId = charge_id;
+      } else if (currentSub?.shopifySubscriptionId) {
+        // If no charge_id but we have shopifySubscriptionId from /subscribe, preserve it
+        updateData.shopifySubscriptionId = currentSub.shopifySubscriptionId;
+      }
+      
       // PRESERVE TRIAL if still active!
       // CRITICAL: When switching plans during trial, preserve the original trial end date
       // This ensures remaining trial days are preserved, not reset to new trial period
