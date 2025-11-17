@@ -467,13 +467,19 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         // NOTE: shopifySubscriptionId is updated to the new subscription ID
       };
       
-      // CRITICAL: Always set trialEndsAt to preserve it correctly
-      // If trial is active, preserve the original trial end date
-      // If trial has ended, preserve the existing trialEndsAt (past date) to prevent webhook from creating new one
-      if (preservedTrialEndsAt) {
+      // CRITICAL: Handle trialEndsAt based on activation status
+      // According to Shopify documentation:
+      // - If plan is activated (activatedAt exists): NO trial, continue billing period
+      // - If plan is in trial (no activatedAt): Preserve trial end date
+      if (existingSub.activatedAt) {
+        // CRITICAL: Plan is already activated - NO trial on upgrade!
+        // According to Shopify: upgrade after activation continues billing period (no new trial)
+        planChangeData.trialEndsAt = null;
+      } else if (preservedTrialEndsAt) {
+        // Plan is in trial - preserve the original trial end date
         planChangeData.trialEndsAt = preservedTrialEndsAt;
       }
-      // If preservedTrialEndsAt is null (no trial was ever set), don't set trialEndsAt
+      // If preservedTrialEndsAt is null AND activatedAt doesn't exist, don't set trialEndsAt
       // This allows webhook to set it for first install
       
       subscription = await Subscription.findOneAndUpdate(

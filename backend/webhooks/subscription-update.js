@@ -180,6 +180,7 @@ export default async function handleSubscriptionUpdate(req, res) {
         // CRITICAL: According to Shopify documentation:
         // - If plan is activated (activatedAt exists): NO trial, continue billing period
         // - If plan is in trial (no activatedAt): Preserve trial end date
+        // IMPORTANT: Check activatedAt FIRST - if it exists, plan is already activated!
         if (subscription.activatedAt) {
           // CRITICAL: Plan is already activated - NO trial on upgrade!
           // According to Shopify: upgrade after activation continues billing period (no new trial)
@@ -192,6 +193,7 @@ export default async function handleSubscriptionUpdate(req, res) {
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (first install) - set trialEndsAt:', subscription.trialEndsAt);
         } else {
           // Upgrade/downgrade during trial - preserve existing trialEndsAt
+          // CRITICAL: Only preserve if activatedAt doesn't exist (still in trial)
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade during trial) - preserving existing trialEndsAt:', subscription.trialEndsAt);
         }
         // CRITICAL: DO NOT set activatedAt here - user is in trial, activatedAt should be undefined
