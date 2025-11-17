@@ -303,10 +303,15 @@ export default function Billing({ shop }) {
         )}
 
         {/* Activate Plan Banner - if pendingActivation or active but no activatedAt */}
-        {/* CRITICAL: Only show banner if pendingActivation is for CURRENT plan (no pendingPlan) or pendingPlan matches current plan */}
+        {/* CRITICAL: Only show banner if:
+            1. pendingActivation is true AND pendingPlan is null (from /activate, not from upgrade/downgrade)
+            2. OR pendingActivation is true AND pendingPlan matches current plan (upgrade/downgrade approved)
+            3. OR status is active but no activatedAt and no pendingPlan (edge case)
+        */}
         {subscription && !subscription.inTrial && (
-          (subscription.pendingActivation && (!subscription.pendingPlan || subscription.pendingPlan === subscription.plan)) ||
-          (subscription.status === 'active' && !subscription.activatedAt && !subscription.pendingPlan)
+          (subscription.pendingActivation && !subscription.pendingPlan) || // From /activate (no pendingPlan)
+          (subscription.pendingActivation && subscription.pendingPlan === subscription.plan) || // From upgrade/downgrade (pendingPlan matches current)
+          (subscription.status === 'active' && !subscription.activatedAt && !subscription.pendingPlan) // Edge case
         ) && (
           <Layout.Section>
             <Banner

@@ -240,6 +240,17 @@ export default async function handleSubscriptionUpdate(req, res) {
         // DON'T change status - keep previous plan (starter/trial)
         await subscription.save();
         console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
+      } else if (foundByFallback && !subscriptionIdMatches) {
+        // CRITICAL: If subscription was found by fallback (pendingPlan/pendingActivation) but subscriptionId doesn't match,
+        // this means the CANCELLED webhook is for the pending subscription that wasn't approved
+        // Clear pendingPlan and pendingActivation to allow new plan selection
+        console.log('[SUBSCRIPTION-UPDATE] CANCELLED webhook for pending subscription (found by fallback) - clearing pending state');
+        subscription.pendingPlan = null;
+        subscription.pendingActivation = false;
+        subscription.activatedAt = undefined;
+        // DON'T change status - keep previous plan
+        await subscription.save();
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state from fallback, kept previous plan:', subscription.plan, 'status:', subscription.status);
       } else if (hasPendingState && !subscriptionIdMatches) {
         // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
         // Don't clear pendingActivation - it's for a different subscription!
