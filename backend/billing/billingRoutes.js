@@ -240,7 +240,9 @@ router.get('/info', verifyRequest, async (req, res) => {
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       const now = new Date();
-      const inTrial = subForInfo?.trialEndsAt && now < new Date(subForInfo.trialEndsAt);
+      // CRITICAL: Trial is active only if trialEndsAt exists, is in the future, AND plan is not activated yet
+      // If activatedAt exists, trial has ended (user activated plan during trial)
+      const inTrial = subForInfo?.trialEndsAt && now < new Date(subForInfo.trialEndsAt) && !subForInfo?.activatedAt;
       
       // Note: subscription.price is now a virtual property that auto-computes from plans.js
       
@@ -487,15 +489,15 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // First install: Create subscription with pendingPlan so webhook can find it
       // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
       // This allows webhook to find and activate it even if it arrives before callback
-      // CRITICAL: DO NOT set trialEndsAt here - only set it after user approves!
-      // If user clicks "back", subscription should not have trialEndsAt set
+      // CRITICAL: Set trialEndsAt immediately for first install (trial starts when plan is selected)
+      // If user clicks "back", trialEndsAt will be cleared by webhook if subscription is cancelled
       const firstInstallData = {
         shop,
         plan: plan, // Set current plan (will be updated if pendingPlan is different)
         pendingPlan: plan, // Mark plan as pending until approved
         shopifySubscriptionId: shopifySubscription.id,
         status: 'pending', // Will be activated by webhook or callback
-        // NOTE: trialEndsAt is NOT set here - only set in callback/webhook after approval
+        trialEndsAt: new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000), // CRITICAL: Set trial end date immediately
         updatedAt: now
       };
       
@@ -578,7 +580,9 @@ router.get('/callback', async (req, res) => {
       // PRESERVE TRIAL if still active!
       // CRITICAL: When switching plans during trial, preserve the original trial end date
       // This ensures remaining trial days are preserved, not reset to new trial period
-      if (currentSub.trialEndsAt) {
+      // IMPORTANT: Only preserve trial if plan is NOT activated yet (no activatedAt)
+      // If activatedAt exists, trial has already ended, so don't preserve it
+      if (currentSub.trialEndsAt && !currentSub.activatedAt) {
         const trialEnd = new Date(currentSub.trialEndsAt);
         if (now < trialEnd) {
           // Trial is still active - preserve the original trial end date
@@ -587,10 +591,13 @@ router.get('/callback', async (req, res) => {
           // Trial already ended - clear it
           updateData.trialEndsAt = null;
         }
-      } else if (!currentSub.activatedAt) {
+      } else if (!currentSub.trialEndsAt && !currentSub.activatedAt) {
         // First install: Set trial end date (from TRIAL_DAYS)
-        // Only set if this is first install (no activatedAt) and no trialEndsAt exists
+        // Only set if this is first install (no activatedAt and no trialEndsAt exists)
         updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+      } else if (currentSub.activatedAt) {
+        // Plan is already activated - trial has ended, don't set trialEndsAt
+        updateData.trialEndsAt = null;
       }
     } else if (plan && PLANS[plan]) {
       // CRITICAL: Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
@@ -669,7 +676,8 @@ router.get('/callback', async (req, res) => {
     // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
     if ((currentSub?.pendingPlan || currentSub?.pendingActivation || subscription.activatedAt) && subscription.plan) {
       const now = new Date();
-      const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      // CRITICAL: Trial is active only if trialEndsAt exists, is in the future, AND plan is not activated yet
+      const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt) && !subscription.activatedAt;
       const isFullyActivated = subscription.activatedAt && !inTrial;
       
       if (isFullyActivated) {
@@ -859,7 +867,8 @@ router.post('/check-feature-access', verifyRequest, async (req, res) => {
     // Get subscription and check trial status
     const subscription = await Subscription.findOne({ shop });
     const now = new Date();
-    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    // CRITICAL: Trial is active only if trialEndsAt exists, is in the future, AND plan is not activated yet
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt) && !subscription?.activatedAt;
     
     // If in trial and feature is blocked, return restriction
     if (inTrial && TRIAL_BLOCKED_FEATURES.includes(feature)) {
