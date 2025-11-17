@@ -621,10 +621,9 @@ router.get('/callback', async (req, res) => {
         
       } else if (currentSub?.activatedAt) {
         // Already activated - preserve existing activation data
-        // Only update plan if it changed
-        if (currentSub.plan !== plan) {
-          updateData.plan = plan;
-        }
+        // CRITICAL: Always update plan to match the approved plan (even if same)
+        // This ensures plan is correctly set after approval
+        updateData.plan = plan;
         
         // PRESERVE activatedAt and trialEndsAt
         updateData.activatedAt = currentSub.activatedAt;
