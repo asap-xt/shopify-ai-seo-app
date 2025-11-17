@@ -187,8 +187,17 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
       } else if (hadPendingPlan) {
         // This is from /subscribe endpoint - preserve existing trialEndsAt
-        // TrialEndsAt should already be preserved in /subscribe, so don't overwrite
-        console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe - preserving existing trialEndsAt:', subscription.trialEndsAt);
+        // CRITICAL: If trialEndsAt doesn't exist, it means trial hasn't started yet (first install)
+        // Otherwise, preserve the existing trialEndsAt (from /subscribe)
+        if (!subscription.trialEndsAt) {
+          // First install - set trialEndsAt
+          const { TRIAL_DAYS } = await import('../plans.js');
+          subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (first install) - set trialEndsAt:', subscription.trialEndsAt);
+        } else {
+          // Upgrade/downgrade - preserve existing trialEndsAt
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade) - preserving existing trialEndsAt:', subscription.trialEndsAt);
+        }
       } else if (!subscription.trialEndsAt) {
         // First install - set trialEndsAt
         const { TRIAL_DAYS } = await import('../plans.js');

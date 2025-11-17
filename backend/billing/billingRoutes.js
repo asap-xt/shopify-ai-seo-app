@@ -555,6 +555,7 @@ router.get('/callback', async (req, res) => {
     if (currentSub?.pendingPlan) {
       updateData.plan = currentSub.pendingPlan;
       updateData.pendingPlan = null; // Clear pending
+      updateData.pendingActivation = false; // CRITICAL: Clear pendingActivation when pendingPlan is approved
       
       // CRITICAL: Set activatedAt when user approves subscription (first install or upgrade)
       // This ensures plan is fully activated, not just pending
