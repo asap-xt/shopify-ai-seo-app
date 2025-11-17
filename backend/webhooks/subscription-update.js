@@ -149,6 +149,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // CRITICAL: Store pendingActivation and pendingPlan BEFORE we clear them!
       // This is needed to determine if this is from /activate (end trial) or /subscribe (preserve trial)
+      // Updated: 2025-11-17 - Fixed bug where wasPendingActivation was always false
       const wasPendingActivation = subscription.pendingActivation;
       const hadPendingPlan = !!subscription.pendingPlan;
       
