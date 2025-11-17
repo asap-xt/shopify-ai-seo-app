@@ -560,13 +560,15 @@ router.get('/callback', async (req, res) => {
       updateData.pendingPlan = null; // Clear pending
       updateData.pendingActivation = false; // CRITICAL: Clear pendingActivation when pendingPlan is approved
       
-      // CRITICAL: Set activatedAt when user approves subscription (first install or upgrade)
-      // This ensures plan is fully activated, not just pending
-      if (!currentSub.activatedAt) {
-        updateData.activatedAt = now;
-      } else {
-        // Preserve existing activatedAt (user is upgrading)
+      // CRITICAL: DO NOT set activatedAt when approving pendingPlan - user is in trial period
+      // activatedAt should only be set when user clicks "Activate Plan" (pendingActivation)
+      // If activatedAt already exists (from previous activation), preserve it
+      if (currentSub.activatedAt) {
+        // User already activated plan previously - preserve activatedAt
         updateData.activatedAt = currentSub.activatedAt;
+      } else {
+        // User is in trial - DO NOT set activatedAt
+        // activatedAt will be set when user clicks "Activate Plan" (pendingActivation)
       }
       
       // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
