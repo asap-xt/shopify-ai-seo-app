@@ -155,7 +155,12 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // Update subscription to active
       subscription.status = 'active';
-      subscription.pendingActivation = false;
+      // CRITICAL: DO NOT clear pendingActivation here - it will be cleared in callback after approval
+      // Only clear it if this is NOT from /activate (wasPendingActivation is false)
+      // If wasPendingActivation is true, keep it until callback confirms approval
+      if (!wasPendingActivation) {
+        subscription.pendingActivation = false;
+      }
       
       // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
       if (subscription.pendingPlan) {

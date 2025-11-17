@@ -302,10 +302,9 @@ export default function Billing({ shop }) {
           </Layout.Section>
         )}
 
-        {/* Activate Plan Banner - show during trial if plan is not activated yet */}
-        {/* CRITICAL: Show banner if in trial AND plan is not activated (no activatedAt) */}
-        {/* This allows user to activate plan during trial period */}
-        {subscription && subscription.inTrial && !subscription.activatedAt && (
+        {/* Plan Activation Pending Banner - show ONLY when pendingActivation is true */}
+        {/* CRITICAL: Show banner ONLY if pendingActivation is true (user clicked "Activate Plan" but didn't approve) */}
+        {subscription && subscription.pendingActivation && (
           <Layout.Section>
             <Banner
               title="Plan Activation Pending"
