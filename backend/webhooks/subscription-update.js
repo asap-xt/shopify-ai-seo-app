@@ -206,14 +206,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       } else {
         // TrialEndsAt already exists - preserve it
         console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
-      } else if (!subscription.trialEndsAt) {
-        // First install - set trialEndsAt
-        const { TRIAL_DAYS } = await import('../plans.js');
-        subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-        console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
-      } else {
-        // TrialEndsAt already exists - preserve it
-        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
       }
       
       await subscription.save();
