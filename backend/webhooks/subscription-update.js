@@ -168,15 +168,28 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
       }
       
-      // CRITICAL: NEVER overwrite existing trialEndsAt!
-      // If trialEndsAt exists, it was set correctly in /subscribe (preserved or null)
-      // Only set trialEndsAt if it doesn't exist (first install after approval)
-      if (!subscription.trialEndsAt) {
+      // CRITICAL: Handle trialEndsAt based on whether this is from /activate or /subscribe
+      // If pendingActivation is true, this is from /activate - user wants to END trial, not start new one
+      // If pendingPlan exists, this is from /subscribe - preserve existing trialEndsAt
+      // If neither, this is first install - set trialEndsAt
+      const wasPendingActivation = subscription.pendingActivation; // Store before we clear it
+      
+      if (wasPendingActivation) {
+        // This is from /activate endpoint - user clicked "Activate Plan" to END trial
+        // DO NOT set trialEndsAt - trial should end (set to null in callback)
+        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - trial should end, not setting trialEndsAt');
+        // Don't set trialEndsAt - callback will set it to null
+      } else if (subscription.pendingPlan) {
+        // This is from /subscribe endpoint - preserve existing trialEndsAt (already handled above)
+        // TrialEndsAt should already be preserved in /subscribe, so don't overwrite
+        console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe - preserving existing trialEndsAt:', subscription.trialEndsAt);
+      } else if (!subscription.trialEndsAt) {
+        // First install - set trialEndsAt
         const { TRIAL_DAYS } = await import('../plans.js');
         subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
       } else {
-        // TrialEndsAt already exists - preserve it (could be preserved trial or null if trial ended)
+        // TrialEndsAt already exists - preserve it
         console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
       }
       

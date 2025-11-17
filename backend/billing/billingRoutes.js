@@ -592,8 +592,9 @@ router.get('/callback', async (req, res) => {
         updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
       }
     } else if (plan && PLANS[plan]) {
-      // Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
-      const isPendingActivation = currentSub?.pendingActivation && !currentSub?.activatedAt;
+      // CRITICAL: Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
+      // IMPORTANT: Check pendingActivation FIRST, even if activatedAt is already set (webhook might have arrived first)
+      const isPendingActivation = currentSub?.pendingActivation;
       
       if (isPendingActivation) {
         // CRITICAL: This is an ACTIVATION callback - user approved the charge!
@@ -607,7 +608,7 @@ router.get('/callback', async (req, res) => {
         }
         updateData.plan = plan;
         updateData.trialEndsAt = null; // Trial ended when user clicked "Activate Plan"
-        updateData.pendingActivation = false; // CRITICAL: Clear pending activation flag
+        updateData.pendingActivation = false; // CRITICAL: Clear pending activation flag (ALWAYS clear if pendingActivation was true)
         
         // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
         // This ensures webhook can find the subscription even if it arrives before callback
