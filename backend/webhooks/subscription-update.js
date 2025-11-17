@@ -147,6 +147,11 @@ export default async function handleSubscriptionUpdate(req, res) {
       // CRITICAL: Define now at the start of activation block
       const now = new Date();
       
+      // CRITICAL: Store pendingActivation and pendingPlan BEFORE we clear them!
+      // This is needed to determine if this is from /activate (end trial) or /subscribe (preserve trial)
+      const wasPendingActivation = subscription.pendingActivation;
+      const hadPendingPlan = !!subscription.pendingPlan;
+      
       // Update subscription to active
       subscription.status = 'active';
       subscription.pendingActivation = false;
@@ -169,18 +174,18 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       // CRITICAL: Handle trialEndsAt based on whether this is from /activate or /subscribe
-      // If pendingActivation is true, this is from /activate - user wants to END trial, not start new one
-      // If pendingPlan exists, this is from /subscribe - preserve existing trialEndsAt
+      // If pendingActivation was true, this is from /activate - user wants to END trial, not start new one
+      // If pendingPlan existed, this is from /subscribe - preserve existing trialEndsAt
       // If neither, this is first install - set trialEndsAt
-      const wasPendingActivation = subscription.pendingActivation; // Store before we clear it
       
       if (wasPendingActivation) {
         // This is from /activate endpoint - user clicked "Activate Plan" to END trial
         // DO NOT set trialEndsAt - trial should end (set to null in callback)
-        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - trial should end, not setting trialEndsAt');
-        // Don't set trialEndsAt - callback will set it to null
-      } else if (subscription.pendingPlan) {
-        // This is from /subscribe endpoint - preserve existing trialEndsAt (already handled above)
+        // CRITICAL: Clear trialEndsAt to end trial immediately
+        subscription.trialEndsAt = null;
+        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
+      } else if (hadPendingPlan) {
+        // This is from /subscribe endpoint - preserve existing trialEndsAt
         // TrialEndsAt should already be preserved in /subscribe, so don't overwrite
         console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe - preserving existing trialEndsAt:', subscription.trialEndsAt);
       } else if (!subscription.trialEndsAt) {
