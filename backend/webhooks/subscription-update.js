@@ -157,16 +157,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       subscription.status = 'active';
       subscription.pendingActivation = false;
       
-      // CRITICAL: Only set activatedAt if not already set (callback might have arrived first)
-      // This prevents overwriting activatedAt if callback already set it
-      if (!subscription.activatedAt) {
-        subscription.activatedAt = now;
-        console.log('[SUBSCRIPTION-UPDATE] Set activatedAt:', subscription.activatedAt);
-      } else {
-        // Callback already set activatedAt - preserve it
-        console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt:', subscription.activatedAt);
-      }
-      
       // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
       if (subscription.pendingPlan) {
         subscription.plan = subscription.pendingPlan;
@@ -174,13 +164,14 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
       }
       
-      // CRITICAL: Handle trialEndsAt based on whether this is from /activate or /subscribe
+      // CRITICAL: Handle trialEndsAt and activatedAt based on whether this is from /activate or /subscribe
       // IMPORTANT: Check hadPendingPlan FIRST - if pendingPlan existed, this is from /subscribe (upgrade/downgrade)
       // If pendingActivation was true BUT no pendingPlan, this is from /activate - user wants to END trial
       // If neither, this is first install - set trialEndsAt
       
       if (hadPendingPlan) {
-        // This is from /subscribe endpoint (upgrade/downgrade) - preserve existing trialEndsAt
+        // This is from /subscribe endpoint (upgrade/downgrade or first install) - DO NOT set activatedAt yet
+        // User is in trial - activatedAt should only be set when they click "Activate Plan" (wasPendingActivation)
         // CRITICAL: If trialEndsAt doesn't exist, it means trial hasn't started yet (first install)
         // Otherwise, preserve the existing trialEndsAt (from /subscribe)
         if (!subscription.trialEndsAt) {
@@ -192,10 +183,22 @@ export default async function handleSubscriptionUpdate(req, res) {
           // Upgrade/downgrade - preserve existing trialEndsAt
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade) - preserving existing trialEndsAt:', subscription.trialEndsAt);
         }
+        // CRITICAL: DO NOT set activatedAt here - user is in trial, activatedAt should be undefined
+        // Only set activatedAt if callback already set it (shouldn't happen, but preserve it if it did)
+        if (subscription.activatedAt) {
+          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
+        } else {
+          console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
+        }
       } else if (wasPendingActivation) {
         // This is from /activate endpoint - user clicked "Activate Plan" to END trial
-        // DO NOT set trialEndsAt - trial should end (set to null in callback)
-        // CRITICAL: Clear trialEndsAt to end trial immediately
+        // CRITICAL: Set activatedAt and clear trialEndsAt to end trial immediately
+        if (!subscription.activatedAt) {
+          subscription.activatedAt = now;
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - set activatedAt:', subscription.activatedAt);
+        } else {
+          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
+        }
         subscription.trialEndsAt = null;
         console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
       } else if (!subscription.trialEndsAt) {
@@ -203,9 +206,17 @@ export default async function handleSubscriptionUpdate(req, res) {
         const { TRIAL_DAYS } = await import('../plans.js');
         subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
+        // CRITICAL: DO NOT set activatedAt - user is in trial
+        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       } else {
         // TrialEndsAt already exists - preserve it
         console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
+        // CRITICAL: DO NOT set activatedAt - user is in trial
+        if (subscription.activatedAt) {
+          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
+        } else {
+          console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
+        }
       }
       
       await subscription.save();
