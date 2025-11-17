@@ -61,19 +61,15 @@ export default function Dashboard({ shop: shopProp }) {
   
   // Onboarding state logic:
   // 1. First REAL show (with active subscription): open, then mark as seen
-  // 2. Subsequent loads: closed by default (hasBeenSeenOnce = true), but can be toggled manually
+  // 2. Subsequent loads: closed by default (hasBeenSeenOnce = true)
+  // NOTE: Manual toggle state is NOT persisted - card always starts closed on subsequent loads
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
     try {
       const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
-      if (hasBeenSeenOnce) {
-        // Subsequent loads - check if user manually toggled it
-        const manualToggle = localStorage.getItem(`onboardingOpen_${shop}`);
-        return manualToggle === 'true'; // If manually set to true, respect it; otherwise false
-      }
-      // First time - will be opened when subscription is confirmed (see useEffect below)
-      return true;
+      // Always closed on subsequent loads (ignore manual toggle from previous session)
+      return !hasBeenSeenOnce; // Open only if never seen before
     } catch {
-      return true; // Default open if localStorage fails
+      return false; // Default closed if localStorage fails
     }
   });
   
@@ -114,6 +110,7 @@ export default function Dashboard({ shop: shopProp }) {
   // Mark Getting Started card as "seen" after first REAL show (with active subscription or trial)
   // This only happens after user activates a plan and sees Dashboard, not on first load before redirect
   // Works for both active subscriptions and trial period (both have subscription.plan)
+  // CRITICAL: Open card on first show, then mark as seen and close on next load
   useEffect(() => {
     if (!loading && subscription?.plan) {
       // Dashboard is loaded and has active subscription (including trial) - this is a real view
@@ -121,8 +118,13 @@ export default function Dashboard({ shop: shopProp }) {
       try {
         const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
         if (!hasBeenSeenOnce) {
-          // First real show - mark as seen (card will stay open for this session)
+          // First real show - open card and mark as seen
+          // Card will stay open for this session, but will be closed on next load
+          setOnboardingOpen(true);
           localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
+        } else {
+          // Subsequent loads - ensure card is closed (ignore any manual toggle from previous session)
+          setOnboardingOpen(false);
         }
       } catch (error) {
         console.error('[Dashboard] Error marking Getting Started as seen:', error);
@@ -400,18 +402,13 @@ export default function Dashboard({ shop: shopProp }) {
     }
   };
 
-  // Handle onboarding toggle with localStorage persistence
-  // This saves the manual toggle state, but on next load it will default to closed
-  // unless user manually opens it again
+  // Handle onboarding toggle
+  // NOTE: Manual toggle state is NOT persisted - card always starts closed on subsequent loads
+  // This ensures card is only open on first view after plan selection
   const handleOnboardingToggle = () => {
     const newState = !onboardingOpen;
     setOnboardingOpen(newState);
-    try {
-      // Save manual toggle state
-      localStorage.setItem(`onboardingOpen_${shop}`, String(newState));
-    } catch (error) {
-      console.error('[Dashboard] Error saving onboarding state:', error);
-    }
+    // Do NOT save to localStorage - card should always start closed on next load
   };
 
   if (loading) {
@@ -466,6 +463,42 @@ export default function Dashboard({ shop: shopProp }) {
                       <strong>Important:</strong> This app primarily <strong>structures</strong> your existing data rather than creating new content. 
                       AI-enhanced features are supplementary and require additional tokens (unless you're on Growth Extra or Enterprise plans).
                     </Text>
+                  </BlockStack>
+                  
+                  <Divider />
+                  
+                  <BlockStack gap="200">
+                    <Text variant="headingMd" as="h3">Video Tutorial</Text>
+                    <Box 
+                      padding="400" 
+                      background="bg-surface-secondary"
+                      borderRadius="200"
+                    >
+                      <div style={{
+                        position: 'relative',
+                        paddingBottom: '56.25%', // 16:9 aspect ratio
+                        height: 0,
+                        overflow: 'hidden',
+                        maxWidth: '100%',
+                        borderRadius: '8px'
+                      }}>
+                        <iframe
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            border: 'none'
+                          }}
+                          src="https://www.youtube-nocookie.com/embed/bNfDsyDQEkc?origin=https://admin.shopify.com"
+                          title="Video Tutorial"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    </Box>
                   </BlockStack>
                   
                   <Divider />
@@ -585,42 +618,6 @@ export default function Dashboard({ shop: shopProp }) {
                         and review plan recommendations.
                       </Text>
                     </BlockStack>
-                  </BlockStack>
-                  
-                  <Divider />
-                  
-                  <BlockStack gap="200">
-                    <Text variant="headingMd" as="h3">Video Tutorial</Text>
-                    <Box 
-                      padding="400" 
-                      background="bg-surface-secondary"
-                      borderRadius="200"
-                    >
-                      <div style={{
-                        position: 'relative',
-                        paddingBottom: '56.25%', // 16:9 aspect ratio
-                        height: 0,
-                        overflow: 'hidden',
-                        maxWidth: '100%',
-                        borderRadius: '8px'
-                      }}>
-                        <iframe
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            border: 'none'
-                          }}
-                          src="https://www.youtube-nocookie.com/embed/bNfDsyDQEkc?origin=https://admin.shopify.com"
-                          title="Video Tutorial"
-                          referrerPolicy="no-referrer-when-downgrade"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
-                    </Box>
                   </BlockStack>
                   
                   <Box paddingBlockStart="200">
