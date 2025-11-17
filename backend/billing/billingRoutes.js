@@ -435,6 +435,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // CRITICAL: Clear old pendingActivation if it exists (from /activate or previous upgrade/downgrade)
       // This ensures that when upgrading/downgrading, old pendingActivation is cleared
       // This allows user to upgrade/downgrade even if they have pendingActivation from /activate
+      // Updated: 2025-11-17 - Fixed pending activation blocking issue
       if (existingSub.pendingActivation && !existingSub.pendingPlan) {
         // Old pendingActivation from /activate (no pendingPlan) - clear it
         console.log('[Billing] Clearing old pendingActivation (from /activate) before setting new pendingPlan');
