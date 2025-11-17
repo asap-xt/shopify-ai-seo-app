@@ -530,6 +530,15 @@ router.get('/callback', async (req, res) => {
       updateData.plan = currentSub.pendingPlan;
       updateData.pendingPlan = null; // Clear pending
       
+      // CRITICAL: Set activatedAt when user approves subscription (first install or upgrade)
+      // This ensures plan is fully activated, not just pending
+      if (!currentSub.activatedAt) {
+        updateData.activatedAt = now;
+      } else {
+        // Preserve existing activatedAt (user is upgrading)
+        updateData.activatedAt = currentSub.activatedAt;
+      }
+      
       // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
       // This ensures webhook can find the subscription even if it arrives before callback
       if (charge_id) {
@@ -551,6 +560,10 @@ router.get('/callback', async (req, res) => {
           // Trial already ended - clear it
           updateData.trialEndsAt = null;
         }
+      } else if (!currentSub.activatedAt) {
+        // First install: Set trial end date (from TRIAL_DAYS)
+        // Only set if this is first install (no activatedAt) and no trialEndsAt exists
+        updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
       }
     } else if (plan && PLANS[plan]) {
       // Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
@@ -584,12 +597,27 @@ router.get('/callback', async (req, res) => {
         updateData.trialEndsAt = currentSub.trialEndsAt;
         
       } else {
-        // First subscription: Create subscription NOW (after approval)
+        // First subscription approval: Activate subscription NOW (after approval)
+        // CRITICAL: Set activatedAt when user approves first subscription
         updateData.plan = plan;
         updateData.pendingPlan = null;
+        updateData.activatedAt = now; // CRITICAL: Set activatedAt on first approval
         
-        // Set trial end date (from TRIAL_DAYS)
-        updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        // Set trial end date (from TRIAL_DAYS) only if not already set
+        // This handles cases where trialEndsAt was set by webhook before callback
+        if (!currentSub?.trialEndsAt) {
+          updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        } else {
+          // Preserve existing trialEndsAt (set by webhook)
+          updateData.trialEndsAt = currentSub.trialEndsAt;
+        }
+        
+        // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
+        if (charge_id) {
+          updateData.shopifySubscriptionId = charge_id;
+        } else if (currentSub?.shopifySubscriptionId) {
+          updateData.shopifySubscriptionId = currentSub.shopifySubscriptionId;
+        }
       }
     }
     

@@ -144,10 +144,13 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       console.log('[SUBSCRIPTION-UPDATE] 🎉 Activating subscription for:', shop);
       
+      // CRITICAL: Define now at the start of activation block
+      const now = new Date();
+      
       // Update subscription to active
       subscription.status = 'active';
       subscription.pendingActivation = false;
-      subscription.activatedAt = new Date();
+      subscription.activatedAt = now;
       
       // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
       if (subscription.pendingPlan) {
@@ -158,17 +161,20 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // CRITICAL: Set trialEndsAt only if not already set (first install after approval)
       // If trialEndsAt is not set, this is a first install and user just approved - start trial now
+      // IMPORTANT: If trialEndsAt already exists, preserve it (user is upgrading during trial)
       if (!subscription.trialEndsAt) {
         const { TRIAL_DAYS } = await import('../plans.js');
         subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
+      } else {
+        // Trial already exists - preserve it (user is upgrading during trial)
+        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
       }
       
       await subscription.save();
       
       // Set included tokens for the plan (replaces old, keeps purchased)
       // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
-      const now = new Date();
       const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
       const isFullyActivated = subscription.activatedAt && !inTrial;
       
