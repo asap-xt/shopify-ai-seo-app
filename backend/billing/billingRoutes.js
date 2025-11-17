@@ -426,23 +426,9 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         }
       }
       
-      // CRITICAL: Clear old pendingActivation if it exists (from /activate or previous upgrade/downgrade)
-      // This ensures that when downgrading/upgrading, old pendingActivation is cleared
-      // We do this BEFORE setting new pendingPlan to ensure clean state
-      if (existingSub.pendingActivation && !existingSub.pendingPlan) {
-        // Old pendingActivation from /activate (no pendingPlan) - clear it
-        console.log('[Billing] Clearing old pendingActivation (from /activate) before setting new pendingPlan');
-        await Subscription.updateOne(
-          { shop },
-          { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
-        );
-      }
-      
       // CRITICAL: If user had pendingActivation for a different plan, clear it
       // This handles the case where user started activating one plan, clicked back, then chose a different plan
       // Also clear old shopifySubscriptionId if it exists (from previous pending activation)
-      // CRITICAL: If user had pendingActivation for current plan (from /activate), clear it when downgrading
-      // This ensures that when downgrading, old pendingActivation is cleared
       const planChangeData = {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
@@ -453,7 +439,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         // NOTE: activatedAt is NOT modified - preserves trial restriction
         // NOTE: We explicitly set pendingActivation: true to replace any old pendingActivation
         // NOTE: shopifySubscriptionId is updated to the new subscription ID
-        // NOTE: This will overwrite any existing pendingActivation (from /activate) when downgrading
       };
       
       subscription = await Subscription.findOneAndUpdate(
