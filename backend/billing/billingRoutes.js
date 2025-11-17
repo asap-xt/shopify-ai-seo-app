@@ -433,13 +433,17 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
         pendingActivation: true, // Set new pending activation for the new plan
-        // PRESERVE trial from existing subscription if still active
-        trialEndsAt: preservedTrialEndsAt,
         updatedAt: now
         // NOTE: activatedAt is NOT modified - preserves trial restriction
         // NOTE: We explicitly set pendingActivation: true to replace any old pendingActivation
         // NOTE: shopifySubscriptionId is updated to the new subscription ID
       };
+      
+      // CRITICAL: Only set trialEndsAt if preservedTrialEndsAt is not null
+      // This prevents overwriting existing trialEndsAt with null when trial has ended
+      if (preservedTrialEndsAt) {
+        planChangeData.trialEndsAt = preservedTrialEndsAt;
+      }
       
       subscription = await Subscription.findOneAndUpdate(
         { shop },
