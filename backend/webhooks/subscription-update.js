@@ -270,12 +270,13 @@ export default async function handleSubscriptionUpdate(req, res) {
       // We should only clear pendingActivation if the cancelled subscription matches the current one
       const subscriptionIdMatches = subscription.shopifySubscriptionId === admin_graphql_api_id;
       
-      // CRITICAL: If pendingActivation OR pendingPlan exists AND (subscriptionId matches OR found by fallback), user clicked "back" without approving
-      // In this case, DON'T change status - just clear pendingActivation, pendingPlan, and activatedAt
-      // This keeps the previous plan (starter/trial) visible to the user
-      // NOTE: If found by fallback, this means the webhook is for this subscription (found by pendingPlan/pendingActivation)
+      // CRITICAL: If pendingActivation OR pendingPlan exists AND subscriptionId matches, user clicked "back" without approving
+      // IMPORTANT: Do NOT use foundByFallback here! If foundByFallback is true but subscriptionIdMatches is false,
+      // it means this is a CANCELLED webhook for an OLD subscription, and we found the subscription by pendingActivation
+      // In that case, we should NOT clear pendingActivation - it's for the NEW subscription!
+      // Only clear if subscriptionIdMatches is true (user clicked "back" on the SAME subscription)
       const hasPendingState = subscription.pendingActivation || subscription.pendingPlan;
-      const shouldClearPending = subscriptionIdMatches || foundByFallback;
+      const shouldClearPending = subscriptionIdMatches; // CRITICAL: Only clear if IDs match!
       
       if (hasPendingState && shouldClearPending) {
         console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending state but keeping previous plan status');
