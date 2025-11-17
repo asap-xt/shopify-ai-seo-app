@@ -639,18 +639,20 @@ router.get('/callback', async (req, res) => {
         updateData.trialEndsAt = currentSub.trialEndsAt;
         
       } else {
-        // First subscription approval: Activate subscription NOW (after approval)
-        // CRITICAL: Set activatedAt when user approves first subscription
+        // First subscription approval: User approved plan from /subscribe
+        // CRITICAL: DO NOT set activatedAt here - user is in trial period
+        // activatedAt should only be set when user clicks "Activate Plan" (pendingActivation)
         updateData.plan = plan;
         updateData.pendingPlan = null;
-        updateData.activatedAt = now; // CRITICAL: Set activatedAt on first approval
+        // CRITICAL: DO NOT set activatedAt - user is in trial, activatedAt should be undefined
+        // Only set activatedAt when user explicitly clicks "Activate Plan" (pendingActivation)
         
         // Set trial end date (from TRIAL_DAYS) only if not already set
         // This handles cases where trialEndsAt was set by webhook before callback
         if (!currentSub?.trialEndsAt) {
           updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         } else {
-          // Preserve existing trialEndsAt (set by webhook)
+          // Preserve existing trialEndsAt (set by webhook or /subscribe)
           updateData.trialEndsAt = currentSub.trialEndsAt;
         }
         
