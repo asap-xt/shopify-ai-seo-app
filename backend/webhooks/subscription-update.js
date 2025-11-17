@@ -295,25 +295,16 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
       } else if (hasPendingState && !subscriptionIdMatches) {
         // This is a CANCELLED webhook for an OLD subscription
-        // CRITICAL: If we have pendingActivation, this means user clicked "back" from /activate
-        // The old subscription was cancelled when new one was created, so we should clear pendingActivation
-        // This allows user to try activating again or upgrade/downgrade
-        if (subscription.pendingActivation) {
-          console.log('[SUBSCRIPTION-UPDATE] CANCELLED webhook for old subscription - clearing pendingActivation to allow new activation');
-          subscription.pendingActivation = false;
-          subscription.activatedAt = undefined;
-          // DON'T clear shopifySubscriptionId - it might be for the new subscription
+        // CRITICAL: When /activate is called, old subscription is cancelled and new one is created
+        // The new subscription has a NEW shopifySubscriptionId, so subscriptionIdMatches is false
+        // We should NOT clear pendingActivation here - it's for the NEW subscription, not the old one!
+        // Only clear pendingActivation if user clicked "back" (which happens in the first if block above)
+        console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
+        // DON'T clear pendingActivation - it's for the NEW subscription that's waiting for approval
+        // Just update the shopifySubscriptionId if it was updated by fallback search
+        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
+          // This shouldn't happen, but if it does, we already updated it in the fallback search
           await subscription.save();
-          console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pendingActivation from old subscription cancellation');
-        } else {
-          // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
-          // Don't clear pendingPlan - it's for a different subscription!
-          console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
-          // Just update the shopifySubscriptionId if it was updated by fallback search
-          if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
-            // This shouldn't happen, but if it does, we already updated it in the fallback search
-            await subscription.save();
-          }
         }
       } else {
         // Subscription was active and now cancelled by merchant

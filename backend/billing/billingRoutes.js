@@ -990,26 +990,59 @@ router.post('/activate', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
     
-    // CRITICAL: Clear any existing pendingPlan or pendingActivation before creating new activation
-    // This ensures that if user has pendingPlan from upgrade/downgrade, or pendingActivation from previous /activate,
-    // we clear them before creating a new activation request
-    // This allows user to activate even if they have pending state from previous actions
-    if (subscription.pendingPlan || subscription.pendingActivation) {
-      console.log('[BILLING-ACTIVATE] Clearing existing pending state before new activation:', {
+    // CRITICAL: Clear any existing pendingPlan before creating new activation
+    // BUT: DO NOT clear pendingActivation or shopifySubscriptionId if they exist
+    // If pendingActivation exists, it means user clicked "Activate Plan" but didn't approve
+    // We should check if that subscription was cancelled, and only then clear it
+    // This allows user to retry activation if previous attempt failed
+    if (subscription.pendingPlan) {
+      console.log('[BILLING-ACTIVATE] Clearing existing pendingPlan before new activation:', {
         shop,
         currentPlan: subscription.plan,
-        pendingPlan: subscription.pendingPlan,
-        pendingActivation: subscription.pendingActivation
+        pendingPlan: subscription.pendingPlan
       });
       await Subscription.updateOne(
         { shop },
-        { $unset: { pendingPlan: '', pendingActivation: '', shopifySubscriptionId: '' } }
+        { $unset: { pendingPlan: '' } }
       );
       
-      // Reload subscription without pending state
+      // Reload subscription without pendingPlan
       const updatedSub = await Subscription.findOne({ shop });
       if (updatedSub) {
         Object.assign(subscription, updatedSub.toObject());
+      }
+    }
+    
+    // CRITICAL: If pendingActivation exists, check if the subscription was cancelled
+    // If it was cancelled (user clicked "back"), clear pendingActivation to allow new activation
+    if (subscription.pendingActivation && subscription.shopifySubscriptionId) {
+      const shopDoc = await Shop.findOne({ shop });
+      if (shopDoc?.accessToken) {
+        const { getSubscriptionById } = await import('./shopifyBilling.js');
+        const shopifySub = await getSubscriptionById(
+          shop, 
+          subscription.shopifySubscriptionId, 
+          shopDoc.accessToken
+        );
+        
+        // If subscription doesn't exist or is CANCELLED, clear pendingActivation
+        if (!shopifySub || shopifySub.status === 'CANCELLED') {
+          console.log('[BILLING-ACTIVATE] Clearing pendingActivation for cancelled/non-existent subscription:', {
+            shop,
+            shopifySubscriptionId: subscription.shopifySubscriptionId,
+            shopifySubStatus: shopifySub?.status
+          });
+          await Subscription.updateOne(
+            { shop },
+            { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
+          );
+          
+          // Reload subscription without pendingActivation
+          const updatedSub = await Subscription.findOne({ shop });
+          if (updatedSub) {
+            Object.assign(subscription, updatedSub.toObject());
+          }
+        }
       }
     }
     
