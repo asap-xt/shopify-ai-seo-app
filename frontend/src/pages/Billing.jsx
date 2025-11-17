@@ -304,7 +304,8 @@ export default function Billing({ shop }) {
 
         {/* Plan Activation Pending Banner - show ONLY when pendingActivation is true */}
         {/* CRITICAL: Show banner ONLY if pendingActivation is true (user clicked "Activate Plan" but didn't approve) */}
-        {subscription && subscription.pendingActivation && (
+        {/* IMPORTANT: Do NOT show if pendingPlan exists (that's a different state - plan waiting for approval) */}
+        {subscription && subscription.pendingActivation && !subscription.pendingPlan && (
           <Layout.Section>
             <Banner
               title="Plan Activation Pending"
@@ -357,8 +358,9 @@ export default function Billing({ shop }) {
           </Layout.Section>
         )}
 
-        {/* Trial Info Banner - ONLY if in trial */}
-        {subscription?.inTrial && (
+        {/* Trial Info Banner - ONLY if in trial and NOT pending activation */}
+        {/* IMPORTANT: Do NOT show trial banner if pendingActivation is true (user clicked "Activate Plan") */}
+        {subscription?.inTrial && !subscription?.pendingActivation && (
           <Layout.Section>
             <Banner
               title="Trial Period Active"
