@@ -177,16 +177,22 @@ export default async function handleSubscriptionUpdate(req, res) {
       if (hadPendingPlan) {
         // This is from /subscribe endpoint (upgrade/downgrade or first install) - DO NOT set activatedAt yet
         // User is in trial - activatedAt should only be set when they click "Activate Plan" (wasPendingActivation)
-        // CRITICAL: If trialEndsAt doesn't exist, it means trial hasn't started yet (first install)
-        // Otherwise, preserve the existing trialEndsAt (from /subscribe)
-        if (!subscription.trialEndsAt) {
+        // CRITICAL: According to Shopify documentation:
+        // - If plan is activated (activatedAt exists): NO trial, continue billing period
+        // - If plan is in trial (no activatedAt): Preserve trial end date
+        if (subscription.activatedAt) {
+          // CRITICAL: Plan is already activated - NO trial on upgrade!
+          // According to Shopify: upgrade after activation continues billing period (no new trial)
+          subscription.trialEndsAt = null;
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade after activation) - NO trial, continuing billing period');
+        } else if (!subscription.trialEndsAt) {
           // First install - set trialEndsAt
           const { TRIAL_DAYS } = await import('../plans.js');
           subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (first install) - set trialEndsAt:', subscription.trialEndsAt);
         } else {
-          // Upgrade/downgrade - preserve existing trialEndsAt
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade) - preserving existing trialEndsAt:', subscription.trialEndsAt);
+          // Upgrade/downgrade during trial - preserve existing trialEndsAt
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade during trial) - preserving existing trialEndsAt:', subscription.trialEndsAt);
         }
         // CRITICAL: DO NOT set activatedAt here - user is in trial, activatedAt should be undefined
         // Only set activatedAt if callback already set it (shouldn't happen, but preserve it if it did)

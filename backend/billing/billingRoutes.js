@@ -417,21 +417,27 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     
     if (existingSub) {
       // Plan change: Set new plan as pending (will be activated in callback)
-      // CRITICAL: Preserve trial end date if trial is still active
+      // CRITICAL: According to Shopify documentation:
+      // - If plan is activated (activatedAt exists): NO trial, continue billing period
+      // - If plan is in trial (no activatedAt): Preserve trial end date
       // This ensures that when switching plans during trial, remaining days are preserved
-      // IMPORTANT: If trial has ended, preserve the existing trialEndsAt (don't set to null)
-      // This ensures webhook doesn't create a new trialEndsAt when trial has already ended
+      // But if plan is already activated, billing period continues (no trial)
       let preservedTrialEndsAt = null;
-      if (existingSub.trialEndsAt) {
+      if (existingSub.trialEndsAt && !existingSub.activatedAt) {
+        // CRITICAL: Only preserve trial if plan is NOT activated yet
+        // If activatedAt exists, plan is already activated - no trial on upgrade!
         const trialEnd = new Date(existingSub.trialEndsAt);
         if (now < trialEnd) {
           // Trial is still active - preserve the original trial end date
           preservedTrialEndsAt = existingSub.trialEndsAt;
         } else {
-          // Trial has ended - preserve the existing trialEndsAt (past date)
-          // This prevents webhook from creating a new trialEndsAt
-          preservedTrialEndsAt = existingSub.trialEndsAt;
+          // Trial already ended (past date) - clear it
+          preservedTrialEndsAt = null;
         }
+      } else if (existingSub.activatedAt) {
+        // CRITICAL: Plan is already activated - NO trial on upgrade!
+        // According to Shopify: upgrade after activation continues billing period
+        preservedTrialEndsAt = null;
       }
       
       // CRITICAL: Clear old pendingActivation if it exists (from /activate or previous upgrade/downgrade)
@@ -581,11 +587,17 @@ router.get('/callback', async (req, res) => {
       }
       
       // PRESERVE TRIAL if still active!
-      // CRITICAL: When switching plans during trial, preserve the original trial end date
-      // This ensures remaining trial days are preserved, not reset to new trial period
+      // CRITICAL: According to Shopify documentation:
+      // - If plan is activated (activatedAt exists): NO trial, continue billing period
+      // - If plan is in trial (no activatedAt): Preserve trial end date
       // IMPORTANT: Only preserve trial if plan is NOT activated yet (no activatedAt)
-      // If activatedAt exists, trial has already ended, so don't preserve it
-      if (currentSub.trialEndsAt && !currentSub.activatedAt) {
+      // If activatedAt exists, plan is already activated - no trial on upgrade!
+      if (currentSub.activatedAt) {
+        // CRITICAL: Plan is already activated - NO trial on upgrade!
+        // According to Shopify: upgrade after activation continues billing period (no new trial)
+        updateData.trialEndsAt = null;
+      } else if (currentSub.trialEndsAt) {
+        // Plan is in trial - preserve trial end date
         const trialEnd = new Date(currentSub.trialEndsAt);
         if (now < trialEnd) {
           // Trial is still active - preserve the original trial end date
@@ -594,13 +606,10 @@ router.get('/callback', async (req, res) => {
           // Trial already ended - clear it
           updateData.trialEndsAt = null;
         }
-      } else if (!currentSub.trialEndsAt && !currentSub.activatedAt) {
+      } else if (!currentSub.trialEndsAt) {
         // First install: Set trial end date (from TRIAL_DAYS)
         // Only set if this is first install (no activatedAt and no trialEndsAt exists)
         updateData.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-      } else if (currentSub.activatedAt) {
-        // Plan is already activated - trial has ended, don't set trialEndsAt
-        updateData.trialEndsAt = null;
       }
     } else if (plan && PLANS[plan]) {
       // CRITICAL: Check if this is an ACTIVATION callback (user clicked "Activate Plan" and approved)
