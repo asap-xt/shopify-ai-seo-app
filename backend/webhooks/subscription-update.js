@@ -68,6 +68,12 @@ export default async function handleSubscriptionUpdate(req, res) {
         });
       }
       
+      // If still not found, try by shop only (for upgrade after activation)
+      // This handles the case where upgrade happens after activation and webhook arrives before callback
+      if (!subscription) {
+        subscription = await Subscription.findOne({ shop });
+      }
+      
       if (subscription) {
         foundByFallback = true; // Mark that subscription was found by fallback search
         console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation/pendingPlan:', {

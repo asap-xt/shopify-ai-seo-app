@@ -651,9 +651,12 @@ router.get('/callback', async (req, res) => {
         // This ensures plan is correctly set after approval
         updateData.plan = plan;
         
-        // PRESERVE activatedAt and trialEndsAt
+        // CRITICAL: According to Shopify documentation:
+        // - If plan is activated (activatedAt exists): NO trial, continue billing period
+        // - Upgrade after activation continues billing period (no new trial)
+        // PRESERVE activatedAt but CLEAR trialEndsAt (no trial on upgrade after activation!)
         updateData.activatedAt = currentSub.activatedAt;
-        updateData.trialEndsAt = currentSub.trialEndsAt;
+        updateData.trialEndsAt = null; // CRITICAL: NO trial on upgrade after activation!
         
       } else {
         // First subscription approval: User approved plan from /subscribe
