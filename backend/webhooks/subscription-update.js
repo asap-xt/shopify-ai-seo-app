@@ -150,7 +150,16 @@ export default async function handleSubscriptionUpdate(req, res) {
       // Update subscription to active
       subscription.status = 'active';
       subscription.pendingActivation = false;
-      subscription.activatedAt = now;
+      
+      // CRITICAL: Only set activatedAt if not already set (callback might have arrived first)
+      // This prevents overwriting activatedAt if callback already set it
+      if (!subscription.activatedAt) {
+        subscription.activatedAt = now;
+        console.log('[SUBSCRIPTION-UPDATE] Set activatedAt:', subscription.activatedAt);
+      } else {
+        // Callback already set activatedAt - preserve it
+        console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt:', subscription.activatedAt);
+      }
       
       // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
       if (subscription.pendingPlan) {
@@ -159,15 +168,15 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
       }
       
-      // CRITICAL: Set trialEndsAt only if not already set (first install after approval)
-      // If trialEndsAt is not set, this is a first install and user just approved - start trial now
-      // IMPORTANT: If trialEndsAt already exists, preserve it (user is upgrading during trial)
+      // CRITICAL: NEVER overwrite existing trialEndsAt!
+      // If trialEndsAt exists, it was set correctly in /subscribe (preserved or null)
+      // Only set trialEndsAt if it doesn't exist (first install after approval)
       if (!subscription.trialEndsAt) {
         const { TRIAL_DAYS } = await import('../plans.js');
         subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
       } else {
-        // Trial already exists - preserve it (user is upgrading during trial)
+        // TrialEndsAt already exists - preserve it (could be preserved trial or null if trial ended)
         console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
       }
       
@@ -241,13 +250,26 @@ export default async function handleSubscriptionUpdate(req, res) {
         await subscription.save();
         console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
       } else if (hasPendingState && !subscriptionIdMatches) {
-        // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
-        // Don't clear pendingActivation - it's for a different subscription!
-        console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
-        // Just update the shopifySubscriptionId if it was updated by fallback search
-        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
-          // This shouldn't happen, but if it does, we already updated it in the fallback search
+        // This is a CANCELLED webhook for an OLD subscription
+        // CRITICAL: If we have pendingActivation, this means user clicked "back" from /activate
+        // The old subscription was cancelled when new one was created, so we should clear pendingActivation
+        // This allows user to try activating again or upgrade/downgrade
+        if (subscription.pendingActivation) {
+          console.log('[SUBSCRIPTION-UPDATE] CANCELLED webhook for old subscription - clearing pendingActivation to allow new activation');
+          subscription.pendingActivation = false;
+          subscription.activatedAt = undefined;
+          // DON'T clear shopifySubscriptionId - it might be for the new subscription
           await subscription.save();
+          console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pendingActivation from old subscription cancellation');
+        } else {
+          // This is a CANCELLED webhook for an OLD subscription, but we have a NEW one pending
+          // Don't clear pendingPlan - it's for a different subscription!
+          console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
+          // Just update the shopifySubscriptionId if it was updated by fallback search
+          if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
+            // This shouldn't happen, but if it does, we already updated it in the fallback search
+            await subscription.save();
+          }
         }
       } else {
         // Subscription was active and now cancelled by merchant

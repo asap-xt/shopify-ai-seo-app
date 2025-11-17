@@ -417,13 +417,31 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // Plan change: Set new plan as pending (will be activated in callback)
       // CRITICAL: Preserve trial end date if trial is still active
       // This ensures that when switching plans during trial, remaining days are preserved
+      // IMPORTANT: If trial has ended, preserve the existing trialEndsAt (don't set to null)
+      // This ensures webhook doesn't create a new trialEndsAt when trial has already ended
       let preservedTrialEndsAt = null;
       if (existingSub.trialEndsAt) {
         const trialEnd = new Date(existingSub.trialEndsAt);
         if (now < trialEnd) {
           // Trial is still active - preserve the original trial end date
           preservedTrialEndsAt = existingSub.trialEndsAt;
+        } else {
+          // Trial has ended - preserve the existing trialEndsAt (past date)
+          // This prevents webhook from creating a new trialEndsAt
+          preservedTrialEndsAt = existingSub.trialEndsAt;
         }
+      }
+      
+      // CRITICAL: Clear old pendingActivation if it exists (from /activate or previous upgrade/downgrade)
+      // This ensures that when upgrading/downgrading, old pendingActivation is cleared
+      // This allows user to upgrade/downgrade even if they have pendingActivation from /activate
+      if (existingSub.pendingActivation && !existingSub.pendingPlan) {
+        // Old pendingActivation from /activate (no pendingPlan) - clear it
+        console.log('[Billing] Clearing old pendingActivation (from /activate) before setting new pendingPlan');
+        await Subscription.updateOne(
+          { shop },
+          { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
+        );
       }
       
       // CRITICAL: If user had pendingActivation for a different plan, clear it
@@ -439,11 +457,14 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         // NOTE: shopifySubscriptionId is updated to the new subscription ID
       };
       
-      // CRITICAL: Only set trialEndsAt if preservedTrialEndsAt is not null
-      // This prevents overwriting existing trialEndsAt with null when trial has ended
+      // CRITICAL: Always set trialEndsAt to preserve it correctly
+      // If trial is active, preserve the original trial end date
+      // If trial has ended, preserve the existing trialEndsAt (past date) to prevent webhook from creating new one
       if (preservedTrialEndsAt) {
         planChangeData.trialEndsAt = preservedTrialEndsAt;
       }
+      // If preservedTrialEndsAt is null (no trial was ever set), don't set trialEndsAt
+      // This allows webhook to set it for first install
       
       subscription = await Subscription.findOneAndUpdate(
         { shop },
@@ -576,9 +597,16 @@ router.get('/callback', async (req, res) => {
       if (isPendingActivation) {
         // CRITICAL: This is an ACTIVATION callback - user approved the charge!
         // NOW we can set activatedAt (user confirmed in Shopify)
-        updateData.activatedAt = new Date();
+        // IMPORTANT: Only set activatedAt if not already set (webhook might have arrived first)
+        if (!currentSub.activatedAt) {
+          updateData.activatedAt = new Date();
+        } else {
+          // Webhook already set activatedAt - preserve it
+          updateData.activatedAt = currentSub.activatedAt;
+        }
         updateData.plan = plan;
         updateData.trialEndsAt = null; // Trial ended when user clicked "Activate Plan"
+        updateData.pendingActivation = false; // CRITICAL: Clear pending activation flag
         
         // CRITICAL: Preserve shopifySubscriptionId from charge_id if provided
         // This ensures webhook can find the subscription even if it arrives before callback
@@ -946,20 +974,23 @@ router.post('/activate', verifyRequest, async (req, res) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
     
-    // CRITICAL: If user has pendingPlan for a different plan, clear it before activating current plan
-    // This handles the case where user downgraded (chose different plan) but then tries to activate current plan
-    if (subscription.pendingPlan && subscription.pendingPlan !== subscription.plan) {
-      console.log('[BILLING-ACTIVATE] Clearing pendingPlan for different plan:', {
+    // CRITICAL: Clear any existing pendingPlan or pendingActivation before creating new activation
+    // This ensures that if user has pendingPlan from upgrade/downgrade, or pendingActivation from previous /activate,
+    // we clear them before creating a new activation request
+    // This allows user to activate even if they have pending state from previous actions
+    if (subscription.pendingPlan || subscription.pendingActivation) {
+      console.log('[BILLING-ACTIVATE] Clearing existing pending state before new activation:', {
         shop,
         currentPlan: subscription.plan,
-        pendingPlan: subscription.pendingPlan
+        pendingPlan: subscription.pendingPlan,
+        pendingActivation: subscription.pendingActivation
       });
       await Subscription.updateOne(
         { shop },
-        { $unset: { pendingPlan: '', pendingActivation: '' } }
+        { $unset: { pendingPlan: '', pendingActivation: '', shopifySubscriptionId: '' } }
       );
       
-      // Reload subscription without pendingPlan
+      // Reload subscription without pending state
       const updatedSub = await Subscription.findOne({ shop });
       if (updatedSub) {
         Object.assign(subscription, updatedSub.toObject());
