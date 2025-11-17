@@ -175,18 +175,12 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       // CRITICAL: Handle trialEndsAt based on whether this is from /activate or /subscribe
-      // If pendingActivation was true, this is from /activate - user wants to END trial, not start new one
-      // If pendingPlan existed, this is from /subscribe - preserve existing trialEndsAt
+      // IMPORTANT: Check hadPendingPlan FIRST - if pendingPlan existed, this is from /subscribe (upgrade/downgrade)
+      // If pendingActivation was true BUT no pendingPlan, this is from /activate - user wants to END trial
       // If neither, this is first install - set trialEndsAt
       
-      if (wasPendingActivation) {
-        // This is from /activate endpoint - user clicked "Activate Plan" to END trial
-        // DO NOT set trialEndsAt - trial should end (set to null in callback)
-        // CRITICAL: Clear trialEndsAt to end trial immediately
-        subscription.trialEndsAt = null;
-        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
-      } else if (hadPendingPlan) {
-        // This is from /subscribe endpoint - preserve existing trialEndsAt
+      if (hadPendingPlan) {
+        // This is from /subscribe endpoint (upgrade/downgrade) - preserve existing trialEndsAt
         // CRITICAL: If trialEndsAt doesn't exist, it means trial hasn't started yet (first install)
         // Otherwise, preserve the existing trialEndsAt (from /subscribe)
         if (!subscription.trialEndsAt) {
@@ -198,6 +192,20 @@ export default async function handleSubscriptionUpdate(req, res) {
           // Upgrade/downgrade - preserve existing trialEndsAt
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade) - preserving existing trialEndsAt:', subscription.trialEndsAt);
         }
+      } else if (wasPendingActivation) {
+        // This is from /activate endpoint - user clicked "Activate Plan" to END trial
+        // DO NOT set trialEndsAt - trial should end (set to null in callback)
+        // CRITICAL: Clear trialEndsAt to end trial immediately
+        subscription.trialEndsAt = null;
+        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
+      } else if (!subscription.trialEndsAt) {
+        // First install (no pendingPlan, no pendingActivation, no trialEndsAt) - set trialEndsAt
+        const { TRIAL_DAYS } = await import('../plans.js');
+        subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+        console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
+      } else {
+        // TrialEndsAt already exists - preserve it
+        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
       } else if (!subscription.trialEndsAt) {
         // First install - set trialEndsAt
         const { TRIAL_DAYS } = await import('../plans.js');

@@ -450,13 +450,14 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // CRITICAL: If user had pendingActivation for a different plan, clear it
       // This handles the case where user started activating one plan, clicked back, then chose a different plan
       // Also clear old shopifySubscriptionId if it exists (from previous pending activation)
+      // IMPORTANT: Do NOT set pendingActivation here - pendingActivation is only for /activate endpoint
+      // When upgrading/downgrading, we only set pendingPlan, not pendingActivation
       const planChangeData = {
         pendingPlan: plan,
         shopifySubscriptionId: shopifySubscription.id,
-        pendingActivation: true, // Set new pending activation for the new plan
         updatedAt: now
         // NOTE: activatedAt is NOT modified - preserves trial restriction
-        // NOTE: We explicitly set pendingActivation: true to replace any old pendingActivation
+        // NOTE: pendingActivation is NOT set here - only set in /activate endpoint
         // NOTE: shopifySubscriptionId is updated to the new subscription ID
       };
       

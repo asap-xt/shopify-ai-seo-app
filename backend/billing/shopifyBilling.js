@@ -308,6 +308,14 @@ export async function getCurrentSubscription(shop, accessToken) {
  * @returns {Promise<object|null>}
  */
 export async function getSubscriptionById(shop, subscriptionId, accessToken) {
+  // CRITICAL: Normalize subscriptionId to GID format if it's just a number
+  // GraphQL requires GID format: 'gid://shopify/AppSubscription/69655626060'
+  let normalizedId = subscriptionId;
+  if (subscriptionId && !subscriptionId.startsWith('gid://')) {
+    // If it's just a number, convert to GID format
+    normalizedId = `gid://shopify/AppSubscription/${subscriptionId}`;
+  }
+  
   const query = `
     query GetSubscriptionById($id: ID!) {
       node(id: $id) {
@@ -338,7 +346,7 @@ export async function getSubscriptionById(shop, subscriptionId, accessToken) {
     }
   `;
   
-  const variables = { id: subscriptionId };
+  const variables = { id: normalizedId };
   
   const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
     method: 'POST',
