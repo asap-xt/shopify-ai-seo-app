@@ -356,24 +356,33 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days)
     // 2. Plan change during trial: trialDays = REMAINING DAYS (preserve trial in Shopify)
     // 3. Plan change after trial: trialDays = 0 (no trial)
-    // 4. User clicks "End Trial": trialDays = 0
+    // 4. Plan change after activation: trialDays = 0 (no trial, continue billing period)
+    // 5. User clicks "End Trial": trialDays = 0
     let trialDays = TRIAL_DAYS;
     const now = new Date();
     
     if (endTrial) {
       trialDays = 0; // User explicitly ended trial
     } else if (existingSubCheck) {
-      // Plan change: Check if trial is still active
-      const trialEnd = existingSubCheck.trialEndsAt ? new Date(existingSubCheck.trialEndsAt) : null;
-      
-      if (trialEnd && now < trialEnd) {
-        // Still in trial - calculate remaining days and preserve in Shopify
-        const msRemaining = trialEnd - now;
-        const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
-        trialDays = daysRemaining;
-      } else {
-        // Trial already ended - no trial for new subscription
+      // Plan change: Check if plan is activated or if trial is still active
+      // CRITICAL: If activatedAt exists, plan is activated - NO trial on upgrade!
+      if (existingSubCheck.activatedAt) {
+        // CRITICAL: Plan is already activated - NO trial on upgrade!
+        // According to Shopify: upgrade after activation continues billing period (no new trial)
         trialDays = 0;
+      } else {
+        // Plan is in trial - check if trial is still active
+        const trialEnd = existingSubCheck.trialEndsAt ? new Date(existingSubCheck.trialEndsAt) : null;
+        
+        if (trialEnd && now < trialEnd) {
+          // Still in trial - calculate remaining days and preserve in Shopify
+          const msRemaining = trialEnd - now;
+          const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
+          trialDays = daysRemaining;
+        } else {
+          // Trial already ended - no trial for new subscription
+          trialDays = 0;
+        }
       }
     }
     
