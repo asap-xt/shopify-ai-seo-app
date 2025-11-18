@@ -80,6 +80,9 @@ export default async function handleSubscriptionUpdate(req, res) {
           shop,
           plan: subscription.plan,
           pendingPlan: subscription.pendingPlan,
+          pendingActivation: subscription.pendingActivation,
+          activatedAt: subscription.activatedAt, // CRITICAL: Log activatedAt to debug upgrade after activation
+          trialEndsAt: subscription.trialEndsAt, // CRITICAL: Log trialEndsAt to debug upgrade after activation
           shopifySubscriptionId: subscription.shopifySubscriptionId,
           webhookSubscriptionId: admin_graphql_api_id,
           status
@@ -176,39 +179,39 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       // CRITICAL: Handle trialEndsAt and activatedAt based on whether this is from /activate or /subscribe
-      // IMPORTANT: Check hadPendingPlan FIRST - if pendingPlan existed, this is from /subscribe (upgrade/downgrade)
-      // If pendingActivation was true BUT no pendingPlan, this is from /activate - user wants to END trial
-      // If neither, this is first install - set trialEndsAt
+      // IMPORTANT: Check activatedAt FIRST - if it exists, trial has ended, NO new trial on upgrade!
+      // According to Shopify documentation: Once trial is ended (activatedAt exists), upgrades continue billing period
       
-      if (hadPendingPlan) {
+      // CRITICAL: Log current state for debugging
+      console.log('[SUBSCRIPTION-UPDATE] Trial logic check:', {
+        activatedAt: subscription.activatedAt,
+        trialEndsAt: subscription.trialEndsAt,
+        hadPendingPlan,
+        wasPendingActivation,
+        plan: subscription.plan
+      });
+      
+      // CRITICAL: If activatedAt exists, trial has ended - NO new trial on upgrade!
+      if (subscription.activatedAt) {
+        // Plan is already activated - NO trial on upgrade!
+        // According to Shopify: upgrade after activation continues billing period (no new trial)
+        subscription.trialEndsAt = null;
+        console.log('[SUBSCRIPTION-UPDATE] Plan is activated (activatedAt exists) - NO trial on upgrade, continuing billing period');
+      } else if (hadPendingPlan) {
         // This is from /subscribe endpoint (upgrade/downgrade or first install) - DO NOT set activatedAt yet
         // User is in trial - activatedAt should only be set when they click "Activate Plan" (wasPendingActivation)
-        // CRITICAL: According to Shopify documentation:
-        // - If plan is activated (activatedAt exists): NO trial, continue billing period
-        // - If plan is in trial (no activatedAt): Preserve trial end date
-        // IMPORTANT: Check activatedAt FIRST - if it exists, plan is already activated!
-        if (subscription.activatedAt) {
-          // CRITICAL: Plan is already activated - NO trial on upgrade!
-          // According to Shopify: upgrade after activation continues billing period (no new trial)
-          subscription.trialEndsAt = null;
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade after activation) - NO trial, continuing billing period');
-        } else if (!subscription.trialEndsAt) {
+        // CRITICAL: Plan is in trial (no activatedAt) - preserve trial end date
+        if (!subscription.trialEndsAt) {
           // First install - set trialEndsAt
           const { TRIAL_DAYS } = await import('../plans.js');
           subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (first install) - set trialEndsAt:', subscription.trialEndsAt);
         } else {
           // Upgrade/downgrade during trial - preserve existing trialEndsAt
-          // CRITICAL: Only preserve if activatedAt doesn't exist (still in trial)
           console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade during trial) - preserving existing trialEndsAt:', subscription.trialEndsAt);
         }
         // CRITICAL: DO NOT set activatedAt here - user is in trial, activatedAt should be undefined
-        // Only set activatedAt if callback already set it (shouldn't happen, but preserve it if it did)
-        if (subscription.activatedAt) {
-          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
-        } else {
-          console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
-        }
+        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       } else if (wasPendingActivation) {
         // This is from /activate endpoint - user clicked "Activate Plan" to END trial
         // CRITICAL: Set activatedAt and clear trialEndsAt to end trial immediately
@@ -221,21 +224,17 @@ export default async function handleSubscriptionUpdate(req, res) {
         subscription.trialEndsAt = null;
         console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
       } else if (!subscription.trialEndsAt) {
-        // First install (no pendingPlan, no pendingActivation, no trialEndsAt) - set trialEndsAt
+        // First install (no pendingPlan, no pendingActivation, no trialEndsAt, no activatedAt) - set trialEndsAt
         const { TRIAL_DAYS } = await import('../plans.js');
         subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
         console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
         // CRITICAL: DO NOT set activatedAt - user is in trial
         console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       } else {
-        // TrialEndsAt already exists - preserve it
+        // TrialEndsAt already exists and activatedAt doesn't exist - preserve trialEndsAt
         console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
         // CRITICAL: DO NOT set activatedAt - user is in trial
-        if (subscription.activatedAt) {
-          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
-        } else {
-          console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
-        }
+        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       }
       
       await subscription.save();
