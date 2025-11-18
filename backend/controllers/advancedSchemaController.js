@@ -666,6 +666,146 @@ async function loadShopContext(shop) {
   }
 }
 
+// Generate and save Organization and WebSite schemas to shop metafields
+async function generateAndSaveShopSchemas(shop, shopContext) {
+  try {
+    // Get store metadata from metafields
+    const storeMetaQuery = `
+      query {
+        shop {
+          id
+          name
+          description
+          email
+          primaryDomain { url }
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
+        }
+      }
+    `;
+    
+    const data = await executeShopifyGraphQL(shop, storeMetaQuery);
+    const shopData = data.shop;
+    
+    // Parse organization schema if available
+    let organizationData = {};
+    if (shopData.organizationMetafield?.value) {
+      try {
+        organizationData = JSON.parse(shopData.organizationMetafield.value);
+      } catch (e) {
+        console.error('[SCHEMA] Failed to parse organization schema:', e);
+      }
+    }
+    
+    // Parse SEO metadata if available
+    let seoData = {};
+    if (shopData.seoMetafield?.value) {
+      try {
+        seoData = JSON.parse(shopData.seoMetafield.value);
+      } catch (e) {
+        console.error('[SCHEMA] Failed to parse SEO metadata:', e);
+      }
+    }
+    
+    const shopUrl = shopData.primaryDomain?.url || `https://${shop}`;
+    const schemas = [];
+    
+    // Generate Organization schema if enabled
+    if (organizationData.enabled) {
+      const organizationSchema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": organizationData.name || shopData.name || shop,
+        "url": shopUrl,
+        ...(organizationData.logo && { "logo": organizationData.logo }),
+        ...(seoData.description && { "description": seoData.description }),
+        ...(organizationData.email && { "email": organizationData.email }),
+        ...(organizationData.phone && {
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": organizationData.phone,
+            "contactType": "customer service",
+            ...(organizationData.languages && organizationData.languages.length > 1 && {
+              "availableLanguage": organizationData.languages.map(l => ({
+                "@type": "Language",
+                "name": l.name || l,
+                "alternateName": l.isoCode || l
+              }))
+            })
+          }
+        }),
+        ...(organizationData.sameAs && {
+          "sameAs": Array.isArray(organizationData.sameAs) 
+            ? organizationData.sameAs 
+            : organizationData.sameAs.split(',').map(url => url.trim()).filter(Boolean)
+        })
+      };
+      schemas.push(organizationSchema);
+    }
+    
+    // Generate WebSite schema (always generated)
+    const websiteSchema = {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": organizationData.name || shopData.name || shop,
+      "url": shopUrl,
+      ...(seoData.description && { "description": seoData.description }),
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": `${shopUrl}/search?q={search_term_string}`
+        },
+        "query-input": "required name=search_term_string"
+      },
+      ...(organizationData.languages && organizationData.languages.length > 1 && {
+        "inLanguage": organizationData.languages.map(l => l.isoCode || l)
+      })
+    };
+    schemas.push(websiteSchema);
+    
+    // Save schemas to shop metafield
+    if (schemas.length > 0) {
+      const mutation = `
+        mutation SetShopSchemas($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) {
+            metafields {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      const variables = {
+        metafields: [{
+          ownerId: shopData.id,
+          namespace: "advanced_schema",
+          key: "shop_schemas",
+          type: "json",
+          value: JSON.stringify(schemas)
+        }]
+      };
+      
+      const saveResult = await executeShopifyGraphQL(shop, mutation, variables);
+      
+      if (saveResult.metafieldsSet?.userErrors?.length > 0) {
+        console.error('[SCHEMA] Failed to save shop schemas:', saveResult.metafieldsSet.userErrors);
+      } else {
+        console.log('[SCHEMA] Successfully saved Organization and WebSite schemas');
+      }
+    }
+    
+    return schemas;
+  } catch (error) {
+    console.error('[SCHEMA] Failed to generate shop schemas:', error);
+    return [];
+  }
+}
+
 // Generate site-wide FAQ
 async function generateSiteFAQ(shop, shopContext) {
   const shopUrl = shopContext.shop.primaryDomain?.url || `https://${shop}`;
@@ -1193,17 +1333,10 @@ async function generateLangSchemas(product, seoData, shop, language) {
     }
   }
 
-  // Add Organization schema if enabled
-  if (richAttributesSettings.organization) {
-    try {
-      const organizationSchema = await generateOrganizationSchema(product, shop, language);
-      if (organizationSchema) {
-        baseSchemas.push(organizationSchema);
-      }
-    } catch (error) {
-      console.error('[SCHEMA] Failed to generate organization schema:', error);
-    }
-  }
+  // NOTE: Organization schema is NO LONGER added here
+  // Organization and WebSite schemas are now generated once as site-wide schemas
+  // and saved to shop.metafields.advanced_schema.shop_schemas
+  // They are included in theme snippet and appear on all pages (not just product pages)
   
   // console.log(`[SCHEMA] generateLangSchemas returning ${baseSchemas.length} schemas for product ${product.id}`);
   return { schemas: baseSchemas, usage: totalUsage };
@@ -1300,6 +1433,15 @@ async function installThemeSnippet(shop) {
     // Since it's already a valid JSON array string, we render it directly
     // The JSON array will be rendered as a single script tag with all schemas
     const snippetContent = `{%- comment -%} Advanced Schema Data - Auto-generated by indexAIze - Unlock AI Search {%- endcomment -%}
+
+{%- comment -%} Organization & WebSite Schema (site-wide) {%- endcomment -%}
+{%- if shop.metafields.advanced_schema.shop_schemas -%}
+  <script type="application/ld+json">
+{{ shop.metafields.advanced_schema.shop_schemas.value }}
+  </script>
+{%- endif -%}
+
+{%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
   {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
   {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
@@ -1442,6 +1584,9 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     if (!shopContext) {
       throw new Error('Failed to load shop context');
     }
+    
+    // Generate and save Organization and WebSite schemas (site-wide)
+    await generateAndSaveShopSchemas(shop, shopContext);
     
     // Generate site-wide FAQ
     const faqResult = await generateSiteFAQ(shop, shopContext);
