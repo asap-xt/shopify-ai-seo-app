@@ -200,6 +200,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // CRITICAL: If activatedAt exists, trial has ended - NO new trial on upgrade!
       // IMPORTANT: Use hasActivatedAt (stored before processing) to ensure we check the original value
+      // This handles the case where subscription was found by fallback search and activatedAt might not be loaded correctly
       if (hasActivatedAt || subscription.activatedAt) {
         // Plan is already activated - NO trial on upgrade!
         // According to Shopify: upgrade after activation continues billing period (no new trial)
@@ -222,17 +223,12 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       } else if (wasPendingActivation) {
         // This is from /activate endpoint - user clicked "Activate Plan" to END trial
-        // CRITICAL: If activatedAt already exists (from previous activation), preserve it!
-        // This handles the case where user upgrades after activation and then clicks "Activate Plan"
-        // According to Shopify: Once trial is ended (activatedAt exists), it should NOT be reset
-        if (subscription.activatedAt) {
-          // User already activated plan previously (upgrade after activation) - preserve original activatedAt
-          // This ensures we don't reset the activation date when upgrading after activation
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - preserving existing activatedAt from previous activation:', subscription.activatedAt);
-        } else {
-          // First activation - set activatedAt now
+        // CRITICAL: Set activatedAt and clear trialEndsAt to end trial immediately
+        if (!subscription.activatedAt) {
           subscription.activatedAt = now;
           console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - set activatedAt:', subscription.activatedAt);
+        } else {
+          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
         }
         subscription.trialEndsAt = null;
         console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
