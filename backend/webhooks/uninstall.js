@@ -5,62 +5,30 @@ import Shop from '../db/Shop.js';
 
 export default async function uninstallWebhook(req, res) {
   try {
-    console.log('[Webhook] ===== UNINSTALL WEBHOOK CALLED =====');
-    console.log('[Webhook] Headers:', req.headers);
-    console.log('[Webhook] Body:', req.body);
-    console.log('[Webhook] Query:', req.query);
-    
     const shop = (req.get('x-shopify-shop-domain') || req.query.shop || '').replace(/^https?:\/\//, '').trim().toLowerCase();
-    console.log('[Webhook] Extracted shop:', shop);
-    console.log('[Webhook] Shop length:', shop.length);
-    console.log('[Webhook] Shop bytes:', Buffer.from(shop).toString('hex'));
 
     if (!shop) {
       console.error('[Webhook] No shop domain in uninstall webhook');
       return res.status(200).send('ok');
     }
-
-    console.log('[Webhook] Starting MongoDB cleanup...');
-    console.log('[Webhook] Note: Shopify metafield definitions will remain (Shopify revokes access before webhook)');
     
     // CRITICAL: Invalidate Redis cache FIRST (before MongoDB cleanup)
     try {
       const { default: cacheService } = await import('../services/cacheService.js');
       await cacheService.invalidateShop(shop);
-      console.log('[Webhook] ✅ Invalidated Redis cache for:', shop);
     } catch (e) {
       console.error('[Webhook] ❌ Error invalidating Redis cache:', e.message);
     }
     
     // Изтриваме shop записа от MongoDB
-    const result = await Shop.deleteOne({ shop });
-    console.log(`[Webhook] Deleted shop ${shop} from database:`, result.deletedCount > 0 ? 'SUCCESS' : 'NOT FOUND');
+    await Shop.deleteOne({ shop });
 
     // Опционално: изтрий и други свързани данни
     try {
       // Ако имате Subscription модел
       const { default: Subscription } = await import('../db/Subscription.js');
       
-      // DEBUG: Check what exists before delete
-      const existingSub = await Subscription.findOne({ shop });
-      console.log(`[Webhook] 🔍 Subscription check for ${shop}:`, existingSub ? {
-        plan: existingSub.plan,
-        status: existingSub.status,
-        shopifySubscriptionId: existingSub.shopifySubscriptionId,
-        activatedAt: existingSub.activatedAt,
-        trialEndsAt: existingSub.trialEndsAt
-      } : 'NOT FOUND');
-      
-      // DEBUG: Check ALL subscriptions in DB
-      const allSubs = await Subscription.find({});
-      console.log(`[Webhook] 🔍 ALL Subscriptions in DB (${allSubs.length}):`, allSubs.map(s => ({
-        shop: s.shop,
-        plan: s.plan,
-        shopMatch: s.shop === shop
-      })));
-      
       const subResult = await Subscription.deleteOne({ shop });
-      console.log(`[Webhook] Deleted subscription for ${shop}: ${subResult.deletedCount} records deleted`);
       if (subResult.deletedCount === 0) {
         console.warn(`[Webhook] ⚠️ No subscription found to delete for ${shop}`);
       }

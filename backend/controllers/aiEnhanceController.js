@@ -564,12 +564,7 @@ router.post('/product', validateRequest(), async (req, res) => {
           { upsert: true, new: true }
         );
         
-        if (result) {
-          console.log(`[AI-ENHANCE] ✅ Marked product ${numericProductId} as AI-enhanced in MongoDB`);
-          if (currentProduct) {
-            console.log(`[AI-ENHANCE] ✅ Updated lastShopifyUpdate to prevent false webhook changes`);
-          }
-        }
+        // Product marked as AI-enhanced in MongoDB
       } catch (e) {
         console.error('[AI-ENHANCE] Failed to mark product as AI-enhanced:', e);
       }
@@ -1226,10 +1221,7 @@ Guidelines:
         );
         
         if (result) {
-          console.log(`[AI-ENHANCE] ✅ Marked collection ${numericCollectionId} as AI-enhanced in MongoDB`);
-          if (currentCollection) {
-            console.log(`[AI-ENHANCE] ✅ Updated lastShopifyUpdate to prevent false webhook changes`);
-          }
+          // Collection marked as AI-enhanced in MongoDB
         }
       } catch (e) {
         console.error('[AI-ENHANCE] Failed to mark collection as AI-enhanced:', e);

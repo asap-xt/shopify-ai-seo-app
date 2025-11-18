@@ -19,14 +19,11 @@ function getHostName() {
     process.env.BASE_URL ||
     process.env.HOST ||
     '';
-  console.log('[SHOPIFY-API] Raw URL:', raw);
   const result = raw.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  console.log('[SHOPIFY-API] HostName:', result);
   return result;
 }
 
 const hostName = getHostName();
-console.log('[SHOPIFY-API] Final hostName:', hostName);
 if (!hostName) {
   // Won't crash, but SDK init will if hostName is empty; warn loudly
   console.warn('⚠️ APP_URL / SHOPIFY_APP_URL / BASE_URL / HOST is not set. Please set your public app URL in Railway.');
@@ -52,26 +49,21 @@ if (false && process.env.MONGODB_URI) {
   const sessions = new Map();
   sessionStorage = {
     async loadSession(id) {
-      console.log('[SESSION] Loading session:', id);
       const session = sessions.get(id);
       return session || null;
     },
     async storeSession(session) {
-      console.log('[SESSION] Storing session:', session.id);
       sessions.set(session.id, session);
       return true;
     },
     async deleteSession(id) {
-      console.log('[SESSION] Deleting session:', id);
       return sessions.delete(id);
     },
     async deleteSessions(ids) {
-      console.log('[SESSION] Deleting sessions:', ids);
       ids.forEach(id => sessions.delete(id));
       return true;
     },
     async findSessionsByShop(shop) {
-      console.log('[SESSION] Finding sessions for shop:', shop);
       const shopSessions = [];
       sessions.forEach((session, id) => {
         if (session.shop === shop) {

@@ -21,20 +21,11 @@ export default async function collectionsWebhook(req, res) {
     // Parse webhook payload
     const payload = typeof req.body === 'object' && req.body !== null ? req.body : {};
     
-    console.log('[Webhook-Collections] ===== COLLECTIONS/UPDATE WEBHOOK =====');
-    console.log('[Webhook-Collections] Topic:', topic);
-    console.log('[Webhook-Collections] Shop:', shop);
-    console.log('[Webhook-Collections] Collection ID:', payload?.id);
-    console.log('[Webhook-Collections] Collection Title:', payload?.title);
-    console.log('[Webhook-Collections] Request headers:', JSON.stringify(req.headers, null, 2));
-    console.log('[Webhook-Collections] Request body:', JSON.stringify(payload, null, 2));
-    
     // Respond immediately to Shopify (prevent timeout)
     res.status(200).send('ok');
     
     // Process webhook asynchronously
     if (!shop || !payload?.id) {
-      console.log('[Webhook-Collections] Missing shop or collection ID, skipping');
       return;
     }
     
@@ -54,17 +45,10 @@ export default async function collectionsWebhook(req, res) {
       let descriptionChanged = false;
       
       if (existingCollection) {
-        console.log('[Webhook-Collections] Found existing collection in MongoDB');
-        
         // 2. Compare with lastShopifyUpdate (if available) for accurate change detection
         // This prevents false positives when our app updates metafields (not collection content)
         const referenceTitle = existingCollection.lastShopifyUpdate?.title || existingCollection.title;
         const referenceDescription = existingCollection.lastShopifyUpdate?.description || existingCollection.description || '';
-        
-        console.log('[Webhook-Collections] Reference title:', referenceTitle);
-        console.log('[Webhook-Collections] Reference description:', referenceDescription?.substring(0, 100) + '...');
-        console.log('[Webhook-Collections] New title:', payload.title);
-        console.log('[Webhook-Collections] New description:', payload.body_html?.substring(0, 100) + '...');
         
         // 3. Detect if title or description changed
         // CRITICAL: Only detect changes if we have valid reference values
@@ -75,7 +59,6 @@ export default async function collectionsWebhook(req, res) {
         } else {
           // No reference title - this is likely first webhook, don't treat as change
           titleChanged = false;
-          console.log('[Webhook-Collections] No reference title found - treating as first webhook, not a change');
         }
         
         const newDescription = payload.body_html || '';
@@ -87,31 +70,18 @@ export default async function collectionsWebhook(req, res) {
         } else {
           // No reference description - this is likely first webhook, don't treat as change
           descriptionChanged = false;
-          console.log('[Webhook-Collections] No reference description found - treating as first webhook, not a change');
         }
         
         if (titleChanged || descriptionChanged) {
-          console.log('[Webhook-Collections] 🚨 CONTENT CHANGED DETECTED!');
-          console.log('[Webhook-Collections] Title changed:', titleChanged);
-          console.log('[Webhook-Collections] Description changed:', descriptionChanged);
-          console.log('[Webhook-Collections] Invalidating ALL SEO metafields...');
-          
           // 4. Delete all SEO metafields for this collection
           await deleteAllSeoMetafieldsForCollection(req, shop, collectionGid);
           
           // 5. Clear SEO status in MongoDB
           await clearCollectionSeoStatusInMongoDB(shop, collectionId);
-          
-          console.log('[Webhook-Collections] ✅ SEO metafields and status cleared');
-        } else {
-          console.log('[Webhook-Collections] No significant content changes detected');
         }
-      } else {
-        console.log('[Webhook-Collections] Collection not found in MongoDB, creating new record');
       }
       
       // 6. Update MongoDB with new collection data for future comparisons
-      console.log('[Webhook-Collections] Updating MongoDB with new collection data...');
       
       // Store whether content changed for proper lastShopifyUpdate update
       const contentChanged = titleChanged || descriptionChanged;
@@ -184,7 +154,6 @@ export default async function collectionsWebhook(req, res) {
             updateDataDupe,
             { new: true }
           );
-          console.log('[Webhook-Collections] ✅ MongoDB updated existing record successfully');
         } else {
           throw mongoError;
         }

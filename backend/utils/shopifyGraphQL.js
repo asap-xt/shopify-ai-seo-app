@@ -12,10 +12,6 @@
 export async function makeShopifyGraphQLRequest(shop, accessToken, query, variables = {}) {
   const url = `https://${shop}/admin/api/2024-10/graphql.json`;
   
-  console.log('[Shopify GraphQL] Making request to:', url);
-  console.log('[Shopify GraphQL] Query:', query.substring(0, 200) + '...');
-  console.log('[Shopify GraphQL] Variables:', JSON.stringify(variables, null, 2));
-  
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -41,8 +37,6 @@ export async function makeShopifyGraphQLRequest(shop, accessToken, query, variab
       console.error('[Shopify GraphQL] GraphQL Errors:', JSON.stringify(result.errors, null, 2));
       throw new Error(`GraphQL Error: ${result.errors[0]?.message || 'Unknown error'}`);
     }
-    
-    console.log('[Shopify GraphQL] Success:', JSON.stringify(result.data, null, 2).substring(0, 500));
     
     return result.data;
   } catch (error) {
@@ -106,11 +100,7 @@ export async function makePaginatedGraphQLRequest(
     const pageInfo = current.pageInfo;
     hasNextPage = pageInfo?.hasNextPage || false;
     cursor = pageInfo?.endCursor || null;
-    
-    console.log(`[Shopify GraphQL] Page ${pageCount}: fetched ${items.length} items, hasNextPage: ${hasNextPage}`);
   }
-  
-  console.log(`[Shopify GraphQL] Pagination complete: ${allItems.length} total items from ${pageCount} pages`);
   
   return allItems;
 }
