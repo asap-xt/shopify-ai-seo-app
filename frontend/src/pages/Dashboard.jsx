@@ -58,17 +58,15 @@ export default function Dashboard({ shop: shopProp }) {
   });
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
-  const dashboardVisibleTimerRef = useRef(null); // Track if dashboard has been visible long enough
-  const hasMarkedAsSeenRef = useRef(false); // Prevent multiple marks
+  const markAsSeenTimerRef = useRef(null); // Timer to mark card as seen after user has time to see it
   
-  // Onboarding state logic:
-  // 1. First REAL show (with active subscription): open, then mark as seen after 2 seconds
-  // 2. Subsequent loads: closed by default (hasBeenSeenOnce = true)
-  // NOTE: Manual toggle state is NOT persisted - card always starts closed on subsequent loads
+  // Onboarding state logic - SIMPLIFIED:
+  // 1. If never seen before AND has subscription: open card
+  // 2. Mark as seen only when user closes it manually OR after 10 seconds (Dashboard is definitely visible)
+  // 3. Subsequent loads: closed by default
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
     try {
       const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
-      // Always closed on subsequent loads (ignore manual toggle from previous session)
       return !hasBeenSeenOnce; // Open only if never seen before
     } catch {
       return false; // Default closed if localStorage fails
@@ -106,48 +104,36 @@ export default function Dashboard({ shop: shopProp }) {
       if (loadDataTimeoutRef.current) {
         clearTimeout(loadDataTimeoutRef.current);
       }
-      if (dashboardVisibleTimerRef.current) {
-        clearTimeout(dashboardVisibleTimerRef.current);
-        dashboardVisibleTimerRef.current = null;
+      if (markAsSeenTimerRef.current) {
+        clearTimeout(markAsSeenTimerRef.current);
+        markAsSeenTimerRef.current = null;
       }
     };
   }, [shop]);
   
-  // Mark Getting Started card as "seen" after first REAL show (with active subscription or trial)
-  // CRITICAL: Only mark as seen if Dashboard is visible for at least 2 seconds
-  // This prevents marking as seen during redirect to Billing page
-  // Works for both active subscriptions and trial period (both have subscription.plan)
+  // SIMPLIFIED: Mark Getting Started card as "seen" logic
+  // Only mark as seen when:
+  // 1. Dashboard is loaded (not loading)
+  // 2. Has subscription (subscription.plan exists)
+  // 3. Card is open (onboardingOpen === true)
+  // 4. After 10 seconds (Dashboard is definitely visible, not redirecting)
   useEffect(() => {
-    // Clear any existing timer
-    if (dashboardVisibleTimerRef.current) {
-      clearTimeout(dashboardVisibleTimerRef.current);
-      dashboardVisibleTimerRef.current = null;
-    }
-    
-    if (!loading && subscription?.plan && !hasMarkedAsSeenRef.current) {
-      // Dashboard is loaded and has active subscription (including trial) - this is a real view
-      // subscription.plan exists for both active subscriptions and trial period
+    // Only proceed if Dashboard is fully loaded and has subscription
+    if (!loading && subscription?.plan && onboardingOpen) {
       try {
         const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
-        if (!hasBeenSeenOnce) {
-          // First real show - open card immediately
-          setOnboardingOpen(true);
-          
-          // Wait 2 seconds before marking as seen
-          // This ensures Dashboard is actually visible (not redirecting to Billing)
-          dashboardVisibleTimerRef.current = setTimeout(() => {
+        
+        // If not marked as seen yet, set timer to mark it after 10 seconds
+        // This gives user time to see the card and ensures Dashboard is visible (not redirecting)
+        if (!hasBeenSeenOnce && !markAsSeenTimerRef.current) {
+          markAsSeenTimerRef.current = setTimeout(() => {
             try {
               localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
-              hasMarkedAsSeenRef.current = true;
               // Card stays open for this session, but will be closed on next load
             } catch (error) {
               console.error('[Dashboard] Error marking Getting Started as seen:', error);
             }
-          }, 2000); // 2 seconds delay
-        } else {
-          // Subsequent loads - ensure card is closed (ignore any manual toggle from previous session)
-          setOnboardingOpen(false);
-          hasMarkedAsSeenRef.current = true;
+          }, 10000); // 10 seconds - enough time to ensure Dashboard is visible
         }
       } catch (error) {
         console.error('[Dashboard] Error checking Getting Started status:', error);
@@ -156,12 +142,12 @@ export default function Dashboard({ shop: shopProp }) {
     
     // Cleanup function
     return () => {
-      if (dashboardVisibleTimerRef.current) {
-        clearTimeout(dashboardVisibleTimerRef.current);
-        dashboardVisibleTimerRef.current = null;
+      if (markAsSeenTimerRef.current) {
+        clearTimeout(markAsSeenTimerRef.current);
+        markAsSeenTimerRef.current = null;
       }
     };
-  }, [loading, subscription?.plan, shop]);
+  }, [loading, subscription?.plan, onboardingOpen, shop]);
   
   // Auto-sync on load if enabled (only once per page load)
   useEffect(() => {
@@ -434,12 +420,24 @@ export default function Dashboard({ shop: shopProp }) {
   };
 
   // Handle onboarding toggle
-  // NOTE: Manual toggle state is NOT persisted - card always starts closed on subsequent loads
-  // This ensures card is only open on first view after plan selection
+  // If user manually closes the card, mark it as seen immediately
   const handleOnboardingToggle = () => {
     const newState = !onboardingOpen;
     setOnboardingOpen(newState);
-    // Do NOT save to localStorage - card should always start closed on next load
+    
+    // If user is closing the card (was open, now closing), mark as seen immediately
+    if (onboardingOpen && !newState) {
+      try {
+        localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
+        // Clear timer if it exists (user closed it manually, no need to wait)
+        if (markAsSeenTimerRef.current) {
+          clearTimeout(markAsSeenTimerRef.current);
+          markAsSeenTimerRef.current = null;
+        }
+      } catch (error) {
+        console.error('[Dashboard] Error marking Getting Started as seen:', error);
+      }
+    }
   };
 
   if (loading) {

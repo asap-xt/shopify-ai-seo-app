@@ -422,10 +422,10 @@ export default function Billing({ shop }) {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', alignItems: 'stretch' }}>
                 {plans.map((plan) => (
-                  <Card key={plan.key}>
-                    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '400px', gap: '12px' }}>
+                  <Card key={plan.key} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '12px' }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
                         {subscription?.plan === plan.key && subscription?.status === 'active' && (subscription?.activatedAt || subscription?.inTrial) && (
@@ -457,7 +457,7 @@ export default function Billing({ shop }) {
                           <BlockStack gap="100">
                             {plan.features.map((feature, idx) => (
                               <Text key={idx} variant="bodySm" tone="subdued">
-                                {feature.startsWith('All from') || feature.startsWith('✓') ? feature : `✓ ${feature}`}
+                                {feature.startsWith('All from') || feature.startsWith('✓') || feature.startsWith('🔓') ? feature : `✓ ${feature}`}
                               </Text>
                             ))}
                           </BlockStack>
@@ -465,14 +465,13 @@ export default function Billing({ shop }) {
                       )}
                       
                       {/* Spacer to push button to bottom */}
-                      <div style={{ flexGrow: 1 }} />
+                      <div style={{ flexGrow: 1, minHeight: 0 }} />
                       
                       {subscription?.plan === plan.key && subscription?.status === 'active' && (subscription?.activatedAt || subscription?.inTrial) ? (
                         <Box 
                           background="bg-surface-secondary" 
                           padding="300" 
                           borderRadius="200"
-                          style={{ marginTop: 'auto' }}
                         >
                           <Text variant="bodySm" alignment="center" tone="subdued" fontWeight="medium">
                             Current Plan{subscription?.inTrial ? ' (Trial)' : ''}
@@ -483,7 +482,6 @@ export default function Billing({ shop }) {
                           background="bg-surface-warning-subdued" 
                           padding="300" 
                           borderRadius="200"
-                          style={{ marginTop: 'auto' }}
                         >
                           <Text variant="bodySm" alignment="center" tone="warning" fontWeight="medium">
                             Activation Pending
