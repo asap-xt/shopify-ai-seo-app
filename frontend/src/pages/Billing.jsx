@@ -423,8 +423,8 @@ export default function Billing({ shop }) {
             <BlockStack gap="400">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', alignItems: 'stretch' }}>
                 {plans.map((plan) => (
-                  <Card key={plan.key} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '12px' }}>
+                  <Card key={plan.key} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', gap: '12px', minHeight: 0 }}>
                       <InlineStack align="space-between" blockAlign="center">
                         <Text variant="headingMd">{plan.name}</Text>
                         {subscription?.plan === plan.key && subscription?.status === 'active' && (subscription?.activatedAt || subscription?.inTrial) && (
@@ -455,13 +455,13 @@ export default function Billing({ shop }) {
                           <Text variant="bodySm" fontWeight="semibold">Features:</Text>
                           <BlockStack gap="100">
                             {plan.features.map((feature, idx) => {
-                              // Remove leading ✓ if feature starts with 🔓
-                              const cleanFeature = feature.startsWith('✓') && feature.includes('🔓') 
-                                ? feature.replace(/^✓\s*/, '') 
+                              // Remove leading ✓ if feature contains 🔓 (regardless of position)
+                              const cleanFeature = feature.includes('🔓') 
+                                ? feature.replace(/^✓\s*/, '').trim() 
                                 : feature;
                               
-                              // Don't add bullet if starts with All from, already has ✓, or starts with 🔓
-                              const displayFeature = cleanFeature.startsWith('All from') || cleanFeature.startsWith('✓') || cleanFeature.startsWith('🔓') 
+                              // Don't add bullet if starts with All from, already has ✓, or contains 🔓
+                              const displayFeature = cleanFeature.startsWith('All from') || cleanFeature.startsWith('✓') || cleanFeature.includes('🔓') 
                                 ? cleanFeature 
                                 : `✓ ${cleanFeature}`;
                               
@@ -476,8 +476,9 @@ export default function Billing({ shop }) {
                       )}
                       
                       {/* Spacer to push button to bottom */}
-                      <div style={{ flexGrow: 1, minHeight: 0 }} />
+                      <div style={{ flexGrow: 1, flexShrink: 0, minHeight: '20px' }} />
                       
+                      <div style={{ marginTop: 'auto', flexShrink: 0 }}>
                       {subscription?.plan === plan.key && subscription?.status === 'active' && (subscription?.activatedAt || subscription?.inTrial) ? (
                         <Box 
                           background="bg-surface-secondary" 
@@ -510,6 +511,7 @@ export default function Billing({ shop }) {
                           Select Plan
                         </Button>
                       )}
+                      </div>
                     </div>
                   </Card>
                 ))}
