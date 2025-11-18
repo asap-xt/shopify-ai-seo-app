@@ -713,19 +713,31 @@ router.get('/callback', async (req, res) => {
       const isFullyActivated = subscription.activatedAt && !inTrial;
       
       if (isFullyActivated) {
-        // Trial ended and plan is activated → add included tokens
+        // Trial ended and plan is activated → set included tokens (or zero them if plan has none)
+        // CRITICAL: Always call setIncludedTokens, even if tokens is 0, to zero out included tokens on downgrade
         const included = getIncludedTokens(subscription.plan);
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
         
-        if (included.tokens > 0) {
-          const tokenBalance = await TokenBalance.getOrCreate(shop);
-          
-          // Use setIncludedTokens to replace old included tokens (keeps purchased)
-          await tokenBalance.setIncludedTokens(
-            included.tokens, 
-            subscription.plan, 
-            subscription.shopifySubscriptionId
-          );
-        }
+        console.log('[BILLING-CALLBACK] Setting included tokens for plan:', {
+          plan: subscription.plan,
+          includedTokens: included.tokens,
+          currentBalance: tokenBalance.balance,
+          totalPurchased: tokenBalance.totalPurchased
+        });
+        
+        // Use setIncludedTokens to replace old included tokens (keeps purchased)
+        // IMPORTANT: This will zero out included tokens if new plan has none (downgrade)
+        await tokenBalance.setIncludedTokens(
+          included.tokens, 
+          subscription.plan, 
+          subscription.shopifySubscriptionId
+        );
+        
+        console.log('[BILLING-CALLBACK] ✅ Set included tokens:', {
+          plan: subscription.plan,
+          includedTokens: included.tokens,
+          newBalance: tokenBalance.balance
+        });
       } else if (inTrial) {
         // Still in trial → don't add included tokens yet (user can only use purchased tokens)
         console.log('[BILLING-CALLBACK] ⚠️ Still in trial - not adding included tokens yet. User can only use purchased tokens.');

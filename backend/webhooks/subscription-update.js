@@ -263,17 +263,22 @@ export default async function handleSubscriptionUpdate(req, res) {
       const isFullyActivated = updatedSubscription.activatedAt && !inTrial;
       
       if (isFullyActivated) {
-        // Trial ended and plan is activated → add included tokens
+        // Trial ended and plan is activated → set included tokens (or zero them if plan has none)
+        // CRITICAL: Always call setIncludedTokens, even if tokens is 0, to zero out included tokens on downgrade
         const included = getIncludedTokens(updatedSubscription.plan);
         const tokenBalance = await TokenBalance.getOrCreate(shop);
         
-        console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
-          balance: tokenBalance.balance,
+        console.log('[SUBSCRIPTION-UPDATE] Setting included tokens for plan:', {
+          shop,
+          plan: updatedSubscription.plan,
+          includedTokens: included.tokens,
+          currentBalance: tokenBalance.balance,
           totalPurchased: tokenBalance.totalPurchased,
           totalUsed: tokenBalance.totalUsed
         });
         
         // Use setIncludedTokens to replace old included tokens (keeps purchased)
+        // IMPORTANT: This will zero out included tokens if new plan has none (downgrade)
         await tokenBalance.setIncludedTokens(
           included.tokens, 
           updatedSubscription.plan, 
