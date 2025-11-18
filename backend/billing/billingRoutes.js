@@ -63,13 +63,12 @@ function getPlanFeatures(planKey) {
   
   // Professional Plus - all from Professional plus:
   if (planKey === 'professional plus') {
-    features.push('All from Professional plus');
-    features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
-    features.push('AI Welcome Page (pay-per-use tokens)');
-    features.push('Collections JSON Feed (pay-per-use tokens)');
-    features.push('AI-Optimized Sitemap (pay-per-use tokens)');
-    features.push('Store Metadata (pay-per-use tokens)');
-    features.push('Advanced Schema Data (pay-per-use tokens)');
+    features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens:');
+    features.push('✓ AI Welcome Page (pay-per-use tokens)');
+    features.push('✓ Collections JSON Feed (pay-per-use tokens)');
+    features.push('✓ AI-Optimized Sitemap (pay-per-use tokens)');
+    features.push('✓ Store Metadata (pay-per-use tokens)');
+    features.push('✓ Advanced Schema Data (pay-per-use tokens)');
     return features;
   }
   
@@ -220,12 +219,6 @@ router.get('/info', verifyRequest, async (req, res) => {
         
         if (!isPendingActivationValid) {
           // pendingActivation exists but subscription was cancelled or doesn't exist - clear it
-          console.log('[BILLING-INFO] Clearing invalid pendingActivation:', {
-            shop,
-            shopifySubscriptionId: subscription.shopifySubscriptionId,
-            subscriptionExists,
-            isCancelled
-          });
           await Subscription.updateOne(
             { shop },
             { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
@@ -239,7 +232,6 @@ router.get('/info', verifyRequest, async (req, res) => {
         }
       } else if (!shopDoc?.accessToken) {
         // No access token - can't validate, but clear pendingActivation to be safe
-        console.log('[BILLING-INFO] No access token, clearing pendingActivation:', { shop });
         await Subscription.updateOne(
           { shop },
           { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
@@ -253,7 +245,6 @@ router.get('/info', verifyRequest, async (req, res) => {
       }
     } else if (subscription?.pendingActivation && !subscription?.shopifySubscriptionId) {
       // pendingActivation exists but no shopifySubscriptionId - invalid state, clear it
-      console.log('[BILLING-INFO] Clearing pendingActivation with no shopifySubscriptionId:', { shop });
       needsCacheInvalidation = true;
       await Subscription.updateOne(
         { shop },
@@ -540,7 +531,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // Updated: 2025-11-17 - Fixed pending activation blocking issue
       if (existingSub.pendingActivation && !existingSub.pendingPlan) {
         // Old pendingActivation from /activate (no pendingPlan) - clear it
-        console.log('[Billing] Clearing old pendingActivation (from /activate) before setting new pendingPlan');
         await Subscription.updateOne(
           { shop },
           { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
@@ -582,16 +572,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         { new: true }  // NO upsert - subscription must already exist
       );
       
-      console.log('[Billing] Plan change - set new pendingPlan:', {
-        shop,
-        oldPlan: existingSub.plan,
-        newPlan: plan,
-        oldPendingActivation: existingSub.pendingActivation,
-        newPendingActivation: subscription.pendingActivation,
-        oldPendingPlan: existingSub.pendingPlan,
-        newPendingPlan: subscription.pendingPlan
-      });
-      
     } else {
       // First install: Create subscription with pendingPlan so webhook can find it
       // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
@@ -613,13 +593,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         firstInstallData,
         { upsert: true, new: true }  // UPSERT allowed for first install
       );
-      
-      console.log('[Billing] Created subscription for first install:', {
-        shop,
-        plan,
-        shopifySubscriptionId: shopifySubscription.id,
-        pendingPlan: subscription.pendingPlan
-      });
     }
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
@@ -803,13 +776,6 @@ router.get('/callback', async (req, res) => {
         const included = getIncludedTokens(subscription.plan);
         const tokenBalance = await TokenBalance.getOrCreate(shop);
         
-        console.log('[BILLING-CALLBACK] Setting included tokens for plan:', {
-          plan: subscription.plan,
-          includedTokens: included.tokens,
-          currentBalance: tokenBalance.balance,
-          totalPurchased: tokenBalance.totalPurchased
-        });
-        
         // Use setIncludedTokens to replace old included tokens (keeps purchased)
         // IMPORTANT: This will zero out included tokens if new plan has none (downgrade)
         await tokenBalance.setIncludedTokens(
@@ -817,15 +783,6 @@ router.get('/callback', async (req, res) => {
           subscription.plan, 
           subscription.shopifySubscriptionId
         );
-        
-        console.log('[BILLING-CALLBACK] ✅ Set included tokens:', {
-          plan: subscription.plan,
-          includedTokens: included.tokens,
-          newBalance: tokenBalance.balance
-        });
-      } else if (inTrial) {
-        // Still in trial → don't add included tokens yet (user can only use purchased tokens)
-        console.log('[BILLING-CALLBACK] ⚠️ Still in trial - not adding included tokens yet. User can only use purchased tokens.');
       }
     }
     
@@ -1120,11 +1077,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
     // We should check if that subscription was cancelled, and only then clear it
     // This allows user to retry activation if previous attempt failed
     if (subscription.pendingPlan) {
-      console.log('[BILLING-ACTIVATE] Clearing existing pendingPlan before new activation:', {
-        shop,
-        currentPlan: subscription.plan,
-        pendingPlan: subscription.pendingPlan
-      });
       await Subscription.updateOne(
         { shop },
         { $unset: { pendingPlan: '' } }
@@ -1151,11 +1103,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
         
         // If subscription doesn't exist or is CANCELLED, clear pendingActivation
         if (!shopifySub || shopifySub.status === 'CANCELLED') {
-          console.log('[BILLING-ACTIVATE] Clearing pendingActivation for cancelled/non-existent subscription:', {
-            shop,
-            shopifySubscriptionId: subscription.shopifySubscriptionId,
-            shopifySubStatus: shopifySub?.status
-          });
           await Subscription.updateOne(
             { shop },
             { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
@@ -1193,11 +1140,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
           
           // If subscription doesn't exist or is CANCELLED, clear pendingActivation
           if (!shopifySub || shopifySub.status === 'CANCELLED') {
-            console.log('[BILLING-ACTIVATE] Clearing pendingActivation for cancelled/non-existent subscription:', {
-              shop,
-              pendingSubscriptionId,
-              shopifySubStatus: shopifySub?.status
-            });
             await Subscription.updateOne(
               { shop },
               { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
@@ -1212,7 +1154,6 @@ router.post('/activate', verifyRequest, async (req, res) => {
         }
       } else {
         // No shopifySubscriptionId but pendingActivation exists - clear it
-        console.log('[BILLING-ACTIVATE] Clearing pendingActivation with no shopifySubscriptionId:', { shop });
         await Subscription.updateOne(
           { shop },
           { $unset: { pendingActivation: '' } }
@@ -1352,18 +1293,11 @@ router.post('/activate', verifyRequest, async (req, res) => {
         
         // Update MongoDB with pending activation (NO activatedAt yet!)
         // Use findOneAndUpdate to ensure atomic update and return updated document
-        const updatedSubscription = await Subscription.findOneAndUpdate(
+        await Subscription.findOneAndUpdate(
           { shop },
           { $set: updateData },
           { new: true } // Return updated document
         );
-        
-        console.log('[BILLING-ACTIVATE] Updated subscription for activation:', {
-          shop,
-          shopifySubscriptionId: newShopifySubscription.id,
-          pendingActivation: updatedSubscription?.pendingActivation,
-          plan: updatedSubscription?.plan
-        });
         
         // If confirmationUrl exists, merchant needs to approve the charge
         if (confirmationUrl) {

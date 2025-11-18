@@ -10,8 +10,6 @@ import { dbLogger } from '../utils/logger.js';
  * This runs once on server startup
  */
 export async function createAllIndexes() {
-  dbLogger.info('📇 Starting index creation (PHASE 2)...');
-  
   try {
     // Import models dynamically to avoid circular dependencies
     const Product = (await import('./Product.js')).default;
@@ -27,19 +25,16 @@ export async function createAllIndexes() {
     // ============================================================================
     // PRODUCT INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating Product indexes...');
     
     // Drop existing conflicting indexes first (if they exist)
     try {
       await Product.collection.dropIndex('shop_1_handle_1');
-      dbLogger.info('🗑️  Dropped old shop_1_handle_1 index');
     } catch (e) {
       // Index doesn't exist, that's fine
     }
     
     try {
       await Product.collection.dropIndex('shop_1_shopifyId_1');
-      dbLogger.info('🗑️  Dropped old shop_1_shopifyId_1 index');
     } catch (e) {
       // Index doesn't exist, that's fine
     }
@@ -88,17 +83,13 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    dbLogger.info('✅ Product indexes created (5)');
-    
     // ============================================================================
     // COLLECTION INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating Collection indexes...');
     
     // Drop existing conflicting indexes first (if they exist)
     try {
       await Collection.collection.dropIndex('shop_1_handle_1');
-      dbLogger.info('🗑️  Dropped old Collection shop_1_handle_1 index');
     } catch (e) {
       // Index doesn't exist, that's fine
     }
@@ -127,35 +118,26 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    dbLogger.info('✅ Collection indexes created (3)');
-    
     // ============================================================================
     // SHOP INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating Shop indexes...');
     
     // Index 1: shop (primary lookup - already exists as unique)
     // This is already defined in Shop.js schema, but let's ensure it
     await Shop.collection.createIndex({ shop: 1 }, { unique: true });
     indexCount++;
     
-    dbLogger.info('✅ Shop indexes created (1)');
-    
     // ============================================================================
     // SITEMAP INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating Sitemap indexes...');
     
     // Index 1: shop (primary lookup)
     await Sitemap.collection.createIndex({ shop: 1 }, { unique: true });
     indexCount++;
     
-    dbLogger.info('✅ Sitemap indexes created (1)');
-    
     // ============================================================================
     // SUBSCRIPTION INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating Subscription indexes...');
     
     // Index 1: shop (primary lookup)
     await Subscription.collection.createIndex({ shop: 1 }, { unique: true });
@@ -165,17 +147,13 @@ export async function createAllIndexes() {
     await Subscription.collection.createIndex({ status: 1 });
     indexCount++;
     
-    dbLogger.info('✅ Subscription indexes created (2)');
-    
     // ============================================================================
     // ADVANCED SCHEMA INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating AdvancedSchema indexes...');
     
     // Drop existing conflicting indexes first (if they exist)
     try {
       await AdvancedSchema.collection.dropIndex('shop_1_productHandle_1');
-      dbLogger.info('🗑️  Dropped old AdvancedSchema shop_1_productHandle_1 index');
     } catch (e) {
       // Index doesn't exist, that's fine
     }
@@ -193,12 +171,9 @@ export async function createAllIndexes() {
     });
     indexCount++;
     
-    dbLogger.info('✅ AdvancedSchema indexes created (1)');
-    
     // ============================================================================
     // SYNC LOG INDEXES
     // ============================================================================
-    dbLogger.info('📇 Creating SyncLog indexes...');
     
     // Index 1: shop + createdAt (for latest sync status)
     await SyncLog.collection.createIndex({ 
@@ -213,14 +188,6 @@ export async function createAllIndexes() {
       { expireAfterSeconds: 30 * 24 * 60 * 60 } // 30 days
     );
     indexCount++;
-    
-    dbLogger.info('✅ SyncLog indexes created (2)');
-    
-    // ============================================================================
-    // SUMMARY
-    // ============================================================================
-    dbLogger.info(`✅ PHASE 2 COMPLETE: Created ${indexCount} indexes successfully!`);
-    dbLogger.info('   Expected performance: 10-50x faster queries');
     
     return { success: true, indexCount };
     

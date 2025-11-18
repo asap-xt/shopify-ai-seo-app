@@ -16,9 +16,6 @@ export default async function handleSubscriptionUpdate(req, res) {
     const shop = req.headers['x-shopify-shop-domain'];
     const webhookData = req.body;
     
-    console.log('[SUBSCRIPTION-UPDATE] Webhook received for:', shop);
-    console.log('[SUBSCRIPTION-UPDATE] Subscription data:', JSON.stringify(webhookData, null, 2));
-    
     if (!shop) {
       console.error('[SUBSCRIPTION-UPDATE] No shop domain in webhook headers');
       return res.status(400).json({ error: 'Missing shop domain' });
@@ -35,9 +32,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       trial_days
     } = appSubscription;
     
-    console.log('[SUBSCRIPTION-UPDATE] Status:', status, '| Test:', test, '| Trial:', trial_days);
-    console.log('[SUBSCRIPTION-UPDATE] Admin GraphQL API ID:', admin_graphql_api_id);
-    
     // Find subscription in our DB
     // First try to find by shopifySubscriptionId (normal case)
     // CRITICAL: Use lean() to ensure all fields are returned, especially activatedAt
@@ -53,8 +47,6 @@ export default async function handleSubscriptionUpdate(req, res) {
     // 3. shopifySubscriptionId doesn't match (shouldn't happen, but safety net)
     let foundByFallback = false;
     if (!subscription) {
-      console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation or pendingPlan');
-      
       // CRITICAL FIX: Use lean() to ensure all fields are returned, especially activatedAt
       // This is the root cause - Mongoose might not return all fields without lean()
       // Try pendingActivation first (for /activate endpoint)
@@ -79,18 +71,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       if (subscription) {
         foundByFallback = true; // Mark that subscription was found by fallback search
-        console.log('[SUBSCRIPTION-UPDATE] Found subscription by fallback search:', {
-          shop,
-          plan: subscription.plan,
-          pendingPlan: subscription.pendingPlan,
-          pendingActivation: subscription.pendingActivation,
-          activatedAt: subscription.activatedAt, // CRITICAL: Log activatedAt to debug upgrade after activation
-          trialEndsAt: subscription.trialEndsAt, // CRITICAL: Log trialEndsAt to debug upgrade after activation
-          shopifySubscriptionId: subscription.shopifySubscriptionId,
-          webhookSubscriptionId: admin_graphql_api_id,
-          status,
-          _id: subscription._id
-        });
         
         // CRITICAL: Only update shopifySubscriptionId if:
         // 1. It doesn't match AND
@@ -100,23 +80,12 @@ export default async function handleSubscriptionUpdate(req, res) {
         const isCancelledOldSubscription = status === 'CANCELLED' && hasPendingNewSubscription;
         
         if (subscription.shopifySubscriptionId !== admin_graphql_api_id && !isCancelledOldSubscription) {
-          console.log('[SUBSCRIPTION-UPDATE] Updating shopifySubscriptionId to match webhook:', {
-            old: subscription.shopifySubscriptionId,
-            new: admin_graphql_api_id
-          });
           subscription.shopifySubscriptionId = admin_graphql_api_id;
-        } else if (isCancelledOldSubscription) {
-          console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Not updating shopifySubscriptionId.');
         }
       }
     }
     
     if (!subscription) {
-      console.warn('[SUBSCRIPTION-UPDATE] Subscription not found in DB:', {
-        shop,
-        shopifySubscriptionId: admin_graphql_api_id,
-        status
-      });
       // Respond 200 to avoid retries
       return res.status(200).json({ success: false, error: 'Subscription not found' });
     }
@@ -126,24 +95,6 @@ export default async function handleSubscriptionUpdate(req, res) {
     // IMPORTANT: Since we're using lean(), subscription is a plain object, so we can safely access activatedAt
     const originalActivatedAt = subscription.activatedAt;
     const hasBeenActivated = !!originalActivatedAt;
-    
-    console.log('[SUBSCRIPTION-UPDATE] Original state BEFORE processing:', {
-      hasBeenActivated,
-      originalActivatedAt,
-      originalTrialEndsAt: subscription.trialEndsAt,
-      pendingPlan: subscription.pendingPlan,
-      pendingActivation: subscription.pendingActivation,
-      _id: subscription._id
-    });
-    
-    console.log('[SUBSCRIPTION-UPDATE] Found subscription:', {
-      shop,
-      plan: subscription.plan,
-      currentStatus: subscription.status,
-      newStatus: status,
-      activatedAt: subscription.activatedAt, // CRITICAL: Log activatedAt to debug upgrade after activation
-      trialEndsAt: subscription.trialEndsAt // CRITICAL: Log trialEndsAt to debug upgrade after activation
-    });
     
     // Handle status transitions
     // CRITICAL: Handle ACTIVE status even if subscription is already 'active'
@@ -159,12 +110,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       const shouldActivate = subscription.pendingActivation || subscription.pendingPlan || !originalActivatedAt;
       
       if (!shouldActivate && subscription.status === 'active') {
-        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but subscription already activated - just updating status:', {
-          shop,
-          plan: subscription.plan,
-          shopifySubscriptionId: subscription.shopifySubscriptionId,
-          activatedAt: originalActivatedAt
-        });
         // Just update status, but don't activate (already activated)
         await Subscription.findByIdAndUpdate(
           subscription._id,
@@ -175,8 +120,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       // If subscription.status is not 'active' OR shouldActivate is true, proceed with activation
-      
-      console.log('[SUBSCRIPTION-UPDATE] 🎉 Activating subscription for:', shop);
       
       // CRITICAL: Define now at the start of activation block
       const now = new Date();
@@ -268,15 +211,6 @@ export default async function handleSubscriptionUpdate(req, res) {
         const included = getIncludedTokens(updatedSubscription.plan);
         const tokenBalance = await TokenBalance.getOrCreate(shop);
         
-        console.log('[SUBSCRIPTION-UPDATE] Setting included tokens for plan:', {
-          shop,
-          plan: updatedSubscription.plan,
-          includedTokens: included.tokens,
-          currentBalance: tokenBalance.balance,
-          totalPurchased: tokenBalance.totalPurchased,
-          totalUsed: tokenBalance.totalUsed
-        });
-        
         // Use setIncludedTokens to replace old included tokens (keeps purchased)
         // IMPORTANT: This will zero out included tokens if new plan has none (downgrade)
         await tokenBalance.setIncludedTokens(
@@ -284,21 +218,10 @@ export default async function handleSubscriptionUpdate(req, res) {
           updatedSubscription.plan, 
           admin_graphql_api_id
         );
-        
-        console.log('[SUBSCRIPTION-UPDATE] ✅ Set included tokens:', {
-          shop,
-          plan: updatedSubscription.plan,
-          includedTokens: included.tokens,
-          newBalance: tokenBalance.balance
-        });
-      } else if (inTrial) {
-        // Still in trial → don't add included tokens yet (user can only use purchased tokens)
-        console.log('[SUBSCRIPTION-UPDATE] ⚠️ Still in trial - not adding included tokens yet. User can only use purchased tokens.');
       }
       
     } else if (status === 'CANCELLED' || status === 'DECLINED') {
       // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)
-      console.log('[SUBSCRIPTION-UPDATE] ❌ Subscription cancelled/declined for:', shop);
       
       // CRITICAL: Only clear pendingActivation if shopifySubscriptionId matches
       // This prevents clearing pendingActivation for a NEW subscription when an OLD one is cancelled
@@ -325,22 +248,18 @@ export default async function handleSubscriptionUpdate(req, res) {
           // First install that wasn't approved - clear activatedAt and trialEndsAt
           updateData.activatedAt = undefined;
           updateData.trialEndsAt = undefined;
-          console.log('[SUBSCRIPTION-UPDATE] Cleared activatedAt and trialEndsAt for unapproved first install');
         }
         
         // DON'T change status - keep previous plan (starter/trial)
         await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
-        console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
       } else if (hasPendingState && !subscriptionIdMatches) {
         // This is a CANCELLED webhook for an OLD subscription
         // CRITICAL: When /activate is called, old subscription is cancelled and new one is created
         // The new subscription has a NEW shopifySubscriptionId, so subscriptionIdMatches is false
         // We should NOT clear pendingActivation here - it's for the NEW subscription, not the old one!
-        console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
         // DON'T clear pendingActivation - it's for the NEW subscription that's waiting for approval
       } else {
         // Subscription was active and now cancelled by merchant
-        console.log('[SUBSCRIPTION-UPDATE] Active subscription cancelled by merchant');
         const updateData = {
           status: 'cancelled',
           cancelledAt: new Date(),
@@ -356,13 +275,10 @@ export default async function handleSubscriptionUpdate(req, res) {
         }
         
         await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
-        console.log('[SUBSCRIPTION-UPDATE] ✅ Subscription cancelled');
       }
       
     } else if (status === 'EXPIRED') {
       // ⏰ Subscription expired (payment failed)
-      console.log('[SUBSCRIPTION-UPDATE] ⏰ Subscription expired for:', shop);
-      
       const updateData = {
         status: 'expired',
         expiredAt: new Date()
@@ -377,8 +293,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       
     } else if (status === 'PENDING') {
       // ⏳ Still pending approval
-      console.log('[SUBSCRIPTION-UPDATE] ⏳ Subscription still pending for:', shop);
-      
       const updateData = {
         status: 'pending'
       };
@@ -389,12 +303,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
-      
-    } else {
-      console.log('[SUBSCRIPTION-UPDATE] Unknown status transition:', {
-        from: subscription.status,
-        to: status
-      });
     }
     
     // Respond to Shopify immediately (webhooks must respond within 5 seconds)

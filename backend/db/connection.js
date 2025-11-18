@@ -61,11 +61,7 @@ class DatabaseConnection {
       this.isConnected = true;
       this.connectionAttempts = 0;
       
-      dbLogger.info('✅ MongoDB connected with optimized pool settings');
-      dbLogger.info(`   - Max Pool Size: ${options.maxPoolSize}`);
-      dbLogger.info(`   - Min Pool Size: ${options.minPoolSize}`);
-      dbLogger.info(`   - Host: ${mongoose.connection.host}`);
-      dbLogger.info(`   - Database: ${mongoose.connection.name}`);
+      dbLogger.info('✅ MongoDB connected');
       
       this.setupEventHandlers();
       this.setupHealthChecks();
@@ -211,8 +207,6 @@ class DatabaseConnection {
     };
 
     // Run FIRST check after a small delay (allow pool to initialize)
-    dbLogger.info('🏥 Starting health checks (every 30 seconds)...');
-    
     setTimeout(() => {
       runHealthCheck();
       // Then run every 30 seconds
