@@ -40,10 +40,11 @@ export default async function handleSubscriptionUpdate(req, res) {
     
     // Find subscription in our DB
     // First try to find by shopifySubscriptionId (normal case)
+    // CRITICAL: Use lean() to ensure all fields are returned, especially activatedAt
     let subscription = await Subscription.findOne({ 
       shop, 
       shopifySubscriptionId: admin_graphql_api_id 
-    });
+    }).lean();
     
     // If not found, try to find by shop + pendingActivation or pendingPlan
     // This handles cases where:
@@ -54,29 +55,31 @@ export default async function handleSubscriptionUpdate(req, res) {
     if (!subscription) {
       console.log('[SUBSCRIPTION-UPDATE] Subscription not found by ID, trying to find by shop + pendingActivation or pendingPlan');
       
+      // CRITICAL FIX: Use lean() to ensure all fields are returned, especially activatedAt
+      // This is the root cause - Mongoose might not return all fields without lean()
       // Try pendingActivation first (for /activate endpoint)
       subscription = await Subscription.findOne({ 
         shop, 
         pendingActivation: true 
-      });
+      }).lean();
       
       // If not found, try pendingPlan (for /subscribe endpoint)
       if (!subscription) {
         subscription = await Subscription.findOne({ 
           shop, 
           pendingPlan: { $exists: true, $ne: null }
-        });
+        }).lean();
       }
       
       // If still not found, try by shop only (for upgrade after activation)
       // This handles the case where upgrade happens after activation and webhook arrives before callback
       if (!subscription) {
-        subscription = await Subscription.findOne({ shop });
+        subscription = await Subscription.findOne({ shop }).lean();
       }
       
       if (subscription) {
         foundByFallback = true; // Mark that subscription was found by fallback search
-        console.log('[SUBSCRIPTION-UPDATE] Found subscription by shop + pendingActivation/pendingPlan:', {
+        console.log('[SUBSCRIPTION-UPDATE] Found subscription by fallback search:', {
           shop,
           plan: subscription.plan,
           pendingPlan: subscription.pendingPlan,
@@ -85,7 +88,8 @@ export default async function handleSubscriptionUpdate(req, res) {
           trialEndsAt: subscription.trialEndsAt, // CRITICAL: Log trialEndsAt to debug upgrade after activation
           shopifySubscriptionId: subscription.shopifySubscriptionId,
           webhookSubscriptionId: admin_graphql_api_id,
-          status
+          status,
+          _id: subscription._id
         });
         
         // CRITICAL: Only update shopifySubscriptionId if:
@@ -117,20 +121,20 @@ export default async function handleSubscriptionUpdate(req, res) {
       return res.status(200).json({ success: false, error: 'Subscription not found' });
     }
     
-    // CRITICAL: If subscription was found by fallback search, reload it to ensure all fields are loaded
-    // This is especially important for activatedAt, which might not be loaded correctly in fallback search
-    if (foundByFallback) {
-      console.log('[SUBSCRIPTION-UPDATE] Subscription found by fallback - reloading to ensure all fields are loaded');
-      const reloadedSubscription = await Subscription.findOne({ _id: subscription._id });
-      if (reloadedSubscription) {
-        // Preserve shopifySubscriptionId if it was updated during fallback search
-        if (subscription.shopifySubscriptionId && subscription.shopifySubscriptionId !== reloadedSubscription.shopifySubscriptionId) {
-          reloadedSubscription.shopifySubscriptionId = subscription.shopifySubscriptionId;
-        }
-        subscription = reloadedSubscription;
-        console.log('[SUBSCRIPTION-UPDATE] Reloaded subscription with activatedAt:', subscription.activatedAt);
-      }
-    }
+    // CRITICAL: Store original activatedAt BEFORE any processing!
+    // This is essential to preserve activatedAt during upgrades after activation
+    // IMPORTANT: Since we're using lean(), subscription is a plain object, so we can safely access activatedAt
+    const originalActivatedAt = subscription.activatedAt;
+    const hasBeenActivated = !!originalActivatedAt;
+    
+    console.log('[SUBSCRIPTION-UPDATE] Original state BEFORE processing:', {
+      hasBeenActivated,
+      originalActivatedAt,
+      originalTrialEndsAt: subscription.trialEndsAt,
+      pendingPlan: subscription.pendingPlan,
+      pendingActivation: subscription.pendingActivation,
+      _id: subscription._id
+    });
     
     console.log('[SUBSCRIPTION-UPDATE] Found subscription:', {
       shop,
@@ -151,18 +155,22 @@ export default async function handleSubscriptionUpdate(req, res) {
       // 2. OR pendingPlan exists (user approved via /subscribe endpoint)
       // 3. OR activatedAt is not set yet (callback might not have run yet, but webhook confirms activation)
       // This handles race conditions where webhook arrives before or after callback
-      const shouldActivate = subscription.pendingActivation || subscription.pendingPlan || !subscription.activatedAt;
+      // Use originalActivatedAt instead of subscription.activatedAt since we're using lean()
+      const shouldActivate = subscription.pendingActivation || subscription.pendingPlan || !originalActivatedAt;
       
       if (!shouldActivate && subscription.status === 'active') {
         console.log('[SUBSCRIPTION-UPDATE] ⚠️ Webhook ACTIVE but subscription already activated - just updating status:', {
           shop,
           plan: subscription.plan,
           shopifySubscriptionId: subscription.shopifySubscriptionId,
-          activatedAt: subscription.activatedAt
+          activatedAt: originalActivatedAt
         });
         // Just update status, but don't activate (already activated)
-        subscription.status = 'active';
-        await subscription.save();
+        await Subscription.findByIdAndUpdate(
+          subscription._id,
+          { status: 'active', shopifySubscriptionId: admin_graphql_api_id },
+          { new: true }
+        );
         return res.status(200).json({ success: true, skipped: 'already activated' });
       }
       
@@ -175,104 +183,88 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // CRITICAL: Store pendingActivation and pendingPlan BEFORE we clear them!
       // This is needed to determine if this is from /activate (end trial) or /subscribe (preserve trial)
-      // Updated: 2025-11-17 - Fixed bug where wasPendingActivation was always false
       const wasPendingActivation = subscription.pendingActivation;
       const hadPendingPlan = !!subscription.pendingPlan;
       
-      // CRITICAL: Store activatedAt AFTER reload (if found by fallback) to ensure we check the correct value!
-      // This is needed to check if plan is already activated (upgrade after activation)
-      // IMPORTANT: activatedAt might be undefined if subscription was found by fallback search
-      // But if it exists, it means trial has ended and we should NOT create new trial on upgrade
-      const hasActivatedAt = !!subscription.activatedAt;
+      // Build update data object
+      // CRITICAL: Since we're using lean(), subscription is a plain object, so we use findByIdAndUpdate
+      const updateData = {
+        status: 'active',
+        shopifySubscriptionId: admin_graphql_api_id
+      };
       
-      // Update subscription to active
-      subscription.status = 'active';
-      // CRITICAL: DO NOT clear pendingActivation here - it will be cleared in callback after approval
-      // Only clear it if this is NOT from /activate (wasPendingActivation is false)
-      // If wasPendingActivation is true, keep it until callback confirms approval
-      if (!wasPendingActivation) {
-        subscription.pendingActivation = false;
-      }
-      
-      // CRITICAL: If pendingPlan exists, activate it now (user approved via /subscribe)
+      // Handle plan change
       if (subscription.pendingPlan) {
-        subscription.plan = subscription.pendingPlan;
-        subscription.pendingPlan = null; // Clear pending
-        console.log('[SUBSCRIPTION-UPDATE] Activated pendingPlan:', subscription.plan);
+        updateData.plan = subscription.pendingPlan;
+        updateData.pendingPlan = null;
+        console.log('[SUBSCRIPTION-UPDATE] Activating pendingPlan:', subscription.pendingPlan);
       }
       
-      // CRITICAL: Handle trialEndsAt and activatedAt based on whether this is from /activate or /subscribe
-      // IMPORTANT: Check activatedAt FIRST - if it exists, trial has ended, NO new trial on upgrade!
-      // According to Shopify documentation: Once trial is ended (activatedAt exists), upgrades continue billing period
+      // Handle activation
+      if (subscription.pendingActivation) {
+        updateData.pendingActivation = false;
+        
+        // Only set activatedAt if this is the first activation
+        if (!hasBeenActivated) {
+          updateData.activatedAt = now;
+          updateData.trialEndsAt = null; // End trial on activation
+          console.log('[SUBSCRIPTION-UPDATE] First activation - setting activatedAt');
+        }
+      }
       
-      // CRITICAL: Log current state for debugging
+      // CRITICAL: Handle upgrade after activation
+      // This is the KEY FIX - preserve originalActivatedAt when it exists
+      if (hasBeenActivated) {
+        // Preserve the original activation date
+        updateData.activatedAt = originalActivatedAt;
+        updateData.trialEndsAt = null; // No trial for upgrades after activation
+        console.log('[SUBSCRIPTION-UPDATE] Upgrade after activation - preserving activatedAt:', originalActivatedAt);
+      } else if (!subscription.pendingActivation && !subscription.trialEndsAt) {
+        // Only set trial for brand new subscriptions (not activated, no existing trial)
+        const { TRIAL_DAYS } = await import('../plans.js');
+        const trialDays = trial_days || TRIAL_DAYS;
+        updateData.trialEndsAt = new Date(now.getTime() + (trialDays * 24 * 60 * 60 * 1000));
+        console.log('[SUBSCRIPTION-UPDATE] New subscription - setting trial period');
+      } else if (subscription.trialEndsAt && !hasBeenActivated) {
+        // Preserve existing trial if still in trial period
+        updateData.trialEndsAt = subscription.trialEndsAt;
+        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trial period');
+      }
+      
+      // CRITICAL: Log update data before applying
       console.log('[SUBSCRIPTION-UPDATE] Trial logic check:', {
-        activatedAt: subscription.activatedAt,
-        hasActivatedAt, // CRITICAL: Check if activatedAt was stored before processing
-        trialEndsAt: subscription.trialEndsAt,
+        originalActivatedAt,
+        hasBeenActivated,
+        updateDataActivatedAt: updateData.activatedAt,
+        updateDataTrialEndsAt: updateData.trialEndsAt,
         hadPendingPlan,
         wasPendingActivation,
-        plan: subscription.plan
+        plan: updateData.plan || subscription.plan
       });
       
-      // CRITICAL: If activatedAt exists, trial has ended - NO new trial on upgrade!
-      // IMPORTANT: Use hasActivatedAt (stored before processing) to ensure we check the original value
-      // This handles the case where subscription was found by fallback search and activatedAt might not be loaded correctly
-      if (hasActivatedAt || subscription.activatedAt) {
-        // Plan is already activated - NO trial on upgrade!
-        // According to Shopify: upgrade after activation continues billing period (no new trial)
-        subscription.trialEndsAt = null;
-        console.log('[SUBSCRIPTION-UPDATE] Plan is activated (activatedAt exists) - NO trial on upgrade, continuing billing period');
-      } else if (hadPendingPlan) {
-        // This is from /subscribe endpoint (upgrade/downgrade or first install) - DO NOT set activatedAt yet
-        // User is in trial - activatedAt should only be set when they click "Activate Plan" (wasPendingActivation)
-        // CRITICAL: Plan is in trial (no activatedAt) - preserve trial end date
-        if (!subscription.trialEndsAt) {
-          // First install - set trialEndsAt
-          const { TRIAL_DAYS } = await import('../plans.js');
-          subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (first install) - set trialEndsAt:', subscription.trialEndsAt);
-        } else {
-          // Upgrade/downgrade during trial - preserve existing trialEndsAt
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /subscribe (upgrade/downgrade during trial) - preserving existing trialEndsAt:', subscription.trialEndsAt);
-        }
-        // CRITICAL: DO NOT set activatedAt here - user is in trial, activatedAt should be undefined
-        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
-      } else if (wasPendingActivation) {
-        // This is from /activate endpoint - user clicked "Activate Plan" to END trial
-        // CRITICAL: Set activatedAt and clear trialEndsAt to end trial immediately
-        if (!subscription.activatedAt) {
-          subscription.activatedAt = now;
-          console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - set activatedAt:', subscription.activatedAt);
-        } else {
-          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
-        }
-        subscription.trialEndsAt = null;
-        console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');
-      } else if (!subscription.trialEndsAt) {
-        // First install (no pendingPlan, no pendingActivation, no trialEndsAt, no activatedAt) - set trialEndsAt
-        const { TRIAL_DAYS } = await import('../plans.js');
-        subscription.trialEndsAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-        console.log('[SUBSCRIPTION-UPDATE] Set trialEndsAt for first install:', subscription.trialEndsAt);
-        // CRITICAL: DO NOT set activatedAt - user is in trial
-        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
-      } else {
-        // TrialEndsAt already exists and activatedAt doesn't exist - preserve trialEndsAt
-        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trialEndsAt:', subscription.trialEndsAt);
-        // CRITICAL: DO NOT set activatedAt - user is in trial
-        console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
-      }
+      // CRITICAL: Use findByIdAndUpdate since we're using lean() (subscription is plain object)
+      const updatedSubscription = await Subscription.findByIdAndUpdate(
+        subscription._id,
+        updateData,
+        { new: true, runValidators: true }
+      );
       
-      await subscription.save();
+      console.log('[SUBSCRIPTION-UPDATE] Updated subscription:', {
+        plan: updatedSubscription.plan,
+        status: updatedSubscription.status,
+        activatedAt: updatedSubscription.activatedAt,
+        trialEndsAt: updatedSubscription.trialEndsAt
+      });
       
       // Set included tokens for the plan (replaces old, keeps purchased)
       // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
-      const inTrial = subscription.trialEndsAt && now < new Date(subscription.trialEndsAt);
-      const isFullyActivated = subscription.activatedAt && !inTrial;
+      // Use updatedSubscription instead of subscription since we've already updated it
+      const inTrial = updatedSubscription.trialEndsAt && now < new Date(updatedSubscription.trialEndsAt);
+      const isFullyActivated = updatedSubscription.activatedAt && !inTrial;
       
       if (isFullyActivated) {
         // Trial ended and plan is activated → add included tokens
-        const included = getIncludedTokens(subscription.plan);
+        const included = getIncludedTokens(updatedSubscription.plan);
         const tokenBalance = await TokenBalance.getOrCreate(shop);
         
         console.log('[SUBSCRIPTION-UPDATE] Current token balance:', {
@@ -284,13 +276,13 @@ export default async function handleSubscriptionUpdate(req, res) {
         // Use setIncludedTokens to replace old included tokens (keeps purchased)
         await tokenBalance.setIncludedTokens(
           included.tokens, 
-          subscription.plan, 
+          updatedSubscription.plan, 
           admin_graphql_api_id
         );
         
         console.log('[SUBSCRIPTION-UPDATE] ✅ Set included tokens:', {
           shop,
-          plan: subscription.plan,
+          plan: updatedSubscription.plan,
           includedTokens: included.tokens,
           newBalance: tokenBalance.balance
         });
@@ -310,51 +302,55 @@ export default async function handleSubscriptionUpdate(req, res) {
       const subscriptionIdMatches = subscription.shopifySubscriptionId === admin_graphql_api_id;
       
       // CRITICAL: If pendingActivation OR pendingPlan exists AND subscriptionId matches, user clicked "back" without approving
-      // IMPORTANT: Do NOT use foundByFallback here! If foundByFallback is true but subscriptionIdMatches is false,
-      // it means this is a CANCELLED webhook for an OLD subscription, and we found the subscription by pendingActivation
-      // In that case, we should NOT clear pendingActivation - it's for the NEW subscription!
-      // Only clear if subscriptionIdMatches is true (user clicked "back" on the SAME subscription)
       const hasPendingState = subscription.pendingActivation || subscription.pendingPlan;
       const shouldClearPending = subscriptionIdMatches; // CRITICAL: Only clear if IDs match!
       
       if (hasPendingState && shouldClearPending) {
         console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending state but keeping previous plan status');
-        subscription.pendingPlan = null; // Clear pending plan (user didn't approve)
-        subscription.pendingActivation = false; // CRITICAL: Clear pending activation flag
-        subscription.activatedAt = undefined; // CRITICAL: Clear activatedAt if it was set
-        // CRITICAL: If this is a first install (status is 'pending' and no activatedAt),
-        // clear trialEndsAt if it was set (user didn't approve, so trial shouldn't start)
-        // But if status is 'active' or 'cancelled', keep trialEndsAt (trial already started)
-        if (subscription.status === 'pending' && !subscription.activatedAt) {
-          // First install that wasn't approved - clear trialEndsAt if it was set
-          subscription.trialEndsAt = undefined;
-          console.log('[SUBSCRIPTION-UPDATE] Cleared trialEndsAt for unapproved first install');
+        const updateData = {
+          pendingPlan: null,
+          pendingActivation: false
+        };
+        
+        // CRITICAL: Preserve activatedAt even when cancelled (if it was set before)
+        // IMPORTANT: Only clear activatedAt if this is a first install that wasn't approved
+        if (originalActivatedAt) {
+          updateData.activatedAt = originalActivatedAt;
+        } else if (subscription.status === 'pending') {
+          // First install that wasn't approved - clear activatedAt and trialEndsAt
+          updateData.activatedAt = undefined;
+          updateData.trialEndsAt = undefined;
+          console.log('[SUBSCRIPTION-UPDATE] Cleared activatedAt and trialEndsAt for unapproved first install');
         }
+        
         // DON'T change status - keep previous plan (starter/trial)
-        await subscription.save();
+        await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
         console.log('[SUBSCRIPTION-UPDATE] ✅ Cleared pending state, kept previous plan:', subscription.plan, 'status:', subscription.status);
       } else if (hasPendingState && !subscriptionIdMatches) {
         // This is a CANCELLED webhook for an OLD subscription
         // CRITICAL: When /activate is called, old subscription is cancelled and new one is created
         // The new subscription has a NEW shopifySubscriptionId, so subscriptionIdMatches is false
         // We should NOT clear pendingActivation here - it's for the NEW subscription, not the old one!
-        // Only clear pendingActivation if user clicked "back" (which happens in the first if block above)
         console.log('[SUBSCRIPTION-UPDATE] ⚠️ CANCELLED webhook for old subscription, but new subscription is pending. Ignoring.');
         // DON'T clear pendingActivation - it's for the NEW subscription that's waiting for approval
-        // Just update the shopifySubscriptionId if it was updated by fallback search
-        if (subscription.shopifySubscriptionId !== admin_graphql_api_id) {
-          // This shouldn't happen, but if it does, we already updated it in the fallback search
-          await subscription.save();
-        }
       } else {
         // Subscription was active and now cancelled by merchant
         console.log('[SUBSCRIPTION-UPDATE] Active subscription cancelled by merchant');
-        subscription.status = 'cancelled';
-        subscription.cancelledAt = new Date();
-        subscription.pendingPlan = null;
-        subscription.pendingActivation = false;
-        subscription.activatedAt = undefined;
-        await subscription.save();
+        const updateData = {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          pendingPlan: null,
+          pendingActivation: false
+        };
+        
+        // IMPORTANT: Preserve activatedAt even when cancelled (if it was set before)
+        if (originalActivatedAt) {
+          updateData.activatedAt = originalActivatedAt;
+        } else {
+          updateData.activatedAt = undefined;
+        }
+        
+        await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
         console.log('[SUBSCRIPTION-UPDATE] ✅ Subscription cancelled');
       }
       
@@ -362,16 +358,32 @@ export default async function handleSubscriptionUpdate(req, res) {
       // ⏰ Subscription expired (payment failed)
       console.log('[SUBSCRIPTION-UPDATE] ⏰ Subscription expired for:', shop);
       
-      subscription.status = 'expired';
-      subscription.expiredAt = new Date();
-      await subscription.save();
+      const updateData = {
+        status: 'expired',
+        expiredAt: new Date()
+      };
+      
+      // IMPORTANT: Preserve activatedAt even when expired (if it was set before)
+      if (originalActivatedAt) {
+        updateData.activatedAt = originalActivatedAt;
+      }
+      
+      await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
       
     } else if (status === 'PENDING') {
       // ⏳ Still pending approval
       console.log('[SUBSCRIPTION-UPDATE] ⏳ Subscription still pending for:', shop);
       
-      subscription.status = 'pending';
-      await subscription.save();
+      const updateData = {
+        status: 'pending'
+      };
+      
+      // IMPORTANT: Preserve activatedAt even when pending (if it was set before)
+      if (originalActivatedAt) {
+        updateData.activatedAt = originalActivatedAt;
+      }
+      
+      await Subscription.findByIdAndUpdate(subscription._id, updateData, { new: true });
       
     } else {
       console.log('[SUBSCRIPTION-UPDATE] Unknown status transition:', {
