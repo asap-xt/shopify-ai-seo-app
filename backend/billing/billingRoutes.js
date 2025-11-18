@@ -186,16 +186,93 @@ router.get('/info', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
-    // FIX: Validate activatedAt BEFORE checking cache
-    // If user has activatedAt but subscription wasn't approved in Shopify,
-    // clear activatedAt and invalidate cache to allow new activation (this happens when user clicks Back)
+    // FIX: Validate activatedAt and pendingActivation BEFORE checking cache
+    // If user has activatedAt or pendingActivation but subscription wasn't approved in Shopify,
+    // clear them and invalidate cache to allow new activation (this happens when user clicks Back)
     const subscription = await Subscription.findOne({ shop });
     
-    // CRITICAL: If we have activatedAt, we need to validate it BEFORE cache check
-    // Invalidate cache first to force fresh data load
-    if (subscription?.activatedAt && subscription?.shopifySubscriptionId) {
-      // Invalidate cache FIRST to ensure we check against fresh Shopify data
+    // CRITICAL: Invalidate cache first to force fresh data load
+    let needsCacheInvalidation = false;
+    
+    // Validate pendingActivation FIRST (before activatedAt check)
+    // This fixes the issue where banner disappears after second "back" click
+    if (subscription?.pendingActivation && subscription?.shopifySubscriptionId) {
+      needsCacheInvalidation = true;
       await cacheService.invalidateShop(shop);
+      
+      const shopDoc = await Shop.findOne({ shop });
+      if (shopDoc?.accessToken) {
+        const { getSubscriptionById } = await import('./shopifyBilling.js');
+        const shopifySub = await getSubscriptionById(
+          shop, 
+          subscription.shopifySubscriptionId, 
+          shopDoc.accessToken
+        );
+        
+        // Subscription exists if found (even if PENDING - waiting for approval)
+        const subscriptionExists = !!shopifySub;
+        
+        // If subscription exists but is CANCELLED, clear pendingActivation
+        const isCancelled = shopifySub?.status === 'CANCELLED';
+        
+        // pendingActivation is valid only if subscription exists and is not CANCELLED
+        const isPendingActivationValid = subscriptionExists && !isCancelled;
+        
+        if (!isPendingActivationValid) {
+          // pendingActivation exists but subscription was cancelled or doesn't exist - clear it
+          console.log('[BILLING-INFO] Clearing invalid pendingActivation:', {
+            shop,
+            shopifySubscriptionId: subscription.shopifySubscriptionId,
+            subscriptionExists,
+            isCancelled
+          });
+          await Subscription.updateOne(
+            { shop },
+            { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
+          );
+          
+          // Reload subscription to get updated data
+          const updatedSub = await Subscription.findOne({ shop });
+          if (updatedSub) {
+            Object.assign(subscription, updatedSub.toObject());
+          }
+        }
+      } else if (!shopDoc?.accessToken) {
+        // No access token - can't validate, but clear pendingActivation to be safe
+        console.log('[BILLING-INFO] No access token, clearing pendingActivation:', { shop });
+        await Subscription.updateOne(
+          { shop },
+          { $unset: { pendingActivation: '', shopifySubscriptionId: '' } }
+        );
+        
+        // Reload subscription to get updated data
+        const updatedSub = await Subscription.findOne({ shop });
+        if (updatedSub) {
+          Object.assign(subscription, updatedSub.toObject());
+        }
+      }
+    } else if (subscription?.pendingActivation && !subscription?.shopifySubscriptionId) {
+      // pendingActivation exists but no shopifySubscriptionId - invalid state, clear it
+      console.log('[BILLING-INFO] Clearing pendingActivation with no shopifySubscriptionId:', { shop });
+      needsCacheInvalidation = true;
+      await Subscription.updateOne(
+        { shop },
+        { $unset: { pendingActivation: '' } }
+      );
+      
+      // Reload subscription to get updated data
+      const updatedSub = await Subscription.findOne({ shop });
+      if (updatedSub) {
+        Object.assign(subscription, updatedSub.toObject());
+      }
+    }
+    
+    // CRITICAL: If we have activatedAt, we need to validate it BEFORE cache check
+    if (subscription?.activatedAt && subscription?.shopifySubscriptionId) {
+      if (!needsCacheInvalidation) {
+        await cacheService.invalidateShop(shop);
+        needsCacheInvalidation = true;
+      }
       
       const shopDoc = await Shop.findOne({ shop });
       if (shopDoc?.accessToken) {
@@ -226,10 +303,18 @@ router.get('/info', verifyRequest, async (req, res) => {
             { $unset: { activatedAt: '', trialEndsAt: '', shopifySubscriptionId: '' } }
           );
           
-          // Cache already invalidated above, but invalidate again to be safe
-          await cacheService.invalidateShop(shop);
+          // Reload subscription to get updated data
+          const updatedSub = await Subscription.findOne({ shop });
+          if (updatedSub) {
+            Object.assign(subscription, updatedSub.toObject());
+          }
         }
       }
+    }
+    
+    // Invalidate cache if we made any changes
+    if (needsCacheInvalidation) {
+      await cacheService.invalidateShop(shop);
     }
     
     // Cache billing info for 5 minutes (PHASE 3: Caching)
