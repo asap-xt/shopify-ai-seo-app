@@ -162,6 +162,12 @@ export default async function handleSubscriptionUpdate(req, res) {
       const wasPendingActivation = subscription.pendingActivation;
       const hadPendingPlan = !!subscription.pendingPlan;
       
+      // CRITICAL: Store activatedAt BEFORE we process trial logic!
+      // This is needed to check if plan is already activated (upgrade after activation)
+      // IMPORTANT: activatedAt might be undefined if subscription was found by fallback search
+      // But if it exists, it means trial has ended and we should NOT create new trial on upgrade
+      const hasActivatedAt = !!subscription.activatedAt;
+      
       // Update subscription to active
       subscription.status = 'active';
       // CRITICAL: DO NOT clear pendingActivation here - it will be cleared in callback after approval
@@ -185,6 +191,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       // CRITICAL: Log current state for debugging
       console.log('[SUBSCRIPTION-UPDATE] Trial logic check:', {
         activatedAt: subscription.activatedAt,
+        hasActivatedAt, // CRITICAL: Check if activatedAt was stored before processing
         trialEndsAt: subscription.trialEndsAt,
         hadPendingPlan,
         wasPendingActivation,
@@ -192,7 +199,8 @@ export default async function handleSubscriptionUpdate(req, res) {
       });
       
       // CRITICAL: If activatedAt exists, trial has ended - NO new trial on upgrade!
-      if (subscription.activatedAt) {
+      // IMPORTANT: Use hasActivatedAt (stored before processing) to ensure we check the original value
+      if (hasActivatedAt || subscription.activatedAt) {
         // Plan is already activated - NO trial on upgrade!
         // According to Shopify: upgrade after activation continues billing period (no new trial)
         subscription.trialEndsAt = null;
@@ -214,12 +222,17 @@ export default async function handleSubscriptionUpdate(req, res) {
         console.log('[SUBSCRIPTION-UPDATE] NOT setting activatedAt - user is in trial period');
       } else if (wasPendingActivation) {
         // This is from /activate endpoint - user clicked "Activate Plan" to END trial
-        // CRITICAL: Set activatedAt and clear trialEndsAt to end trial immediately
-        if (!subscription.activatedAt) {
+        // CRITICAL: If activatedAt already exists (from previous activation), preserve it!
+        // This handles the case where user upgrades after activation and then clicks "Activate Plan"
+        // According to Shopify: Once trial is ended (activatedAt exists), it should NOT be reset
+        if (subscription.activatedAt) {
+          // User already activated plan previously (upgrade after activation) - preserve original activatedAt
+          // This ensures we don't reset the activation date when upgrading after activation
+          console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - preserving existing activatedAt from previous activation:', subscription.activatedAt);
+        } else {
+          // First activation - set activatedAt now
           subscription.activatedAt = now;
           console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - set activatedAt:', subscription.activatedAt);
-        } else {
-          console.log('[SUBSCRIPTION-UPDATE] Preserving existing activatedAt from callback:', subscription.activatedAt);
         }
         subscription.trialEndsAt = null;
         console.log('[SUBSCRIPTION-UPDATE] Activation from /activate - ending trial, clearing trialEndsAt');

@@ -634,12 +634,18 @@ router.get('/callback', async (req, res) => {
       if (isPendingActivation) {
         // CRITICAL: This is an ACTIVATION callback - user approved the charge!
         // NOW we can set activatedAt (user confirmed in Shopify)
-        // IMPORTANT: Only set activatedAt if not already set (webhook might have arrived first)
-        if (!currentSub.activatedAt) {
-          updateData.activatedAt = new Date();
-        } else {
-          // Webhook already set activatedAt - preserve it
+        // IMPORTANT: If activatedAt already exists (from previous activation), preserve it!
+        // This handles the case where user upgrades after activation and then clicks "Activate Plan"
+        // According to Shopify: Once trial is ended (activatedAt exists), it should NOT be reset
+        if (currentSub.activatedAt) {
+          // User already activated plan previously (upgrade after activation) - preserve original activatedAt
+          // This ensures we don't reset the activation date when upgrading after activation
           updateData.activatedAt = currentSub.activatedAt;
+          console.log('[BILLING-CALLBACK] Preserving existing activatedAt from previous activation:', updateData.activatedAt);
+        } else {
+          // First activation - set activatedAt now
+          updateData.activatedAt = new Date();
+          console.log('[BILLING-CALLBACK] Setting new activatedAt for first activation:', updateData.activatedAt);
         }
         updateData.plan = plan;
         updateData.trialEndsAt = null; // Trial ended when user clicked "Activate Plan"
