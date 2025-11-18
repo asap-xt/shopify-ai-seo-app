@@ -433,12 +433,36 @@ ${JSON.stringify(allSchemas, null, 2)}
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
+  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
   {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
   {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
   {%- if schemas_json -%}
     <script type="application/ld+json">
 {{ schemas_json }}
     </script>
+  {%- else -%}
+    {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
+    {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
+    {%- assign seo_data_json = product.metafields.seo_ai[seo_key].value | default: product.metafields.seo_ai.seo__en.value -%}
+    {%- if seo_data_json -%}
+      <script type="application/ld+json" id="seo-basic-jsonld-{{ product.id }}">
+      </script>
+      <script>
+        (function() {
+          try {
+            var seoData = JSON.parse({{ seo_data_json | json }});
+            if (seoData && seoData.jsonLd) {
+              var scriptTag = document.getElementById('seo-basic-jsonld-{{ product.id }}');
+              if (scriptTag) {
+                scriptTag.textContent = JSON.stringify(seoData.jsonLd);
+              }
+            }
+          } catch(e) {
+            console.error('Failed to parse SEO JSON-LD:', e);
+          }
+        })();
+      </script>
+    {%- endif -%}
   {%- endif -%}
 {%- endif -%}
 
@@ -469,12 +493,36 @@ ${JSON.stringify(allSchemas, null, 2)}
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
+  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
   {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
   {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
   {%- if schemas_json -%}
     <script type="application/ld+json">
 {{ schemas_json }}
     </script>
+  {%- else -%}
+    {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
+    {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
+    {%- assign seo_data_json = product.metafields.seo_ai[seo_key].value | default: product.metafields.seo_ai.seo__en.value -%}
+    {%- if seo_data_json -%}
+      <script type="application/ld+json" id="seo-basic-jsonld-{{ product.id }}">
+      </script>
+      <script>
+        (function() {
+          try {
+            var seoData = JSON.parse({{ seo_data_json | json }});
+            if (seoData && seoData.jsonLd) {
+              var scriptTag = document.getElementById('seo-basic-jsonld-{{ product.id }}');
+              if (scriptTag) {
+                scriptTag.textContent = JSON.stringify(seoData.jsonLd);
+              }
+            }
+          } catch(e) {
+            console.error('Failed to parse SEO JSON-LD:', e);
+          }
+        })();
+      </script>
+    {%- endif -%}
   {%- endif -%}
 {%- endif -%}
 

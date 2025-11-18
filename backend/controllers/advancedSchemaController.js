@@ -1403,7 +1403,27 @@ async function installScriptTag(shop) {
   }
 }
 
-// Install Theme Snippet for auto-injection
+/**
+ * Install Theme Snippet for auto-injection
+ * 
+ * ⚠️ CURRENTLY DISABLED - Requires Shopify Protected Scope Approval
+ * 
+ * This function attempts to automatically write ai-schema.liquid snippet to the store's theme
+ * and add {% render 'ai-schema' %} to layout/theme.liquid.
+ * However, it requires the `write_themes_assets` protected scope which is NOT available
+ * without explicit approval from Shopify.
+ * 
+ * Status: NOT IN USE - Manual copy/paste is required (same as robots.txt)
+ * Alternative: Users manually copy/paste code via SchemaData.jsx Installation tab
+ * 
+ * To enable in the future:
+ * 1. Submit "Online Store Protected Scope Exemption Request" via Shopify Partner Dashboard
+ * 2. Wait for Shopify approval for `write_themes_assets` scope
+ * 3. Add `write_themes_assets` to server.js scopes
+ * 4. Uncomment installThemeSnippet() call in generateAllSchemas()
+ * 
+ * See: https://partners.shopify.com/ (search for protected scope exemption)
+ */
 async function installThemeSnippet(shop) {
   
   try {
@@ -1443,6 +1463,7 @@ async function installThemeSnippet(shop) {
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
+  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
   {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
   {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
   {%- if schemas_json -%}
@@ -1451,6 +1472,29 @@ async function installThemeSnippet(shop) {
     <script type="application/ld+json">
 {{ schemas_json }}
     </script>
+  {%- else -%}
+    {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
+    {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
+    {%- assign seo_data_json = product.metafields.seo_ai[seo_key].value | default: product.metafields.seo_ai.seo__en.value -%}
+    {%- if seo_data_json -%}
+      <script type="application/ld+json" id="seo-basic-jsonld-{{ product.id }}">
+      </script>
+      <script>
+        (function() {
+          try {
+            var seoData = JSON.parse({{ seo_data_json | json }});
+            if (seoData && seoData.jsonLd) {
+              var scriptTag = document.getElementById('seo-basic-jsonld-{{ product.id }}');
+              if (scriptTag) {
+                scriptTag.textContent = JSON.stringify(seoData.jsonLd);
+              }
+            }
+          } catch(e) {
+            console.error('Failed to parse SEO JSON-LD:', e);
+          }
+        })();
+      </script>
+    {%- endif -%}
   {%- endif -%}
 {%- endif -%}
 
