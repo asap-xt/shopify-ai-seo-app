@@ -117,11 +117,28 @@ export default async function handleSubscriptionUpdate(req, res) {
       return res.status(200).json({ success: false, error: 'Subscription not found' });
     }
     
+    // CRITICAL: If subscription was found by fallback search, reload it to ensure all fields are loaded
+    // This is especially important for activatedAt, which might not be loaded correctly in fallback search
+    if (foundByFallback) {
+      console.log('[SUBSCRIPTION-UPDATE] Subscription found by fallback - reloading to ensure all fields are loaded');
+      const reloadedSubscription = await Subscription.findOne({ _id: subscription._id });
+      if (reloadedSubscription) {
+        // Preserve shopifySubscriptionId if it was updated during fallback search
+        if (subscription.shopifySubscriptionId && subscription.shopifySubscriptionId !== reloadedSubscription.shopifySubscriptionId) {
+          reloadedSubscription.shopifySubscriptionId = subscription.shopifySubscriptionId;
+        }
+        subscription = reloadedSubscription;
+        console.log('[SUBSCRIPTION-UPDATE] Reloaded subscription with activatedAt:', subscription.activatedAt);
+      }
+    }
+    
     console.log('[SUBSCRIPTION-UPDATE] Found subscription:', {
       shop,
       plan: subscription.plan,
       currentStatus: subscription.status,
-      newStatus: status
+      newStatus: status,
+      activatedAt: subscription.activatedAt, // CRITICAL: Log activatedAt to debug upgrade after activation
+      trialEndsAt: subscription.trialEndsAt // CRITICAL: Log trialEndsAt to debug upgrade after activation
     });
     
     // Handle status transitions
@@ -162,7 +179,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       const wasPendingActivation = subscription.pendingActivation;
       const hadPendingPlan = !!subscription.pendingPlan;
       
-      // CRITICAL: Store activatedAt BEFORE we process trial logic!
+      // CRITICAL: Store activatedAt AFTER reload (if found by fallback) to ensure we check the correct value!
       // This is needed to check if plan is already activated (upgrade after activation)
       // IMPORTANT: activatedAt might be undefined if subscription was found by fallback search
       // But if it exists, it means trial has ended and we should NOT create new trial on upgrade
