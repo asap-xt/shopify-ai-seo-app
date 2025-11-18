@@ -58,9 +58,11 @@ export default function Dashboard({ shop: shopProp }) {
   });
   const pollRef = useRef(null);
   const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
+  const dashboardVisibleTimerRef = useRef(null); // Track if dashboard has been visible long enough
+  const hasMarkedAsSeenRef = useRef(false); // Prevent multiple marks
   
   // Onboarding state logic:
-  // 1. First REAL show (with active subscription): open, then mark as seen
+  // 1. First REAL show (with active subscription): open, then mark as seen after 2 seconds
   // 2. Subsequent loads: closed by default (hasBeenSeenOnce = true)
   // NOTE: Manual toggle state is NOT persisted - card always starts closed on subsequent loads
   const [onboardingOpen, setOnboardingOpen] = useState(() => {
@@ -104,32 +106,61 @@ export default function Dashboard({ shop: shopProp }) {
       if (loadDataTimeoutRef.current) {
         clearTimeout(loadDataTimeoutRef.current);
       }
+      if (dashboardVisibleTimerRef.current) {
+        clearTimeout(dashboardVisibleTimerRef.current);
+        dashboardVisibleTimerRef.current = null;
+      }
     };
   }, [shop]);
   
   // Mark Getting Started card as "seen" after first REAL show (with active subscription or trial)
-  // This only happens after user activates a plan and sees Dashboard, not on first load before redirect
+  // CRITICAL: Only mark as seen if Dashboard is visible for at least 2 seconds
+  // This prevents marking as seen during redirect to Billing page
   // Works for both active subscriptions and trial period (both have subscription.plan)
-  // CRITICAL: Open card on first show, then mark as seen and close on next load
   useEffect(() => {
-    if (!loading && subscription?.plan) {
+    // Clear any existing timer
+    if (dashboardVisibleTimerRef.current) {
+      clearTimeout(dashboardVisibleTimerRef.current);
+      dashboardVisibleTimerRef.current = null;
+    }
+    
+    if (!loading && subscription?.plan && !hasMarkedAsSeenRef.current) {
       // Dashboard is loaded and has active subscription (including trial) - this is a real view
       // subscription.plan exists for both active subscriptions and trial period
       try {
         const hasBeenSeenOnce = localStorage.getItem(`gettingStartedSeenOnce_${shop}`) === 'true';
         if (!hasBeenSeenOnce) {
-          // First real show - open card and mark as seen
-          // Card will stay open for this session, but will be closed on next load
+          // First real show - open card immediately
           setOnboardingOpen(true);
-          localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
+          
+          // Wait 2 seconds before marking as seen
+          // This ensures Dashboard is actually visible (not redirecting to Billing)
+          dashboardVisibleTimerRef.current = setTimeout(() => {
+            try {
+              localStorage.setItem(`gettingStartedSeenOnce_${shop}`, 'true');
+              hasMarkedAsSeenRef.current = true;
+              // Card stays open for this session, but will be closed on next load
+            } catch (error) {
+              console.error('[Dashboard] Error marking Getting Started as seen:', error);
+            }
+          }, 2000); // 2 seconds delay
         } else {
           // Subsequent loads - ensure card is closed (ignore any manual toggle from previous session)
           setOnboardingOpen(false);
+          hasMarkedAsSeenRef.current = true;
         }
       } catch (error) {
-        console.error('[Dashboard] Error marking Getting Started as seen:', error);
+        console.error('[Dashboard] Error checking Getting Started status:', error);
       }
     }
+    
+    // Cleanup function
+    return () => {
+      if (dashboardVisibleTimerRef.current) {
+        clearTimeout(dashboardVisibleTimerRef.current);
+        dashboardVisibleTimerRef.current = null;
+      }
+    };
   }, [loading, subscription?.plan, shop]);
   
   // Auto-sync on load if enabled (only once per page load)
@@ -964,3 +995,4 @@ export default function Dashboard({ shop: shopProp }) {
     </Layout>
   );
 }
+

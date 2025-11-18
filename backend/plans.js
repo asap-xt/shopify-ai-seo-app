@@ -89,17 +89,78 @@ export const DEFAULT_MODELS = {
   llama: ["meta-llama/llama-3.1-8b-instruct", "meta-llama/llama-3.1-70b-instruct"],
 };
 
+/**
+ * Resolve plan key from various input formats
+ * Handles: "professional plus", "professional_plus", "professional-plus", "professionalplus"
+ * @param {string} input - Plan name in any format
+ * @returns {string|null} - Resolved plan key (our internal format with spaces)
+ */
 export function resolvePlanKey(input) {
   const key = String(input || "").toLowerCase().trim();
   if (!key) return null;
   if (PLANS[key]) return key;
   
-  // Resolve variants
-  if (key === "growth_extra" || key === "growthextra") return "growth extra";
-  if (key === "professional_plus" || key === "professionalplus") return "professional plus";
-  if (key === "growth_plus" || key === "growthplus") return "growth plus";
+  // Resolve variants (normalize to our internal format with spaces)
+  if (key === "growth_extra" || key === "growthextra" || key === "growth-extra") return "growth extra";
+  if (key === "professional_plus" || key === "professionalplus" || key === "professional-plus") return "professional plus";
+  if (key === "growth_plus" || key === "growthplus" || key === "growth-plus") return "growth plus";
   
   return null;
+}
+
+/**
+ * Convert our internal plan key to Shopify plan handle format
+ * Shopify uses hyphens (-) instead of spaces or underscores
+ * @param {string} planKey - Our internal plan key (e.g., "professional plus")
+ * @returns {string} - Shopify plan handle (e.g., "professional-plus")
+ */
+export function toShopifyPlanHandle(planKey) {
+  if (!planKey) return null;
+  
+  // Normalize to our internal format first
+  const normalized = resolvePlanKey(planKey);
+  if (!normalized) return null;
+  
+  // Convert spaces to hyphens for Shopify
+  // Only these 4 plans are supported by Shopify:
+  // - professional (no change)
+  // - professional-plus
+  // - growth-plus
+  // - enterprise (no change)
+  const shopifyHandles = {
+    'professional': 'professional',
+    'professional plus': 'professional-plus',
+    'growth plus': 'growth-plus',
+    'enterprise': 'enterprise'
+  };
+  
+  return shopifyHandles[normalized] || normalized.replace(/\s+/g, '-');
+}
+
+/**
+ * Convert Shopify plan handle to our internal plan key format
+ * @param {string} shopifyHandle - Shopify plan handle (e.g., "professional-plus")
+ * @returns {string|null} - Our internal plan key (e.g., "professional plus")
+ */
+export function fromShopifyPlanHandle(shopifyHandle) {
+  if (!shopifyHandle) return null;
+  
+  const handle = String(shopifyHandle).toLowerCase().trim();
+  
+  // Map Shopify handles to our internal format
+  const handleMap = {
+    'professional': 'professional',
+    'professional-plus': 'professional plus',
+    'growth-plus': 'growth plus',
+    'enterprise': 'enterprise'
+  };
+  
+  if (handleMap[handle]) {
+    return handleMap[handle];
+  }
+  
+  // Fallback: try to resolve using existing resolvePlanKey
+  return resolvePlanKey(handle);
 }
 
 export function getPlanConfig(plan) {
