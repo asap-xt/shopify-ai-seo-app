@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
-    "build": "echo \"no build step\"",
-    "postinstall": "npm --prefix frontend install && npm --prefix frontend run build"
+    "build": "cd frontend && npm install && npm run build",
+    "postinstall": "cd frontend && npm install && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",

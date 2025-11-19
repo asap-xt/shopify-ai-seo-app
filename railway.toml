@@ -1,8 +1,17 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install && cd frontend && npm install && npm run build && cd .."
+buildCommand = "npm install && npm run build"
 
 [deploy]
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+
+[healthcheck]
+path = "/health"
+port = 8080
+initialDelaySeconds = 10
+timeoutSeconds = 30
+periodSeconds = 10
+successThreshold = 1
+failureThreshold = 3

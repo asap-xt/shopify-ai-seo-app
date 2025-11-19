@@ -1434,22 +1434,22 @@ if (!IS_PROD) {
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
           
-              // Inject version for cache busting
-              const appVersion = Date.now();
-              html = html.replace(/%BUILD_TIME%/g, appVersion);
-              html = html.replace(/%CACHE_BUST%/g, appVersion);
+              // Generate cache busting values
+              const buildTime = Date.now().toString();
+              const cacheBust = Math.random().toString(36).substring(7);
               
-              // Inject the Shopify API key and other data into the HTML
+              // Replace ALL placeholders
               const apiKey = process.env.SHOPIFY_API_KEY || '';
+              html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
+              html = html.replace(/%BUILD_TIME%/g, buildTime);
+              html = html.replace(/%CACHE_BUST%/g, cacheBust);
               
               console.log('[SERVER] Injecting API key into HTML:', {
                 apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING',
                 shop: shop,
-                hasIdToken: !!id_token
+                hasIdToken: !!id_token,
+                cacheBust: cacheBust
               });
-              
-              // First, replace the placeholder in the existing meta tag
-              html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
               
               // Find the closing </head> tag and inject our script before it
               const headEndIndex = html.indexOf('</head>');
@@ -1599,15 +1599,22 @@ if (!IS_PROD) {
           res.set('Cache-Control', 'no-store');
           let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
           
-          // Inject API key
+          // Generate cache busting values
+          const buildTime = Date.now().toString();
+          const cacheBust = Math.random().toString(36).substring(7);
+          
+          // Replace ALL placeholders
           const apiKey = process.env.SHOPIFY_API_KEY || '';
-          // First, replace the placeholder in the existing meta tag
           html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
+          html = html.replace(/%BUILD_TIME%/g, buildTime);
+          html = html.replace(/%CACHE_BUST%/g, cacheBust);
+          
           const headEndIndex = html.indexOf('</head>');
           if (headEndIndex !== -1) {
             const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
+              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
             </script>
             <meta name="shopify-api-key" content="${apiKey}">
           `;
@@ -1627,15 +1634,22 @@ if (!IS_PROD) {
       res.set('Cache-Control', 'no-store');
       let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
       
-      // Inject API key
+      // Generate cache busting values
+      const buildTime = Date.now().toString();
+      const cacheBust = Math.random().toString(36).substring(7);
+      
+      // Replace ALL placeholders
       const apiKey = process.env.SHOPIFY_API_KEY || '';
-      // First, replace the placeholder in the existing meta tag
-      html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+      html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
+      html = html.replace(/%BUILD_TIME%/g, buildTime);
+      html = html.replace(/%CACHE_BUST%/g, cacheBust);
+      
       const headEndIndex = html.indexOf('</head>');
       if (headEndIndex !== -1) {
         const injection = `
           <script>
             window.__SHOPIFY_API_KEY = '${apiKey}';
+            console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
           </script>
           <meta name="shopify-api-key" content="${apiKey}">
         `;
@@ -2089,22 +2103,34 @@ if (!IS_PROD) {
       if (req.url.includes('/apps/')) {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
         res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
+        
         let html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
         
-        // Inject API key
+        // Generate cache busting values
+        const buildTime = Date.now().toString();
+        const cacheBust = Math.random().toString(36).substring(7);
+        
+        // Replace ALL placeholders
         const apiKey = process.env.SHOPIFY_API_KEY || '';
-        // First, replace the placeholder in the existing meta tag
-        html = html.replace('%VITE_SHOPIFY_API_KEY%', apiKey);
+        html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
+        html = html.replace(/%BUILD_TIME%/g, buildTime);
+        html = html.replace(/%CACHE_BUST%/g, cacheBust);
+        
+        // Also inject API key into window object
         const headEndIndex = html.indexOf('</head>');
         if (headEndIndex !== -1) {
           const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
+              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
+              console.log('[SERVER] Cache bust:', '${cacheBust}');
             </script>
-            <meta name="shopify-api-key" content="${apiKey}">
           `;
           html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
         }
+        
+        // Log for debugging
+        console.log('[SERVER] Serving index.html with cache bust:', cacheBust);
         
         res.send(html);
       } else {
