@@ -809,7 +809,22 @@ export default function App() {
         }
         
         if (!plansResponse.ok) {
-          console.error('[APP] Failed to load plans:', await plansResponse.text());
+          const errorText = await plansResponse.text();
+          console.error('[APP] Failed to load plans:', errorText);
+          
+          // Fallback: Set default plan to prevent infinite loading
+          setPlan({
+            shop: shop,
+            plan: null,
+            planKey: null,
+            subscriptionStatus: 'pending',
+            product_limit: 0,
+            language_limit: 0,
+            collection_limit: 0,
+            providersAllowed: [],
+            modelsSuggested: [],
+            trial: { active: false }
+          });
           return;
         }
         
@@ -851,6 +866,23 @@ export default function App() {
         
       } catch (error) {
         console.error('[APP] Error loading initial data:', error);
+        
+        // Fallback: Set default plan to prevent infinite loading
+        const shop = new URLSearchParams(window.location.search).get('shop');
+        if (shop) {
+          setPlan({
+            shop: shop,
+            plan: null,
+            planKey: null,
+            subscriptionStatus: 'pending',
+            product_limit: 0,
+            language_limit: 0,
+            collection_limit: 0,
+            providersAllowed: [],
+            modelsSuggested: [],
+            trial: { active: false }
+          });
+        }
       }
     };
     
