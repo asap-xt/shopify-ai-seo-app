@@ -6,7 +6,7 @@
 
 ### 1. App Setup → Client credentials
 - [ ] **Client ID**: `cbb6c395806364fba75996525ffce483` ✅
-- [ ] **Client secret**: `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` ✅
+- [ ] **Client secret**: `shpss_***` (check Railway env vars) ✅
 
 ### 2. App Setup → App URL
 - [ ] **App URL**: `https://indexaize-aiseo-app-staging.up.railway.app` ✅
@@ -54,7 +54,7 @@
 ```bash
 # Критични
 SHOPIFY_API_KEY=cbb6c395806364fba75996525ffce483
-SHOPIFY_API_SECRET=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
+SHOPIFY_API_SECRET=shpss_***  # Check Railway env vars
 VITE_SHOPIFY_API_KEY=cbb6c395806364fba75996525ffce483  # ⚠️ ТРЯБВА ДА Е СЪЩОТО КАТО SHOPIFY_API_KEY
 APP_URL=https://indexaize-aiseo-app-staging.up.railway.app
 SHOPIFY_APP_URL=https://indexaize-aiseo-app-staging.up.railway.app
