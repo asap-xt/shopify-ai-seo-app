@@ -1,6 +1,7 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 22:00 - Fix build loop
+// FORCE REBUILD: 2025-11-19 20:45 - Force new build with cache busting fixes
 console.log('[MAIN] ===== main.jsx FILE LOADED =====');
+console.log('[MAIN] Build timestamp: 2025-11-19T20:45:00Z');
 console.log('[MAIN] Timestamp:', new Date().toISOString());
 console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
 console.log('[MAIN] document.readyState:', document.readyState);
