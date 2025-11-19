@@ -122,6 +122,14 @@ export async function createAllIndexes() {
     // SHOP INDEXES
     // ============================================================================
     
+    // Drop old/conflicting indexes first
+    try {
+      await Shop.collection.dropIndex('shopify_domain_1');
+      dbLogger.info('✅ Dropped old shopify_domain_1 index');
+    } catch (e) {
+      // Index doesn't exist, that's fine
+    }
+    
     // Index 1: shop (primary lookup - already exists as unique)
     // This is already defined in Shop.js schema, but let's ensure it
     await Shop.collection.createIndex({ shop: 1 }, { unique: true });
