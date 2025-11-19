@@ -6,7 +6,7 @@
 
 ### 1. App Setup → Client credentials
 - [ ] **Client ID**: `cbb6c395806364fba75996525ffce483` ✅
-- [ ] **Client secret**: `shpss_***` (check Railway env vars) ✅
+- [ ] **Client secret**: Check Railway env vars ✅
 
 ### 2. App Setup → App URL
 - [ ] **App URL**: `https://indexaize-aiseo-app-staging.up.railway.app` ✅
@@ -54,14 +54,14 @@
 ```bash
 # Критични
 SHOPIFY_API_KEY=cbb6c395806364fba75996525ffce483
-SHOPIFY_API_SECRET=shpss_***  # Check Railway env vars
+SHOPIFY_API_SECRET=<check Railway env vars>
 VITE_SHOPIFY_API_KEY=cbb6c395806364fba75996525ffce483  # ⚠️ ТРЯБВА ДА Е СЪЩОТО КАТО SHOPIFY_API_KEY
 APP_URL=https://indexaize-aiseo-app-staging.up.railway.app
 SHOPIFY_APP_URL=https://indexaize-aiseo-app-staging.up.railway.app
 NODE_ENV=staging
 
 # MongoDB
-MONGODB_URI=mongodb://mongo:****@ballast.proxy.rlwy.net:48860
+MONGODB_URI=<check Railway env vars>
 
 # Други (копирани от production)
 BASE_URL=https://indexaize-aiseo-app-staging.up.railway.app
