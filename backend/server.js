@@ -1460,8 +1460,18 @@ if (!IS_PROD) {
                   const newestIndexFile = indexFilesWithStats[0].name;
                   console.log('[SERVER] 🔄 Found', indexFiles.length, 'index files, using newest:', newestIndexFile);
                   
-                  // Replace old index file reference with newest one
+                  // Replace old index file reference with newest one (in both script tags and modulepreload links)
+                  const beforeReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
+                  if (beforeReplace) {
+                    console.log('[SERVER] 🔍 Found index references before replace:', beforeReplace);
+                  }
                   html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
+                  const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
+                  if (afterReplace) {
+                    console.log('[SERVER] ⚠️ Still found index references after replace:', afterReplace);
+                  } else {
+                    console.log('[SERVER] ✅ All index references replaced successfully');
+                  }
                 }
                 
                 // Find newest react-vendor file
@@ -1475,6 +1485,7 @@ if (!IS_PROD) {
                   
                   const newestReactVendorFile = reactVendorFilesWithStats[0].name;
                   console.log('[SERVER] 🔄 Found', reactVendorFiles.length, 'react-vendor files, using newest:', newestReactVendorFile);
+                  // Replace in both script tags and modulepreload links
                   html = html.replace(/react-vendor-[a-zA-Z0-9_-]+\.js/g, newestReactVendorFile);
                 }
                 
@@ -1489,6 +1500,7 @@ if (!IS_PROD) {
                   
                   const newestAppBridgeFile = appBridgeFilesWithStats[0].name;
                   console.log('[SERVER] 🔄 Found', appBridgeFiles.length, 'app-bridge files, using newest:', newestAppBridgeFile);
+                  // Replace in both script tags and modulepreload links
                   html = html.replace(/app-bridge-[a-zA-Z0-9_-]+\.js/g, newestAppBridgeFile);
                 }
                 
@@ -1503,6 +1515,7 @@ if (!IS_PROD) {
                   
                   const newestPolarisFile = polarisFilesWithStats[0].name;
                   console.log('[SERVER] 🔄 Found', polarisFiles.length, 'polaris files, using newest:', newestPolarisFile);
+                  // Replace in both script tags and modulepreload links
                   html = html.replace(/polaris-[a-zA-Z0-9_-]+\.js/g, newestPolarisFile);
                 }
               }
