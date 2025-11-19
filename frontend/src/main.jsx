@@ -11,6 +11,10 @@ const shop = params.get('shop');
 // Check if we're embedded in Shopify Admin
 const embedded = params.get('embedded') === '1';
 
+// ALWAYS log - even if devLog doesn't work
+console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
+console.log('[MAIN] Full URL:', window.location.href);
+
 devLog('[MAIN] Public App - Host:', host, 'Shop:', shop);
 devLog('[MAIN] Full URL:', window.location.href);
 

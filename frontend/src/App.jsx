@@ -773,6 +773,8 @@ export default function App() {
     };
     
     const loadInitialData = async (shop) => {
+      // ALWAYS log - even if devLog doesn't work
+      console.log('[APP] loadInitialData called for shop:', shop);
       try {
         // Опитай се да заредиш планове през GraphQL
         const Q = `
@@ -796,12 +798,19 @@ export default function App() {
             }
           }
         `;
+        // ALWAYS log - even if devLog doesn't work
+        console.log('[APP] Making GraphQL request to /graphql for shop:', shop);
+        console.log('[APP] Full URL:', window.location.href);
+        console.log('[APP] GraphQL query:', Q);
+        console.log('[APP] GraphQL variables:', { shop });
+        
+        const graphqlUrl = '/graphql';
+        console.log('[APP] Fetching from:', graphqlUrl);
+        
         devLog('[APP] Making GraphQL request to /graphql for shop:', shop);
         devLog('[APP] Full URL:', window.location.href);
         devLog('[APP] GraphQL query:', Q);
         devLog('[APP] GraphQL variables:', { shop });
-        
-        const graphqlUrl = '/graphql';
         devLog('[APP] Fetching from:', graphqlUrl);
         
         const plansResponse = await fetch(graphqlUrl, {
