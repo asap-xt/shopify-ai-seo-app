@@ -1463,6 +1463,33 @@ if (!IS_PROD) {
                     window.__SHOPIFY_API_KEY = '${apiKey}';
                     window.__SHOPIFY_SHOP = '${shop}';
                     window.__SHOPIFY_HOST = '${host || ''}';
+                    
+                    // Add error handler to catch JavaScript errors
+                    window.addEventListener('error', function(e) {
+                      console.error('[GLOBAL ERROR]', e.error);
+                      console.error('[GLOBAL ERROR] Message:', e.message);
+                      console.error('[GLOBAL ERROR] Filename:', e.filename);
+                      console.error('[GLOBAL ERROR] Line:', e.lineno);
+                      console.error('[GLOBAL ERROR] Column:', e.colno);
+                      console.error('[GLOBAL ERROR] Stack:', e.error?.stack);
+                    });
+                    
+                    // Add unhandled promise rejection handler
+                    window.addEventListener('unhandledrejection', function(e) {
+                      console.error('[UNHANDLED REJECTION]', e.reason);
+                      console.error('[UNHANDLED REJECTION] Stack:', e.reason?.stack);
+                    });
+                    
+                    // Log when DOM is ready
+                    if (document.readyState === 'loading') {
+                      document.addEventListener('DOMContentLoaded', function() {
+                        console.log('[SERVER-INJECTED] DOM Content Loaded');
+                        console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
+                      });
+                    } else {
+                      console.log('[SERVER-INJECTED] DOM already ready');
+                      console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
+                    }
                   </script>
                   <meta name="shopify-api-key" content="${apiKey}">
                 `;
