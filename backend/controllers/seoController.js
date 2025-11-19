@@ -24,11 +24,26 @@ export async function getPlansMeForShop(app, shop) {
   // 1. First check Subscription (this is the truth)
   let subscription = await Subscription.findOne({ shop });
   
-  // 2. If no subscription, create PENDING subscription (requires plan selection)
+  // 2. If no subscription, check if shop exists
   if (!subscription) {
     const shopRecord = await Shop.findOne({ shop });
     if (!shopRecord) {
-      throw new Error('Shop not found');
+      // Shop not found - return default plan to allow app to load
+      // This happens when token exchange hasn't completed yet
+      return {
+        shop: shop,
+        plan: null,
+        planKey: null,
+        priceUsd: 0,
+        product_limit: 0,
+        language_limit: 0,
+        collection_limit: 0,
+        providersAllowed: [],
+        modelsSuggested: [],
+        autosyncCron: null,
+        trial: { active: false, ends_at: null, days_left: 0 },
+        subscriptionStatus: 'pending'
+      };
     }
     
     // DON'T create subscription here!
