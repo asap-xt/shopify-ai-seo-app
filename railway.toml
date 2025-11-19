@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
+buildCommand = "npm install && cd frontend && rm -rf dist node_modules/.vite && npm install && npm run build && cd .."
 
 [deploy]
 startCommand = "npm start"
