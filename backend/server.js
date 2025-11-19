@@ -1408,6 +1408,12 @@ if (!IS_PROD) {
               // Inject the Shopify API key and other data into the HTML
               const apiKey = process.env.SHOPIFY_API_KEY || '';
               
+              console.log('[SERVER] Injecting API key into HTML:', {
+                apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING',
+                shop: shop,
+                hasIdToken: !!id_token
+              });
+              
               // First, replace the placeholder in the existing meta tag
               html = html.replace(/%VITE_SHOPIFY_API_KEY%/g, apiKey);
               
@@ -1417,6 +1423,9 @@ if (!IS_PROD) {
               if (headEndIndex !== -1) {
                 const injection = `
                   <script>
+                    console.log('[SERVER-INJECTED] API Key:', '${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}');
+                    console.log('[SERVER-INJECTED] Shop:', '${shop}');
+                    console.log('[SERVER-INJECTED] Host:', '${host || ''}');
                     window.__SHOPIFY_API_KEY = '${apiKey}';
                     window.__SHOPIFY_SHOP = '${shop}';
                     window.__SHOPIFY_HOST = '${host || ''}';
