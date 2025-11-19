@@ -4,6 +4,8 @@
 import fetch from 'node-fetch';
 import { resolveAdminTokenForShop } from './tokenResolver.js';
 
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
+
 /**
  * Build comprehensive store context for AI models
  * This provides factual information about the store to prevent hallucinations
@@ -70,7 +72,7 @@ async function fetchStoreData(shop, accessToken) {
   `;
   
   try {
-    const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+    const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': accessToken,
@@ -109,7 +111,7 @@ async function fetchStoreMetadata(shop, accessToken) {
   `;
   
   try {
-    const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+    const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': accessToken,
@@ -189,7 +191,7 @@ async function fetchStorePolicies(shop, accessToken, storeMetadata) {
   `;
   
   try {
-    const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+    const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': accessToken,
@@ -267,7 +269,7 @@ async function getProductCatalogSummary(shop, accessToken) {
   `;
   
   try {
-    const response = await fetch(`https://${shop}/admin/api/2024-10/graphql.json`, {
+    const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': accessToken,
