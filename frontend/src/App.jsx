@@ -736,6 +736,11 @@ export default function App() {
       // Първо направи token exchange ако има id_token
       if (shop && idToken) {
         try {
+          console.log('[APP] ===== Starting token exchange =====');
+          console.log('[APP] Shop:', shop);
+          console.log('[APP] ID Token present:', !!idToken);
+          console.log('[APP] ID Token length:', idToken ? idToken.length : 0);
+          
           devLog('[APP] Performing initial token exchange for shop:', shop);
           
           const response = await fetch('/token-exchange', {
@@ -749,14 +754,21 @@ export default function App() {
             })
           });
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('[APP] Token exchange failed:', errorData);
-            return;
-          }
+          console.log('[APP] Token exchange response status:', response.status);
+          console.log('[APP] Token exchange response ok:', response.ok);
 
-          const result = await response.json();
-          devLog('[APP] Token exchange successful:', result);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+            console.error('[APP] Token exchange failed:', errorData);
+            console.error('[APP] Response status:', response.status);
+            console.error('[APP] Response statusText:', response.statusText);
+            // Don't return - try to load data anyway
+            console.log('[APP] Continuing despite token exchange failure...');
+          } else {
+            const result = await response.json();
+            console.log('[APP] ✅ Token exchange successful');
+            devLog('[APP] Token exchange successful:', result);
+          }
           
           // Премахни id_token от URL
           const newUrl = new URL(window.location);
