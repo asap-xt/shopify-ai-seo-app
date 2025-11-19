@@ -4,7 +4,9 @@ import { getSessionToken } from '@shopify/app-bridge-utils';
 
 // Get API key from multiple sources
 const apiKey = window.__SHOPIFY_API_KEY || import.meta.env?.VITE_SHOPIFY_API_KEY;
-const app = window.__SHOPIFY_APP_BRIDGE__;
+// App Bridge is initialized by React Provider, not via window
+// We'll get session token via getSessionToken from app-bridge-utils
+const app = null; // Will be passed via context or created dynamically
 
 export function createApiClient() {
   const qs = new URLSearchParams(window.location.search);
@@ -29,13 +31,18 @@ export function createApiClient() {
     if (idToken) h.Authorization = `Bearer ${idToken}`;
     if (method !== 'GET' && !h['Content-Type']) h['Content-Type'] = 'application/json';
 
-    // Get session token for authorization
-    if (app && !idToken) {
+    // Get session token for authorization (App Bridge v4 doesn't need app instance)
+    if (!idToken) {
       try {
-        const sessionToken = await getSessionToken(app);
-        h.Authorization = `Bearer ${sessionToken}`;
+        // App Bridge v4: getSessionToken() works without app instance
+        const sessionToken = await getSessionToken();
+        if (sessionToken) {
+          h.Authorization = `Bearer ${sessionToken}`;
+        }
       } catch (err) {
-        console.warn('[API] Failed to get session token:', err);
+        // Session token not available - continue without it
+        // This is normal for non-embedded apps or during initial load
+        console.warn('[API] Failed to get session token (this is OK):', err.message);
       }
     }
 
