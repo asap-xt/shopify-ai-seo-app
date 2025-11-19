@@ -1256,6 +1256,14 @@ if (!IS_PROD) {
     app.get('/', async (req, res) => {
       const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
       
+      // ALWAYS log - critical for debugging
+      console.log('[ROOT] GET / request:', {
+        shop: shop ? shop.substring(0, 20) + '...' : 'MISSING',
+        embedded: embedded,
+        hasIdToken: !!id_token,
+        host: host ? host.substring(0, 20) + '...' : 'MISSING'
+      });
+      
       // If no shop parameter, show install form
       if (!shop) {
         let html = `
@@ -1396,6 +1404,7 @@ if (!IS_PROD) {
           // For embedded apps, we use Token Exchange to get Admin API access tokens
           // The tokenResolver will handle JWT -> Admin token exchange automatically
           if (id_token || embedded === '1') {
+              console.log('[ROOT] Serving HTML for embedded app, shop:', shop);
               
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
