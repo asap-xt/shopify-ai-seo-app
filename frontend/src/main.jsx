@@ -6,7 +6,6 @@ console.log('[MAIN] document.readyState:', document.readyState);
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Provider as AppBridgeProvider } from '@shopify/app-bridge-react';
 import App from './App.jsx';
 import { devLog, devError } from './utils/devLog.js';
 
@@ -103,13 +102,10 @@ function ShopifyAppBridgeWrapper() {
     return <div>Loading...</div>;
   }
   
-  // App Bridge v4 still needs Provider for session tokens to work
-  console.log('[MAIN] Rendering App with App Bridge Provider, apiKey:', apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING', 'host:', host);
-  return (
-    <AppBridgeProvider config={{ apiKey, host, forceRedirect: true }}>
-      <App />
-    </AppBridgeProvider>
-  );
+  // App Bridge v4 doesn't need Provider - it's initialized via script tag in HTML
+  // getSessionToken() works without Provider because App Bridge is global
+  console.log('[MAIN] Rendering App, apiKey:', apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING', 'host:', host);
+  return <App />;
 }
 
 // Render the app
