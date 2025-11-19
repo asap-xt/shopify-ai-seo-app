@@ -256,6 +256,18 @@ if (!IS_PROD) {
 
     // DEBUG: Log all incoming requests
     // Normalize shop domain for all requests
+    app.use((req, res, next) => {
+      // Log GraphQL requests specifically
+      if (req.path === '/graphql' && req.method === 'POST') {
+        console.log('[MIDDLEWARE] GraphQL request detected:', {
+          path: req.path,
+          method: req.method,
+          hasBody: !!req.body,
+          shop: req.query.shop || req.body?.variables?.shop || 'unknown'
+        });
+      }
+      next();
+    });
     app.use(attachShop);
 
     // make id_token available to every API handler via req.idToken
