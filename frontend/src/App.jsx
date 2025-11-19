@@ -797,32 +797,30 @@ export default function App() {
           }
         `;
         devLog('[APP] Making GraphQL request to /graphql for shop:', shop);
-        const plansResponse = await fetch('/graphql', {
+        devLog('[APP] Full URL:', window.location.href);
+        devLog('[APP] GraphQL query:', Q);
+        devLog('[APP] GraphQL variables:', { shop });
+        
+        const graphqlUrl = '/graphql';
+        devLog('[APP] Fetching from:', graphqlUrl);
+        
+        const plansResponse = await fetch(graphqlUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: Q, variables: { shop } }),
         });
         
         devLog('[APP] GraphQL response status:', plansResponse.status);
+        devLog('[APP] GraphQL response headers:', Object.fromEntries(plansResponse.headers.entries()));
         
         if (plansResponse.status === 202) {
-          // Трябва token exchange
-          const errorData = await plansResponse.json();
-          devLog('[APP] Token exchange required:', errorData);
-          if (errorData.error === 'token_exchange_required') {
-            devLog('[APP] Token exchange required, but no id_token available');
-            // Пренасочи към OAuth flow
-            window.location.href = `/auth?shop=${encodeURIComponent(shop)}`;
-            return;
-          }
-        }
-        
-        if (!plansResponse.ok) {
-          const errorText = await plansResponse.text();
-          console.error('[APP] Failed to load plans:', plansResponse.status, errorText);
+          // Token exchange required - но това не трябва да се случва ако token exchange е направен на сървъра
+          // Ако стигнем до тук, значи има проблем - пренасочи към billing за да може user да избере план
+          const errorData = await plansResponse.json().catch(() => ({}));
+          devLog('[APP] Token exchange required (unexpected):', errorData);
           
-          // Fallback: Set default plan to prevent infinite loading
-          setPlan({
+          // Set default plan and redirect to billing
+          const defaultPlan = {
             shop: shop,
             plan: null,
             planKey: null,
@@ -833,7 +831,53 @@ export default function App() {
             providersAllowed: [],
             modelsSuggested: [],
             trial: { active: false }
-          });
+          };
+          setPlan(defaultPlan);
+          
+          // Redirect to billing instead of OAuth (token exchange should have happened on server)
+          const params = new URLSearchParams(window.location.search);
+          const host = params.get('host');
+          const embedded = params.get('embedded');
+          const currentPath = window.location.pathname;
+          const isAlreadyOnBilling = currentPath.includes('/billing');
+          
+          if (!isAlreadyOnBilling) {
+            devLog('[APP] Redirecting to billing due to token exchange issue');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host || '')}`;
+          }
+          return;
+        }
+        
+        if (!plansResponse.ok) {
+          const errorText = await plansResponse.text();
+          console.error('[APP] Failed to load plans:', plansResponse.status, errorText);
+          
+          // Fallback: Set default plan and redirect to billing
+          const defaultPlan = {
+            shop: shop,
+            plan: null,
+            planKey: null,
+            subscriptionStatus: 'pending',
+            product_limit: 0,
+            language_limit: 0,
+            collection_limit: 0,
+            providersAllowed: [],
+            modelsSuggested: [],
+            trial: { active: false }
+          };
+          setPlan(defaultPlan);
+          
+          // CRITICAL: Redirect to billing to prevent infinite loading
+          const params = new URLSearchParams(window.location.search);
+          const host = params.get('host');
+          const embedded = params.get('embedded');
+          const currentPath = window.location.pathname;
+          const isAlreadyOnBilling = currentPath.includes('/billing');
+          
+          if (!isAlreadyOnBilling) {
+            devLog('[APP] GraphQL failed, redirecting to billing');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host || '')}`;
+          }
           return;
         }
         
@@ -878,10 +922,10 @@ export default function App() {
       } catch (error) {
         console.error('[APP] Error loading initial data:', error);
         
-        // Fallback: Set default plan to prevent infinite loading
+        // Fallback: Set default plan and redirect to billing to prevent infinite loading
         const shop = new URLSearchParams(window.location.search).get('shop');
         if (shop) {
-          setPlan({
+          const defaultPlan = {
             shop: shop,
             plan: null,
             planKey: null,
@@ -892,7 +936,20 @@ export default function App() {
             providersAllowed: [],
             modelsSuggested: [],
             trial: { active: false }
-          });
+          };
+          setPlan(defaultPlan);
+          
+          // CRITICAL: Redirect to billing to prevent infinite loading
+          const params = new URLSearchParams(window.location.search);
+          const host = params.get('host');
+          const embedded = params.get('embedded');
+          const currentPath = window.location.pathname;
+          const isAlreadyOnBilling = currentPath.includes('/billing');
+          
+          if (!isAlreadyOnBilling) {
+            devLog('[APP] Exception caught, redirecting to billing');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host || '')}`;
+          }
         }
       }
     };
