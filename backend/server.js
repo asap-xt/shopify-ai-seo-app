@@ -1473,10 +1473,14 @@ if (!IS_PROD) {
                     // Replace all occurrences
                     html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
                     const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                    if (afterReplace && afterReplace.length > 0) {
-                      console.log('[SERVER] ⚠️ Still found index references after replace:', afterReplace);
+                    // After replace, we should only have references to the newest file
+                    const allMatchNewest = afterReplace && afterReplace.every(ref => ref === newestIndexFile);
+                    if (allMatchNewest) {
+                      console.log('[SERVER] ✅ All index references replaced successfully with:', newestIndexFile);
+                    } else if (afterReplace && afterReplace.length > 0) {
+                      console.log('[SERVER] ⚠️ Still found old index references after replace:', afterReplace.filter(ref => ref !== newestIndexFile));
                     } else {
-                      console.log('[SERVER] ✅ All index references replaced successfully');
+                      console.log('[SERVER] ⚠️ No index references found after replace (unexpected)');
                     }
                   } else {
                     console.log('[SERVER] ⚠️ No index references found in HTML to replace!');
@@ -1580,11 +1584,35 @@ if (!IS_PROD) {
                       document.addEventListener('DOMContentLoaded', function() {
                         console.log('[SERVER-INJECTED] DOM Content Loaded');
                         console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
+                        
+                        // Check if main.jsx script is loaded
+                        const scripts = document.querySelectorAll('script[type="module"]');
+                        console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
+                        scripts.forEach((script, i) => {
+                          console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
+                        });
                       });
                     } else {
                       console.log('[SERVER-INJECTED] DOM already ready');
                       console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
+                      
+                      // Check if main.jsx script is loaded
+                      const scripts = document.querySelectorAll('script[type="module"]');
+                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
+                      scripts.forEach((script, i) => {
+                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
+                      });
                     }
+                    
+                    // Also check after a short delay to see if scripts load
+                    setTimeout(function() {
+                      console.log('[SERVER-INJECTED] After 2s delay - checking scripts again');
+                      const scripts = document.querySelectorAll('script[type="module"]');
+                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts after delay');
+                      scripts.forEach((script, i) => {
+                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
+                      });
+                    }, 2000);
                   </script>
                   <meta name="shopify-api-key" content="${apiKey}">
                 `;
