@@ -28,12 +28,11 @@ export const IS_DEV = !IS_PROD && !IS_STAGING;
  * Get environment-specific app URL
  */
 export function getAppUrl() {
-  return process.env.APP_URL || (IS_PROD 
-    ? 'https://indexaize-aiseo-app-production.up.railway.app'
-    : IS_STAGING
-    ? 'https://indexaize-staging.up.railway.app'
-    : 'http://localhost:8080'
-  );
+  // Always use APP_URL from environment - no hardcoded fallbacks
+  if (!process.env.APP_URL) {
+    throw new Error('APP_URL environment variable is required');
+  }
+  return process.env.APP_URL;
 }
 
 /**

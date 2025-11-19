@@ -159,7 +159,7 @@ To generate a fresh sitemap:
 3. Click "Generate Sitemap"
 4. Your sitemap will be available at this URL
 
-App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(shop)}
     `);
     
   } catch (err) {

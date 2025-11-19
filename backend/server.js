@@ -451,7 +451,10 @@ if (!IS_PROD) {
   // Generate direct OAuth URL for testing
   app.get('/generate-oauth-url', (req, res) => {
     try {
-      const shop = req.query.shop || 'asapxt-teststore.myshopify.com';
+      const shop = req.query.shop;
+      if (!shop) {
+        return res.status(400).json({ error: 'Missing shop parameter' });
+      }
       const state = 'test-state-' + Date.now();
       
       const oauthUrl = `https://${shop}/admin/oauth/authorize?` + new URLSearchParams({
@@ -1736,7 +1739,7 @@ if (!IS_PROD) {
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
-    App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+    App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(shop)}
               `);
             }
             
@@ -1842,7 +1845,7 @@ if (!IS_PROD) {
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
-    App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+    App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(shop)}
               `);
             }
             
@@ -1940,7 +1943,7 @@ if (!IS_PROD) {
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
-    App URL: https://indexaize-aiseo-app-production.up.railway.app/?shop=${encodeURIComponent(shop)}
+    App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(shop)}
               `);
             }
             

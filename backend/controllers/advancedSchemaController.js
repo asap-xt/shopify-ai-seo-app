@@ -355,7 +355,10 @@ function sanitizeAIResponse(response, knownFacts) {
   async function loadRichAttributesSettings(shop) {
   try {
     // Try to get settings from AI Discovery settings
-  const response = await fetch(`${process.env.SHOPIFY_APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app'}/api/ai-discovery/settings?shop=${shop}`);
+  if (!process.env.SHOPIFY_APP_URL) {
+    throw new Error('SHOPIFY_APP_URL environment variable is required');
+  }
+  const response = await fetch(`${process.env.SHOPIFY_APP_URL}/api/ai-discovery/settings?shop=${shop}`);
     
     if (response.ok) {
       const data = await response.json();
