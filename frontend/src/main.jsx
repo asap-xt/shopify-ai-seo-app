@@ -1,5 +1,5 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 22:10 - Aggressive cache clearing for Railway
+// FORCE REBUILD: 2025-11-19 22:15 - Add server logging to debug Railway cache
 console.log('[MAIN] ===== main.jsx FILE LOADED =====');
 console.log('[MAIN] Build timestamp: 2025-11-19T20:45:00Z');
 console.log('[MAIN] Timestamp:', new Date().toISOString());

@@ -1262,6 +1262,15 @@ if (!IS_PROD) {
           console.log('[SERVER] ✅ Assets directory exists with', assets.length, 'files');
           const jsFiles = assets.filter(f => f.endsWith('.js'));
           console.log('[SERVER] Found', jsFiles.length, 'JavaScript files in assets');
+          // Log the actual index.js file that exists
+          const indexFiles = jsFiles.filter(f => f.startsWith('index-'));
+          console.log('[SERVER] 🔍 Index files found:', indexFiles);
+          if (indexFiles.length > 0) {
+            console.log('[SERVER] 🔍 First index file:', indexFiles[0]);
+            const indexFilePath = path.join(assetsPath, indexFiles[0]);
+            const stats = fs.statSync(indexFilePath);
+            console.log('[SERVER] 🔍 Index file size:', stats.size, 'bytes, modified:', stats.mtime);
+          }
         } else {
           console.error('[SERVER] ❌ ERROR: frontend/dist/assets directory does not exist!');
         }
