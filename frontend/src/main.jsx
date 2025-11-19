@@ -1,5 +1,5 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 21:10 - Force Railway to use new build files
+// FORCE REBUILD: 2025-11-19 21:25 - Clear Railway cache and force new build
 console.log('[MAIN] ===== main.jsx FILE LOADED =====');
 console.log('[MAIN] Build timestamp: 2025-11-19T20:45:00Z');
 console.log('[MAIN] Timestamp:', new Date().toISOString());
