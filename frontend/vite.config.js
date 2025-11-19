@@ -19,30 +19,37 @@ export default defineConfig({
       }
     }
   },
+  // Proxy configuration only for development
+  // In production, all requests go directly to the same server
   server: {
     proxy: {
       '/api': {
-        target: 'https://indexaize-aiseo-app-production.up.railway.app',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: true
       },
       '/auth': {
-        target: 'https://indexaize-aiseo-app-production.up.railway.app',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: true
       },
       '/seo': {
-        target: 'https://indexaize-aiseo-app-production.up.railway.app',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: true
       },
       '/plans': {
-        target: 'https://indexaize-aiseo-app-production.up.railway.app',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: true
       },
       '/collections': {
-        target: 'https://indexaize-aiseo-app-production.up.railway.app',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: true
+      },
+      '/graphql': {
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: true
       }
