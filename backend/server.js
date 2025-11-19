@@ -1242,6 +1242,31 @@ if (!IS_PROD) {
     // We DO NOT use a catch-all regex to avoid shadowing /auth and other APIs.
     // ---------------------------------------------------------------------------
     const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+    
+    // Verify dist directory exists
+    if (!fs.existsSync(distPath)) {
+      console.error('[SERVER] ❌ ERROR: frontend/dist directory does not exist!');
+      console.error('[SERVER] Expected path:', distPath);
+      console.error('[SERVER] Please run: npm run build (or npm install which runs postinstall)');
+    } else {
+      console.log('[SERVER] ✅ frontend/dist directory exists:', distPath);
+      const indexPath = path.join(distPath, 'index.html');
+      if (!fs.existsSync(indexPath)) {
+        console.error('[SERVER] ❌ ERROR: frontend/dist/index.html does not exist!');
+      } else {
+        console.log('[SERVER] ✅ frontend/dist/index.html exists');
+        // Check if assets directory exists
+        const assetsPath = path.join(distPath, 'assets');
+        if (fs.existsSync(assetsPath)) {
+          const assets = fs.readdirSync(assetsPath);
+          console.log('[SERVER] ✅ Assets directory exists with', assets.length, 'files');
+          const jsFiles = assets.filter(f => f.endsWith('.js'));
+          console.log('[SERVER] Found', jsFiles.length, 'JavaScript files in assets');
+        } else {
+          console.error('[SERVER] ❌ ERROR: frontend/dist/assets directory does not exist!');
+        }
+      }
+    }
 
     // Блокирайте достъп до root index.html
     app.use((req, res, next) => {
@@ -1818,6 +1843,18 @@ if (!IS_PROD) {
 
 
         // Serve assets with aggressive caching for production (MUST be before catch-all)
+        // Add logging middleware for assets
+        app.use((req, res, next) => {
+          // Log asset requests (JS, CSS, images, etc.)
+          if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/)) {
+            console.log('[ASSETS] Request:', req.method, req.path, {
+              exists: fs.existsSync(path.join(distPath, req.path)),
+              distPath: distPath
+            });
+          }
+          next();
+        });
+        
         app.use(
           express.static(distPath, {
             index: false,
