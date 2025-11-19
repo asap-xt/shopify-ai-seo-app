@@ -721,11 +721,14 @@ export default function App() {
   // Token exchange logic
   useEffect(() => {
     // ALWAYS log - even if devLog doesn't work
-    console.log('[APP] useEffect triggered, shop:', shop);
+    console.log('[APP] ===== useEffect triggered =====');
+    console.log('[APP] Shop:', shop);
+    console.log('[APP] Plan state:', plan);
+    console.log('[APP] Current path:', window.location.pathname);
     
     const handleTokenExchange = async () => {
       // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] handleTokenExchange called');
+      console.log('[APP] ===== handleTokenExchange called =====');
       const urlParams = new URLSearchParams(window.location.search);
       const shop = urlParams.get('shop');
       const idToken = urlParams.get('id_token');
@@ -779,7 +782,15 @@ export default function App() {
     
     const loadInitialData = async (shop) => {
       // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] loadInitialData called for shop:', shop);
+      console.log('[APP] ===== loadInitialData called =====');
+      console.log('[APP] Shop parameter:', shop);
+      console.log('[APP] Current plan state:', plan);
+      
+      if (!shop) {
+        console.error('[APP] ❌ No shop provided, cannot load data');
+        return;
+      }
+      
       try {
         // Опитай се да заредиш планове през GraphQL
         const Q = `
@@ -820,14 +831,18 @@ export default function App() {
         
         console.log('[APP] About to fetch GraphQL, URL:', graphqlUrl);
         console.log('[APP] Request body:', JSON.stringify({ query: Q, variables: { shop } }));
+        console.log('[APP] Full request URL:', window.location.origin + graphqlUrl);
         
+        const fetchStartTime = Date.now();
         const plansResponse = await fetch(graphqlUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: Q, variables: { shop } }),
         });
+        const fetchDuration = Date.now() - fetchStartTime;
         
-        console.log('[APP] GraphQL fetch completed, status:', plansResponse.status);
+        console.log('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
+        console.log('[APP] Response headers:', Object.fromEntries(plansResponse.headers.entries()));
         
         devLog('[APP] GraphQL response status:', plansResponse.status);
         devLog('[APP] GraphQL response headers:', Object.fromEntries(plansResponse.headers.entries()));
