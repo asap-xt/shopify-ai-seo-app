@@ -1,5 +1,5 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 22:45 - Server updates all asset references with detailed logging
+// FORCE REBUILD: 2025-11-19 22:50 - Server fixes asset reference replacement with better logging
 // Use window.console to ensure logging works even if console is not available
 (function() {
   try {

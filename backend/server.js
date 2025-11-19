@@ -1442,6 +1442,10 @@ if (!IS_PROD) {
               
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
+              
+              // Log initial HTML content to debug
+              const initialIndexMatch = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
+              console.log('[SERVER] 📄 Initial HTML contains index references:', initialIndexMatch);
           
               // Find the newest asset files and update all references
               const assetsPath = path.join(distPath, 'assets');
@@ -1461,16 +1465,21 @@ if (!IS_PROD) {
                   console.log('[SERVER] 🔄 Found', indexFiles.length, 'index files, using newest:', newestIndexFile);
                   
                   // Replace old index file reference with newest one (in both script tags and modulepreload links)
+                  // Use a more flexible regex that matches the full path
                   const beforeReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                  if (beforeReplace) {
-                    console.log('[SERVER] 🔍 Found index references before replace:', beforeReplace);
-                  }
-                  html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
-                  const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                  if (afterReplace) {
-                    console.log('[SERVER] ⚠️ Still found index references after replace:', afterReplace);
+                  console.log('[SERVER] 🔍 Found index references before replace:', beforeReplace);
+                  
+                  if (beforeReplace && beforeReplace.length > 0) {
+                    // Replace all occurrences
+                    html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
+                    const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
+                    if (afterReplace && afterReplace.length > 0) {
+                      console.log('[SERVER] ⚠️ Still found index references after replace:', afterReplace);
+                    } else {
+                      console.log('[SERVER] ✅ All index references replaced successfully');
+                    }
                   } else {
-                    console.log('[SERVER] ✅ All index references replaced successfully');
+                    console.log('[SERVER] ⚠️ No index references found in HTML to replace!');
                   }
                 }
                 
