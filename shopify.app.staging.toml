@@ -3,10 +3,8 @@
 
 name = "indexAIze - Staging"
 handle = "indexaize-staging"
-# NOTE: Replace with staging app client_id after creating staging app in Shopify Partner Dashboard
-client_id = "<staging_client_id>"
-# NOTE: Replace with staging Railway URL after deployment
-application_url = "https://indexaize-staging.up.railway.app"
+client_id = "cbb6c395806364fba75996525ffce483"
+application_url = "https://shopify-ai-seo-app-staging.up.railway.app"
 embedded = true
 
 [webhooks]
@@ -27,17 +25,17 @@ uri = "/webhooks/shop/redact"
 
 [auth]
 redirect_urls = [
-  "https://indexaize-staging.up.railway.app/auth/callback",
-  "https://indexaize-staging.up.railway.app/api/auth/callback",
-  "https://indexaize-staging.up.railway.app/api/auth",
-  "https://indexaize-staging.up.railway.app/"
+  "https://shopify-ai-seo-app-staging.up.railway.app/auth/callback",
+  "https://shopify-ai-seo-app-staging.up.railway.app/api/auth/callback",
+  "https://shopify-ai-seo-app-staging.up.railway.app/api/auth",
+  "https://shopify-ai-seo-app-staging.up.railway.app/"
 ]
 
 [access_scopes]
 scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metaobjects,write_metaobjects,read_content,write_content,write_script_tags,read_markets"
 
 [app_proxy]
-url = "https://indexaize-staging.up.railway.app/apps"
+url = "https://shopify-ai-seo-app-staging.up.railway.app/apps"
 prefix = "apps"
 subpath = "new-ai-seo"
 
