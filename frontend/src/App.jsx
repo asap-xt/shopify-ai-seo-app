@@ -760,6 +760,11 @@ export default function App() {
           
         } catch (error) {
           console.error('[APP] Token exchange error:', error);
+          // Fallback: Try to load data anyway
+          if (shop) {
+            devLog('[APP] Token exchange failed, trying to load data anyway...');
+            await loadInitialData(shop);
+          }
         }
       } else if (shop) {
         // Няма id_token, опитай се да заредиш данните директно
@@ -791,15 +796,19 @@ export default function App() {
             }
           }
         `;
+        devLog('[APP] Making GraphQL request to /graphql for shop:', shop);
         const plansResponse = await fetch('/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: Q, variables: { shop } }),
         });
         
+        devLog('[APP] GraphQL response status:', plansResponse.status);
+        
         if (plansResponse.status === 202) {
           // Трябва token exchange
           const errorData = await plansResponse.json();
+          devLog('[APP] Token exchange required:', errorData);
           if (errorData.error === 'token_exchange_required') {
             devLog('[APP] Token exchange required, but no id_token available');
             // Пренасочи към OAuth flow
@@ -810,7 +819,7 @@ export default function App() {
         
         if (!plansResponse.ok) {
           const errorText = await plansResponse.text();
-          console.error('[APP] Failed to load plans:', errorText);
+          console.error('[APP] Failed to load plans:', plansResponse.status, errorText);
           
           // Fallback: Set default plan to prevent infinite loading
           setPlan({
@@ -830,8 +839,10 @@ export default function App() {
         
         // Заредени са плановете, запази ги в state
         const plansData = await plansResponse.json();
+        devLog('[APP] GraphQL response data:', plansData);
         const pm = plansData?.data?.plansMe;
         if (pm) {
+          devLog('[APP] Plan loaded successfully:', pm);
           setPlan(pm);
           // Persist plan in sessionStorage to survive React remounts
           try {
