@@ -475,10 +475,6 @@ ${JSON.stringify(allSchemas, null, 2)}
                             </pre>
                           </Box>
 
-                          <Banner tone="info">
-                            <Text><strong>💡 Note:</strong> This code uses Advanced Schema Data from metafields. Make sure you have generated Advanced Schema Data first in the Advanced Schema Data section above.</Text>
-                          </Banner>
-
                           <InlineStack align="end">
                             <Button 
                               onClick={() => {
