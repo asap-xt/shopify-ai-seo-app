@@ -257,6 +257,16 @@ if (!IS_PROD) {
     // DEBUG: Log all incoming requests
     // Normalize shop domain for all requests
     app.use((req, res, next) => {
+      // Log ALL POST requests to help debug
+      if (req.method === 'POST') {
+        console.log('[MIDDLEWARE] POST request detected:', {
+          path: req.path,
+          method: req.method,
+          contentType: req.headers['content-type'],
+          hasBody: !!req.body,
+          bodyKeys: req.body ? Object.keys(req.body) : []
+        });
+      }
       // Log GraphQL requests specifically
       if (req.path === '/graphql' && req.method === 'POST') {
         console.log('[MIDDLEWARE] GraphQL request detected:', {
