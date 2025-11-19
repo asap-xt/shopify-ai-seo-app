@@ -1443,6 +1443,27 @@ if (!IS_PROD) {
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
           
+              // Find the newest index-*.js file and update the reference
+              const assetsPath = path.join(distPath, 'assets');
+              if (fs.existsSync(assetsPath)) {
+                const assets = fs.readdirSync(assetsPath);
+                const indexFiles = assets.filter(f => f.startsWith('index-') && f.endsWith('.js'));
+                if (indexFiles.length > 0) {
+                  // Sort by modification time, newest first
+                  const indexFilesWithStats = indexFiles.map(f => {
+                    const filePath = path.join(assetsPath, f);
+                    const stats = fs.statSync(filePath);
+                    return { name: f, mtime: stats.mtime, size: stats.size };
+                  }).sort((a, b) => b.mtime - a.mtime);
+                  
+                  const newestIndexFile = indexFilesWithStats[0].name;
+                  console.log('[SERVER] 🔄 Found', indexFiles.length, 'index files, using newest:', newestIndexFile);
+                  
+                  // Replace old index file reference with newest one
+                  html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
+                }
+              }
+          
               // Generate cache busting values
               const buildTime = Date.now().toString();
               const cacheBust = Math.random().toString(36).substring(7);
