@@ -3,11 +3,20 @@ console.log('[MAIN] ===== main.jsx FILE LOADED =====');
 console.log('[MAIN] Timestamp:', new Date().toISOString());
 console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
 console.log('[MAIN] document.readyState:', document.readyState);
+console.log('[MAIN] About to import React...');
 
 import React, { useMemo, useState, useEffect } from 'react';
+console.log('[MAIN] ✅ React imported');
+
 import { createRoot } from 'react-dom/client';
+console.log('[MAIN] ✅ createRoot imported');
+
 import App from './App.jsx';
+console.log('[MAIN] ✅ App imported');
+
 import { devLog, devError } from './utils/devLog.js';
+console.log('[MAIN] ✅ devLog imported');
+console.log('[MAIN] ✅ All imports successful');
 
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);

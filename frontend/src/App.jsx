@@ -1058,13 +1058,69 @@ export default function App() {
   // CRITICAL: Show loading ONLY while plan data is being fetched (first load)
   // This prevents Dashboard from flashing before redirecting to Billing
   // Once plan is loaded, never show this loading screen again
-  if (!plan) {
+  // Add timeout to prevent infinite loading if GraphQL fails
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  
+  useEffect(() => {
+    // If plan is not loaded after 5 seconds, set timeout flag
+    const timer = setTimeout(() => {
+      if (!plan) {
+        console.warn('[APP] ⚠️ Plan not loaded after 5 seconds, setting timeout flag');
+        setLoadingTimeout(true);
+      }
+    }, 5000);
+    
+    return () => clearTimeout(timer);
+  }, [plan]);
+  
+  if (!plan && !loadingTimeout) {
     return (
       <AppProvider i18n={I18N}>
         <Frame>
           <Page>
             <Box padding="400">
               <Text>Loading...</Text>
+            </Box>
+          </Page>
+        </Frame>
+      </AppProvider>
+    );
+  }
+  
+  // If timeout reached and no plan, show error or redirect to billing
+  if (!plan && loadingTimeout) {
+    console.error('[APP] ❌ Plan loading timeout - redirecting to billing');
+    const params = new URLSearchParams(window.location.search);
+    const shop = params.get('shop');
+    const host = params.get('host');
+    const embedded = params.get('embedded');
+    
+    // Set default plan to prevent infinite loop
+    const defaultPlan = {
+      shop: shop || '',
+      plan: null,
+      planKey: null,
+      subscriptionStatus: 'pending',
+      product_limit: 0,
+      language_limit: 0,
+      collection_limit: 0,
+      providersAllowed: [],
+      modelsSuggested: [],
+      trial: { active: false }
+    };
+    
+    // Only redirect if not already on billing page
+    if (!window.location.pathname.includes('/billing') && shop) {
+      window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host || '')}`;
+    }
+    
+    // Show loading while redirecting
+    return (
+      <AppProvider i18n={I18N}>
+        <Frame>
+          <Page>
+            <Box padding="400">
+              <Text>Redirecting to billing...</Text>
             </Box>
           </Page>
         </Frame>
