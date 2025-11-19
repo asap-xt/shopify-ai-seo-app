@@ -720,7 +720,12 @@ export default function App() {
 
   // Token exchange logic
   useEffect(() => {
+    // ALWAYS log - even if devLog doesn't work
+    console.log('[APP] useEffect triggered, shop:', shop);
+    
     const handleTokenExchange = async () => {
+      // ALWAYS log - even if devLog doesn't work
+      console.log('[APP] handleTokenExchange called');
       const urlParams = new URLSearchParams(window.location.search);
       const shop = urlParams.get('shop');
       const idToken = urlParams.get('id_token');
