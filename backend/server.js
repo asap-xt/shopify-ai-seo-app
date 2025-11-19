@@ -912,8 +912,15 @@ import debugRouter from './controllers/debugRouter.js';
       try {
         const { query, variables } = req.body || {};
         
+        // Log incoming GraphQL requests for debugging
+        console.log(`[GRAPHQL] Request received:`, {
+          query: query?.substring(0, 100),
+          variables: variables,
+          shop: variables?.shop || req.shopDomain || 'unknown'
+        });
+        
         if (!query) {
-          console.error(`[DEBUG] GraphQL error: No query provided`);
+          console.error(`[GRAPHQL] Error: No query provided`);
           return res.status(400).json({ errors: [{ message: 'No query provided' }] });
         }
         
@@ -926,13 +933,14 @@ import debugRouter from './controllers/debugRouter.js';
         });
         
         if (result.errors?.length) {
-          console.error(`[DEBUG] GraphQL errors:`, result.errors);
+          console.error(`[GRAPHQL] Errors:`, result.errors);
           res.status(400).json(result);
         } else {
+          console.log(`[GRAPHQL] Success for shop:`, variables?.shop || 'unknown');
           res.json(result);
         }
       } catch (e) {
-        console.error(`[DEBUG] GraphQL exception:`, e);
+        console.error(`[GRAPHQL] Exception:`, e);
         res.status(500).json({ errors: [{ message: e.message || 'GraphQL error' }] });
       }
     });
