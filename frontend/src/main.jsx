@@ -1,3 +1,9 @@
+// CRITICAL: Log immediately when this file loads (before any imports)
+console.log('[MAIN] ===== main.jsx FILE LOADED =====');
+console.log('[MAIN] Timestamp:', new Date().toISOString());
+console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
+console.log('[MAIN] document.readyState:', document.readyState);
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
@@ -14,6 +20,7 @@ const embedded = params.get('embedded') === '1';
 // ALWAYS log - even if devLog doesn't work
 console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
 console.log('[MAIN] Full URL:', window.location.href);
+console.log('[MAIN] Embedded:', embedded);
 
 devLog('[MAIN] Public App - Host:', host, 'Shop:', shop);
 devLog('[MAIN] Full URL:', window.location.href);
@@ -100,4 +107,21 @@ function ShopifyAppBridgeWrapper() {
 }
 
 // Render the app
-createRoot(document.getElementById('root')).render(<ShopifyAppBridgeWrapper />);
+console.log('[MAIN] ===== ATTEMPTING TO RENDER APP =====');
+console.log('[MAIN] root element exists:', !!document.getElementById('root'));
+
+try {
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    console.error('[MAIN] ❌ Root element not found!');
+  } else {
+    console.log('[MAIN] ✅ Root element found, creating React root...');
+    const root = createRoot(rootElement);
+    console.log('[MAIN] ✅ React root created, rendering component...');
+    root.render(<ShopifyAppBridgeWrapper />);
+    console.log('[MAIN] ✅ Component rendered successfully!');
+  }
+} catch (error) {
+  console.error('[MAIN] ❌ ERROR RENDERING APP:', error);
+  console.error('[MAIN] Error stack:', error.stack);
+}
