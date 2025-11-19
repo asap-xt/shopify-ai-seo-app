@@ -818,11 +818,16 @@ export default function App() {
         devLog('[APP] GraphQL variables:', { shop });
         devLog('[APP] Fetching from:', graphqlUrl);
         
+        console.log('[APP] About to fetch GraphQL, URL:', graphqlUrl);
+        console.log('[APP] Request body:', JSON.stringify({ query: Q, variables: { shop } }));
+        
         const plansResponse = await fetch(graphqlUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: Q, variables: { shop } }),
         });
+        
+        console.log('[APP] GraphQL fetch completed, status:', plansResponse.status);
         
         devLog('[APP] GraphQL response status:', plansResponse.status);
         devLog('[APP] GraphQL response headers:', Object.fromEntries(plansResponse.headers.entries()));

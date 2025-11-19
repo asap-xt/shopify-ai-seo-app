@@ -35,7 +35,9 @@ export function createApiClient() {
     if (!idToken) {
       try {
         // App Bridge v4: getSessionToken() works without app instance
+        console.log('[API] Attempting to get session token...');
         const sessionToken = await getSessionToken();
+        console.log('[API] Session token received:', sessionToken ? `${sessionToken.substring(0, 20)}...` : 'null');
         if (sessionToken) {
           h.Authorization = `Bearer ${sessionToken}`;
         }
@@ -43,6 +45,7 @@ export function createApiClient() {
         // Session token not available - continue without it
         // This is normal for non-embedded apps or during initial load
         console.warn('[API] Failed to get session token (this is OK):', err.message);
+        console.warn('[API] Error details:', err);
       }
     }
 
