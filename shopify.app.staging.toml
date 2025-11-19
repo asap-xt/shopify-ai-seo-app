@@ -4,7 +4,7 @@
 name = "indexAIze - Staging"
 handle = "indexaize-staging"
 client_id = "cbb6c395806364fba75996525ffce483"
-application_url = "https://shopify-ai-seo-app-staging.up.railway.app"
+application_url = "https://indexaize-aiseo-app-staging.up.railway.app"
 embedded = true
 
 [webhooks]
@@ -25,17 +25,17 @@ uri = "/webhooks/shop/redact"
 
 [auth]
 redirect_urls = [
-  "https://shopify-ai-seo-app-staging.up.railway.app/auth/callback",
-  "https://shopify-ai-seo-app-staging.up.railway.app/api/auth/callback",
-  "https://shopify-ai-seo-app-staging.up.railway.app/api/auth",
-  "https://shopify-ai-seo-app-staging.up.railway.app/"
+  "https://indexaize-aiseo-app-staging.up.railway.app/auth/callback",
+  "https://indexaize-aiseo-app-staging.up.railway.app/api/auth/callback",
+  "https://indexaize-aiseo-app-staging.up.railway.app/api/auth",
+  "https://indexaize-aiseo-app-staging.up.railway.app/"
 ]
 
 [access_scopes]
 scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metaobjects,write_metaobjects,read_content,write_content,write_script_tags,read_markets"
 
 [app_proxy]
-url = "https://shopify-ai-seo-app-staging.up.railway.app/apps"
+url = "https://indexaize-aiseo-app-staging.up.railway.app/apps"
 prefix = "apps"
 subpath = "new-ai-seo"
 
