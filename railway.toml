@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "rm -rf frontend/dist frontend/node_modules/.vite frontend/.vite && npm install && cd frontend && rm -rf dist node_modules/.vite .vite && npm install && npm run build && echo '=== CHECKING INDEX.HTML ===' && grep -o 'index-[^\"\\']*\.js' dist/index.html && echo '=== BUILD COMPLETE ===' && cd .."
+buildCommand = "rm -rf frontend/dist frontend/node_modules/.vite frontend/.vite && npm install && cd frontend && rm -rf dist node_modules/.vite .vite && npm install && npm run build && echo '=== CHECKING INDEX.HTML ===' && grep -o 'index-[a-zA-Z0-9_-]*\\.js' dist/index.html && echo '=== BUILD COMPLETE ===' && cd .."
 
 [deploy]
 startCommand = "npm start"
