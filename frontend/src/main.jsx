@@ -1,25 +1,13 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 22:50 - Server fixes asset reference replacement with better logging
-// Use window.console to ensure logging works even if console is not available
-(function() {
-  try {
-    const log = window.console?.log || function() {};
-    log('[MAIN] ===== main.jsx FILE LOADED =====');
-    log('[MAIN] Build timestamp: 2025-11-19T22:45:00Z');
-    log('[MAIN] Timestamp:', new Date().toISOString());
-    log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
-    log('[MAIN] document.readyState:', document.readyState);
-    log('[MAIN] window.location.href:', window.location.href);
-    log('[MAIN] About to import React...');
-  } catch (e) {
-    // If logging fails, at least try to show an error
-    try {
-      document.body.innerHTML = '<div style="padding:20px;color:red;">Error loading app: ' + e.message + '</div>';
-    } catch (e2) {
-      // If even that fails, do nothing
-    }
-  }
-})();
+// FORCE REBUILD: 2025-11-19 23:05 - Remove IIFE, use direct top-level code for ES modules
+// In ES modules, top-level code executes immediately
+console.log('[MAIN] ===== main.jsx FILE LOADED =====');
+console.log('[MAIN] Build timestamp: 2025-11-19T23:05:00Z');
+console.log('[MAIN] Timestamp:', new Date().toISOString());
+console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
+console.log('[MAIN] document.readyState:', document.readyState);
+console.log('[MAIN] window.location.href:', window.location.href);
+console.log('[MAIN] About to import React...');
 
 import React, { useMemo, useState, useEffect } from 'react';
 console.log('[MAIN] ✅ React imported');
