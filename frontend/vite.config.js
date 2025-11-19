@@ -8,13 +8,24 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-        chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'polaris': ['@shopify/polaris'],
-          'app-bridge': ['@shopify/app-bridge-react']
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
+        manualChunks(id) {
+          // Only create chunks for actual dependencies
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('@shopify/polaris')) {
+              return 'polaris';
+            }
+            if (id.includes('@shopify/app-bridge')) {
+              return 'app-bridge';
+            }
+            // Other vendor code
+            return 'vendor';
+          }
         }
       }
     }
