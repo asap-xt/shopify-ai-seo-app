@@ -1,5 +1,5 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
-// FORCE REBUILD: 2025-11-19 22:35 - Server dynamically updates index.html to use newest index file
+// FORCE REBUILD: 2025-11-19 22:40 - Server updates all asset references (index, react-vendor, app-bridge, polaris)
 console.log('[MAIN] ===== main.jsx FILE LOADED =====');
 console.log('[MAIN] Build timestamp: 2025-11-19T20:45:00Z');
 console.log('[MAIN] Timestamp:', new Date().toISOString());

@@ -1443,13 +1443,14 @@ if (!IS_PROD) {
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
           
-              // Find the newest index-*.js file and update the reference
+              // Find the newest asset files and update all references
               const assetsPath = path.join(distPath, 'assets');
               if (fs.existsSync(assetsPath)) {
                 const assets = fs.readdirSync(assetsPath);
+                
+                // Find newest index file
                 const indexFiles = assets.filter(f => f.startsWith('index-') && f.endsWith('.js'));
                 if (indexFiles.length > 0) {
-                  // Sort by modification time, newest first
                   const indexFilesWithStats = indexFiles.map(f => {
                     const filePath = path.join(assetsPath, f);
                     const stats = fs.statSync(filePath);
@@ -1461,6 +1462,48 @@ if (!IS_PROD) {
                   
                   // Replace old index file reference with newest one
                   html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
+                }
+                
+                // Find newest react-vendor file
+                const reactVendorFiles = assets.filter(f => f.startsWith('react-vendor-') && f.endsWith('.js'));
+                if (reactVendorFiles.length > 0) {
+                  const reactVendorFilesWithStats = reactVendorFiles.map(f => {
+                    const filePath = path.join(assetsPath, f);
+                    const stats = fs.statSync(filePath);
+                    return { name: f, mtime: stats.mtime };
+                  }).sort((a, b) => b.mtime - a.mtime);
+                  
+                  const newestReactVendorFile = reactVendorFilesWithStats[0].name;
+                  console.log('[SERVER] 🔄 Found', reactVendorFiles.length, 'react-vendor files, using newest:', newestReactVendorFile);
+                  html = html.replace(/react-vendor-[a-zA-Z0-9_-]+\.js/g, newestReactVendorFile);
+                }
+                
+                // Find newest app-bridge file
+                const appBridgeFiles = assets.filter(f => f.startsWith('app-bridge-') && f.endsWith('.js'));
+                if (appBridgeFiles.length > 0) {
+                  const appBridgeFilesWithStats = appBridgeFiles.map(f => {
+                    const filePath = path.join(assetsPath, f);
+                    const stats = fs.statSync(filePath);
+                    return { name: f, mtime: stats.mtime };
+                  }).sort((a, b) => b.mtime - a.mtime);
+                  
+                  const newestAppBridgeFile = appBridgeFilesWithStats[0].name;
+                  console.log('[SERVER] 🔄 Found', appBridgeFiles.length, 'app-bridge files, using newest:', newestAppBridgeFile);
+                  html = html.replace(/app-bridge-[a-zA-Z0-9_-]+\.js/g, newestAppBridgeFile);
+                }
+                
+                // Find newest polaris file
+                const polarisFiles = assets.filter(f => f.startsWith('polaris-') && f.endsWith('.js'));
+                if (polarisFiles.length > 0) {
+                  const polarisFilesWithStats = polarisFiles.map(f => {
+                    const filePath = path.join(assetsPath, f);
+                    const stats = fs.statSync(filePath);
+                    return { name: f, mtime: stats.mtime };
+                  }).sort((a, b) => b.mtime - a.mtime);
+                  
+                  const newestPolarisFile = polarisFilesWithStats[0].name;
+                  console.log('[SERVER] 🔄 Found', polarisFiles.length, 'polaris files, using newest:', newestPolarisFile);
+                  html = html.replace(/polaris-[a-zA-Z0-9_-]+\.js/g, newestPolarisFile);
                 }
               }
           
