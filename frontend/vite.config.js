@@ -6,6 +6,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    emptyOutDir: true, // Always clear dist before build to prevent old files
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash].js`,
