@@ -2099,6 +2099,28 @@ if (!IS_PROD) {
           next();
         });
         
+        // Serve logo for emails (public endpoint)
+        app.get('/assets/logo/Logo_60x60.png', (req, res) => {
+          const logoPath = path.join(__dirname, 'assets', 'logo', 'Logo_60x60.png');
+          const logoPathAlt = path.join(__dirname, '..', 'backend', 'assets', 'logo', 'Logo_60x60.png');
+          
+          let finalPath = null;
+          if (fs.existsSync(logoPath)) {
+            finalPath = logoPath;
+          } else if (fs.existsSync(logoPathAlt)) {
+            finalPath = logoPathAlt;
+          }
+          
+          if (finalPath) {
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            res.sendFile(path.resolve(finalPath));
+          } else {
+            console.error('[LOGO] Logo not found. Tried:', logoPath, 'and', logoPathAlt);
+            res.status(404).send('Logo not found');
+          }
+        });
+
         app.use(
           express.static(distPath, {
             index: false,
