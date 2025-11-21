@@ -4,14 +4,26 @@
     // Railway trigger: GDPR webhook fix + AI enhanced product tracking
 
     import 'dotenv/config';
+    import { config } from 'dotenv';
+    import { fileURLToPath } from 'url';
+    import path from 'path';
+    
+    // Load sendgrid.env if it exists (for development)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const sendgridEnvPath = path.join(__dirname, '..', 'sendgrid.env');
+    try {
+      config({ path: sendgridEnvPath });
+    } catch (e) {
+      // sendgrid.env might not exist, that's okay
+    }
+    
     import express from 'express';
     import helmet from 'helmet';
     import cors from 'cors';
     import morgan from 'morgan';
     import cookieParser from 'cookie-parser';
     import compression from 'compression';
-    import path from 'path';
-    import { fileURLToPath } from 'url';
     import fs from 'fs';
     import { buildSchema, graphql } from 'graphql';
     import { getPlansMeForShop } from './controllers/seoController.js';
@@ -34,10 +46,8 @@
     import shopify from './utils/shopifyApi.js';
 
     // ---------------------------------------------------------------------------
-    // ESM __dirname
+    // ESM __dirname (already defined above for sendgrid.env loading)
     // ---------------------------------------------------------------------------
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
 
     // ---------------------------------------------------------------------------
     // App configuration constants
@@ -512,6 +522,75 @@ if (!IS_PROD) {
       url: req.url,
       method: req.method
     });
+  });
+
+  // Test email endpoint
+  app.get('/api/test/email/:type', async (req, res) => {
+    const { type } = req.params;
+    const { shop } = req.query;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    try {
+      const Shop = (await import('./db/Shop.js')).default;
+      const Subscription = (await import('./db/Subscription.js')).default;
+      
+      const store = await Shop.findOne({ shop }).lean();
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+      
+      const subscription = await Subscription.findOne({ shop }).lean();
+      const storeWithSubscription = { ...store, subscription };
+      
+      const emailService = (await import('./services/emailService.js')).default;
+      
+      let result;
+      switch(type) {
+        case 'welcome':
+          result = await emailService.sendWelcomeEmail(storeWithSubscription);
+          break;
+        case 'onboarding':
+          result = await emailService.sendOnboardingEmail(storeWithSubscription, 1);
+          break;
+        case 'trial':
+          result = await emailService.sendTrialExpiringEmail(storeWithSubscription, 3);
+          break;
+        case 'weekly':
+          const weeklyStats = {
+            productsOptimized: 10,
+            aiQueries: 25,
+            topProducts: ['Product 1', 'Product 2'],
+            seoImprovement: '15%'
+          };
+          result = await emailService.sendWeeklyDigest(storeWithSubscription, weeklyStats);
+          break;
+        case 'upgrade':
+          result = await emailService.sendUpgradeSuccessEmail(storeWithSubscription, 'professional');
+          break;
+        case 'reengagement':
+          result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
+          break;
+        default:
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, onboarding, trial, weekly, upgrade, reengagement' });
+      }
+      
+      res.json({
+        success: result.success,
+        message: `Email ${result.success ? 'sent' : 'failed'}`,
+        type,
+        shop,
+        error: result.error || null
+      });
+    } catch (error) {
+      console.error('[TEST EMAIL] Error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
   });
 }
 
@@ -1818,6 +1897,7 @@ if (!IS_PROD) {
     // Startup: optional Mongo, mount optional routers, start scheduler, listen
     // ---------------------------------------------------------------------------
     import { startScheduler } from './scheduler.js';
+    import emailScheduler from './services/emailScheduler.js';
 
     async function start() {
       try {
@@ -2271,6 +2351,13 @@ if (!IS_PROD) {
           } catch (e) {
             console.error('Scheduler start error:', e);
           }
+          
+          // Start email scheduler
+          try {
+            emailScheduler.startAll();
+          } catch (e) {
+            console.error('Email scheduler start error:', e);
+          }
         });
       } catch (e) {
         console.error('Fatal startup error:', e);
@@ -2358,8 +2445,27 @@ if (!IS_PROD) {
     });
 
     // ---------------------------------------------------------------------------
-    // Process safety logs
+    // Process safety logs and graceful shutdown
     // ---------------------------------------------------------------------------
     process.on('unhandledRejection', (reason) => console.error('Unhandled Rejection:', reason));
-    process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));// Force rebuild 1757432718
+    process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+    
+    // Graceful shutdown for email scheduler
+    process.on('SIGTERM', async () => {
+      console.log('🛑 SIGTERM received. Shutting down email scheduler...');
+      try {
+        emailScheduler.stopAll();
+      } catch (e) {
+        console.error('Error stopping email scheduler:', e);
+      }
+    });
+    
+    process.on('SIGINT', async () => {
+      console.log('🛑 SIGINT received. Shutting down email scheduler...');
+      try {
+        emailScheduler.stopAll();
+      } catch (e) {
+        console.error('Error stopping email scheduler:', e);
+      }
+    });// Force rebuild 1757432718
 // Trigger Railway redeploy - Sun Nov  9 08:54:49 EET 2025

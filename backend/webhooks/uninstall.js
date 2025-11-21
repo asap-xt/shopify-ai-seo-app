@@ -12,6 +12,10 @@ export default async function uninstallWebhook(req, res) {
       return res.status(200).send('ok');
     }
     
+    // CRITICAL: Get store data BEFORE deletion for email follow-up
+    const storeData = await Shop.findOne({ shop }).lean();
+    const subscriptionData = storeData ? await import('../db/Subscription.js').then(m => m.default.findOne({ shop }).lean()) : null;
+    
     // CRITICAL: Invalidate Redis cache FIRST (before MongoDB cleanup)
     try {
       const { default: cacheService } = await import('../services/cacheService.js');
@@ -96,6 +100,22 @@ export default async function uninstallWebhook(req, res) {
     console.log('[Webhook] ===== UNINSTALL CLEANUP COMPLETED =====');
     console.log(`[Webhook] All MongoDB data for ${shop} has been removed`);
     console.log('[Webhook] Note: Shopify metafield definitions and values will remain in the store');
+    
+    // Send follow-up email after 1 hour (if store data exists)
+    if (storeData) {
+      setTimeout(async () => {
+        try {
+          const emailService = (await import('../services/emailService.js')).default;
+          await emailService.sendUninstallFollowupEmail({
+            ...storeData,
+            subscription: subscriptionData
+          });
+        } catch (emailError) {
+          console.error('[Webhook] ❌ Error sending uninstall follow-up email:', emailError);
+        }
+      }, 60 * 60 * 1000); // 1 hour delay
+    }
+    
     res.status(200).send('ok');
   } catch (e) {
     console.error('[Webhook] uninstall error:', e?.message || e);
