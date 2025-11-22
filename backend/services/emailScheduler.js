@@ -88,13 +88,13 @@ class EmailScheduler {
         console.log(`[TOKEN-EMAIL]   - ${store.shop}: ${minutesAgo} minutes ago (createdAt: ${store.createdAt})`);
       });
       
-      // TESTING: 5-10 minutes after installation (for testing only)
+      // TESTING: 0-30 minutes after installation (for testing only)
       // PRODUCTION: Day 3 after installation (72-74 hours ago)
       // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 15 * 60 * 1000), // 15 minutes ago (testing - wider window)
-          $lte: new Date(now - 3 * 60 * 1000)   // 3 minutes ago (testing - wider window)
+          $gte: new Date(now - 30 * 60 * 1000), // 30 minutes ago (testing - wider window)
+          $lte: new Date(now - 0 * 60 * 1000)   // 0 minutes ago (testing - include all recent)
         }
       }).lean();
 
@@ -105,6 +105,14 @@ class EmailScheduler {
       for (const store of day3Stores) {
         const minutesAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60));
         console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed ${minutesAgo} minutes ago at: ${store.createdAt}`);
+        
+        // Check if user has unsubscribed from marketing emails
+        const emailPrefs = store.emailPreferences || {};
+        if (emailPrefs.marketingEmails === false) {
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - unsubscribed from marketing emails`);
+          continue;
+        }
+        
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
         if (!subscription) {
           console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - no subscription found`);
