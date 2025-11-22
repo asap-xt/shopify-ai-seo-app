@@ -537,6 +537,40 @@ if (!IS_PROD) {
     }
   });
 
+  // Reset unsubscribe status endpoint (for testing)
+  app.post('/api/test/reset-unsubscribe', async (req, res) => {
+    try {
+      const { shop } = req.body;
+      if (!shop) {
+        return res.status(400).json({ success: false, error: 'shop parameter is required' });
+      }
+
+      const Shop = (await import('./db/Shop.js')).default;
+      const shopRecord = await Shop.findOne({ shop });
+      
+      if (!shopRecord) {
+        return res.status(404).json({ success: false, error: 'Shop not found' });
+      }
+
+      // Reset to subscribed
+      shopRecord.emailPreferences = shopRecord.emailPreferences || {};
+      shopRecord.emailPreferences.marketingEmails = true;
+      shopRecord.emailPreferences.unsubscribedAt = null;
+      await shopRecord.save();
+
+      console.log(`[TEST] ✅ Reset unsubscribe status for ${shop} - now subscribed`);
+
+      res.json({ 
+        success: true, 
+        message: `Shop ${shop} reset to subscribed status`,
+        emailPreferences: shopRecord.emailPreferences
+      });
+    } catch (error) {
+      console.error('[TEST] Error resetting unsubscribe:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
 
   // Test email endpoint
   app.get('/api/test/email/:type', async (req, res) => {
