@@ -7,7 +7,7 @@
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
     "build": "cd frontend && npm install && npm run build",
-    "postinstall": "cd frontend && npm install && npm run build"
+    "postinstall": "cd frontend && npm install --legacy-peer-deps && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
