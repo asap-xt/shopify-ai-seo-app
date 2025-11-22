@@ -2336,12 +2336,16 @@ if (!IS_PROD) {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
     });
 
-    // Unsubscribe endpoint (must be before catch-all)
+    // Unsubscribe endpoint (must be before catch-all, public endpoint - no auth required)
     app.get('/api/email/unsubscribe', async (req, res) => {
+      console.log('[UNSUBSCRIBE] Request received:', req.url, req.method);
       try {
         const { shop, email } = req.query;
         
+        console.log('[UNSUBSCRIBE] Params:', { shop, email });
+        
         if (!shop) {
+          console.log('[UNSUBSCRIBE] Missing shop parameter');
           return res.status(400).send('Missing shop parameter');
         }
 
@@ -2349,6 +2353,7 @@ if (!IS_PROD) {
         const shopRecord = await Shop.findOne({ shop });
         
         if (!shopRecord) {
+          console.log('[UNSUBSCRIBE] Shop not found:', shop);
           return res.status(404).send('Shop not found');
         }
 
@@ -2358,7 +2363,7 @@ if (!IS_PROD) {
         shopRecord.emailPreferences.unsubscribedAt = new Date();
         await shopRecord.save();
 
-        console.log(`[UNSUBSCRIBE] Shop ${shop} (${email}) unsubscribed from marketing emails`);
+        console.log(`[UNSUBSCRIBE] ✅ Shop ${shop} (${email}) unsubscribed from marketing emails`);
 
         // Return a simple HTML confirmation page
         res.send(`
@@ -2396,7 +2401,7 @@ if (!IS_PROD) {
           </html>
         `);
       } catch (error) {
-        console.error('[UNSUBSCRIBE] Error:', error);
+        console.error('[UNSUBSCRIBE] ❌ Error:', error);
         res.status(500).send('Failed to process unsubscribe request');
       }
     });

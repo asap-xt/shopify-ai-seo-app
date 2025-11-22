@@ -29,9 +29,9 @@ class EmailScheduler {
     console.log('📧 Starting email scheduler...');
 
     // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 22:25 EET (20:25 UTC) for testing. Change back to '0 10 * * *' for production.
+    // TESTING: Changed to 22:38 EET (20:38 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('25 20 * * *', async () => {
+      cron.schedule('38 20 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
