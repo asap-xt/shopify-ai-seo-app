@@ -162,72 +162,77 @@ class EmailService {
   }
 
   /**
-   * Send onboarding sequence (Day 1, 3, 7)
+   * Send token purchase email (Day 3 after installation)
+   * Only sent if: no purchased tokens AND plan is not Growth Extra/Enterprise
    */
-  async sendOnboardingEmail(store, day) {
+  async sendTokenPurchaseEmail(store) {
     if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping onboarding email');
+      console.warn('⚠️ SendGrid not configured - skipping token purchase email');
       return { success: false, error: 'SendGrid not configured' };
     }
 
-    const content = {
-      1: {
-        subject: '🚀 Let\'s optimize your first products!',
-        tips: [
-          'Sync your products from Shopify',
-          'Choose your preferred AI provider',
-          'Run your first SEO optimization'
-        ]
-      },
-      3: {
-        subject: '📊 Check your SEO improvements',
-        tips: [
-          'View your analytics dashboard',
-          'See which products are optimized',
-          'Compare AI provider results'
-        ]
-      },
-      7: {
-        subject: '🎯 Maximize your AI SEO results',
-        tips: [
-          'Enable auto-sync for continuous optimization',
-          'Try bulk operations for faster results',
-          'Upgrade for unlimited AI queries'
-        ]
-      }
-    };
-
-    const dayContent = content[day];
-    if (!dayContent) {
-      return { success: false, error: 'Invalid day' };
-    }
-
     try {
+      // Check if email was already sent (avoid duplicates)
+      if (store._id || store.id) {
+        const EmailLog = (await import('../db/EmailLog.js')).default;
+        const existingLog = await EmailLog.findOne({
+          storeId: store._id || store.id,
+          type: 'token-purchase',
+          status: 'sent'
+        });
+        
+        if (existingLog) {
+          console.log(`ℹ️ Token purchase email already sent to ${store.shop}, skipping duplicate`);
+          return { success: true, skipped: true, reason: 'already_sent' };
+        }
+      }
+
       const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
       const subscription = store.subscription || {};
+      const planKey = subscription.plan || 'starter';
+      
+      // Get plan features
+      const planFeatures = await this.getPlanFeatures(planKey);
+      const planName = subscription.plan || 'Starter';
+      
+      // Use SendGrid attachment with Content-ID for inline image
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo'
+        });
+      }
       
       const msg = {
-        to: store.email || `${shopName}@example.com`,
+        to: store.email || store.shopOwner || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: dayContent.subject,
-        html: this.getOnboardingEmailTemplate({
+        subject: 'Unlock AI-Enhanced Features with Tokens',
+        html: this.getTokenPurchaseEmailTemplate({
           shopName,
-          day,
-          tips: dayContent.tips,
-          dashboardUrl: this.getDashboardUrl(store.shop),
-          productsOptimized: subscription.usage?.productsOptimized || 0,
-          aiQueriesUsed: subscription.usage?.aiQueries || 0
-        })
+          planName,
+          planKey,
+          planFeatures,
+          billingUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/billing?shop=${store.shop}`,
+          logoUrl: 'cid:logo'
+        }),
+        attachments: attachments
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Day ${day} onboarding email sent: ${store.shop}`);
-      await this.logEmail(store._id || store.id, store.shop, `onboarding-day${day}`, 'sent');
+      console.log(`✅ Token purchase email sent: ${store.shop}`);
+      await this.logEmail(store._id || store.id, store.shop, 'token-purchase', 'sent');
       return { success: true };
     } catch (error) {
-      console.error(`❌ Day ${day} onboarding error:`, error);
-      await this.logEmail(store._id || store.id, store.shop, `onboarding-day${day}`, 'failed', error.message);
-      return { success: false };
+      console.error('❌ Token purchase email error:', error);
+      await this.logEmail(store._id || store.id, store.shop, 'token-purchase', 'failed', error.message);
+      return { success: false, error: error.message };
     }
   }
 
@@ -598,42 +603,106 @@ class EmailService {
     `;
   }
 
-  getOnboardingEmailTemplate(data) {
+  getTokenPurchaseEmailTemplate(data) {
+    const planFeaturesHtml = data.planFeatures && data.planFeatures.length > 0
+      ? `<ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
+          ${data.planFeatures.map(feature => `<li style="margin-bottom: 8px;">${feature.replace(/^[✓🔓]/g, '').trim()}</li>`).join('')}
+        </ul>`
+      : `<p style="margin: 0; color: #4a4a4a; font-size: 14px;">Plan features are being configured.</p>`;
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>${data.subject}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Unlock AI-Enhanced Features - indexAIze</title>
       </head>
-      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-          <h2 style="color: white; margin: 0;">${data.subject}</h2>
-        </div>
-        
-        <div style="padding: 30px; background: #f8f9fa; border-radius: 0 0 8px 8px;">
-          <p>Hi ${data.shopName}! 👋</p>
-          
-          <p>Here are some tips to help you get the most out of AI SEO 2.0:</p>
-          
-          <ul>
-            ${data.tips.map(tip => `<li>${tip}</li>`).join('')}
-          </ul>
-          
-          <div style="background: #e8f4f8; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <strong>Your Progress:</strong><br>
-            Products Optimized: ${data.productsOptimized}<br>
-            AI Queries Used: ${data.aiQueriesUsed}
-          </div>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block;">
-              Continue Optimizing
-            </a>
-          </div>
-          
-          <p>Happy optimizing! 🎉<br>The AI SEO 2.0 Team</p>
-        </div>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="cid:logo" alt="indexAIze Logo" style="width: 120px; height: 120px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      You've been using indexAIze for a few days now. To unlock the full potential of AI-powered search optimization, consider purchasing tokens to access AI-enhanced features.
+                    </p>
+                    
+                    <!-- Current Plan -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Your Current Plan: ${data.planName}</h3>
+                      ${planFeaturesHtml}
+                    </div>
+                    
+                    <!-- AI-Enhanced Features Benefits -->
+                    <div style="margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">AI-Enhanced Features with Tokens</h3>
+                      <ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
+                        <li style="margin-bottom: 12px;"><strong>Enhanced Product Optimization:</strong> AI-generated bullet points and FAQ sections that help AI bots better understand your products</li>
+                        <li style="margin-bottom: 12px;"><strong>Collection Optimization:</strong> Optimize entire collections for better category discovery by AI search engines</li>
+                        <li style="margin-bottom: 12px;"><strong>Advanced Schema Data:</strong> Rich structured data that improves how AI bots interpret your store's content</li>
+                        <li style="margin-bottom: 12px;"><strong>AI-Optimized Sitemap:</strong> Intelligent sitemap generation with priority scoring for better crawling</li>
+                        <li style="margin-bottom: 12px;"><strong>AI Testing Tools:</strong> Simulate how AI bots see your store and validate your optimization</li>
+                      </ul>
+                    </div>
+                    
+                    <!-- Benefits Section -->
+                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #b45309; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">How This Improves Your AI SEO</h3>
+                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                        AI-enhanced features provide richer, more structured data that helps AI search engines like ChatGPT, Gemini, and Perplexity better understand and recommend your products. This leads to improved visibility in AI-powered search results and higher chances of your products being discovered by potential customers.
+                      </p>
+                    </div>
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${data.billingUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        View Plans & Billing
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;

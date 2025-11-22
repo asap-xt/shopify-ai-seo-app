@@ -28,11 +28,11 @@ class EmailScheduler {
 
     console.log('📧 Starting email scheduler...');
 
-    // Daily onboarding emails check (every day at 10 AM)
+    // Token purchase email check (every day at 10 AM) - Day 3 after installation
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running daily onboarding check...');
-        await this.checkOnboardingEmails();
+        console.log('⏰ Running token purchase email check...');
+        await this.checkTokenPurchaseEmail();
       })
     );
 
@@ -65,57 +65,55 @@ class EmailScheduler {
   }
 
   /**
-   * Check and send onboarding emails
+   * Check and send token purchase email (Day 3 after installation)
+   * Only sends if: no purchased tokens AND plan is not Growth Extra/Enterprise
    */
-  async checkOnboardingEmails() {
+  async checkTokenPurchaseEmail() {
     try {
       const now = new Date();
       
-      // Day 1 onboarding (24 hours after install)
-      const day1Stores = await Shop.find({
-        createdAt: {
-          $gte: new Date(now - 25 * 60 * 60 * 1000), // 25 hours ago
-          $lte: new Date(now - 23 * 60 * 60 * 1000)  // 23 hours ago
-        }
-      }).lean();
-
-      for (const store of day1Stores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 1);
-        await this.delay(1000); // 1 second delay between emails
-      }
-
-      // Day 3 onboarding
+      // Day 3 after installation (72-74 hours ago)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 73 * 60 * 60 * 1000),
-          $lte: new Date(now - 71 * 60 * 60 * 1000)
+          $gte: new Date(now - 74 * 60 * 60 * 1000), // 74 hours ago
+          $lte: new Date(now - 72 * 60 * 60 * 1000)   // 72 hours ago
         }
       }).lean();
+
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
 
       for (const store of day3Stores) {
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 3);
-        await this.delay(1000);
-      }
-
-      // Day 7 onboarding
-      const day7Stores = await Shop.find({
-        createdAt: {
-          $gte: new Date(now - 169 * 60 * 60 * 1000),
-          $lte: new Date(now - 167 * 60 * 60 * 1000)
+        if (!subscription) {
+          continue; // Skip if no subscription
         }
-      }).lean();
 
-      for (const store of day7Stores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 7);
-        await this.delay(1000);
+        const planKey = (subscription.plan || 'starter').toLowerCase().trim();
+        const hasIncludedTokens = planKey === 'growth extra' || planKey === 'enterprise';
+        
+        // Skip if plan has included tokens (Growth Extra/Enterprise)
+        if (hasIncludedTokens) {
+          console.log(`⏭️ Skipping token purchase email for ${store.shop} - plan has included tokens`);
+          continue;
+        }
+
+        // Check if user has purchased tokens
+        const tokenBalance = await TokenBalance.findOne({ shop: store.shop }).lean();
+        const hasPurchasedTokens = tokenBalance && tokenBalance.totalPurchased > 0;
+        
+        if (hasPurchasedTokens) {
+          console.log(`⏭️ Skipping token purchase email for ${store.shop} - already has purchased tokens`);
+          continue;
+        }
+
+        // Send token purchase email
+        await emailService.sendTokenPurchaseEmail({ ...store, subscription });
+        await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log('✅ Onboarding emails check completed');
+      console.log('✅ Token purchase email check completed');
     } catch (error) {
-      console.error('❌ Onboarding emails error:', error);
+      console.error('❌ Token purchase email error:', error);
     }
   }
 

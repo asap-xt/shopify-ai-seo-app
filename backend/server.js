@@ -552,8 +552,8 @@ if (!IS_PROD) {
         case 'welcome':
           result = await emailService.sendWelcomeEmail(storeWithSubscription);
           break;
-        case 'onboarding':
-          result = await emailService.sendOnboardingEmail(storeWithSubscription, 1);
+        case 'token-purchase':
+          result = await emailService.sendTokenPurchaseEmail(storeWithSubscription);
           break;
         case 'trial':
           result = await emailService.sendTrialExpiringEmail(storeWithSubscription, 3);
@@ -574,7 +574,7 @@ if (!IS_PROD) {
           result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
           break;
         default:
-          return res.status(400).json({ error: 'Invalid email type. Use: welcome, onboarding, trial, weekly, upgrade, reengagement' });
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, trial, weekly, upgrade, reengagement' });
       }
       
       res.json({
