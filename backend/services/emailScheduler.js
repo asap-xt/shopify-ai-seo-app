@@ -67,16 +67,20 @@ class EmailScheduler {
   /**
    * Check and send token purchase email (Day 3 after installation)
    * Only sends if: no purchased tokens AND plan is not Growth Extra/Enterprise
+   * 
+   * TESTING: Currently set to 5 minutes for testing. Change back to 72-74 hours for production.
    */
   async checkTokenPurchaseEmail() {
     try {
       const now = new Date();
       
-      // Day 3 after installation (72-74 hours ago)
+      // TESTING: 5 minutes after installation (for testing only)
+      // PRODUCTION: Day 3 after installation (72-74 hours ago)
+      // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 74 * 60 * 60 * 1000), // 74 hours ago
-          $lte: new Date(now - 72 * 60 * 60 * 1000)   // 72 hours ago
+          $gte: new Date(now - 6 * 60 * 1000), // 6 minutes ago (testing)
+          $lte: new Date(now - 4 * 60 * 1000)   // 4 minutes ago (testing)
         }
       }).lean();
 
