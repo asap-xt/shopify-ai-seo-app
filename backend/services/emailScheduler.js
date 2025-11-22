@@ -29,9 +29,9 @@ class EmailScheduler {
     console.log('📧 Starting email scheduler...');
 
     // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 20:40 EET (18:40 UTC) for testing. Change back to '0 10 * * *' for production.
+    // TESTING: Changed to 20:55 EET (18:55 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('40 18 * * *', async () => {
+      cron.schedule('55 18 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
@@ -75,19 +75,22 @@ class EmailScheduler {
     try {
       const now = new Date();
       
-      // TESTING: 5 minutes after installation (for testing only)
+      // TESTING: 5-10 minutes after installation (for testing only)
       // PRODUCTION: Day 3 after installation (72-74 hours ago)
       // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 6 * 60 * 1000), // 6 minutes ago (testing - window for 5 min check)
-          $lte: new Date(now - 4 * 60 * 1000)   // 4 minutes ago (testing - window for 5 min check)
+          $gte: new Date(now - 15 * 60 * 1000), // 15 minutes ago (testing - wider window)
+          $lte: new Date(now - 3 * 60 * 1000)   // 3 minutes ago (testing - wider window)
         }
       }).lean();
+
+      console.log(`[TOKEN-EMAIL] Found ${day3Stores.length} stores installed in the last 3-15 minutes`);
 
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
 
       for (const store of day3Stores) {
+        console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed at: ${store.createdAt}`);
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
         if (!subscription) {
           continue; // Skip if no subscription
@@ -98,7 +101,7 @@ class EmailScheduler {
         
         // Skip if plan has included tokens (Growth Extra/Enterprise)
         if (hasIncludedTokens) {
-          console.log(`⏭️ Skipping token purchase email for ${store.shop} - plan has included tokens`);
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - plan has included tokens (${planKey})`);
           continue;
         }
 
@@ -107,12 +110,18 @@ class EmailScheduler {
         const hasPurchasedTokens = tokenBalance && tokenBalance.totalPurchased > 0;
         
         if (hasPurchasedTokens) {
-          console.log(`⏭️ Skipping token purchase email for ${store.shop} - already has purchased tokens`);
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - already has purchased tokens (${tokenBalance.totalPurchased})`);
           continue;
         }
 
         // Send token purchase email (store already has accessToken from Shop model)
-        await emailService.sendTokenPurchaseEmail({ ...store, subscription });
+        console.log(`[TOKEN-EMAIL] ✅ Sending token purchase email to ${store.shop}`);
+        const result = await emailService.sendTokenPurchaseEmail({ ...store, subscription });
+        if (result.success) {
+          console.log(`[TOKEN-EMAIL] ✅ Email sent successfully to ${store.shop}`);
+        } else {
+          console.error(`[TOKEN-EMAIL] ❌ Email failed for ${store.shop}:`, result.error);
+        }
         await this.delay(1000); // 1 second delay between emails
       }
 
