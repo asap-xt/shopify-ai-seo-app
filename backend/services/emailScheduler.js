@@ -29,9 +29,9 @@ class EmailScheduler {
     console.log('📧 Starting email scheduler...');
 
     // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 21:40 EET (19:40 UTC) for testing. Change back to '0 10 * * *' for production.
+    // TESTING: Changed to 21:55 EET (19:55 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('40 19 * * *', async () => {
+      cron.schedule('55 19 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
@@ -112,22 +112,28 @@ class EmailScheduler {
         }
         console.log(`[TOKEN-EMAIL] Found subscription for ${store.shop}: plan=${subscription.plan}, status=${subscription.status}`);
 
-        const planKey = (subscription.plan || 'starter').toLowerCase().trim();
-        const hasIncludedTokens = planKey === 'growth extra' || planKey === 'enterprise';
+        // Check token balance - if balance > 0, skip email (regardless of plan)
+        const tokenBalance = await TokenBalance.findOne({ shop: store.shop }).lean();
+        const currentBalance = tokenBalance?.balance || 0;
         
-        // Skip if plan has included tokens (Growth Extra/Enterprise)
-        if (hasIncludedTokens) {
-          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - plan has included tokens (${planKey})`);
+        console.log(`[TOKEN-EMAIL] Token balance for ${store.shop}:`, {
+          exists: !!tokenBalance,
+          balance: currentBalance,
+          totalPurchased: tokenBalance?.totalPurchased || 0,
+          totalUsed: tokenBalance?.totalUsed || 0,
+          plan: subscription.plan
+        });
+        
+        // Skip if balance > 0 (user has tokens, regardless of plan or source)
+        if (currentBalance > 0) {
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - has token balance (${currentBalance}), plan: ${subscription.plan}`);
           continue;
         }
-
-        // Check if user has purchased tokens
-        const tokenBalance = await TokenBalance.findOne({ shop: store.shop }).lean();
-        const hasPurchasedTokens = tokenBalance && tokenBalance.totalPurchased > 0;
         
-        if (hasPurchasedTokens) {
-          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - already has purchased tokens (${tokenBalance.totalPurchased})`);
-          continue;
+        if (!tokenBalance) {
+          console.log(`[TOKEN-EMAIL] ℹ️ No token balance record found for ${store.shop} - balance is 0, will send email`);
+        } else {
+          console.log(`[TOKEN-EMAIL] ℹ️ Token balance is 0 for ${store.shop} (plan: ${subscription.plan}) - will send email`);
         }
 
         // Send token purchase email (store already has accessToken from Shop model)
