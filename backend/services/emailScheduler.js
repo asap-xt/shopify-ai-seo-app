@@ -90,11 +90,14 @@ class EmailScheduler {
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
 
       for (const store of day3Stores) {
-        console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed at: ${store.createdAt}`);
+        const minutesAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60));
+        console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed ${minutesAgo} minutes ago at: ${store.createdAt}`);
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
         if (!subscription) {
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - no subscription found`);
           continue; // Skip if no subscription
         }
+        console.log(`[TOKEN-EMAIL] Found subscription for ${store.shop}: plan=${subscription.plan}, status=${subscription.status}`);
 
         const planKey = (subscription.plan || 'starter').toLowerCase().trim();
         const hasIncludedTokens = planKey === 'growth extra' || planKey === 'enterprise';

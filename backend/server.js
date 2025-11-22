@@ -524,6 +524,19 @@ if (!IS_PROD) {
     });
   });
 
+  // Test token purchase email check endpoint (manual trigger)
+  app.get('/api/test/token-email-check', async (req, res) => {
+    try {
+      const emailScheduler = (await import('./services/emailScheduler.js')).default;
+      console.log('[TEST] Manually triggering token purchase email check...');
+      await emailScheduler.checkTokenPurchaseEmail();
+      res.json({ success: true, message: 'Token purchase email check completed. Check logs for details.' });
+    } catch (error) {
+      console.error('[TEST] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Test email endpoint
   app.get('/api/test/email/:type', async (req, res) => {
     const { type } = req.params;
