@@ -561,10 +561,10 @@ class EmailService {
                     <div style="margin: 30px 0;">
                       <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Quick Start Tips</h3>
                       <ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
-                        <li>Enable products.json endpoint for AI bot discovery</li>
-                        <li>Configure your preferred AI provider in Settings</li>
-                        <li>Run your first optimization to generate structured data</li>
-                        <li>Monitor analytics to track AI query performance</li>
+                        <li style="margin-bottom: 12px;">Sync Your Store Data from the Dashboard</li>
+                        <li style="margin-bottom: 12px;">Structure Your Product Data - Go to "Search Optimization for AI" → Products tab. Also optimize your Collections to help AI bots understand your product categories and relationships.</li>
+                        <li style="margin-bottom: 12px;">Use AI-enhanced add-ons to supplement and strengthen your data discovery by AI bots, increasing your store's chances of being well-represented.</li>
+                        <li style="margin-bottom: 12px;">Monitor & Improve, use AI testing tools and more.</li>
                       </ul>
                     </div>
                     
