@@ -48,6 +48,21 @@ class EmailService {
     }
 
     try {
+      // Check if welcome email was already sent (avoid duplicates)
+      if (store._id || store.id) {
+        const EmailLog = (await import('../db/EmailLog.js')).default;
+        const existingLog = await EmailLog.findOne({
+          storeId: store._id || store.id,
+          type: 'welcome',
+          status: 'sent'
+        });
+        
+        if (existingLog) {
+          console.log(`ℹ️ Welcome email already sent to ${store.shop}, skipping duplicate`);
+          return { success: true, skipped: true, reason: 'already_sent' };
+        }
+      }
+
       // Import plans module to get real plan features
       const { getPlanConfig } = await import('../plans.js');
       
