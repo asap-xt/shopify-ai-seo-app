@@ -78,27 +78,27 @@ class EmailScheduler {
       // First, let's see ALL recent stores for debugging
       const allRecentStores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 30 * 60 * 1000) // Last 30 minutes
+          $gte: new Date(now - 60 * 60 * 1000) // Last 60 minutes
         }
       }).sort({ createdAt: -1 }).lean();
       
-      console.log(`[TOKEN-EMAIL] All stores installed in last 30 minutes: ${allRecentStores.length}`);
+      console.log(`[TOKEN-EMAIL] All stores installed in last 60 minutes: ${allRecentStores.length}`);
       allRecentStores.forEach(store => {
         const minutesAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60));
         console.log(`[TOKEN-EMAIL]   - ${store.shop}: ${minutesAgo} minutes ago (createdAt: ${store.createdAt})`);
       });
       
-      // TESTING: 0-30 minutes after installation (for testing only)
+      // TESTING: From now (cron start) to 1 hour ago (for testing only)
       // PRODUCTION: Day 3 after installation (72-74 hours ago)
       // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 30 * 60 * 1000), // 30 minutes ago (testing - wider window)
-          $lte: new Date(now - 0 * 60 * 1000)   // 0 minutes ago (testing - include all recent)
+          $gte: new Date(now - 60 * 60 * 1000), // 1 hour ago
+          $lte: new Date(now)                    // Up to now (cron start time)
         }
       }).lean();
 
-      console.log(`[TOKEN-EMAIL] Found ${day3Stores.length} stores in target window (3-15 minutes ago)`);
+      console.log(`[TOKEN-EMAIL] Found ${day3Stores.length} stores in target window (from now to 1 hour ago)`);
 
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
 
