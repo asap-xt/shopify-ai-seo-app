@@ -519,7 +519,7 @@ class EmailService {
     const unsubscribeUrl = this.getUnsubscribeUrl(shop, email);
     return `
       <p style="margin: 15px 0 0; color: #94a3b8; font-size: 11px; line-height: 1.5; text-align: center;">
-        <a href="${unsubscribeUrl}" style="color: #94a3b8; text-decoration: underline;">Unsubscribe</a> from marketing emails
+        Don't want to get marketing news & tips from us? <a href="${unsubscribeUrl}" style="color: #94a3b8; text-decoration: underline;">Unsubscribe</a>
       </p>
     `;
   }

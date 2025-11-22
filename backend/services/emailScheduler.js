@@ -29,9 +29,9 @@ class EmailScheduler {
     console.log('📧 Starting email scheduler...');
 
     // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 22:38 EET (20:38 UTC) for testing. Change back to '0 10 * * *' for production.
+    // TESTING: Changed to 22:55 EET (20:55 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('38 20 * * *', async () => {
+      cron.schedule('55 20 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
@@ -108,8 +108,14 @@ class EmailScheduler {
         
         // Check if user has unsubscribed from marketing emails
         const emailPrefs = store.emailPreferences || {};
+        console.log(`[TOKEN-EMAIL] Email preferences for ${store.shop}:`, {
+          marketingEmails: emailPrefs.marketingEmails,
+          unsubscribedAt: emailPrefs.unsubscribedAt,
+          hasPreferences: !!store.emailPreferences
+        });
+        
         if (emailPrefs.marketingEmails === false) {
-          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - unsubscribed from marketing emails`);
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - unsubscribed from marketing emails (marketingEmails: ${emailPrefs.marketingEmails})`);
           continue;
         }
         
