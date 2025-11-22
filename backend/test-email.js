@@ -38,11 +38,13 @@ async function testEmail() {
   console.log('👤 FROM_NAME:', process.env.FROM_NAME || emailService.fromName);
   console.log('');
   
-  // Test data
+  // Test data - ПРОМЕНИ EMAIL АДРЕСА ТУК!
+  const testEmail = process.env.TEST_EMAIL || 'indexAIze@gmail.com';
+  
   const testStore = {
     _id: null, // Skip logging for test
     shop: 'test-shop.myshopify.com',
-    email: 'test@example.com', // ⚠️ CHANGE THIS to your real email for testing!
+    email: testEmail,
     shopOwner: 'Test Owner',
     subscription: {
       plan: 'professional',
@@ -66,40 +68,32 @@ async function testEmail() {
   
   console.log('📝 Test Store:', testStore.shop);
   console.log('📧 Test Email:', testStore.email);
-  console.log('');
+  console.log('⚠️  Ако е "test@example.com", промени го в test-email.js или задай TEST_EMAIL env variable!\n');
   
-  // Test welcome email
+  // Тествай само Welcome Email
   console.log('📨 Testing Welcome Email...');
   try {
     const result = await emailService.sendWelcomeEmail(testStore);
     if (result.success) {
-      console.log('✅ Welcome email sent successfully!\n');
+      console.log('✅ Welcome Email sent successfully!\n');
     } else {
-      console.log('❌ Welcome email failed:', result.error, '\n');
+      console.log('❌ Welcome Email failed:', result.error, '\n');
     }
   } catch (error) {
-    console.error('❌ Error sending welcome email:', error.message, '\n');
+    console.error('❌ Error sending Welcome Email:', error.message, '\n');
   }
   
-  // Wait a bit between emails
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Test onboarding email (day 1)
-  console.log('📨 Testing Onboarding Email (Day 1)...');
-  try {
-    const result = await emailService.sendOnboardingEmail(testStore, 1);
-    if (result.success) {
-      console.log('✅ Onboarding email sent successfully!\n');
-    } else {
-      console.log('❌ Onboarding email failed:', result.error, '\n');
-    }
-  } catch (error) {
-    console.error('❌ Error sending onboarding email:', error.message, '\n');
-  }
-  
+  console.log('='.repeat(50));
   console.log('✅ Email testing completed!');
-  console.log('💡 Check your email inbox (and spam folder) for the test emails.');
-  console.log('💡 Make sure to verify your sender email in SendGrid first!');
+  console.log('='.repeat(50));
+  console.log('\n💡 Next steps:');
+  console.log('   1. Check your email inbox (and spam folder)');
+  console.log('   2. Check SendGrid Activity: https://app.sendgrid.com/activity');
+  console.log('   3. Verify the email was delivered successfully');
+  console.log('\n⚠️  If email is not received:');
+  console.log('   - Check spam folder');
+  console.log('   - Verify sender email is authenticated in SendGrid');
+  console.log('   - Check SendGrid Activity for delivery status');
 }
 
 testEmail().catch(error => {

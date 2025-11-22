@@ -2,6 +2,12 @@
 // Email service using SendGrid for transactional and marketing emails
 
 import sgMail from '@sendgrid/mail';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize SendGrid
 if (process.env.SENDGRID_API_KEY) {
@@ -13,7 +19,23 @@ if (process.env.SENDGRID_API_KEY) {
 class EmailService {
   constructor() {
     this.fromEmail = process.env.FROM_EMAIL || 'noreply@aiseo2.app';
-    this.fromName = process.env.FROM_NAME || 'AI SEO 2.0 Team';
+    this.fromName = process.env.FROM_NAME || 'indexAIze Team';
+    
+    // Load logo as base64 for email templates
+    this.logoBase64 = this.loadLogoBase64();
+  }
+  
+  loadLogoBase64() {
+    try {
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_60x60.png');
+      if (fs.existsSync(logoPath)) {
+        const logoBuffer = fs.readFileSync(logoPath);
+        return logoBuffer.toString('base64');
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not load logo for emails:', error.message);
+    }
+    return null;
   }
 
   /**
@@ -26,23 +48,56 @@ class EmailService {
     }
 
     try {
+      // Import plans module to get real plan features
+      const { getPlanConfig } = await import('../plans.js');
+      
       const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
       const subscription = store.subscription || {};
-      const plan = subscription.plan || 'starter';
+      const planKey = subscription.plan || 'starter';
+      
+      // Get real plan configuration
+      const planConfig = getPlanConfig(planKey);
+      const planName = planConfig?.name || planKey;
+      
+      // Calculate trial days
+      const trialDays = this.calculateTrialDays(subscription.trialEndsAt || subscription.expiresAt);
+      
+      // Format providers nicely
+      const providers = planConfig?.providersAllowed || [];
+      const providersDisplay = providers.length > 0 
+        ? providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
+        : 'Not specified';
+      
+      // Use SendGrid attachment with Content-ID for inline image (works in all email clients including Gmail)
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo' // SendGrid uses content_id (not contentId)
+        });
+      }
       
       const msg = {
         to: store.email || store.shopOwner || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: '🚀 Welcome to AI SEO 2.0!',
+        subject: `Welcome to indexAIze - Unlock AI Search`,
         html: this.getWelcomeEmailTemplate({
           shopName,
           shopUrl: `https://${store.shop}`,
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`,
-          plan,
-          trialDays: this.calculateTrialDays(subscription.trialEndsAt || subscription.expiresAt),
-          aiProviders: subscription.aiProviders?.join(', ') || 'OpenAI',
-          productLimit: subscription.productLimit || 150
-        })
+          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
+          planName,
+          planKey,
+          trialDays,
+          logoUrl: 'cid:logo', // Use Content-ID reference for inline attachment
+          planFeatures: await this.getPlanFeatures(planKey) // Get real plan features instead of technical limits
+        }),
+        attachments: attachments
       };
 
       await sgMail.send(msg);
@@ -56,6 +111,32 @@ class EmailService {
       console.error('❌ Welcome email error:', error);
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'failed', error.message);
       return { success: false, error: error.message };
+    }
+  }
+  
+  formatAutosyncFrequency(cron) {
+    if (!cron) return 'Not available';
+    // Parse cron: "0 */48 * * *" = every 48 hours
+    const parts = cron.split(' ');
+    if (parts[1]?.startsWith('*/')) {
+      const hours = parts[1].replace('*/', '');
+      return `Every ${hours} hours`;
+    }
+    if (parts[0]?.startsWith('*/')) {
+      const days = parts[0].replace('*/', '');
+      return `Every ${days} days`;
+    }
+    return 'Custom schedule';
+  }
+  
+  async getPlanFeatures(planKey) {
+    // Import getPlanFeatures from billingRoutes
+    try {
+      const { getPlanFeatures } = await import('../billing/billingRoutes.js');
+      return getPlanFeatures(planKey) || [];
+    } catch (error) {
+      console.warn('⚠️ Could not load plan features:', error.message);
+      return [];
     }
   }
 
@@ -112,7 +193,7 @@ class EmailService {
           shopName,
           day,
           tips: dayContent.tips,
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`,
+          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
           productsOptimized: subscription.usage?.productsOptimized || 0,
           aiQueriesUsed: subscription.usage?.aiQueries || 0
         })
@@ -150,7 +231,7 @@ class EmailService {
           shopName,
           daysLeft,
           productsOptimized: subscription.usage?.productsOptimized || 0,
-          upgradeUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/billing?shop=${store.shop}`,
+          upgradeUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/billing?shop=${store.shop}`,
           stats: {
             totalOptimizations: store.analytics?.totalAIQueries || 0,
             topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
@@ -187,8 +268,8 @@ class EmailService {
         html: this.getUninstallFollowupEmailTemplate({
           shopName,
           uninstallReason: reason,
-          feedbackUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/feedback?shop=${store.shop}`,
-          reinstallUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/?shop=${store.shop}`,
+          feedbackUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/feedback?shop=${store.shop}`,
+          reinstallUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/?shop=${store.shop}`,
           supportEmail: process.env.SUPPORT_EMAIL || 'support@aiseo2.app'
         })
       };
@@ -227,7 +308,7 @@ class EmailService {
             topProducts: stats.topProducts || [],
             improvement: stats.seoImprovement || '0%'
           },
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`,
+          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
           tips: this.getWeeklyTips(stats)
         })
       };
@@ -263,7 +344,7 @@ class EmailService {
           shopName,
           oldPlan: subscription.previousPlan || 'starter',
           newPlan: newPlan,
-          newFeatures: this.getPlanFeatures(newPlan),
+          newFeatures: await this.getPlanFeatures(newPlan),
           dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`
         })
       };
@@ -298,8 +379,8 @@ class EmailService {
           shopName,
           daysSinceActive: daysSinceLastActive,
           incentive: '50% off next month if you upgrade this week!',
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`,
-          supportUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/support`
+          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
+          supportUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/support`
         })
       };
 
@@ -332,29 +413,6 @@ class EmailService {
     return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
   }
 
-  getPlanFeatures(plan) {
-    const features = {
-      professional: [
-        '500 AI queries per month',
-        '3 AI providers',
-        'Auto-sync every 12h',
-        'Bulk operations'
-      ],
-      business: [
-        '2,000 AI queries per month',
-        '4 AI providers',
-        'Auto-sync every 6h',
-        'Advanced analytics'
-      ],
-      enterprise: [
-        '10,000 AI queries per month',
-        'All 5 AI providers',
-        'Auto-sync every 2h',
-        'Priority support'
-      ]
-    };
-    return features[plan] || [];
-  }
 
   getWeeklyTips(stats) {
     const tips = [
@@ -394,48 +452,106 @@ class EmailService {
 
   // Email templates
   getWelcomeEmailTemplate(data) {
+    const planConfig = data.planConfig || {};
+    
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Welcome to AI SEO 2.0!</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to indexAIze - Unlock AI Search</title>
       </head>
-      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0;">🚀 Welcome to AI SEO 2.0!</h1>
-        </div>
-        
-        <div style="padding: 30px; background: #f8f9fa; border-radius: 0 0 8px 8px;">
-          <p>Hi ${data.shopName}! 👋</p>
-          
-          <p>Congrats on installing AI SEO 2.0! You're now ready to optimize your Shopify store with the power of AI.</p>
-          
-          <h3>Your Trial Details:</h3>
-          <ul>
-            <li>🎯 Plan: <strong>${data.plan}</strong></li>
-            <li>🤖 AI Providers: ${data.aiProviders}</li>
-            <li>📦 Product Limit: ${data.productLimit}</li>
-            <li>⏰ Trial Days Left: <strong>${data.trialDays} days</strong></li>
-          </ul>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block;">
-              Go to Dashboard
-            </a>
-          </div>
-          
-          <h3>Next Steps:</h3>
-          <ol>
-            <li>Sync your products from Shopify</li>
-            <li>Choose your preferred AI provider</li>
-            <li>Run your first SEO optimization</li>
-          </ol>
-          
-          <p>Need help? Reply to this email or visit our <a href="${data.dashboardUrl}">support center</a>.</p>
-          
-          <p>Happy optimizing! 🎉<br>The AI SEO 2.0 Team</p>
-        </div>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          ${data.logoUrl ? `<img src="${data.logoUrl}" alt="indexAIze Logo" style="width: 120px; height: 120px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />` : `<div style="width: 120px; height: 120px; background-color: rgba(255,255,255,0.2); border-radius: 12px;"></div>`}
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Thank you for installing indexAIze. Your store is now configured to optimize product discovery through AI search engines including ChatGPT, Gemini, Perplexity, and others.
+                    </p>
+                    
+                    <!-- Plan Details -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Your Plan: ${data.planName}</h3>
+                      
+                      ${data.planFeatures && data.planFeatures.length > 0 ? `
+                      <ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
+                        ${data.planFeatures.map(feature => `<li style="margin-bottom: 8px;">${feature.replace(/^[✓🔓]/g, '').trim()}</li>`).join('')}
+                      </ul>
+                      ` : `
+                      <p style="margin: 0; color: #4a4a4a; font-size: 14px;">Plan features are being configured.</p>
+                      `}
+                      
+                      ${data.trialDays > 0 ? `
+                      <p style="margin: 15px 0 0; color: #1e40af; font-size: 13px; padding-top: 10px; border-top: 1px solid #dbeafe;">
+                        Trial period: <strong style="color: #1e40af;">${data.trialDays} day${data.trialDays !== 1 ? 's' : ''} remaining</strong>
+                      </p>
+                      ` : ''}
+                    </div>
+                    
+                    <!-- Quick Tips -->
+                    <div style="margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Quick Start Tips</h3>
+                      <ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
+                        <li>Enable products.json endpoint for AI bot discovery</li>
+                        <li>Configure your preferred AI provider in Settings</li>
+                        <li>Run your first optimization to generate structured data</li>
+                        <li>Monitor analytics to track AI query performance</li>
+                      </ul>
+                    </div>
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${data.dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        Open Dashboard
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong><br>
+                      Unlock AI Search Optimization
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;

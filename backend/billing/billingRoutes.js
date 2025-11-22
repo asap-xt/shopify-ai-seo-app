@@ -40,7 +40,7 @@ function getPlanBadge(planKey) {
 }
 
 // Helper: Get features for a plan
-function getPlanFeatures(planKey) {
+export function getPlanFeatures(planKey) {
   const features = [];
   
   // Starter plan - base features
