@@ -48,7 +48,7 @@ async function testEmail() {
     shopOwner: 'Test Owner',
     subscription: {
       plan: 'professional',
-      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      trialEndsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now (TRIAL_DAYS)
       aiProviders: ['openai', 'claude'],
       productLimit: 500,
       usage: {

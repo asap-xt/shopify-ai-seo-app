@@ -83,6 +83,11 @@ class EmailService {
         });
       }
       
+      // Check if plan has included tokens (Growth Extra, Enterprise)
+      const { getIncludedTokens } = await import('../billing/tokenConfig.js');
+      const includedTokens = getIncludedTokens(planKey);
+      const hasIncludedTokens = includedTokens.tokens > 0;
+      
       const msg = {
         to: store.email || store.shopOwner || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
@@ -90,12 +95,13 @@ class EmailService {
         html: this.getWelcomeEmailTemplate({
           shopName,
           shopUrl: `https://${store.shop}`,
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
+          dashboardUrl: this.getDashboardUrl(store.shop),
           planName,
           planKey,
           trialDays,
           logoUrl: 'cid:logo', // Use Content-ID reference for inline attachment
-          planFeatures: await this.getPlanFeatures(planKey) // Get real plan features instead of technical limits
+          planFeatures: await this.getPlanFeatures(planKey), // Get real plan features instead of technical limits
+          hasIncludedTokens // Flag to show/hide token purchase recommendation
         }),
         attachments: attachments
       };
@@ -193,7 +199,7 @@ class EmailService {
           shopName,
           day,
           tips: dayContent.tips,
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
+          dashboardUrl: this.getDashboardUrl(store.shop),
           productsOptimized: subscription.usage?.productsOptimized || 0,
           aiQueriesUsed: subscription.usage?.aiQueries || 0
         })
@@ -308,7 +314,7 @@ class EmailService {
             topProducts: stats.topProducts || [],
             improvement: stats.seoImprovement || '0%'
           },
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
+          dashboardUrl: this.getDashboardUrl(store.shop),
           tips: this.getWeeklyTips(stats)
         })
       };
@@ -345,7 +351,7 @@ class EmailService {
           oldPlan: subscription.previousPlan || 'starter',
           newPlan: newPlan,
           newFeatures: await this.getPlanFeatures(newPlan),
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || 'https://app.aiseo2.app'}/dashboard?shop=${store.shop}`
+          dashboardUrl: this.getDashboardUrl(store.shop)
         })
       };
 
@@ -379,8 +385,8 @@ class EmailService {
           shopName,
           daysSinceActive: daysSinceLastActive,
           incentive: '50% off next month if you upgrade this week!',
-          dashboardUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/dashboard?shop=${store.shop}`,
-          supportUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/support`
+          dashboardUrl: this.getDashboardUrl(store.shop),
+          supportUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/support`
         })
       };
 
@@ -402,6 +408,18 @@ class EmailService {
     const now = new Date();
     const diff = new Date(expiresAt) - now;
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+
+  getDashboardUrl(shop) {
+    // Get APP_URL from environment - required, no fallback
+    const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
+    if (!appUrl) {
+      console.warn('⚠️ APP_URL not set in environment variables');
+      return `https://app.indexaize.com/dashboard?shop=${shop}`; // Fallback to production domain
+    }
+    // Remove trailing slash if present
+    const baseUrl = appUrl.replace(/\/$/, '');
+    return `${baseUrl}/dashboard?shop=${shop}`;
   }
 
   getTopProvider(aiQueryHistory) {
@@ -515,6 +533,15 @@ class EmailService {
                       ` : ''}
                     </div>
                     
+                    ${!data.hasIncludedTokens ? `
+                    <!-- Token Purchase Recommendation -->
+                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #b45309;">Unlock AI-Enhanced Features:</strong> Purchase tokens to access AI-enhanced product optimization, advanced schema data, and other premium features. Visit your dashboard to buy tokens and enhance your store's AI capabilities.
+                      </p>
+                    </div>
+                    ` : ''}
+                    
                     <!-- Quick Tips -->
                     <div style="margin: 30px 0;">
                       <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Quick Start Tips</h3>
@@ -543,8 +570,7 @@ class EmailService {
                 <tr>
                   <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
                     <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.6;">
-                      <strong style="color: #1e40af;">indexAIze Team</strong><br>
-                      Unlock AI Search Optimization
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
                     </p>
                   </td>
                 </tr>
