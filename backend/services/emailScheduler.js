@@ -28,10 +28,9 @@ class EmailScheduler {
 
     console.log('📧 Starting email scheduler...');
 
-    // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 23:15 EET (21:15 UTC) for testing. Change back to '0 10 * * *' for production.
+    // Token purchase email check (every day at 10:00 UTC) - Day 3 after installation (72 hours)
     this.jobs.push(
-      cron.schedule('15 21 * * *', async () => {
+      cron.schedule('0 10 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
@@ -66,92 +65,73 @@ class EmailScheduler {
   }
 
   /**
-   * Check and send token purchase email (Day 3 after installation)
-   * Only sends if: no purchased tokens AND plan is not Growth Extra/Enterprise
-   * 
-   * TESTING: Currently set to 5 minutes for testing. Change back to 72-74 hours for production.
+   * Check and send token purchase email (Day 3 after installation - 72 hours)
+   * Only sends if: 
+   * - Installed exactly 72 hours ago (3 days)
+   * - Token balance = 0
+   * - Not unsubscribed
+   * - Hasn't received this email before
    */
   async checkTokenPurchaseEmail() {
     try {
       const now = new Date();
+      const EmailLog = (await import('../db/EmailLog.js')).default;
       
-      // First, let's see ALL recent stores for debugging
-      const allRecentStores = await Shop.find({
-        createdAt: {
-          $gte: new Date(now - 60 * 60 * 1000) // Last 60 minutes
-        }
-      }).sort({ createdAt: -1 }).lean();
-      
-      console.log(`[TOKEN-EMAIL] All stores installed in last 60 minutes: ${allRecentStores.length}`);
-      allRecentStores.forEach(store => {
-        const minutesAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60));
-        console.log(`[TOKEN-EMAIL]   - ${store.shop}: ${minutesAgo} minutes ago (createdAt: ${store.createdAt})`);
-      });
-      
-      // TESTING: From now (cron start) to 1 hour ago (for testing only)
-      // PRODUCTION: Day 3 after installation (72-74 hours ago)
-      // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
+      // Find stores installed exactly 72 hours ago (3 days)
+      // Using a 2-hour window (71-73 hours) to account for cron timing variations
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 60 * 60 * 1000), // 1 hour ago
-          $lte: new Date(now)                    // Up to now (cron start time)
+          $gte: new Date(now - 73 * 60 * 60 * 1000), // 73 hours ago
+          $lte: new Date(now - 71 * 60 * 60 * 1000)  // 71 hours ago
         }
       }).lean();
 
-      console.log(`[TOKEN-EMAIL] Found ${day3Stores.length} stores in target window (from now to 1 hour ago)`);
+      console.log(`[TOKEN-EMAIL] Found ${day3Stores.length} stores installed 72 hours ago (71-73 hour window)`);
 
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
 
       for (const store of day3Stores) {
-        const minutesAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60));
-        console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed ${minutesAgo} minutes ago at: ${store.createdAt}`);
+        const hoursAgo = Math.floor((now - new Date(store.createdAt)) / (1000 * 60 * 60));
+        console.log(`[TOKEN-EMAIL] Checking store: ${store.shop}, installed ${hoursAgo} hours ago at: ${store.createdAt}`);
+        
+        // Check if email was already sent (prevent duplicates)
+        const existingEmailLog = await EmailLog.findOne({
+          shop: store.shop,
+          type: 'token-purchase',
+          status: 'sent'
+        }).lean();
+        
+        if (existingEmailLog) {
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - token purchase email already sent on ${existingEmailLog.sentAt}`);
+          continue;
+        }
         
         // Check if user has unsubscribed from marketing emails
         const emailPrefs = store.emailPreferences || {};
-        console.log(`[TOKEN-EMAIL] Email preferences for ${store.shop}:`, {
-          marketingEmails: emailPrefs.marketingEmails,
-          unsubscribedAt: emailPrefs.unsubscribedAt,
-          hasPreferences: !!store.emailPreferences
-        });
-        
         if (emailPrefs.marketingEmails === false) {
-          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - unsubscribed from marketing emails (marketingEmails: ${emailPrefs.marketingEmails})`);
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - unsubscribed from marketing emails`);
           continue;
         }
         
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
         if (!subscription) {
           console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - no subscription found`);
-          continue; // Skip if no subscription
+          continue;
         }
         console.log(`[TOKEN-EMAIL] Found subscription for ${store.shop}: plan=${subscription.plan}, status=${subscription.status}`);
 
-        // Check token balance - if balance > 0, skip email (regardless of plan)
+        // Check token balance - if balance > 0, skip email
         const tokenBalance = await TokenBalance.findOne({ shop: store.shop }).lean();
         const currentBalance = tokenBalance?.balance || 0;
         
-        console.log(`[TOKEN-EMAIL] Token balance for ${store.shop}:`, {
-          exists: !!tokenBalance,
-          balance: currentBalance,
-          totalPurchased: tokenBalance?.totalPurchased || 0,
-          totalUsed: tokenBalance?.totalUsed || 0,
-          plan: subscription.plan
-        });
-        
-        // Skip if balance > 0 (user has tokens, regardless of plan or source)
         if (currentBalance > 0) {
-          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - has token balance (${currentBalance}), plan: ${subscription.plan}`);
+          console.log(`[TOKEN-EMAIL] ⏭️ Skipping ${store.shop} - has token balance (${currentBalance})`);
           continue;
         }
         
-        if (!tokenBalance) {
-          console.log(`[TOKEN-EMAIL] ℹ️ No token balance record found for ${store.shop} - balance is 0, will send email`);
-        } else {
-          console.log(`[TOKEN-EMAIL] ℹ️ Token balance is 0 for ${store.shop} (plan: ${subscription.plan}) - will send email`);
-        }
+        console.log(`[TOKEN-EMAIL] ✅ Conditions met for ${store.shop}: balance=0, subscribed, not sent before`);
 
-        // Send token purchase email (store already has accessToken from Shop model)
-        console.log(`[TOKEN-EMAIL] ✅ Sending token purchase email to ${store.shop}`);
+        // Send token purchase email
         const result = await emailService.sendTokenPurchaseEmail({ ...store, subscription });
         if (result.success) {
           console.log(`[TOKEN-EMAIL] ✅ Email sent successfully to ${store.shop}`);
