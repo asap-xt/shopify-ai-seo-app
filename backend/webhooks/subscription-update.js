@@ -225,6 +225,14 @@ export default async function handleSubscriptionUpdate(req, res) {
       // Only send if this is a new subscription (not an upgrade after activation)
       const isNewSubscription = !originalActivatedAt && (hadPendingPlan || wasPendingActivation);
       
+      console.log('[SUBSCRIPTION-UPDATE] Welcome email check:', {
+        originalActivatedAt,
+        hadPendingPlan,
+        wasPendingActivation,
+        isNewSubscription,
+        status: updatedSubscription.status
+      });
+      
       if (isNewSubscription) {
         // Send welcome email asynchronously (non-blocking)
         import('../services/emailService.js').then(async (emailModule) => {

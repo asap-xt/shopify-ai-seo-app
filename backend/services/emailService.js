@@ -671,9 +671,10 @@ class EmailService {
                 <!-- Footer -->
                 <tr>
                   <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
-                    <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.6;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
                       <strong style="color: #1e40af;">indexAIze Team</strong>
                     </p>
+                    ${data.shop && data.email ? this.getUnsubscribeFooter(data.shop, data.email) : ''}
                   </td>
                 </tr>
               </table>

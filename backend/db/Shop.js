@@ -92,6 +92,10 @@ const shopSchema = new mongoose.Schema({
     type: Date,
     default: () => new Date()
   },
+  emailPreferences: {
+    marketingEmails: { type: Boolean, default: true },
+    unsubscribedAt: { type: Date, default: null }
+  },
   updatedAt: {
     type: Date,
     default: () => new Date()
