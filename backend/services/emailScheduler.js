@@ -29,9 +29,9 @@ class EmailScheduler {
     console.log('📧 Starting email scheduler...');
 
     // Token purchase email check (every day at 10 AM) - Day 3 after installation
-    // TESTING: Changed to 20:10 (8:10 PM) for testing. Change back to '0 10 * * *' for production.
+    // TESTING: Changed to 20:40 EET (18:40 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('10 20 * * *', async () => {
+      cron.schedule('40 18 * * *', async () => {
         console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
@@ -80,8 +80,8 @@ class EmailScheduler {
       // Change back to: $gte: new Date(now - 74 * 60 * 60 * 1000), $lte: new Date(now - 72 * 60 * 60 * 1000)
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 6 * 60 * 1000), // 6 minutes ago (testing)
-          $lte: new Date(now - 4 * 60 * 1000)   // 4 minutes ago (testing)
+          $gte: new Date(now - 6 * 60 * 1000), // 6 minutes ago (testing - window for 5 min check)
+          $lte: new Date(now - 4 * 60 * 1000)   // 4 minutes ago (testing - window for 5 min check)
         }
       }).lean();
 
