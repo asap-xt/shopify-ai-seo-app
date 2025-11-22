@@ -316,33 +316,6 @@ router.get('/callback', async (req, res) => {
       console.error('[AUTH] Webhook registration failed:', error.message);
     });
 
-    // 7.5) Send welcome email (non-blocking, don't delay redirect)
-    // Check if this is a new installation (shopRecord was just created)
-    const isNewInstallation = shopRecord.createdAt && 
-      (new Date() - new Date(shopRecord.createdAt)) < 60000; // Created less than 1 minute ago
-    
-    if (isNewInstallation) {
-      // Import emailService dynamically to avoid circular dependencies
-      import('./services/emailService.js').then(async (emailModule) => {
-        const emailService = emailModule.default;
-        try {
-          // Get subscription for email
-          const subForEmail = subscription || await Subscription.findOne({ shop }).lean();
-          const storeWithSubscription = {
-            ...shopRecord.toObject(),
-            subscription: subForEmail || { plan: 'starter' }
-          };
-          
-          await emailService.sendWelcomeEmail(storeWithSubscription);
-          console.log('[AUTH] Welcome email sent successfully');
-        } catch (emailError) {
-          console.error('[AUTH] Failed to send welcome email:', emailError.message);
-          // Don't throw - email failure shouldn't block installation
-        }
-      }).catch(error => {
-        console.error('[AUTH] Error loading email service:', error.message);
-      });
-    }
 
     // 8) Clear state cookie
     res.clearCookie('shopify_oauth_state');

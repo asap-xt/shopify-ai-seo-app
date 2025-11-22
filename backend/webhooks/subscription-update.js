@@ -4,6 +4,7 @@
 
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
+import Shop from '../db/Shop.js';
 import { getIncludedTokens } from '../billing/tokenConfig.js';
 
 /**
@@ -218,6 +219,77 @@ export default async function handleSubscriptionUpdate(req, res) {
           updatedSubscription.plan, 
           admin_graphql_api_id
         );
+      }
+      
+      // Send welcome email when subscription is approved (ACTIVE status)
+      // Only send if this is a new subscription (not an upgrade after activation)
+      const isNewSubscription = !originalActivatedAt && (hadPendingPlan || wasPendingActivation);
+      
+      if (isNewSubscription) {
+        // Send welcome email asynchronously (non-blocking)
+        import('../services/emailService.js').then(async (emailModule) => {
+          const emailService = emailModule.default;
+          try {
+            // Get shop record
+            const shopRecord = await Shop.findOne({ shop }).lean();
+            if (!shopRecord) {
+              console.warn('[SUBSCRIPTION-UPDATE] Shop record not found, skipping welcome email');
+              return;
+            }
+            
+            // Fetch shop email from Shopify API
+            let shopEmail = null;
+            try {
+              const shopQuery = `
+                query {
+                  shop {
+                    email
+                    name
+                  }
+                }
+              `;
+              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+                method: 'POST',
+                headers: {
+                  'X-Shopify-Access-Token': shopRecord.accessToken,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: shopQuery }),
+              });
+              
+              if (shopResponse.ok) {
+                const shopData = await shopResponse.json();
+                shopEmail = shopData.data?.shop?.email || null;
+              }
+            } catch (emailFetchError) {
+              console.warn('[SUBSCRIPTION-UPDATE] Could not fetch shop email:', emailFetchError.message);
+            }
+            
+            const storeWithSubscription = {
+              ...shopRecord,
+              _id: shopRecord._id,
+              email: shopEmail || shopRecord.email,
+              shopOwner: shopEmail || shopRecord.shopOwner,
+              subscription: updatedSubscription
+            };
+            
+            const result = await emailService.sendWelcomeEmail(storeWithSubscription);
+            if (result.success) {
+              if (result.skipped) {
+                console.log('[SUBSCRIPTION-UPDATE] Welcome email skipped:', result.reason);
+              } else {
+                console.log('[SUBSCRIPTION-UPDATE] ✅ Welcome email sent successfully');
+              }
+            } else {
+              console.error('[SUBSCRIPTION-UPDATE] ❌ Welcome email failed:', result.error);
+            }
+          } catch (emailError) {
+            console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to send welcome email:', emailError.message);
+            // Don't throw - email failure shouldn't block subscription activation
+          }
+        }).catch(error => {
+          console.error('[SUBSCRIPTION-UPDATE] ❌ Error loading email service:', error.message);
+        });
       }
       
     } else if (status === 'CANCELLED' || status === 'DECLINED') {
