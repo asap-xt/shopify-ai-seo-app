@@ -537,39 +537,6 @@ if (!IS_PROD) {
     }
   });
 
-  // Reset unsubscribe status endpoint (for testing)
-  app.post('/api/test/reset-unsubscribe', async (req, res) => {
-    try {
-      const { shop } = req.body;
-      if (!shop) {
-        return res.status(400).json({ success: false, error: 'shop parameter is required' });
-      }
-
-      const Shop = (await import('./db/Shop.js')).default;
-      const shopRecord = await Shop.findOne({ shop });
-      
-      if (!shopRecord) {
-        return res.status(404).json({ success: false, error: 'Shop not found' });
-      }
-
-      // Reset to subscribed
-      shopRecord.emailPreferences = shopRecord.emailPreferences || {};
-      shopRecord.emailPreferences.marketingEmails = true;
-      shopRecord.emailPreferences.unsubscribedAt = null;
-      await shopRecord.save();
-
-      console.log(`[TEST] ✅ Reset unsubscribe status for ${shop} - now subscribed`);
-
-      res.json({ 
-        success: true, 
-        message: `Shop ${shop} reset to subscribed status`,
-        emailPreferences: shopRecord.emailPreferences
-      });
-    } catch (error) {
-      console.error('[TEST] Error resetting unsubscribe:', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
 
 
   // Test email endpoint
@@ -2368,6 +2335,40 @@ if (!IS_PROD) {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
       res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+    });
+
+    // Reset unsubscribe status endpoint (for testing)
+    app.post('/api/test/reset-unsubscribe', async (req, res) => {
+      try {
+        const { shop } = req.body;
+        if (!shop) {
+          return res.status(400).json({ success: false, error: 'shop parameter is required' });
+        }
+
+        const Shop = (await import('./db/Shop.js')).default;
+        const shopRecord = await Shop.findOne({ shop });
+        
+        if (!shopRecord) {
+          return res.status(404).json({ success: false, error: 'Shop not found' });
+        }
+
+        // Reset to subscribed
+        shopRecord.emailPreferences = shopRecord.emailPreferences || {};
+        shopRecord.emailPreferences.marketingEmails = true;
+        shopRecord.emailPreferences.unsubscribedAt = null;
+        await shopRecord.save();
+
+        console.log(`[TEST] ✅ Reset unsubscribe status for ${shop} - now subscribed`);
+
+        res.json({ 
+          success: true, 
+          message: `Shop ${shop} reset to subscribed status`,
+          emailPreferences: shopRecord.emailPreferences
+        });
+      } catch (error) {
+        console.error('[TEST] Error resetting unsubscribe:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
     });
 
     // Unsubscribe endpoint (must be before catch-all, public endpoint - no auth required)
