@@ -479,15 +479,25 @@ class EmailService {
   }
 
   getBillingUrl(shop) {
-    // Get APP_URL from environment - required, no fallback
-    const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
-    if (!appUrl) {
-      console.warn('⚠️ APP_URL not set in environment variables');
-      return `https://app.indexaize.com/billing?shop=${shop}`; // Fallback to production domain
+    // For embedded Shopify apps, use Shopify admin URL structure
+    // This ensures the link works correctly when clicked from email
+    const appId = process.env.SHOPIFY_API_KEY;
+    if (!appId) {
+      console.warn('⚠️ SHOPIFY_API_KEY not set');
+      // Fallback to app URL if no API key
+      const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
+      if (appUrl) {
+        const baseUrl = appUrl.replace(/\/$/, '');
+        return `${baseUrl}/billing?shop=${shop}`;
+      }
+      return `https://app.indexaize.com/billing?shop=${shop}`;
     }
-    // Remove trailing slash if present
-    const baseUrl = appUrl.replace(/\/$/, '');
-    return `${baseUrl}/billing?shop=${shop}`;
+    
+    // Extract shop name (remove .myshopify.com)
+    const shopName = shop.replace('.myshopify.com', '');
+    
+    // Use Shopify admin URL structure for embedded apps
+    return `https://admin.shopify.com/store/${shopName}/apps/${appId}/billing`;
   }
 
   getTopProvider(aiQueryHistory) {
