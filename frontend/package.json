@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "echo '=== BUILD START ===' && npx vite build && echo '=== BUILD END ===' && ls -la dist/assets/ | head -10",
+    "build": "echo '=== BUILD START ===' && ./node_modules/.bin/vite build && echo '=== BUILD END ===' && ls -la dist/assets/ | head -10",
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
