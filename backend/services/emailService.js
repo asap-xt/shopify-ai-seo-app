@@ -109,6 +109,8 @@ class EmailService {
         subject: `Welcome to indexAIze - Unlock AI Search`,
         html: this.getWelcomeEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           shopUrl: `https://${store.shop}`,
           dashboardUrl: this.getDashboardUrl(store.shop),
           planName,
@@ -252,6 +254,8 @@ class EmailService {
         subject: 'Unlock AI-Enhanced Features with Tokens',
         html: this.getTokenPurchaseEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           planName,
           planKey,
           planFeatures,
@@ -291,6 +295,8 @@ class EmailService {
         subject: `⏰ Your trial expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}!`,
         html: this.getTrialExpiringEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           daysLeft,
           productsOptimized: subscription.usage?.productsOptimized || 0,
           upgradeUrl: this.getBillingUrl(store.shop),
@@ -329,6 +335,8 @@ class EmailService {
         subject: 'We\'d love your feedback!',
         html: this.getUninstallFollowupEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           uninstallReason: reason,
           feedbackUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/feedback?shop=${store.shop}`,
           reinstallUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/?shop=${store.shop}`,
@@ -364,6 +372,8 @@ class EmailService {
         subject: '📊 Your weekly SEO report',
         html: this.getWeeklyDigestEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           weeklyStats: {
             productsOptimized: stats.productsOptimized || 0,
             aiQueriesUsed: stats.aiQueries || 0,
@@ -404,6 +414,8 @@ class EmailService {
         subject: '🎉 Upgrade successful!',
         html: this.getUpgradeSuccessEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           oldPlan: subscription.previousPlan || 'starter',
           newPlan: newPlan,
           newFeatures: await this.getPlanFeatures(newPlan),
@@ -439,6 +451,8 @@ class EmailService {
         subject: 'We miss you! 🎁',
         html: this.getReengagementEmailTemplate({
           shopName,
+          shop: store.shop,
+          email: store.email,
           daysSinceActive: daysSinceLastActive,
           incentive: '50% off next month if you upgrade this week!',
           dashboardUrl: this.getDashboardUrl(store.shop),
@@ -489,6 +503,25 @@ class EmailService {
     // Remove trailing slash if present
     const baseUrl = appUrl.replace(/\/$/, '');
     return `${baseUrl}/billing?shop=${shop}`;
+  }
+
+  getUnsubscribeUrl(shop, email) {
+    // Generate unsubscribe URL with shop and email parameters
+    const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
+    const baseUrl = appUrl ? appUrl.replace(/\/$/, '') : 'https://app.indexaize.com';
+    
+    // Encode email for URL safety
+    const encodedEmail = encodeURIComponent(email || '');
+    return `${baseUrl}/api/email/unsubscribe?shop=${shop}&email=${encodedEmail}`;
+  }
+
+  getUnsubscribeFooter(shop, email) {
+    const unsubscribeUrl = this.getUnsubscribeUrl(shop, email);
+    return `
+      <p style="margin: 15px 0 0; color: #94a3b8; font-size: 11px; line-height: 1.5; text-align: center;">
+        <a href="${unsubscribeUrl}" style="color: #94a3b8; text-decoration: underline;">Unsubscribe</a> from marketing emails
+      </p>
+    `;
   }
 
   getTopProvider(aiQueryHistory) {
@@ -743,9 +776,10 @@ class EmailService {
                 <!-- Footer -->
                 <tr>
                   <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
-                    <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.6;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
                       <strong style="color: #1e40af;">indexAIze Team</strong>
                     </p>
+                    ${this.getUnsubscribeFooter(data.shop, data.email)}
                   </td>
                 </tr>
               </table>
@@ -789,6 +823,13 @@ class EmailService {
           </div>
           
           <p>Questions? Reply to this email!</p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
         </div>
       </body>
       </html>
@@ -824,6 +865,13 @@ class EmailService {
           </div>
           
           <p>Questions? Email us at <a href="mailto:${data.supportEmail}">${data.supportEmail}</a></p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
         </div>
       </body>
       </html>
@@ -863,6 +911,13 @@ class EmailService {
               View Dashboard
             </a>
           </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
         </div>
       </body>
       </html>
@@ -897,6 +952,13 @@ class EmailService {
               Start Using New Features
             </a>
           </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
         </div>
       </body>
       </html>
@@ -926,6 +988,13 @@ class EmailService {
           </div>
           
           <p>Need help? <a href="${data.supportUrl}">Contact Support</a></p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
         </div>
       </body>
       </html>
