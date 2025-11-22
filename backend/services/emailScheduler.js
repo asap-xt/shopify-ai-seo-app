@@ -106,7 +106,7 @@ class EmailScheduler {
           continue;
         }
 
-        // Send token purchase email
+        // Send token purchase email (store already has accessToken from Shop model)
         await emailService.sendTokenPurchaseEmail({ ...store, subscription });
         await this.delay(1000); // 1 second delay between emails
       }

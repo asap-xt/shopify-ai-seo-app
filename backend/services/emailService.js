@@ -187,9 +187,45 @@ class EmailService {
         }
       }
 
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
       const subscription = store.subscription || {};
       const planKey = subscription.plan || 'starter';
+      
+      // Fetch shop name and email from Shopify API
+      let shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      let shopEmail = store.email || store.shopOwner;
+      
+      if (store.shop && store.accessToken) {
+        try {
+          const shopQuery = `
+            query {
+              shop {
+                name
+                email
+              }
+            }
+          `;
+          const shopResponse = await fetch(`https://${store.shop}/admin/api/2025-07/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': store.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: shopQuery }),
+          });
+          
+          if (shopResponse.ok) {
+            const shopData = await shopResponse.json();
+            if (shopData.data?.shop?.name) {
+              shopName = shopData.data.shop.name;
+            }
+            if (shopData.data?.shop?.email) {
+              shopEmail = shopData.data.shop.email;
+            }
+          }
+        } catch (shopFetchError) {
+          console.warn('[EMAIL] Could not fetch shop name:', shopFetchError.message);
+        }
+      }
       
       // Get plan features
       const planFeatures = await this.getPlanFeatures(planKey);
@@ -211,7 +247,7 @@ class EmailService {
       }
       
       const msg = {
-        to: store.email || store.shopOwner || `${shopName}@example.com`,
+        to: shopEmail || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
         subject: 'Unlock AI-Enhanced Features with Tokens',
         html: this.getTokenPurchaseEmailTemplate({
@@ -219,7 +255,7 @@ class EmailService {
           planName,
           planKey,
           planFeatures,
-          billingUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/billing?shop=${store.shop}`,
+          billingUrl: this.getBillingUrl(store.shop),
           logoUrl: 'cid:logo'
         }),
         attachments: attachments
@@ -257,7 +293,7 @@ class EmailService {
           shopName,
           daysLeft,
           productsOptimized: subscription.usage?.productsOptimized || 0,
-          upgradeUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/billing?shop=${store.shop}`,
+          upgradeUrl: this.getBillingUrl(store.shop),
           stats: {
             totalOptimizations: store.analytics?.totalAIQueries || 0,
             topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
@@ -440,6 +476,18 @@ class EmailService {
     // Remove trailing slash if present
     const baseUrl = appUrl.replace(/\/$/, '');
     return `${baseUrl}/dashboard?shop=${shop}`;
+  }
+
+  getBillingUrl(shop) {
+    // Get APP_URL from environment - required, no fallback
+    const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
+    if (!appUrl) {
+      console.warn('⚠️ APP_URL not set in environment variables');
+      return `https://app.indexaize.com/billing?shop=${shop}`; // Fallback to production domain
+    }
+    // Remove trailing slash if present
+    const baseUrl = appUrl.replace(/\/$/, '');
+    return `${baseUrl}/billing?shop=${shop}`;
   }
 
   getTopProvider(aiQueryHistory) {

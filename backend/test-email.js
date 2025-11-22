@@ -70,17 +70,32 @@ async function testEmail() {
   console.log('📧 Test Email:', testStore.email);
   console.log('⚠️  Ако е "test@example.com", промени го в test-email.js или задай TEST_EMAIL env variable!\n');
   
-  // Тествай само Welcome Email
-  console.log('📨 Testing Welcome Email...');
+  // Get email type from command line argument or default to welcome
+  const emailType = process.argv[2] || 'welcome';
+  
+  console.log(`📨 Testing ${emailType} Email...`);
   try {
-    const result = await emailService.sendWelcomeEmail(testStore);
+    let result;
+    switch(emailType) {
+      case 'welcome':
+        result = await emailService.sendWelcomeEmail(testStore);
+        break;
+      case 'token-purchase':
+        result = await emailService.sendTokenPurchaseEmail(testStore);
+        break;
+      default:
+        console.log(`❌ Unknown email type: ${emailType}`);
+        console.log('💡 Available types: welcome, token-purchase');
+        process.exit(1);
+    }
+    
     if (result.success) {
-      console.log('✅ Welcome Email sent successfully!\n');
+      console.log(`✅ ${emailType} Email sent successfully!\n`);
     } else {
-      console.log('❌ Welcome Email failed:', result.error, '\n');
+      console.log(`❌ ${emailType} Email failed:`, result.error, '\n');
     }
   } catch (error) {
-    console.error('❌ Error sending Welcome Email:', error.message, '\n');
+    console.error(`❌ Error sending ${emailType} Email:`, error.message, '\n');
   }
   
   console.log('='.repeat(50));
