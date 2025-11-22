@@ -311,16 +311,57 @@ router.get('/callback', async (req, res) => {
       scopes: shopRecord.scopes
     });
 
-    // 7) Register webhooks (non-blocking)
+    // 7) Add to SendGrid list (non-blocking)
+    // Fetch shop email and add to SendGrid App Users list
+    import('../services/sendgridListsService.js').then(async (sendgridModule) => {
+      const sendgridListsService = sendgridModule.default;
+      try {
+        // Fetch shop email from Shopify API
+        const shopQuery = `
+          query {
+            shop {
+              email
+              name
+            }
+          }
+        `;
+        const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: shopQuery }),
+        });
+        
+        if (shopResponse.ok) {
+          const shopData = await shopResponse.json();
+          const shopEmail = shopData.data?.shop?.email;
+          const shopName = shopData.data?.shop?.name;
+          
+          if (shopEmail) {
+            await sendgridListsService.addToAppUsersList(shopEmail, shop, shopName);
+          } else {
+            console.warn('[AUTH] Shop email not found in Shopify API response');
+          }
+        }
+      } catch (error) {
+        console.error('[AUTH] Failed to add to SendGrid list:', error.message);
+      }
+    }).catch(error => {
+      console.error('[AUTH] SendGrid list service error:', error.message);
+    });
+
+    // 8) Register webhooks (non-blocking)
     registerWebhooks(shop, accessToken).catch(error => {
       console.error('[AUTH] Webhook registration failed:', error.message);
     });
 
 
-    // 8) Clear state cookie
+    // 9) Clear state cookie
     res.clearCookie('shopify_oauth_state');
 
-    // 9) Check for active subscription
+    // 10) Check for active subscription
     console.log('[AUTH] Checking for active subscription...');
     const subscription = await Subscription.findOne({ shop }).lean();
     
@@ -335,7 +376,7 @@ router.get('/callback', async (req, res) => {
       hasActive: hasActiveSubscription
     });
 
-    // 10) Redirect to appropriate page
+    // 11) Redirect to appropriate page
     const finalHost = host
       ? host.toString()
       : base64UrlEncode(`${shop}/admin`);

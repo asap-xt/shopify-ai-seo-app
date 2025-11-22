@@ -2358,6 +2358,15 @@ if (!IS_PROD) {
         shopRecord.emailPreferences.unsubscribedAt = null;
         await shopRecord.save();
 
+        // Remove from SendGrid suppression list (non-blocking)
+        const sendgridListsService = (await import('./services/sendgridListsService.js')).default;
+        const emailToResubscribe = shopRecord.email || shopRecord.shopOwner;
+        if (emailToResubscribe) {
+          sendgridListsService.removeFromSuppressionList(emailToResubscribe).catch(error => {
+            console.error('[TEST] Failed to remove from SendGrid suppression list:', error.message);
+          });
+        }
+
         console.log(`[TEST] ✅ Reset unsubscribe status for ${shop} - now subscribed`);
 
         res.json({ 
@@ -2398,7 +2407,16 @@ if (!IS_PROD) {
         shopRecord.emailPreferences.unsubscribedAt = new Date();
         await shopRecord.save();
 
-        console.log(`[UNSUBSCRIBE] ✅ Shop ${shop} (${email}) unsubscribed from marketing emails`);
+        // Add to SendGrid suppression list (non-blocking)
+        const sendgridListsService = (await import('./services/sendgridListsService.js')).default;
+        const emailToUnsubscribe = email || shopRecord.email || shopRecord.shopOwner;
+        if (emailToUnsubscribe) {
+          sendgridListsService.addToSuppressionList(emailToUnsubscribe, shop).catch(error => {
+            console.error('[UNSUBSCRIBE] Failed to add to SendGrid suppression list:', error.message);
+          });
+        }
+
+        console.log(`[UNSUBSCRIBE] ✅ Shop ${shop} (${emailToUnsubscribe || 'N/A'}) unsubscribed from marketing emails`);
 
         // Return a simple HTML confirmation page
         res.send(`
