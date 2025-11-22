@@ -537,72 +537,6 @@ if (!IS_PROD) {
     }
   });
 
-  // Unsubscribe endpoint
-  app.get('/api/email/unsubscribe', async (req, res) => {
-    try {
-      const { shop, email } = req.query;
-      
-      if (!shop) {
-        return res.status(400).send('Missing shop parameter');
-      }
-
-      const Shop = (await import('./db/Shop.js')).default;
-      const shopRecord = await Shop.findOne({ shop });
-      
-      if (!shopRecord) {
-        return res.status(404).send('Shop not found');
-      }
-
-      // Set email preferences to unsubscribe from marketing emails
-      // For now, we'll add a flag to the shop record
-      // In the future, you might want a separate EmailPreferences model
-      shopRecord.emailPreferences = shopRecord.emailPreferences || {};
-      shopRecord.emailPreferences.marketingEmails = false;
-      shopRecord.emailPreferences.unsubscribedAt = new Date();
-      await shopRecord.save();
-
-      console.log(`[UNSUBSCRIBE] Shop ${shop} (${email}) unsubscribed from marketing emails`);
-
-      // Return a simple HTML confirmation page
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Unsubscribed</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              max-width: 600px;
-              margin: 50px auto;
-              padding: 20px;
-              text-align: center;
-            }
-            .success {
-              background: #d1fae5;
-              border: 1px solid #10b981;
-              border-radius: 8px;
-              padding: 30px;
-              color: #065f46;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="success">
-            <h2>✓ Successfully Unsubscribed</h2>
-            <p>You have been unsubscribed from marketing emails.</p>
-            <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
-              You will still receive important transactional emails related to your account.
-            </p>
-          </div>
-        </body>
-        </html>
-      `);
-    } catch (error) {
-      console.error('[UNSUBSCRIBE] Error:', error);
-      res.status(500).send('Failed to process unsubscribe request');
-    }
-  });
 
   // Test email endpoint
   app.get('/api/test/email/:type', async (req, res) => {
@@ -2400,6 +2334,71 @@ if (!IS_PROD) {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private, no-transform');
       res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+    });
+
+    // Unsubscribe endpoint (must be before catch-all)
+    app.get('/api/email/unsubscribe', async (req, res) => {
+      try {
+        const { shop, email } = req.query;
+        
+        if (!shop) {
+          return res.status(400).send('Missing shop parameter');
+        }
+
+        const Shop = (await import('./db/Shop.js')).default;
+        const shopRecord = await Shop.findOne({ shop });
+        
+        if (!shopRecord) {
+          return res.status(404).send('Shop not found');
+        }
+
+        // Set email preferences to unsubscribe from marketing emails
+        shopRecord.emailPreferences = shopRecord.emailPreferences || {};
+        shopRecord.emailPreferences.marketingEmails = false;
+        shopRecord.emailPreferences.unsubscribedAt = new Date();
+        await shopRecord.save();
+
+        console.log(`[UNSUBSCRIBE] Shop ${shop} (${email}) unsubscribed from marketing emails`);
+
+        // Return a simple HTML confirmation page
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Unsubscribed</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                max-width: 600px;
+                margin: 50px auto;
+                padding: 20px;
+                text-align: center;
+              }
+              .success {
+                background: #d1fae5;
+                border: 1px solid #10b981;
+                border-radius: 8px;
+                padding: 30px;
+                color: #065f46;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="success">
+              <h2>✓ Successfully Unsubscribed</h2>
+              <p>You have been unsubscribed from marketing emails.</p>
+              <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+                You will still receive important transactional emails related to your account.
+              </p>
+            </div>
+          </body>
+          </html>
+        `);
+      } catch (error) {
+        console.error('[UNSUBSCRIBE] Error:', error);
+        res.status(500).send('Failed to process unsubscribe request');
+      }
     });
 
     // Catch-all for any unmatched routes - MUST be last
