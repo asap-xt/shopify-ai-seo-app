@@ -1,26 +1,11 @@
 // CRITICAL: Log immediately when this file loads (before any imports)
 // FORCE REBUILD: 2025-11-19 23:05 - Remove IIFE, use direct top-level code for ES modules
 // In ES modules, top-level code executes immediately
-console.log('[MAIN] ===== main.jsx FILE LOADED =====');
-console.log('[MAIN] Build timestamp: 2025-11-19T23:05:00Z');
-console.log('[MAIN] Timestamp:', new Date().toISOString());
-console.log('[MAIN] window.__SHOPIFY_API_KEY:', window.__SHOPIFY_API_KEY);
-console.log('[MAIN] document.readyState:', document.readyState);
-console.log('[MAIN] window.location.href:', window.location.href);
-console.log('[MAIN] About to import React...');
 
 import React, { useMemo, useState, useEffect } from 'react';
-console.log('[MAIN] ✅ React imported');
-
 import { createRoot } from 'react-dom/client';
-console.log('[MAIN] ✅ createRoot imported');
-
 import App from './App.jsx';
-console.log('[MAIN] ✅ App imported');
-
 import { devLog, devError } from './utils/devLog.js';
-console.log('[MAIN] ✅ devLog imported');
-console.log('[MAIN] ✅ All imports successful');
 
 // Get URL parameters
 const params = new URLSearchParams(window.location.search);
@@ -29,11 +14,6 @@ const shop = params.get('shop');
 
 // Check if we're embedded in Shopify Admin
 const embedded = params.get('embedded') === '1';
-
-// ALWAYS log - even if devLog doesn't work
-console.log('[MAIN] Public App - Host:', host, 'Shop:', shop);
-console.log('[MAIN] Full URL:', window.location.href);
-console.log('[MAIN] Embedded:', embedded);
 
 devLog('[MAIN] Public App - Host:', host, 'Shop:', shop);
 devLog('[MAIN] Full URL:', window.location.href);
@@ -117,26 +97,26 @@ function ShopifyAppBridgeWrapper() {
   
   // App Bridge v4 doesn't need Provider - it's initialized via script tag in HTML
   // getSessionToken() works without Provider because App Bridge is global
-  console.log('[MAIN] Rendering App, apiKey:', apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING', 'host:', host);
+  devLog('[MAIN] Rendering App, apiKey:', apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING', 'host:', host);
   return <App />;
 }
 
 // Render the app
-console.log('[MAIN] ===== ATTEMPTING TO RENDER APP =====');
-console.log('[MAIN] root element exists:', !!document.getElementById('root'));
+devLog('[MAIN] ===== ATTEMPTING TO RENDER APP =====');
+devLog('[MAIN] root element exists:', !!document.getElementById('root'));
 
 try {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
-    console.error('[MAIN] ❌ Root element not found!');
+    devError('[MAIN] ❌ Root element not found!');
   } else {
-    console.log('[MAIN] ✅ Root element found, creating React root...');
+    devLog('[MAIN] ✅ Root element found, creating React root...');
     const root = createRoot(rootElement);
-    console.log('[MAIN] ✅ React root created, rendering component...');
+    devLog('[MAIN] ✅ React root created, rendering component...');
     root.render(<ShopifyAppBridgeWrapper />);
-    console.log('[MAIN] ✅ Component rendered successfully!');
+    devLog('[MAIN] ✅ Component rendered successfully!');
   }
 } catch (error) {
-  console.error('[MAIN] ❌ ERROR RENDERING APP:', error);
-  console.error('[MAIN] Error stack:', error.stack);
+  devError('[MAIN] ❌ ERROR RENDERING APP:', error);
+  devError('[MAIN] Error stack:', error.stack);
 }

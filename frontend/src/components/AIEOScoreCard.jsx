@@ -336,11 +336,8 @@ export default function AIEOScoreCard({
 
   // Safety check - ensure calculatedAIEOScore exists
   if (!calculatedAIEOScore) {
-    console.error('[AIEOScoreCard] calculatedAIEOScore is null/undefined');
     return null;
   }
-
-  console.log('[AIEOScoreCard] Rendering with score:', calculatedAIEOScore.score);
 
   return (
     <Card>

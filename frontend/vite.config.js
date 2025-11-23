@@ -7,6 +7,13 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     emptyOutDir: true, // Always clear dist before build to prevent old files
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove all console.* calls in production
+        drop_debugger: true
+      }
+    },
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash].js`,

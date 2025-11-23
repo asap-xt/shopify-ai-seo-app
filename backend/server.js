@@ -1834,7 +1834,6 @@ if (!IS_PROD) {
             const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
             </script>
             <meta name="shopify-api-key" content="${apiKey}">
           `;
@@ -2487,7 +2486,6 @@ if (!IS_PROD) {
           const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
               console.log('[SERVER] Cache bust:', '${cacheBust}');
             </script>
           `;

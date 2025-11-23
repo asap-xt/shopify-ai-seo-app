@@ -68,7 +68,7 @@ function useRoute() {
   useEffect(() => {
     const handleLocationChange = () => {
       const normalized = normalizePath(window.location.pathname);
-      console.log('[useRoute] Location changed to:', normalized);
+      devLog('[useRoute] Location changed to:', normalized);
       setPath(normalized);
       
       // Track page view in GA4
@@ -176,7 +176,7 @@ const DashboardCard = React.memo(({ shop }) => {
     `;
     runGQL(Q, { shop: currentShop })
       .then((d) => { const pm = d?.plansMe; if (pm) setPlan(pm); })
-      .catch((e) => console.error('Failed to load plan via GraphQL:', e));
+      .catch((e) => devLog('Failed to load plan via GraphQL:', e));
   }, [currentShop, apiSession]);
 
 //   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
@@ -300,7 +300,7 @@ function SingleProductPanel({ shop }) {
         // default selected language:
         setLanguage(showSel ? (language && effective.includes(language) ? language : effective[0]) : primary);
       } catch (e) {
-        console.error('Failed to load languages:', e);
+        devLog('Failed to load languages:', e);
         setShowLanguageSelector(true);
       }
     })();
@@ -318,7 +318,7 @@ function SingleProductPanel({ shop }) {
       shop: s,
       body: { shop: s }
     })
-    .catch(err => console.error('Failed to init collection metafields:', err));
+    .catch(err => devLog('Failed to init collection metafields:', err));
   }, [shop]);
 
   const handleGenerate = async () => {
@@ -369,7 +369,7 @@ function SingleProductPanel({ shop }) {
     } catch (e) {
       const msg = e?.message || 'Failed to generate SEO';
       setToast(msg);
-      console.error(e);
+      devLog('Error:', e);
     } finally {
       setLoading(false);
     }
@@ -456,7 +456,7 @@ function SingleProductPanel({ shop }) {
     } catch (e) {
       const msg = e?.message || 'Failed to apply SEO';
       setToast(msg);
-      console.error('Apply error:', e);
+      devLog('Apply error:', e);
     } finally {
       setLoading(false);
     }
@@ -720,15 +720,9 @@ export default function App() {
 
   // Token exchange logic
   useEffect(() => {
-    // ALWAYS log - even if devLog doesn't work
-    console.log('[APP] ===== useEffect triggered =====');
-    console.log('[APP] Shop:', shop);
-    console.log('[APP] Plan state:', plan);
-    console.log('[APP] Current path:', window.location.pathname);
+    devLog('[APP] useEffect triggered, shop:', shop, 'path:', window.location.pathname);
     
     const handleTokenExchange = async () => {
-      // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] ===== handleTokenExchange called =====');
       const urlParams = new URLSearchParams(window.location.search);
       const shop = urlParams.get('shop');
       const idToken = urlParams.get('id_token');
@@ -736,11 +730,6 @@ export default function App() {
       // Първо направи token exchange ако има id_token
       if (shop && idToken) {
         try {
-          console.log('[APP] ===== Starting token exchange =====');
-          console.log('[APP] Shop:', shop);
-          console.log('[APP] ID Token present:', !!idToken);
-          console.log('[APP] ID Token length:', idToken ? idToken.length : 0);
-          
           devLog('[APP] Performing initial token exchange for shop:', shop);
           
           const response = await fetch('/token-exchange', {
@@ -754,19 +743,13 @@ export default function App() {
             })
           });
 
-          console.log('[APP] Token exchange response status:', response.status);
-          console.log('[APP] Token exchange response ok:', response.ok);
-
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
-            console.error('[APP] Token exchange failed:', errorData);
-            console.error('[APP] Response status:', response.status);
-            console.error('[APP] Response statusText:', response.statusText);
+            devLog('[APP] Token exchange failed:', errorData);
             // Don't return - try to load data anyway
-            console.log('[APP] Continuing despite token exchange failure...');
           } else {
             const result = await response.json();
-            console.log('[APP] ✅ Token exchange successful');
+            devLog('[APP] Token exchange successful');
             devLog('[APP] Token exchange successful:', result);
           }
           
@@ -779,7 +762,7 @@ export default function App() {
           await loadInitialData(shop);
           
         } catch (error) {
-          console.error('[APP] Token exchange error:', error);
+          devLog('[APP] Token exchange error:', error);
           // Fallback: Try to load data anyway
           if (shop) {
             devLog('[APP] Token exchange failed, trying to load data anyway...');
@@ -793,13 +776,10 @@ export default function App() {
     };
     
     const loadInitialData = async (shop) => {
-      // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] ===== loadInitialData called =====');
-      console.log('[APP] Shop parameter:', shop);
-      console.log('[APP] Current plan state:', plan);
+      devLog('[APP] loadInitialData called for shop:', shop);
       
       if (!shop) {
-        console.error('[APP] ❌ No shop provided, cannot load data');
+        devLog('[APP] No shop provided, cannot load data');
         return;
       }
       
@@ -826,14 +806,8 @@ export default function App() {
             }
           }
         `;
-        // ALWAYS log - even if devLog doesn't work
-        console.log('[APP] Making GraphQL request to /graphql for shop:', shop);
-        console.log('[APP] Full URL:', window.location.href);
-        console.log('[APP] GraphQL query:', Q);
-        console.log('[APP] GraphQL variables:', { shop });
         
         const graphqlUrl = '/graphql';
-        console.log('[APP] Fetching from:', graphqlUrl);
         
         devLog('[APP] Making GraphQL request to /graphql for shop:', shop);
         devLog('[APP] Full URL:', window.location.href);
@@ -841,9 +815,6 @@ export default function App() {
         devLog('[APP] GraphQL variables:', { shop });
         devLog('[APP] Fetching from:', graphqlUrl);
         
-        console.log('[APP] About to fetch GraphQL, URL:', graphqlUrl);
-        console.log('[APP] Request body:', JSON.stringify({ query: Q, variables: { shop } }));
-        console.log('[APP] Full request URL:', window.location.origin + graphqlUrl);
         
         const fetchStartTime = Date.now();
         const plansResponse = await fetch(graphqlUrl, {
@@ -853,11 +824,7 @@ export default function App() {
         });
         const fetchDuration = Date.now() - fetchStartTime;
         
-        console.log('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
-        console.log('[APP] Response headers:', Object.fromEntries(plansResponse.headers.entries()));
-        
-        devLog('[APP] GraphQL response status:', plansResponse.status);
-        devLog('[APP] GraphQL response headers:', Object.fromEntries(plansResponse.headers.entries()));
+        devLog('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
         
         if (plansResponse.status === 202) {
           // Token exchange required - но това не трябва да се случва ако token exchange е направен на сървъра
@@ -896,7 +863,7 @@ export default function App() {
         
         if (!plansResponse.ok) {
           const errorText = await plansResponse.text();
-          console.error('[APP] Failed to load plans:', plansResponse.status, errorText);
+          devLog('[APP] Failed to load plans:', plansResponse.status, errorText);
           
           // Fallback: Set default plan and redirect to billing
           const defaultPlan = {
@@ -938,7 +905,7 @@ export default function App() {
           try {
             sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
           } catch (e) {
-            console.error('[APP] Failed to cache plan:', e);
+            devLog('[APP] Failed to cache plan:', e);
           }
           
           // CRITICAL: Redirect to billing if subscription is pending
@@ -954,7 +921,7 @@ export default function App() {
             try {
               localStorage.removeItem(`onboardingOpen_${shop}`);
             } catch (e) {
-              console.error('[APP] Failed to clear onboarding state:', e);
+              devLog('[APP] Failed to clear onboarding state:', e);
             }
             
             const params = new URLSearchParams(window.location.search);
@@ -966,7 +933,7 @@ export default function App() {
         }
         
       } catch (error) {
-        console.error('[APP] Error loading initial data:', error);
+        devLog('[APP] Error loading initial data:', error);
         
         // Fallback: Set default plan and redirect to billing to prevent infinite loading
         const shop = new URLSearchParams(window.location.search).get('shop');
@@ -1077,7 +1044,7 @@ export default function App() {
     // If plan is not loaded after 5 seconds, set timeout flag
     const timer = setTimeout(() => {
       if (!plan) {
-        console.warn('[APP] ⚠️ Plan not loaded after 5 seconds, setting timeout flag');
+        devLog('[APP] Plan not loaded after 5 seconds, setting timeout flag');
         setLoadingTimeout(true);
       }
     }, 5000);
@@ -1101,7 +1068,7 @@ export default function App() {
   
   // If timeout reached and no plan, show error or redirect to billing
   if (!plan && loadingTimeout) {
-    console.error('[APP] ❌ Plan loading timeout - redirecting to billing');
+    devLog('[APP] Plan loading timeout - redirecting to billing');
     const params = new URLSearchParams(window.location.search);
     const shop = params.get('shop');
     const host = params.get('host');

@@ -1,0 +1,102 @@
+📧 EMAIL TESTING GUIDE
+=====================
+
+🎯 КАК ДА ТЕСТВАМЕ:
+------------------
+
+1. Тест скрипт (най-лесно):
+   - Отвори backend/test-email.js
+   - Промени email: 'твоя-реален-email@example.com' на ред 45
+   - Пусни: node backend/test-email.js
+   - Провери inbox (и spam папка)
+
+2. API Endpoint (development only):
+   GET /api/test/email/:type?shop=xxx
+   
+   Типове:
+   - welcome
+   - onboarding  
+   - trial
+   - weekly
+   - upgrade
+   - reengagement
+
+📬 КАКВО ТОЧНО СЕ ИЗПРАЩА:
+------------------------
+
+1. WELCOME EMAIL
+   Subject: 🚀 Welcome to AI SEO 2.0!
+   Съдържание:
+   - Поздравление
+   - Trial details (план, AI провайдъри, лимит, дни)
+   - Бутон "Go to Dashboard"
+   - Next Steps (3 стъпки)
+
+2. ONBOARDING - Day 1
+   Subject: 🚀 Let's optimize your first products!
+   Съдържание:
+   - Tips (sync products, choose provider, run optimization)
+   - Progress (products optimized, AI queries)
+   - Бутон "Continue Optimizing"
+
+3. ONBOARDING - Day 3
+   Subject: 📊 Check your SEO improvements
+   Съдържание:
+   - Tips (view analytics, see optimized, compare)
+   - Progress update
+   - Бутон "Continue Optimizing"
+
+4. ONBOARDING - Day 7
+   Subject: 🎯 Maximize your AI SEO results
+   Съдържание:
+   - Advanced tips (auto-sync, bulk, upgrade)
+   - Progress update
+   - Бутон "Continue Optimizing"
+
+5. TRIAL EXPIRING (3 дни)
+   Subject: ⏰ Your trial expires in 3 days!
+   Съдържание:
+   - Предупреждение
+   - Stats (products, optimizations, provider)
+   - Бутон "Upgrade Now"
+
+6. TRIAL EXPIRING (1 ден)
+   Subject: ⏰ Your trial expires in 1 day!
+   Съдържание:
+   - Последно напомняне
+   - Stats
+   - Бутон "Upgrade Now"
+
+7. WEEKLY DIGEST
+   Subject: 📊 Your weekly SEO report
+   Съдържание:
+   - Weekly stats (products, queries, improvement %)
+   - Weekly tips
+   - Бутон "View Dashboard"
+
+8. RE-ENGAGEMENT
+   Subject: We miss you! 🎁
+   Съдържание:
+   - Напомняне за неактивност
+   - Special offer (50% off)
+   - Бутон "Return to Dashboard"
+
+9. UNINSTALL FOLLOW-UP
+   Subject: We'd love your feedback!
+   Съдържание:
+   - Feedback request
+   - Бутон "Share Feedback"
+   - Бутон "Reinstall App"
+
+10. UPGRADE SUCCESS
+    Subject: 🎉 Upgrade successful!
+    Съдържание:
+    - Congratulations
+    - New features списък
+    - Бутон "Start Using New Features"
+
+✅ ПРОВЕРКА:
+-----------
+- Провери SendGrid Activity: https://app.sendgrid.com/activity
+- Провери inbox (и spam папка)
+- Провери email logs в MongoDB (EmailLog collection)
