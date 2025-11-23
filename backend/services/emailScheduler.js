@@ -86,21 +86,23 @@ class EmailScheduler {
       const EmailLog = (await import('../db/EmailLog.js')).default;
       const TokenBalance = (await import('../db/TokenBalance.js')).default;
       
-      // Find stores installed exactly 72 hours ago (3 days)
-      // Using a 2-hour window (71-73 hours) to account for cron timing variations
+      // Find stores installed 3-4 days ago (72-96 hours)
+      // Check all stores from the last 24 hours that are now 3+ days old
+      // This ensures we catch all stores regardless of installation time
+      // EmailLog check prevents duplicates if a store was already processed
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 73 * 60 * 60 * 1000), // 73 hours ago
-          $lte: new Date(now - 71 * 60 * 60 * 1000)  // 71 hours ago
+          $gte: new Date(now - 96 * 60 * 60 * 1000), // 4 days ago (96 hours)
+          $lte: new Date(now - 72 * 60 * 60 * 1000)   // 3 days ago (72 hours)
         }
       }).lean();
 
       if (day3Stores.length === 0) {
-        console.log('[TOKEN-EMAIL] No stores found installed 72 hours ago');
+        console.log('[TOKEN-EMAIL] No stores found installed 3-4 days ago (72-96 hour window)');
         return;
       }
 
-      console.log(`[TOKEN-EMAIL] Checking ${day3Stores.length} stores installed 72 hours ago`);
+      console.log(`[TOKEN-EMAIL] Checking ${day3Stores.length} stores installed 3-4 days ago (72-96 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
