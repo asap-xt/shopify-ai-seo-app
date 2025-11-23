@@ -1057,49 +1057,6 @@ export default function Dashboard({ shop: shopProp }) {
         />
       </Layout.Section>
 
-      {/* AIEO Score Card - Full width section (2 columns) */}
-      <Layout.Section>
-        <AIEOScoreCard 
-          testResults={testResults}
-          aiTestResults={aiTestResults}
-          stats={(() => {
-            // Use stats from state (synced via localStorage)
-            // If stats are not loaded yet, try to get from localStorage
-            if (stats) {
-              return {
-                totalProducts: stats?.products?.total || 0,
-                optimizedProducts: stats?.products?.optimized || 0,
-                totalCollections: stats?.collections?.total || 0,
-                optimizedCollections: stats?.collections?.optimized || 0
-              };
-            }
-            
-            // Fallback to localStorage if stats not loaded yet
-            try {
-              const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
-              if (savedStats) {
-                const parsed = JSON.parse(savedStats);
-                return {
-                  totalProducts: parsed.totalProducts || 0,
-                  optimizedProducts: parsed.optimizedProducts || 0,
-                  totalCollections: parsed.totalCollections || 0,
-                  optimizedCollections: parsed.optimizedCollections || 0
-                };
-              }
-            } catch (err) {
-              console.error('[Dashboard] Error loading stats from localStorage:', err);
-            }
-            
-            return {
-              totalProducts: 0,
-              optimizedProducts: 0,
-              totalCollections: 0,
-              optimizedCollections: 0
-            };
-          })()}
-        />
-      </Layout.Section>
-
       {/* Current Plan & Token Balance - Two columns side by side */}
       <Layout.Section>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
