@@ -59,6 +59,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [aiTestProgress, setAiTestProgress] = useState(0);
   const [tokenBalance, setTokenBalance] = useState(null);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
+  const [aiEOScore, setAiEOScore] = useState(null);
 
   useEffect(() => {
     if (shop) {
@@ -271,6 +272,12 @@ export default function AiTesting({ shop: shopProp }) {
       if (response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
+        
+        // Store AIEO score if available
+        if (response.aiEOScore) {
+          setAiEOScore(response.aiEOScore);
+        }
+        
         setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
         // Reload token balance
         loadTokenBalance();
@@ -495,6 +502,130 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(aiTestResults).length > 0 && (
                     <BlockStack gap="300">
+                      {/* AIEO Score Card */}
+                      {aiEOScore && (
+                        <Card>
+                          <Box padding="400">
+                            <BlockStack gap="300">
+                              <InlineStack align="space-between" blockAlign="center">
+                                <BlockStack gap="100">
+                                  <Text as="h3" variant="headingMd">AIEO Score</Text>
+                                  <Text variant="bodySm" tone="subdued">
+                                    Overall AI Engine Optimization rating
+                                  </Text>
+                                </BlockStack>
+                                <BlockStack gap="100" align="end">
+                                  <Box
+                                    style={{
+                                      width: '80px',
+                                      height: '80px',
+                                      borderRadius: '50%',
+                                      background: `conic-gradient(${aiEOScore.gradeColor} ${aiEOScore.score * 3.6}deg, #e5e7eb ${aiEOScore.score * 3.6}deg)`,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      position: 'relative'
+                                    }}
+                                  >
+                                    <Box
+                                      style={{
+                                        width: '60px',
+                                        height: '60px',
+                                        borderRadius: '50%',
+                                        background: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexDirection: 'column'
+                                      }}
+                                    >
+                                      <Text variant="headingLg" fontWeight="bold" style={{ color: aiEOScore.gradeColor }}>
+                                        {aiEOScore.score}
+                                      </Text>
+                                      <Text variant="bodyXs" style={{ color: aiEOScore.gradeColor, marginTop: '-4px' }}>
+                                        {aiEOScore.grade}
+                                      </Text>
+                                    </Box>
+                                  </Box>
+                                </BlockStack>
+                              </InlineStack>
+                              
+                              {/* Score Breakdown */}
+                              <Box paddingBlockStart="300">
+                                <BlockStack gap="200">
+                                  <Text variant="bodySm" fontWeight="semibold">Score Breakdown:</Text>
+                                  <BlockStack gap="100">
+                                    <InlineStack align="space-between">
+                                      <Text variant="bodySm">Endpoint Availability</Text>
+                                      <Text variant="bodySm" fontWeight="semibold">
+                                        {aiEOScore.breakdown.endpointAvailability}/30
+                                      </Text>
+                                    </InlineStack>
+                                    <ProgressBar 
+                                      progress={Math.round((aiEOScore.breakdown.endpointAvailability / 30) * 100)} 
+                                      size="small" 
+                                    />
+                                    
+                                    <InlineStack align="space-between">
+                                      <Text variant="bodySm">AI Validation Quality</Text>
+                                      <Text variant="bodySm" fontWeight="semibold">
+                                        {aiEOScore.breakdown.aiValidationQuality}/40
+                                      </Text>
+                                    </InlineStack>
+                                    <ProgressBar 
+                                      progress={Math.round((aiEOScore.breakdown.aiValidationQuality / 40) * 100)} 
+                                      size="small" 
+                                    />
+                                    
+                                    <InlineStack align="space-between">
+                                      <Text variant="bodySm">Optimization Coverage</Text>
+                                      <Text variant="bodySm" fontWeight="semibold">
+                                        {aiEOScore.breakdown.optimizationCoverage}/20
+                                      </Text>
+                                    </InlineStack>
+                                    <ProgressBar 
+                                      progress={Math.round((aiEOScore.breakdown.optimizationCoverage / 20) * 100)} 
+                                      size="small" 
+                                    />
+                                    
+                                    <InlineStack align="space-between">
+                                      <Text variant="bodySm">Structured Data Quality</Text>
+                                      <Text variant="bodySm" fontWeight="semibold">
+                                        {aiEOScore.breakdown.structuredDataQuality}/10
+                                      </Text>
+                                    </InlineStack>
+                                    <ProgressBar 
+                                      progress={Math.round((aiEOScore.breakdown.structuredDataQuality / 10) * 100)} 
+                                      size="small" 
+                                    />
+                                  </BlockStack>
+                                </BlockStack>
+                              </Box>
+                              
+                              {/* Recommendations */}
+                              {aiEOScore.recommendations && aiEOScore.recommendations.length > 0 && (
+                                <Box paddingBlockStart="200">
+                                  <BlockStack gap="200">
+                                    <Text variant="bodySm" fontWeight="semibold">Recommendations:</Text>
+                                    {aiEOScore.recommendations.map((rec, idx) => (
+                                      <Banner
+                                        key={idx}
+                                        tone={rec.priority === 'high' ? 'critical' : 'warning'}
+                                        title={rec.message}
+                                      >
+                                        <Text variant="bodySm">{rec.action}</Text>
+                                      </Banner>
+                                    ))}
+                                  </BlockStack>
+                                </Box>
+                              )}
+                            </BlockStack>
+                          </Box>
+                        </Card>
+                      )}
+                      
+                      <Divider />
+                      
                       {/* AI Results for Products JSON Feed */}
                       {aiTestResults.productsJson && (
                         <>

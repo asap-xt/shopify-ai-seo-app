@@ -922,12 +922,45 @@ Format:
       console.error('[AI-TESTING] Failed to invalidate cache:', cacheErr);
     }
     
+    // Calculate AIEO Score
+    let aiEOScore = null;
+    try {
+      const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
+      
+      // Get stats for score calculation
+      const totalProducts = await Product.countDocuments({ shop });
+      const optimizedProducts = await Product.countDocuments({ 
+        shop, 
+        'seoStatus.optimized': true 
+      });
+      const totalCollections = await Collection.countDocuments({ shop });
+      const optimizedCollections = await Collection.countDocuments({ 
+        shop, 
+        'seoStatus.optimized': true 
+      });
+      
+      aiEOScore = calculateAIEOScore(
+        endpointResults, // Basic test results
+        results,         // AI validation results
+        {
+          totalProducts,
+          optimizedProducts,
+          totalCollections,
+          optimizedCollections
+        }
+      );
+    } catch (scoreError) {
+      console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
+      // Don't fail the request if score calculation fails
+    }
+    
     res.json({
       shop,
       timestamp: new Date().toISOString(),
       results,
       tokensUsed: totalTokensUsed,
-      tokenBalance: tokenBalance.balance
+      tokenBalance: tokenBalance.balance,
+      aiEOScore // Add score to response
     });
     
   } catch (error) {
