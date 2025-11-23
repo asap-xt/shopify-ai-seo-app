@@ -1934,7 +1934,9 @@ if (!IS_PROD) {
         }
 
       // DEBUG ENDPOINTS (MUST be first, before all other middleware)
-      if (!IS_PROD) {
+      // Staging diagnostics endpoint (available in staging and non-prod)
+      const IS_STAGING = process.env.NODE_ENV === 'staging';
+      if (!IS_PROD || IS_STAGING) {
         app.get('/debug/env', (req, res) => {
           const key = process.env.SHOPIFY_API_KEY || '';
           res.json({
@@ -1945,6 +1947,64 @@ if (!IS_PROD) {
             NODE_ENV: process.env.NODE_ENV || null,
             embedded: true
           });
+        });
+
+        // Staging installation diagnostics endpoint
+        app.get('/debug/staging-install', (req, res) => {
+          const expectedStagingKey = 'cbb6c395806364fba75996525ffce483';
+          const expectedStagingUrl = 'https://indexaize-aiseo-app-staging.up.railway.app';
+          
+          const diagnostics = {
+            timestamp: new Date().toISOString(),
+            environment: {
+              NODE_ENV: process.env.NODE_ENV || 'not set',
+              APP_URL: process.env.APP_URL || 'not set',
+              SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY || 'not set',
+              SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? '***SET***' : 'NOT SET',
+              VITE_SHOPIFY_API_KEY: process.env.VITE_SHOPIFY_API_KEY || 'not set',
+              MONGODB_URI: process.env.MONGODB_URI ? '***SET***' : 'NOT SET',
+            },
+            validation: {
+              isStaging: IS_STAGING,
+              apiKeyMatches: process.env.SHOPIFY_API_KEY === expectedStagingKey,
+              appUrlMatches: process.env.APP_URL === expectedStagingUrl,
+              apiKeysMatch: process.env.SHOPIFY_API_KEY === process.env.VITE_SHOPIFY_API_KEY,
+              appUrlIsHttps: process.env.APP_URL?.startsWith('https://'),
+              appUrlHasTrailingSlash: process.env.APP_URL?.endsWith('/'),
+            },
+            redirectUrls: process.env.APP_URL ? [
+              `${process.env.APP_URL.replace(/\/+$/, '')}/auth/callback`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/api/auth/callback`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/api/auth`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/`,
+            ] : [],
+            issues: [],
+          };
+
+          // Check for issues
+          if (!process.env.SHOPIFY_API_KEY) diagnostics.issues.push('SHOPIFY_API_KEY is not set');
+          if (!process.env.SHOPIFY_API_SECRET) diagnostics.issues.push('SHOPIFY_API_SECRET is not set');
+          if (!process.env.APP_URL) diagnostics.issues.push('APP_URL is not set');
+          if (!process.env.VITE_SHOPIFY_API_KEY) diagnostics.issues.push('VITE_SHOPIFY_API_KEY is not set');
+          if (IS_STAGING && !diagnostics.validation.apiKeyMatches) {
+            diagnostics.issues.push(`SHOPIFY_API_KEY should be ${expectedStagingKey} for staging`);
+          }
+          if (IS_STAGING && !diagnostics.validation.appUrlMatches) {
+            diagnostics.issues.push(`APP_URL should be ${expectedStagingUrl} for staging`);
+          }
+          if (!diagnostics.validation.apiKeysMatch && process.env.SHOPIFY_API_KEY && process.env.VITE_SHOPIFY_API_KEY) {
+            diagnostics.issues.push('SHOPIFY_API_KEY and VITE_SHOPIFY_API_KEY do not match');
+          }
+          if (diagnostics.validation.appUrlHasTrailingSlash) {
+            diagnostics.issues.push('APP_URL has trailing slash - this can cause OAuth issues');
+          }
+          if (!diagnostics.validation.appUrlIsHttps && process.env.APP_URL) {
+            diagnostics.issues.push('APP_URL should use HTTPS');
+          }
+
+          diagnostics.status = diagnostics.issues.length === 0 ? 'ok' : 'issues_found';
+          
+          res.json(diagnostics);
         });
 
         // Database Indexes Status Endpoint (PHASE 2 - Verification)
