@@ -157,6 +157,87 @@ class EmailScheduler {
   }
 
   /**
+   * Check and send App Store rating email (Day 6 after installation - 144 hours)
+   * Only sends if: 
+   * - Installed exactly 144 hours ago (6 days)
+   * - Subscription is active (after trial)
+   * - Hasn't received this email before
+   */
+  async checkAppStoreRatingEmail() {
+    try {
+      const now = new Date();
+      const EmailLog = (await import('../db/EmailLog.js')).default;
+      
+      // Find stores installed exactly 144 hours ago (6 days)
+      // Using a 2-hour window (143-145 hours) to account for cron timing variations
+      const day6Stores = await Shop.find({
+        createdAt: {
+          $gte: new Date(now - 145 * 60 * 60 * 1000), // 145 hours ago
+          $lte: new Date(now - 143 * 60 * 60 * 1000)  // 143 hours ago
+        }
+      }).lean();
+
+      if (day6Stores.length === 0) {
+        console.log('[APPSTORE-RATING] No stores found installed 144 hours ago');
+        return;
+      }
+
+      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 144 hours ago`);
+      let sentCount = 0;
+      let skippedCount = 0;
+
+      for (const store of day6Stores) {
+        // Check if email was already sent (prevent duplicates)
+        const existingEmailLog = await EmailLog.findOne({
+          shop: store.shop,
+          type: 'appstore-rating',
+          status: 'sent'
+        }).lean();
+        
+        if (existingEmailLog) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Check if user has unsubscribed from marketing emails
+        const emailPrefs = store.emailPreferences || {};
+        if (emailPrefs.marketingEmails === false) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Check if subscription is active (after trial)
+        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
+        if (!subscription) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Only send if subscription is active (not cancelled, not pending)
+        if (subscription.status !== 'active' || subscription.cancelledAt) {
+          skippedCount++;
+          continue;
+        }
+
+        // Send app store rating email
+        const emailService = (await import('./emailService.js')).default;
+        const result = await emailService.sendAppStoreRatingEmail({ ...store, subscription });
+        if (result.success) {
+          sentCount++;
+          console.log(`[APPSTORE-RATING] ✅ Sent to ${store.shop}`);
+        } else {
+          console.error(`[APPSTORE-RATING] ❌ Failed for ${store.shop}:`, result.error);
+        }
+        await this.delay(1000); // 1 second delay between emails
+      }
+
+      console.log(`[APPSTORE-RATING] Completed: ${sentCount} sent, ${skippedCount} skipped`);
+    } catch (error) {
+      console.error('[APPSTORE-RATING] Error:', error);
+    }
+  }
+
+  /**
    * Check trial expiring
    */
   async checkTrialExpiring() {
