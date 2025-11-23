@@ -20,6 +20,7 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 import { devLog } from '../utils/devLog.js';
+import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
 
 // Query string helper
 const qs = (k, d = '') => {
@@ -988,6 +989,20 @@ export default function Dashboard({ shop: shopProp }) {
             </Card>
           </div>
         </div>
+      </Layout.Section>
+
+      {/* AIEO Score Card - Below Products & Collections & Languages & Markets */}
+      <Layout.Section>
+        <AIEOScoreCard 
+          testResults={{}}
+          aiTestResults={{}}
+          stats={{
+            totalProducts: stats?.products?.total || 0,
+            optimizedProducts: stats?.products?.optimized || 0,
+            totalCollections: stats?.collections?.total || 0,
+            optimizedCollections: stats?.collections?.optimized || 0
+          }}
+        />
       </Layout.Section>
 
     </Layout>
