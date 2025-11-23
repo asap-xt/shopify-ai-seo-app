@@ -508,6 +508,13 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(aiTestResults).length > 0 && (
                     <BlockStack gap="300">
+                      {/* Debug: Show AIEO Score status */}
+                      <Banner tone={aiEOScore ? 'success' : 'warning'}>
+                        <Text variant="bodySm">
+                          AIEO Score Status: {aiEOScore ? `✅ Received (Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade})` : '❌ Not received'}
+                        </Text>
+                      </Banner>
+                      
                       {/* AIEO Score Card */}
                       {aiEOScore && aiEOScore.score !== undefined && (
                         <Card>

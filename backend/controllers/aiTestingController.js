@@ -970,14 +970,27 @@ Format:
       // Don't fail the request if score calculation fails
     }
     
-    res.json({
+    const responseData = {
       shop,
       timestamp: new Date().toISOString(),
       results,
       tokensUsed: totalTokensUsed,
       tokenBalance: tokenBalance.balance,
       aiEOScore // Add score to response
-    });
+    };
+    
+    console.log('[AI-TESTING] Response data keys:', Object.keys(responseData));
+    console.log('[AI-TESTING] aiEOScore in response:', responseData.aiEOScore ? 'PRESENT' : 'MISSING');
+    if (responseData.aiEOScore) {
+      console.log('[AI-TESTING] aiEOScore details:', {
+        hasScore: !!responseData.aiEOScore.score,
+        hasGrade: !!responseData.aiEOScore.grade,
+        hasBreakdown: !!responseData.aiEOScore.breakdown,
+        hasRecommendations: !!responseData.aiEOScore.recommendations
+      });
+    }
+    
+    res.json(responseData);
     
   } catch (error) {
     console.error('[AI-VALIDATION] Error:', error);
