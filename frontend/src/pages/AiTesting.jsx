@@ -178,6 +178,29 @@ export default function AiTesting({ shop: shopProp }) {
     advancedSchemaApi: 'Advanced Schema Data'
   };
 
+  // Function to interpolate color from red to green based on score (0-100)
+  const getScoreColor = (score) => {
+    // Clamp score between 0 and 100
+    const normalizedScore = Math.max(0, Math.min(100, score)) / 100;
+    
+    // Red: #ef4444 = rgb(239, 68, 68)
+    // Green: #10b981 = rgb(16, 185, 129)
+    const redStart = 239;
+    const greenStart = 68;
+    const blueStart = 68;
+    
+    const redEnd = 16;
+    const greenEnd = 185;
+    const blueEnd = 129;
+    
+    // Interpolate between start and end colors
+    const red = Math.round(redStart + (redEnd - redStart) * normalizedScore);
+    const green = Math.round(greenStart + (greenEnd - greenStart) * normalizedScore);
+    const blue = Math.round(blueStart + (blueEnd - blueStart) * normalizedScore);
+    
+    return `rgb(${red}, ${green}, ${blue})`;
+  };
+
   // Calculate AIEO Score based on test results, AI validation, and stats
   const calculatedAIEOScore = useMemo(() => {
     const calculateScore = (endpointResults, aiValidationResults, stats) => {
@@ -659,43 +682,31 @@ export default function AiTesting({ shop: shopProp }) {
               
               <Divider />
               
-              {/* Two-column layout: Pie Chart (left) and Score Breakdown (right) */}
+              {/* Two-column layout: Pie Chart with Score (left) and Score Breakdown (right) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                {/* Left Column: Pie Chart */}
-                <BlockStack gap="200" align="center">
+                {/* Left Column: Pie Chart + Score Text */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                  {/* Pie Chart (without text inside) */}
                   <Box
                     style={{
                       width: '120px',
                       height: '120px',
                       borderRadius: '50%',
-                      background: `conic-gradient(${calculatedAIEOScore.gradeColor} ${calculatedAIEOScore.score * 3.6}deg, #e5e7eb ${calculatedAIEOScore.score * 3.6}deg)`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      position: 'relative'
+                      background: `conic-gradient(${getScoreColor(calculatedAIEOScore.score)} ${calculatedAIEOScore.score * 3.6}deg, #e5e7eb ${calculatedAIEOScore.score * 3.6}deg)`,
+                      flexShrink: 0
                     }}
-                  >
-                    <Box
-                      style={{
-                        width: '90px',
-                        height: '90px',
-                        borderRadius: '50%',
-                        background: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'column'
-                      }}
-                    >
-                      <Text variant="headingLg" fontWeight="bold" style={{ color: calculatedAIEOScore.gradeColor }}>
-                        {calculatedAIEOScore.score}
-                      </Text>
-                      <Text variant="bodySm" style={{ color: calculatedAIEOScore.gradeColor, marginTop: '-4px' }}>
-                        {calculatedAIEOScore.grade}
-                      </Text>
-                    </Box>
-                  </Box>
-                </BlockStack>
+                  />
+                  
+                  {/* Score Text (to the right of pie chart) */}
+                  <BlockStack gap="100">
+                    <Text variant="headingMd" fontWeight="semibold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
+                      AIEO Score = {calculatedAIEOScore.score}
+                    </Text>
+                    <Text variant="bodyMd" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
+                      AIEO Rating = {calculatedAIEOScore.grade}
+                    </Text>
+                  </BlockStack>
+                </div>
                 
                 {/* Right Column: Score Breakdown */}
                 <BlockStack gap="200">
@@ -705,28 +716,28 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="bodyMd">Endpoint Availability</Text>
                       <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.endpointAvailability}/30</Text>
                     </InlineStack>
-                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.endpointAvailability / 30) * 100)} size="small" tone="primary" />
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.endpointAvailability / 30) * 100)} size="small" tone="success" />
                   </BlockStack>
                   <BlockStack gap="100">
                     <InlineStack align="space-between">
                       <Text variant="bodyMd">AI Validation Quality</Text>
                       <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.aiValidationQuality}/40</Text>
                     </InlineStack>
-                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.aiValidationQuality / 40) * 100)} size="small" tone="primary" />
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.aiValidationQuality / 40) * 100)} size="small" tone="success" />
                   </BlockStack>
                   <BlockStack gap="100">
                     <InlineStack align="space-between">
                       <Text variant="bodyMd">Optimization Coverage</Text>
                       <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.optimizationCoverage}/20</Text>
                     </InlineStack>
-                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.optimizationCoverage / 20) * 100)} size="small" tone="primary" />
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.optimizationCoverage / 20) * 100)} size="small" tone="success" />
                   </BlockStack>
                   <BlockStack gap="100">
                     <InlineStack align="space-between">
                       <Text variant="bodyMd">Structured Data Quality</Text>
                       <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.structuredDataQuality}/10</Text>
                     </InlineStack>
-                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.structuredDataQuality / 10) * 100)} size="small" tone="primary" />
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.structuredDataQuality / 10) * 100)} size="small" tone="success" />
                   </BlockStack>
                 </BlockStack>
               </div>
