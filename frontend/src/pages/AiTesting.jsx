@@ -275,11 +275,20 @@ export default function AiTesting({ shop: shopProp }) {
         setAiTestProgress(100);
         
         // Store AIEO score if available - check for both aiEOScore and its properties
-        if (response.aiEOScore && typeof response.aiEOScore === 'object' && response.aiEOScore.score !== undefined) {
-          setAiEOScore(response.aiEOScore);
-          setToastContent(`AI validation completed! Score: ${response.aiEOScore.score}/100 (${response.tokensUsed || 0} tokens used)`);
+        // Force set even if structure is slightly different
+        if (response.aiEOScore) {
+          // Ensure we have a valid score object
+          const scoreData = response.aiEOScore;
+          if (scoreData && (scoreData.score !== undefined || scoreData.score === 0)) {
+            setAiEOScore(scoreData);
+            setToastContent(`AI validation completed! Score: ${scoreData.score || 0}/100 (${response.tokensUsed || 0} tokens used)`);
+          } else {
+            // If structure is unexpected, try to use it anyway
+            setAiEOScore(scoreData);
+            setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
+          }
         } else {
-          // Reset score if not present or invalid
+          // Reset score if not present
           setAiEOScore(null);
           setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
         }
@@ -508,15 +517,17 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(aiTestResults).length > 0 && (
                     <BlockStack gap="300">
-                      {/* Debug: Show AIEO Score status */}
+                      {/* Debug: Show AIEO Score status - Always show if we have results */}
                       <Banner tone={aiEOScore ? 'success' : 'warning'}>
                         <Text variant="bodySm">
-                          AIEO Score Status: {aiEOScore ? `✅ Received (Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade})` : '❌ Not received'}
+                          Debug: aiTestResults keys: {Object.keys(aiTestResults).length} | 
+                          aiEOScore state: {aiEOScore ? 'SET' : 'NULL'} | 
+                          {aiEOScore ? `Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade}` : 'No score'}
                         </Text>
                       </Banner>
                       
-                      {/* AIEO Score Card */}
-                      {aiEOScore && aiEOScore.score !== undefined && (
+                      {/* AIEO Score Card - Show if we have any aiEOScore data */}
+                      {aiEOScore && (
                         <Card>
                           <Box padding="400">
                             <BlockStack gap="300">
