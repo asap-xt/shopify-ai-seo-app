@@ -61,6 +61,11 @@ export default function AiTesting({ shop: shopProp }) {
   const [trialEndsAt, setTrialEndsAt] = useState(null);
   const [aiEOScore, setAiEOScore] = useState(null);
 
+  // Debug: Log aiEOScore changes
+  useEffect(() => {
+    console.log('[AI-TESTING] aiEOScore state changed:', aiEOScore);
+  }, [aiEOScore]);
+
   useEffect(() => {
     if (shop) {
       loadPlan();
@@ -269,6 +274,12 @@ export default function AiTesting({ shop: shopProp }) {
         }
       });
       
+      // Debug: Log full response
+      console.log('[AI-TESTING] Full API response:', JSON.stringify(response, null, 2));
+      console.log('[AI-TESTING] Response keys:', Object.keys(response || {}));
+      console.log('[AI-TESTING] Has results?', !!response?.results);
+      console.log('[AI-TESTING] Has aiEOScore?', !!response?.aiEOScore);
+      
       if (response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
@@ -276,16 +287,23 @@ export default function AiTesting({ shop: shopProp }) {
         // Store AIEO score if available
         console.log('[AI-TESTING] AI Validation response:', response);
         if (response.aiEOScore) {
-          console.log('[AI-TESTING] AIEO Score received:', response.aiEOScore);
+          console.log('[AI-TESTING] ✅ AIEO Score received:', response.aiEOScore);
           setAiEOScore(response.aiEOScore);
         } else {
-          console.warn('[AI-TESTING] No AIEO score in response');
+          console.warn('[AI-TESTING] ⚠️ No AIEO score in response');
+          console.warn('[AI-TESTING] Response structure:', {
+            hasResults: !!response.results,
+            hasAiEOScore: !!response.aiEOScore,
+            keys: Object.keys(response)
+          });
         }
         
         setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
         // Reload token balance
         loadTokenBalance();
       } else {
+        console.error('[AI-TESTING] ❌ No results in response');
+        console.error('[AI-TESTING] Response:', response);
         setToastContent('AI validation failed. Please try again.');
       }
     } catch (error) {
@@ -507,6 +525,11 @@ export default function AiTesting({ shop: shopProp }) {
                   {Object.keys(aiTestResults).length > 0 && (
                     <BlockStack gap="300">
                       {/* AIEO Score Card */}
+                      {(() => {
+                        console.log('[AI-TESTING] Rendering check - aiEOScore:', aiEOScore);
+                        console.log('[AI-TESTING] Rendering check - aiTestResults keys:', Object.keys(aiTestResults));
+                        return null;
+                      })()}
                       {aiEOScore && (
                         <Card>
                           <Box padding="400">
