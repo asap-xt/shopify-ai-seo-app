@@ -201,31 +201,81 @@ export default function AiTesting({ shop: shopProp }) {
     return `rgb(${red}, ${green}, ${blue})`;
   };
 
-  // Function to generate smooth gradient for donut chart (full circle gradient)
+  // Function to generate smooth gradient for donut chart (scaled based on score)
   const getDonutGradient = (score) => {
-    // Create a smooth gradient that goes from red (0%) to green (100%) around the full circle
-    // The filled portion shows the gradient, the rest is gray
+    // The gradient should scale based on score:
+    // - 0-20%: only red
+    // - 20-40%: red -> orange
+    // - 40-60%: red -> orange -> yellow
+    // - 60-80%: red -> orange -> yellow -> light green
+    // - 80-100%: red -> orange -> yellow -> green
     const scoreDeg = score * 3.6; // Convert score (0-100) to degrees (0-360)
-    
-    // Smooth color stops: red -> orange -> yellow -> green
-    // The gradient always shows the full spectrum, but only scoreDeg portion is filled
-    // For the filled portion, scale the gradient stops proportionally
     const normalizedScore = Math.max(0, Math.min(100, score)) / 100;
     
-    // Scale gradient stops to match the filled portion
-    const redDeg = 0;
-    const orangeDeg = normalizedScore * 90; // 25% of circle = 90deg
-    const yellowDeg = normalizedScore * 180; // 50% of circle = 180deg
-    const greenDeg = scoreDeg; // End at score
+    // Color stops based on score percentage
+    let gradientStops = [];
     
-    return `conic-gradient(
-      #ef4444 ${redDeg}deg,
-      #f97316 ${orangeDeg}deg,
-      #f59e0b ${yellowDeg}deg,
-      #10b981 ${greenDeg}deg,
-      #e5e7eb ${scoreDeg}deg,
-      #e5e7eb 360deg
-    )`;
+    if (normalizedScore <= 0.2) {
+      // 0-20%: Only red
+      gradientStops = [
+        `#ef4444 0deg`,
+        `#ef4444 ${scoreDeg}deg`,
+        `#e5e7eb ${scoreDeg}deg`,
+        `#e5e7eb 360deg`
+      ];
+    } else if (normalizedScore <= 0.4) {
+      // 20-40%: Red -> Orange
+      const orangeStop = scoreDeg * 0.5; // Orange appears at midpoint
+      gradientStops = [
+        `#ef4444 0deg`,
+        `#f97316 ${orangeStop}deg`,
+        `#f97316 ${scoreDeg}deg`,
+        `#e5e7eb ${scoreDeg}deg`,
+        `#e5e7eb 360deg`
+      ];
+    } else if (normalizedScore <= 0.6) {
+      // 40-60%: Red -> Orange -> Yellow
+      const orangeStop = scoreDeg * 0.33;
+      const yellowStop = scoreDeg * 0.66;
+      gradientStops = [
+        `#ef4444 0deg`,
+        `#f97316 ${orangeStop}deg`,
+        `#f59e0b ${yellowStop}deg`,
+        `#f59e0b ${scoreDeg}deg`,
+        `#e5e7eb ${scoreDeg}deg`,
+        `#e5e7eb 360deg`
+      ];
+    } else if (normalizedScore <= 0.8) {
+      // 60-80%: Red -> Orange -> Yellow -> Light Green
+      const orangeStop = scoreDeg * 0.25;
+      const yellowStop = scoreDeg * 0.5;
+      const lightGreenStop = scoreDeg * 0.75;
+      gradientStops = [
+        `#ef4444 0deg`,
+        `#f97316 ${orangeStop}deg`,
+        `#f59e0b ${yellowStop}deg`,
+        `#22c55e ${lightGreenStop}deg`, // Light green
+        `#22c55e ${scoreDeg}deg`,
+        `#e5e7eb ${scoreDeg}deg`,
+        `#e5e7eb 360deg`
+      ];
+    } else {
+      // 80-100%: Red -> Orange -> Yellow -> Green
+      const orangeStop = scoreDeg * 0.2;
+      const yellowStop = scoreDeg * 0.4;
+      const greenStop = scoreDeg * 0.6;
+      gradientStops = [
+        `#ef4444 0deg`,
+        `#f97316 ${orangeStop}deg`,
+        `#f59e0b ${yellowStop}deg`,
+        `#10b981 ${greenStop}deg`,
+        `#10b981 ${scoreDeg}deg`,
+        `#e5e7eb ${scoreDeg}deg`,
+        `#e5e7eb 360deg`
+      ];
+    }
+    
+    return `conic-gradient(${gradientStops.join(', ')})`;
   };
 
   // Calculate AIEO Score based on test results, AI validation, and stats
@@ -711,11 +761,11 @@ export default function AiTesting({ shop: shopProp }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 {/* Left Column: Donut Chart + Score Text */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                  {/* Donut Chart (with white circle inside) */}
+                  {/* Donut Chart (with white circle inside) - 15% larger */}
                   <Box
                     style={{
-                      width: '120px',
-                      height: '120px',
+                      width: '138px', // 120px * 1.15 = 138px
+                      height: '138px',
                       borderRadius: '50%',
                       background: getDonutGradient(calculatedAIEOScore.score),
                       display: 'flex',
@@ -725,11 +775,11 @@ export default function AiTesting({ shop: shopProp }) {
                       flexShrink: 0
                     }}
                   >
-                    {/* White inner circle for donut effect */}
+                    {/* White inner circle for donut effect - scaled proportionally */}
                     <Box
                       style={{
-                        width: '90px',
-                        height: '90px',
+                        width: '103.5px', // 90px * 1.15 = 103.5px
+                        height: '103.5px',
                         borderRadius: '50%',
                         background: 'white',
                         position: 'absolute',
@@ -743,7 +793,7 @@ export default function AiTesting({ shop: shopProp }) {
                     <Text variant="headingMd" fontWeight="semibold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
                       AIEO Score = {calculatedAIEOScore.score}
                     </Text>
-                    <Text variant="bodyMd" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
+                    <Text variant="headingMd" fontWeight="bold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
                       AIEO Rating = {calculatedAIEOScore.grade}
                     </Text>
                   </BlockStack>
