@@ -939,6 +939,15 @@ Format:
         'seoStatus.optimized': true 
       });
       
+      console.log('[AI-TESTING] Calculating AIEO score with:', {
+        endpointResultsCount: Object.keys(endpointResults || {}).length,
+        aiValidationResultsCount: Object.keys(results || {}).length,
+        totalProducts,
+        optimizedProducts,
+        totalCollections,
+        optimizedCollections
+      });
+      
       aiEOScore = calculateAIEOScore(
         endpointResults, // Basic test results
         results,         // AI validation results
@@ -949,8 +958,15 @@ Format:
           optimizedCollections
         }
       );
+      
+      console.log('[AI-TESTING] AIEO Score calculated:', {
+        score: aiEOScore?.score,
+        grade: aiEOScore?.grade,
+        breakdown: aiEOScore?.breakdown
+      });
     } catch (scoreError) {
       console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
+      console.error('[AI-TESTING] Score error stack:', scoreError.stack);
       // Don't fail the request if score calculation fails
     }
     
