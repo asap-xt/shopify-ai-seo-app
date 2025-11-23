@@ -270,9 +270,6 @@ export default function AiTesting({ shop: shopProp }) {
         }
       });
       
-      // Debug: Log full response
-      window.__DEBUG_AI_RESPONSE = response; // Store in window for debugging
-      
       if (response && response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
@@ -296,9 +293,6 @@ export default function AiTesting({ shop: shopProp }) {
         setToastContent('AI validation failed. Please try again.');
       }
     } catch (error) {
-      // Debug: Log error details
-      window.__DEBUG_AI_ERROR = error; // Store in window for debugging
-      
       // Check for 402 status (payment required)
       if (error.status === 402) {
         if (error.trialRestriction && error.requiresActivation) {
@@ -503,17 +497,6 @@ export default function AiTesting({ shop: shopProp }) {
                     </Button>
                   </InlineStack>
 
-                  {/* Debug: Always show AIEO Score status - FORCE VISIBLE */}
-                  <Box paddingBlockStart="300">
-                    <Banner tone={aiEOScore ? 'success' : 'info'}>
-                      <Text variant="bodySm" fontWeight="bold">
-                        🔍 DEBUG INFO: aiTestResults keys: {Object.keys(aiTestResults).length} | 
-                        aiEOScore state: {aiEOScore ? 'SET' : 'NULL'} | 
-                        {aiEOScore ? `Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade}` : 'No score'} |
-                        Check window.__DEBUG_AI_RESPONSE in console
-                      </Text>
-                    </Banner>
-                  </Box>
 
                   {aiTesting && (
                     <Box>
