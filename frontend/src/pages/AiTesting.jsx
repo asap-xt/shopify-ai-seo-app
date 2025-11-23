@@ -270,23 +270,19 @@ export default function AiTesting({ shop: shopProp }) {
         }
       });
       
+      // Debug: Log full response
+      window.__DEBUG_AI_RESPONSE = response; // Store in window for debugging
+      
       if (response && response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
         
-        // Store AIEO score if available - check for both aiEOScore and its properties
-        // Force set even if structure is slightly different
+        // Store AIEO score if available
         if (response.aiEOScore) {
-          // Ensure we have a valid score object
           const scoreData = response.aiEOScore;
-          if (scoreData && (scoreData.score !== undefined || scoreData.score === 0)) {
-            setAiEOScore(scoreData);
-            setToastContent(`AI validation completed! Score: ${scoreData.score || 0}/100 (${response.tokensUsed || 0} tokens used)`);
-          } else {
-            // If structure is unexpected, try to use it anyway
-            setAiEOScore(scoreData);
-            setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
-          }
+          // Always set if present, regardless of structure
+          setAiEOScore(scoreData);
+          setToastContent(`AI validation completed! Score: ${scoreData.score || 'N/A'}/100 (${response.tokensUsed || 0} tokens used)`);
         } else {
           // Reset score if not present
           setAiEOScore(null);
@@ -300,7 +296,8 @@ export default function AiTesting({ shop: shopProp }) {
         setToastContent('AI validation failed. Please try again.');
       }
     } catch (error) {
-      console.error('[AI-TESTING] Error running AI validation:', error);
+      // Debug: Log error details
+      window.__DEBUG_AI_ERROR = error; // Store in window for debugging
       
       // Check for 402 status (payment required)
       if (error.status === 402) {
@@ -506,6 +503,18 @@ export default function AiTesting({ shop: shopProp }) {
                     </Button>
                   </InlineStack>
 
+                  {/* Debug: Always show AIEO Score status - FORCE VISIBLE */}
+                  <Box paddingBlockStart="300">
+                    <Banner tone={aiEOScore ? 'success' : 'info'}>
+                      <Text variant="bodySm" fontWeight="bold">
+                        🔍 DEBUG INFO: aiTestResults keys: {Object.keys(aiTestResults).length} | 
+                        aiEOScore state: {aiEOScore ? 'SET' : 'NULL'} | 
+                        {aiEOScore ? `Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade}` : 'No score'} |
+                        Check window.__DEBUG_AI_RESPONSE in console
+                      </Text>
+                    </Banner>
+                  </Box>
+
                   {aiTesting && (
                     <Box>
                       <BlockStack gap="200">
@@ -517,15 +526,6 @@ export default function AiTesting({ shop: shopProp }) {
 
                   {Object.keys(aiTestResults).length > 0 && (
                     <BlockStack gap="300">
-                      {/* Debug: Show AIEO Score status - Always show if we have results */}
-                      <Banner tone={aiEOScore ? 'success' : 'warning'}>
-                        <Text variant="bodySm">
-                          Debug: aiTestResults keys: {Object.keys(aiTestResults).length} | 
-                          aiEOScore state: {aiEOScore ? 'SET' : 'NULL'} | 
-                          {aiEOScore ? `Score: ${aiEOScore.score}, Grade: ${aiEOScore.grade}` : 'No score'}
-                        </Text>
-                      </Banner>
-                      
                       {/* AIEO Score Card - Show if we have any aiEOScore data */}
                       {aiEOScore && (
                         <Card>
