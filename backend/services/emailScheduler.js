@@ -37,9 +37,8 @@ class EmailScheduler {
     );
 
     // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
-    // TESTING: Changed to 8:50 EET (6:50 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('50 6 * * *', async () => {
+      cron.schedule('0 10 * * *', async () => {
         console.log('⏰ Running app store rating email check...');
         await this.checkAppStoreRatingEmail();
       })
@@ -169,22 +168,25 @@ class EmailScheduler {
       const now = new Date();
       const EmailLog = (await import('../db/EmailLog.js')).default;
       
-      // TESTING: Last 60 minutes (for testing only)
-      // PRODUCTION: Find stores installed exactly 144 hours ago (6 days)
-      // Change back to: $gte: new Date(now - 145 * 60 * 60 * 1000), $lte: new Date(now - 143 * 60 * 60 * 1000)
+      // Find stores installed 6 days ago (144 hours)
+      // Using a 4-hour window (142-146 hours) to ensure we don't miss any stores
+      // This accounts for:
+      // - Stores installed at different times throughout the day
+      // - Cron job timing variations
+      // - Timezone differences
       const day6Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 60 * 60 * 1000), // 60 minutes ago (testing)
-          $lte: new Date(now)                    // Up to now (testing)
+          $gte: new Date(now - 146 * 60 * 60 * 1000), // 146 hours ago
+          $lte: new Date(now - 142 * 60 * 60 * 1000)  // 142 hours ago
         }
       }).lean();
 
       if (day6Stores.length === 0) {
-        console.log('[APPSTORE-RATING] No stores found installed in last 60 minutes');
+        console.log('[APPSTORE-RATING] No stores found installed 6 days ago (142-146 hour window)');
         return;
       }
 
-      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed in last 60 minutes`);
+      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 6 days ago (142-146 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
