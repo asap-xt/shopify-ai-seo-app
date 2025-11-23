@@ -893,7 +893,7 @@ export default function Dashboard({ shop: shopProp }) {
         </Layout.Section>
       )}
 
-      {/* Two columns: Left = Products & Collections + Current Plan; Right = Languages & Markets + Last Optimization + Token Balance */}
+      {/* Two columns: Left = Products & Collections; Right = Languages & Markets + Last Optimization */}
       <Layout.Section>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
           {/* LEFT COLUMN */}
@@ -954,22 +954,6 @@ export default function Dashboard({ shop: shopProp }) {
                 </InlineStack>
               </BlockStack>
             </Card>
-
-            {/* Current Plan */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <div>
-                    <Text variant="headingMd">Current Plan</Text>
-                    <Box paddingBlockStart="100">
-                      <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
-                    </Box>
-                  </div>
-                  <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
-                </InlineStack>
-                <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
-              </BlockStack>
-            </Card>
           </div>
 
           {/* RIGHT COLUMN */}
@@ -1026,23 +1010,11 @@ export default function Dashboard({ shop: shopProp }) {
                 <Button onClick={() => navigate('/ai-seo/products')}>Optimize Now</Button>
               </BlockStack>
             </Card>
-
-            {/* Token Balance */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <Text variant="headingMd">Token Balance</Text>
-                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
-                {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
-                  <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
-                )}
-                <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
-              </BlockStack>
-            </Card>
           </div>
         </div>
       </Layout.Section>
 
-      {/* AIEO Score Card - Below Products & Collections & Languages & Markets */}
+      {/* AIEO Score Card - Full width section (2 columns) */}
       <Layout.Section>
         <AIEOScoreCard 
           testResults={testResults}
@@ -1083,6 +1055,82 @@ export default function Dashboard({ shop: shopProp }) {
             };
           })()}
         />
+      </Layout.Section>
+
+      {/* AIEO Score Card - Full width section (2 columns) */}
+      <Layout.Section>
+        <AIEOScoreCard 
+          testResults={testResults}
+          aiTestResults={aiTestResults}
+          stats={(() => {
+            // Use stats from state (synced via localStorage)
+            // If stats are not loaded yet, try to get from localStorage
+            if (stats) {
+              return {
+                totalProducts: stats?.products?.total || 0,
+                optimizedProducts: stats?.products?.optimized || 0,
+                totalCollections: stats?.collections?.total || 0,
+                optimizedCollections: stats?.collections?.optimized || 0
+              };
+            }
+            
+            // Fallback to localStorage if stats not loaded yet
+            try {
+              const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+              if (savedStats) {
+                const parsed = JSON.parse(savedStats);
+                return {
+                  totalProducts: parsed.totalProducts || 0,
+                  optimizedProducts: parsed.optimizedProducts || 0,
+                  totalCollections: parsed.totalCollections || 0,
+                  optimizedCollections: parsed.optimizedCollections || 0
+                };
+              }
+            } catch (err) {
+              console.error('[Dashboard] Error loading stats from localStorage:', err);
+            }
+            
+            return {
+              totalProducts: 0,
+              optimizedProducts: 0,
+              totalCollections: 0,
+              optimizedCollections: 0
+            };
+          })()}
+        />
+      </Layout.Section>
+
+      {/* Current Plan & Token Balance - Two columns side by side */}
+      <Layout.Section>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {/* Current Plan */}
+          <Card style={{ height: 220, minHeight: 220 }}>
+            <BlockStack gap="300">
+              <InlineStack align="space-between" blockAlign="center">
+                <div>
+                  <Text variant="headingMd">Current Plan</Text>
+                  <Box paddingBlockStart="100">
+                    <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
+                  </Box>
+                </div>
+                <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
+              </InlineStack>
+              <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
+            </BlockStack>
+          </Card>
+
+          {/* Token Balance */}
+          <Card style={{ height: 220, minHeight: 220 }}>
+            <BlockStack gap="300">
+              <Text variant="headingMd">Token Balance</Text>
+              <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
+              {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
+                <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
+              )}
+              <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
+            </BlockStack>
+          </Card>
+        </div>
       </Layout.Section>
 
     </Layout>
