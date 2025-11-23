@@ -360,7 +360,7 @@ class EmailService {
       const msg = {
         to: shopEmail || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: 'Love indexAIze? Help us grow with a review!',
+        subject: 'Finding indexAIze useful? Rate us in App Store',
         html: this.getAppStoreRatingEmailTemplate({
           shopName,
           shop: store.shop,
@@ -938,22 +938,22 @@ class EmailService {
                     <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
                     
                     <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
-                      Thank you for using indexAIze! We're thrilled that you've been with us for a week now.
+                      You've been using indexAIze for a week now. If the app has been helpful for your store's AI search optimization, we'd appreciate your feedback in the Shopify App Store.
                     </p>
                     
                     <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
-                      Your feedback means the world to us. If you're enjoying indexAIze, we'd be incredibly grateful if you could take a moment to rate us in the Shopify App Store. Your review helps other merchants discover our app and helps us continue improving.
+                      Your review helps other merchants evaluate indexAIze and helps us prioritize improvements based on real usage.
                     </p>
                     
                     <!-- CTA Button -->
                     <div style="text-align: center; margin: 40px 0;">
                       <a href="${data.appStoreUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; letter-spacing: 0.5px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
-                        Rate Us in App Store
+                        Rate in App Store
                       </a>
                     </div>
                     
                     <p style="margin: 30px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
-                      It only takes a minute, and it makes a huge difference for us. Thank you for being part of the indexAIze community!
+                      Thank you for using indexAIze.
                     </p>
                   </td>
                 </tr>
