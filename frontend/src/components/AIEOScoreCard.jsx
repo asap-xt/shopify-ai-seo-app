@@ -11,23 +11,24 @@ import {
   Banner
 } from '@shopify/polaris';
 
+// Map technical endpoint keys to public display names (constant, outside component)
+const endpointDisplayNames = {
+  productsJson: 'Products JSON Feed',
+  basicSitemap: 'Basic Sitemap',
+  robotsTxt: 'robots.txt.liquid',
+  schemaData: 'Schema Data (theme.liquid)',
+  welcomePage: 'AI Welcome Page',
+  collectionsJson: 'Collections JSON Feed',
+  storeMetadata: 'Store Metadata',
+  aiSitemap: 'AI-Enhanced Sitemap',
+  advancedSchemaApi: 'Advanced Schema Data'
+};
+
 export default function AIEOScoreCard({ 
   testResults = {}, 
   aiTestResults = {}, 
   stats = {} 
 }) {
-  // Map technical endpoint keys to public display names
-  const endpointDisplayNames = {
-    productsJson: 'Products JSON Feed',
-    basicSitemap: 'Basic Sitemap',
-    robotsTxt: 'robots.txt.liquid',
-    schemaData: 'Schema Data (theme.liquid)',
-    welcomePage: 'AI Welcome Page',
-    collectionsJson: 'Collections JSON Feed',
-    storeMetadata: 'Store Metadata',
-    aiSitemap: 'AI-Enhanced Sitemap',
-    advancedSchemaApi: 'Advanced Schema Data'
-  };
 
   // Function to interpolate color from red to green based on score (0-100)
   const getScoreColor = (score) => {
@@ -135,7 +136,7 @@ export default function AIEOScoreCard({
 
   // Calculate AIEO Score based on test results, AI validation, and stats
   const calculatedAIEOScore = useMemo(() => {
-    const calculateScore = (endpointResults, aiValidationResults, stats) => {
+    const calculateScore = (endpointResults, aiValidationResults, stats, endpointDisplayNames) => {
       const scoreBreakdown = {
         endpointAvailability: 0,
         aiValidationQuality: 0,
@@ -330,8 +331,16 @@ export default function AIEOScoreCard({
       };
     };
 
-    return calculateScore(testResults, aiTestResults, stats);
+    return calculateScore(testResults, aiTestResults, stats, endpointDisplayNames);
   }, [testResults, aiTestResults, stats]);
+
+  // Safety check - ensure calculatedAIEOScore exists
+  if (!calculatedAIEOScore) {
+    console.error('[AIEOScoreCard] calculatedAIEOScore is null/undefined');
+    return null;
+  }
+
+  console.log('[AIEOScoreCard] Rendering with score:', calculatedAIEOScore.score);
 
   return (
     <Card>
