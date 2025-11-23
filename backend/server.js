@@ -588,8 +588,11 @@ if (!IS_PROD) {
         case 'reengagement':
           result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
           break;
+        case 'appstore-rating':
+          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
+          break;
         default:
-          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, trial, weekly, upgrade, reengagement' });
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, trial, weekly, upgrade, reengagement' });
       }
       
       res.json({

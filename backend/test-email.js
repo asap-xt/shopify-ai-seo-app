@@ -83,9 +83,12 @@ async function testEmail() {
       case 'token-purchase':
         result = await emailService.sendTokenPurchaseEmail(testStore);
         break;
+      case 'appstore-rating':
+        result = await emailService.sendAppStoreRatingEmail(testStore);
+        break;
       default:
         console.log(`❌ Unknown email type: ${emailType}`);
-        console.log('💡 Available types: welcome, token-purchase');
+        console.log('💡 Available types: welcome, token-purchase, appstore-rating');
         process.exit(1);
     }
     
