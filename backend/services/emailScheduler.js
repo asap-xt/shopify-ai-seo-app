@@ -37,8 +37,9 @@ class EmailScheduler {
     );
 
     // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
+    // TESTING: Changed to 8:50 EET (6:50 UTC) for testing. Change back to '0 10 * * *' for production.
     this.jobs.push(
-      cron.schedule('0 10 * * *', async () => {
+      cron.schedule('50 6 * * *', async () => {
         console.log('⏰ Running app store rating email check...');
         await this.checkAppStoreRatingEmail();
       })
@@ -168,21 +169,22 @@ class EmailScheduler {
       const now = new Date();
       const EmailLog = (await import('../db/EmailLog.js')).default;
       
-      // Find stores installed exactly 144 hours ago (6 days)
-      // Using a 2-hour window (143-145 hours) to account for cron timing variations
+      // TESTING: Last 60 minutes (for testing only)
+      // PRODUCTION: Find stores installed exactly 144 hours ago (6 days)
+      // Change back to: $gte: new Date(now - 145 * 60 * 60 * 1000), $lte: new Date(now - 143 * 60 * 60 * 1000)
       const day6Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 145 * 60 * 60 * 1000), // 145 hours ago
-          $lte: new Date(now - 143 * 60 * 60 * 1000)  // 143 hours ago
+          $gte: new Date(now - 60 * 60 * 1000), // 60 minutes ago (testing)
+          $lte: new Date(now)                    // Up to now (testing)
         }
       }).lean();
 
       if (day6Stores.length === 0) {
-        console.log('[APPSTORE-RATING] No stores found installed 144 hours ago');
+        console.log('[APPSTORE-RATING] No stores found installed in last 60 minutes');
         return;
       }
 
-      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 144 hours ago`);
+      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed in last 60 minutes`);
       let sentCount = 0;
       let skippedCount = 0;
 
