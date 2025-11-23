@@ -461,13 +461,17 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     // Get token balance (needed for all paths)
     const tokenBalance = await TokenBalance.getOrCreate(shop);
     
+    // Check if user has purchased tokens (not just included tokens)
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
     // Check if feature requires tokens
     const { requiresTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     
     if (requiresTokens(feature)) {
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && !isActivated && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
         return res.status(402).json({
           error: 'AI-Powered Validation is locked during trial period',
