@@ -168,25 +168,23 @@ class EmailScheduler {
       const now = new Date();
       const EmailLog = (await import('../db/EmailLog.js')).default;
       
-      // Find stores installed 6 days ago (144 hours)
-      // Using a 4-hour window (142-146 hours) to ensure we don't miss any stores
-      // This accounts for:
-      // - Stores installed at different times throughout the day
-      // - Cron job timing variations
-      // - Timezone differences
+      // Find stores installed 6-7 days ago (144-168 hours)
+      // Check all stores from the last 24 hours that are now 6+ days old
+      // This ensures we catch all stores regardless of installation time
+      // EmailLog check prevents duplicates if a store was already processed
       const day6Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 146 * 60 * 60 * 1000), // 146 hours ago
-          $lte: new Date(now - 142 * 60 * 60 * 1000)  // 142 hours ago
+          $gte: new Date(now - 168 * 60 * 60 * 1000), // 7 days ago (168 hours)
+          $lte: new Date(now - 144 * 60 * 60 * 1000)   // 6 days ago (144 hours)
         }
       }).lean();
 
       if (day6Stores.length === 0) {
-        console.log('[APPSTORE-RATING] No stores found installed 6 days ago (142-146 hour window)');
+        console.log('[APPSTORE-RATING] No stores found installed 6-7 days ago (144-168 hour window)');
         return;
       }
 
-      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 6 days ago (142-146 hour window)`);
+      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 6-7 days ago (144-168 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
