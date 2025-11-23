@@ -274,8 +274,12 @@ export default function AiTesting({ shop: shopProp }) {
         setAiTestProgress(100);
         
         // Store AIEO score if available
+        console.log('[AI-TESTING] AI Validation response:', response);
         if (response.aiEOScore) {
+          console.log('[AI-TESTING] AIEO Score received:', response.aiEOScore);
           setAiEOScore(response.aiEOScore);
+        } else {
+          console.warn('[AI-TESTING] No AIEO score in response');
         }
         
         setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
