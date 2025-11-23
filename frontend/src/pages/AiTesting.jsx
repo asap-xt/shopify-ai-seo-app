@@ -133,6 +133,19 @@ export default function AiTesting({ shop: shopProp }) {
     }
   };
 
+  // Map technical endpoint keys to public display names
+  const endpointDisplayNames = {
+    productsJson: 'Products JSON Feed',
+    basicSitemap: 'Basic Sitemap',
+    robotsTxt: 'robots.txt.liquid',
+    schemaData: 'Schema Data (theme.liquid)',
+    welcomePage: 'AI Welcome Page',
+    collectionsJson: 'Collections JSON Feed',
+    storeMetadata: 'Store Metadata',
+    aiSitemap: 'AI-Enhanced Sitemap',
+    advancedSchemaApi: 'Advanced Schema Data'
+  };
+
   // Calculate AIEO Score based on test results, AI validation, and stats
   const calculatedAIEOScore = useMemo(() => {
     const calculateScore = (endpointResults, aiValidationResults, stats) => {
@@ -292,7 +305,7 @@ export default function AiTesting({ shop: shopProp }) {
             const rating = result.rating?.toLowerCase();
             return (rating === 'poor' || rating === 'fair') && key !== 'robotsTxt' && key !== 'schemaData';
           })
-          .map(([key]) => key);
+          .map(([key]) => endpointDisplayNames[key] || key);
         if (poorRatings.length > 0) {
           recommendations.push(`${poorRatings.length} endpoint(s) have low data quality ratings. Improve content quality to boost your score.`);
           recommendations.push(`Review and improve: ${poorRatings.join(', ')}`);
@@ -316,7 +329,7 @@ export default function AiTesting({ shop: shopProp }) {
     };
 
     return calculateScore(testResults, aiTestResults, stats);
-  }, [testResults, aiTestResults, stats]);
+  }, [testResults, aiTestResults, stats, endpointDisplayNames]);
 
   // Plan-based feature availability (synced with Settings.jsx)
   const isFeatureAvailable = (feature) => {
@@ -587,18 +600,23 @@ export default function AiTesting({ shop: shopProp }) {
         <Card>
           <Box padding="400">
             <BlockStack gap="300">
-              <InlineStack align="space-between" blockAlign="center">
-                <BlockStack gap="100">
-                  <Text as="h3" variant="headingMd">AIEO Score</Text>
-                  <Text variant="bodySm" tone="subdued">
-                    Overall AI Engine Optimization rating
-                  </Text>
-                </BlockStack>
-                <BlockStack gap="100" align="end">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">AIEO Score</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Overall AI Engine Optimization rating
+                </Text>
+              </BlockStack>
+              
+              <Divider />
+              
+              {/* Two-column layout: Pie Chart (left) and Score Breakdown (right) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                {/* Left Column: Pie Chart */}
+                <BlockStack gap="200" align="center">
                   <Box
                     style={{
-                      width: '80px',
-                      height: '80px',
+                      width: '120px',
+                      height: '120px',
                       borderRadius: '50%',
                       background: `conic-gradient(${calculatedAIEOScore.gradeColor} ${calculatedAIEOScore.score * 3.6}deg, #e5e7eb ${calculatedAIEOScore.score * 3.6}deg)`,
                       display: 'flex',
@@ -609,8 +627,8 @@ export default function AiTesting({ shop: shopProp }) {
                   >
                     <Box
                       style={{
-                        width: '60px',
-                        height: '60px',
+                        width: '90px',
+                        height: '90px',
                         borderRadius: '50%',
                         background: 'white',
                         display: 'flex',
@@ -622,62 +640,65 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="headingLg" fontWeight="bold" style={{ color: calculatedAIEOScore.gradeColor }}>
                         {calculatedAIEOScore.score}
                       </Text>
-                      <Text variant="bodyXs" style={{ color: calculatedAIEOScore.gradeColor, marginTop: '-4px' }}>
+                      <Text variant="bodySm" style={{ color: calculatedAIEOScore.gradeColor, marginTop: '-4px' }}>
                         {calculatedAIEOScore.grade}
                       </Text>
                     </Box>
                   </Box>
                 </BlockStack>
-              </InlineStack>
-              
-              <Divider />
-              
-              {/* Score Breakdown */}
-              <BlockStack gap="200">
-                <Text variant="headingSm">Score Breakdown</Text>
-                <BlockStack gap="100">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd">Endpoint Availability</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.endpointAvailability}/30</Text>
-                  </InlineStack>
-                  <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.endpointAvailability / 30) * 100)} size="small" tone="primary" />
+                
+                {/* Right Column: Score Breakdown */}
+                <BlockStack gap="200">
+                  <Text variant="headingSm">Score Breakdown</Text>
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text variant="bodyMd">Endpoint Availability</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.endpointAvailability}/30</Text>
+                    </InlineStack>
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.endpointAvailability / 30) * 100)} size="small" tone="primary" />
+                  </BlockStack>
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text variant="bodyMd">AI Validation Quality</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.aiValidationQuality}/40</Text>
+                    </InlineStack>
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.aiValidationQuality / 40) * 100)} size="small" tone="primary" />
+                  </BlockStack>
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text variant="bodyMd">Optimization Coverage</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.optimizationCoverage}/20</Text>
+                    </InlineStack>
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.optimizationCoverage / 20) * 100)} size="small" tone="primary" />
+                  </BlockStack>
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text variant="bodyMd">Structured Data Quality</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.structuredDataQuality}/10</Text>
+                    </InlineStack>
+                    <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.structuredDataQuality / 10) * 100)} size="small" tone="primary" />
+                  </BlockStack>
                 </BlockStack>
-                <BlockStack gap="100">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd">AI Validation Quality</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.aiValidationQuality}/40</Text>
-                  </InlineStack>
-                  <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.aiValidationQuality / 40) * 100)} size="small" tone="primary" />
-                </BlockStack>
-                <BlockStack gap="100">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd">Optimization Coverage</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.optimizationCoverage}/20</Text>
-                  </InlineStack>
-                  <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.optimizationCoverage / 20) * 100)} size="small" tone="primary" />
-                </BlockStack>
-                <BlockStack gap="100">
-                  <InlineStack align="space-between">
-                    <Text variant="bodyMd">Structured Data Quality</Text>
-                    <Text variant="bodyMd" fontWeight="semibold">{calculatedAIEOScore.breakdown.structuredDataQuality}/10</Text>
-                  </InlineStack>
-                  <ProgressBar progress={Math.round((calculatedAIEOScore.breakdown.structuredDataQuality / 10) * 100)} size="small" tone="primary" />
-                </BlockStack>
-              </BlockStack>
+              </div>
 
               {calculatedAIEOScore.recommendations && calculatedAIEOScore.recommendations.length > 0 && (
-                <BlockStack gap="200">
-                  <Text variant="headingSm">Recommendations</Text>
-                  {calculatedAIEOScore.recommendations.map((rec, idx) => (
-                    <Banner 
-                      key={idx} 
-                      tone={rec.includes('Fix') || rec.includes('Improve') || rec.includes('low') ? 'critical' : 
-                            rec.includes('Review') ? 'warning' : 'info'}
-                    >
-                      <Text variant="bodyMd">{rec}</Text>
-                    </Banner>
-                  ))}
-                </BlockStack>
+                <>
+                  <Divider />
+                  <BlockStack gap="200">
+                    <Text variant="headingSm">Recommendations</Text>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {calculatedAIEOScore.recommendations.map((rec, idx) => (
+                        <Banner 
+                          key={idx} 
+                          tone={rec.includes('Fix') || rec.includes('Improve') || rec.includes('low') ? 'critical' : 
+                                rec.includes('Review') ? 'warning' : 'info'}
+                        >
+                          <Text variant="bodyMd">{rec}</Text>
+                        </Banner>
+                      ))}
+                    </div>
+                  </BlockStack>
+                </>
               )}
             </BlockStack>
           </Box>
