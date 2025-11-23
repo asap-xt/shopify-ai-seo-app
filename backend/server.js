@@ -1936,20 +1936,9 @@ if (!IS_PROD) {
       // DEBUG ENDPOINTS (MUST be first, before all other middleware)
       // Staging diagnostics endpoint (available in staging and non-prod)
       const IS_STAGING = process.env.NODE_ENV === 'staging';
-      if (!IS_PROD || IS_STAGING) {
-        app.get('/debug/env', (req, res) => {
-          const key = process.env.SHOPIFY_API_KEY || '';
-          res.json({
-            ok: true,
-            SHOPIFY_API_KEY_present: Boolean(key),
-            SHOPIFY_API_KEY_len: key.length,
-            SHOPIFY_API_KEY_preview: key ? `${key.slice(0,4)}…${key.slice(-4)}` : null,
-            NODE_ENV: process.env.NODE_ENV || null,
-            embedded: true
-          });
-        });
-
-        // Staging installation diagnostics endpoint
+      
+      // Staging installation diagnostics endpoint (available in staging)
+      if (IS_STAGING) {
         app.get('/debug/staging-install', (req, res) => {
           const expectedStagingKey = 'cbb6c395806364fba75996525ffce483';
           const expectedStagingUrl = 'https://indexaize-aiseo-app-staging.up.railway.app';
@@ -2005,6 +1994,20 @@ if (!IS_PROD) {
           diagnostics.status = diagnostics.issues.length === 0 ? 'ok' : 'issues_found';
           
           res.json(diagnostics);
+        });
+      }
+      
+      if (!IS_PROD) {
+        app.get('/debug/env', (req, res) => {
+          const key = process.env.SHOPIFY_API_KEY || '';
+          res.json({
+            ok: true,
+            SHOPIFY_API_KEY_present: Boolean(key),
+            SHOPIFY_API_KEY_len: key.length,
+            SHOPIFY_API_KEY_preview: key ? `${key.slice(0,4)}…${key.slice(-4)}` : null,
+            NODE_ENV: process.env.NODE_ENV || null,
+            embedded: true
+          });
         });
 
         // Database Indexes Status Endpoint (PHASE 2 - Verification)
