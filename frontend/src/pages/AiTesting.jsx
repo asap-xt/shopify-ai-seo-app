@@ -163,12 +163,46 @@ export default function AiTesting({ shop: shopProp }) {
 
   const loadStats = async () => {
     try {
-      const data = await api(`/api/dashboard/stats?shop=${shop}`);
+      // First, try to load from localStorage (synced from Dashboard Sync)
+      let statsData = null;
+      try {
+        const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+        if (savedStats) {
+          const parsed = JSON.parse(savedStats);
+          // Check if stats are recent (less than 5 minutes old)
+          const statsAge = parsed.timestamp ? (Date.now() - new Date(parsed.timestamp).getTime()) : Infinity;
+          if (statsAge < 5 * 60 * 1000) { // 5 minutes
+            statsData = parsed;
+          }
+        }
+      } catch (err) {
+        console.error('[AI-TESTING] Error loading stats from localStorage:', err);
+      }
+      
+      // If no recent stats in localStorage, fetch from API
+      if (!statsData) {
+        const data = await api(`/api/dashboard/stats?shop=${shop}`);
+        statsData = {
+          totalProducts: data?.products?.total || 0,
+          optimizedProducts: data?.products?.optimized || 0,
+          totalCollections: data?.collections?.total || 0,
+          optimizedCollections: data?.collections?.optimized || 0,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Save to localStorage for consistency
+        try {
+          localStorage.setItem(`dashboard-stats-${shop}`, JSON.stringify(statsData));
+        } catch (err) {
+          console.error('[AI-TESTING] Error saving stats to localStorage:', err);
+        }
+      }
+      
       setStats({
-        totalProducts: data?.products?.total || 0,
-        optimizedProducts: data?.products?.optimized || 0,
-        totalCollections: data?.collections?.total || 0,
-        optimizedCollections: data?.collections?.optimized || 0
+        totalProducts: statsData.totalProducts || 0,
+        optimizedProducts: statsData.optimizedProducts || 0,
+        totalCollections: statsData.totalCollections || 0,
+        optimizedCollections: statsData.optimizedCollections || 0
       });
     } catch (err) {
       console.error('[AI-TESTING] Error loading stats:', err);

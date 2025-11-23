@@ -98,7 +98,7 @@ export default function Dashboard({ shop: shopProp }) {
   // Debounce timer for dashboard data loading
   const loadDataTimeoutRef = useRef(null);
 
-  // Load saved test results from localStorage (same as AI Testing page)
+  // Load saved test results and stats from localStorage (same as AI Testing page)
   const loadSavedTestResults = () => {
     try {
       const savedData = localStorage.getItem(`ai-test-results-${shop}`);
@@ -116,6 +116,14 @@ export default function Dashboard({ shop: shopProp }) {
         if (parsed.results) {
           setAiTestResults(parsed.results);
         }
+      }
+      
+      // Load stats from localStorage (synced from Dashboard Sync)
+      const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+      if (savedStats) {
+        const parsed = JSON.parse(savedStats);
+        // Use saved stats if they exist (will be overridden by API call, but ensures consistency)
+        // This is mainly for AI Testing page to use
       }
     } catch (err) {
       console.error('[Dashboard] Error loading saved test results:', err);
@@ -207,6 +215,20 @@ export default function Dashboard({ shop: shopProp }) {
           if (statsData) {
             setStats(statsData);
             setSubscription(statsData.subscription);
+            
+            // Save stats to localStorage for AI Testing page to use
+            try {
+              const statsToSave = {
+                totalProducts: statsData?.products?.total || 0,
+                optimizedProducts: statsData?.products?.optimized || 0,
+                totalCollections: statsData?.collections?.total || 0,
+                optimizedCollections: statsData?.collections?.optimized || 0,
+                timestamp: new Date().toISOString()
+              };
+              localStorage.setItem(`dashboard-stats-${shop}`, JSON.stringify(statsToSave));
+            } catch (err) {
+              console.error('[Dashboard] Error saving stats to localStorage:', err);
+            }
           }
           if (tokensData) {
             setTokens(tokensData);
@@ -1025,12 +1047,41 @@ export default function Dashboard({ shop: shopProp }) {
         <AIEOScoreCard 
           testResults={testResults}
           aiTestResults={aiTestResults}
-          stats={{
-            totalProducts: stats?.products?.total || 0,
-            optimizedProducts: stats?.products?.optimized || 0,
-            totalCollections: stats?.collections?.total || 0,
-            optimizedCollections: stats?.collections?.optimized || 0
-          }}
+          stats={(() => {
+            // Use stats from state (synced via localStorage)
+            // If stats are not loaded yet, try to get from localStorage
+            if (stats) {
+              return {
+                totalProducts: stats?.products?.total || 0,
+                optimizedProducts: stats?.products?.optimized || 0,
+                totalCollections: stats?.collections?.total || 0,
+                optimizedCollections: stats?.collections?.optimized || 0
+              };
+            }
+            
+            // Fallback to localStorage if stats not loaded yet
+            try {
+              const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+              if (savedStats) {
+                const parsed = JSON.parse(savedStats);
+                return {
+                  totalProducts: parsed.totalProducts || 0,
+                  optimizedProducts: parsed.optimizedProducts || 0,
+                  totalCollections: parsed.totalCollections || 0,
+                  optimizedCollections: parsed.optimizedCollections || 0
+                };
+              }
+            } catch (err) {
+              console.error('[Dashboard] Error loading stats from localStorage:', err);
+            }
+            
+            return {
+              totalProducts: 0,
+              optimizedProducts: 0,
+              totalCollections: 0,
+              optimizedCollections: 0
+            };
+          })()}
         />
       </Layout.Section>
 
