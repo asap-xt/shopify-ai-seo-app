@@ -234,7 +234,7 @@ export default function AiTesting({ shop: shopProp }) {
         `#e5e7eb 360deg`
       ];
     } else if (normalizedScore <= 0.6) {
-      // 40-60%: Red -> Orange -> Yellow
+      // 40-60%: Red -> Orange -> Yellow (NO GREEN)
       const orangeStop = scoreDeg * 0.33;
       const yellowStop = scoreDeg * 0.66;
       gradientStops = [
@@ -246,24 +246,28 @@ export default function AiTesting({ shop: shopProp }) {
         `#e5e7eb 360deg`
       ];
     } else if (normalizedScore <= 0.8) {
-      // 60-80%: Red -> Orange -> Yellow -> Light Green
-      const orangeStop = scoreDeg * 0.25;
-      const yellowStop = scoreDeg * 0.5;
-      const lightGreenStop = scoreDeg * 0.75;
+      // 60-80%: Red -> Orange -> Yellow -> Light Green (green starts at 60%)
+      const orangeStop = scoreDeg * 0.2;
+      const yellowStop = scoreDeg * 0.4;
+      // Green starts at 60% of the filled portion, which is at 60% of total score
+      const greenStartDeg = 60 * 3.6; // 60% = 216deg
+      const lightGreenStop = Math.max(greenStartDeg, scoreDeg * 0.7);
       gradientStops = [
         `#ef4444 0deg`,
         `#f97316 ${orangeStop}deg`,
         `#f59e0b ${yellowStop}deg`,
-        `#22c55e ${lightGreenStop}deg`, // Light green
+        `#22c55e ${lightGreenStop}deg`, // Light green starts after 60%
         `#22c55e ${scoreDeg}deg`,
         `#e5e7eb ${scoreDeg}deg`,
         `#e5e7eb 360deg`
       ];
     } else {
       // 80-100%: Red -> Orange -> Yellow -> Green
-      const orangeStop = scoreDeg * 0.2;
-      const yellowStop = scoreDeg * 0.4;
-      const greenStop = scoreDeg * 0.6;
+      const orangeStop = scoreDeg * 0.15;
+      const yellowStop = scoreDeg * 0.3;
+      // Green starts at 60% of total (216deg)
+      const greenStartDeg = 60 * 3.6; // 60% = 216deg
+      const greenStop = Math.max(greenStartDeg, scoreDeg * 0.5);
       gradientStops = [
         `#ef4444 0deg`,
         `#f97316 ${orangeStop}deg`,
