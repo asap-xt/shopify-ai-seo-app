@@ -201,6 +201,33 @@ export default function AiTesting({ shop: shopProp }) {
     return `rgb(${red}, ${green}, ${blue})`;
   };
 
+  // Function to generate smooth gradient for donut chart (full circle gradient)
+  const getDonutGradient = (score) => {
+    // Create a smooth gradient that goes from red (0%) to green (100%) around the full circle
+    // The filled portion shows the gradient, the rest is gray
+    const scoreDeg = score * 3.6; // Convert score (0-100) to degrees (0-360)
+    
+    // Smooth color stops: red -> orange -> yellow -> green
+    // The gradient always shows the full spectrum, but only scoreDeg portion is filled
+    // For the filled portion, scale the gradient stops proportionally
+    const normalizedScore = Math.max(0, Math.min(100, score)) / 100;
+    
+    // Scale gradient stops to match the filled portion
+    const redDeg = 0;
+    const orangeDeg = normalizedScore * 90; // 25% of circle = 90deg
+    const yellowDeg = normalizedScore * 180; // 50% of circle = 180deg
+    const greenDeg = scoreDeg; // End at score
+    
+    return `conic-gradient(
+      #ef4444 ${redDeg}deg,
+      #f97316 ${orangeDeg}deg,
+      #f59e0b ${yellowDeg}deg,
+      #10b981 ${greenDeg}deg,
+      #e5e7eb ${scoreDeg}deg,
+      #e5e7eb 360deg
+    )`;
+  };
+
   // Calculate AIEO Score based on test results, AI validation, and stats
   const calculatedAIEOScore = useMemo(() => {
     const calculateScore = (endpointResults, aiValidationResults, stats) => {
@@ -328,26 +355,24 @@ export default function AiTesting({ shop: shopProp }) {
         scoreBreakdown.structuredDataQuality
       );
 
-      // Determine grade
-      let grade = 'F';
+      // Determine grade (5-point scale: A=80-100%, B=60-79%, C=40-59%, D=20-39%, E=0-19%)
+      let grade = 'E';
       let gradeColor = '#ef4444';
 
-      if (scoreBreakdown.total >= 90) {
-        grade = 'A+';
-        gradeColor = '#10b981';
-      } else if (scoreBreakdown.total >= 80) {
+      if (scoreBreakdown.total >= 80) {
         grade = 'A';
         gradeColor = '#10b981';
-      } else if (scoreBreakdown.total >= 70) {
+      } else if (scoreBreakdown.total >= 60) {
         grade = 'B';
         gradeColor = '#3b82f6';
-      } else if (scoreBreakdown.total >= 60) {
+      } else if (scoreBreakdown.total >= 40) {
         grade = 'C';
         gradeColor = '#f59e0b';
-      } else if (scoreBreakdown.total >= 50) {
+      } else if (scoreBreakdown.total >= 20) {
         grade = 'D';
         gradeColor = '#f97316';
       }
+      // E is for 0-19%
 
       // Generate recommendations
       const recommendations = [];
@@ -684,20 +709,36 @@ export default function AiTesting({ shop: shopProp }) {
               
               {/* Two-column layout: Pie Chart with Score (left) and Score Breakdown (right) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                {/* Left Column: Pie Chart + Score Text */}
+                {/* Left Column: Donut Chart + Score Text */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                  {/* Pie Chart (without text inside) */}
+                  {/* Donut Chart (with white circle inside) */}
                   <Box
                     style={{
                       width: '120px',
                       height: '120px',
                       borderRadius: '50%',
-                      background: `conic-gradient(${getScoreColor(calculatedAIEOScore.score)} ${calculatedAIEOScore.score * 3.6}deg, #e5e7eb ${calculatedAIEOScore.score * 3.6}deg)`,
+                      background: getDonutGradient(calculatedAIEOScore.score),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
                       flexShrink: 0
                     }}
-                  />
+                  >
+                    {/* White inner circle for donut effect */}
+                    <Box
+                      style={{
+                        width: '90px',
+                        height: '90px',
+                        borderRadius: '50%',
+                        background: 'white',
+                        position: 'absolute',
+                        zIndex: 1
+                      }}
+                    />
+                  </Box>
                   
-                  {/* Score Text (to the right of pie chart) */}
+                  {/* Score Text (to the right of donut chart) */}
                   <BlockStack gap="100">
                     <Text variant="headingMd" fontWeight="semibold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
                       AIEO Score = {calculatedAIEOScore.score}
