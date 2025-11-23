@@ -1,5 +1,5 @@
 // frontend/src/pages/AiTesting.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Box,
