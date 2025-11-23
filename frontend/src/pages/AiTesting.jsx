@@ -90,6 +90,15 @@ export default function AiTesting({ shop: shopProp }) {
           setLastTestTimestamp(new Date(parsed.timestamp));
         }
       }
+      
+      // Load AI validation results if available
+      const savedAiData = localStorage.getItem(`ai-validation-results-${shop}`);
+      if (savedAiData) {
+        const parsed = JSON.parse(savedAiData);
+        if (parsed.results) {
+          setAiTestResults(parsed.results);
+        }
+      }
     } catch (err) {
       console.error('[AI-TESTING] Error loading saved test results:', err);
     }
@@ -328,6 +337,17 @@ export default function AiTesting({ shop: shopProp }) {
       if (response && response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
+        
+        // Save AI test results to localStorage (for Dashboard to use)
+        try {
+          const dataToSave = {
+            results: response.results,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem(`ai-validation-results-${shop}`, JSON.stringify(dataToSave));
+        } catch (err) {
+          console.error('[AI-TESTING] Error saving AI test results:', err);
+        }
         
         // Store AIEO score if available
         if (response.aiEOScore) {

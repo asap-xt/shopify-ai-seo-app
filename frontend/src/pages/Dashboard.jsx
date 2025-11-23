@@ -44,6 +44,10 @@ export default function Dashboard({ shop: shopProp }) {
   const [subscription, setSubscription] = useState(null);
   const [tokens, setTokens] = useState(null);
   
+  // Test results for AIEO Score (loaded from localStorage, same as AI Testing page)
+  const [testResults, setTestResults] = useState({});
+  const [aiTestResults, setAiTestResults] = useState({});
+  
   // Sync state
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -94,9 +98,34 @@ export default function Dashboard({ shop: shopProp }) {
   // Debounce timer for dashboard data loading
   const loadDataTimeoutRef = useRef(null);
 
+  // Load saved test results from localStorage (same as AI Testing page)
+  const loadSavedTestResults = () => {
+    try {
+      const savedData = localStorage.getItem(`ai-test-results-${shop}`);
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.results) {
+          setTestResults(parsed.results);
+        }
+      }
+      
+      // Check for AI test results (if saved separately)
+      const savedAiData = localStorage.getItem(`ai-validation-results-${shop}`);
+      if (savedAiData) {
+        const parsed = JSON.parse(savedAiData);
+        if (parsed.results) {
+          setAiTestResults(parsed.results);
+        }
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error loading saved test results:', err);
+    }
+  };
+
   useEffect(() => {
     loadDashboardData(true); // Force immediate load on mount
     loadSyncStatus();
+    loadSavedTestResults(); // Load test results from localStorage
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -994,8 +1023,8 @@ export default function Dashboard({ shop: shopProp }) {
       {/* AIEO Score Card - Below Products & Collections & Languages & Markets */}
       <Layout.Section>
         <AIEOScoreCard 
-          testResults={{}}
-          aiTestResults={{}}
+          testResults={testResults}
+          aiTestResults={aiTestResults}
           stats={{
             totalProducts: stats?.products?.total || 0,
             optimizedProducts: stats?.products?.optimized || 0,
