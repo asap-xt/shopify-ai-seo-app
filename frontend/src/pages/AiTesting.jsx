@@ -66,6 +66,7 @@ export default function AiTesting({ shop: shopProp }) {
     totalCollections: 0,
     optimizedCollections: 0
   });
+  const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
 
 
   useEffect(() => {
@@ -73,8 +74,39 @@ export default function AiTesting({ shop: shopProp }) {
       loadPlan();
       loadTokenBalance();
       loadStats();
+      loadSavedTestResults();
     }
   }, [shop, api]);
+
+  // Load saved test results from localStorage
+  const loadSavedTestResults = () => {
+    try {
+      const savedData = localStorage.getItem(`ai-test-results-${shop}`);
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.results && parsed.timestamp) {
+          setTestResults(parsed.results);
+          setLastTestTimestamp(new Date(parsed.timestamp));
+        }
+      }
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading saved test results:', err);
+    }
+  };
+
+  // Save test results to localStorage
+  const saveTestResults = (results) => {
+    try {
+      const dataToSave = {
+        results,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(`ai-test-results-${shop}`, JSON.stringify(dataToSave));
+      setLastTestTimestamp(new Date());
+    } catch (err) {
+      console.error('[AI-TESTING] Error saving test results:', err);
+    }
+  };
   
   // Refresh token balance when component becomes visible (after returning from billing page)
   useEffect(() => {
@@ -297,7 +329,24 @@ export default function AiTesting({ shop: shopProp }) {
       // Generate recommendations
       const recommendations = [];
       if (scoreBreakdown.endpointAvailability < 20) {
-        recommendations.push('Several AI discovery endpoints are missing or not working. Fix endpoint issues to improve your score.');
+        // Check if there are locked endpoints vs error/failed endpoints
+        const lockedEndpoints = Object.entries(endpointResults || {})
+          .filter(([key, result]) => result.status === 'locked')
+          .length;
+        const errorEndpoints = Object.entries(endpointResults || {})
+          .filter(([key, result]) => result.status === 'error' || result.status === 'failed')
+          .length;
+        
+        if (lockedEndpoints > 0 && errorEndpoints === 0) {
+          // All missing are locked
+          recommendations.push('Several AI discovery endpoints are locked due to plan limitations. Upgrade your plan to unlock them.');
+        } else if (lockedEndpoints > 0 && errorEndpoints > 0) {
+          // Mix of locked and errors
+          recommendations.push('Some endpoints are missing or not working. Others are locked due to plan limitations. Fix endpoint issues and upgrade your plan to improve your score.');
+        } else {
+          // Only errors, no locked
+          recommendations.push('Several AI discovery endpoints are missing or not working. Fix endpoint issues to improve your score.');
+        }
       }
       if (scoreBreakdown.aiValidationQuality < 30) {
         const poorRatings = Object.entries(aiValidationResults || {})
@@ -445,6 +494,7 @@ export default function AiTesting({ shop: shopProp }) {
       if (response.results) {
         setTestResults(response.results);
         setTestProgress(100);
+        saveTestResults(response.results); // Save to localStorage
         setToastContent('Basic tests completed!');
       } else {
         setToastContent('Testing failed. Please try again.');
@@ -726,6 +776,20 @@ export default function AiTesting({ shop: shopProp }) {
                       {testing ? 'Testing...' : 'Run Basic Tests'}
                     </Button>
                   </InlineStack>
+
+                  {/* Show banner if there are saved test results */}
+                  {lastTestTimestamp && Object.keys(testResults).length > 0 && !testing && (
+                    <Banner tone="info">
+                      <Text variant="bodySm">
+                        These results are from {lastTestTimestamp.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}. Run Basic Tests again to refresh.
+                      </Text>
+                    </Banner>
+                  )}
 
                   {testing && (
                     <Box>
