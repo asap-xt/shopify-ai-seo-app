@@ -36,6 +36,14 @@ class EmailScheduler {
       })
     );
 
+    // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
+    this.jobs.push(
+      cron.schedule('0 10 * * *', async () => {
+        console.log('⏰ Running app store rating email check...');
+        await this.checkAppStoreRatingEmail();
+      })
+    );
+
     // Trial expiring check (every day at 9 AM)
     this.jobs.push(
       cron.schedule('0 9 * * *', async () => {

@@ -277,6 +277,112 @@ class EmailService {
   }
 
   /**
+   * Send App Store rating email (Day 6 after installation)
+   * Only sent if: subscription is active (after trial)
+   */
+  async sendAppStoreRatingEmail(store) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - skipping app store rating email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      // Check if email was already sent (avoid duplicates)
+      if (store._id || store.id) {
+        const EmailLog = (await import('../db/EmailLog.js')).default;
+        const existingLog = await EmailLog.findOne({
+          storeId: store._id || store.id,
+          type: 'appstore-rating',
+          status: 'sent'
+        });
+        
+        if (existingLog) {
+          console.log(`ℹ️ App Store rating email already sent to ${store.shop}, skipping duplicate`);
+          return { success: true, skipped: true, reason: 'already_sent' };
+        }
+      }
+
+      // Fetch shop name and email from Shopify API
+      let shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      let shopEmail = store.email || store.shopOwner;
+      
+      if (store.shop && store.accessToken) {
+        try {
+          const shopQuery = `
+            query {
+              shop {
+                name
+                email
+              }
+            }
+          `;
+          const shopResponse = await fetch(`https://${store.shop}/admin/api/2025-07/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': store.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: shopQuery }),
+          });
+          
+          if (shopResponse.ok) {
+            const shopData = await shopResponse.json();
+            if (shopData.data?.shop?.name) {
+              shopName = shopData.data.shop.name;
+            }
+            if (shopData.data?.shop?.email) {
+              shopEmail = shopData.data.shop.email;
+            }
+          }
+        } catch (shopFetchError) {
+          console.warn('[EMAIL] Could not fetch shop name:', shopFetchError.message);
+        }
+      }
+      
+      // App Store URL - placeholder until app is approved
+      const appStoreUrl = process.env.SHOPIFY_APP_STORE_URL || 'https://apps.shopify.com/indexaize';
+      
+      // Use SendGrid attachment with Content-ID for inline image
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo'
+        });
+      }
+      
+      const msg = {
+        to: shopEmail || `${shopName}@example.com`,
+        from: { email: this.fromEmail, name: this.fromName },
+        subject: 'Love indexAIze? Help us grow with a review!',
+        html: this.getAppStoreRatingEmailTemplate({
+          shopName,
+          shop: store.shop,
+          email: shopEmail,
+          appStoreUrl,
+          logoUrl: 'cid:logo'
+        }),
+        attachments: attachments
+      };
+
+      await sgMail.send(msg);
+      console.log(`✅ App Store rating email sent: ${store.shop}`);
+      await this.logEmail(store._id || store.id, store.shop, 'appstore-rating', 'sent');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ App Store rating email error:', error);
+      await this.logEmail(store._id || store.id, store.shop, 'appstore-rating', 'failed', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Trial expiring reminder
    */
   async sendTrialExpiringEmail(store, daysLeft) {
@@ -779,6 +885,87 @@ class EmailService {
                   <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
                     <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
                       <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                    ${this.getUnsubscribeFooter(data.shop, data.email)}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+  }
+
+  getAppStoreRatingEmailTemplate(data) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Rate indexAIze - indexAIze</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="cid:logo" alt="indexAIze Logo" style="width: 120px; height: 120px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Thank you for using indexAIze! We're thrilled that you've been with us for a week now.
+                    </p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Your feedback means the world to us. If you're enjoying indexAIze, we'd be incredibly grateful if you could take a moment to rate us in the Shopify App Store. Your review helps other merchants discover our app and helps us continue improving.
+                    </p>
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 40px 0;">
+                      <a href="${data.appStoreUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; letter-spacing: 0.5px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
+                        Rate Us in App Store
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
+                      It only takes a minute, and it makes a huge difference for us. Thank you for being part of the indexAIze community!
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
                     </p>
                     ${this.getUnsubscribeFooter(data.shop, data.email)}
                   </td>

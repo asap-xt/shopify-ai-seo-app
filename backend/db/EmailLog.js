@@ -19,6 +19,7 @@ const emailLogSchema = new mongoose.Schema({
       'onboarding-day3', 
       'onboarding-day7', 
       'token-purchase',
+      'appstore-rating',
       'trial-expiring', 
       'uninstall-followup', 
       'weekly-digest', 
