@@ -50,6 +50,30 @@ const shopSchema = new mongoose.Schema({
     type: Number,
     default: 50
   },
+  email: {
+    type: String,
+    required: false
+  },
+  contactEmail: {
+    type: String,
+    required: false
+  },
+  shopOwner: {
+    type: String,
+    required: false
+  },
+  shopOwnerEmail: {
+    type: String,
+    required: false
+  },
+  welcomeEmailSent: {
+    type: Boolean,
+    default: false
+  },
+  welcomeEmailSentAt: {
+    type: Date,
+    required: false
+  },
   // Dashboard sync settings
   lastSyncDate: {
     type: Date,
