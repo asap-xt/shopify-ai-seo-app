@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import express from 'express';
 import Shop from './db/Shop.js';
 import Subscription from './db/Subscription.js';
+import emailService from './services/emailService.js';
 
 const router = express.Router();
 
@@ -196,6 +197,62 @@ async function registerWebhooks(shop, accessToken) {
   }
 }
 
+async function fetchShopContactInfo(shop, accessToken) {
+  try {
+    const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
+      method: 'GET',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('[AUTH] Failed to fetch shop contact info:', response.status);
+      return null;
+    }
+    
+    const payload = await response.json();
+    const shopData = payload?.shop;
+    if (!shopData) return null;
+    
+    return {
+      contactEmail: shopData.customer_email || shopData.contact_email || null,
+      email: shopData.email || null,
+      shopOwner: shopData.shop_owner || null,
+      shopOwnerEmail: shopData.customer_email || shopData.email || null
+    };
+  } catch (error) {
+    console.error('[AUTH] Error fetching shop contact info:', error.message);
+    return null;
+  }
+}
+
+function scheduleWelcomeEmail(shop) {
+  queueMicrotask(async () => {
+    try {
+      const shopDoc = await Shop.findOne({ shop }).lean();
+      if (!shopDoc) {
+        console.warn('[AUTH] Cannot send welcome email, shop missing:', shop);
+        return;
+      }
+      
+      if (shopDoc.welcomeEmailSent) {
+        console.log('[AUTH] Welcome email already sent for', shop);
+        return;
+      }
+      
+      const subscription = await Subscription.findOne({ shop }).lean();
+      const result = await emailService.sendWelcomeEmail({ ...shopDoc, subscription });
+      if (result?.success) {
+        await Shop.updateOne({ shop }, { welcomeEmailSent: true, welcomeEmailSentAt: new Date() });
+      }
+    } catch (error) {
+      console.error('[AUTH] Welcome email dispatch failed:', error);
+    }
+  });
+}
+
 // GET /?shop=asapxt-teststore.myshopify.com
 router.get('/', async (req, res) => {
   console.log('[AUTH] Starting OAuth flow', { query: req.query });
@@ -288,7 +345,7 @@ router.get('/callback', async (req, res) => {
       ? accessToken.accessToken 
       : accessToken;
     
-    const shopRecord = await Shop.findOneAndUpdate(
+    let shopRecord = await Shop.findOneAndUpdate(
       { shop }, 
       { 
         shop, 
@@ -303,6 +360,26 @@ router.get('/callback', async (req, res) => {
       }, 
       { upsert: true, new: true }
     );
+    
+    const contactInfo = await fetchShopContactInfo(shop, accessTokenString);
+    if (contactInfo) {
+      const contactUpdate = {};
+      if (contactInfo.email) contactUpdate.email = contactInfo.email;
+      if (contactInfo.contactEmail) contactUpdate.contactEmail = contactInfo.contactEmail;
+      if (contactInfo.shopOwner) contactUpdate.shopOwner = contactInfo.shopOwner;
+      if (contactInfo.shopOwnerEmail) contactUpdate.shopOwnerEmail = contactInfo.shopOwnerEmail;
+      
+      if (Object.keys(contactUpdate).length) {
+        contactUpdate.updatedAt = new Date();
+        shopRecord = await Shop.findOneAndUpdate(
+          { shop },
+          { $set: contactUpdate },
+          { new: true }
+        );
+      }
+    }
+    
+    scheduleWelcomeEmail(shop);
     
     console.log('[AUTH] Shop record saved:', {
       id: shopRecord._id,
