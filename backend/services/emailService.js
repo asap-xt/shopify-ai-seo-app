@@ -1235,7 +1235,7 @@ class EmailService {
       const msg = {
         to: store.email || store.shopOwnerEmail || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: `📊 ${totalCount} product${totalCount > 1 ? 's' : ''} ready for AIEO optimization`,
+        subject: `${totalCount} product${totalCount > 1 ? 's' : ''} ready for AIEO optimization`,
         html: this.getProductDigestTemplate({
           shopName,
           shop: store.shop,
@@ -1265,6 +1265,7 @@ class EmailService {
 
   getProductDigestTemplate(data) {
     const { shopName, dashboardUrl, totalCount, newProducts, updatedProducts, needsOptimization, productChanges } = data;
+    const logoUrl = 'https://indexaize.com/logo.png'; // Same as welcome email
     
     return `
       <!DOCTYPE html>
@@ -1272,95 +1273,126 @@ class EmailService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Weekly Product Digest</title>
+        <title>Weekly Product Update - indexAIze</title>
       </head>
-      <body style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-          <!-- Header -->
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">📊 Weekly Product Update</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">Your products are waiting for AIEO optimization</p>
-          </div>
-
-          <!-- Content -->
-          <div style="padding: 40px 30px;">
-            <p style="font-size: 16px; color: #334155; margin: 0 0 25px;">Hi ${shopName}! 👋</p>
-            
-            <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 30px;">
-              This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} AIEO attention.
-            </p>
-
-            <!-- Stats Cards -->
-            <div style="display: flex; gap: 15px; margin-bottom: 30px;">
-              ${newProducts.length > 0 ? `
-              <div style="flex: 1; background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: 700; color: #16a34a;">${newProducts.length}</div>
-                <div style="font-size: 13px; color: #15803d;">New Products</div>
-              </div>
-              ` : ''}
-              ${updatedProducts.length > 0 ? `
-              <div style="flex: 1; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: 700; color: #2563eb;">${updatedProducts.length}</div>
-                <div style="font-size: 13px; color: #1d4ed8;">Updated</div>
-              </div>
-              ` : ''}
-              ${needsOptimization.length > 0 ? `
-              <div style="flex: 1; background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px;">
-                <div style="font-size: 24px; font-weight: 700; color: #d97706;">${needsOptimization.length}</div>
-                <div style="font-size: 13px; color: #b45309;">Need AIEO</div>
-              </div>
-              ` : ''}
-            </div>
-
-            <!-- Product List -->
-            ${productChanges.length > 0 ? `
-            <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-              <h3 style="margin: 0 0 15px; font-size: 16px; color: #1e293b;">Recent Changes:</h3>
-              ${productChanges.map(product => `
-                <div style="padding: 12px; background: white; border-radius: 6px; margin-bottom: 10px;">
-                  <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${product.productTitle}</div>
-                  <div style="font-size: 13px; color: #64748b;">
-                    ${product.changeType === 'created' ? '🆕 New product' : '📝 Updated'}
-                    ${product.needsAttention ? ' • <span style="color: #f59e0b;">Needs optimization</span>' : ''}
-                  </div>
-                </div>
-              `).join('')}
-              ${totalCount > 10 ? `
-              <div style="text-align: center; padding: 10px; color: #64748b; font-size: 13px;">
-                +${totalCount - 10} more products...
-              </div>
-              ` : ''}
-            </div>
-            ` : ''}
-
-            <!-- CTA -->
-            <div style="text-align: center; margin: 35px 0;">
-              <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);">
-                Optimize Products Now
-              </a>
-            </div>
-
-            <!-- Tip Box -->
-            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; padding: 20px; margin: 30px 0;">
-              <div style="font-size: 14px; color: #78350f;">
-                <strong>💡 Pro Tip:</strong> Products optimized for AI search engines get discovered faster by ChatGPT, Perplexity, and other AI assistants. Stay ahead of the curve!
-              </div>
-            </div>
-
-            <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 20px 0 0;">
-              Questions? <a href="mailto:${this.supportEmail}" style="color: #667eea; text-decoration: none;">Contact Support</a>
-            </p>
-          </div>
-
-          <!-- Footer -->
-          <div style="padding: 30px; background: #f8fafc; text-align: center; border-top: 1px solid #e2e8f0;">
-            <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
-              <strong style="color: #1e40af;">indexAIze Team</strong><br>
-              Helping you rank higher in AI search
-            </p>
-            ${this.getUnsubscribeFooter(data.shop, data.email || 'customer@example.com')}
-          </div>
-        </div>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="${logoUrl}" alt="indexAIze Logo" style="width: 120px; height: 120px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Weekly Product Update</p>
+                          <p style="margin: 5px 0 0; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 400;">AIEO opportunities for your store</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} AIEO attention to improve discoverability in AI search engines.
+                    </p>
+                    
+                    <!-- Stats Summary Box -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">This Week's Activity</h3>
+                      
+                      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          ${newProducts.length > 0 ? `
+                          <td style="padding: 10px; text-align: center; border-right: 1px solid #dbeafe;">
+                            <div style="font-size: 28px; font-weight: 700; color: #1e40af; margin-bottom: 5px;">${newProducts.length}</div>
+                            <div style="font-size: 13px; color: #64748b;">New Products</div>
+                          </td>
+                          ` : ''}
+                          ${updatedProducts.length > 0 ? `
+                          <td style="padding: 10px; text-align: center; ${needsOptimization.length > 0 ? 'border-right: 1px solid #dbeafe;' : ''}">
+                            <div style="font-size: 28px; font-weight: 700; color: #1e40af; margin-bottom: 5px;">${updatedProducts.length}</div>
+                            <div style="font-size: 13px; color: #64748b;">Updated</div>
+                          </td>
+                          ` : ''}
+                          ${needsOptimization.length > 0 ? `
+                          <td style="padding: 10px; text-align: center;">
+                            <div style="font-size: 28px; font-weight: 700; color: #f59e0b; margin-bottom: 5px;">${needsOptimization.length}</div>
+                            <div style="font-size: 13px; color: #64748b;">Need AIEO</div>
+                          </td>
+                          ` : ''}
+                        </tr>
+                      </table>
+                    </div>
+                    
+                    <!-- Product List -->
+                    ${productChanges.length > 0 ? `
+                    <div style="margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Recent Changes</h3>
+                      ${productChanges.map(product => `
+                        <div style="padding: 12px 15px; background: #f8fafc; border-left: 3px solid ${product.changeType === 'created' ? '#22c55e' : '#3b82f6'}; margin-bottom: 10px; border-radius: 4px;">
+                          <div style="font-weight: 600; color: #1e293b; font-size: 14px; margin-bottom: 4px;">${product.productTitle}</div>
+                          <div style="font-size: 13px; color: #64748b;">
+                            ${product.changeType === 'created' ? '🆕 New product' : '📝 Updated'}
+                            ${product.needsAttention ? ' • <span style="color: #f59e0b; font-weight: 500;">Needs optimization</span>' : ''}
+                          </div>
+                        </div>
+                      `).join('')}
+                      ${totalCount > 10 ? `
+                      <div style="text-align: center; padding: 15px; color: #64748b; font-size: 13px; background: #f8fafc; border-radius: 4px; margin-top: 10px;">
+                        +${totalCount - 10} more products waiting for optimization...
+                      </div>
+                      ` : ''}
+                    </div>
+                    ` : ''}
+                    
+                    <!-- Pro Tip Box (similar to welcome email style) -->
+                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #b45309;">💡 Pro Tip:</strong> Products optimized for AI search engines get discovered faster by ChatGPT, Perplexity, and other AI assistants. Stay ahead of the curve!
+                      </p>
+                    </div>
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        Optimize Products Now
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong><br>
+                      Helping AI assistants discover and recommend your products
+                    </p>
+                    ${this.getUnsubscribeFooter(data.shop, data.email || 'customer@example.com')}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;
