@@ -1282,8 +1282,21 @@ class EmailService {
         });
       }
       
+      const recipientEmail = store.email || store.shopOwnerEmail || store.contactEmail || null;
+      
+      if (!recipientEmail) {
+        console.error('[PRODUCT-DIGEST] ❌ No valid email found for shop:', store.shop);
+        console.error('[PRODUCT-DIGEST] Shop data:', {
+          email: store.email || 'NOT SET',
+          shopOwnerEmail: store.shopOwnerEmail || 'NOT SET',
+          contactEmail: store.contactEmail || 'NOT SET'
+        });
+        await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'failed', 'No valid recipient email');
+        return { success: false, error: 'No valid recipient email' };
+      }
+      
       const msg = {
-        to: store.email || store.shopOwnerEmail || `${shopName}@example.com`,
+        to: recipientEmail,
         from: { email: this.fromEmail, name: this.fromName },
         subject: `${totalCount} product${totalCount > 1 ? 's' : ''} ready for AIEO optimization`,
         html: this.getProductDigestTemplate({
@@ -1304,6 +1317,11 @@ class EmailService {
           openTracking: { enable: true }
         }
       };
+
+      console.log('[PRODUCT-DIGEST] 📧 Sending email to:', msg.to);
+      console.log('[PRODUCT-DIGEST] From:', msg.from);
+      console.log('[PRODUCT-DIGEST] Subject:', msg.subject);
+      console.log('[PRODUCT-DIGEST] Total products:', totalCount);
 
       await sgMail.send(msg);
       console.log(`✅ Weekly product digest sent to: ${store.shop}`);
