@@ -643,6 +643,42 @@ if (!IS_PROD) {
       });
     }
   });
+
+  // Check shop email (debug endpoint)
+  app.get('/api/test/check-shop-email', async (req, res) => {
+    const { shop } = req.query;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    try {
+      const Shop = (await import('./db/Shop.js')).default;
+      const shopRecord = await Shop.findOne({ shop }).lean();
+      
+      if (!shopRecord) {
+        return res.status(404).json({ 
+          error: 'Shop not found in database',
+          shop 
+        });
+      }
+
+      res.json({
+        shop: shopRecord.shop,
+        email: shopRecord.email || 'NOT SET',
+        shopOwner: shopRecord.shopOwner || 'NOT SET',
+        shopOwnerEmail: shopRecord.shopOwnerEmail || 'NOT SET',
+        contactEmail: shopRecord.contactEmail || 'NOT SET',
+        name: shopRecord.name || 'NOT SET',
+        isActive: shopRecord.isActive,
+        createdAt: shopRecord.createdAt,
+        updatedAt: shopRecord.updatedAt
+      });
+    } catch (error) {
+      console.error('[CHECK SHOP EMAIL] Error:', error);
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  });
 }
 
     // ---------------------------------------------------------------------------

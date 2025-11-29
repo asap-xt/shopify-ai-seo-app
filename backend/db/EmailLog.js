@@ -22,7 +22,8 @@ const emailLogSchema = new mongoose.Schema({
       'appstore-rating',
       'trial-expiring', 
       'uninstall-followup', 
-      'weekly-digest', 
+      'weekly-digest',
+      'product_digest', 
       'upgrade-success', 
       'reengagement'
     ],
