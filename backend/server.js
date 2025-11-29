@@ -717,6 +717,7 @@ app.post('/api/test/fetch-shop-email', async (req, res) => {
       headers: {
         'X-Shopify-Access-Token': shopRecord.accessToken,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify({ query: shopQuery }),
     });
