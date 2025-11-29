@@ -262,6 +262,7 @@ export default async function handleSubscriptionUpdate(req, res) {
                 headers: {
                   'X-Shopify-Access-Token': shopRecord.accessToken,
                   'Content-Type': 'application/json',
+                  'Accept': 'application/graphql-response+json, application/json',
                 },
                 body: JSON.stringify({ query: shopQuery }),
               });
