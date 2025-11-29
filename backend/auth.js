@@ -173,6 +173,7 @@ async function registerWebhooks(shop, accessToken) {
 
 async function fetchShopContactInfo(shop, accessToken) {
   try {
+    console.log('[AUTH] Fetching shop contact info for:', shop);
     const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
       method: 'GET',
       headers: {
@@ -182,20 +183,30 @@ async function fetchShopContactInfo(shop, accessToken) {
     });
     
     if (!response.ok) {
-      console.warn('[AUTH] Failed to fetch shop contact info:', response.status);
+      console.error('[AUTH] Failed to fetch shop contact info:', response.status, response.statusText);
       return null;
     }
     
     const payload = await response.json();
     const shopData = payload?.shop;
-    if (!shopData) return null;
+    if (!shopData) {
+      console.error('[AUTH] No shop data in response');
+      return null;
+    }
     
-    return {
+    const contactInfo = {
       contactEmail: shopData.customer_email || shopData.contact_email || null,
       email: shopData.email || null,
       shopOwner: shopData.shop_owner || null,
       shopOwnerEmail: shopData.customer_email || shopData.email || null
     };
+    
+    console.log('[AUTH] ✅ Shop contact info fetched:', {
+      email: contactInfo.email,
+      shopOwner: contactInfo.shopOwner
+    });
+    
+    return contactInfo;
   } catch (error) {
     console.error('[AUTH] Error fetching shop contact info:', error.message);
     return null;
@@ -344,7 +355,16 @@ router.get('/callback', async (req, res) => {
           { $set: contactUpdate },
           { new: true }
         );
+        console.log('[AUTH] ✅ Shop contact info updated in DB:', {
+          shop,
+          email: contactUpdate.email,
+          shopOwner: contactUpdate.shopOwner
+        });
+      } else {
+        console.warn('[AUTH] ⚠️ No contact info to update (all fields were null)');
       }
+    } else {
+      console.error('[AUTH] ❌ Failed to fetch shop contact info - shop record will have no email!');
     }
     
     scheduleWelcomeEmail(shop);

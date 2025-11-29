@@ -120,7 +120,11 @@ class EmailService {
           planFeatures: await this.getPlanFeatures(planKey), // Get real plan features instead of technical limits
           hasIncludedTokens // Flag to show/hide token purchase recommendation
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -262,7 +266,11 @@ class EmailService {
           billingUrl: this.getBillingUrl(store.shop),
           logoUrl: 'cid:logo'
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -368,7 +376,11 @@ class EmailService {
           appStoreUrl,
           logoUrl: 'cid:logo'
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -410,7 +422,11 @@ class EmailService {
             totalOptimizations: store.analytics?.totalAIQueries || 0,
             topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
           }
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -447,7 +463,11 @@ class EmailService {
           feedbackUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/feedback?shop=${store.shop}`,
           reinstallUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/?shop=${store.shop}`,
           supportEmail: process.env.SUPPORT_EMAIL || 'support@aiseo2.app'
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -488,7 +508,11 @@ class EmailService {
           },
           dashboardUrl: this.getDashboardUrl(store.shop),
           tips: this.getWeeklyTips(stats)
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -526,7 +550,11 @@ class EmailService {
           newPlan: newPlan,
           newFeatures: await this.getPlanFeatures(newPlan),
           dashboardUrl: this.getDashboardUrl(store.shop)
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -563,7 +591,11 @@ class EmailService {
           incentive: '50% off next month if you upgrade this week!',
           dashboardUrl: this.getDashboardUrl(store.shop),
           supportUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/support`
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -1263,7 +1295,11 @@ class EmailService {
           needsOptimization,
           productChanges: productChanges.slice(0, 10) // Show top 10
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
