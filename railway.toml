@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "echo '=== CLEAN BUILD TIMESTAMP: 2025-11-29T12:45 ===' && rm -rf frontend/dist frontend/node_modules/.vite frontend/.vite && npm install && cd frontend && rm -rf dist node_modules/.vite .vite && npm install && npm run build && echo '=== VERIFYING SINGLE INDEX FILE ===' && ls -la dist/assets/index-*.js && grep -o 'index-[a-zA-Z0-9_-]*\\.js' dist/index.html && cd .."
 
 [deploy]
-startCommand = "npm start"
+startCommand = "rm -f frontend/dist/assets/index-xfv8MV1x.js && echo '=== CLEANED OLD INDEX FILES ===' && ls -la frontend/dist/assets/index-*.js && npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
