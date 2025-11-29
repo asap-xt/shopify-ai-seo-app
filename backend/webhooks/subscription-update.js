@@ -244,75 +244,64 @@ export default async function handleSubscriptionUpdate(req, res) {
               return;
             }
             
-            // Fetch shop email from Shopify API (using REST API - more reliable)
+            // Fetch shop email from Shopify GraphQL API (production-tested)
             let shopEmail = null;
-            let shopOwner = null;
             try {
-              console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify REST API...');
-              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/shop.json`, {
-                method: 'GET',
+              console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify GraphQL API...');
+              const shopQuery = `
+                query {
+                  shop {
+                    email
+                    name
+                    contactEmail
+                  }
+                }
+              `;
+              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+                method: 'POST',
                 headers: {
                   'X-Shopify-Access-Token': shopRecord.accessToken,
                   'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({ query: shopQuery }),
               });
               
               if (shopResponse.ok) {
                 const shopData = await shopResponse.json();
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Shop data from Shopify:', {
-                  email: shopData.shop?.email,
-                  customer_email: shopData.shop?.customer_email,
-                  contact_email: shopData.shop?.contact_email,
-                  shop_owner: shopData.shop?.shop_owner
+                  email: shopData.data?.shop?.email,
+                  contactEmail: shopData.data?.shop?.contactEmail,
+                  name: shopData.data?.shop?.name
                 });
-                shopEmail = shopData.shop?.email || 
-                           shopData.shop?.customer_email || 
-                           shopData.shop?.contact_email || 
+                shopEmail = shopData.data?.shop?.email || 
+                           shopData.data?.shop?.contactEmail || 
                            null;
-                shopOwner = shopData.shop?.shop_owner || null;
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop email:', shopEmail);
-                console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop owner:', shopOwner);
               } else {
-                console.error('[SUBSCRIPTION-UPDATE] ❌ Shopify API error:', shopResponse.status, shopResponse.statusText);
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Shopify GraphQL error:', shopResponse.status, shopResponse.statusText);
               }
             } catch (emailFetchError) {
               console.error('[SUBSCRIPTION-UPDATE] ❌ Could not fetch shop email:', emailFetchError.message);
             }
             
             // Update shop record with email if fetched successfully
-            if (shopEmail || shopOwner) {
+            if (shopEmail && shopEmail !== shopRecord.email) {
               try {
-                const updateFields = { updatedAt: new Date() };
-                if (shopEmail) {
-                  updateFields.email = shopEmail;
-                  updateFields.shopOwnerEmail = shopEmail;
-                }
-                if (shopOwner) {
-                  updateFields.shopOwner = shopOwner;
-                }
-                
                 await Shop.updateOne(
                   { shop },
-                  { $set: updateFields }
+                  { $set: { email: shopEmail, shopOwnerEmail: shopEmail, updatedAt: new Date() } }
                 );
-                console.log('[SUBSCRIPTION-UPDATE] ✅ Updated shop data in DB:', updateFields);
+                console.log('[SUBSCRIPTION-UPDATE] ✅ Updated shop email in DB:', shopEmail);
               } catch (updateError) {
-                console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to update shop data:', updateError.message);
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to update shop email:', updateError.message);
               }
-            }
-            
-            // Prepare email recipient - prefer fetched email, fallback to existing, last resort skip
-            const recipientEmail = shopEmail || shopRecord.email;
-            if (!recipientEmail) {
-              console.error('[SUBSCRIPTION-UPDATE] ❌ No valid email found for shop:', shop);
-              return; // Skip email if no valid recipient
             }
             
             const storeWithSubscription = {
               ...shopRecord,
               _id: shopRecord._id,
-              email: recipientEmail,
-              shopOwner: shopOwner || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
+              email: shopEmail || shopRecord.email,
+              shopOwner: shopEmail || shopRecord.shopOwner,
               subscription: updatedSubscription
             };
             
