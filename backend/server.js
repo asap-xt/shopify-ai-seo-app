@@ -2093,9 +2093,16 @@ if (!IS_PROD) {
         });
         
         // Serve logo for emails (public endpoint)
-        app.get('/assets/logo/Logo_60x60.png', (req, res) => {
-          const logoPath = path.join(__dirname, 'assets', 'logo', 'Logo_60x60.png');
-          const logoPathAlt = path.join(__dirname, '..', 'backend', 'assets', 'logo', 'Logo_60x60.png');
+        app.get('/assets/logo/:size', (req, res) => {
+          const { size } = req.params;
+          const allowedSizes = ['Logo_60x60.png', 'Logo_80x80.png', 'Logo_120x120.png'];
+          
+          if (!allowedSizes.includes(size)) {
+            return res.status(404).send('Logo size not found');
+          }
+          
+          const logoPath = path.join(__dirname, 'assets', 'logo', size);
+          const logoPathAlt = path.join(__dirname, '..', 'backend', 'assets', 'logo', size);
           
           let finalPath = null;
           if (fs.existsSync(logoPath)) {

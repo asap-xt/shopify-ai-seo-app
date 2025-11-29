@@ -1232,6 +1232,21 @@ class EmailService {
         return { success: true, skipped: true, reason: 'no_changes' };
       }
       
+      // Prepare logo attachment (same as welcome email)
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo' // SendGrid uses content_id (not contentId)
+        });
+      }
+      
       const msg = {
         to: store.email || store.shopOwnerEmail || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
@@ -1239,6 +1254,7 @@ class EmailService {
         html: this.getProductDigestTemplate({
           shopName,
           shop: store.shop,
+          email: store.email,
           dashboardUrl: this.getDashboardUrl(store.shop),
           billingUrl: this.getBillingUrl(store.shop),
           totalCount,
@@ -1246,7 +1262,8 @@ class EmailService {
           updatedProducts,
           needsOptimization,
           productChanges: productChanges.slice(0, 10) // Show top 10
-        })
+        }),
+        attachments: attachments
       };
 
       await sgMail.send(msg);
@@ -1265,7 +1282,9 @@ class EmailService {
 
   getProductDigestTemplate(data) {
     const { shopName, dashboardUrl, totalCount, newProducts, updatedProducts, needsOptimization, productChanges } = data;
-    const logoUrl = 'https://cdn.shopify.com/s/files/1/0742/9688/5569/files/indexaize-logo-square.png?v=1732902847'; // indexAIze logo
+    
+    // Use Content-ID reference for inline attachment (same as welcome email)
+    const logoUrl = 'cid:logo';
     
     return `
       <!DOCTYPE html>
