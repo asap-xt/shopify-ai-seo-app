@@ -1188,6 +1188,164 @@ class EmailService {
       </html>
     `;
   }
+
+  /**
+   * Send weekly product digest email
+   */
+  async sendWeeklyProductDigest(store, productChanges) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - skipping product digest');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      
+      // Count products by type
+      const newProducts = productChanges.filter(p => p.changeType === 'created');
+      const updatedProducts = productChanges.filter(p => p.changeType === 'updated');
+      const needsOptimization = productChanges.filter(p => p.needsAttention);
+      
+      const totalCount = productChanges.length;
+      
+      // Skip if no changes
+      if (totalCount === 0) {
+        return { success: true, skipped: true, reason: 'no_changes' };
+      }
+      
+      const msg = {
+        to: store.email || store.shopOwnerEmail || `${shopName}@example.com`,
+        from: { email: this.fromEmail, name: this.fromName },
+        subject: `📊 ${totalCount} product${totalCount > 1 ? 's' : ''} ready for SEO optimization`,
+        html: this.getProductDigestTemplate({
+          shopName,
+          shop: store.shop,
+          dashboardUrl: this.getDashboardUrl(store.shop),
+          billingUrl: this.getBillingUrl(store.shop),
+          totalCount,
+          newProducts,
+          updatedProducts,
+          needsOptimization,
+          productChanges: productChanges.slice(0, 10) // Show top 10
+        })
+      };
+
+      await sgMail.send(msg);
+      console.log(`✅ Weekly product digest sent to: ${store.shop}`);
+      
+      // Log email activity
+      await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'sent');
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Product digest email error:', error);
+      await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'failed', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  getProductDigestTemplate(data) {
+    const { shopName, dashboardUrl, totalCount, newProducts, updatedProducts, needsOptimization, productChanges } = data;
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Weekly Product Digest</title>
+      </head>
+      <body style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">📊 Weekly Product Update</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">Your products are waiting for SEO optimization</p>
+          </div>
+
+          <!-- Content -->
+          <div style="padding: 40px 30px;">
+            <p style="font-size: 16px; color: #334155; margin: 0 0 25px;">Hi ${shopName}! 👋</p>
+            
+            <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 30px;">
+              This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} SEO attention.
+            </p>
+
+            <!-- Stats Cards -->
+            <div style="display: flex; gap: 15px; margin-bottom: 30px;">
+              ${newProducts.length > 0 ? `
+              <div style="flex: 1; background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #16a34a;">${newProducts.length}</div>
+                <div style="font-size: 13px; color: #15803d;">New Products</div>
+              </div>
+              ` : ''}
+              ${updatedProducts.length > 0 ? `
+              <div style="flex: 1; background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #2563eb;">${updatedProducts.length}</div>
+                <div style="font-size: 13px; color: #1d4ed8;">Updated</div>
+              </div>
+              ` : ''}
+              ${needsOptimization.length > 0 ? `
+              <div style="flex: 1; background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #d97706;">${needsOptimization.length}</div>
+                <div style="font-size: 13px; color: #b45309;">Need SEO</div>
+              </div>
+              ` : ''}
+            </div>
+
+            <!-- Product List -->
+            ${productChanges.length > 0 ? `
+            <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+              <h3 style="margin: 0 0 15px; font-size: 16px; color: #1e293b;">Recent Changes:</h3>
+              ${productChanges.map(product => `
+                <div style="padding: 12px; background: white; border-radius: 6px; margin-bottom: 10px;">
+                  <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${product.productTitle}</div>
+                  <div style="font-size: 13px; color: #64748b;">
+                    ${product.changeType === 'created' ? '🆕 New product' : '📝 Updated'}
+                    ${product.needsAttention ? ' • <span style="color: #f59e0b;">Needs optimization</span>' : ''}
+                  </div>
+                </div>
+              `).join('')}
+              ${totalCount > 10 ? `
+              <div style="text-align: center; padding: 10px; color: #64748b; font-size: 13px;">
+                +${totalCount - 10} more products...
+              </div>
+              ` : ''}
+            </div>
+            ` : ''}
+
+            <!-- CTA -->
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);">
+                Optimize Products Now
+              </a>
+            </div>
+
+            <!-- Tip Box -->
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; padding: 20px; margin: 30px 0;">
+              <div style="font-size: 14px; color: #78350f;">
+                <strong>💡 Pro Tip:</strong> Products with optimized SEO rank 3x higher in Google search results. Don't miss this opportunity!
+              </div>
+            </div>
+
+            <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 20px 0 0;">
+              Questions? <a href="mailto:${this.supportEmail}" style="color: #667eea; text-decoration: none;">Contact Support</a>
+            </p>
+          </div>
+
+          <!-- Footer -->
+          <div style="padding: 30px; background: #f8fafc; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong><br>
+              Helping you rank higher on Google
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email || 'customer@example.com')}
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
 }
 
 export default new EmailService();

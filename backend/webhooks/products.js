@@ -6,6 +6,7 @@
 
 import { deleteAllSeoMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
 import cacheService from '../services/cacheService.js';
+import ProductChangeLog from '../db/ProductChangeLog.js';
 
 /**
  * Smart webhook handler:
@@ -77,7 +78,7 @@ export default async function productsWebhook(req, res) {
       // Store whether content changed for proper lastShopifyUpdate update
       const contentChanged = titleChanged || descriptionChanged;
       
-      await Product.findOneAndUpdate(
+      const updatedProduct = await Product.findOneAndUpdate(
         { shop, productId: numericProductId },
         {
           shopifyProductId: numericProductId,
@@ -116,6 +117,31 @@ export default async function productsWebhook(req, res) {
         },
         { upsert: true, new: true }
       );
+      
+      // Log change for weekly digest (if significant change or new product)
+      const isNewProduct = !existingProduct;
+      const changedFields = [];
+      
+      if (titleChanged) changedFields.push('title');
+      if (descriptionChanged) changedFields.push('description');
+      
+      // Only log if new product OR significant fields changed
+      if (isNewProduct || changedFields.length > 0) {
+        const hasOptimization = updatedProduct.seoStatus === 'optimized' || 
+                               updatedProduct.seoStatus === 'ai_enhanced';
+        
+        await ProductChangeLog.create({
+          shop,
+          productId: String(numericProductId),
+          productTitle: payload.title,
+          productHandle: payload.handle,
+          changeType: isNewProduct ? 'created' : 'updated',
+          changedFields: isNewProduct ? ['all'] : changedFields,
+          hasOptimization,
+          needsAttention: !hasOptimization,
+          notified: false
+        });
+      }
       
       // 6. Invalidate Redis cache for this shop's products
       // This ensures frontend immediately sees the updated product status
