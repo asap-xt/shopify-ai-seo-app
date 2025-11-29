@@ -594,7 +594,13 @@ class EmailService {
       return `https://app.indexaize.com/dashboard?shop=${shop}`; // Fallback to production domain
     }
     // Remove trailing slash if present
-    const baseUrl = appUrl.replace(/\/$/, '');
+    let baseUrl = appUrl.replace(/\/$/, '');
+    // Force HTTPS if not present
+    if (!baseUrl.startsWith('https://') && !baseUrl.startsWith('http://')) {
+      baseUrl = `https://${baseUrl}`;
+    } else if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    }
     return `${baseUrl}/dashboard?shop=${shop}`;
   }
 
@@ -607,14 +613,27 @@ class EmailService {
       return `https://app.indexaize.com/billing?shop=${shop}`; // Fallback to production domain
     }
     // Remove trailing slash if present
-    const baseUrl = appUrl.replace(/\/$/, '');
+    let baseUrl = appUrl.replace(/\/$/, '');
+    // Force HTTPS if not present
+    if (!baseUrl.startsWith('https://') && !baseUrl.startsWith('http://')) {
+      baseUrl = `https://${baseUrl}`;
+    } else if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    }
     return `${baseUrl}/billing?shop=${shop}`;
   }
 
   getUnsubscribeUrl(shop, email) {
     // Generate unsubscribe URL with shop and email parameters
     const appUrl = process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL;
-    const baseUrl = appUrl ? appUrl.replace(/\/$/, '') : 'https://app.indexaize.com';
+    let baseUrl = appUrl ? appUrl.replace(/\/$/, '') : 'https://app.indexaize.com';
+    
+    // Force HTTPS if not present
+    if (!baseUrl.startsWith('https://') && !baseUrl.startsWith('http://')) {
+      baseUrl = `https://${baseUrl}`;
+    } else if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    }
     
     // Encode email for URL safety
     const encodedEmail = encodeURIComponent(email || '');
@@ -1216,7 +1235,7 @@ class EmailService {
       const msg = {
         to: store.email || store.shopOwnerEmail || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: `📊 ${totalCount} product${totalCount > 1 ? 's' : ''} ready for SEO optimization`,
+        subject: `📊 ${totalCount} product${totalCount > 1 ? 's' : ''} ready for AIEO optimization`,
         html: this.getProductDigestTemplate({
           shopName,
           shop: store.shop,
@@ -1260,7 +1279,7 @@ class EmailService {
           <!-- Header -->
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">📊 Weekly Product Update</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">Your products are waiting for SEO optimization</p>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">Your products are waiting for AIEO optimization</p>
           </div>
 
           <!-- Content -->
@@ -1268,7 +1287,7 @@ class EmailService {
             <p style="font-size: 16px; color: #334155; margin: 0 0 25px;">Hi ${shopName}! 👋</p>
             
             <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 30px;">
-              This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} SEO attention.
+              This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} AIEO attention.
             </p>
 
             <!-- Stats Cards -->
@@ -1288,7 +1307,7 @@ class EmailService {
               ${needsOptimization.length > 0 ? `
               <div style="flex: 1; background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px;">
                 <div style="font-size: 24px; font-weight: 700; color: #d97706;">${needsOptimization.length}</div>
-                <div style="font-size: 13px; color: #b45309;">Need SEO</div>
+                <div style="font-size: 13px; color: #b45309;">Need AIEO</div>
               </div>
               ` : ''}
             </div>
@@ -1324,7 +1343,7 @@ class EmailService {
             <!-- Tip Box -->
             <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; padding: 20px; margin: 30px 0;">
               <div style="font-size: 14px; color: #78350f;">
-                <strong>💡 Pro Tip:</strong> Products with optimized SEO rank 3x higher in Google search results. Don't miss this opportunity!
+                <strong>💡 Pro Tip:</strong> Products optimized for AI search engines get discovered faster by ChatGPT, Perplexity, and other AI assistants. Stay ahead of the curve!
               </div>
             </div>
 
@@ -1337,7 +1356,7 @@ class EmailService {
           <div style="padding: 30px; background: #f8fafc; text-align: center; border-top: 1px solid #e2e8f0;">
             <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
               <strong style="color: #1e40af;">indexAIze Team</strong><br>
-              Helping you rank higher on Google
+              Helping you rank higher in AI search
             </p>
             ${this.getUnsubscribeFooter(data.shop, data.email || 'customer@example.com')}
           </div>
