@@ -89,16 +89,20 @@ class EmailService {
       const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
       const attachments = [];
       
-      if (fs.existsSync(logoPath)) {
-        const logoContent = fs.readFileSync(logoPath);
-        attachments.push({
-          content: logoContent.toString('base64'),
-          filename: 'logo.png',
-          type: 'image/png',
-          disposition: 'inline',
-          content_id: 'logo' // SendGrid uses content_id (not contentId)
-        });
-      }
+      // TEMPORARILY DISABLED for debugging - use external logo URL instead
+      // if (fs.existsSync(logoPath)) {
+      //   const logoContent = fs.readFileSync(logoPath);
+      //   attachments.push({
+      //     content: logoContent.toString('base64'),
+      //     filename: 'logo.png',
+      //     type: 'image/png',
+      //     disposition: 'inline',
+      //     content_id: 'logo' // SendGrid uses content_id (not contentId)
+      //   });
+      // }
+      
+      // Use external logo URL for now
+      const logoUrl = `${getAppUrl()}/assets/logo/120x120`;
       
       // Check if plan has included tokens (Growth Extra, Enterprise)
       const { getIncludedTokens } = await import('../billing/tokenConfig.js');
@@ -118,11 +122,11 @@ class EmailService {
           planName,
           planKey,
           trialDays,
-          logoUrl: 'cid:logo', // Use Content-ID reference for inline attachment
+          logoUrl: logoUrl, // Use external URL instead of cid:logo
           planFeatures: await this.getPlanFeatures(planKey), // Get real plan features instead of technical limits
           hasIncludedTokens // Flag to show/hide token purchase recommendation
         }),
-        attachments: attachments,
+        attachments: attachments, // Empty for now
         trackingSettings: {
           clickTracking: { enable: false },
           openTracking: { enable: true }
