@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Build artifacts - DON'T copy from source, use freshly built ones
+frontend/dist/
+
+# Cache directories
+.vite/
+frontend/.vite/
+frontend/node_modules/.vite/
+
+# Environment files
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Temp files
+*.tmp
+.DS_Store
+
