@@ -245,39 +245,27 @@ export default async function handleSubscriptionUpdate(req, res) {
               return;
             }
             
-            // Fetch shop email from Shopify API
+            // Fetch shop email from Shopify API (using REST API - more reliable)
             let shopEmail = null;
             try {
-              console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify API...');
-              const shopQuery = `
-                query {
-                  shop {
-                    email
-                    name
-                    contactEmail
-                    customerEmail
-                  }
-                }
-              `;
-              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-                method: 'POST',
+              console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify REST API...');
+              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/shop.json`, {
+                method: 'GET',
                 headers: {
                   'X-Shopify-Access-Token': shopRecord.accessToken,
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ query: shopQuery }),
               });
               
               if (shopResponse.ok) {
                 const shopData = await shopResponse.json();
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Shop data from Shopify:', {
-                  email: shopData.data?.shop?.email,
-                  contactEmail: shopData.data?.shop?.contactEmail,
-                  customerEmail: shopData.data?.shop?.customerEmail
+                  email: shopData.shop?.email,
+                  customer_email: shopData.shop?.customer_email,
+                  shop_owner: shopData.shop?.shop_owner
                 });
-                shopEmail = shopData.data?.shop?.email || 
-                           shopData.data?.shop?.contactEmail || 
-                           shopData.data?.shop?.customerEmail || 
+                shopEmail = shopData.shop?.email || 
+                           shopData.shop?.customer_email || 
                            null;
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop email:', shopEmail);
               } else {
