@@ -1346,29 +1346,13 @@ if (!IS_PROD) {
       console.error('[SERVER] Expected path:', distPath);
       console.error('[SERVER] Please run: npm run build (or npm install which runs postinstall)');
     } else {
-      console.log('[SERVER] ✅ frontend/dist directory exists:', distPath);
       const indexPath = path.join(distPath, 'index.html');
       if (!fs.existsSync(indexPath)) {
         console.error('[SERVER] ❌ ERROR: frontend/dist/index.html does not exist!');
       } else {
-        console.log('[SERVER] ✅ frontend/dist/index.html exists');
         // Check if assets directory exists
         const assetsPath = path.join(distPath, 'assets');
-        if (fs.existsSync(assetsPath)) {
-          const assets = fs.readdirSync(assetsPath);
-          console.log('[SERVER] ✅ Assets directory exists with', assets.length, 'files');
-          const jsFiles = assets.filter(f => f.endsWith('.js'));
-          console.log('[SERVER] Found', jsFiles.length, 'JavaScript files in assets');
-          // Log the actual index.js file that exists
-          const indexFiles = jsFiles.filter(f => f.startsWith('index-'));
-          console.log('[SERVER] 🔍 Index files found:', indexFiles);
-          if (indexFiles.length > 0) {
-            console.log('[SERVER] 🔍 First index file:', indexFiles[0]);
-            const indexFilePath = path.join(assetsPath, indexFiles[0]);
-            const stats = fs.statSync(indexFilePath);
-            console.log('[SERVER] 🔍 Index file size:', stats.size, 'bytes, modified:', stats.mtime);
-          }
-        } else {
+        if (!fs.existsSync(assetsPath)) {
           console.error('[SERVER] ❌ ERROR: frontend/dist/assets directory does not exist!');
         }
       }
@@ -1540,96 +1524,9 @@ if (!IS_PROD) {
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
               
-              // Log initial HTML content to debug
-              const initialIndexMatch = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-              console.log('[SERVER] 📄 Initial HTML contains index references:', initialIndexMatch);
-          
-              // Find the newest asset files and update all references
-              const assetsPath = path.join(distPath, 'assets');
-              if (fs.existsSync(assetsPath)) {
-                const assets = fs.readdirSync(assetsPath);
-                
-                // Find newest index file
-                const indexFiles = assets.filter(f => f.startsWith('index-') && f.endsWith('.js'));
-                if (indexFiles.length > 0) {
-                  const indexFilesWithStats = indexFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime, size: stats.size };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestIndexFile = indexFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', indexFiles.length, 'index files, using newest:', newestIndexFile);
-                  
-                  // Replace old index file reference with newest one (in both script tags and modulepreload links)
-                  // Use a more flexible regex that matches the full path
-                  const beforeReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                  console.log('[SERVER] 🔍 Found index references before replace:', beforeReplace);
-                  
-                  if (beforeReplace && beforeReplace.length > 0) {
-                    // Replace all occurrences
-                    html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
-                    const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                    // After replace, we should only have references to the newest file
-                    const allMatchNewest = afterReplace && afterReplace.every(ref => ref === newestIndexFile);
-                    if (allMatchNewest) {
-                      console.log('[SERVER] ✅ All index references replaced successfully with:', newestIndexFile);
-                    } else if (afterReplace && afterReplace.length > 0) {
-                      console.log('[SERVER] ⚠️ Still found old index references after replace:', afterReplace.filter(ref => ref !== newestIndexFile));
-                    } else {
-                      console.log('[SERVER] ⚠️ No index references found after replace (unexpected)');
-                    }
-                  } else {
-                    console.log('[SERVER] ⚠️ No index references found in HTML to replace!');
-                  }
-                }
-                
-                // Find newest react-vendor file
-                const reactVendorFiles = assets.filter(f => f.startsWith('react-vendor-') && f.endsWith('.js'));
-                if (reactVendorFiles.length > 0) {
-                  const reactVendorFilesWithStats = reactVendorFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestReactVendorFile = reactVendorFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', reactVendorFiles.length, 'react-vendor files, using newest:', newestReactVendorFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/react-vendor-[a-zA-Z0-9_-]+\.js/g, newestReactVendorFile);
-                }
-                
-                // Find newest app-bridge file
-                const appBridgeFiles = assets.filter(f => f.startsWith('app-bridge-') && f.endsWith('.js'));
-                if (appBridgeFiles.length > 0) {
-                  const appBridgeFilesWithStats = appBridgeFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestAppBridgeFile = appBridgeFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', appBridgeFiles.length, 'app-bridge files, using newest:', newestAppBridgeFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/app-bridge-[a-zA-Z0-9_-]+\.js/g, newestAppBridgeFile);
-                }
-                
-                // Find newest polaris file
-                const polarisFiles = assets.filter(f => f.startsWith('polaris-') && f.endsWith('.js'));
-                if (polarisFiles.length > 0) {
-                  const polarisFilesWithStats = polarisFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestPolarisFile = polarisFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', polarisFiles.length, 'polaris files, using newest:', newestPolarisFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/polaris-[a-zA-Z0-9_-]+\.js/g, newestPolarisFile);
-                }
-              }
-          
+              // With .dockerignore in place, we always get fresh build artifacts
+              // No need for dynamic asset replacement anymore
+              
               // Generate cache busting values
               const buildTime = Date.now().toString();
               const cacheBust = Math.random().toString(36).substring(7);
@@ -1640,22 +1537,12 @@ if (!IS_PROD) {
               html = html.replace(/%BUILD_TIME%/g, buildTime);
               html = html.replace(/%CACHE_BUST%/g, cacheBust);
               
-              console.log('[SERVER] Injecting API key into HTML:', {
-                apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING',
-                shop: shop,
-                hasIdToken: !!id_token,
-                cacheBust: cacheBust
-              });
-              
               // Find the closing </head> tag and inject our script before it
               const headEndIndex = html.indexOf('</head>');
               
               if (headEndIndex !== -1) {
                 const injection = `
                   <script>
-                    console.log('[SERVER-INJECTED] API Key:', '${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}');
-                    console.log('[SERVER-INJECTED] Shop:', '${shop}');
-                    console.log('[SERVER-INJECTED] Host:', '${host || ''}');
                     window.__SHOPIFY_API_KEY = '${apiKey}';
                     window.__SHOPIFY_SHOP = '${shop}';
                     window.__SHOPIFY_HOST = '${host || ''}';
@@ -1663,53 +1550,12 @@ if (!IS_PROD) {
                     // Add error handler to catch JavaScript errors
                     window.addEventListener('error', function(e) {
                       console.error('[GLOBAL ERROR]', e.error);
-                      console.error('[GLOBAL ERROR] Message:', e.message);
-                      console.error('[GLOBAL ERROR] Filename:', e.filename);
-                      console.error('[GLOBAL ERROR] Line:', e.lineno);
-                      console.error('[GLOBAL ERROR] Column:', e.colno);
-                      console.error('[GLOBAL ERROR] Stack:', e.error?.stack);
                     });
                     
                     // Add unhandled promise rejection handler
                     window.addEventListener('unhandledrejection', function(e) {
                       console.error('[UNHANDLED REJECTION]', e.reason);
-                      console.error('[UNHANDLED REJECTION] Stack:', e.reason?.stack);
                     });
-                    
-                    // Log when DOM is ready
-                    if (document.readyState === 'loading') {
-                      document.addEventListener('DOMContentLoaded', function() {
-                        console.log('[SERVER-INJECTED] DOM Content Loaded');
-                        console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
-                        
-                        // Check if main.jsx script is loaded
-                        const scripts = document.querySelectorAll('script[type="module"]');
-                        console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
-                        scripts.forEach((script, i) => {
-                          console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                        });
-                      });
-                    } else {
-                      console.log('[SERVER-INJECTED] DOM already ready');
-                      console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
-                      
-                      // Check if main.jsx script is loaded
-                      const scripts = document.querySelectorAll('script[type="module"]');
-                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
-                      scripts.forEach((script, i) => {
-                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                      });
-                    }
-                    
-                    // Also check after a short delay to see if scripts load
-                    setTimeout(function() {
-                      console.log('[SERVER-INJECTED] After 2s delay - checking scripts again');
-                      const scripts = document.querySelectorAll('script[type="module"]');
-                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts after delay');
-                      scripts.forEach((script, i) => {
-                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                      });
-                    }, 2000);
                   </script>
                   <meta name="shopify-api-key" content="${apiKey}">
                 `;

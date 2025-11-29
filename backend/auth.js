@@ -29,17 +29,6 @@ const REQUIRED_SCOPES = [
   'read_translations'
 ];
 
-// DEBUG: Log configuration on startup
-console.log('[AUTH CONFIG]', {
-  SHOPIFY_API_KEY: SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
-  SHOPIFY_API_SECRET: SHOPIFY_API_SECRET ? 'SET' : 'NOT SET', 
-  SHOPIFY_API_SCOPES,
-  APP_URL,
-  REDIRECT_URI,
-  CALLBACK_PATH,
-  REQUIRED_SCOPES: REQUIRED_SCOPES.join(',')
-});
-
 // Validate required environment variables
 if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
   console.error('[AUTH] Missing required environment variables');
@@ -70,7 +59,6 @@ function buildAuthUrl(shop, state) {
   });
   
   const authUrl = `https://${shop}/admin/oauth/authorize?${params.toString()}`;
-  console.log('[AUTH] Building auth URL:', authUrl);
   return authUrl;
 }
 
@@ -96,8 +84,6 @@ async function exchangeToken(shop, code) {
       code 
     };
     
-    console.log(`[AUTH] Token exchange request to: ${tokenUrl}`);
-    
     const resp = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,7 +91,6 @@ async function exchangeToken(shop, code) {
     });
     
     const responseText = await resp.text();
-    console.log(`[AUTH] Token exchange response status: ${resp.status}`);
     
     if (!resp.ok) {
       console.error(`[AUTH] Token exchange failed:`, responseText);
@@ -113,9 +98,6 @@ async function exchangeToken(shop, code) {
     }
     
     const tokenData = JSON.parse(responseText);
-    console.log(`[AUTH] Token exchange successful!`);
-    console.log(`[AUTH] Received scopes: ${tokenData.scope}`);
-    console.log(`[AUTH] Token type: ${tokenData.access_token?.startsWith('shpat_') ? 'offline' : 'unknown'}`);
     
     // Validate token format
     if (!tokenData.access_token) {
@@ -123,8 +105,7 @@ async function exchangeToken(shop, code) {
     }
     
     if (!tokenData.access_token.startsWith('shpat_')) {
-      console.warn(`[AUTH] Warning: Token does not start with 'shpat_', got: ${tokenData.access_token.substring(0, 10)}...`);
-      console.warn(`[AUTH] This may be an online token instead of offline token`);
+      console.warn(`[AUTH] Warning: Token does not start with 'shpat_', may be online token`);
     }
     
     return tokenData; // { access_token, scope, ... }
@@ -135,8 +116,6 @@ async function exchangeToken(shop, code) {
 }
 
 async function testToken(shop, accessToken) {
-  console.log(`[AUTH] Testing access token for shop: ${shop}`);
-  
   try {
     const testQuery = `
       query TestToken {
@@ -164,7 +143,6 @@ async function testToken(shop, accessToken) {
       return false;
     }
     
-    console.log(`[AUTH] Token test successful for shop: ${result.data?.shop?.name}`);
     return true;
     
   } catch (error) {
@@ -174,8 +152,6 @@ async function testToken(shop, accessToken) {
 }
 
 async function registerWebhooks(shop, accessToken) {
-  console.log('[AUTH] Starting webhook registration using GraphQL...');
-  
   try {
     // Use the GraphQL-based webhook registration from webhookRegistration.js
     const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
@@ -187,8 +163,6 @@ async function registerWebhooks(shop, accessToken) {
     };
     
     const results = await registerAllWebhooks(mockReq, shop, APP_URL);
-    
-    console.log('[AUTH] Webhook registration results:', JSON.stringify(results, null, 2));
     
     return results;
   } catch (error) {
@@ -286,17 +260,11 @@ router.get('/', async (req, res) => {
     path: '/',
   });
 
-  console.log(`[AUTH] Redirecting to Shopify OAuth for shop: ${shop}`);
   return res.redirect(302, buildAuthUrl(shop, state));
 });
 
 // GET /callback?code=...&hmac=...&shop=...&state=...&host=...
 router.get('/callback', async (req, res) => {
-  console.log('[AUTH] OAuth callback received', { 
-    query: req.query,
-    cookies: req.cookies 
-  });
-  
   try {
     // Check environment variables
     if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
@@ -381,13 +349,6 @@ router.get('/callback', async (req, res) => {
     
     scheduleWelcomeEmail(shop);
     
-    console.log('[AUTH] Shop record saved:', {
-      id: shopRecord._id,
-      shop: shopRecord.shop,
-      tokenType: shopRecord.tokenType,
-      scopes: shopRecord.scopes
-    });
-
     // 7) Add to SendGrid list (non-blocking)
     // Fetch shop email and add to SendGrid App Users list
     import('../services/sendgridListsService.js').then(async (sendgridModule) => {
