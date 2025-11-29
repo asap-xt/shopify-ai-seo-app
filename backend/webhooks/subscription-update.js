@@ -222,15 +222,14 @@ export default async function handleSubscriptionUpdate(req, res) {
       }
       
       // Send welcome email when subscription is approved (ACTIVE status)
-      // Only send if this is a new subscription (not an upgrade after activation)
-      const isNewSubscription = !originalActivatedAt && (hadPendingPlan || wasPendingActivation);
+      // Only send if this is a new subscription (first time activation)
+      // Logic: If subscription never had activatedAt set before, it's a new subscription
+      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active';
       
       console.log('[SUBSCRIPTION-UPDATE] Welcome email check:', {
         originalActivatedAt,
-        hadPendingPlan,
-        wasPendingActivation,
-        isNewSubscription,
-        status: updatedSubscription.status
+        currentStatus: updatedSubscription.status,
+        isNewSubscription
       });
       
       if (isNewSubscription) {
