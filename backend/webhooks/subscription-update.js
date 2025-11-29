@@ -250,7 +250,6 @@ export default async function handleSubscriptionUpdate(req, res) {
             
             // Fetch shop email from Shopify GraphQL API (production-tested)
             let shopEmail = null;
-            let shopOwner = null;
             let shopName = null;
             try {
               console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify GraphQL API...');
@@ -260,12 +259,11 @@ export default async function handleSubscriptionUpdate(req, res) {
                     email
                     contactEmail
                     name
-                    shopOwner
                   }
                 }
               `;
               console.log('[SUBSCRIPTION-UPDATE] 📧 Making GraphQL request to Shopify...');
-              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+              const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
                 method: 'POST',
                 headers: {
                   'X-Shopify-Access-Token': shopRecord.accessToken,
@@ -282,16 +280,13 @@ export default async function handleSubscriptionUpdate(req, res) {
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Shop data from Shopify:', {
                   email: shopData.data?.shop?.email,
                   contactEmail: shopData.data?.shop?.contactEmail,
-                  name: shopData.data?.shop?.name,
-                  shopOwner: shopData.data?.shop?.shopOwner
+                  name: shopData.data?.shop?.name
                 });
                 shopEmail = shopData.data?.shop?.email || 
                            shopData.data?.shop?.contactEmail || 
                            null;
-                shopOwner = shopData.data?.shop?.shopOwner || null;
                 shopName = shopData.data?.shop?.name || null;
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop email:', shopEmail);
-                console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop owner:', shopOwner);
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop name:', shopName);
               } else {
                 console.error('[SUBSCRIPTION-UPDATE] ❌ Shopify GraphQL error:', shopResponse.status, shopResponse.statusText);
@@ -304,16 +299,13 @@ export default async function handleSubscriptionUpdate(req, res) {
             }
             
             // Update shop record with email if fetched successfully
-            if (shopEmail || shopOwner || shopName) {
+            if (shopEmail || shopName) {
               try {
                 console.log('[SUBSCRIPTION-UPDATE] 📧 Updating shop record in DB...');
                 const updateFields = { updatedAt: new Date() };
                 if (shopEmail && shopEmail !== shopRecord.email) {
                   updateFields.email = shopEmail;
                   updateFields.shopOwnerEmail = shopEmail;
-                }
-                if (shopOwner && shopOwner !== shopRecord.shopOwner) {
-                  updateFields.shopOwner = shopOwner;
                 }
                 if (shopName && shopName !== shopRecord.name) {
                   updateFields.name = shopName;
@@ -339,14 +331,12 @@ export default async function handleSubscriptionUpdate(req, res) {
               ...shopRecord,
               _id: shopRecord._id,
               email: shopEmail || shopRecord.email,
-              shopOwner: shopOwner || shopRecord.shopOwner,
               name: shopName || shopRecord.name,
               subscription: updatedSubscription
             };
             
             console.log('[SUBSCRIPTION-UPDATE] 📧 Sending welcome email with data:', {
               email: storeWithSubscription.email,
-              shopOwner: storeWithSubscription.shopOwner,
               name: storeWithSubscription.name
             });
             
