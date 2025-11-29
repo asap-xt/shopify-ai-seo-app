@@ -5,6 +5,7 @@ import sgMail from '@sendgrid/mail';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getAppUrl } from '../utils/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,8 +19,10 @@ if (process.env.SENDGRID_API_KEY) {
 
 class EmailService {
   constructor() {
-    this.fromEmail = process.env.FROM_EMAIL || 'noreply@aiseo2.app';
+    // Use verified sender email from SendGrid
+    this.fromEmail = process.env.FROM_EMAIL || 'hello@indexaize.com';
     this.fromName = process.env.FROM_NAME || 'indexAIze Team';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'hello@indexaize.com';
     
     // Load logo as base64 for email templates
     this.logoBase64 = this.loadLogoBase64();
@@ -83,20 +86,8 @@ class EmailService {
         ? providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
         : 'Not specified';
       
-      // Use SendGrid attachment with Content-ID for inline image (works in all email clients including Gmail)
-      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
-      const attachments = [];
-      
-      if (fs.existsSync(logoPath)) {
-        const logoContent = fs.readFileSync(logoPath);
-        attachments.push({
-          content: logoContent.toString('base64'),
-          filename: 'logo.png',
-          type: 'image/png',
-          disposition: 'inline',
-          content_id: 'logo' // SendGrid uses content_id (not contentId)
-        });
-      }
+      // Logo URL - use external URL as inline attachments don't work reliably on Railway
+      const logoUrl = `${getAppUrl()}/assets/logo/120x120`;
       
       // Check if plan has included tokens (Growth Extra, Enterprise)
       const { getIncludedTokens } = await import('../billing/tokenConfig.js');
@@ -116,13 +107,22 @@ class EmailService {
           planName,
           planKey,
           trialDays,
-          logoUrl: 'cid:logo', // Use Content-ID reference for inline attachment
+          logoUrl: logoUrl, // Use external URL (works reliably)
           planFeatures: await this.getPlanFeatures(planKey), // Get real plan features instead of technical limits
           hasIncludedTokens // Flag to show/hide token purchase recommendation
         }),
-        attachments: attachments
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
+      // Debug: log the message being sent
+      console.log('[WELCOME-EMAIL] Sending to:', msg.to);
+      console.log('[WELCOME-EMAIL] From:', msg.from);
+      console.log('[WELCOME-EMAIL] Subject:', msg.subject);
+      console.log('[WELCOME-EMAIL] Has attachments:', msg.attachments?.length || 0);
+      
       await sgMail.send(msg);
       console.log(`✅ Welcome email sent to: ${store.shop}`);
       
@@ -132,6 +132,13 @@ class EmailService {
       return { success: true };
     } catch (error) {
       console.error('❌ Welcome email error:', error);
+      console.error('❌ SendGrid error details:', {
+        message: error.message,
+        code: error.code,
+        statusCode: error.response?.statusCode,
+        body: JSON.stringify(error.response?.body, null, 2), // Stringify to see full error
+        headers: error.response?.headers
+      });
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'failed', error.message);
       return { success: false, error: error.message };
     }
@@ -262,7 +269,11 @@ class EmailService {
           billingUrl: this.getBillingUrl(store.shop),
           logoUrl: 'cid:logo'
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -368,7 +379,11 @@ class EmailService {
           appStoreUrl,
           logoUrl: 'cid:logo'
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -410,7 +425,11 @@ class EmailService {
             totalOptimizations: store.analytics?.totalAIQueries || 0,
             topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
           }
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -447,7 +466,11 @@ class EmailService {
           feedbackUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/feedback?shop=${store.shop}`,
           reinstallUrl: `${process.env.APP_URL || process.env.BASE_URL || process.env.SHOPIFY_APP_URL || ''}/?shop=${store.shop}`,
           supportEmail: process.env.SUPPORT_EMAIL || 'support@aiseo2.app'
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -488,7 +511,11 @@ class EmailService {
           },
           dashboardUrl: this.getDashboardUrl(store.shop),
           tips: this.getWeeklyTips(stats)
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -526,7 +553,11 @@ class EmailService {
           newPlan: newPlan,
           newFeatures: await this.getPlanFeatures(newPlan),
           dashboardUrl: this.getDashboardUrl(store.shop)
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -563,7 +594,11 @@ class EmailService {
           incentive: '50% off next month if you upgrade this week!',
           dashboardUrl: this.getDashboardUrl(store.shop),
           supportUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/support`
-        })
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       await sgMail.send(msg);
@@ -1276,7 +1311,11 @@ class EmailService {
           needsOptimization,
           productChanges: productChanges.slice(0, 10) // Show top 10
         }),
-        attachments: attachments
+        attachments: attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
       };
 
       console.log('[PRODUCT-DIGEST] 📧 Sending email to:', msg.to);
