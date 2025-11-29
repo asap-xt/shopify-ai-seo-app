@@ -18,8 +18,9 @@ if (process.env.SENDGRID_API_KEY) {
 
 class EmailService {
   constructor() {
-    this.fromEmail = process.env.FROM_EMAIL || 'noreply@aiseo2.app';
-    this.fromName = process.env.FROM_NAME || 'indexAIze Team';
+    this.fromEmail = process.env.FROM_EMAIL || 'support@indexaize.com';
+    this.fromName = process.env.FROM_NAME || 'indexAIze';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'support@indexaize.com';
     
     // Load logo as base64 for email templates
     this.logoBase64 = this.loadLogoBase64();
