@@ -1381,7 +1381,7 @@ class EmailService {
                     <!-- Pro Tip Box (similar to welcome email style) -->
                     <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
                       <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-                        <strong style="color: #b45309;">💡 Pro Tip:</strong> After optimizing your products, don't forget to regenerate your Sitemap, AI-Enhanced Sitemap (if your plan includes it), and Advanced Schemas for maximum AI discoverability!
+                        <strong style="color: #b45309;">💡 Pro Tip:</strong> After optimizing your products, don't forget to regenerate your Sitemap, AI-Enhanced Sitemap, and Advanced Schemas for maximum AI discoverability!
                       </p>
                     </div>
                     
