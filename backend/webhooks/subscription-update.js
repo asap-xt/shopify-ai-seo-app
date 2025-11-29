@@ -266,8 +266,6 @@ export default async function handleSubscriptionUpdate(req, res) {
               `;
               console.log('[SUBSCRIPTION-UPDATE] 📧 Making GraphQL request to Shopify...');
               const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-              console.log('[SUBSCRIPTION-UPDATE] 📧 Making GraphQL request to Shopify...');
-              const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
                 method: 'POST',
                 headers: {
                   'X-Shopify-Access-Token': shopRecord.accessToken,
