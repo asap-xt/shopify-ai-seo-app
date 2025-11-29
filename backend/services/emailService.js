@@ -1265,7 +1265,7 @@ class EmailService {
 
   getProductDigestTemplate(data) {
     const { shopName, dashboardUrl, totalCount, newProducts, updatedProducts, needsOptimization, productChanges } = data;
-    const logoUrl = 'https://indexaize.com/logo.png'; // Same as welcome email
+    const logoUrl = 'https://cdn.shopify.com/s/files/1/0742/9688/5569/files/indexaize-logo-square.png?v=1732902847'; // indexAIze logo
     
     return `
       <!DOCTYPE html>
@@ -1362,7 +1362,7 @@ class EmailService {
                     <!-- Pro Tip Box (similar to welcome email style) -->
                     <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
                       <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-                        <strong style="color: #b45309;">💡 Pro Tip:</strong> Products optimized for AI search engines get discovered faster by ChatGPT, Perplexity, and other AI assistants. Stay ahead of the curve!
+                        <strong style="color: #b45309;">💡 Pro Tip:</strong> After optimizing your products, don't forget to regenerate your Sitemap, AI-Enhanced Sitemap (if your plan includes it), and Advanced Schemas for maximum AI discoverability!
                       </p>
                     </div>
                     
