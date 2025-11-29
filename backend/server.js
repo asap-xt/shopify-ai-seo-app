@@ -679,97 +679,97 @@ if (!IS_PROD) {
       });
     }
   });
-
-  // Fetch and update shop email from Shopify (fix endpoint)
-  app.post('/api/test/fetch-shop-email', async (req, res) => {
-    const { shop } = req.query;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
-    try {
-      const Shop = (await import('./db/Shop.js')).default;
-      const { SHOPIFY_API_VERSION } = await import('./utils/env.js');
-      
-      const shopRecord = await Shop.findOne({ shop });
-      
-      if (!shopRecord) {
-        return res.status(404).json({ error: 'Shop not found in database' });
-      }
-
-      if (!shopRecord.accessToken) {
-        return res.status(400).json({ error: 'Shop has no access token' });
-      }
-
-      // Fetch from Shopify GraphQL API
-      const shopQuery = `
-        query {
-          shop {
-            email
-            contactEmail
-            name
-          }
-        }
-      `;
-      
-      const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': shopRecord.accessToken,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: shopQuery }),
-      });
-
-      if (!shopResponse.ok) {
-        return res.status(500).json({ 
-          error: 'Shopify API error',
-          status: shopResponse.status 
-        });
-      }
-
-      const shopData = await shopResponse.json();
-      const shopEmail = shopData.data?.shop?.email || shopData.data?.shop?.contactEmail || null;
-      const shopName = shopData.data?.shop?.name || null;
-      
-      if (!shopEmail) {
-        return res.status(404).json({ 
-          error: 'No email found in Shopify API response',
-          shopData: shopData.data?.shop 
-        });
-      }
-
-      // Update shop in DB
-      const updateFields = {
-        email: shopEmail,
-        shopOwnerEmail: shopEmail,
-        contactEmail: shopEmail,
-        updatedAt: new Date()
-      };
-      
-      if (shopName) {
-        updateFields.name = shopName;
-      }
-
-      await Shop.updateOne(
-        { shop },
-        { $set: updateFields }
-      );
-
-      res.json({
-        success: true,
-        shop,
-        email: shopEmail,
-        name: shopName,
-        message: 'Shop email updated successfully'
-      });
-    } catch (error) {
-      console.error('[FETCH SHOP EMAIL] Error:', error);
-      res.status(500).json({
-        error: error.message
-      });
-    }
-  });
 }
+
+// Fetch and update shop email from Shopify (works in production for fixing missing emails)
+app.post('/api/test/fetch-shop-email', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  try {
+    const Shop = (await import('./db/Shop.js')).default;
+    const { SHOPIFY_API_VERSION } = await import('./utils/env.js');
+    
+    const shopRecord = await Shop.findOne({ shop });
+    
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found in database' });
+    }
+
+    if (!shopRecord.accessToken) {
+      return res.status(400).json({ error: 'Shop has no access token' });
+    }
+
+    // Fetch from Shopify GraphQL API
+    const shopQuery = `
+      query {
+        shop {
+          email
+          contactEmail
+          name
+        }
+      }
+    `;
+    
+    const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': shopRecord.accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: shopQuery }),
+    });
+
+    if (!shopResponse.ok) {
+      return res.status(500).json({ 
+        error: 'Shopify API error',
+        status: shopResponse.status 
+      });
+    }
+
+    const shopData = await shopResponse.json();
+    const shopEmail = shopData.data?.shop?.email || shopData.data?.shop?.contactEmail || null;
+    const shopName = shopData.data?.shop?.name || null;
+    
+    if (!shopEmail) {
+      return res.status(404).json({ 
+        error: 'No email found in Shopify API response',
+        shopData: shopData.data?.shop 
+      });
+    }
+
+    // Update shop in DB
+    const updateFields = {
+      email: shopEmail,
+      shopOwnerEmail: shopEmail,
+      contactEmail: shopEmail,
+      updatedAt: new Date()
+    };
+    
+    if (shopName) {
+      updateFields.name = shopName;
+    }
+
+    await Shop.updateOne(
+      { shop },
+      { $set: updateFields }
+    );
+
+    res.json({
+      success: true,
+      shop,
+      email: shopEmail,
+      name: shopName,
+      message: 'Shop email updated successfully'
+    });
+  } catch (error) {
+    console.error('[FETCH SHOP EMAIL] Error:', error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
 
     // ---------------------------------------------------------------------------
     // Shopify OAuth Routes for Public App (moved to start function)
