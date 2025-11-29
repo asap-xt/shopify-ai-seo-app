@@ -701,7 +701,7 @@ app.post('/api/test/fetch-shop-email', async (req, res) => {
       return res.status(400).json({ error: 'Shop has no access token' });
     }
 
-    // Fetch from Shopify GraphQL API
+    // Fetch from Shopify GraphQL API (using correct headers for 2025-01+)
     const shopQuery = `
       query {
         shop {
@@ -717,7 +717,7 @@ app.post('/api/test/fetch-shop-email', async (req, res) => {
       headers: {
         'X-Shopify-Access-Token': shopRecord.accessToken,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': 'application/graphql-response+json, application/json',
       },
       body: JSON.stringify({ query: shopQuery }),
     });
