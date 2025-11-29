@@ -1,5 +1,6 @@
 // backend/webhooks/products-update.js
 import Product from '../db/Product.js';
+import ProductChangeLog from '../db/ProductChangeLog.js';
 import { formatProductForAI } from '../../utils/aiFormatter.js';
 
 export default async function productsUpdateWebhook(req, res) {
@@ -14,6 +15,18 @@ export default async function productsUpdateWebhook(req, res) {
       productId: product.id 
     });
 
+    // Determine if this is a new product or update
+    const isNewProduct = !existingProduct;
+    const changedFields = [];
+    
+    if (!isNewProduct && existingProduct) {
+      // Detect what changed
+      if (existingProduct.title !== formatted.title) changedFields.push('title');
+      if (existingProduct.description !== formatted.description) changedFields.push('description');
+      if (JSON.stringify(existingProduct.variants) !== JSON.stringify(formatted.variants)) changedFields.push('variants');
+      if (JSON.stringify(existingProduct.images) !== JSON.stringify(formatted.images)) changedFields.push('images');
+    }
+
     // Prepare update data
     const updateData = {
       ...formatted,
@@ -24,9 +37,6 @@ export default async function productsUpdateWebhook(req, res) {
     // CRITICAL: Always preserve existing seoStatus
     if (existingProduct?.seoStatus) {
       updateData.seoStatus = existingProduct.seoStatus;
-      console.log(`[PRODUCTS-UPDATE-WEBHOOK] ✅ Preserving seoStatus:`, updateData.seoStatus);
-    } else {
-      console.log(`[PRODUCTS-UPDATE-WEBHOOK] ⚠️ No existing seoStatus to preserve`);
     }
 
     const updatedProduct = await Product.findOneAndUpdate(
@@ -35,9 +45,24 @@ export default async function productsUpdateWebhook(req, res) {
       { upsert: true, new: true }
     );
 
-    console.log(`[PRODUCTS-UPDATE-WEBHOOK] Product updated successfully`);
-    console.log(`[PRODUCTS-UPDATE-WEBHOOK] Updated seoStatus:`, updatedProduct.seoStatus);
-    console.log(`[PRODUCTS-UPDATE-WEBHOOK] ===== Webhook processing complete =====`);
+    // Log change for weekly digest (only if significant change)
+    const hasOptimization = updatedProduct.seoStatus === 'optimized' || 
+                           updatedProduct.seoStatus === 'ai_enhanced';
+    
+    // Only log if new product OR significant fields changed
+    if (isNewProduct || changedFields.some(f => ['title', 'description'].includes(f))) {
+      await ProductChangeLog.create({
+        shop: shopDomain,
+        productId: String(product.id),
+        productTitle: product.title,
+        productHandle: product.handle,
+        changeType: isNewProduct ? 'created' : 'updated',
+        changedFields: isNewProduct ? ['all'] : changedFields,
+        hasOptimization,
+        needsAttention: !hasOptimization, // Needs attention if not optimized
+        notified: false
+      });
+    }
 
     res.status(200).send('Webhook processed');
   } catch (err) {

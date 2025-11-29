@@ -610,6 +610,39 @@ if (!IS_PROD) {
       });
     }
   });
+
+  // Manual trigger for product digest
+  app.get('/api/test/product-digest', async (req, res) => {
+    const { shop } = req.query;
+    
+    try {
+      const productDigestScheduler = (await import('./services/productDigestScheduler.js')).default;
+      
+      if (shop) {
+        // Trigger for specific shop
+        const result = await productDigestScheduler.triggerNow(shop);
+        return res.json({
+          success: result.success,
+          message: `Digest ${result.success ? 'sent' : 'failed'}`,
+          shop,
+          error: result.error || null
+        });
+      } else {
+        // Trigger for all shops
+        await productDigestScheduler.triggerNow();
+        return res.json({
+          success: true,
+          message: 'Digest job triggered for all shops'
+        });
+      }
+    } catch (error) {
+      console.error('[TEST DIGEST] Error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+  });
 }
 
     // ---------------------------------------------------------------------------
@@ -667,6 +700,39 @@ import debugRouter from './controllers/debugRouter.js';
     app.use(seoRouter);
     app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
     app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
+
+    // Manual trigger for product digest (TEST MODE)
+    app.get('/api/test/product-digest', async (req, res) => {
+      const { shop } = req.query;
+      
+      try {
+        const productDigestScheduler = (await import('./services/productDigestScheduler.js')).default;
+        
+        if (shop) {
+          // Trigger for specific shop
+          const result = await productDigestScheduler.triggerNow(shop);
+          return res.json({
+            success: result.success,
+            message: `Digest ${result.success ? 'sent' : 'failed'}`,
+            shop,
+            error: result.error || null
+          });
+        } else {
+          // Trigger for all shops
+          await productDigestScheduler.triggerNow();
+          return res.json({
+            success: true,
+            message: 'Digest job triggered for all shops'
+          });
+        }
+      } catch (error) {
+        console.error('[TEST DIGEST] Error:', error);
+        res.status(500).json({ 
+          success: false,
+          error: error.message 
+        });
+      }
+    });
 
     // --- Minimal GraphQL endpoint for test plan overrides ---
     const schema = buildSchema(`
@@ -1761,6 +1827,7 @@ if (!IS_PROD) {
     // ---------------------------------------------------------------------------
     import { startScheduler } from './scheduler.js';
     import emailScheduler from './services/emailScheduler.js';
+    import productDigestScheduler from './services/productDigestScheduler.js';
 
     async function start() {
       try {
@@ -2426,6 +2493,13 @@ if (!IS_PROD) {
             emailScheduler.startAll();
           } catch (e) {
             console.error('Email scheduler start error:', e);
+          }
+          
+          // Start product digest scheduler
+          try {
+            productDigestScheduler.start();
+          } catch (e) {
+            console.error('Product digest scheduler start error:', e);
           }
         });
       } catch (e) {
