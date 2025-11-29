@@ -701,25 +701,13 @@ app.post('/api/test/fetch-shop-email', async (req, res) => {
       return res.status(400).json({ error: 'Shop has no access token' });
     }
 
-    // Fetch from Shopify GraphQL API
-    const shopQuery = `
-      query {
-        shop {
-          email
-          contactEmail
-          name
-        }
-      }
-    `;
-    
-    const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
-      method: 'POST',
+    // Fetch from Shopify REST API (GraphQL може да връща 406 на production)
+    const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
+      method: 'GET',
       headers: {
         'X-Shopify-Access-Token': shopRecord.accessToken,
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ query: shopQuery }),
     });
 
     if (!shopResponse.ok) {
@@ -730,13 +718,14 @@ app.post('/api/test/fetch-shop-email', async (req, res) => {
     }
 
     const shopData = await shopResponse.json();
-    const shopEmail = shopData.data?.shop?.email || shopData.data?.shop?.contactEmail || null;
-    const shopName = shopData.data?.shop?.name || null;
+    const shopInfo = shopData.shop;
+    const shopEmail = shopInfo?.customer_email || shopInfo?.email || null;
+    const shopName = shopInfo?.name || null;
     
     if (!shopEmail) {
       return res.status(404).json({ 
         error: 'No email found in Shopify API response',
-        shopData: shopData.data?.shop 
+        shopInfo: shopInfo
       });
     }
 
