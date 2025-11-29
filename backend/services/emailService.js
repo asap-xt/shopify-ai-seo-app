@@ -128,6 +128,12 @@ class EmailService {
         }
       };
 
+      // Debug: log the message being sent
+      console.log('[WELCOME-EMAIL] Sending to:', msg.to);
+      console.log('[WELCOME-EMAIL] From:', msg.from);
+      console.log('[WELCOME-EMAIL] Subject:', msg.subject);
+      console.log('[WELCOME-EMAIL] Has attachments:', msg.attachments?.length || 0);
+      
       await sgMail.send(msg);
       console.log(`✅ Welcome email sent to: ${store.shop}`);
       
@@ -137,6 +143,13 @@ class EmailService {
       return { success: true };
     } catch (error) {
       console.error('❌ Welcome email error:', error);
+      console.error('❌ SendGrid error details:', {
+        message: error.message,
+        code: error.code,
+        statusCode: error.response?.statusCode,
+        body: error.response?.body,
+        headers: error.response?.headers
+      });
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'failed', error.message);
       return { success: false, error: error.message };
     }
