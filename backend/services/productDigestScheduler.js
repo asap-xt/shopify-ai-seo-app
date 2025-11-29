@@ -103,12 +103,27 @@ class ProductDigestScheduler {
       .limit(50) // Max 50 products per digest
       .lean();
 
-      // Skip if less than threshold (default: 5 products)
-      const minThreshold = parseInt(process.env.DIGEST_MIN_THRESHOLD) || 5;
-      if (changes.length < minThreshold && !this.testMode) {
-        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - only ${changes.length} changes (threshold: ${minThreshold})`);
+      // Calculate dynamic threshold based on total products (10% of total, min 2, max 10)
+      const Product = (await import('../db/Product.js')).default;
+      const totalProducts = await Product.countDocuments({ shop: shop.shop });
+      
+      let minThreshold;
+      if (this.testMode) {
+        minThreshold = 1; // Test mode: always 1
+      } else if (process.env.DIGEST_MIN_THRESHOLD) {
+        minThreshold = parseInt(process.env.DIGEST_MIN_THRESHOLD); // Manual override
+      } else {
+        // Dynamic: 10% of total products, minimum 2, maximum 10
+        const dynamicThreshold = Math.ceil(totalProducts * 0.1);
+        minThreshold = Math.max(2, Math.min(10, dynamicThreshold));
+      }
+      
+      if (changes.length < minThreshold) {
+        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - ${changes.length} changes < ${minThreshold} threshold (${totalProducts} total products)`);
         return { success: true, skipped: true, reason: 'below_threshold' };
       }
+      
+      console.log(`[PRODUCT-DIGEST] Sending digest for ${shop.shop} - ${changes.length} changes >= ${minThreshold} threshold (${totalProducts} total products)`);
 
       // Skip if no changes at all
       if (changes.length === 0) {
