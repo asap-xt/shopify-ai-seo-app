@@ -248,11 +248,14 @@ export default async function handleSubscriptionUpdate(req, res) {
             // Fetch shop email from Shopify API
             let shopEmail = null;
             try {
+              console.log('[SUBSCRIPTION-UPDATE] 📧 Fetching shop email from Shopify API...');
               const shopQuery = `
                 query {
                   shop {
                     email
                     name
+                    contactEmail
+                    customerEmail
                   }
                 }
               `;
@@ -267,16 +270,40 @@ export default async function handleSubscriptionUpdate(req, res) {
               
               if (shopResponse.ok) {
                 const shopData = await shopResponse.json();
-                shopEmail = shopData.data?.shop?.email || null;
+                console.log('[SUBSCRIPTION-UPDATE] 📧 Shop data from Shopify:', {
+                  email: shopData.data?.shop?.email,
+                  contactEmail: shopData.data?.shop?.contactEmail,
+                  customerEmail: shopData.data?.shop?.customerEmail
+                });
+                shopEmail = shopData.data?.shop?.email || 
+                           shopData.data?.shop?.contactEmail || 
+                           shopData.data?.shop?.customerEmail || 
+                           null;
+                console.log('[SUBSCRIPTION-UPDATE] 📧 Final shop email:', shopEmail);
+              } else {
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Shopify API error:', shopResponse.status, shopResponse.statusText);
               }
             } catch (emailFetchError) {
-              console.warn('[SUBSCRIPTION-UPDATE] Could not fetch shop email:', emailFetchError.message);
+              console.error('[SUBSCRIPTION-UPDATE] ❌ Could not fetch shop email:', emailFetchError.message);
+            }
+            
+            // Update shop record with email if fetched successfully
+            if (shopEmail && shopEmail !== shopRecord.email) {
+              try {
+                await Shop.updateOne(
+                  { shop },
+                  { $set: { email: shopEmail, shopOwnerEmail: shopEmail, updatedAt: new Date() } }
+                );
+                console.log('[SUBSCRIPTION-UPDATE] ✅ Updated shop email in DB:', shopEmail);
+              } catch (updateError) {
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to update shop email:', updateError.message);
+              }
             }
             
             const storeWithSubscription = {
               ...shopRecord,
               _id: shopRecord._id,
-              email: shopEmail || shopRecord.email,
+              email: shopEmail || shopRecord.email || `${shop.replace('.myshopify.com', '')}@placeholder.com`,
               shopOwner: shopEmail || shopRecord.shopOwner,
               subscription: updatedSubscription
             };
