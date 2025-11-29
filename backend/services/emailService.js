@@ -148,7 +148,7 @@ class EmailService {
         message: error.message,
         code: error.code,
         statusCode: error.response?.statusCode,
-        body: error.response?.body,
+        body: JSON.stringify(error.response?.body, null, 2), // Stringify to see full error
         headers: error.response?.headers
       });
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'failed', error.message);
