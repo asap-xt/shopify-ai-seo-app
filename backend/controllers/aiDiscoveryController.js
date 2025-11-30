@@ -136,25 +136,16 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       const isActivated = !!subscription?.activatedAt;
       
       // Check tokens - CRITICAL: Always fetch FRESH data from DB (no cache)
-      // This ensures we get the latest token balance after recent purchases
-      const tokenBalance = await TokenBalance.findOne({ shop });
+      // Use getOrCreate but ensure we're reading fresh data from DB
+      let tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // CRITICAL FIX: After getOrCreate, reload from DB to get latest data
+      // This ensures we see tokens that were just purchased in a parallel request
+      tokenBalance = await TokenBalance.findOne({ shop });
+      
       if (!tokenBalance) {
-        // First time - create new balance
-        const newBalance = new TokenBalance({ shop });
-        await newBalance.save();
-        const hasPurchasedTokens = false;
-        const hasTokenBalance = false;
-        
-        // No tokens at all → show purchase modal
-        return res.status(402).json({
-          error: 'Insufficient tokens for AI-Optimized Sitemap',
-          requiresPurchase: true,
-          currentPlan: subscription?.plan,
-          tokensAvailable: 0,
-          tokensNeeded: 10000,
-          feature: 'ai-sitemap-optimized',
-          message: 'Purchase tokens to enable AI-Optimized Sitemap'
-        });
+        // Should never happen after getOrCreate, but handle gracefully
+        tokenBalance = await TokenBalance.create({ shop, balance: 0, totalPurchased: 0, totalUsed: 0 });
       }
       
       const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
