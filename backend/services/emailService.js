@@ -87,7 +87,20 @@ class EmailService {
         : 'Not specified';
       
       // Logo URL - use external URL as inline attachments don't work reliably on Railway
-      const logoUrl = `${getAppUrl()}/assets/logo/120x120`;
+      // UPDATE: Actually inline attachments DO work! Use them.
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo' // SendGrid uses content_id (not contentId)
+        });
+      }
       
       // Check if plan has included tokens (Growth Extra, Enterprise)
       const { getIncludedTokens } = await import('../billing/tokenConfig.js');
@@ -107,10 +120,11 @@ class EmailService {
           planName,
           planKey,
           trialDays,
-          logoUrl: logoUrl, // Use external URL (works reliably)
+          logoUrl: 'cid:logo', // Use Content-ID reference for inline attachment
           planFeatures: await this.getPlanFeatures(planKey), // Get real plan features instead of technical limits
           hasIncludedTokens // Flag to show/hide token purchase recommendation
         }),
+        attachments: attachments, // Add logo attachment
         trackingSettings: {
           clickTracking: { enable: false },
           openTracking: { enable: true }
