@@ -33,6 +33,10 @@ export default async function handleSubscriptionUpdate(req, res) {
       trial_days
     } = appSubscription;
     
+    console.log('[SUBSCRIPTION-UPDATE] 🔥 Webhook received for shop:', shop);
+    console.log('[SUBSCRIPTION-UPDATE] Status:', status);
+    console.log('[SUBSCRIPTION-UPDATE] Subscription ID:', admin_graphql_api_id);
+    
     // Find subscription in our DB
     // First try to find by shopifySubscriptionId (normal case)
     // CRITICAL: Use lean() to ensure all fields are returned, especially activatedAt
@@ -41,6 +45,9 @@ export default async function handleSubscriptionUpdate(req, res) {
       shopifySubscriptionId: admin_graphql_api_id 
     }).lean();
     
+    console.log('[SUBSCRIPTION-UPDATE] 🔍 Primary lookup by shopifySubscriptionId:', admin_graphql_api_id);
+    console.log('[SUBSCRIPTION-UPDATE] Found by primary lookup:', !!subscription);
+    
     // If not found, try to find by shop + pendingActivation or pendingPlan
     // This handles cases where:
     // 1. Webhook arrives before shopifySubscriptionId is saved (race condition)
@@ -48,6 +55,8 @@ export default async function handleSubscriptionUpdate(req, res) {
     // 3. shopifySubscriptionId doesn't match (shouldn't happen, but safety net)
     let foundByFallback = false;
     if (!subscription) {
+      console.log('[SUBSCRIPTION-UPDATE] 🔍 Primary lookup failed, trying fallback searches...');
+      
       // CRITICAL FIX: Use lean() to ensure all fields are returned, especially activatedAt
       // This is the root cause - Mongoose might not return all fields without lean()
       // Try pendingActivation first (for /activate endpoint)
@@ -56,22 +65,39 @@ export default async function handleSubscriptionUpdate(req, res) {
         pendingActivation: true 
       }).lean();
       
+      console.log('[SUBSCRIPTION-UPDATE] Found by pendingActivation:', !!subscription);
+      
       // If not found, try pendingPlan (for /subscribe endpoint)
       if (!subscription) {
         subscription = await Subscription.findOne({ 
           shop, 
           pendingPlan: { $exists: true, $ne: null }
         }).lean();
+        
+        console.log('[SUBSCRIPTION-UPDATE] Found by pendingPlan:', !!subscription);
       }
       
       // If still not found, try by shop only (for upgrade after activation)
       // This handles the case where upgrade happens after activation and webhook arrives before callback
       if (!subscription) {
         subscription = await Subscription.findOne({ shop }).lean();
+        
+        console.log('[SUBSCRIPTION-UPDATE] Found by shop only:', !!subscription);
       }
       
       if (subscription) {
         foundByFallback = true; // Mark that subscription was found by fallback search
+        
+        console.log('[SUBSCRIPTION-UPDATE] ✅ Found subscription by fallback search');
+        console.log('[SUBSCRIPTION-UPDATE] Subscription data:', {
+          _id: subscription._id,
+          shop: subscription.shop,
+          plan: subscription.plan,
+          pendingPlan: subscription.pendingPlan || 'NOT SET',
+          pendingActivation: subscription.pendingActivation || false,
+          shopifySubscriptionId: subscription.shopifySubscriptionId || 'NOT SET',
+          activatedAt: subscription.activatedAt || 'NOT SET'
+        });
         
         // CRITICAL: Only update shopifySubscriptionId if:
         // 1. It doesn't match AND
@@ -84,9 +110,21 @@ export default async function handleSubscriptionUpdate(req, res) {
           subscription.shopifySubscriptionId = admin_graphql_api_id;
         }
       }
+    } else {
+      console.log('[SUBSCRIPTION-UPDATE] ✅ Found subscription by primary lookup');
+      console.log('[SUBSCRIPTION-UPDATE] Subscription data:', {
+        _id: subscription._id,
+        shop: subscription.shop,
+        plan: subscription.plan,
+        pendingPlan: subscription.pendingPlan || 'NOT SET',
+        pendingActivation: subscription.pendingActivation || false,
+        shopifySubscriptionId: subscription.shopifySubscriptionId,
+        activatedAt: subscription.activatedAt || 'NOT SET'
+      });
     }
     
     if (!subscription) {
+      console.error('[SUBSCRIPTION-UPDATE] ❌ Subscription not found after all searches');
       // Respond 200 to avoid retries
       return res.status(200).json({ success: false, error: 'Subscription not found' });
     }
@@ -223,11 +261,15 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       // Send welcome email when subscription is approved (ACTIVE status)
       // Only send if this is a new subscription (first time activation)
-      // Logic: If subscription never had activatedAt set before, it's a new subscription
-      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active';
+      // Logic: 
+      // - No originalActivatedAt (never activated before)
+      // - Status is active
+      // - Had a pending plan (just activated from pending)
+      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active' && hadPendingPlan;
       
       console.log('[SUBSCRIPTION-UPDATE] Welcome email check:', {
         originalActivatedAt,
+        hadPendingPlan,
         currentStatus: updatedSubscription.status,
         isNewSubscription
       });
