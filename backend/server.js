@@ -982,17 +982,29 @@ import debugRouter from './controllers/debugRouter.js';
           
           const now = new Date();
           const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          const isActivated = subscription?.isActivated || false;
           
           const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const includedTokensPlans = ['growth_extra', 'enterprise'];
           const hasIncludedTokens = includedTokensPlans.includes(planKey);
           
+          // Check if user has purchased tokens
+          const { default: TokenBalance } = await import('./db/TokenBalance.js');
+          const tokenBalance = await TokenBalance.findOne({ shop });
+          const hasPurchasedTokens = tokenBalance?.totalPurchased > 0;
+          const hasTokenBalance = tokenBalance?.balance > 0;
+          
           // Import isBlockedInTrial
           const { isBlockedInTrial } = await import('./billing/tokenConfig.js');
           const feature = 'ai-sitemap-optimized';
           
-          // CRITICAL: Block during trial ONLY for plans with included tokens
-          if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+          // CRITICAL: Block during trial ONLY if:
+          // 1. Has included tokens plan (Growth Extra/Enterprise)
+          // 2. In trial period
+          // 3. Plan not activated
+          // 4. Never purchased tokens AND has no remaining balance
+          // 5. Feature is blocked for this plan
+          if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
