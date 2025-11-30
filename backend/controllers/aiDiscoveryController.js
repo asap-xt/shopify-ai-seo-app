@@ -157,13 +157,14 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       }
       
       // Check if has enough tokens (basic check - detailed check happens at generation)
-      if (!hasIncludedTokens && tokenBalance.balance < 10000) {
+      // Skip check for included tokens plans (Growth Extra, Enterprise) - they have unlimited tokens
+      if (!hasIncludedTokens && !hasPurchasedTokens) {
         return res.status(402).json({
           error: 'Insufficient tokens for AI-Optimized Sitemap',
           requiresPurchase: true,
           currentPlan: subscription?.plan,
           tokensAvailable: tokenBalance.balance,
-          tokensNeeded: 10000 - tokenBalance.balance,
+          tokensNeeded: 10000,
           feature: 'ai-sitemap-optimized',
           message: 'Purchase tokens to enable AI-Optimized Sitemap'
         });
