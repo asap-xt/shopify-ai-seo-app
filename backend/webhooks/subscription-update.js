@@ -6,6 +6,7 @@ import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
 import Shop from '../db/Shop.js';
 import { getIncludedTokens } from '../billing/tokenConfig.js';
+import { SHOPIFY_API_VERSION } from '../utils/env.js';
 
 /**
  * Handle APP_SUBSCRIPTIONS_UPDATE webhook
