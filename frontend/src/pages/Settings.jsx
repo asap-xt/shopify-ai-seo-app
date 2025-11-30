@@ -2573,8 +2573,35 @@ export default function Settings() {
             currentPlan={tokenError.currentPlan || settings?.plan || 'enterprise'}
             tokensRequired={tokenError.tokensRequired || 0}
             onActivatePlan={async () => {
-              // Reload page after activation to refresh settings
-              window.location.reload();
+              // Direct API call to activate plan (same as Collections)
+              try {
+                console.log('[SETTINGS] 🔓 Activating plan directly...');
+                
+                const response = await api('/api/billing/activate', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    shop,
+                    endTrial: true,
+                    returnTo: '/settings' // Return to Settings after approval
+                  })
+                });
+                
+                console.log('[SETTINGS] ✅ Activation response:', response);
+                
+                // Redirect to Shopify approval page
+                if (response.confirmationUrl) {
+                  console.log('[SETTINGS] 🔗 Redirecting to Shopify approval:', response.confirmationUrl);
+                  window.location.href = response.confirmationUrl;
+                } else {
+                  console.error('[SETTINGS] ❌ No confirmation URL in response');
+                  setToast('Failed to activate plan: No confirmation URL');
+                  setShowTrialActivationModal(false);
+                }
+              } catch (error) {
+                console.error('[SETTINGS] ❌ Activation error:', error);
+                setToast('Failed to activate plan: ' + (error.message || 'Unknown error'));
+                setShowTrialActivationModal(false);
+              }
             }}
             onPurchaseTokens={() => {
               // Redirect to billing page for token purchase
