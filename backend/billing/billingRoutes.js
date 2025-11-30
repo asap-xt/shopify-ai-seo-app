@@ -501,15 +501,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     let subscription;
     
     if (existingSub) {
-      console.log('[BILLING-SUBSCRIBE] 🔄 EXISTING SUBSCRIPTION - Plan change/upgrade');
-      console.log('[BILLING-SUBSCRIBE] Existing sub data:', {
-        shop: existingSub.shop,
-        currentPlan: existingSub.plan,
-        status: existingSub.status,
-        pendingPlan: existingSub.pendingPlan || 'NOT SET',
-        activatedAt: existingSub.activatedAt || 'NOT SET'
-      });
-      
       // Plan change: Set new plan as pending (will be activated in callback)
       // CRITICAL: According to Shopify documentation:
       // - If plan is activated (activatedAt exists): NO trial, continue billing period
@@ -575,7 +566,6 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // If preservedTrialEndsAt is null AND activatedAt doesn't exist, don't set trialEndsAt
       // This allows webhook to set it for first install
       
-      console.log('[BILLING-SUBSCRIBE] Saving plan change data:', planChangeData);
       
       subscription = await Subscription.findOneAndUpdate(
         { shop },
@@ -583,11 +573,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         { new: true }  // NO upsert - subscription must already exist
       );
       
-      console.log('[BILLING-SUBSCRIBE] ✅ Plan change saved. pendingPlan:', subscription.pendingPlan);
-      
     } else {
-      console.log('[BILLING-SUBSCRIBE] 🆕 FIRST INSTALL - Creating new subscription');
-      
       // First install: Create subscription with pendingPlan so webhook can find it
       // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
       // This allows webhook to find and activate it even if it arrives before callback
@@ -603,22 +589,11 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         updatedAt: now
       };
       
-      console.log('[BILLING-SUBSCRIBE] Creating first install data:', firstInstallData);
-      
       subscription = await Subscription.findOneAndUpdate(
         { shop },
         firstInstallData,
         { upsert: true, new: true }  // UPSERT allowed for first install
       );
-      
-      console.log('[BILLING-SUBSCRIBE] ✅ First install saved. Subscription ID:', subscription._id);
-      console.log('[BILLING-SUBSCRIBE] Subscription data:', {
-        shop: subscription.shop,
-        plan: subscription.plan,
-        pendingPlan: subscription.pendingPlan,
-        shopifySubscriptionId: subscription.shopifySubscriptionId,
-        status: subscription.status
-      });
     }
     
     // Invalidate cache after subscription change (PHASE 3: Caching)
