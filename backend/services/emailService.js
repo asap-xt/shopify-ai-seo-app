@@ -131,12 +131,6 @@ class EmailService {
         }
       };
 
-      // Debug: log the message being sent
-      console.log('[WELCOME-EMAIL] Sending to:', msg.to);
-      console.log('[WELCOME-EMAIL] From:', msg.from);
-      console.log('[WELCOME-EMAIL] Subject:', msg.subject);
-      console.log('[WELCOME-EMAIL] Has attachments:', msg.attachments?.length || 0);
-      
       await sgMail.send(msg);
       console.log(`✅ Welcome email sent to: ${store.shop}`);
       
@@ -1321,12 +1315,7 @@ class EmailService {
       const recipientEmail = store.email || store.shopOwnerEmail || store.contactEmail || null;
       
       if (!recipientEmail) {
-        console.error('[PRODUCT-DIGEST] ❌ No valid email found for shop:', store.shop);
-        console.error('[PRODUCT-DIGEST] Shop data:', {
-          email: store.email || 'NOT SET',
-          shopOwnerEmail: store.shopOwnerEmail || 'NOT SET',
-          contactEmail: store.contactEmail || 'NOT SET'
-        });
+        console.warn(`[PRODUCT-DIGEST] No valid email found for shop: ${store.shop}`);
         await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'failed', 'No valid recipient email');
         return { success: false, error: 'No valid recipient email' };
       }
@@ -1353,11 +1342,6 @@ class EmailService {
           openTracking: { enable: true }
         }
       };
-
-      console.log('[PRODUCT-DIGEST] 📧 Sending email to:', msg.to);
-      console.log('[PRODUCT-DIGEST] From:', msg.from);
-      console.log('[PRODUCT-DIGEST] Subject:', msg.subject);
-      console.log('[PRODUCT-DIGEST] Total products:', totalCount);
 
       await sgMail.send(msg);
       console.log(`✅ Weekly product digest sent to: ${store.shop}`);
