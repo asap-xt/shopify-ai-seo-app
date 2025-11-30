@@ -227,8 +227,8 @@ export default async function handleSubscriptionUpdate(req, res) {
       // Logic: 
       // - No originalActivatedAt (never activated before)
       // - Status is active
-      // - Had a pending plan (just activated from pending)
-      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active' && hadPendingPlan;
+      // REMOVED hadPendingPlan check: callback clears it before webhook arrives (race condition)
+      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active';
       
       console.log('[SUBSCRIPTION-UPDATE] Welcome email check:', {
         originalActivatedAt,
