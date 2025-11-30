@@ -155,24 +155,9 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
       
-      // PRIORITY 1: If NO tokens at all (no purchased, no balance) → show purchase modal
-      // This applies to ALL plans (including Enterprise in trial without purchased tokens)
-      if (!hasPurchasedTokens && !hasTokenBalance) {
-        return res.status(402).json({
-          error: 'Insufficient tokens for AI-Optimized Sitemap',
-          requiresPurchase: true,
-          currentPlan: subscription?.plan,
-          tokensAvailable: 0,
-          tokensNeeded: 10000,
-          feature: 'ai-sitemap-optimized',
-          message: 'Purchase tokens to enable AI-Optimized Sitemap'
-        });
-      }
-      
-      // PRIORITY 2: If has tokens BUT included tokens plan in trial without activation → show activation modal
-      // This only applies to plans with included tokens (Growth Extra, Enterprise)
-      // Allow if user has ANY tokens (purchased OR balance) - they paid for them!
-      // CRITICAL: Only block if BOTH totalPurchased=0 AND balance=0 (truly no tokens at all)
+      // PRIORITY 1: If included tokens plan (Growth Extra/Enterprise) in trial without activation
+      // → Show "Activate Plan or Buy Tokens" modal (TrialActivationModal)
+      // This check MUST come BEFORE insufficient tokens check to show the correct modal!
       if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial('ai-sitemap-optimized')) {
         return res.status(402).json({
           error: 'AI-Optimized Sitemap is locked during trial period',
@@ -182,6 +167,21 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
           currentPlan: subscription.plan,
           feature: 'ai-sitemap-optimized',
           message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens'
+        });
+      }
+      
+      // PRIORITY 2: If NO tokens at all (no purchased, no balance) → show purchase modal
+      // This applies to plans WITHOUT included tokens (Starter, Professional, Growth, Plus plans)
+      // OR to users who already have purchased tokens but used them all
+      if (!hasPurchasedTokens && !hasTokenBalance) {
+        return res.status(402).json({
+          error: 'Insufficient tokens for AI-Optimized Sitemap',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensAvailable: 0,
+          tokensNeeded: 10000,
+          feature: 'ai-sitemap-optimized',
+          message: 'Purchase tokens to enable AI-Optimized Sitemap'
         });
       }
     }
