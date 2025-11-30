@@ -1936,6 +1936,17 @@ if (!IS_PROD) {
     });
     res.status(200).json({ routes });
   });
+  
+  // PHASE 1 OPTIMIZATION: AI Queue monitoring endpoint
+  app.get('/debug/ai-queue-stats', async (req, res) => {
+    try {
+      const aiQueue = (await import('./services/aiQueue.js')).default;
+      const stats = aiQueue.getStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 }
 
     // Старият /test/set-plan endpoint е премахнат - използваме GraphQL версията

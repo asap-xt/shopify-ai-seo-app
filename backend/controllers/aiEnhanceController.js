@@ -53,39 +53,47 @@ router.post('/check-eligibility', validateRequest(), async (req, res) => {
 // Copy ONLY the OpenRouter connection from seoController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+import aiQueue from '../services/aiQueue.js'; // PHASE 1 OPTIMIZATION
 
+/**
+ * OpenRouter Chat wrapper - NOW WITH RATE LIMITING
+ * Priority: NORMAL (product enhancement, not time-critical)
+ */
 async function openrouterChat(model, messages, response_format_json = true) {
   
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
   }
   
-  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-      'X-Title': 'indexAIze - Unlock AI Search',
-    },
-    body: JSON.stringify({
-      model,
-      response_format: response_format_json ? { type: 'json_object' } : undefined,
-      messages,
-      temperature: 0.4,
-    }),
-  });
-  
-  if (!rsp.ok) {
-    const text = await rsp.text().catch(() => '');
-    console.error('🤖 [AI-ENHANCE] OpenRouter error:', rsp.status, text);
-    throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
-  }
-  
-  const j = await rsp.json();
-  const content = j?.choices?.[0]?.message?.content || '';
-  
-  return { content, usage: j?.usage || {} };
+  // Wrap in NORMAL PRIORITY queue (product enhancement)
+  return aiQueue.add(async () => {
+    const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
+      },
+      body: JSON.stringify({
+        model,
+        response_format: response_format_json ? { type: 'json_object' } : undefined,
+        messages,
+        temperature: 0.4,
+      }),
+    });
+    
+    if (!rsp.ok) {
+      const text = await rsp.text().catch(() => '');
+      console.error('🤖 [AI-ENHANCE] OpenRouter error:', rsp.status, text);
+      throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
+    }
+    
+    const j = await rsp.json();
+    const content = j?.choices?.[0]?.message?.content || '';
+    
+    return { content, usage: j?.usage || {} };
+  }, { model, messageCount: messages.length });
 }
 
 async function generateEnhancedBulletsFAQ(data) {

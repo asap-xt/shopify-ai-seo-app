@@ -350,9 +350,15 @@ async function shopGraphQL(req, shop, query, variables = {}) {
 }
 
 /* --------------------------- OpenRouter (AI) --------------------------- */
+import aiQueue from '../services/aiQueue.js'; // PHASE 1 OPTIMIZATION
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
+/**
+ * OpenRouter Chat wrapper - NOW WITH RATE LIMITING
+ * Priority: NORMAL (SEO optimization, not time-critical)
+ */
 async function openrouterChat(model, messages, response_format_json = true) {
   // TEMPORARY CLAUDE BLOCK - remove if you want to use Claude
   if (model.includes('claude')) {
@@ -365,34 +371,38 @@ async function openrouterChat(model, messages, response_format_json = true) {
     err.status = 500;
     throw err;
   }
-  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-      'X-Title': 'indexAIze - Unlock AI Search',
-    },
-    body: JSON.stringify({
-      model,
-      response_format: response_format_json ? { type: 'json_object' } : undefined,
-      messages,
-      temperature: 0.4,
-    }),
-  });
-  if (!rsp.ok) {
-    const text = await rsp.text().catch(() => '');
-    const e = new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
-    e.status = rsp.status || 500;
-    throw e;
-  }
-  const j = await rsp.json();
-  const content =
-    j?.choices?.[0]?.message?.content ||
-    j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
-    '';
   
-  return { content, usage: j?.usage || {} };
+  // Wrap in NORMAL PRIORITY queue (SEO optimization)
+  return aiQueue.add(async () => {
+    const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
+      },
+      body: JSON.stringify({
+        model,
+        response_format: response_format_json ? { type: 'json_object' } : undefined,
+        messages,
+        temperature: 0.4,
+      }),
+    });
+    if (!rsp.ok) {
+      const text = await rsp.text().catch(() => '');
+      const e = new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
+      e.status = rsp.status || 500;
+      throw e;
+    }
+    const j = await rsp.json();
+    const content =
+      j?.choices?.[0]?.message?.content ||
+      j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
+      '';
+    
+    return { content, usage: j?.usage || {} };
+  }, { model, messageCount: messages.length });
 }
 
 /* --------------------------- Metafield Definition Helper --------------------------- */

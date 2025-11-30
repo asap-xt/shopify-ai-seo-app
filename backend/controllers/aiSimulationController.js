@@ -11,51 +11,59 @@ import {
   estimateTokensWithMargin,
   calculateActualTokens
 } from '../billing/tokenConfig.js';
+import aiQueue from '../services/aiQueue.js'; // PHASE 1 OPTIMIZATION
 
 // Copy ONLY the OpenRouter connection from aiEnhanceController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
+/**
+ * OpenRouter Chat wrapper - NOW WITH RATE LIMITING
+ * Priority: HIGH (real-time user interactions)
+ */
 async function openrouterChat(model, messages, response_format_json = true) {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
   }
   
-  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-      'X-Title': 'indexAIze - Unlock AI Search',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      ...(response_format_json ? { response_format: { type: 'json_object' } } : {}),
-      messages,
-    }),
-  });
-  
-  if (!rsp.ok) {
-    const text = await rsp.text().catch(() => '');
-    console.error('🤖 [AI-SIMULATION] OpenRouter error:', rsp.status, text);
-    throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
-  }
-  
-  const j = await rsp.json();
-  const content = j?.choices?.[0]?.message?.content || '';
-  const usage = j?.usage || {};
-  
-  return {
-    content,
-    usage: {
-      prompt_tokens: usage.prompt_tokens || 0,
-      completion_tokens: usage.completion_tokens || 0,
-      total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-      total_cost: usage.total_cost || null
+  // Wrap in HIGH PRIORITY queue (real-time user simulation)
+  return aiQueue.addHighPriority(async () => {
+    const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        ...(response_format_json ? { response_format: { type: 'json_object' } } : {}),
+        messages,
+      }),
+    });
+    
+    if (!rsp.ok) {
+      const text = await rsp.text().catch(() => '');
+      console.error('🤖 [AI-SIMULATION] OpenRouter error:', rsp.status, text);
+      throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
     }
-  };
+    
+    const j = await rsp.json();
+    const content = j?.choices?.[0]?.message?.content || '';
+    const usage = j?.usage || {};
+    
+    return {
+      content,
+      usage: {
+        prompt_tokens: usage.prompt_tokens || 0,
+        completion_tokens: usage.completion_tokens || 0,
+        total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+        total_cost: usage.total_cost || null
+      }
+    };
+  }, { model, messageCount: messages.length });
 }
 
 const router = express.Router();
