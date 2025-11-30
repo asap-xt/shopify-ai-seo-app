@@ -2588,19 +2588,26 @@ export default function Settings() {
                 
                 console.log('[SETTINGS] ✅ Activation response:', response);
                 
-                // Redirect to Shopify approval page
-                if (response.confirmationUrl) {
-                  console.log('[SETTINGS] 🔗 Redirecting to Shopify approval:', response.confirmationUrl);
-                  window.location.href = response.confirmationUrl;
-                } else {
-                  console.error('[SETTINGS] ❌ No confirmation URL in response');
-                  setToast('Failed to activate plan: No confirmation URL');
-                  setShowTrialActivationModal(false);
+                // Check if Shopify approval is required
+                if (response.requiresApproval && response.confirmationUrl) {
+                  console.log('[SETTINGS] 🔗 Redirecting to Shopify approval (breaking out of iframe):', response.confirmationUrl);
+                  // CRITICAL: Use window.top to break out of iframe (X-Frame-Options: DENY)
+                  window.top.location.href = response.confirmationUrl;
+                  return;
                 }
+                
+                // Plan activated successfully without approval
+                console.log('[SETTINGS] ✅ Plan activated without approval, reloading...');
+                window.location.reload();
+                
               } catch (error) {
-                console.error('[SETTINGS] ❌ Activation error:', error);
-                setToast('Failed to activate plan: ' + (error.message || 'Unknown error'));
-                setShowTrialActivationModal(false);
+                console.error('[SETTINGS] ❌ Activation failed:', error);
+                
+                // Fallback: Navigate to billing page
+                const params = new URLSearchParams(window.location.search);
+                const host = params.get('host');
+                const embedded = params.get('embedded');
+                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
               }
             }}
             onPurchaseTokens={() => {
