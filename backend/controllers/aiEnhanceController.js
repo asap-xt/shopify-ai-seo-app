@@ -408,11 +408,14 @@ router.post('/product', validateRequest(), async (req, res) => {
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
         // ВАЖНО: Единственият критерий е enhancedAt timestamp (bullets/faq винаги ще има от Basic SEO)
+        // EXCEPTION: If user has purchased tokens during trial, allow re-enhancement (they're paying!)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
         const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt (това е за apply)
+        const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
         
-        if (shouldSkipEnhanced && hasAIEnhanced) {
+        // Skip only if: plan has skip enabled AND already enhanced AND NOT using purchased tokens
+        if (shouldSkipEnhanced && hasAIEnhanced && !hasPurchasedTokens) {
           results.push({ 
             language, 
             bullets: existingSeo.bullets,
