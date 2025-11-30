@@ -23,6 +23,7 @@ import {
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 // Dev-only debug logger (hidden in production builds)
@@ -77,12 +78,14 @@ export default function Settings() {
   
   // Insufficient Tokens Modal state
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [tokenModalData, setTokenModalData] = useState({
     feature: '',
     tokensRequired: 0,
     tokensAvailable: 0,
     tokensNeeded: 0
   });
+  const [tokenError, setTokenError] = useState(null);
   const [processingSchema, setProcessingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState('');
   const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
@@ -833,16 +836,16 @@ export default function Settings() {
             // Check if error message indicates trial restriction
             const errorMessage = result?.data?.regenerateSitemap?.message || '';
             if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
-              setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
               setSaving(false);
               
-              // Navigate to billing page after 2 seconds
-              setTimeout(() => {
-                const params = new URLSearchParams(window.location.search);
-                const host = params.get('host');
-                const embedded = params.get('embedded');
-                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-              }, 2000);
+              // Show Trial Activation Modal instead of redirect
+              setTokenError({
+                trialRestriction: true,
+                requiresActivation: true,
+                feature: 'ai-sitemap-optimized',
+                currentPlan: settings?.plan || 'enterprise'
+              });
+              setShowTrialActivationModal(true);
               return;
             }
             
@@ -853,19 +856,18 @@ export default function Settings() {
           }
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
+          setSaving(false);
           
           // Check if error is trial restriction (402 with trialRestriction flag)
-          if (error.trialRestriction && error.requiresActivation) {
-            setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
-            setSaving(false);
-            
-            // Navigate to billing page after 2 seconds
-            setTimeout(() => {
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-            }, 2000);
+          if (error.status === 402 && error.trialRestriction && error.requiresActivation) {
+            // Show Trial Activation Modal instead of redirect
+            setTokenError({
+              trialRestriction: true,
+              requiresActivation: true,
+              feature: 'ai-sitemap-optimized',
+              currentPlan: settings?.plan || 'enterprise'
+            });
+            setShowTrialActivationModal(true);
             return;
           }
           
@@ -885,33 +887,25 @@ export default function Settings() {
     } catch (error) {
       console.error('Failed to save settings:', error);
       
-      // Check for 402 status (payment required)
+      // Check for 402 status (payment required) - SHOW MODAL INSTEAD OF REDIRECT
       if (error.status === 402) {
-        if (error.trialRestriction && error.requiresActivation) {
-          // Growth Extra/Enterprise in trial → Show "Activate Plan" message
-          setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan or purchase tokens.');
-          // Navigate to billing page after 2 seconds
-          setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-            const host = params.get('host');
-            const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-          }, 2000);
-          return;
-        }
+        setSaving(false);
         
-        if (error.requiresPurchase) {
-          // Insufficient tokens → Show purchase message
-          setToast('AI-Optimized Sitemap requires tokens. Redirecting to purchase page...');
-          // Navigate to billing page after 2 seconds
-          setTimeout(() => {
-            const params = new URLSearchParams(window.location.search);
-            const host = params.get('host');
-            const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-          }, 2000);
-          return;
+        // Set error data for modals
+        setTokenError(error);
+        
+        // Show appropriate modal based on error type (same logic as Collections)
+        if (error.trialRestriction && error.requiresActivation) {
+          // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+          setShowTrialActivationModal(true);
+        } else if (error.requiresPurchase) {
+          // Insufficient tokens → Show "Purchase Tokens" modal
+          setShowInsufficientTokensModal(true);
+        } else {
+          // Fallback: Generic trial restriction
+          setToast('AI-Optimized Sitemap requires tokens. Please upgrade or purchase tokens.');
         }
+        return;
       }
       
       setToast('Failed to save settings');
@@ -2548,19 +2542,68 @@ export default function Settings() {
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
       
-      {/* Insufficient Tokens Modal */}
-      <InsufficientTokensModal
-        open={showInsufficientTokensModal}
-        onClose={() => setShowInsufficientTokensModal(false)}
-        feature={tokenModalData.feature}
-        tokensRequired={tokenModalData.tokensRequired}
-        tokensAvailable={tokenModalData.tokensAvailable}
-        tokensNeeded={tokenModalData.tokensNeeded}
-        shop={shop}
-        needsUpgrade={false}
-        minimumPlan={null}
-        currentPlan={settings?.plan || 'starter'}
-      />
+      {/* Modals for Token/Trial Restrictions */}
+      {tokenError && (
+        <>
+          <InsufficientTokensModal
+            open={showInsufficientTokensModal}
+            onClose={() => {
+              setShowInsufficientTokensModal(false);
+              setTokenError(null);
+            }}
+            feature={tokenError.feature || 'ai-sitemap-optimized'}
+            tokensRequired={tokenError.tokensRequired || 0}
+            tokensAvailable={tokenError.tokensAvailable || 0}
+            tokensNeeded={tokenError.tokensNeeded || 0}
+            shop={shop}
+            needsUpgrade={tokenError.needsUpgrade || false}
+            minimumPlan={tokenError.minimumPlanForFeature || null}
+            currentPlan={tokenError.currentPlan || settings?.plan || 'starter'}
+            returnTo="/settings"
+          />
+          
+          <TrialActivationModal
+            open={showTrialActivationModal}
+            onClose={() => {
+              setShowTrialActivationModal(false);
+              setTokenError(null);
+            }}
+            feature={tokenError.feature || 'ai-sitemap-optimized'}
+            trialEndsAt={tokenError.trialEndsAt}
+            currentPlan={tokenError.currentPlan || settings?.plan || 'enterprise'}
+            tokensRequired={tokenError.tokensRequired || 0}
+            onActivatePlan={async () => {
+              // Reload page after activation to refresh settings
+              window.location.reload();
+            }}
+            onPurchaseTokens={() => {
+              // Redirect to billing page for token purchase
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }}
+            shop={shop}
+          />
+        </>
+      )}
+      
+      {/* Fallback: Old Insufficient Tokens Modal (for non-error cases) */}
+      {!tokenError && showInsufficientTokensModal && (
+        <InsufficientTokensModal
+          open={showInsufficientTokensModal}
+          onClose={() => setShowInsufficientTokensModal(false)}
+          feature={tokenModalData.feature}
+          tokensRequired={tokenModalData.tokensRequired}
+          tokensAvailable={tokenModalData.tokensAvailable}
+          tokensNeeded={tokenModalData.tokensNeeded}
+          shop={shop}
+          needsUpgrade={false}
+          minimumPlan={null}
+          currentPlan={settings?.plan || 'starter'}
+          returnTo="/settings"
+        />
+      )}
       
     </BlockStack>
     );
