@@ -884,6 +884,36 @@ export default function Settings() {
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
+      
+      // Check for 402 status (payment required)
+      if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          // Growth Extra/Enterprise in trial → Show "Activate Plan" message
+          setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan or purchase tokens.');
+          // Navigate to billing page after 2 seconds
+          setTimeout(() => {
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            const embedded = params.get('embedded');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          }, 2000);
+          return;
+        }
+        
+        if (error.requiresPurchase) {
+          // Insufficient tokens → Show purchase message
+          setToast('AI-Optimized Sitemap requires tokens. Redirecting to purchase page...');
+          // Navigate to billing page after 2 seconds
+          setTimeout(() => {
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            const embedded = params.get('embedded');
+            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+          }, 2000);
+          return;
+        }
+      }
+      
       setToast('Failed to save settings');
     } finally {
       setSaving(false);
