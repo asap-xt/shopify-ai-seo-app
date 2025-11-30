@@ -171,8 +171,8 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       
       // PRIORITY 2: If has tokens BUT included tokens plan in trial without activation → show activation modal
       // This only applies to plans with included tokens (Growth Extra, Enterprise)
-      // Allow if user has purchased/remaining tokens (they paid for them!)
-      // CRITICAL: Check !hasPurchasedTokens && !hasTokenBalance to allow purchased tokens during trial
+      // Allow if user has ANY tokens (purchased OR balance) - they paid for them!
+      // CRITICAL: Only block if BOTH totalPurchased=0 AND balance=0 (truly no tokens at all)
       if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial('ai-sitemap-optimized')) {
         return res.status(402).json({
           error: 'AI-Optimized Sitemap is locked during trial period',
