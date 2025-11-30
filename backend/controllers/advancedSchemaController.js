@@ -1607,10 +1607,15 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // CRITICAL: Block during trial ONLY for plans with included tokens
       // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         throw new Error('TRIAL_RESTRICTION: Advanced Schema Data is locked during trial period. Activate your plan to unlock.');
       }
       

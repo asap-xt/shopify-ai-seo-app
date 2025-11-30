@@ -268,11 +268,16 @@ async function generateSitemapCore(shop, options = {}) {
               const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
               const includedTokensPlans = ['growth_extra', 'enterprise'];
               const hasIncludedTokens = includedTokensPlans.includes(planKey);
+              const isActivated = !!subscription?.activatedAt;
+              
+              // Check if user has purchased tokens (not just included tokens)
+              const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
               
               // CRITICAL: Trial restriction ONLY for plans with included tokens
               // Plus plans can use purchased tokens during trial without activating plan
               // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-              if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+              // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+              if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
                 // Return error response instead of generating basic sitemap
                 return res.status(402).json({
                   error: 'AI-Optimized Sitemap is locked during trial period',

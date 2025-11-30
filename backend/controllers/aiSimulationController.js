@@ -102,15 +102,17 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       const normalizedPlanKey = planKey.toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        // BUT: Allow if user has purchased tokens (can use purchased tokens during trial)
-        // During trial, included tokens are NOT added, so balance = only purchased tokens
-        if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-          return res.status(402).json({
-            error: 'AI Testing is locked during trial period',
+        return res.status(402).json({
+          error: 'AI Testing is locked during trial period',
             trialRestriction: true,
             requiresActivation: true,
             trialEndsAt: subscription.trialEndsAt,
@@ -122,8 +124,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
             tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
             message: 'Activate your plan to unlock AI Testing with included tokens, or purchase tokens to use during trial'
           });
-        }
-        // User has purchased tokens → allow usage (will use purchased tokens only)
       }
       
       // If insufficient tokens → Request token purchase
