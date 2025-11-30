@@ -270,13 +270,13 @@ router.post('/product', validateRequest(), async (req, res) => {
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
     
+    // Get token balance EARLY (needed for re-enhancement check later in loop)
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
       // Estimate required tokens with 10% safety margin
       const tokenEstimate = estimateTokensWithMargin(feature, { languages: languages.length });
-      
-      // Check token balance
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       // Check if plan has included tokens (Growth Extra, Enterprise)
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
