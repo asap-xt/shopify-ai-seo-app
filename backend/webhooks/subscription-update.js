@@ -72,13 +72,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       
       if (subscription) {
         foundByFallback = true; // Mark that subscription was found by fallback search
-          shop: subscription.shop,
-          plan: subscription.plan,
-          pendingPlan: subscription.pendingPlan || 'NOT SET',
-          pendingActivation: subscription.pendingActivation || false,
-          shopifySubscriptionId: subscription.shopifySubscriptionId || 'NOT SET',
-          activatedAt: subscription.activatedAt || 'NOT SET'
-        });
         
         // CRITICAL: Only update shopifySubscriptionId if:
         // 1. It doesn't match AND
