@@ -1798,34 +1798,29 @@ export default function Settings() {
                         console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
                         console.error('[SCHEMA-GEN] ❌ Full error object:', apiError);
                         
-                        // Check if error is trial restriction (402 with trialRestriction flag)
-                        if (apiError.trialRestriction && apiError.requiresActivation) {
-                          console.log('[SCHEMA-GEN] 🔒 Trial restriction - plan not activated');
-                          setToast('Advanced Schema Data is locked during trial. Please activate your plan to use included tokens.');
+                        // Check for 402 error (payment/activation required) - SHOW MODAL INSTEAD OF REDIRECT
+                        if (apiError.status === 402) {
+                          console.log('[SCHEMA-GEN] 💳 402 error - showing appropriate modal');
                           setSchemaGenerating(false);
+                          isGeneratingRef.current = false;
                           
-                          // Navigate to billing page
-                          setTimeout(() => {
-                            window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
-                          }, 2000);
+                          // Set error data for modals
+                          setTokenError(apiError);
+                          
+                          // Show appropriate modal based on error type (same logic as AI Sitemap)
+                          if (apiError.trialRestriction && apiError.requiresActivation) {
+                            // Growth Extra/Enterprise in trial → Show "Activate Plan or Buy Tokens" modal
+                            console.log('[SCHEMA-GEN] 🔒 Trial restriction - showing TrialActivationModal');
+                            setShowTrialActivationModal(true);
+                          } else if (apiError.requiresPurchase) {
+                            // Insufficient tokens → Show "Purchase Tokens" modal
+                            console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing InsufficientTokensModal');
+                            setShowInsufficientTokensModal(true);
+                          } else {
+                            // Fallback: Generic trial restriction toast
+                            setToast('Advanced Schema Data requires activation or token purchase.');
+                          }
                           return;
-                        }
-                        
-                        // Check if error has requiresPurchase flag (402 status)
-                        if (apiError.requiresPurchase) {
-                          console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing modal');
-                          setTokenModalData({
-                            feature: apiError.feature || 'ai-schema-advanced',
-                            tokensRequired: apiError.tokensRequired || 0,
-                            tokensAvailable: apiError.tokensAvailable || 0,
-                            tokensNeeded: apiError.tokensNeeded || 0,
-                            needsUpgrade: apiError.needsUpgrade || false,
-                            currentPlan: apiError.currentPlan || '',
-                            minimumPlanForFeature: apiError.minimumPlanForFeature || null
-                          });
-                          setShowInsufficientTokensModal(true);
-                          setSchemaGenerating(false);
-                          return; // Don't re-throw, modal handles it
                         }
                         
                         throw apiError; // Re-throw for other errors
