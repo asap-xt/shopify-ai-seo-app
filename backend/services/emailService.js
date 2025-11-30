@@ -136,9 +136,15 @@ class EmailService {
         message: error.message,
         code: error.code,
         statusCode: error.response?.statusCode,
-        body: JSON.stringify(error.response?.body, null, 2), // Stringify to see full error
+        body: error.response?.body, // Don't stringify - let console show nested objects
         headers: error.response?.headers
       });
+      
+      // CRITICAL: Log full error body for debugging
+      if (error.response?.body?.errors) {
+        console.error('❌ SendGrid errors array:', error.response.body.errors);
+      }
+      
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'failed', error.message);
       return { success: false, error: error.message };
     }
@@ -782,7 +788,15 @@ class EmailService {
                       
                       ${data.planFeatures && data.planFeatures.length > 0 ? `
                       <ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
-                        ${data.planFeatures.map(feature => `<li style="margin-bottom: 8px;">${feature.replace(/^[✓🔓]/g, '').trim()}</li>`).join('')}
+                        ${data.planFeatures.map(feature => {
+                          // Remove emoji/checkmark characters safely
+                          const cleanFeature = feature
+                            .replace(/^[\u{1F512}-\u{1F513}]/gu, '') // Lock emojis
+                            .replace(/^[\u2713\u2714]/g, '') // Checkmarks
+                            .replace(/^[\u{1F5DD}]/gu, '') // Old key emoji
+                            .trim();
+                          return `<li style="margin-bottom: 8px;">${cleanFeature}</li>`;
+                        }).join('')}
                       </ul>
                       ` : `
                       <p style="margin: 0; color: #4a4a4a; font-size: 14px;">Plan features are being configured.</p>
@@ -849,7 +863,15 @@ class EmailService {
   getTokenPurchaseEmailTemplate(data) {
     const planFeaturesHtml = data.planFeatures && data.planFeatures.length > 0
       ? `<ul style="margin: 0; padding-left: 20px; color: #4a4a4a; font-size: 14px; line-height: 1.8;">
-          ${data.planFeatures.map(feature => `<li style="margin-bottom: 8px;">${feature.replace(/^[✓🔓]/g, '').trim()}</li>`).join('')}
+          ${data.planFeatures.map(feature => {
+            // Remove emoji/checkmark characters safely
+            const cleanFeature = feature
+              .replace(/^[\u{1F512}-\u{1F513}]/gu, '') // Lock emojis
+              .replace(/^[\u2713\u2714]/g, '') // Checkmarks
+              .replace(/^[\u{1F5DD}]/gu, '') // Old key emoji
+              .trim();
+            return `<li style="margin-bottom: 8px;">${cleanFeature}</li>`;
+          }).join('')}
         </ul>`
       : `<p style="margin: 0; color: #4a4a4a; font-size: 14px;">Plan features are being configured.</p>`;
 
