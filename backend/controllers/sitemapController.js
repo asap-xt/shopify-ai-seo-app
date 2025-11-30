@@ -293,8 +293,25 @@ async function generateSitemapCore(shop, options = {}) {
                 reservationId = reservation.reservationId;
                 await reservation.save();
               } else {
-                // Insufficient tokens
-                isAISitemapEnabled = false;
+                // Insufficient tokens → Return error for purchase
+                const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+                const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(planKey);
+                
+                return res.status(402).json({
+                  error: 'Insufficient tokens for AI-Optimized Sitemap',
+                  requiresPurchase: true,
+                  needsUpgrade: needsUpgrade,
+                  minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+                  currentPlan: subscription?.plan,
+                  tokensRequired: tokenEstimate.estimated,
+                  tokensWithMargin: tokenEstimate.withMargin,
+                  tokensAvailable: tokenBalance.balance,
+                  tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+                  feature,
+                  message: needsUpgrade 
+                    ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-Optimized Sitemap'
+                    : 'You need more tokens to use AI-Optimized Sitemap'
+                });
               }
             }
           }

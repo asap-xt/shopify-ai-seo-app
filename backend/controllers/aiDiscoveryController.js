@@ -120,6 +120,57 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    // === TRIAL & TOKEN CHECK FOR AI SITEMAP ===
+    // Check if trying to enable AI Sitemap
+    if (features?.aiSitemap === true) {
+      const Subscription = (await import('../db/Subscription.js')).default;
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
+      
+      const subscription = await Subscription.findOne({ shop });
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      
+      // Check trial status
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check tokens
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+      
+      // Check if plan has included tokens
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // TRIAL RESTRICTION: Block if included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial('ai-sitemap-optimized')) {
+        return res.status(402).json({
+          error: 'AI-Optimized Sitemap is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature: 'ai-sitemap-optimized',
+          message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens, or purchase tokens to use during trial'
+        });
+      }
+      
+      // Check if has enough tokens (basic check - detailed check happens at generation)
+      if (!hasIncludedTokens && tokenBalance.balance < 10000) {
+        return res.status(402).json({
+          error: 'Insufficient tokens for AI-Optimized Sitemap',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensAvailable: tokenBalance.balance,
+          tokensNeeded: 10000 - tokenBalance.balance,
+          feature: 'ai-sitemap-optimized',
+          message: 'Purchase tokens to enable AI-Optimized Sitemap'
+        });
+      }
+    }
+    // === END TRIAL & TOKEN CHECK ===
+    
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
