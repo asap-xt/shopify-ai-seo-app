@@ -135,8 +135,28 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
       const isActivated = !!subscription?.activatedAt;
       
-      // Check tokens
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      // Check tokens - CRITICAL: Always fetch FRESH data from DB (no cache)
+      // This ensures we get the latest token balance after recent purchases
+      const tokenBalance = await TokenBalance.findOne({ shop });
+      if (!tokenBalance) {
+        // First time - create new balance
+        const newBalance = new TokenBalance({ shop });
+        await newBalance.save();
+        const hasPurchasedTokens = false;
+        const hasTokenBalance = false;
+        
+        // No tokens at all → show purchase modal
+        return res.status(402).json({
+          error: 'Insufficient tokens for AI-Optimized Sitemap',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensAvailable: 0,
+          tokensNeeded: 10000,
+          feature: 'ai-sitemap-optimized',
+          message: 'Purchase tokens to enable AI-Optimized Sitemap'
+        });
+      }
+      
       const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       const hasTokenBalance = tokenBalance.balance > 0;
       
