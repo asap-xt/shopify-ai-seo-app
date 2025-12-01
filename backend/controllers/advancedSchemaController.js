@@ -1969,8 +1969,12 @@ router.get('/status', async (req, res) => {
     const schemaQueue = (await import('../services/schemaQueue.js')).default;
     const jobStatus = await schemaQueue.getJobStatus(shop);
     
+    console.log('[SCHEMA-STATUS] jobStatus from queue:', JSON.stringify(jobStatus));
+    
     // Get shop schema status from DB
     const shopDoc = await Shop.findOne({ shop }).select('schemaStatus').lean();
+    
+    console.log('[SCHEMA-STATUS] shopDoc.schemaStatus from DB:', JSON.stringify(shopDoc?.schemaStatus));
     
     // Get last generated schema info from MongoDB
     const schemaDoc = await AdvancedSchema.findOne({ shop }).select('schemas siteFAQ generatedAt').lean();
