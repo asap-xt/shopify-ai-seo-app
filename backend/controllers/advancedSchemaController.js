@@ -1582,13 +1582,16 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
   let totalAITokens = 0;
   
   try {
+    // CRITICAL: Get actual product count BEFORE token reservation!
+    const totalProductsInMongo = await Product.countDocuments({ shop });
+    
     // Check if this feature requires tokens and reserve
     const { estimateTokensWithMargin, requiresTokens, calculateActualTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
     if (requiresTokens(feature)) {
-      // Estimate tokens (rough estimate: 500 products * 4 AI calls * 500 tokens each = 1M tokens)
-      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 }); // Conservative estimate
+      // Estimate tokens based on ACTUAL product count
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: totalProductsInMongo });
       
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
@@ -1648,7 +1651,7 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // First, sync products from Shopify to MongoDB if needed
-    const totalProductsInMongo = await Product.countDocuments({ shop });
+    // totalProductsInMongo is already counted earlier for token estimation
     
     if (totalProductsInMongo === 0) {
       try {
@@ -1863,9 +1866,9 @@ router.post('/generate-all', async (req, res) => {
     // 5. User has NO remaining token balance (!hasTokenBalance)
     // 6. Feature is blocked during trial
     if (hasIncludedAccess && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
-      // Get token info for Trial Activation Modal
+      // Get token info for Trial Activation Modal (use actual product count)
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
-      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 });
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: totalProductsInMongo });
       
       return res.status(402).json({
         error: 'Advanced Schema Data is locked during trial period',
@@ -1888,9 +1891,9 @@ router.post('/generate-all', async (req, res) => {
       // Reuse tokenBalance from trial check if already fetched
       const tokenBalanceForCheck = tokenBalance || await TokenBalance.getOrCreate(shop);
       
-      // Estimate tokens needed for Advanced Schema
+      // Estimate tokens needed for Advanced Schema (use actual product count)
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
-      const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: 100 });
+      const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: totalProductsInMongo });
       
       if (!tokenBalanceForCheck.hasBalance(tokenEstimate.withMargin)) {
         return res.status(402).json({ 

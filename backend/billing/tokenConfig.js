@@ -89,13 +89,13 @@ export const TOKEN_COSTS = {
   
   'ai-schema-advanced': {
     base: 3000,           // Complex schema generation
-    perProduct: 2500,
+    perProduct: 150,      // Conservative estimate (actual may be lower, based on sitemap data)
     description: 'Advanced schema data generation'
   },
   
   'ai-sitemap-optimized': {
     base: 5000,           // One-time per generation
-    perProduct: 3000,     // Cost per product in sitemap (realistic avg: 2,159 tokens)
+    perProduct: 20,       // Cost per product in sitemap (actual avg: ~6 tokens, 3× safety margin)
     description: 'AI-optimized sitemap generation'
   }
 };

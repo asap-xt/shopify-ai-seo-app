@@ -261,7 +261,18 @@ async function generateSitemapCore(shop, options = {}) {
             const feature = 'ai-sitemap-optimized';
             
             if (requiresTokens(feature)) {
-              const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
+              // CRITICAL: Get ACTUAL product count, not plan limit!
+              const countQuery = `
+                query {
+                  productsCount: products(query: "status:active") {
+                    count
+                  }
+                }
+              `;
+              const countData = await shopGraphQL(normalizedShop, countQuery);
+              const actualProductCount = Math.min(countData.productsCount?.count || 0, limit);
+              
+              const tokenEstimate = estimateTokensWithMargin(feature, { productCount: actualProductCount });
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
               // Determine plan type
