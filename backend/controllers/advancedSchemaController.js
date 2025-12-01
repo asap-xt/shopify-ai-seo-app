@@ -1844,6 +1844,9 @@ router.post('/generate-all', async (req, res) => {
       });
     }
     
+    // Get actual product count BEFORE token checks
+    const totalProductsInMongo = await Product.countDocuments({ shop });
+    
     // === TRIAL RESTRICTION CHECK ===
     // IMPORTANT: Only for plans with INCLUDED tokens (Growth Extra, Enterprise)
     // Plus plans use PURCHASED tokens → no trial restriction
@@ -1911,63 +1914,27 @@ router.post('/generate-all', async (req, res) => {
       }
     }
     
-    // Return immediately
-    res.json({ 
-      success: true, 
-      message: 'Advanced schema generation started in background' 
-    });
-    
     // Get forceBasicSeo parameter from request body
     const forceBasicSeo = req.body?.forceBasicSeo === true;
     
-    // Start background process
-    generateAllSchemas(shop, forceBasicSeo).catch(err => {
-      console.error('[SCHEMA] ❌ Background generation failed:', err);
-      console.error('[SCHEMA] ❌ Error message:', err.message);
-      
-      // Update status with error
-      if (err.message === 'NO_OPTIMIZED_PRODUCTS') {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'NO_OPTIMIZED_PRODUCTS',
-          errorMessage: 'No optimized products found. Please run AISEO optimization first.'
-        });
-      } else if (err.message === 'ONLY_BASIC_SEO') {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'ONLY_BASIC_SEO',
-          errorMessage: 'Only basic AISEO found. AI-enhanced optimization is recommended for better results.'
-        });
-      } else if (err.message.startsWith('TRIAL_RESTRICTION:')) {
-        // Trial restriction error
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'TRIAL_RESTRICTION',
-          errorMessage: err.message.replace('TRIAL_RESTRICTION: ', '')
-        });
-      } else if (err.message.startsWith('INSUFFICIENT_TOKENS:')) {
-        // Token balance error
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'INSUFFICIENT_TOKENS',
-          errorMessage: err.message.replace('INSUFFICIENT_TOKENS: ', '')
-        });
-      } else {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'GENERATION_FAILED',
-          errorMessage: err.message || 'Schema generation failed'
-        });
+    // Add job to background queue
+    const schemaQueue = (await import('../services/schemaQueue.js')).default;
+    const jobInfo = await schemaQueue.addJob(shop, async () => {
+      const result = await generateAllSchemas(shop, forceBasicSeo);
+      return {
+        schemaCount: result?.schemaCount || result?.schemas?.length || 0,
+        success: true
+      };
+    });
+    
+    // Return immediately with queue info
+    res.json({ 
+      success: true, 
+      message: jobInfo.message,
+      job: {
+        queued: jobInfo.queued,
+        position: jobInfo.position,
+        estimatedTime: jobInfo.estimatedTime
       }
     });
     
