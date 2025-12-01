@@ -1933,54 +1933,7 @@ router.post('/generate-all', async (req, res) => {
     // Get forceBasicSeo parameter from request body
     const forceBasicSeo = req.body?.forceBasicSeo === true;
     
-    // PRE-CHECK: Run product validation synchronously BEFORE adding to queue
-    // This allows us to return 400 errors immediately instead of queueing a doomed job
-    try {
-      // Get total product count (same logic as in generateAllSchemas)
-      const totalProductsInMongo = await Product.countDocuments({ shop });
-      
-      // If no products at all, try to sync first
-      if (totalProductsInMongo === 0) {
-        try {
-          await syncProductsToMongoDB(shop);
-        } catch (syncError) {
-          console.error('[SCHEMA] Failed to sync products:', syncError);
-          // Continue, maybe some products exist after all
-        }
-      }
-      
-      // Now check for optimized products
-      const allProducts = await Product.find({
-        shop,
-        'seoStatus.optimized': true
-      }).limit(1); // Just check if at least 1 exists
-      
-      const aiEnhancedCount = await Product.countDocuments({
-        shop,
-        'seoStatus.aiEnhanced': true
-      });
-      
-      // Case 1: No optimized products at all
-      if (allProducts.length === 0) {
-        return res.status(400).json({ 
-          error: 'NO_OPTIMIZED_PRODUCTS',
-          message: 'No optimized products found. Please run AISEO optimization first.' 
-        });
-      }
-      
-      // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
-      if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
-        return res.status(400).json({ 
-          error: 'ONLY_BASIC_SEO',
-          message: 'Only basic AISEO found. AI-Enhanced optimization recommended for best results.' 
-        });
-      }
-    } catch (preCheckError) {
-      console.error('[SCHEMA] Pre-check error:', preCheckError);
-      return res.status(500).json({ error: 'Failed to validate products' });
-    }
-    
-    // Add job to background queue (product checks already passed)
+    // Add job to background queue (product checks will happen inside generateAllSchemas)
     const schemaQueue = (await import('../services/schemaQueue.js')).default;
     const jobInfo = await schemaQueue.addJob(shop, async () => {
       const result = await generateAllSchemas(shop, forceBasicSeo);

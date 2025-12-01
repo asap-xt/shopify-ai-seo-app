@@ -137,8 +137,12 @@ class SchemaQueue {
         job.error = error.message;
         job.failedAt = new Date();
 
-        // Retry logic
-        if (job.attempts < job.maxAttempts) {
+        // Check if error is non-retryable (user action required)
+        const nonRetryableErrors = ['NO_OPTIMIZED_PRODUCTS', 'ONLY_BASIC_SEO'];
+        const isNonRetryable = nonRetryableErrors.includes(error.message);
+
+        // Retry logic (skip for non-retryable errors)
+        if (!isNonRetryable && job.attempts < job.maxAttempts) {
           dbLogger.warn(`[SCHEMA-QUEUE] 🔄 Retrying job for shop: ${job.shop} (attempt ${job.attempts + 1}/${job.maxAttempts})`);
           
           // Re-add to queue for retry
@@ -151,13 +155,14 @@ class SchemaQueue {
             lastError: error.message
           });
         } else {
-          // Max attempts reached, mark as failed
-          dbLogger.error(`[SCHEMA-QUEUE] ❌ Job permanently failed for shop: ${job.shop} after ${job.maxAttempts} attempts`);
+          // Non-retryable error OR max attempts reached
+          const reason = isNonRetryable ? 'Non-retryable error' : `Max attempts (${job.maxAttempts}) reached`;
+          dbLogger.error(`[SCHEMA-QUEUE] ❌ Job permanently failed for shop: ${job.shop}. ${reason}`);
           
           await this.updateShopStatus(job.shop, {
             inProgress: false,
             status: 'failed',
-            message: `Generation failed: ${error.message}`,
+            message: error.message, // Use raw error message for NO_OPTIMIZED_PRODUCTS/ONLY_BASIC_SEO
             lastError: error.message,
             failedAt: new Date()
           });
