@@ -264,7 +264,7 @@ async function generateSitemapCore(shop, options = {}) {
               // CRITICAL: Get ACTUAL product count, not plan limit!
               const countQuery = `
                 query {
-                  productsCount: products(query: "status:active") {
+                  productsCount {
                     count
                   }
                 }
@@ -519,9 +519,11 @@ async function generateSitemapCore(shop, options = {}) {
               price: product.priceRangeV2?.minVariantPrice?.amount
             };
             
-            // Generate AI enhancements (with timeout)
+            // Generate AI enhancements (sequential processing via aiQueue)
             // Uses Gemini 2.5 Flash (Lite) for fast, cost-effective generation
-            const enhancementPromise = enhanceProductForSitemap(productForAI, allProducts, {
+            // NO TIMEOUT: We need to complete all AI calls to track token usage accurately
+            // The aiQueue already has built-in timeout protection (30-60s per request)
+            const aiEnhancements = await enhanceProductForSitemap(productForAI, allProducts, {
               enableSummary: true,
               enableSemanticTags: true,
               enableContextHints: true,
@@ -529,10 +531,6 @@ async function generateSitemapCore(shop, options = {}) {
               enableSentiment: true,
               enableRelated: true
             });
-            
-            // Set timeout to avoid blocking (15s for 6 parallel AI calls)
-            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 15000));
-            const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
             
             // Track AI token usage
             if (aiEnhancements?.usage) {
