@@ -121,6 +121,21 @@ export default function Settings() {
   });
   const [schemaPollingInterval, setSchemaPollingInterval] = useState(null);
   
+  // DEPRECATED: Old schema generation states (kept for backward compatibility with old code)
+  const [schemaGenerating, setSchemaGenerating] = useState(false);
+  const [schemaComplete, setSchemaComplete] = useState(false);
+  const [schemaProgress, setSchemaProgress] = useState({
+    current: 0,
+    total: 0,
+    percent: 0,
+    currentProduct: '',
+    stats: {
+      siteFAQ: false,
+      products: 0,
+      totalSchemas: 0
+    }
+  });
+  
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
   
