@@ -206,32 +206,41 @@ async function syncProductsToMongoDB(shop) {
       
       if (existingProduct) {
         // Update existing product
+        // IMPORTANT: Preserve existing seoStatus if product was optimized through the app
+        // Only update seoStatus if we detect AI metafields (which means optimization via app)
+        const updateData = {
+          $set: {
+            title: product.title,
+            description: product.descriptionHtml,
+            productType: product.productType,
+            vendor: product.vendor,
+            tags: product.tags,
+            status: product.status,
+            handle: product.handle,
+            createdAt: new Date(product.createdAt),
+            updatedAt: new Date(product.updatedAt)
+          }
+        };
+        
+        // Only update seoStatus if we detect AI metafields
+        // Otherwise, preserve existing seoStatus (product may have been optimized via app)
+        if (hasSeoMetafields) {
+          updateData.$set.seoStatus = {
+            optimized: true,
+            aiEnhanced: true,
+            languages: detectedLanguages.map(lang => ({ 
+              code: lang, 
+              optimized: true, 
+              hasSeo: true 
+            })),
+            lastCheckedAt: new Date()
+          };
+        }
+        
         await Product.findOneAndUpdate(
           { shop, shopifyProductId: numericId },
-          {
-            $set: {
-              title: product.title,
-              description: product.descriptionHtml,
-              productType: product.productType,
-              vendor: product.vendor,
-              tags: product.tags,
-              status: product.status,
-              handle: product.handle,
-              createdAt: new Date(product.createdAt),
-              updatedAt: new Date(product.updatedAt),
-              // Update seoStatus based on metafields
-              seoStatus: {
-                optimized: hasSeoMetafields,
-                languages: detectedLanguages.map(lang => ({ 
-                  code: lang, 
-                  optimized: true, 
-                  hasSeo: true 
-                })),
-                lastCheckedAt: new Date()
-              }
-            }
-          },
-          { upsert: true }
+          updateData,
+          { upsert: false }
         );
       } else {
         // Create new product
