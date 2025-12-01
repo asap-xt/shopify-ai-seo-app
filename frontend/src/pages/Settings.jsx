@@ -1612,8 +1612,69 @@ export default function Settings() {
                               helpText={feature.description}
                             />
                           </Box>
+                          
                           {/* AI Sitemap View button */}
                           {feature.key === 'aiSitemap' && showAiSitemapView && !sitemapStatus.inProgress && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                          
+                          {/* Products JSON View button */}
+                          {feature.key === 'productsJson' && showProductsJsonView && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                          
+                          {/* Collections JSON View button */}
+                          {feature.key === 'collectionsJson' && showCollectionsJsonView && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                          
+                          {/* Store Metadata - View button or Configure button */}
+                          {feature.key === 'storeMetadata' && isEnabled && (
+                            showStoreMetadataView ? (
+                              <Button
+                                size="slim"
+                                onClick={() => viewJson(feature.key, feature.name)}
+                              >
+                                View
+                              </Button>
+                            ) : (
+                              <Button
+                                size="slim"
+                                variant="primary"
+                                onClick={async () => {
+                                  // Check tokens first for Plus plans
+                                  const canProceed = await checkTokensBeforeAction('storeMetadata');
+                                  if (!canProceed) {
+                                    return; // Stop if tokens are required but not available
+                                  }
+                                  
+                                  // Open Store Metadata tab in new window
+                                  const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
+                                  window.open(storeMetadataUrl, '_blank');
+                                }}
+                              >
+                                Configure
+                              </Button>
+                            )
+                          )}
+                          
+                          {/* Welcome Page View button */}
+                          {feature.key === 'welcomePage' && showWelcomePageView && (
                             <Button
                               size="slim"
                               onClick={() => viewJson(feature.key, feature.name)}
@@ -1667,51 +1728,6 @@ export default function Settings() {
                               </Text>
                             </InlineStack>
                           </Box>
-                        )}
-                        
-                        {/* Other Features View Buttons (not aiSitemap) */}
-                        {feature.key === 'productsJson' && (() => {
-                          return feature.key === 'productsJson' && showProductsJsonView;
-                        })() && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        
-                        {feature.key === 'collectionsJson' && (() => {
-                          return feature.key === 'collectionsJson' && showCollectionsJsonView;
-                        })() && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        
-                        {feature.key === 'storeMetadata' && (() => {
-                          return feature.key === 'storeMetadata' && isEnabled;
-                        })() && (
-                          showStoreMetadataView ? (
-                            <Button
-                              size="slim"
-                              onClick={() => viewJson(feature.key, feature.name)}
-                            >
-                              View
-                            </Button>
-                          ) : null
-                        )}
-                        
-                        {feature.key === 'welcomePage' && showWelcomePageView && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
                         )}
                       </BlockStack>
                     ) : (
