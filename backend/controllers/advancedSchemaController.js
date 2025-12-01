@@ -1933,7 +1933,6 @@ router.post('/generate-all', async (req, res) => {
       // If no products at all, try to sync first
       if (totalProductsInMongo === 0) {
         try {
-          const { default: syncProductsToMongoDB } = await import('../utils/syncProducts.js');
           await syncProductsToMongoDB(shop);
         } catch (syncError) {
           console.error('[SCHEMA] Failed to sync products:', syncError);
