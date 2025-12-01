@@ -1917,6 +1917,34 @@ router.post('/generate-all', async (req, res) => {
     // Get forceBasicSeo parameter from request body
     const forceBasicSeo = req.body?.forceBasicSeo === true;
     
+    // === PRE-CHECK: Verify optimized products exist BEFORE adding to queue ===
+    const allProducts = await Product.find({
+      shop,
+      'seoStatus.optimized': true
+    }).limit(1); // Just check if at least 1 exists
+    
+    const aiEnhancedCount = await Product.countDocuments({
+      shop,
+      'seoStatus.aiEnhanced': true
+    });
+    
+    // Case 1: No optimized products at all
+    if (allProducts.length === 0) {
+      return res.status(400).json({ 
+        error: 'NO_OPTIMIZED_PRODUCTS',
+        message: 'No optimized products found. Please run AISEO optimization first.' 
+      });
+    }
+    
+    // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
+    if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
+      return res.status(400).json({ 
+        error: 'ONLY_BASIC_SEO',
+        message: 'Only basic AISEO found. AI-Enhanced optimization recommended for best results.' 
+      });
+    }
+    // === END PRE-CHECK ===
+    
     // Add job to background queue
     const schemaQueue = (await import('../services/schemaQueue.js')).default;
     const jobInfo = await schemaQueue.addJob(shop, async () => {
