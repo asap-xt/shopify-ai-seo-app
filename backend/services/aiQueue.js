@@ -56,22 +56,11 @@ class AIQueue {
     
     // Setup event listeners
     this.setupEventListeners();
-    
-    console.log('[AI-QUEUE] ✅ AI Queue service initialized');
-    console.log(`[AI-QUEUE] Mode: ${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPMENT'}`);
   }
   
   setupEventListeners() {
     // Track queue events for monitoring
     const setupQueueListeners = (queue, name) => {
-      queue.on('active', () => {
-        // console.log(`[AI-QUEUE] ${name} - Job started (pending: ${queue.pending}, active: ${queue.size})`);
-      });
-      
-      queue.on('idle', () => {
-        console.log(`[AI-QUEUE] ${name} - Queue idle`);
-      });
-      
       queue.on('error', (error) => {
         console.error(`[AI-QUEUE] ${name} - Queue error:`, error.message);
         this.stats.failedCalls++;
@@ -134,11 +123,6 @@ class AIQueue {
       });
       
       this.stats.successfulCalls++;
-      const duration = Date.now() - startTime;
-      
-      if (duration > 10000) {
-        console.warn(`[AI-QUEUE] ${options.priority} - Slow job: ${duration}ms`, options);
-      }
       
       return result;
     } catch (error) {
@@ -212,7 +196,6 @@ class AIQueue {
     this.highPriorityQueue.clear();
     this.normalQueue.clear();
     this.bulkQueue.clear();
-    console.warn('[AI-QUEUE] ⚠️ All queues cleared');
   }
 }
 

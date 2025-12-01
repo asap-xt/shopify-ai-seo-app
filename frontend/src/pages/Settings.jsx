@@ -151,7 +151,6 @@ export default function Settings() {
     
     const interval = setInterval(async () => {
       attempts++;
-      console.log(`[SETTINGS] Polling attempt ${attempts}/${maxAttempts}`);
       
       try {
         // Check sitemap info to see if it was recently updated
@@ -1500,15 +1499,6 @@ export default function Settings() {
                 const isAvailable = isFeatureAvailable(feature.key);
                 const isEnabled = !!settings?.features?.[feature.key];
                 
-                // Debug: Log each feature state
-                console.log(`[SETTINGS DEBUG] Feature ${feature.key}:`, {
-                  isAvailable,
-                  isEnabled,
-                  rawValue: settings?.features?.[feature.key],
-                  plan: settings?.plan,
-                  normalizedPlan: normalizePlan(settings?.plan)
-                });
-                
                 return (
                   <Box key={feature.key}
                     padding="200" 
@@ -1708,13 +1698,6 @@ export default function Settings() {
         const settingsCheck = settings?.features?.schemaData;
         const originalCheck = originalSettings?.features?.schemaData;
         
-        console.log('[SCHEMA-DEBUG] Advanced Schema Management visibility check:');
-        console.log('[SCHEMA-DEBUG] - Plan:', plan);
-        console.log('[SCHEMA-DEBUG] - Plan check (Plus/Enterprise):', planCheck);
-        console.log('[SCHEMA-DEBUG] - Settings schemaData:', settingsCheck);
-        console.log('[SCHEMA-DEBUG] - Original schemaData:', originalCheck);
-        console.log('[SCHEMA-DEBUG] - All conditions met:', planCheck && settingsCheck && originalCheck);
-        
         return planCheck && settingsCheck && originalCheck;
       })() && (
         <Card>
@@ -1729,41 +1712,28 @@ export default function Settings() {
                 <Button
                   primary
                   onClick={async () => {
-                    console.log('[SCHEMA-GEN] Button clicked!');
-                    
                     // Prevent multiple simultaneous generations
                     if (isGeneratingRef.current) {
-                      console.log('[SCHEMA-GEN] Already generating, ignoring click');
                       return;
                     }
                     
                     try {
                       // First check if there's existing data
-                      console.log('[SCHEMA-GEN] Checking for existing data...');
                       const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
-                      console.log('[SCHEMA-GEN] Existing data:', existingData);
                       
                       if (existingData.schemas && existingData.schemas.length > 0) {
                         // Has data - ask if to regenerate
-                        console.log('[SCHEMA-GEN] Found existing schemas, asking for confirmation...');
                         if (!confirm('This will replace existing schema data. Continue?')) {
-                          console.log('[SCHEMA-GEN] User cancelled');
                           return;
                         }
                       }
                       
-                      // Continue with generation
-                      console.log('[SCHEMA-GEN] Starting generation...');
-                      console.log('[SCHEMA-GEN] ⚠️ BEFORE setState - schemaGenerating:', schemaGenerating);
-                      
                       // Set ref FIRST (no closure issues)
                       isGeneratingRef.current = true;
                       checkCountRef.current = 0; // Reset counter
-                      console.log('[SCHEMA-GEN] 🔵 Set isGeneratingRef.current = true');
                       
                       // Set state immediately after ref to avoid sync issues
                       setSchemaGenerating(true);
-                      console.log('[SCHEMA-GEN] 🔵 Set schemaGenerating state = true');
                       setSchemaComplete(false);
                       setSchemaProgress({
                         current: 0,
@@ -1777,14 +1747,6 @@ export default function Settings() {
                         }
                       });
                       
-                      console.log('[SCHEMA-GEN] ✅ AFTER setState - should be true now');
-                      
-                      console.log('[SCHEMA-GEN] About to call api() function...');
-                      console.log('[SCHEMA-GEN] api function exists:', typeof api);
-                      console.log('[SCHEMA-GEN] shop value:', shop);
-                      
-                      console.log('[SCHEMA-GEN] Calling POST /api/schema/generate-all...');
-                      
                       let data;
                       try {
                         data = await api(`/api/schema/generate-all?shop=${shop}`, {
@@ -1792,15 +1754,9 @@ export default function Settings() {
                           shop,
                           body: { shop }
                         });
-                        console.log('[SCHEMA-GEN] ✅ API call successful!');
                       } catch (apiError) {
-                        console.error('[SCHEMA-GEN] ❌ API call failed:', apiError);
-                        console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
-                        console.error('[SCHEMA-GEN] ❌ Full error object:', apiError);
-                        
                         // Check for 402 error (payment/activation required) - SHOW MODAL INSTEAD OF REDIRECT
                         if (apiError.status === 402) {
-                          console.log('[SCHEMA-GEN] 💳 402 error - showing appropriate modal');
                           setSchemaGenerating(false);
                           isGeneratingRef.current = false;
                           
@@ -1810,11 +1766,9 @@ export default function Settings() {
                           // Show appropriate modal based on error type (same logic as AI Sitemap)
                           if (apiError.trialRestriction && apiError.requiresActivation) {
                             // Growth Extra/Enterprise in trial → Show "Activate Plan or Buy Tokens" modal
-                            console.log('[SCHEMA-GEN] 🔒 Trial restriction - showing TrialActivationModal');
                             setShowTrialActivationModal(true);
                           } else if (apiError.requiresPurchase) {
                             // Insufficient tokens → Show "Purchase Tokens" modal
-                            console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing InsufficientTokensModal');
                             setShowInsufficientTokensModal(true);
                           } else {
                             // Fallback: Generic trial restriction toast
@@ -1826,13 +1780,8 @@ export default function Settings() {
                         throw apiError; // Re-throw for other errors
                       }
                       
-                      console.log('[SCHEMA-GEN] POST response:', data);
-                      console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
-                      console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
-                      
                       // Start checking progress after 3 seconds (longer delay to reduce load)
                       setTimeout(() => {
-                        console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
                         checkGenerationProgress();
                       }, 3000);
                     } catch (err) {
@@ -1986,20 +1935,13 @@ export default function Settings() {
                 primary
                 size="large"
                 onClick={async () => {
-                  console.log('[GENERATE ROBOTS] Starting...');
-                  console.log('[GENERATE ROBOTS] Settings:', settings);
-                  
                   try {
                     const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    console.log('[GENERATE ROBOTS] Has selected bots:', hasSelectedBots);
                     
                     if (!hasSelectedBots) {
-                      console.log('[GENERATE ROBOTS] No bots, showing modal');
                       setShowNoBotsModal(true);
                     } else {
-                      console.log('[GENERATE ROBOTS] Calling generateRobotsTxt...');
                       await generateRobotsTxt();
-                      console.log('[GENERATE ROBOTS] Robots.txt generated, showing modal');
                       setShowRobotsModal(true);
                     }
                   } catch (error) {
@@ -2236,11 +2178,9 @@ export default function Settings() {
           open={schemaGenerating}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            console.log('[SCHEMA-MODAL] ❌ Close button clicked');
             isGeneratingRef.current = false;
             setSchemaGenerating(false);
             setSchemaComplete(false);
-            console.log('[SCHEMA-MODAL] States and ref reset to false');
           }}
         >
           <Modal.Section>
@@ -2321,7 +2261,6 @@ export default function Settings() {
           open={true}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            console.log('[SCHEMA-MODAL] Closing modal...');
             isGeneratingRef.current = false;
             checkCountRef.current = 0; // Reset counter
             setSchemaGenerating(false);
@@ -2570,8 +2509,6 @@ export default function Settings() {
             onActivatePlan={async () => {
               // Direct API call to activate plan (same as Collections)
               try {
-                console.log('[SETTINGS] 🔓 Activating plan directly...');
-                
                 const response = await api('/api/billing/activate', {
                   method: 'POST',
                   body: JSON.stringify({
@@ -2581,22 +2518,18 @@ export default function Settings() {
                   })
                 });
                 
-                console.log('[SETTINGS] ✅ Activation response:', response);
-                
                 // Check if Shopify approval is required
                 if (response.requiresApproval && response.confirmationUrl) {
-                  console.log('[SETTINGS] 🔗 Redirecting to Shopify approval (breaking out of iframe):', response.confirmationUrl);
                   // CRITICAL: Use window.top to break out of iframe (X-Frame-Options: DENY)
                   window.top.location.href = response.confirmationUrl;
                   return;
                 }
                 
                 // Plan activated successfully without approval
-                console.log('[SETTINGS] ✅ Plan activated without approval, reloading...');
                 window.location.reload();
                 
               } catch (error) {
-                console.error('[SETTINGS] ❌ Activation failed:', error);
+                console.error('[SETTINGS] Activation failed:', error);
                 
                 // Fallback: Navigate to billing page
                 const params = new URLSearchParams(window.location.search);
@@ -2657,13 +2590,11 @@ export default function Settings() {
 COMMENTED OLD CODE FOR ADVANCED SCHEMA CHECKBOX - FOR TESTING
 
 onChange={async (checked) => {
-  console.log('Advanced Schema checkbox clicked:', checked);
   setAdvancedSchemaEnabled(checked);
   setSchemaError('');
   
   // Save the setting in AI Discovery settings
   try {
-    console.log('Saving settings to AI Discovery...');
     await api(`/api/ai-discovery/settings?shop=${shop}`, {
       method: 'POST',
       shop,
@@ -2673,8 +2604,6 @@ onChange={async (checked) => {
         advancedSchemaEnabled: checked
       }
     });
-    
-    console.log('Advanced Schema setting saved successfully');
   } catch (err) {
     console.error('Failed to save Advanced Schema setting:', err);
     setSchemaError('Failed to save settings');

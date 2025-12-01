@@ -797,8 +797,6 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
       
       if (saveResult.metafieldsSet?.userErrors?.length > 0) {
         console.error('[SCHEMA] Failed to save shop schemas:', saveResult.metafieldsSet.userErrors);
-      } else {
-        console.log('[SCHEMA] Successfully saved Organization and WebSite schemas');
       }
     }
     

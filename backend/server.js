@@ -972,10 +972,6 @@ import debugRouter from './controllers/debugRouter.js';
 
       async regenerateSitemap({ shop }, ctx) {
         try {
-          console.log('[GRAPHQL] ===== REGENERATE SITEMAP MUTATION CALLED =====');
-          console.log('[GRAPHQL] Shop:', shop);
-          console.log('[GRAPHQL] enableAIEnhancement: true');
-          
           // === TRIAL RESTRICTION CHECK ===
           const { default: Subscription } = await import('./db/Subscription.js');
           const subscription = await Subscription.findOne({ shop });
@@ -1010,25 +1006,20 @@ import debugRouter from './controllers/debugRouter.js';
           
           // Import the core sitemap generation logic
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
-          console.log('[GRAPHQL] ✅ generateSitemapCore imported successfully');
           
           // ===== CRITICAL: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
-          console.log('[GRAPHQL] 🚀 Starting background sitemap generation...');
           generateSitemapCore(shop, { enableAIEnhancement: true })
             .then((result) => {
-              console.log('[GRAPHQL] ✅ Background sitemap generation completed successfully!');
-              console.log('[GRAPHQL] Result:', result);
+              // Success - sitemap generation completed
             })
             .catch((error) => {
-              console.error('[GRAPHQL] ❌ Background sitemap generation failed:', error);
-              console.error('[GRAPHQL] Error stack:', error.stack);
+              console.error('[GRAPHQL] Background sitemap generation failed:', error);
             });
           
           // Return immediately
-          console.log('[GRAPHQL] 📤 Returning immediate success response');
           return {
             success: true,
             message: 'AI-Optimized Sitemap regeneration started in background',
