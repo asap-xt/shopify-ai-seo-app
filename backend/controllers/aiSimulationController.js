@@ -282,6 +282,29 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     
   } catch (error) {
     console.error('[AI-SIMULATION] Error:', error);
+    
+    // CRITICAL: If we reserved tokens but simulation failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-SIMULATION] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-SIMULATION] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-SIMULATION] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ 
       success: false, 
       error: error.message,

@@ -615,6 +615,29 @@ router.post('/product', validateRequest(), async (req, res) => {
     
   } catch (error) {
     console.error('[AI-ENHANCE] Error:', error.message);
+    
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -915,6 +938,28 @@ Output JSON with:
     });
     
   } catch (error) {
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -1295,6 +1340,29 @@ Guidelines:
     
   } catch (error) {
     console.error('[AI-ENHANCE] Fatal error:', error);
+    
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });

@@ -803,6 +803,30 @@ async function generateSitemapCore(shop, options = {}) {
     
   } catch (error) {
     console.error('[SITEMAP-CORE] Error:', error);
+    
+    // CRITICAL: If we reserved tokens but generation failed, refund them!
+    if (reservationId) {
+      try {
+        const { default: TokenBalance } = await import('../db/TokenBalance.js');
+        const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[SITEMAP-CORE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(normalizedShop);
+        } catch (cacheErr) {
+          console.error('[SITEMAP-CORE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[SITEMAP-CORE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     throw error;
   }
 }

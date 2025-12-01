@@ -1774,6 +1774,29 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     console.error(`[SCHEMA] ❌ Error message:`, error.message);
     console.error(`[SCHEMA] ❌ Error stack:`, error.stack);
     
+    // CRITICAL: If we reserved tokens but generation failed, refund them!
+    if (reservationId) {
+      try {
+        const { default: TokenBalance } = await import('../db/TokenBalance.js');
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[SCHEMA] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[SCHEMA] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[SCHEMA] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     // Mark generation as failed
     generationStatus.set(shop, { 
       generating: false, 

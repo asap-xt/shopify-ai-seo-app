@@ -425,28 +425,24 @@ Keep the answer concise (2–3 sentences).`;
   } catch (error) {
     console.error('[AI-SIMULATE] Error:', error);
     
-    // Refund reserved tokens on error (Professional & Growth only)
+    // CRITICAL: Refund reserved tokens on error using finalizeReservation (0 actual usage)
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
       try {
         const tokenBalance = res.locals.tokenBalance;
         const reservationId = res.locals.tokenReservationId;
         
-        // Find the reservation and mark as cancelled, refund the tokens
-        const reservationIndex = tokenBalance.usage.findIndex(
-          u => u.metadata?.reservationId === reservationId && u.metadata?.status === 'reserved'
-        );
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
         
-        if (reservationIndex !== -1) {
-          const estimatedAmount = tokenBalance.usage[reservationIndex].tokensUsed;
-          
-          // Refund the estimated amount back to balance
-          tokenBalance.balance += estimatedAmount;
-          
-          // Mark reservation as cancelled
-          tokenBalance.usage[reservationIndex].metadata.status = 'cancelled';
-          tokenBalance.usage[reservationIndex].metadata.cancelledAt = new Date();
-          
-          await tokenBalance.save();
+        console.log(`[AI-SIMULATE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const shop = res.locals.shop;
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-SIMULATE] Failed to invalidate cache:', cacheErr);
         }
       } catch (refundError) {
         console.error('[AI-SIMULATE] Error refunding tokens:', refundError);
