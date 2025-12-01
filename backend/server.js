@@ -570,29 +570,21 @@ if (!IS_PROD) {
         case 'token-purchase':
           result = await emailService.sendTokenPurchaseEmail(storeWithSubscription);
           break;
-        case 'trial':
-          result = await emailService.sendTrialExpiringEmail(storeWithSubscription, 3);
-          break;
-        case 'weekly':
-          const weeklyStats = {
-            productsOptimized: 10,
-            aiQueries: 25,
-            topProducts: ['Product 1', 'Product 2'],
-            seoImprovement: '15%'
-          };
-          result = await emailService.sendWeeklyDigest(storeWithSubscription, weeklyStats);
+        case 'appstore-rating':
+          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
           break;
         case 'upgrade':
           result = await emailService.sendUpgradeSuccessEmail(storeWithSubscription, 'professional');
           break;
+        // DEPRECATED: These emails are no longer sent automatically
+        case 'trial':
+          return res.status(410).json({ error: 'Trial expiring email has been deprecated (use in-app banner instead)' });
+        case 'weekly':
+          return res.status(410).json({ error: 'Weekly digest has been deprecated (use /api/test/product-digest instead)' });
         case 'reengagement':
-          result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
-          break;
-        case 'appstore-rating':
-          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
-          break;
+          return res.status(410).json({ error: 'Re-engagement email has been deprecated' });
         default:
-          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, trial, weekly, upgrade, reengagement' });
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, upgrade' });
       }
       
       res.json({

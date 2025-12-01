@@ -44,29 +44,9 @@ class EmailScheduler {
       })
     );
 
-    // Trial expiring check (every day at 9 AM)
-    this.jobs.push(
-      cron.schedule('0 9 * * *', async () => {
-        console.log('⏰ Running trial expiring check...');
-        await this.checkTrialExpiring();
-      })
-    );
-
-    // Weekly digest (every Monday at 10 AM)
-    this.jobs.push(
-      cron.schedule('0 10 * * 1', async () => {
-        console.log('⏰ Sending weekly digests...');
-        await this.sendWeeklyDigests();
-      })
-    );
-
-    // Re-engagement check (every day at 2 PM)
-    this.jobs.push(
-      cron.schedule('0 14 * * *', async () => {
-        console.log('⏰ Running re-engagement check...');
-        await this.checkInactiveUsers();
-      })
-    );
+    // REMOVED: Trial expiring check - replaced with in-app banner
+    // REMOVED: Weekly digest - replaced with Weekly Product Digest
+    // REMOVED: Re-engagement check - too aggressive
 
     this.isRunning = true;
     console.log('✅ Email scheduler started');
@@ -242,7 +222,8 @@ class EmailScheduler {
   }
 
   /**
-   * Check trial expiring
+   * DEPRECATED: Check trial expiring - replaced with in-app banner
+   * Kept for reference, no longer scheduled
    */
   async checkTrialExpiring() {
     try {
@@ -291,7 +272,8 @@ class EmailScheduler {
   }
 
   /**
-   * Send weekly digest
+   * DEPRECATED: Send weekly digest - replaced with Weekly Product Digest
+   * Kept for reference, no longer scheduled
    */
   async sendWeeklyDigests() {
     try {
@@ -314,7 +296,8 @@ class EmailScheduler {
   }
 
   /**
-   * Check inactive users
+   * DEPRECATED: Check inactive users - too aggressive re-engagement
+   * Kept for reference, no longer scheduled
    */
   async checkInactiveUsers() {
     try {

@@ -101,20 +101,7 @@ export default async function uninstallWebhook(req, res) {
     console.log(`[Webhook] All MongoDB data for ${shop} has been removed`);
     console.log('[Webhook] Note: Shopify metafield definitions and values will remain in the store');
     
-    // Send follow-up email after 1 hour (if store data exists)
-    if (storeData) {
-      setTimeout(async () => {
-        try {
-          const emailService = (await import('../services/emailService.js')).default;
-          await emailService.sendUninstallFollowupEmail({
-            ...storeData,
-            subscription: subscriptionData
-          });
-        } catch (emailError) {
-          console.error('[Webhook] ❌ Error sending uninstall follow-up email:', emailError);
-        }
-      }, 60 * 60 * 1000); // 1 hour delay
-    }
+    // REMOVED: Uninstall follow-up email - users don't want marketing after uninstall
     
     res.status(200).send('ok');
   } catch (e) {
