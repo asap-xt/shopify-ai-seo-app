@@ -94,20 +94,6 @@ export default function Settings() {
     generated: false,
     progress: ''
   });
-  // Schema generation states - start with false
-  const [schemaGenerating, setSchemaGenerating] = useState(false);
-  const [schemaProgress, setSchemaProgress] = useState({
-    current: 0,
-    total: 0,
-    percent: 0,
-    currentProduct: '',
-    stats: {
-      siteFAQ: false,
-      products: 0,
-      totalSchemas: 0
-    }
-  });
-  const [schemaComplete, setSchemaComplete] = useState(false);
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
@@ -122,6 +108,18 @@ export default function Settings() {
     productCount: 0
   });
   const [sitemapPollingInterval, setSitemapPollingInterval] = useState(null);
+  
+  // Advanced Schema background generation status (same as sitemap)
+  const [schemaStatus, setSchemaStatus] = useState({
+    inProgress: false,
+    status: 'idle', // idle, queued, processing, completed, failed
+    message: null,
+    position: null,
+    estimatedTime: null,
+    generatedAt: null,
+    schemaCount: 0
+  });
+  const [schemaPollingInterval, setSchemaPollingInterval] = useState(null);
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
@@ -229,12 +227,101 @@ export default function Settings() {
     };
   }, [sitemapPollingInterval]);
   
+  // Function to fetch schema status from backend (same as sitemap)
+  const fetchSchemaStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/schema/status?shop=${shop}`);
+      
+      setSchemaStatus({
+        inProgress: status.inProgress || false,
+        status: status.status || 'idle',
+        message: status.message || null,
+        position: status.queue?.position || null,
+        estimatedTime: status.queue?.estimatedTime || null,
+        generatedAt: status.schema?.generatedAt || null,
+        schemaCount: status.schema?.schemaCount || 0
+      });
+      
+      // If completed, stop polling and uncheck the checkbox
+      if (status.status === 'completed' && !status.inProgress) {
+        if (schemaPollingInterval) {
+          clearInterval(schemaPollingInterval);
+          setSchemaPollingInterval(null);
+        }
+        // Show success toast only once
+        if (schemaStatus.inProgress) {
+          setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
+          
+          // Uncheck the schemaData checkbox to prevent accidental re-generation
+          setSettings(prev => ({
+            ...prev,
+            features: {
+              ...prev.features,
+              schemaData: false
+            }
+          }));
+        }
+      }
+      
+      // If failed, stop polling and show error
+      if (status.status === 'failed') {
+        if (schemaPollingInterval) {
+          clearInterval(schemaPollingInterval);
+          setSchemaPollingInterval(null);
+        }
+        setToast('Advanced Schema Data generation failed. Please try again.');
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('[SETTINGS] Failed to fetch schema status:', error);
+    }
+  }, [shop, api, schemaPollingInterval, schemaStatus.inProgress]);
+  
+  // Function to start polling for schema status
+  const startSchemaPolling = useCallback(() => {
+    // Clear any existing polling
+    if (schemaPollingInterval) {
+      clearInterval(schemaPollingInterval);
+    }
+    
+    // Poll immediately
+    fetchSchemaStatus();
+    
+    // Then poll every 10 seconds
+    const interval = setInterval(() => {
+      fetchSchemaStatus();
+    }, 10000); // 10 seconds
+    
+    setSchemaPollingInterval(interval);
+  }, [fetchSchemaStatus, schemaPollingInterval]);
+  
+  // Cleanup schema polling on unmount
+  useEffect(() => {
+    return () => {
+      if (schemaPollingInterval) {
+        clearInterval(schemaPollingInterval);
+      }
+    };
+  }, [schemaPollingInterval]);
+  
   // Start polling on mount if sitemap is generating
   useEffect(() => {
     if (shop && !sitemapPollingInterval) {
       fetchSitemapStatus().then(status => {
         if (status?.inProgress) {
           startSitemapPolling();
+        }
+      });
+    }
+  }, [shop]); // Only run on mount
+  
+  // Start polling on mount if schema is generating
+  useEffect(() => {
+    if (shop && !schemaPollingInterval) {
+      fetchSchemaStatus().then(status => {
+        if (status?.inProgress) {
+          startSchemaPolling();
         }
       });
     }
@@ -730,6 +817,11 @@ export default function Settings() {
       // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
       if (data.hasAiSitemap && data.features?.aiSitemap) {
         data.features.aiSitemap = false;
+      }
+      
+      // If Advanced Schema already exists, uncheck the checkbox to prevent accidental re-generation
+      if (data.hasAdvancedSchema && data.features?.schemaData) {
+        data.features.schemaData = false;
       }
       
       setSettings(data);
@@ -1743,6 +1835,52 @@ export default function Settings() {
                             </InlineStack>
                           </Box>
                         )}
+                        
+                        {/* Advanced Schema Status Indicator */}
+                        {feature.key === 'schemaData' && isEnabled && schemaStatus.inProgress && (
+                          <Box paddingInlineStart="800" paddingBlockStart="200">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Spinner size="small" />
+                              <BlockStack gap="100">
+                                <Text variant="bodyMd" tone="subdued">
+                                  {schemaStatus.message || 'Generating schema data...'}
+                                </Text>
+                                {schemaStatus.position > 0 && (
+                                  <Text variant="bodySm" tone="subdued">
+                                    Queue position: {schemaStatus.position} · Est. {Math.ceil(schemaStatus.estimatedTime / 60)} min
+                                  </Text>
+                                )}
+                                {schemaStatus.status === 'processing' && schemaStatus.schemaCount > 0 && (
+                                  <Text variant="bodySm" tone="subdued">
+                                    Processing {schemaStatus.schemaCount} schemas...
+                                  </Text>
+                                )}
+                              </BlockStack>
+                            </InlineStack>
+                          </Box>
+                        )}
+                        
+                        {/* Advanced Schema Completion Status - shown even if checkbox is unchecked */}
+                        {feature.key === 'schemaData' && !schemaStatus.inProgress && schemaStatus.status === 'completed' && schemaStatus.generatedAt && (
+                          <Box paddingInlineStart="800" paddingBlockStart="200">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Badge tone="success">Generated</Badge>
+                              <Text variant="bodySm" tone="subdued">
+                                {schemaStatus.schemaCount} schemas · {(() => {
+                                  const now = new Date();
+                                  const generated = new Date(schemaStatus.generatedAt);
+                                  const diff = Math.floor((now - generated) / 1000 / 60);
+                                  if (diff < 1) return 'Just now';
+                                  if (diff < 60) return `${diff} min ago`;
+                                  const hours = Math.floor(diff / 60);
+                                  if (hours < 24) return `${hours}h ago`;
+                                  const days = Math.floor(hours / 24);
+                                  return `${days}d ago`;
+                                })()}
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                        )}
                       </BlockStack>
                     ) : (
                       <Checkbox
@@ -1861,11 +1999,6 @@ export default function Settings() {
                 <Button
                   primary
                   onClick={async () => {
-                    // Prevent multiple simultaneous generations
-                    if (isGeneratingRef.current) {
-                      return;
-                    }
-                    
                     try {
                       // First check if there's existing data
                       const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
@@ -1877,66 +2010,39 @@ export default function Settings() {
                         }
                       }
                       
-                      // Set ref FIRST (no closure issues)
-                      isGeneratingRef.current = true;
-                      checkCountRef.current = 0; // Reset counter
-                      
-                      // Set state immediately after ref to avoid sync issues
-                      setSchemaGenerating(true);
-                      setSchemaComplete(false);
-                      setSchemaProgress({
-                        current: 0,
-                        total: 0,
-                        percent: 10, // Start with 10% to show progress immediately
-                        currentProduct: 'Initializing...',
-                        stats: {
-                          siteFAQ: false,
-                          products: 0,
-                          totalSchemas: 0
-                        }
+                      // Call API to start background generation
+                      const data = await api(`/api/schema/generate-all?shop=${shop}`, {
+                        method: 'POST',
+                        shop,
+                        body: { shop }
                       });
                       
-                      let data;
-                      try {
-                        data = await api(`/api/schema/generate-all?shop=${shop}`, {
-                          method: 'POST',
-                          shop,
-                          body: { shop }
-                        });
-                      } catch (apiError) {
-                        // Check for 402 error (payment/activation required) - SHOW MODAL INSTEAD OF REDIRECT
-                        if (apiError.status === 402) {
-                          setSchemaGenerating(false);
-                          isGeneratingRef.current = false;
-                          
-                          // Set error data for modals
-                          setTokenError(apiError);
-                          
-                          // Show appropriate modal based on error type (same logic as AI Sitemap)
-                          if (apiError.trialRestriction && apiError.requiresActivation) {
-                            // Growth Extra/Enterprise in trial → Show "Activate Plan or Buy Tokens" modal
-                            setShowTrialActivationModal(true);
-                          } else if (apiError.requiresPurchase) {
-                            // Insufficient tokens → Show "Purchase Tokens" modal
-                            setShowInsufficientTokensModal(true);
-                          } else {
-                            // Fallback: Generic trial restriction toast
-                            setToast('Advanced Schema Data requires activation or token purchase.');
-                          }
-                          return;
-                        }
+                      // Show success toast
+                      setToast('Advanced Schema Data generation started in background. You can navigate away - it will continue processing.');
+                      
+                      // Start polling for status updates
+                      startSchemaPolling();
+                      
+                    } catch (apiError) {
+                      // Check for 402 error (payment/activation required)
+                      if (apiError.status === 402) {
+                        // Set error data for modals
+                        setTokenError(apiError);
                         
-                        throw apiError; // Re-throw for other errors
+                        // Show appropriate modal based on error type
+                        if (apiError.trialRestriction && apiError.requiresActivation) {
+                          setShowTrialActivationModal(true);
+                        } else if (apiError.requiresPurchase) {
+                          setShowInsufficientTokensModal(true);
+                        } else {
+                          setToast('Advanced Schema Data requires activation or token purchase.');
+                        }
+                        return;
                       }
                       
-                      // Start checking progress after 3 seconds (longer delay to reduce load)
-                      setTimeout(() => {
-                        checkGenerationProgress();
-                      }, 3000);
-                    } catch (err) {
-                      console.error('[SCHEMA-GEN] Error:', err);
-                      setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
-                      setSchemaGenerating(false);
+                      // Other errors
+                      console.error('[SCHEMA-GEN] Error:', apiError);
+                      setToast('Failed to generate schema: ' + (apiError.message || 'Unknown error'));
                     }
                   }}
                 >
@@ -2321,49 +2427,7 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Simple test modal */}
-      {schemaGenerating && !schemaComplete && (
-        <Modal
-          open={schemaGenerating}
-          title="Generating Advanced Schema Data"
-          onClose={() => {
-            isGeneratingRef.current = false;
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-        >
-          <Modal.Section>
-            <Text>Modal is showing! Progress: {schemaProgress.percent}%</Text>
-          </Modal.Section>
-        </Modal>
-      )}
-
-      {/* Schema Generation Complete Modal */}
-      {schemaComplete && (
-        <Modal
-          open={true}
-          title="Schema Generation Complete"
-          onClose={() => {
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          primaryAction={{
-            content: 'View Generated Schemas',
-            onAction: () => {
-              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }}
-          secondaryActions={[{
-            content: 'Close',
-            onAction: () => {
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }]}
-        >
-          <Modal.Section>
+      {/* Schema modals removed - now using background queue with status indicator */}
             <BlockStack gap="400">
               <Banner status="success" title="Generation successful!">
                 <p>Advanced schema data has been generated for your products.</p>
@@ -2404,98 +2468,7 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Schema Generation Progress Modal */}
-      {schemaGenerating && !schemaComplete && (
-        <Modal
-          open={true}
-          title="Generating Advanced Schema Data"
-          onClose={() => {
-            isGeneratingRef.current = false;
-            checkCountRef.current = 0; // Reset counter
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          noScroll
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd">
-                Generating schemas for your products...
-              </Text>
-              <ProgressBar progress={schemaProgress.percent} size="small" />
-              <Text variant="bodySm" tone="subdued">
-                This process may take 1-2 minutes depending on the number of products.
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
-
-      {/* Schema Generation Complete Modal */}
-      {schemaComplete && (
-        <Modal
-          open={true}
-          title="Schema Generation Complete"
-          onClose={() => {
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          primaryAction={{
-            content: 'View Generated Schemas',
-            onAction: () => {
-              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }}
-          secondaryActions={[{
-            content: 'Close',
-            onAction: () => {
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Banner status="success" title="Generation successful!">
-                <p>Advanced schema data has been generated for your products.</p>
-              </Banner>
-              
-              <Text variant="headingMd">Generation Statistics</Text>
-              
-              <InlineStack gap="600" wrap>
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.products}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.totalSchemas}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              <Box paddingBlockStart="200">
-                <Text variant="bodySm" tone="subdued">
-                  Structured schemas are now generated and help AI bots better understand your products.
-                </Text>
-              </Box>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
+      {/* Schema modals removed - now using background queue with status indicator (like AI Sitemap) */}
 
       {/* Schema Error Modal - No Optimized Products */}
       {showSchemaErrorModal && schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' && (

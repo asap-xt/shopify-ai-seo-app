@@ -89,12 +89,22 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const { default: Sitemap } = await import('../db/Sitemap.js');
     const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced updatedAt').lean();
     const hasAiSitemap = existingSitemap && existingSitemap.isAiEnhanced === true;
+    
+    // Check if Advanced Schema Data exists in database
+    const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
+    const existingSchema = await AdvancedSchema.findOne({ shop }).select('schemas generatedAt').lean();
+    const hasAdvancedSchema = existingSchema && existingSchema.schemas && existingSchema.schemas.length > 0;
 
     const mergedFeatures = isFreshShop ? defaultFeatures : savedSettings.features;
     
     // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
     if (hasAiSitemap && mergedFeatures?.aiSitemap) {
       mergedFeatures.aiSitemap = false;
+    }
+    
+    // If Advanced Schema already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAdvancedSchema && mergedFeatures?.schemaData) {
+      mergedFeatures.schemaData = false;
     }
     
     const mergedSettings = {
@@ -105,7 +115,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString(),
-      hasAiSitemap: hasAiSitemap // NEW: indicate if AI sitemap exists
+      hasAiSitemap: hasAiSitemap, // NEW: indicate if AI sitemap exists
+      hasAdvancedSchema: hasAdvancedSchema // NEW: indicate if Advanced Schema exists
     };
 
     res.json(mergedSettings);

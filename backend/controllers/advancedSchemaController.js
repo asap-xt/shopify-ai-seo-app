@@ -1949,86 +1949,49 @@ router.get('/status', async (req, res) => {
   try {
     const shop = requireShop(req);
     
-    // Get current generation status from memory
-    const currentStatus = generationStatus.get(shop) || { 
-      generating: false, 
-      progress: '0%', 
-      currentProduct: '' 
-    };
+    // Get job status from queue
+    const schemaQueue = (await import('../services/schemaQueue.js')).default;
+    const jobStatus = await schemaQueue.getJobStatus(shop);
     
-    // IMPORTANT: Check if data actually exists in MongoDB
-    // This is the source of truth, not the in-memory status
-    let actualDataExists = false;
-    let productsWithSchema = 0;
-    let hasFAQ = false;
+    // Get shop schema status from DB
+    const shopDoc = await Shop.findOne({ shop }).select('schemaStatus').lean();
     
-    try {
-      // Check MongoDB for actual saved data
-      const savedSchema = await AdvancedSchema.findOne({ shop });
-      
-      if (savedSchema && savedSchema.schemas && savedSchema.schemas.length > 0) {
-        actualDataExists = true;
-        
-        // Count unique products by extracting product handles from schema URLs
-        const uniqueProducts = new Set();
-        savedSchema.schemas.forEach(schema => {
-          if (schema.url && schema.url.includes('/products/')) {
-            const handle = schema.url.split('/products/')[1]?.split('#')[0];
-            if (handle) {
-              uniqueProducts.add(handle);
-            }
-          }
-        });
-        productsWithSchema = uniqueProducts.size;
-        
-        hasFAQ = !!savedSchema.siteFAQ;
-      }
-      
-      // Also check FAQ in metafields as backup
-      if (!hasFAQ) {
-        const faqQuery = `
-          query {
-            shop {
-              metafield(namespace: "advanced_schema", key: "site_faq") {
-                value
-              }
-            }
-          }
-        `;
-        
-        const faqData = await executeShopifyGraphQL(shop, faqQuery);
-        hasFAQ = !!faqData.shop?.metafield?.value;
-      }
-    } catch (dbError) {
-      console.error(`[SCHEMA-STATUS] Error checking MongoDB:`, dbError);
-    }
+    // Get last generated schema info from MongoDB
+    const schemaDoc = await AdvancedSchema.findOne({ shop }).select('schemas siteFAQ generatedAt').lean();
     
-    // Determine actual generation status
-    let isActuallyGenerating = currentStatus.generating;
+    // Determine overall status for frontend
+    const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
+    const inProgress = shopDoc?.schemaStatus?.inProgress || false;
     
-    // If memory says generating but we found complete data, generation is done
-    if (isActuallyGenerating && actualDataExists) {
-      isActuallyGenerating = false;
-      
-      // Clear the in-memory status since generation is complete
-      generationStatus.set(shop, {
-        generating: false,
-        progress: '100%',
-        currentProduct: 'Complete'
-      });
+    // Count schemas
+    let schemaCount = 0;
+    if (schemaDoc?.schemas) {
+      schemaCount = schemaDoc.schemas.length;
     }
     
     res.json({
-      enabled: true,
-      generating: isActuallyGenerating,
-      progress: isActuallyGenerating ? currentStatus.progress : '100%',
-      currentProduct: currentStatus.currentProduct,
-      error: currentStatus.error || null,
-      errorMessage: currentStatus.errorMessage || null,
-      hasSiteFAQ: hasFAQ,
-      productsWithSchema: productsWithSchema,
-      // Add this flag to help frontend know data is ready
-      dataReady: actualDataExists
+      shop,
+      // Overall status for frontend
+      inProgress: isGenerating || inProgress,
+      status: jobStatus.status,
+      message: jobStatus.message,
+      // Queue details
+      queue: {
+        status: jobStatus.status,
+        message: jobStatus.message,
+        position: jobStatus.position || null,
+        queueLength: jobStatus.queueLength,
+        estimatedTime: jobStatus.estimatedTime || null
+      },
+      // Last generated schema info
+      schema: {
+        exists: !!schemaDoc,
+        generatedAt: schemaDoc?.generatedAt || null,
+        schemaCount: schemaCount,
+        hasSiteFAQ: !!schemaDoc?.siteFAQ
+      },
+      // Detailed shop status from DB
+      shopStatus: shopDoc?.schemaStatus || null
     });
     
   } catch (error) {
