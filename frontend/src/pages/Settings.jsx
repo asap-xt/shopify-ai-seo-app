@@ -278,13 +278,24 @@ export default function Settings() {
         }
       }
       
-      // If failed, stop polling and show error
+      // If failed, stop polling and show appropriate error modal
       if (status.status === 'failed') {
         if (schemaPollingInterval) {
           clearInterval(schemaPollingInterval);
           setSchemaPollingInterval(null);
         }
-        setToast('Advanced Schema Data generation failed. Please try again.');
+        
+        // Check for specific error types and show modals
+        if (status.message === 'NO_OPTIMIZED_PRODUCTS') {
+          setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+          setShowSchemaErrorModal(true);
+        } else if (status.message === 'ONLY_BASIC_SEO') {
+          setSchemaErrorType('ONLY_BASIC_SEO');
+          setShowSchemaErrorModal(true);
+        } else {
+          // Generic error toast
+          setToast(`Advanced Schema Data generation failed: ${status.message || 'Unknown error'}`);
+        }
       }
       
       return status;
