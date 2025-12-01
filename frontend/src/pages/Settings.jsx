@@ -165,7 +165,7 @@ export default function Settings() {
         productCount: status.sitemap?.productCount || 0
       });
       
-      // If completed, show View button and stop polling
+      // If completed, show View button, stop polling, and uncheck the checkbox
       if (status.status === 'completed' && !status.inProgress) {
         setShowAiSitemapView(true);
         if (sitemapPollingInterval) {
@@ -175,6 +175,15 @@ export default function Settings() {
         // Show success toast only once
         if (sitemapStatus.inProgress) {
           setToast(`AI-Optimized Sitemap generated successfully! (${status.sitemap?.productCount || 0} products)`);
+          
+          // Uncheck the AI Sitemap checkbox to prevent accidental re-generation
+          setSettings(prev => ({
+            ...prev,
+            features: {
+              ...prev.features,
+              aiSitemap: false
+            }
+          }));
         }
       }
       
@@ -717,6 +726,11 @@ export default function Settings() {
       
       // Debug: Check if any features are true
       const trueFeatures = Object.entries(data?.features || {}).filter(([key, value]) => value === true);
+      
+      // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
+      if (data.hasAiSitemap && data.features?.aiSitemap) {
+        data.features.aiSitemap = false;
+      }
       
       setSettings(data);
       setOriginalSettings(data); // Save original settings
@@ -1708,8 +1722,8 @@ export default function Settings() {
                           </Box>
                         )}
                         
-                        {/* AI Sitemap Completion Status */}
-                        {feature.key === 'aiSitemap' && isEnabled && !sitemapStatus.inProgress && sitemapStatus.status === 'completed' && sitemapStatus.generatedAt && (
+                        {/* AI Sitemap Completion Status - shown even if checkbox is unchecked */}
+                        {feature.key === 'aiSitemap' && !sitemapStatus.inProgress && sitemapStatus.status === 'completed' && sitemapStatus.generatedAt && (
                           <Box paddingInlineStart="800" paddingBlockStart="200">
                             <InlineStack gap="200" blockAlign="center">
                               <Badge tone="success">Generated</Badge>
