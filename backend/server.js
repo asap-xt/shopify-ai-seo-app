@@ -242,6 +242,19 @@ if (!IS_PROD) {
   });
 }
 
+    // Public landing page
+    app.get('/landing', (req, res) => {
+      const landingPath = path.join(__dirname, '..', 'public', 'landing.html');
+      if (fs.existsSync(landingPath)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+        res.sendFile(landingPath);
+      } else {
+        console.error('[LANDING] landing.html not found at:', landingPath);
+        res.status(404).send('Landing page not found');
+      }
+    });
+
     // Quick sanity endpoint: confirms we can exchange the session token for an Admin API token
     app.get('/api/whoami', attachShop, async (req, res) => {
       try {

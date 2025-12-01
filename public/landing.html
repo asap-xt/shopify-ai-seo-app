@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>indexAIze - AI Search Engine Optimization</title>
+  <meta name="description" content="Future-proof your store for AI search engines like ChatGPT, Claude, and Perplexity. Structure your product data for maximum AI discovery.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f8f9fa;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      color: white;
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header .tagline {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 20px;
+      font-weight: 400;
+      margin-top: 10px;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Section */
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      margin: 30px 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .section h2 {
+      color: #667eea;
+      font-size: 32px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    .section p {
+      font-size: 18px;
+      line-height: 1.8;
+      color: #555;
+      margin-bottom: 15px;
+    }
+
+    .section strong {
+      color: #333;
+      font-weight: 600;
+    }
+
+    /* Video Container */
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%; /* 16:9 aspect ratio */
+      height: 0;
+      overflow: hidden;
+      max-width: 100%;
+      background: #f0f0f0;
+      border-radius: 12px;
+      margin: 30px 0;
+    }
+
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 12px;
+    }
+
+    /* Plans Grid */
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 30px;
+    }
+
+    .plan-card {
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .plan-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+      border-color: #667eea;
+    }
+
+    .plan-card.featured {
+      border-color: #667eea;
+      border-width: 3px;
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+    }
+
+    .plan-badge {
+      position: absolute;
+      top: -12px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .plan-card h3 {
+      font-size: 26px;
+      color: #333;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .plan-price {
+      font-size: 48px;
+      font-weight: 700;
+      color: #667eea;
+      margin: 16px 0;
+    }
+
+    .plan-price span {
+      font-size: 18px;
+      color: #888;
+      font-weight: 400;
+    }
+
+    .plan-description {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .plan-features {
+      list-style: none;
+      margin: 20px 0;
+      flex-grow: 1;
+    }
+
+    .plan-features li {
+      padding: 10px 0;
+      font-size: 15px;
+      color: #555;
+      line-height: 1.6;
+      position: relative;
+      padding-left: 24px;
+    }
+
+    .plan-features li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .plan-button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .plan-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Token Notice */
+    .token-notice {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 20px;
+      margin: 30px 0;
+      border-radius: 8px;
+    }
+
+    .token-notice p {
+      margin: 0;
+      color: #856404;
+      font-size: 16px;
+    }
+
+    /* Contact Section */
+    .contact-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      padding: 60px 40px;
+    }
+
+    .contact-section h2 {
+      color: white;
+      margin-bottom: 20px;
+      font-size: 36px;
+    }
+
+    .contact-section p {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.95);
+      margin-bottom: 30px;
+    }
+
+    .contact-button {
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 16px 40px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .contact-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      color: #888;
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 32px;
+      }
+
+      .header .tagline {
+        font-size: 16px;
+      }
+
+      .section {
+        padding: 24px;
+      }
+
+      .section h2 {
+        font-size: 24px;
+      }
+
+      .section p {
+        font-size: 16px;
+      }
+
+      .plans-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .plan-price {
+        font-size: 36px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 30px; margin-bottom: 20px;">
+      <img src="assets/logo/indexaize-logo.png" alt="indexAIze Logo" style="width: 100px; height: 100px;" onerror="this.style.display='none'">
+      <div>
+        <h1 style="margin: 0;">indexAIze - Unlock AI Search</h1>
+      </div>
+    </div>
+    <p class="tagline">Future-Proof Your Store for AI Search Engines</p>
+  </div>
+
+  <div class="container">
+    <!-- What This App Does -->
+    <div class="section">
+      <h2>What This App Does</h2>
+      <p>
+        This app helps optimize your Shopify store for <strong>AI search engines</strong> (like ChatGPT, Claude, Perplexity) 
+        by structuring your existing product data in a format that AI bots can easily understand and reference.
+      </p>
+      <p>
+        <strong>Important:</strong> This app primarily <strong>structures</strong> your existing data rather than creating new content. 
+        AI-enhanced features are supplementary and require additional tokens (unless you're on Growth Extra or Enterprise plans).
+      </p>
+      <p>
+        Traditional SEO isn't enough anymore. AI assistants like ChatGPT, Gemini & Perplexity need structured data to recommend your products. 
+        indexAIze transforms your product data into structured formats optimized for AI search engines, making it easy for AI bots to find and recommend your products.
+      </p>
+    </div>
+
+    <!-- Video Section -->
+    <div class="section">
+      <h2>See indexAIze in Action</h2>
+      <div class="video-container">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/tfzlaRjvvEY"
+          title="indexAIze Promo Video"
+          referrerpolicy="no-referrer-when-downgrade"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+
+    <!-- Plans Section -->
+    <div class="section">
+      <h2>Choose Your Plan</h2>
+      <p style="text-align: center; color: #667eea; font-weight: 600; margin-bottom: 10px;">
+        ✅ Smart approach: Start with a smaller plan to test optimization. Upgrade anytime to scale across your entire catalog.
+      </p>
+
+      <div class="plans-grid">
+        <!-- Professional Plan -->
+        <div class="plan-card">
+          <h3>Professional</h3>
+          <p style="font-size: 14px; color: #667eea; margin-bottom: 10px; font-weight: 500;">Best for: Growing stores ready to scale</p>
+          <div class="plan-price">$19.99<span>/month</span></div>
+          <div class="plan-description">
+            Optimize up to <strong>70 products</strong> in up to <strong>1 language</strong>
+          </div>
+          <ul class="plan-features">
+            <li>Product Optimization for AI search</li>
+            <li>Sitemap generation</li>
+            <li>AI Bot Access: Meta AI, Claude (Anthropic), Gemini (Google)</li>
+            <li>Pay-per-use tokens</li>
+            <li>AI-enhanced add-ons for products (pay-per-use tokens required)</li>
+          </ul>
+          <a href="https://apps.shopify.com/indexaize" class="plan-button" target="_blank">Get Started</a>
+        </div>
+
+        <!-- Professional Plus Plan -->
+        <div class="plan-card featured">
+          <div class="plan-badge">Most Popular</div>
+          <h3>Professional Plus</h3>
+          <p style="font-size: 14px; color: #667eea; margin-bottom: 10px; font-weight: 500;">Best for: Stores unlocking full AI discovery</p>
+          <div class="plan-price">$29.99<span>/month</span></div>
+          <div class="plan-description">
+            Optimize up to <strong>200 products</strong> in up to <strong>2 languages</strong>
+          </div>
+          <ul class="plan-features">
+            <li style="list-style-type: none; padding-left: 0; font-weight: 600; margin-bottom: 8px;">🔓 All AI Discovery features unlocked with pay-per-use tokens:</li>
+            <li>AI Welcome Page (pay-per-use tokens)</li>
+            <li>Collections JSON Feed (pay-per-use tokens)</li>
+            <li>AI-Optimized Sitemap (pay-per-use tokens)</li>
+            <li>Store Metadata (pay-per-use tokens)</li>
+            <li>Advanced Schema Data (pay-per-use tokens)</li>
+          </ul>
+          <a href="https://apps.shopify.com/indexaize" class="plan-button" target="_blank">Get Started</a>
+        </div>
+
+        <!-- Growth Plus Plan -->
+        <div class="plan-card">
+          <h3>Growth Plus</h3>
+          <p style="font-size: 14px; color: #667eea; margin-bottom: 10px; font-weight: 500;">Best for: Advanced AI-driven commerce</p>
+          <div class="plan-price">$49.99<span>/month</span></div>
+          <div class="plan-description">
+            Optimize up to <strong>450 products</strong> in up to <strong>3 languages</strong>
+          </div>
+          <ul class="plan-features">
+            <li>Product Optimization for AI search</li>
+            <li>Collections optimization</li>
+            <li>Sitemap generation</li>
+            <li>AI Bot Access: + ChatGPT (OpenAI)</li>
+            <li>AI Welcome Page (included)</li>
+            <li>Collections JSON Feed (included)</li>
+            <li style="list-style-type: none; padding-left: 0; font-weight: 600; margin-top: 8px;">🔓 All AI Discovery features unlocked with pay-per-use tokens</li>
+            <li>AI-Optimized Sitemap (pay-per-use tokens)</li>
+            <li>Store Metadata (pay-per-use tokens)</li>
+            <li>Advanced Schema Data (pay-per-use tokens)</li>
+          </ul>
+          <a href="https://apps.shopify.com/indexaize" class="plan-button" target="_blank">Get Started</a>
+        </div>
+
+        <!-- Growth Extra Plan -->
+        <div class="plan-card featured">
+          <div class="plan-badge">Best Value</div>
+          <h3>Growth Extra</h3>
+          <p style="font-size: 14px; color: #667eea; margin-bottom: 10px; font-weight: 500;">Best for: Large catalogs & multilingual stores</p>
+          <div class="plan-price">$99.99<span>/month</span></div>
+          <div class="plan-description">
+            Optimize up to <strong>750 products</strong> in up to <strong>6 languages</strong>
+          </div>
+          <ul class="plan-features">
+            <li>All from Growth plus</li>
+            <li>100M monthly tokens</li>
+            <li>AI-Optimized Sitemap</li>
+            <li>AI Bot Access: + Perplexity</li>
+            <li>AI-enhanced add-ons at no extra cost</li>
+          </ul>
+          <a href="https://apps.shopify.com/indexaize" class="plan-button" target="_blank">Get Started</a>
+        </div>
+
+        <!-- Enterprise Plan -->
+        <div class="plan-card">
+          <h3>Enterprise</h3>
+          <p style="font-size: 14px; color: #667eea; margin-bottom: 10px; font-weight: 500;">Best for: Global AI-powered reach</p>
+          <div class="plan-price">$179.99<span>/month</span></div>
+          <div class="plan-description">
+            Optimize up to <strong>1200 products</strong> in up to <strong>10 languages</strong>
+          </div>
+          <ul class="plan-features">
+            <li>All from Growth Extra plus</li>
+            <li>300M monthly tokens</li>
+            <li>Advanced Schema Data</li>
+            <li>AI Bot Access: + Deepseek, Bytespider & others</li>
+          </ul>
+          <a href="https://apps.shopify.com/indexaize" class="plan-button" target="_blank">Get Started</a>
+        </div>
+      </div>
+
+      <!-- Token Notice -->
+      <div class="token-notice">
+        <p>
+          <strong>⚠️ Important:</strong> Professional, Professional Plus, and Growth Plus plans require purchasing tokens separately to unlock AI-enhanced features 
+          (AI Testing, Advanced Schema, AI-Enhanced Sitemap, AI Discovery). Growth Extra and Enterprise plans include tokens in the monthly price.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Section -->
+  <div class="contact-section">
+    <div class="container">
+      <h2>Need More Information?</h2>
+      <p>Get in touch with us for questions, custom plans, or enterprise solutions.</p>
+      <a href="mailto:support@indexaize.com" class="contact-button">Contact Us</a>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>&copy; 2025 indexAIze. All rights reserved.</p>
+  </div>
+</body>
+</html>
+
