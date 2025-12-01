@@ -2427,15 +2427,6 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Schema modals removed - now using background queue with status indicator */}
-            <BlockStack gap="400">
-              <Banner status="success" title="Generation successful!">
-                <p>Advanced schema data has been generated for your products.</p>
-              </Banner>
-              
-              <Text variant="headingMd">Generation Statistics</Text>
-              
-              <InlineStack gap="600" wrap>
       {/* Schema modals removed - now using background queue with status indicator (like AI Sitemap) */}
 
       {/* Schema Error Modal - No Optimized Products */}
