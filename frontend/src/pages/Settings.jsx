@@ -2436,38 +2436,6 @@ export default function Settings() {
               <Text variant="headingMd">Generation Statistics</Text>
               
               <InlineStack gap="600" wrap>
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.products}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.totalSchemas}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              <Box paddingBlockStart="200">
-                <Text variant="bodySm" tone="subdued">
-                  Structured schemas are now generated and help AI bots better understand your products.
-                </Text>
-              </Box>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
-
       {/* Schema modals removed - now using background queue with status indicator (like AI Sitemap) */}
 
       {/* Schema Error Modal - No Optimized Products */}
