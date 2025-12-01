@@ -1772,6 +1772,13 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       currentProduct: 'Generation complete!' 
     });
     
+    // CRITICAL: Return schema count for background queue
+    return {
+      success: true,
+      schemaCount: allProductSchemas.length,
+      schemas: allProductSchemas
+    };
+    
   } catch (error) {
     console.error(`[SCHEMA] ❌ Fatal error for ${shop}:`, error);
     console.error(`[SCHEMA] ❌ Error message:`, error.message);

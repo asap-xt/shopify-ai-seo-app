@@ -2025,11 +2025,11 @@ export default function Settings() {
                         }
                       }
                       
-                      // Call API to start background generation
+                      // Call API to start background generation (WITHOUT forceBasicSeo first)
                       const data = await api(`/api/schema/generate-all?shop=${shop}`, {
                         method: 'POST',
                         shop,
-                        body: { shop, forceBasicSeo: true }
+                        body: { shop } // Do NOT send forceBasicSeo on first attempt
                       });
                       
                       // Show success toast
