@@ -972,51 +972,54 @@ import debugRouter from './controllers/debugRouter.js';
 
       async regenerateSitemap({ shop }, ctx) {
         try {
-          console.log('[GRAPHQL] ===== REGENERATE SITEMAP MUTATION CALLED =====');
-          console.log('[GRAPHQL] Shop:', shop);
-          console.log('[GRAPHQL] enableAIEnhancement: true');
-          
           // === TRIAL RESTRICTION CHECK ===
           const { default: Subscription } = await import('./db/Subscription.js');
           const subscription = await Subscription.findOne({ shop });
           
           const now = new Date();
           const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          const isActivated = subscription?.isActivated || false;
           
           const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const includedTokensPlans = ['growth_extra', 'enterprise'];
           const hasIncludedTokens = includedTokensPlans.includes(planKey);
           
+          // Check if user has purchased tokens
+          const { default: TokenBalance } = await import('./db/TokenBalance.js');
+          const tokenBalance = await TokenBalance.findOne({ shop });
+          const hasPurchasedTokens = tokenBalance?.totalPurchased > 0;
+          const hasTokenBalance = tokenBalance?.balance > 0;
+          
           // Import isBlockedInTrial
           const { isBlockedInTrial } = await import('./billing/tokenConfig.js');
           const feature = 'ai-sitemap-optimized';
           
-          // CRITICAL: Block during trial ONLY for plans with included tokens
-          if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+          // CRITICAL: Block during trial ONLY if:
+          // 1. Has included tokens plan (Growth Extra/Enterprise)
+          // 2. In trial period
+          // 3. Plan not activated
+          // 4. Never purchased tokens AND has no remaining balance
+          // 5. Feature is blocked for this plan
+          if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
           // Import the core sitemap generation logic
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
-          console.log('[GRAPHQL] ✅ generateSitemapCore imported successfully');
           
           // ===== CRITICAL: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
-          console.log('[GRAPHQL] 🚀 Starting background sitemap generation...');
           generateSitemapCore(shop, { enableAIEnhancement: true })
             .then((result) => {
-              console.log('[GRAPHQL] ✅ Background sitemap generation completed successfully!');
-              console.log('[GRAPHQL] Result:', result);
+              // Success - sitemap generation completed
             })
             .catch((error) => {
-              console.error('[GRAPHQL] ❌ Background sitemap generation failed:', error);
-              console.error('[GRAPHQL] Error stack:', error.stack);
+              console.error('[GRAPHQL] Background sitemap generation failed:', error);
             });
           
           // Return immediately
-          console.log('[GRAPHQL] 📤 Returning immediate success response');
           return {
             success: true,
             message: 'AI-Optimized Sitemap regeneration started in background',
@@ -1937,6 +1940,17 @@ if (!IS_PROD) {
     res.status(200).json({ routes });
   });
 }
+
+// PHASE 1 OPTIMIZATION: AI Queue monitoring endpoint (available on all environments for monitoring)
+app.get('/debug/ai-queue-stats', async (req, res) => {
+  try {
+    const aiQueue = (await import('./services/aiQueue.js')).default;
+    const stats = aiQueue.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
     // Старият /test/set-plan endpoint е премахнат - използваме GraphQL версията
 

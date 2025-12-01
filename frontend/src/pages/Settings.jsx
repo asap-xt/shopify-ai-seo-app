@@ -23,6 +23,7 @@ import {
 import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 // Dev-only debug logger (hidden in production builds)
@@ -77,12 +78,14 @@ export default function Settings() {
   
   // Insufficient Tokens Modal state
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [tokenModalData, setTokenModalData] = useState({
     feature: '',
     tokensRequired: 0,
     tokensAvailable: 0,
     tokensNeeded: 0
   });
+  const [tokenError, setTokenError] = useState(null);
   const [processingSchema, setProcessingSchema] = useState(false);
   const [schemaError, setSchemaError] = useState('');
   const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
@@ -148,7 +151,6 @@ export default function Settings() {
     
     const interval = setInterval(async () => {
       attempts++;
-      console.log(`[SETTINGS] Polling attempt ${attempts}/${maxAttempts}`);
       
       try {
         // Check sitemap info to see if it was recently updated
@@ -833,16 +835,16 @@ export default function Settings() {
             // Check if error message indicates trial restriction
             const errorMessage = result?.data?.regenerateSitemap?.message || '';
             if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
-              setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
               setSaving(false);
               
-              // Navigate to billing page after 2 seconds
-              setTimeout(() => {
-                const params = new URLSearchParams(window.location.search);
-                const host = params.get('host');
-                const embedded = params.get('embedded');
-                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-              }, 2000);
+              // Show Trial Activation Modal instead of redirect
+              setTokenError({
+                trialRestriction: true,
+                requiresActivation: true,
+                feature: 'ai-sitemap-optimized',
+                currentPlan: settings?.plan || 'enterprise'
+              });
+              setShowTrialActivationModal(true);
               return;
             }
             
@@ -853,19 +855,18 @@ export default function Settings() {
           }
         } catch (error) {
           console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
+          setSaving(false);
           
           // Check if error is trial restriction (402 with trialRestriction flag)
-          if (error.trialRestriction && error.requiresActivation) {
-            setToast('AI-Optimized Sitemap is locked during trial. Please activate your plan to use included tokens.');
-            setSaving(false);
-            
-            // Navigate to billing page after 2 seconds
-            setTimeout(() => {
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
-            }, 2000);
+          if (error.status === 402 && error.trialRestriction && error.requiresActivation) {
+            // Show Trial Activation Modal instead of redirect
+            setTokenError({
+              trialRestriction: true,
+              requiresActivation: true,
+              feature: 'ai-sitemap-optimized',
+              currentPlan: settings?.plan || 'enterprise'
+            });
+            setShowTrialActivationModal(true);
             return;
           }
           
@@ -884,6 +885,28 @@ export default function Settings() {
       }
     } catch (error) {
       console.error('Failed to save settings:', error);
+      
+      // Check for 402 status (payment required) - SHOW MODAL INSTEAD OF REDIRECT
+      if (error.status === 402) {
+        setSaving(false);
+        
+        // Set error data for modals
+        setTokenError(error);
+        
+        // Show appropriate modal based on error type (same logic as Collections)
+        if (error.trialRestriction && error.requiresActivation) {
+          // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
+          setShowTrialActivationModal(true);
+        } else if (error.requiresPurchase) {
+          // Insufficient tokens → Show "Purchase Tokens" modal
+          setShowInsufficientTokensModal(true);
+        } else {
+          // Fallback: Generic trial restriction
+          setToast('AI-Optimized Sitemap requires tokens. Please upgrade or purchase tokens.');
+        }
+        return;
+      }
+      
       setToast('Failed to save settings');
     } finally {
       setSaving(false);
@@ -1476,15 +1499,6 @@ export default function Settings() {
                 const isAvailable = isFeatureAvailable(feature.key);
                 const isEnabled = !!settings?.features?.[feature.key];
                 
-                // Debug: Log each feature state
-                console.log(`[SETTINGS DEBUG] Feature ${feature.key}:`, {
-                  isAvailable,
-                  isEnabled,
-                  rawValue: settings?.features?.[feature.key],
-                  plan: settings?.plan,
-                  normalizedPlan: normalizePlan(settings?.plan)
-                });
-                
                 return (
                   <Box key={feature.key}
                     padding="200" 
@@ -1684,13 +1698,6 @@ export default function Settings() {
         const settingsCheck = settings?.features?.schemaData;
         const originalCheck = originalSettings?.features?.schemaData;
         
-        console.log('[SCHEMA-DEBUG] Advanced Schema Management visibility check:');
-        console.log('[SCHEMA-DEBUG] - Plan:', plan);
-        console.log('[SCHEMA-DEBUG] - Plan check (Plus/Enterprise):', planCheck);
-        console.log('[SCHEMA-DEBUG] - Settings schemaData:', settingsCheck);
-        console.log('[SCHEMA-DEBUG] - Original schemaData:', originalCheck);
-        console.log('[SCHEMA-DEBUG] - All conditions met:', planCheck && settingsCheck && originalCheck);
-        
         return planCheck && settingsCheck && originalCheck;
       })() && (
         <Card>
@@ -1705,41 +1712,28 @@ export default function Settings() {
                 <Button
                   primary
                   onClick={async () => {
-                    console.log('[SCHEMA-GEN] Button clicked!');
-                    
                     // Prevent multiple simultaneous generations
                     if (isGeneratingRef.current) {
-                      console.log('[SCHEMA-GEN] Already generating, ignoring click');
                       return;
                     }
                     
                     try {
                       // First check if there's existing data
-                      console.log('[SCHEMA-GEN] Checking for existing data...');
                       const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
-                      console.log('[SCHEMA-GEN] Existing data:', existingData);
                       
                       if (existingData.schemas && existingData.schemas.length > 0) {
                         // Has data - ask if to regenerate
-                        console.log('[SCHEMA-GEN] Found existing schemas, asking for confirmation...');
                         if (!confirm('This will replace existing schema data. Continue?')) {
-                          console.log('[SCHEMA-GEN] User cancelled');
                           return;
                         }
                       }
                       
-                      // Continue with generation
-                      console.log('[SCHEMA-GEN] Starting generation...');
-                      console.log('[SCHEMA-GEN] ⚠️ BEFORE setState - schemaGenerating:', schemaGenerating);
-                      
                       // Set ref FIRST (no closure issues)
                       isGeneratingRef.current = true;
                       checkCountRef.current = 0; // Reset counter
-                      console.log('[SCHEMA-GEN] 🔵 Set isGeneratingRef.current = true');
                       
                       // Set state immediately after ref to avoid sync issues
                       setSchemaGenerating(true);
-                      console.log('[SCHEMA-GEN] 🔵 Set schemaGenerating state = true');
                       setSchemaComplete(false);
                       setSchemaProgress({
                         current: 0,
@@ -1753,14 +1747,6 @@ export default function Settings() {
                         }
                       });
                       
-                      console.log('[SCHEMA-GEN] ✅ AFTER setState - should be true now');
-                      
-                      console.log('[SCHEMA-GEN] About to call api() function...');
-                      console.log('[SCHEMA-GEN] api function exists:', typeof api);
-                      console.log('[SCHEMA-GEN] shop value:', shop);
-                      
-                      console.log('[SCHEMA-GEN] Calling POST /api/schema/generate-all...');
-                      
                       let data;
                       try {
                         data = await api(`/api/schema/generate-all?shop=${shop}`, {
@@ -1768,52 +1754,34 @@ export default function Settings() {
                           shop,
                           body: { shop }
                         });
-                        console.log('[SCHEMA-GEN] ✅ API call successful!');
                       } catch (apiError) {
-                        console.error('[SCHEMA-GEN] ❌ API call failed:', apiError);
-                        console.error('[SCHEMA-GEN] ❌ API error message:', apiError.message);
-                        console.error('[SCHEMA-GEN] ❌ Full error object:', apiError);
-                        
-                        // Check if error is trial restriction (402 with trialRestriction flag)
-                        if (apiError.trialRestriction && apiError.requiresActivation) {
-                          console.log('[SCHEMA-GEN] 🔒 Trial restriction - plan not activated');
-                          setToast('Advanced Schema Data is locked during trial. Please activate your plan to use included tokens.');
+                        // Check for 402 error (payment/activation required) - SHOW MODAL INSTEAD OF REDIRECT
+                        if (apiError.status === 402) {
                           setSchemaGenerating(false);
+                          isGeneratingRef.current = false;
                           
-                          // Navigate to billing page
-                          setTimeout(() => {
-                            window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
-                          }, 2000);
+                          // Set error data for modals
+                          setTokenError(apiError);
+                          
+                          // Show appropriate modal based on error type (same logic as AI Sitemap)
+                          if (apiError.trialRestriction && apiError.requiresActivation) {
+                            // Growth Extra/Enterprise in trial → Show "Activate Plan or Buy Tokens" modal
+                            setShowTrialActivationModal(true);
+                          } else if (apiError.requiresPurchase) {
+                            // Insufficient tokens → Show "Purchase Tokens" modal
+                            setShowInsufficientTokensModal(true);
+                          } else {
+                            // Fallback: Generic trial restriction toast
+                            setToast('Advanced Schema Data requires activation or token purchase.');
+                          }
                           return;
-                        }
-                        
-                        // Check if error has requiresPurchase flag (402 status)
-                        if (apiError.requiresPurchase) {
-                          console.log('[SCHEMA-GEN] 💰 Insufficient tokens - showing modal');
-                          setTokenModalData({
-                            feature: apiError.feature || 'ai-schema-advanced',
-                            tokensRequired: apiError.tokensRequired || 0,
-                            tokensAvailable: apiError.tokensAvailable || 0,
-                            tokensNeeded: apiError.tokensNeeded || 0,
-                            needsUpgrade: apiError.needsUpgrade || false,
-                            currentPlan: apiError.currentPlan || '',
-                            minimumPlanForFeature: apiError.minimumPlanForFeature || null
-                          });
-                          setShowInsufficientTokensModal(true);
-                          setSchemaGenerating(false);
-                          return; // Don't re-throw, modal handles it
                         }
                         
                         throw apiError; // Re-throw for other errors
                       }
                       
-                      console.log('[SCHEMA-GEN] POST response:', data);
-                      console.log('[SCHEMA-GEN] 🕐 Scheduling progress check in 2 seconds...');
-                      console.log('[SCHEMA-GEN] 🕐 Current schemaGenerating value:', schemaGenerating);
-                      
                       // Start checking progress after 3 seconds (longer delay to reduce load)
                       setTimeout(() => {
-                        console.log('[SCHEMA-GEN] ⏰ setTimeout fired! Calling checkGenerationProgress...');
                         checkGenerationProgress();
                       }, 3000);
                     } catch (err) {
@@ -1967,20 +1935,13 @@ export default function Settings() {
                 primary
                 size="large"
                 onClick={async () => {
-                  console.log('[GENERATE ROBOTS] Starting...');
-                  console.log('[GENERATE ROBOTS] Settings:', settings);
-                  
                   try {
                     const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    console.log('[GENERATE ROBOTS] Has selected bots:', hasSelectedBots);
                     
                     if (!hasSelectedBots) {
-                      console.log('[GENERATE ROBOTS] No bots, showing modal');
                       setShowNoBotsModal(true);
                     } else {
-                      console.log('[GENERATE ROBOTS] Calling generateRobotsTxt...');
                       await generateRobotsTxt();
-                      console.log('[GENERATE ROBOTS] Robots.txt generated, showing modal');
                       setShowRobotsModal(true);
                     }
                   } catch (error) {
@@ -2217,11 +2178,9 @@ export default function Settings() {
           open={schemaGenerating}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            console.log('[SCHEMA-MODAL] ❌ Close button clicked');
             isGeneratingRef.current = false;
             setSchemaGenerating(false);
             setSchemaComplete(false);
-            console.log('[SCHEMA-MODAL] States and ref reset to false');
           }}
         >
           <Modal.Section>
@@ -2302,7 +2261,6 @@ export default function Settings() {
           open={true}
           title="Generating Advanced Schema Data"
           onClose={() => {
-            console.log('[SCHEMA-MODAL] Closing modal...');
             isGeneratingRef.current = false;
             checkCountRef.current = 0; // Reset counter
             setSchemaGenerating(false);
@@ -2518,19 +2476,96 @@ export default function Settings() {
       {/* Toast notifications */}
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
       
-      {/* Insufficient Tokens Modal */}
-      <InsufficientTokensModal
-        open={showInsufficientTokensModal}
-        onClose={() => setShowInsufficientTokensModal(false)}
-        feature={tokenModalData.feature}
-        tokensRequired={tokenModalData.tokensRequired}
-        tokensAvailable={tokenModalData.tokensAvailable}
-        tokensNeeded={tokenModalData.tokensNeeded}
-        shop={shop}
-        needsUpgrade={false}
-        minimumPlan={null}
-        currentPlan={settings?.plan || 'starter'}
-      />
+      {/* Modals for Token/Trial Restrictions */}
+      {tokenError && (
+        <>
+          <InsufficientTokensModal
+            open={showInsufficientTokensModal}
+            onClose={() => {
+              setShowInsufficientTokensModal(false);
+              setTokenError(null);
+            }}
+            feature={tokenError.feature || 'ai-sitemap-optimized'}
+            tokensRequired={tokenError.tokensRequired || 0}
+            tokensAvailable={tokenError.tokensAvailable || 0}
+            tokensNeeded={tokenError.tokensNeeded || 0}
+            shop={shop}
+            needsUpgrade={tokenError.needsUpgrade || false}
+            minimumPlan={tokenError.minimumPlanForFeature || null}
+            currentPlan={tokenError.currentPlan || settings?.plan || 'starter'}
+            returnTo="/settings"
+          />
+          
+          <TrialActivationModal
+            open={showTrialActivationModal}
+            onClose={() => {
+              setShowTrialActivationModal(false);
+              setTokenError(null);
+            }}
+            feature={tokenError.feature || 'ai-sitemap-optimized'}
+            trialEndsAt={tokenError.trialEndsAt}
+            currentPlan={tokenError.currentPlan || settings?.plan || 'enterprise'}
+            tokensRequired={tokenError.tokensRequired || 0}
+            onActivatePlan={async () => {
+              // Direct API call to activate plan (same as Collections)
+              try {
+                const response = await api('/api/billing/activate', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    shop,
+                    endTrial: true,
+                    returnTo: '/settings' // Return to Settings after approval
+                  })
+                });
+                
+                // Check if Shopify approval is required
+                if (response.requiresApproval && response.confirmationUrl) {
+                  // CRITICAL: Use window.top to break out of iframe (X-Frame-Options: DENY)
+                  window.top.location.href = response.confirmationUrl;
+                  return;
+                }
+                
+                // Plan activated successfully without approval
+                window.location.reload();
+                
+              } catch (error) {
+                console.error('[SETTINGS] Activation failed:', error);
+                
+                // Fallback: Navigate to billing page
+                const params = new URLSearchParams(window.location.search);
+                const host = params.get('host');
+                const embedded = params.get('embedded');
+                window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              }
+            }}
+            onPurchaseTokens={() => {
+              // Redirect to billing page for token purchase
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }}
+            shop={shop}
+          />
+        </>
+      )}
+      
+      {/* Fallback: Old Insufficient Tokens Modal (for non-error cases) */}
+      {!tokenError && showInsufficientTokensModal && (
+        <InsufficientTokensModal
+          open={showInsufficientTokensModal}
+          onClose={() => setShowInsufficientTokensModal(false)}
+          feature={tokenModalData.feature}
+          tokensRequired={tokenModalData.tokensRequired}
+          tokensAvailable={tokenModalData.tokensAvailable}
+          tokensNeeded={tokenModalData.tokensNeeded}
+          shop={shop}
+          needsUpgrade={false}
+          minimumPlan={null}
+          currentPlan={settings?.plan || 'starter'}
+          returnTo="/settings"
+        />
+      )}
       
     </BlockStack>
     );
@@ -2555,13 +2590,11 @@ export default function Settings() {
 COMMENTED OLD CODE FOR ADVANCED SCHEMA CHECKBOX - FOR TESTING
 
 onChange={async (checked) => {
-  console.log('Advanced Schema checkbox clicked:', checked);
   setAdvancedSchemaEnabled(checked);
   setSchemaError('');
   
   // Save the setting in AI Discovery settings
   try {
-    console.log('Saving settings to AI Discovery...');
     await api(`/api/ai-discovery/settings?shop=${shop}`, {
       method: 'POST',
       shop,
@@ -2571,8 +2604,6 @@ onChange={async (checked) => {
         advancedSchemaEnabled: checked
       }
     });
-    
-    console.log('Advanced Schema setting saved successfully');
   } catch (err) {
     console.error('Failed to save Advanced Schema setting:', err);
     setSchemaError('Failed to save settings');

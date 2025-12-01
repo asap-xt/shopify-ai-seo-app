@@ -11,51 +11,59 @@ import {
   estimateTokensWithMargin,
   calculateActualTokens
 } from '../billing/tokenConfig.js';
+import aiQueue from '../services/aiQueue.js'; // PHASE 1 OPTIMIZATION
 
 // Copy ONLY the OpenRouter connection from aiEnhanceController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
+/**
+ * OpenRouter Chat wrapper - NOW WITH RATE LIMITING
+ * Priority: HIGH (real-time user interactions)
+ */
 async function openrouterChat(model, messages, response_format_json = true) {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
   }
   
-  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-      'X-Title': 'indexAIze - Unlock AI Search',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      ...(response_format_json ? { response_format: { type: 'json_object' } } : {}),
-      messages,
-    }),
-  });
-  
-  if (!rsp.ok) {
-    const text = await rsp.text().catch(() => '');
-    console.error('🤖 [AI-SIMULATION] OpenRouter error:', rsp.status, text);
-    throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
-  }
-  
-  const j = await rsp.json();
-  const content = j?.choices?.[0]?.message?.content || '';
-  const usage = j?.usage || {};
-  
-  return {
-    content,
-    usage: {
-      prompt_tokens: usage.prompt_tokens || 0,
-      completion_tokens: usage.completion_tokens || 0,
-      total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-      total_cost: usage.total_cost || null
+  // Wrap in HIGH PRIORITY queue (real-time user simulation)
+  return aiQueue.addHighPriority(async () => {
+    const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        ...(response_format_json ? { response_format: { type: 'json_object' } } : {}),
+        messages,
+      }),
+    });
+    
+    if (!rsp.ok) {
+      const text = await rsp.text().catch(() => '');
+      console.error('🤖 [AI-SIMULATION] OpenRouter error:', rsp.status, text);
+      throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
     }
-  };
+    
+    const j = await rsp.json();
+    const content = j?.choices?.[0]?.message?.content || '';
+    const usage = j?.usage || {};
+    
+    return {
+      content,
+      usage: {
+        prompt_tokens: usage.prompt_tokens || 0,
+        completion_tokens: usage.completion_tokens || 0,
+        total_tokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+        total_cost: usage.total_cost || null
+      }
+    };
+  }, { model, messageCount: messages.length });
 }
 
 const router = express.Router();
@@ -94,15 +102,17 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
       const normalizedPlanKey = planKey.toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
-        // BUT: Allow if user has purchased tokens (can use purchased tokens during trial)
-        // During trial, included tokens are NOT added, so balance = only purchased tokens
-        if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
-          return res.status(402).json({
-            error: 'AI Testing is locked during trial period',
+        return res.status(402).json({
+          error: 'AI Testing is locked during trial period',
             trialRestriction: true,
             requiresActivation: true,
             trialEndsAt: subscription.trialEndsAt,
@@ -114,8 +124,6 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
             tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
             message: 'Activate your plan to unlock AI Testing with included tokens, or purchase tokens to use during trial'
           });
-        }
-        // User has purchased tokens → allow usage (will use purchased tokens only)
       }
       
       // If insufficient tokens → Request token purchase

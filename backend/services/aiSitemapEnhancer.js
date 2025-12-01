@@ -23,7 +23,8 @@ Format: Plain text, no markdown, concise and informative. Maximum 3 sentences.`;
 
     const result = await getGeminiResponse(prompt, {
       maxTokens: 200,
-      temperature: 0.3 // Lower temperature for consistency
+      temperature: 0.3, // Lower temperature for consistency
+      priority: 'bulk'  // LOW PRIORITY: Sitemap generation is not time-critical
     });
 
     return { data: result.content.trim(), usage: result.usage };
@@ -64,7 +65,8 @@ Format as JSON:
 
     const result = await getGeminiResponse(prompt, {
       maxTokens: 300,
-      temperature: 0.2
+      temperature: 0.2,
+      priority: 'bulk'  // LOW PRIORITY: Sitemap generation
     });
 
     // Parse JSON response
@@ -124,7 +126,8 @@ Format as JSON:
 
     const result = await getGeminiResponse(prompt, {
       maxTokens: 400,
-      temperature: 0.3
+      temperature: 0.3,
+      priority: 'bulk'  // LOW PRIORITY: Sitemap generation
     });
 
     const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
@@ -183,7 +186,8 @@ Format as JSON array:
 
     const result = await getGeminiResponse(prompt, {
       maxTokens: 800,
-      temperature: 0.4
+      temperature: 0.4,
+      priority: 'bulk'  // LOW PRIORITY: Sitemap generation
     });
 
     const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
@@ -221,7 +225,8 @@ Format as JSON:
 
     const result = await getGeminiResponse(prompt, {
       maxTokens: 150,
-      temperature: 0.2
+      temperature: 0.2,
+      priority: 'bulk'  // LOW PRIORITY: Sitemap generation
     });
 
     const cleaned = result.content.trim().replace(/```json\n?|\n?```/g, '');
@@ -299,6 +304,9 @@ export function findRelatedProducts(product, allProducts, maxResults = 5) {
  * Batch generate all AI enhancements for a product
  * This is the main function to call
  * Uses Gemini 2.5 Flash (Lite) for fast, cost-effective generation
+ * 
+ * PHASE 1 OPTIMIZATION: Changed from parallel to sequential execution
+ * All AI calls now go through aiQueue with 'bulk' priority to prevent rate limit issues
  */
 export async function enhanceProductForSitemap(product, allProducts = [], options = {}) {
   const {
@@ -311,27 +319,70 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
   } = options;
 
   try {
-    // Run all enhancements in parallel for speed
-    // Note: Each function now returns {data, usage} from getGeminiResponse
-    // Use Promise.allSettled to prevent one failure from breaking all
-    const results = await Promise.allSettled([
-      enableSummary ? generateAISummary(product) : Promise.resolve({data: null, usage: null}),
-      enableSemanticTags ? generateSemanticTags(product) : Promise.resolve({data: null, usage: null}),
-      enableContextHints ? generateContextHints(product) : Promise.resolve({data: null, usage: null}),
-      enableQA ? generateProductQA(product) : Promise.resolve({data: null, usage: null}),
-      enableSentiment ? analyzeSentiment(product) : Promise.resolve({data: null, usage: null})
-    ]);
-
-    // Extract successful results
-    const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = results.map((result, index) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      } else {
-        const names = ['summary', 'semanticTags', 'contextHints', 'qa', 'sentiment'];
-        console.error(`[AI-SITEMAP] Failed to generate ${names[index]} for ${product.title}:`, result.reason);
-        return {data: null, usage: null};
+    // CRITICAL CHANGE: Run enhancements SEQUENTIALLY (not parallel)
+    // This prevents overwhelming the AI API with 5 simultaneous requests per product
+    // getGeminiResponse now uses aiQueue with 'bulk' priority internally
+    
+    const results = [];
+    const names = ['summary', 'semanticTags', 'contextHints', 'qa', 'sentiment'];
+    
+    // Execute sequentially with proper error handling
+    if (enableSummary) {
+      try {
+        results.push(await generateAISummary(product));
+      } catch (error) {
+        console.error(`[AI-SITEMAP] Failed to generate summary for ${product.title}:`, error.message);
+        results.push({data: null, usage: null});
       }
-    });
+    } else {
+      results.push({data: null, usage: null});
+    }
+    
+    if (enableSemanticTags) {
+      try {
+        results.push(await generateSemanticTags(product));
+      } catch (error) {
+        console.error(`[AI-SITEMAP] Failed to generate semanticTags for ${product.title}:`, error.message);
+        results.push({data: null, usage: null});
+      }
+    } else {
+      results.push({data: null, usage: null});
+    }
+    
+    if (enableContextHints) {
+      try {
+        results.push(await generateContextHints(product));
+      } catch (error) {
+        console.error(`[AI-SITEMAP] Failed to generate contextHints for ${product.title}:`, error.message);
+        results.push({data: null, usage: null});
+      }
+    } else {
+      results.push({data: null, usage: null});
+    }
+    
+    if (enableQA) {
+      try {
+        results.push(await generateProductQA(product));
+      } catch (error) {
+        console.error(`[AI-SITEMAP] Failed to generate QA for ${product.title}:`, error.message);
+        results.push({data: null, usage: null});
+      }
+    } else {
+      results.push({data: null, usage: null});
+    }
+    
+    if (enableSentiment) {
+      try {
+        results.push(await analyzeSentiment(product));
+      } catch (error) {
+        console.error(`[AI-SITEMAP] Failed to generate sentiment for ${product.title}:`, error.message);
+        results.push({data: null, usage: null});
+      }
+    } else {
+      results.push({data: null, usage: null});
+    }
+
+    const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = results;
 
     // Find related products (synchronous, fast)
     const relatedProducts = enableRelated ? findRelatedProducts(product, allProducts) : [];
@@ -343,7 +394,7 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
       total_tokens: 0
     };
     
-    [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult].forEach(result => {
+    results.forEach(result => {
       if (result?.usage) {
         totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
         totalUsage.completion_tokens += result.usage.completion_tokens || 0;

@@ -797,8 +797,6 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
       
       if (saveResult.metafieldsSet?.userErrors?.length > 0) {
         console.error('[SCHEMA] Failed to save shop schemas:', saveResult.metafieldsSet.userErrors);
-      } else {
-        console.log('[SCHEMA] Successfully saved Organization and WebSite schemas');
       }
     }
     
@@ -1607,10 +1605,15 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // CRITICAL: Block during trial ONLY for plans with included tokens
       // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         throw new Error('TRIAL_RESTRICTION: Advanced Schema Data is locked during trial period. Activate your plan to unlock.');
       }
       
@@ -1820,16 +1823,26 @@ router.post('/generate-all', async (req, res) => {
     // Plus plans use PURCHASED tokens → no trial restriction
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
-    const isActive = subscription?.status === 'active';
+    const isActivated = subscription?.activatedAt != null;
     const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
-    // CRITICAL: Block during trial ONLY for plans with included tokens
-    if (hasIncludedAccess && inTrial && !isActive && isBlockedInTrial(feature)) {
+    // Check if user has purchased tokens (bypass trial restriction)
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    const hasTokenBalance = tokenBalance.balance > 0;
+    
+    // CRITICAL: Block during trial ONLY if:
+    // 1. Plan has included tokens (Enterprise/Growth Extra)
+    // 2. Currently in trial period
+    // 3. Plan not activated
+    // 4. User has NEVER purchased tokens (!hasPurchasedTokens)
+    // 5. User has NO remaining token balance (!hasTokenBalance)
+    // 6. Feature is blocked during trial
+    if (hasIncludedAccess && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
       // Get token info for Trial Activation Modal
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
       const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 });
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
       
       return res.status(402).json({
         error: 'Advanced Schema Data is locked during trial period',
@@ -1849,13 +1862,14 @@ router.post('/generate-all', async (req, res) => {
     // === TOKEN BALANCE CHECK ===
     // For Plus plans (purchased tokens) OR active included-tokens plans
     if (isPlusPlan) {
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      // Reuse tokenBalance from trial check if already fetched
+      const tokenBalanceForCheck = tokenBalance || await TokenBalance.getOrCreate(shop);
       
       // Estimate tokens needed for Advanced Schema
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
       const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: 100 });
       
-      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      if (!tokenBalanceForCheck.hasBalance(tokenEstimate.withMargin)) {
         return res.status(402).json({ 
           error: 'Insufficient token balance',
           requiresPurchase: true, // ← Show Insufficient Tokens Modal
@@ -1863,8 +1877,8 @@ router.post('/generate-all', async (req, res) => {
           currentPlan: subscription?.plan || 'none',
           tokensRequired: tokenEstimate.estimated,
           tokensWithMargin: tokenEstimate.withMargin,
-          tokensAvailable: tokenBalance.balance,
-          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+          tokensAvailable: tokenBalanceForCheck.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalanceForCheck.balance,
           feature: 'ai-schema-advanced',
           message: 'Purchase tokens to generate Advanced Schema Data'
         });

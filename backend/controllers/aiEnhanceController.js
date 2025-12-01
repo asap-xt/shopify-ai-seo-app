@@ -53,39 +53,47 @@ router.post('/check-eligibility', validateRequest(), async (req, res) => {
 // Copy ONLY the OpenRouter connection from seoController
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+import aiQueue from '../services/aiQueue.js'; // PHASE 1 OPTIMIZATION
 
+/**
+ * OpenRouter Chat wrapper - NOW WITH RATE LIMITING
+ * Priority: NORMAL (product enhancement, not time-critical)
+ */
 async function openrouterChat(model, messages, response_format_json = true) {
   
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key missing');
   }
   
-  const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-      'X-Title': 'indexAIze - Unlock AI Search',
-    },
-    body: JSON.stringify({
-      model,
-      response_format: response_format_json ? { type: 'json_object' } : undefined,
-      messages,
-      temperature: 0.4,
-    }),
-  });
-  
-  if (!rsp.ok) {
-    const text = await rsp.text().catch(() => '');
-    console.error('🤖 [AI-ENHANCE] OpenRouter error:', rsp.status, text);
-    throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
-  }
-  
-  const j = await rsp.json();
-  const content = j?.choices?.[0]?.message?.content || '';
-  
-  return { content, usage: j?.usage || {} };
+  // Wrap in NORMAL PRIORITY queue (product enhancement)
+  return aiQueue.add(async () => {
+    const rsp = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - Unlock AI Search',
+      },
+      body: JSON.stringify({
+        model,
+        response_format: response_format_json ? { type: 'json_object' } : undefined,
+        messages,
+        temperature: 0.4,
+      }),
+    });
+    
+    if (!rsp.ok) {
+      const text = await rsp.text().catch(() => '');
+      console.error('🤖 [AI-ENHANCE] OpenRouter error:', rsp.status, text);
+      throw new Error(`OpenRouter ${rsp.status}: ${text || rsp.statusText}`);
+    }
+    
+    const j = await rsp.json();
+    const content = j?.choices?.[0]?.message?.content || '';
+    
+    return { content, usage: j?.usage || {} };
+  }, { model, messageCount: messages.length });
 }
 
 async function generateEnhancedBulletsFAQ(data) {
@@ -262,21 +270,26 @@ router.post('/product', validateRequest(), async (req, res) => {
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
     
+    // Get token balance EARLY (needed for re-enhancement check later in loop)
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
     // Check if feature requires tokens
     if (requiresTokens(feature)) {
       // Estimate required tokens with 10% safety margin
       const tokenEstimate = estimateTokensWithMargin(feature, { languages: languages.length });
       
-      // Check token balance
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
-      
       // Check if plan has included tokens (Growth Extra, Enterprise)
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
           error: 'AI-enhanced product optimization is locked during trial period',
@@ -395,11 +408,14 @@ router.post('/product', validateRequest(), async (req, res) => {
         // Ако вече има AI Enhanced съдържание, пропускаме САМО за Growth Extra и Enterprise
         // За Starter/Professional/Growth (pay-per-use tokens) винаги re-enhance
         // ВАЖНО: Единственият критерий е enhancedAt timestamp (bullets/faq винаги ще има от Basic SEO)
+        // EXCEPTION: If user has purchased tokens during trial, allow re-enhancement (they're paying!)
         const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
         const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
         const hasAIEnhanced = existingSeo.enhancedAt; // Само enhancedAt, не updatedAt (това е за apply)
+        const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
         
-        if (shouldSkipEnhanced && hasAIEnhanced) {
+        // Skip only if: plan has skip enabled AND already enhanced AND NOT using purchased tokens
+        if (shouldSkipEnhanced && hasAIEnhanced && !hasPurchasedTokens) {
           results.push({ 
             language, 
             bullets: existingSeo.bullets,
@@ -673,9 +689,14 @@ router.post('/collection', validateRequest(), async (req, res) => {
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
           error: 'AI-enhanced collection optimization is locked during trial period',
@@ -963,9 +984,14 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
       const normalizedPlanKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(normalizedPlanKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // TRIAL RESTRICTION: Different logic for included vs purchased tokens
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         // Growth Extra/Enterprise with included tokens → Show "Activate Plan" modal
         return res.status(402).json({
           error: 'AI-enhanced collection optimization is locked during trial period',

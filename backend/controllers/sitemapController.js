@@ -268,11 +268,16 @@ async function generateSitemapCore(shop, options = {}) {
               const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
               const includedTokensPlans = ['growth_extra', 'enterprise'];
               const hasIncludedTokens = includedTokensPlans.includes(planKey);
+              const isActivated = !!subscription?.activatedAt;
+              
+              // Check if user has purchased tokens (not just included tokens)
+              const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
               
               // CRITICAL: Trial restriction ONLY for plans with included tokens
               // Plus plans can use purchased tokens during trial without activating plan
               // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-              if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+              // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+              if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
                 // Return error response instead of generating basic sitemap
                 return res.status(402).json({
                   error: 'AI-Optimized Sitemap is locked during trial period',
@@ -288,8 +293,25 @@ async function generateSitemapCore(shop, options = {}) {
                 reservationId = reservation.reservationId;
                 await reservation.save();
               } else {
-                // Insufficient tokens
-                isAISitemapEnabled = false;
+                // Insufficient tokens → Return error for purchase
+                const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+                const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(planKey);
+                
+                return res.status(402).json({
+                  error: 'Insufficient tokens for AI-Optimized Sitemap',
+                  requiresPurchase: true,
+                  needsUpgrade: needsUpgrade,
+                  minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
+                  currentPlan: subscription?.plan,
+                  tokensRequired: tokenEstimate.estimated,
+                  tokensWithMargin: tokenEstimate.withMargin,
+                  tokensAvailable: tokenBalance.balance,
+                  tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+                  feature,
+                  message: needsUpgrade 
+                    ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-Optimized Sitemap'
+                    : 'You need more tokens to use AI-Optimized Sitemap'
+                });
               }
             }
           }

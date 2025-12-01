@@ -120,6 +120,73 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    // === TRIAL & TOKEN CHECK FOR AI SITEMAP ===
+    // Check if trying to enable AI Sitemap
+    if (features?.aiSitemap === true) {
+      const Subscription = (await import('../db/Subscription.js')).default;
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
+      
+      const subscription = await Subscription.findOne({ shop });
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      
+      // Check trial status
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check tokens - CRITICAL: Always fetch FRESH data from DB (no cache)
+      // Use getOrCreate but ensure we're reading fresh data from DB
+      let tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // CRITICAL FIX: After getOrCreate, reload from DB to get latest data
+      // This ensures we see tokens that were just purchased in a parallel request
+      tokenBalance = await TokenBalance.findOne({ shop });
+      
+      if (!tokenBalance) {
+        // Should never happen after getOrCreate, but handle gracefully
+        tokenBalance = await TokenBalance.create({ shop, balance: 0, totalPurchased: 0, totalUsed: 0 });
+      }
+      
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+      const hasTokenBalance = tokenBalance.balance > 0;
+      
+      // Check if plan has included tokens
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // PRIORITY 1: If included tokens plan (Growth Extra/Enterprise) in trial without activation
+      // → Show "Activate Plan or Buy Tokens" modal (TrialActivationModal)
+      // This check MUST come BEFORE insufficient tokens check to show the correct modal!
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial('ai-sitemap-optimized')) {
+        return res.status(402).json({
+          error: 'AI-Optimized Sitemap is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature: 'ai-sitemap-optimized',
+          message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens'
+        });
+      }
+      
+      // PRIORITY 2: If NO tokens at all (no purchased, no balance) → show purchase modal
+      // This applies to plans WITHOUT included tokens (Starter, Professional, Growth, Plus plans)
+      // OR to users who already have purchased tokens but used them all
+      if (!hasPurchasedTokens && !hasTokenBalance) {
+        return res.status(402).json({
+          error: 'Insufficient tokens for AI-Optimized Sitemap',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensAvailable: 0,
+          tokensNeeded: 10000,
+          feature: 'ai-sitemap-optimized',
+          message: 'Purchase tokens to enable AI-Optimized Sitemap'
+        });
+      }
+    }
+    // === END TRIAL & TOKEN CHECK ===
+    
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
     
