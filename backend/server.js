@@ -1004,26 +1004,34 @@ import debugRouter from './controllers/debugRouter.js';
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
-          // Import the core sitemap generation logic
+          // Import the core sitemap generation logic and queue
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
+          const { default: sitemapQueue } = await import('./services/sitemapQueue.js');
           
-          // ===== CRITICAL: AI Enhancement enabled from Settings =====
+          // ===== BACKGROUND QUEUE: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
-          generateSitemapCore(shop, { enableAIEnhancement: true })
-            .then((result) => {
-              // Success - sitemap generation completed
-            })
-            .catch((error) => {
-              console.error('[GRAPHQL] Background sitemap generation failed:', error);
-            });
+          // 
+          // Use queue system for reliable background processing:
+          // - Works independently of frontend connection
+          // - Prevents duplicate jobs
+          // - Handles retries on failure
+          // - Updates status in Shop.sitemapStatus
+          const jobInfo = await sitemapQueue.addJob(shop, async () => {
+            return await generateSitemapCore(shop, { enableAIEnhancement: true });
+          });
           
-          // Return immediately
+          // Return immediately with job info
           return {
             success: true,
-            message: 'AI-Optimized Sitemap regeneration started in background',
-            shop: shop
+            message: jobInfo.queued 
+              ? 'AI-Optimized Sitemap regeneration started in background. You can navigate away - the process will continue.'
+              : jobInfo.message,
+            shop: shop,
+            queued: jobInfo.queued,
+            position: jobInfo.position,
+            estimatedTime: jobInfo.estimatedTime
           };
           
         } catch (error) {

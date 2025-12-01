@@ -977,8 +977,17 @@ async function handleStatus(req, res) {
     // Get last generated sitemap info
     const sitemapDoc = await Sitemap.findOne({ shop }).select('-content').lean();
     
+    // Determine overall status for frontend
+    const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
+    const inProgress = shopDoc?.sitemapStatus?.inProgress || false;
+    
     res.json({
       shop,
+      // Overall status for frontend
+      inProgress: isGenerating || inProgress,
+      status: jobStatus.status,
+      message: jobStatus.message,
+      // Queue details
       queue: {
         status: jobStatus.status,
         message: jobStatus.message,
@@ -986,12 +995,14 @@ async function handleStatus(req, res) {
         queueLength: jobStatus.queueLength,
         estimatedTime: jobStatus.estimatedTime || null
       },
+      // Last generated sitemap info
       sitemap: {
         exists: !!sitemapDoc,
         generatedAt: sitemapDoc?.generatedAt || null,
         productCount: sitemapDoc?.productCount || 0,
         size: sitemapDoc?.size || 0
       },
+      // Detailed shop status from DB
       shopStatus: shopDoc?.sitemapStatus || null
     });
     

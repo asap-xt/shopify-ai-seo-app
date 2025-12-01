@@ -111,6 +111,18 @@ export default function Settings() {
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
+  // AI Sitemap background generation status
+  const [sitemapStatus, setSitemapStatus] = useState({
+    inProgress: false,
+    status: 'idle', // idle, queued, processing, completed, failed
+    message: null,
+    position: null,
+    estimatedTime: null,
+    generatedAt: null,
+    productCount: 0
+  });
+  const [sitemapPollingInterval, setSitemapPollingInterval] = useState(null);
+  
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
   
@@ -138,7 +150,88 @@ export default function Settings() {
     }
   }, [toast]);
   
-  // Function to start polling for background regeneration completion
+  // Function to fetch sitemap status from backend
+  const fetchSitemapStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/sitemap/status?shop=${shop}`);
+      
+      setSitemapStatus({
+        inProgress: status.inProgress || false,
+        status: status.status || 'idle',
+        message: status.message || null,
+        position: status.queue?.position || null,
+        estimatedTime: status.queue?.estimatedTime || null,
+        generatedAt: status.sitemap?.generatedAt || null,
+        productCount: status.sitemap?.productCount || 0
+      });
+      
+      // If completed, show View button and stop polling
+      if (status.status === 'completed' && !status.inProgress) {
+        setShowAiSitemapView(true);
+        if (sitemapPollingInterval) {
+          clearInterval(sitemapPollingInterval);
+          setSitemapPollingInterval(null);
+        }
+        // Show success toast only once
+        if (sitemapStatus.inProgress) {
+          setToast(`AI-Optimized Sitemap generated successfully! (${status.sitemap?.productCount || 0} products)`);
+        }
+      }
+      
+      // If failed, stop polling and show error
+      if (status.status === 'failed') {
+        if (sitemapPollingInterval) {
+          clearInterval(sitemapPollingInterval);
+          setSitemapPollingInterval(null);
+        }
+        setToast('AI-Optimized Sitemap generation failed. Please try again.');
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('[SETTINGS] Failed to fetch sitemap status:', error);
+    }
+  }, [shop, api, sitemapPollingInterval, sitemapStatus.inProgress]);
+  
+  // Function to start polling for sitemap status
+  const startSitemapPolling = useCallback(() => {
+    // Clear any existing polling
+    if (sitemapPollingInterval) {
+      clearInterval(sitemapPollingInterval);
+    }
+    
+    // Poll immediately
+    fetchSitemapStatus();
+    
+    // Then poll every 10 seconds
+    const interval = setInterval(() => {
+      fetchSitemapStatus();
+    }, 10000); // 10 seconds
+    
+    setSitemapPollingInterval(interval);
+  }, [fetchSitemapStatus, sitemapPollingInterval]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (sitemapPollingInterval) {
+        clearInterval(sitemapPollingInterval);
+      }
+    };
+  }, [sitemapPollingInterval]);
+  
+  // Start polling on mount if sitemap is generating
+  useEffect(() => {
+    if (shop && !sitemapPollingInterval) {
+      fetchSitemapStatus().then(status => {
+        if (status?.inProgress) {
+          startSitemapPolling();
+        }
+      });
+    }
+  }, [shop]); // Only run on mount
+  
+  // DEPRECATED: Old polling function (kept for backward compatibility)
   const startPollingForCompletion = () => {
     
     // Clear any existing polling
@@ -828,8 +921,9 @@ export default function Settings() {
           if (result?.data?.regenerateSitemap?.success) {
             setToast('');
             setTimeout(() => {
-              setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-              startPollingForCompletion();
+              setToast('Settings saved! AI-Optimized Sitemap generation started in background. You can navigate away - it will continue processing.');
+              // Start polling for status updates
+              startSitemapPolling();
             }, 100);
           } else {
             // Check if error message indicates trial restriction
@@ -1508,6 +1602,119 @@ export default function Settings() {
                     borderColor="border"
                   >
                     {isAvailable ? (
+                      <BlockStack gap="200">
+                        <InlineStack align="space-between" blockAlign="center">
+                          <Box flexGrow={1}>
+                            <Checkbox
+                              label={feature.name}
+                              checked={isEnabled}
+                              onChange={() => toggleFeature(feature.key)}
+                              helpText={feature.description}
+                            />
+                          </Box>
+                          {/* AI Sitemap View button */}
+                          {feature.key === 'aiSitemap' && showAiSitemapView && !sitemapStatus.inProgress && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </InlineStack>
+                        
+                        {/* AI Sitemap Status Indicator */}
+                        {feature.key === 'aiSitemap' && isEnabled && sitemapStatus.inProgress && (
+                          <Box paddingInlineStart="800" paddingBlockStart="200">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Spinner size="small" />
+                              <BlockStack gap="100">
+                                <Text variant="bodyMd" tone="subdued">
+                                  {sitemapStatus.message || 'Generating sitemap...'}
+                                </Text>
+                                {sitemapStatus.position > 0 && (
+                                  <Text variant="bodySm" tone="subdued">
+                                    Queue position: {sitemapStatus.position} · Est. {Math.ceil(sitemapStatus.estimatedTime / 60)} min
+                                  </Text>
+                                )}
+                                {sitemapStatus.status === 'processing' && sitemapStatus.productCount > 0 && (
+                                  <Text variant="bodySm" tone="subdued">
+                                    Processing {sitemapStatus.productCount} products...
+                                  </Text>
+                                )}
+                              </BlockStack>
+                            </InlineStack>
+                          </Box>
+                        )}
+                        
+                        {/* AI Sitemap Completion Status */}
+                        {feature.key === 'aiSitemap' && isEnabled && !sitemapStatus.inProgress && sitemapStatus.status === 'completed' && sitemapStatus.generatedAt && (
+                          <Box paddingInlineStart="800" paddingBlockStart="200">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Badge tone="success">Generated</Badge>
+                              <Text variant="bodySm" tone="subdued">
+                                {sitemapStatus.productCount} products · {(() => {
+                                  const now = new Date();
+                                  const generated = new Date(sitemapStatus.generatedAt);
+                                  const diff = Math.floor((now - generated) / 1000 / 60);
+                                  if (diff < 1) return 'Just now';
+                                  if (diff < 60) return `${diff} min ago`;
+                                  const hours = Math.floor(diff / 60);
+                                  if (hours < 24) return `${hours}h ago`;
+                                  const days = Math.floor(hours / 24);
+                                  return `${days}d ago`;
+                                })()}
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                        )}
+                        
+                        {/* Other Features View Buttons (not aiSitemap) */}
+                        {feature.key === 'productsJson' && (() => {
+                          return feature.key === 'productsJson' && showProductsJsonView;
+                        })() && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {feature.key === 'collectionsJson' && (() => {
+                          return feature.key === 'collectionsJson' && showCollectionsJsonView;
+                        })() && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                        
+                        {feature.key === 'storeMetadata' && (() => {
+                          return feature.key === 'storeMetadata' && isEnabled;
+                        })() && (
+                          showStoreMetadataView ? (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          ) : null
+                        )}
+                        
+                        {feature.key === 'welcomePage' && showWelcomePageView && (
+                          <Button
+                            size="slim"
+                            onClick={() => viewJson(feature.key, feature.name)}
+                          >
+                            View
+                          </Button>
+                        )}
+                      </BlockStack>
+                    ) : (
                       <InlineStack align="space-between" blockAlign="center">
                         <Box flexGrow={1}>
                           <Checkbox
