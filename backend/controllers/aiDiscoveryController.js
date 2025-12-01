@@ -90,11 +90,18 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced updatedAt').lean();
     const hasAiSitemap = existingSitemap && existingSitemap.isAiEnhanced === true;
 
+    const mergedFeatures = isFreshShop ? defaultFeatures : savedSettings.features;
+    
+    // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAiSitemap && mergedFeatures?.aiSitemap) {
+      mergedFeatures.aiSitemap = false;
+    }
+    
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: isFreshShop ? defaultFeatures : savedSettings.features,
+      features: mergedFeatures,
       richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString(),
