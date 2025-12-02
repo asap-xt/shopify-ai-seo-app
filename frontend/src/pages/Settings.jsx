@@ -263,18 +263,19 @@ export default function Settings() {
           clearInterval(schemaPollingInterval);
           setSchemaPollingInterval(null);
         }
-        // Show success toast only once
+        
+        // Always uncheck the schemaData checkbox after successful generation
+        setSettings(prev => ({
+          ...prev,
+          features: {
+            ...prev.features,
+            schemaData: false
+          }
+        }));
+        
+        // Show success toast only once (when transitioning from inProgress to completed)
         if (schemaStatus.inProgress) {
           setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
-          
-          // Uncheck the schemaData checkbox to prevent accidental re-generation
-          setSettings(prev => ({
-            ...prev,
-            features: {
-              ...prev.features,
-              schemaData: false
-            }
-          }));
         }
       }
       
@@ -292,17 +293,18 @@ export default function Settings() {
             setSchemaPollingInterval(null);
           }
           
+          // Always uncheck the schemaData checkbox after successful generation
+          setSettings(prev => ({
+            ...prev,
+            features: {
+              ...prev.features,
+              schemaData: false
+            }
+          }));
+          
+          // Show success toast only once (when transitioning from inProgress to completed)
           if (schemaStatus.inProgress) {
             setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
-            
-            // Uncheck the schemaData checkbox to prevent accidental re-generation
-            setSettings(prev => ({
-              ...prev,
-              features: {
-                ...prev.features,
-                schemaData: false
-              }
-            }));
           }
           return status;
         }
