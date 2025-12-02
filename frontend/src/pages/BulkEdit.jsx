@@ -137,6 +137,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     skippedProducts: 0
   });
   const [seoJobPollingInterval, setSeoJobPollingInterval] = useState(null);
+  const [seoJobStarted, setSeoJobStarted] = useState(false); // Flag to track if we started a job
   
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
@@ -155,65 +156,65 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
   
   // Fetch SEO job status from backend
-  const fetchSeoJobStatus = useCallback(async (showToastOnComplete = true) => {
+  const fetchSeoJobStatus = useCallback(async () => {
     try {
       const status = await api(`/api/seo/job-status?shop=${shop}`);
-      
-      // Only show toast if transitioning from inProgress to completed/failed
-      const wasInProgress = seoJobStatus.inProgress;
-      const justCompleted = wasInProgress && !status.inProgress && (status.status === 'completed' || status.status === 'failed');
-      
       setSeoJobStatus(status);
       
-      // If completed or failed, stop polling and refresh products
-      if (status.status === 'completed' || status.status === 'failed') {
+      // If completed or failed, stop polling and handle result
+      if ((status.status === 'completed' || status.status === 'failed') && seoJobStarted) {
+        // Stop polling
         if (seoJobPollingInterval) {
           clearInterval(seoJobPollingInterval);
           setSeoJobPollingInterval(null);
         }
         
-        // Only show toast once when job just completed
-        if (justCompleted && showToastOnComplete) {
-          if (status.status === 'completed') {
-            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
-              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
-              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
-            setToast(msg);
-          } else if (status.status === 'failed') {
-            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
-          }
-          
-          // Refresh products list
-          const params = new URLSearchParams({
-            shop,
-            page: 1,
-            limit: 50,
-            ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-            ...(searchValue && { search: searchValue }),
-            sortBy,
-            sortOrder,
-            _t: Date.now()
-          });
-          
-          const data = await api(`/api/products/list?${params}`, { shop });
-          setProducts(data.products || []);
-          setPage(1);
-          setHasMore(data.pagination?.hasNext || false);
-          setTotalCount(data.pagination?.total || 0);
+        // Reset flag
+        setSeoJobStarted(false);
+        
+        // Show toast
+        if (status.status === 'completed') {
+          const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+            (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+            (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+          setToast(msg);
+        } else {
+          setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
         }
+        
+        // Refresh products list to update badges
+        const params = new URLSearchParams({
+          shop,
+          page: 1,
+          limit: 50,
+          ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+          ...(searchValue && { search: searchValue }),
+          sortBy,
+          sortOrder,
+          _t: Date.now()
+        });
+        
+        const data = await api(`/api/products/list?${params}`, { shop });
+        setProducts(data.products || []);
+        setPage(1);
+        setHasMore(data.pagination?.hasNext || false);
+        setTotalCount(data.pagination?.total || 0);
       }
       
       return status;
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, seoJobPollingInterval, seoJobStatus.inProgress, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, seoJobPollingInterval, seoJobStarted, optimizedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
     if (seoJobPollingInterval) {
       clearInterval(seoJobPollingInterval);
     }
+    
+    // Mark that we started a job
+    setSeoJobStarted(true);
     
     fetchSeoJobStatus();
     
