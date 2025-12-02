@@ -136,8 +136,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     failedProducts: 0,
     skippedProducts: 0
   });
-  const [seoJobPollingInterval, setSeoJobPollingInterval] = useState(null);
-  const [seoJobStarted, setSeoJobStarted] = useState(false); // Flag to track if we started a job
+  const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
@@ -167,14 +166,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           (status.status === 'completed' || status.status === 'failed');
         
         if (justCompleted) {
-          // Stop polling
-          if (seoJobPollingInterval) {
-            clearInterval(seoJobPollingInterval);
-            setSeoJobPollingInterval(null);
+          // Stop polling using ref (no stale closure)
+          if (seoJobPollingRef.current) {
+            clearInterval(seoJobPollingRef.current);
+            seoJobPollingRef.current = null;
           }
-          
-          // Reset flag
-          setSeoJobStarted(false);
           
           // Show toast
           if (status.status === 'completed') {
@@ -213,34 +209,33 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, seoJobPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
-    if (seoJobPollingInterval) {
-      clearInterval(seoJobPollingInterval);
+    // Clear any existing polling
+    if (seoJobPollingRef.current) {
+      clearInterval(seoJobPollingRef.current);
     }
     
-    // Mark that we started a job
-    setSeoJobStarted(true);
+    // Set initial state to inProgress so we can detect completion
+    setSeoJobStatus(prev => ({ ...prev, inProgress: true }));
     
     fetchSeoJobStatus();
     
-    const interval = setInterval(() => {
+    seoJobPollingRef.current = setInterval(() => {
       fetchSeoJobStatus();
     }, 5000); // Poll every 5 seconds
-    
-    setSeoJobPollingInterval(interval);
-  }, [fetchSeoJobStatus, seoJobPollingInterval]);
+  }, [fetchSeoJobStatus]);
   
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (seoJobPollingInterval) {
-        clearInterval(seoJobPollingInterval);
+      if (seoJobPollingRef.current) {
+        clearInterval(seoJobPollingRef.current);
       }
     };
-  }, [seoJobPollingInterval]);
+  }, []);
   
   // Fetch SEO job status on mount (to restore state after navigation)
   useEffect(() => {
