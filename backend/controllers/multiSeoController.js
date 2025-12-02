@@ -3,6 +3,8 @@
 // Route(s):
 //   POST /api/seo/generate-multi
 //   POST /api/seo/apply-multi
+//   POST /api/seo/apply-batch (background processing)
+//   GET /api/seo/apply-status
 //
 // Implements "multi-language" flow by delegating to existing single endpoints
 //   /seo/generate  and  /seo/apply
@@ -11,6 +13,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import seoApplyQueue from '../services/seoApplyQueue.js';
 
 const router = Router();
 
@@ -154,6 +157,92 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
   } catch (err) {
     console.error('POST /api/seo/apply-multi error:', err);
     return res.status(500).json({ error: 'Failed to apply SEO for multiple languages' });
+  }
+});
+
+// POST /api/seo/apply-batch
+// Background processing for batch SEO apply
+// Body: { shop, products: [{ productId, results: [{ language, seo }...], options }] }
+router.post('/apply-batch', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    const shopDomain = req.shopDomain || shop;
+    const { products } = req.body || {};
+    
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: 'Missing products array' });
+    }
+
+    // Prepare products for queue
+    const productsToProcess = products.map(p => ({
+      productId: toGID(String(p.productId)),
+      results: p.results || [],
+      options: p.options || {}
+    }));
+
+    // Create apply function that will be called for each product
+    const applyFn = async (productData) => {
+      const { applySEOForLanguage } = await import('./seoController.js');
+      
+      for (const r of productData.results) {
+        if (!r || !r.seo) continue;
+        
+        const result = await applySEOForLanguage(
+          null, // req not needed - token resolved from DB
+          shopDomain,
+          productData.productId,
+          r.seo,
+          r.language,
+          productData.options
+        );
+        
+        if (!result?.ok) {
+          throw new Error(result?.errors?.join('; ') || 'Apply failed');
+        }
+      }
+    };
+
+    // Add job to queue
+    const queueResult = await seoApplyQueue.addJob(shopDomain, productsToProcess, applyFn);
+
+    return res.json({
+      queued: queueResult.queued,
+      message: queueResult.message || 'Job added to queue',
+      jobId: queueResult.jobId,
+      totalProducts: productsToProcess.length
+    });
+
+  } catch (err) {
+    console.error('POST /api/seo/apply-batch error:', err);
+    return res.status(500).json({ error: 'Failed to queue SEO apply batch' });
+  }
+});
+
+// GET /api/seo/apply-status
+// Get status of background SEO apply job
+router.get('/apply-status', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    const status = await seoApplyQueue.getJobStatus(shop);
+    return res.json(status);
+  } catch (err) {
+    console.error('GET /api/seo/apply-status error:', err);
+    return res.status(500).json({ error: 'Failed to get apply status' });
   }
 });
 

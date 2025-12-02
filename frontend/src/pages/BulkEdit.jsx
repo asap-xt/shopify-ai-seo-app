@@ -26,6 +26,7 @@ import {
   Popover,
   ActionList,
   Banner,
+  Spinner,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
@@ -125,6 +126,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
   });
   
+  // Background Apply status
+  const [applyStatus, setApplyStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalProducts: 0,
+    processedProducts: 0,
+    successfulProducts: 0,
+    failedProducts: 0
+  });
+  const [applyPollingInterval, setApplyPollingInterval] = useState(null);
+  
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
   const [productLimit, setProductLimit] = useState(70); // Default to Starter limit
@@ -140,6 +153,74 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
+  
+  // Fetch apply status from backend
+  const fetchApplyStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/seo/apply-status?shop=${shop}`);
+      setApplyStatus(status);
+      
+      // If completed or failed, stop polling and refresh products
+      if (status.status === 'completed' || status.status === 'failed') {
+        if (applyPollingInterval) {
+          clearInterval(applyPollingInterval);
+          setApplyPollingInterval(null);
+        }
+        
+        if (status.status === 'completed') {
+          setToast(`Applied SEO to ${status.successfulProducts} products${status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : ''}`);
+          
+          // Refresh products list
+          const params = new URLSearchParams({
+            shop,
+            page: 1,
+            limit: 50,
+            ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+            ...(searchValue && { search: searchValue }),
+            sortBy,
+            sortOrder,
+            _t: Date.now()
+          });
+          
+          const data = await api(`/api/products/list?${params}`, { shop });
+          setProducts(data.products || []);
+          setPage(1);
+          setHasMore(data.pagination?.hasNext || false);
+          setTotalCount(data.pagination?.total || 0);
+        } else if (status.status === 'failed') {
+          setToast(`Apply failed: ${status.message || 'Unknown error'}`);
+        }
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('[BULK-EDIT] Failed to fetch apply status:', error);
+    }
+  }, [shop, api, applyPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
+  
+  // Start polling for apply status
+  const startApplyPolling = useCallback(() => {
+    if (applyPollingInterval) {
+      clearInterval(applyPollingInterval);
+    }
+    
+    fetchApplyStatus();
+    
+    const interval = setInterval(() => {
+      fetchApplyStatus();
+    }, 5000); // Poll every 5 seconds
+    
+    setApplyPollingInterval(interval);
+  }, [fetchApplyStatus, applyPollingInterval]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (applyPollingInterval) {
+        clearInterval(applyPollingInterval);
+      }
+    };
+  }, [applyPollingInterval]);
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   // NOTE: This should only be used as fallback - GraphQL query is primary source
@@ -878,128 +959,71 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   };
   
-  // Apply SEO results
+  // Apply SEO results - Background processing
   const applySEO = async () => {
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    
     try {
       const successfulResults = Object.entries(results).filter(([_, r]) => r.success && !r.skipped);
-      const total = successfulResults.length;
-      setProgress({ current: 0, total, percent: 0 });
       
-      for (let i = 0; i < successfulResults.length; i++) {
-        const [productId, result] = successfulResults[i];
-        const product = products.find(p => p.id === productId);
-        
-        if (!product) continue;
-        
-        setCurrentProduct(product.title || 'Product');
-        
-        try {
-          const productGid = product.gid || toProductGID(product.productId || product.id);
-          
-          const data = await api('/api/seo/apply-multi', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              results: result.data.results.filter(r => r?.seo).map(r => ({
-                language: r.language,
-                seo: r.seo,
-              })),
-              options: {
-                updateTitle: true,
-                updateBody: true,
-                updateSeo: true,
-                updateBullets: true,
-                updateFaq: true,
-                updateAlt: false,
-                dryRun: false,
-              }
-            }
-          });
-          
-          // Optimistic update - веднага обновяваме локалното състояние
-          if (data.appliedLanguages && data.appliedLanguages.length > 0) {
-            setProducts(prevProducts => 
-              prevProducts.map(prod => {
-                if (prod.id === productId) {
-                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
-                  const newOptimized = [...new Set([...currentOptimized, ...data.appliedLanguages])];
-                  
-                  return {
-                    ...prod,
-                    optimizationSummary: {
-                      ...prod.optimizationSummary,
-                      optimizedLanguages: newOptimized,
-                      optimized: true,
-                      lastOptimized: new Date().toISOString()
-                    }
-                  };
-                }
-                return prod;
-              })
-            );
-          }
-          
-        } catch (err) {
-          setErrors(prev => [...prev, { product: product.title, error: `Apply failed: ${err.message}` }]);
-        }
-        
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
+      if (successfulResults.length === 0) {
+        setToast('No products to apply');
+        return;
       }
       
-      setToast('AI Search Optimisation applied successfully!');
-      setShowResultsModal(false);
-      
-      // Clear selected items
-      setSelectedItems([]);
-      setSelectAllPages(false);
-      
-      // Add delay to ensure MongoDB writes are propagated
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Force a complete refresh of the products list
-      setProducts([]); // Clear current products to force re-render
-      
-      // Load products with cache bypass
-      const params = new URLSearchParams({
-        shop,
-        page: 1,
-        limit: 50,
-        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(searchValue && { search: searchValue }),
-        ...(languageFilter && { languageFilter }),
-        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
-        sortBy,
-        sortOrder,
-        _t: Date.now() // Cache buster
+      // Prepare batch data
+      const productsToApply = successfulResults.map(([productId, result]) => {
+        const product = products.find(p => p.id === productId);
+        const productGid = product?.gid || toProductGID(product?.productId || productId);
+        
+        return {
+          productId: productGid,
+          results: result.data.results.filter(r => r?.seo).map(r => ({
+            language: r.language,
+            seo: r.seo,
+          })),
+          options: {
+            updateTitle: true,
+            updateBody: true,
+            updateSeo: true,
+            updateBullets: true,
+            updateFaq: true,
+            updateAlt: false,
+            dryRun: false,
+          }
+        };
       });
       
-      const data = await api(`/api/products/list?${params}`, { 
+      // Send batch request
+      const response = await api('/api/seo/apply-batch', {
+        method: 'POST',
         shop,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+        body: {
+          shop,
+          products: productsToApply
         }
       });
       
-      
-      
-      setProducts(data.products || []);
-      setPage(1);
-      setHasMore(data.pagination?.hasNext || false);
-      setTotalCount(data.pagination?.total || 0);
+      if (response.queued) {
+        // Close results modal
+        setShowResultsModal(false);
+        
+        // Clear selected items
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        
+        // Clear results
+        setResults({});
+        
+        // Show toast
+        setToast(`Applying SEO to ${productsToApply.length} products in background...`);
+        
+        // Start polling for status
+        startApplyPolling();
+      } else {
+        setToast(response.message || 'Failed to queue apply job');
+      }
       
     } catch (err) {
-      setToast(`Error applying AI Search Optimisation: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentProduct('');
+      setToast(`Error: ${err.message}`);
     }
   };
   
@@ -1795,6 +1819,35 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           )}
         </Box>
       </Card>
+
+      {/* Background Apply Status Indicator */}
+      {applyStatus.inProgress && (
+        <Box paddingBlockStart="400">
+          <Card>
+            <Box padding="400">
+              <InlineStack gap="300" align="start" blockAlign="center">
+                <Spinner size="small" />
+                <BlockStack gap="100">
+                  <Text variant="bodyMd" fontWeight="semibold">
+                    Applying SEO Optimization...
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    {applyStatus.message || `Processing ${applyStatus.processedProducts}/${applyStatus.totalProducts} products`}
+                  </Text>
+                  {applyStatus.totalProducts > 0 && (
+                    <Box paddingBlockStart="100">
+                      <ProgressBar 
+                        progress={(applyStatus.processedProducts / applyStatus.totalProducts) * 100} 
+                        size="small"
+                      />
+                    </Box>
+                  )}
+                </BlockStack>
+              </InlineStack>
+            </Box>
+          </Card>
+        </Box>
+      )}
 
       <Box paddingBlockStart="400">
         <Card>
