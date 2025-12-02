@@ -1860,18 +1860,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 </InlineStack>
               ) : applyStatus.status === 'completed' ? (
                 // Completed state
-                <InlineStack gap="300" align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge tone="success">Completed</Badge>
-                    <Text variant="bodyMd">
-                      Applied SEO to {applyStatus.successfulProducts} product{applyStatus.successfulProducts !== 1 ? 's' : ''}
-                      {applyStatus.failedProducts > 0 && (
-                        <Text as="span" tone="critical"> ({applyStatus.failedProducts} failed)</Text>
-                      )}
-                    </Text>
-                  </InlineStack>
+                <InlineStack gap="200" align="start" blockAlign="center">
+                  <Badge tone="success">Completed</Badge>
+                  <Text variant="bodyMd">
+                    Applied AIEO to {applyStatus.successfulProducts} product{applyStatus.successfulProducts !== 1 ? 's' : ''}
+                    {applyStatus.failedProducts > 0 && (
+                      <Text as="span" tone="critical"> ({applyStatus.failedProducts} failed)</Text>
+                    )}
+                  </Text>
                   <Text variant="bodySm" tone="subdued">
-                    {applyStatus.completedAt && (() => {
+                    · {applyStatus.completedAt && (() => {
                       const completed = new Date(applyStatus.completedAt);
                       const now = new Date();
                       const diffMs = now - completed;
