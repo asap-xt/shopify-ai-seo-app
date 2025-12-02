@@ -278,8 +278,36 @@ export default function Settings() {
         }
       }
       
-      // If failed, stop polling and show appropriate error modal
+      // If failed, check if there's a newer successful generation
       if (status.status === 'failed') {
+        // Check if schema was generated AFTER the failure (user retried with forceBasicSeo)
+        const failedAt = status.shopStatus?.failedAt ? new Date(status.shopStatus.failedAt) : null;
+        const generatedAt = status.schema?.generatedAt ? new Date(status.schema.generatedAt) : null;
+        
+        // If schema exists and was generated after the failure, treat as success
+        if (status.schema?.exists && generatedAt && failedAt && generatedAt > failedAt) {
+          // This is actually a success - a new generation completed after the failure
+          if (schemaPollingInterval) {
+            clearInterval(schemaPollingInterval);
+            setSchemaPollingInterval(null);
+          }
+          
+          if (schemaStatus.inProgress) {
+            setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
+            
+            // Uncheck the schemaData checkbox to prevent accidental re-generation
+            setSettings(prev => ({
+              ...prev,
+              features: {
+                ...prev.features,
+                schemaData: false
+              }
+            }));
+          }
+          return status;
+        }
+        
+        // It's a real failure - stop polling and show appropriate error modal
         if (schemaPollingInterval) {
           clearInterval(schemaPollingInterval);
           setSchemaPollingInterval(null);
@@ -2542,15 +2570,13 @@ export default function Settings() {
           secondaryActions={[{
             content: 'Proceed with Basic AISEO',
             onAction: async () => {
+              // Close modal first
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
               
-              // Trigger schema generation anyway (with basic AISEO products)
+              // Trigger schema generation with forceBasicSeo flag
               try {
-                setSchemaGenerating(true);
-                setSchemaComplete(false);
-                isGeneratingRef.current = true;
-                checkCountRef.current = 0;
+                setToast('Starting schema generation with basic AISEO...');
                 
                 await api(`/api/schema/generate-all?shop=${shop}`, {
                   method: 'POST',
@@ -2558,14 +2584,11 @@ export default function Settings() {
                   body: JSON.stringify({ forceBasicSeo: true })
                 });
                 
-                // Start checking progress
-                setTimeout(() => {
-                  checkGenerationProgress();
-                }, 3000);
+                // Start polling for status updates (new background queue approach)
+                startSchemaPolling();
               } catch (err) {
                 console.error('[SCHEMA-GEN] Error:', err);
                 setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
-                setSchemaGenerating(false);
               }
             }
           }]}
