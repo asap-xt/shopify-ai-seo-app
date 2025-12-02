@@ -10,10 +10,11 @@ import emailService from './emailService.js';
 class ProductDigestScheduler {
   constructor() {
     this.jobs = [];
-    // TEST MODE: 10 minutes for testing, comment out for production
+    // Test mode: DIGEST_TEST_MODE=true (default: false for production)
+    // Set DIGEST_TEST_MODE=true in staging Railway environment
     this.testMode = process.env.DIGEST_TEST_MODE === 'true';
     this.testInterval = '*/10 * * * *'; // Every 10 minutes
-    this.productionSchedule = '0 9 * * 1'; // Every Monday at 9 AM
+    this.productionSchedule = '0 9 * * 1'; // Every Monday at 9 AM UTC
   }
 
   /**
@@ -52,10 +53,9 @@ class ProductDigestScheduler {
    */
   async sendDigests() {
     try {
-      // Find all shops with active subscriptions
+      // Find all shops with valid access tokens (active installations)
       const shops = await Shop.find({
-        isActive: true,
-        accessToken: { $exists: true, $ne: null, $ne: 'jwt-pending' }
+        accessToken: { $exists: true, $ne: null, $ne: '', $ne: 'jwt-pending' }
       }).lean();
 
       console.log(`[PRODUCT-DIGEST] Found ${shops.length} active shops`);
