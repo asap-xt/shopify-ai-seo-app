@@ -1,10 +1,11 @@
 // backend/controllers/multiSeoController.js
 // Router: mounted at /api/seo
 // Route(s):
-//   POST /api/seo/generate-multi
-//   POST /api/seo/apply-multi
-//   POST /api/seo/apply-batch (background processing)
-//   GET /api/seo/apply-status
+//   POST /api/seo/generate-multi (single product, multiple languages)
+//   POST /api/seo/apply-multi (single product, multiple languages)
+//   POST /api/seo/generate-apply-batch (background Generate + Apply for multiple products)
+//   GET /api/seo/job-status (get background job status)
+//   POST /api/seo/delete-multi (delete SEO for multiple languages)
 //
 // Implements "multi-language" flow by delegating to existing single endpoints
 //   /seo/generate  and  /seo/apply
@@ -13,7 +14,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
-import seoApplyQueue from '../services/seoApplyQueue.js';
+import seoJobQueue from '../services/seoJobQueue.js';
 
 const router = Router();
 
@@ -160,10 +161,10 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
   }
 });
 
-// POST /api/seo/apply-batch
-// Background processing for batch SEO apply
-// Body: { shop, products: [{ productId, results: [{ language, seo }...], options }] }
-router.post('/apply-batch', validateRequest(), async (req, res) => {
+// POST /api/seo/generate-apply-batch
+// Background processing for combined Generate + Apply
+// Body: { shop, products: [{ productId, languages, existingLanguages }], model }
+router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
   const shop =
     req.query?.shop ||
     req.body?.shop ||
@@ -175,33 +176,83 @@ router.post('/apply-batch', validateRequest(), async (req, res) => {
 
   try {
     const shopDomain = req.shopDomain || shop;
-    const { products } = req.body || {};
+    const { products, model } = req.body || {};
     
     if (!Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ error: 'Missing products array' });
     }
 
+    if (!model) {
+      return res.status(400).json({ error: 'Missing model' });
+    }
+
     // Prepare products for queue
     const productsToProcess = products.map(p => ({
       productId: toGID(String(p.productId)),
-      results: p.results || [],
-      options: p.options || {}
+      languages: p.languages || [],
+      existingLanguages: p.existingLanguages || [],
+      model
     }));
 
-    // Create apply function that will be called for each product
-    const applyFn = async (productData) => {
+    // Generate function - calls /seo/generate for each language
+    const generateFn = async (productData) => {
+      const languagesToGenerate = productData.languages.filter(
+        lang => !productData.existingLanguages.includes(lang)
+      );
+
+      if (languagesToGenerate.length === 0) {
+        return { success: true, skipped: true, message: 'All languages already optimized' };
+      }
+
+      const results = [];
+      for (const lang of languagesToGenerate) {
+        try {
+          const url = `${APP_URL}/seo/generate?shop=${encodeURIComponent(shopDomain)}`;
+          const rsp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              shop: shopDomain, 
+              productId: productData.productId, 
+              model: productData.model, 
+              language: lang 
+            }),
+          });
+          const text = await rsp.text();
+          let json;
+          try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
+          if (!rsp.ok) {
+            results.push({ language: lang, error: json?.error || `Generate failed (${rsp.status})` });
+          } else {
+            results.push({ language: lang, seo: json.seo, quality: json.quality });
+          }
+        } catch (e) {
+          results.push({ language: lang, error: e.message || 'Generate exception' });
+        }
+      }
+
+      const successfulResults = results.filter(r => r.seo);
+      if (successfulResults.length === 0) {
+        return { success: false, error: 'All languages failed to generate' };
+      }
+
+      return { success: true, data: { results: successfulResults } };
+    };
+
+    // Apply function - calls applySEOForLanguage for each result
+    const applyFn = async (productData, generateData) => {
       const { applySEOForLanguage } = await import('./seoController.js');
       
-      for (const r of productData.results) {
+      for (const r of generateData.results) {
         if (!r || !r.seo) continue;
         
         const result = await applySEOForLanguage(
-          null, // req not needed - token resolved from DB
+          null,
           shopDomain,
           productData.productId,
           r.seo,
           r.language,
-          productData.options
+          { updateTitle: true, updateBody: true, updateSeo: true, updateBullets: true, updateFaq: true }
         );
         
         if (!result?.ok) {
@@ -211,7 +262,7 @@ router.post('/apply-batch', validateRequest(), async (req, res) => {
     };
 
     // Add job to queue
-    const queueResult = await seoApplyQueue.addJob(shopDomain, productsToProcess, applyFn);
+    const queueResult = await seoJobQueue.addJob(shopDomain, productsToProcess, generateFn, applyFn);
 
     return res.json({
       queued: queueResult.queued,
@@ -221,14 +272,14 @@ router.post('/apply-batch', validateRequest(), async (req, res) => {
     });
 
   } catch (err) {
-    console.error('POST /api/seo/apply-batch error:', err);
-    return res.status(500).json({ error: 'Failed to queue SEO apply batch' });
+    console.error('POST /api/seo/generate-apply-batch error:', err);
+    return res.status(500).json({ error: 'Failed to queue SEO job' });
   }
 });
 
-// GET /api/seo/apply-status
-// Get status of background SEO apply job
-router.get('/apply-status', validateRequest(), async (req, res) => {
+// GET /api/seo/job-status
+// Get status of background SEO job (Generate + Apply combined)
+router.get('/job-status', validateRequest(), async (req, res) => {
   const shop =
     req.query?.shop ||
     res.locals?.shopify?.session?.shop;
@@ -238,11 +289,11 @@ router.get('/apply-status', validateRequest(), async (req, res) => {
   }
 
   try {
-    const status = await seoApplyQueue.getJobStatus(shop);
+    const status = await seoJobQueue.getJobStatus(shop);
     return res.json(status);
   } catch (err) {
-    console.error('GET /api/seo/apply-status error:', err);
-    return res.status(500).json({ error: 'Failed to get apply status' });
+    console.error('GET /api/seo/job-status error:', err);
+    return res.status(500).json({ error: 'Failed to get job status' });
   }
 });
 

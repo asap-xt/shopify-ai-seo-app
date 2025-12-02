@@ -110,10 +110,11 @@ const shopSchema = new mongoose.Schema({
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null }
   },
-  // SEO Apply batch queue status
-  applyStatus: {
+  // SEO Job queue status (Generate + Apply combined)
+  seoJobStatus: {
     inProgress: { type: Boolean, default: false },
-    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    status: { type: String, default: 'idle' }, // idle, queued, generating, applying, completed, failed
+    phase: { type: String, default: null }, // 'generate' or 'apply'
     message: { type: String, default: null },
     queuedAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
@@ -125,7 +126,8 @@ const shopSchema = new mongoose.Schema({
     totalProducts: { type: Number, default: 0 },
     processedProducts: { type: Number, default: 0 },
     successfulProducts: { type: Number, default: 0 },
-    failedProducts: { type: Number, default: 0 }
+    failedProducts: { type: Number, default: 0 },
+    skippedProducts: { type: Number, default: 0 }
   },
   storeLanguages: [{
     locale: String,

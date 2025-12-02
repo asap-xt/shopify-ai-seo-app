@@ -106,8 +106,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [errors, setErrors] = useState([]);
   
   // Results state
-  const [results, setResults] = useState({});
-  const [showResultsModal, setShowResultsModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedDeleteLanguages, setSelectedDeleteLanguages] = useState([]);
@@ -126,17 +124,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
   });
   
-  // Background Apply status
-  const [applyStatus, setApplyStatus] = useState({
+  // Background SEO Job status (Generate + Apply combined)
+  const [seoJobStatus, setSeoJobStatus] = useState({
     inProgress: false,
     status: 'idle',
+    phase: null,
     message: null,
     totalProducts: 0,
     processedProducts: 0,
     successfulProducts: 0,
-    failedProducts: 0
+    failedProducts: 0,
+    skippedProducts: 0
   });
-  const [applyPollingInterval, setApplyPollingInterval] = useState(null);
+  const [seoJobPollingInterval, setSeoJobPollingInterval] = useState(null);
   
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
@@ -154,21 +154,24 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
   
-  // Fetch apply status from backend
-  const fetchApplyStatus = useCallback(async () => {
+  // Fetch SEO job status from backend
+  const fetchSeoJobStatus = useCallback(async () => {
     try {
-      const status = await api(`/api/seo/apply-status?shop=${shop}`);
-      setApplyStatus(status);
+      const status = await api(`/api/seo/job-status?shop=${shop}`);
+      setSeoJobStatus(status);
       
       // If completed or failed, stop polling and refresh products
       if (status.status === 'completed' || status.status === 'failed') {
-        if (applyPollingInterval) {
-          clearInterval(applyPollingInterval);
-          setApplyPollingInterval(null);
+        if (seoJobPollingInterval) {
+          clearInterval(seoJobPollingInterval);
+          setSeoJobPollingInterval(null);
         }
         
         if (status.status === 'completed') {
-          setToast(`Applied SEO to ${status.successfulProducts} products${status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : ''}`);
+          const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+            (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+            (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+          setToast(msg);
           
           // Refresh products list
           const params = new URLSearchParams({
@@ -188,51 +191,51 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           setHasMore(data.pagination?.hasNext || false);
           setTotalCount(data.pagination?.total || 0);
         } else if (status.status === 'failed') {
-          setToast(`Apply failed: ${status.message || 'Unknown error'}`);
+          setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
         }
       }
       
       return status;
     } catch (error) {
-      console.error('[BULK-EDIT] Failed to fetch apply status:', error);
+      console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, applyPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, seoJobPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
   
-  // Start polling for apply status
-  const startApplyPolling = useCallback(() => {
-    if (applyPollingInterval) {
-      clearInterval(applyPollingInterval);
+  // Start polling for SEO job status
+  const startSeoJobPolling = useCallback(() => {
+    if (seoJobPollingInterval) {
+      clearInterval(seoJobPollingInterval);
     }
     
-    fetchApplyStatus();
+    fetchSeoJobStatus();
     
     const interval = setInterval(() => {
-      fetchApplyStatus();
+      fetchSeoJobStatus();
     }, 5000); // Poll every 5 seconds
     
-    setApplyPollingInterval(interval);
-  }, [fetchApplyStatus, applyPollingInterval]);
+    setSeoJobPollingInterval(interval);
+  }, [fetchSeoJobStatus, seoJobPollingInterval]);
   
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (applyPollingInterval) {
-        clearInterval(applyPollingInterval);
+      if (seoJobPollingInterval) {
+        clearInterval(seoJobPollingInterval);
       }
     };
-  }, [applyPollingInterval]);
+  }, [seoJobPollingInterval]);
   
-  // Fetch apply status on mount (to restore state after navigation)
+  // Fetch SEO job status on mount (to restore state after navigation)
   useEffect(() => {
     if (shop && api) {
-      fetchApplyStatus().then(status => {
+      fetchSeoJobStatus().then(status => {
         // If there's an active job, start polling
         if (status?.inProgress) {
-          startApplyPolling();
+          startSeoJobPolling();
         }
       });
     }
-  }, [shop]); // Only run on mount, not on every fetchApplyStatus change
+  }, [shop]); // Only run on mount
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   // NOTE: This should only be used as fallback - GraphQL query is primary source
@@ -840,16 +843,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       finalModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
     }
     
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    setErrors([]);
-    setResults({});
-    
     try {
       let productsToProcess = [];
       
       if (selectAllPages) {
-        // тук URL вече има shop → не подаваме {shop}
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
@@ -860,9 +857,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const selectedCount = productsToProcess.length;
       
       if (selectedCount > productLimit) {
-        setIsProcessing(false);
-        setProgress({ current: 0, total: 0, percent: 0 });
-        setShowLanguageModal(false); // Close language modal
+        setShowLanguageModal(false);
         
         // Show upgrade modal with product limit specific message
         const nextPlan = getNextPlanForLimit(selectedCount);
@@ -882,156 +877,39 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         return;
       }
       
-      // Close language modal only after passing limit check
+      // Close language modal
       setShowLanguageModal(false);
       
-      const total = selectedCount;
-      const skippedDueToPlan = 0;
+      // Prepare batch data for background processing
+      const productsForBatch = productsToProcess.map(product => ({
+        productId: product.gid || toProductGID(product.productId || product.id),
+        languages: selectedLanguages,
+        existingLanguages: product.optimizationSummary?.optimizedLanguages || []
+      }));
       
-      setProgress({ current: 0, total, percent: 0 });
-      
-      const batchSize = 5;
-      const results = {};
-      
-      for (let i = 0; i < productsToProcess.length; i += batchSize) {
-        const batch = productsToProcess.slice(i, Math.min(i + batchSize, productsToProcess.length));
-        
-        const batchPromises = batch.map(async (product) => {
-          setCurrentProduct(product.title || product.handle || 'Product');
-          
-          try {
-            const productGid = product.gid || toProductGID(product.productId || product.id);
-            
-            const existingLanguages = product.optimizationSummary?.optimizedLanguages || [];
-            const languagesToGenerate = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
-            
-            if (languagesToGenerate.length === 0) {
-              results[product.id] = {
-                success: true,
-                skipped: true,
-                message: 'All selected languages already have AI Search Optimisation'
-              };
-              return;
-            }
-            
-            
-            const data = await api('/api/seo/generate-multi', {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                productId: productGid,
-                model: finalModel,
-                languages: languagesToGenerate,
-              }
-            });
-            
-            results[product.id] = {
-              success: true,
-              data,
-              languages: languagesToGenerate,
-            };
-          } catch (err) {
-            results[product.id] = {
-              success: false,
-              error: err.message,
-            };
-            setErrors(prev => [...prev, { product: product.title, error: err.message }]);
-          }
-        });
-        
-        await Promise.all(batchPromises);
-        
-        const current = Math.min(i + batchSize, productsToProcess.length);
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
-      }
-      
-      setResults(results);
-      setShowResultsModal(true);
-      
-      const successCount = Object.keys(results).filter(k => results[k].success && !results[k].skipped).length;
-      const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
-      
-      let toastMessage = `Generated Optimization for AI Search for ${successCount} products`;
-      if (skippedCount > 0) {
-        toastMessage += ` (${skippedCount} already optimised)`;
-      }
-      if (skippedDueToPlan > 0) {
-        toastMessage += ` (${skippedDueToPlan} skipped due to plan limit)`;
-      }
-      
-      setToast(toastMessage);
-      
-    } catch (err) {
-      setToast(`Error: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentProduct('');
-    }
-  };
-  
-  // Apply SEO results - Background processing
-  const applySEO = async () => {
-    try {
-      const successfulResults = Object.entries(results).filter(([_, r]) => r.success && !r.skipped);
-      
-      if (successfulResults.length === 0) {
-        setToast('No products to apply');
-        return;
-      }
-      
-      // Prepare batch data
-      const productsToApply = successfulResults.map(([productId, result]) => {
-        const product = products.find(p => p.id === productId);
-        const productGid = product?.gid || toProductGID(product?.productId || productId);
-        
-        return {
-          productId: productGid,
-          results: result.data.results.filter(r => r?.seo).map(r => ({
-            language: r.language,
-            seo: r.seo,
-          })),
-          options: {
-            updateTitle: true,
-            updateBody: true,
-            updateSeo: true,
-            updateBullets: true,
-            updateFaq: true,
-            updateAlt: false,
-            dryRun: false,
-          }
-        };
-      });
-      
-      // Send batch request
-      const response = await api('/api/seo/apply-batch', {
+      // Send batch request for background Generate + Apply
+      const response = await api('/api/seo/generate-apply-batch', {
         method: 'POST',
         shop,
         body: {
           shop,
-          products: productsToApply
+          products: productsForBatch,
+          model: finalModel
         }
       });
       
       if (response.queued) {
-        // Close results modal
-        setShowResultsModal(false);
-        
         // Clear selected items
         setSelectedItems([]);
         setSelectAllPages(false);
         
-        // Clear results
-        setResults({});
-        
         // Show toast
-        setToast(`Applying SEO to ${productsToApply.length} products in background...`);
+        setToast(`Optimizing ${productsForBatch.length} products in background...`);
         
         // Start polling for status
-        startApplyPolling();
+        startSeoJobPolling();
       } else {
-        setToast(response.message || 'Failed to queue apply job');
+        setToast(response.message || 'Failed to queue optimization job');
       }
       
     } catch (err) {
@@ -1405,69 +1283,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     </Modal>
   );
   
-  // Results modal
-  const resultsModal = (
-    <Modal
-      open={showResultsModal && !isProcessing}
-      title="AI Search Optimisation Results"
-      primaryAction={{
-        content: 'Apply Optimisation',
-        onAction: applySEO,
-        disabled: !Object.values(results).some(r => r.success && !r.skipped),
-      }}
-      secondaryActions={[
-        {
-          content: 'Cancel',
-          onAction: () => setShowResultsModal(false),
-        },
-      ]}
-    >
-      <Modal.Section>
-        <BlockStack gap="300">
-          <InlineStack gap="400">
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="success">
-                {Object.values(results).filter(r => r.success && !r.skipped).length}
-              </Text>
-            </Box>
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="info">
-                {Object.values(results).filter(r => r.skipped).length}
-              </Text>
-            </Box>
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="critical">
-                {Object.values(results).filter(r => !r.success).length}
-              </Text>
-            </Box>
-          </InlineStack>
-          
-          {errors.length > 0 && (
-            <>
-              <Divider />
-              <Text variant="bodyMd" fontWeight="semibold">Errors:</Text>
-              <Box maxHeight="200px" overflowY="scroll">
-                {errors.slice(0, 10).map((err, idx) => (
-                  <Text key={idx} variant="bodySm" tone="critical">
-                    {err.product}: {err.error}
-                  </Text>
-                ))}
-                {errors.length > 10 && (
-                  <Text variant="bodySm" tone="subdued">
-                    ... and {errors.length - 10} more errors
-                  </Text>
-                )}
-              </Box>
-            </>
-          )}
-        </BlockStack>
-      </Modal.Section>
-    </Modal>
-  );
-  
   // Delete language selection modal
   const deleteModal = (
     <Modal
@@ -1832,45 +1647,48 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         </Box>
       </Card>
 
-      {/* Background Apply Status Indicator */}
-      {(applyStatus.inProgress || applyStatus.status === 'completed' || applyStatus.status === 'failed') && (
+      {/* Background SEO Job Status Indicator */}
+      {(seoJobStatus.inProgress || seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed') && (
         <Box paddingBlockStart="400">
           <Card>
             <Box padding="400">
-              {applyStatus.inProgress ? (
+              {seoJobStatus.inProgress ? (
                 // In Progress state
                 <InlineStack gap="300" align="start" blockAlign="center">
                   <Spinner size="small" />
                   <BlockStack gap="100">
                     <Text variant="bodyMd" fontWeight="semibold">
-                      Applying SEO Optimization...
+                      {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
                     </Text>
                     <Text variant="bodySm" tone="subdued">
-                      {applyStatus.message || `Processing ${applyStatus.processedProducts}/${applyStatus.totalProducts} products`}
+                      {seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`}
                     </Text>
-                    {applyStatus.totalProducts > 0 && (
+                    {seoJobStatus.totalProducts > 0 && (
                       <Box paddingBlockStart="100">
                         <ProgressBar 
-                          progress={(applyStatus.processedProducts / applyStatus.totalProducts) * 100} 
+                          progress={(seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} 
                           size="small"
                         />
                       </Box>
                     )}
                   </BlockStack>
                 </InlineStack>
-              ) : applyStatus.status === 'completed' ? (
+              ) : seoJobStatus.status === 'completed' ? (
                 // Completed state
                 <InlineStack gap="200" align="start" blockAlign="center">
                   <Badge tone="success">Completed</Badge>
                   <Text variant="bodyMd">
-                    Applied AIEO to {applyStatus.successfulProducts} product{applyStatus.successfulProducts !== 1 ? 's' : ''}
-                    {applyStatus.failedProducts > 0 && (
-                      <Text as="span" tone="critical"> ({applyStatus.failedProducts} failed)</Text>
+                    Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                    {seoJobStatus.skippedProducts > 0 && (
+                      <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>
+                    )}
+                    {seoJobStatus.failedProducts > 0 && (
+                      <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>
                     )}
                   </Text>
                   <Text variant="bodySm" tone="subdued">
-                    · {applyStatus.completedAt && (() => {
-                      const completed = new Date(applyStatus.completedAt);
+                    · {seoJobStatus.completedAt && (() => {
+                      const completed = new Date(seoJobStatus.completedAt);
                       const now = new Date();
                       const diffMs = now - completed;
                       const diffMins = Math.floor(diffMs / 60000);
@@ -1886,16 +1704,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 </InlineStack>
               ) : (
                 // Failed state
-                <InlineStack gap="300" align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge tone="critical">Failed</Badge>
-                    <Text variant="bodyMd" tone="critical">
-                      {applyStatus.message || 'Apply operation failed'}
-                    </Text>
-                  </InlineStack>
-                  <Text variant="bodySm" tone="subdued">
-                    {applyStatus.successfulProducts > 0 && `${applyStatus.successfulProducts} succeeded before failure`}
+                <InlineStack gap="200" align="start" blockAlign="center">
+                  <Badge tone="critical">Failed</Badge>
+                  <Text variant="bodyMd" tone="critical">
+                    {seoJobStatus.message || 'Optimization failed'}
                   </Text>
+                  {seoJobStatus.successfulProducts > 0 && (
+                    <Text variant="bodySm" tone="subdued">
+                      · {seoJobStatus.successfulProducts} succeeded before failure
+                    </Text>
+                  )}
                 </InlineStack>
               )}
             </Box>
@@ -2146,7 +1964,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
       {progressModal}
       {languageModal}
-      {resultsModal}
       {deleteModal}
       {deleteConfirmModal}
       {AIEnhanceModal()}
