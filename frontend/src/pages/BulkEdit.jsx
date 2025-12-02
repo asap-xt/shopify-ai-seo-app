@@ -1050,21 +1050,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setToast(`Deleted Optimization for AI Search from ${successCount} products`);
       }
       
-      // Hide the "Completed" status bar after delete operation
+      // Always hide the "Completed" status bar after delete operation
       // This prevents showing stale "Applied AIEO to X products" after deletion
-      if (seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed') {
-        setSeoJobStatus({
-          inProgress: false,
-          status: 'idle',
-          phase: null,
-          message: null,
-          totalProducts: 0,
-          processedProducts: 0,
-          successfulProducts: 0,
-          failedProducts: 0,
-          skippedProducts: 0
-        });
-      }
+      setSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        phase: null,
+        message: null,
+        totalProducts: 0,
+        processedProducts: 0,
+        successfulProducts: 0,
+        failedProducts: 0,
+        skippedProducts: 0
+      });
       
       // Force refetch with delay and cache busting
       setTimeout(() => {
