@@ -155,9 +155,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
   
   // Fetch SEO job status from backend
-  const fetchSeoJobStatus = useCallback(async () => {
+  const fetchSeoJobStatus = useCallback(async (showToastOnComplete = true) => {
     try {
       const status = await api(`/api/seo/job-status?shop=${shop}`);
+      
+      // Only show toast if transitioning from inProgress to completed/failed
+      const wasInProgress = seoJobStatus.inProgress;
+      const justCompleted = wasInProgress && !status.inProgress && (status.status === 'completed' || status.status === 'failed');
+      
       setSeoJobStatus(status);
       
       // If completed or failed, stop polling and refresh products
@@ -167,11 +172,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           setSeoJobPollingInterval(null);
         }
         
-        if (status.status === 'completed') {
-          const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
-            (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
-            (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
-          setToast(msg);
+        // Only show toast once when job just completed
+        if (justCompleted && showToastOnComplete) {
+          if (status.status === 'completed') {
+            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+            setToast(msg);
+          } else if (status.status === 'failed') {
+            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
+          }
           
           // Refresh products list
           const params = new URLSearchParams({
@@ -190,8 +200,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           setPage(1);
           setHasMore(data.pagination?.hasNext || false);
           setTotalCount(data.pagination?.total || 0);
-        } else if (status.status === 'failed') {
-          setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
         }
       }
       
@@ -199,7 +207,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, seoJobPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, seoJobPollingInterval, seoJobStatus.inProgress, optimizedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
@@ -1042,7 +1050,21 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setToast(`Deleted Optimization for AI Search from ${successCount} products`);
       }
       
-      // Apply the same fix pattern as apply function
+      // Hide the "Completed" status bar after delete operation
+      // This prevents showing stale "Applied AIEO to X products" after deletion
+      if (seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed') {
+        setSeoJobStatus({
+          inProgress: false,
+          status: 'idle',
+          phase: null,
+          message: null,
+          totalProducts: 0,
+          processedProducts: 0,
+          successfulProducts: 0,
+          failedProducts: 0,
+          skippedProducts: 0
+        });
+      }
       
       // Force refetch with delay and cache busting
       setTimeout(() => {
