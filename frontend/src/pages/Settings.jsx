@@ -2661,6 +2661,11 @@ export default function Settings() {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || settings?.plan || 'starter'}
             returnTo="/settings"
+            onBuyTokens={() => {
+              // Close InsufficientTokensModal and open TokenPurchaseModal
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -2729,6 +2734,11 @@ export default function Settings() {
           minimumPlan={null}
           currentPlan={settings?.plan || 'starter'}
           returnTo="/settings"
+          onBuyTokens={() => {
+            // Close InsufficientTokensModal and open TokenPurchaseModal
+            setShowInsufficientTokensModal(false);
+            setShowTokenPurchaseModal(true);
+          }}
         />
       )}
 
