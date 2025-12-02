@@ -114,15 +114,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Toast
   const [toast, setToast] = useState('');
   
-  // AI Enhancement Modal state
-  const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
-  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
-    processing: false,
-    current: 0,
-    total: 0,
-    currentItem: '',
-    results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
+  // AI Enhancement Job status (background processing)
+  const [aiEnhanceJobStatus, setAiEnhanceJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalProducts: 0,
+    processedProducts: 0,
+    successfulProducts: 0,
+    failedProducts: 0,
+    skippedProducts: 0,
+    completedAt: null
   });
+  const aiEnhancePollingRef = useRef(null);
   
   // Background SEO Job status (Generate + Apply combined)
   const [seoJobStatus, setSeoJobStatus] = useState({
@@ -548,7 +552,81 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     setShowDeleteModal(true);
   };
 
-  // AI Enhancement handler
+  // ============================================================
+  // AI Enhancement Background Job Functions
+  // ============================================================
+  
+  // Fetch AI Enhancement job status
+  const fetchAiEnhanceJobStatus = useCallback(async () => {
+    try {
+      const status = await api(`/ai-enhance/job-status?shop=${shop}`);
+      
+      setAiEnhanceJobStatus(prevStatus => {
+        const justCompleted = prevStatus.inProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          // Stop polling
+          if (aiEnhancePollingRef.current) {
+            clearInterval(aiEnhancePollingRef.current);
+            aiEnhancePollingRef.current = null;
+          }
+          
+          // Show toast
+          if (status.status === 'completed') {
+            const msg = `AI Enhanced ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+            setToast(msg);
+          } else if (status.status === 'failed') {
+            setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          // Refresh products to update badges
+          loadProducts(1, false, Date.now());
+        }
+        
+        return status;
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[BULK-EDIT] Failed to fetch AI Enhance job status:', error);
+    }
+  }, [shop, api, loadProducts]);
+  
+  // Start polling for AI Enhancement job status
+  const startAiEnhancePolling = useCallback(() => {
+    if (aiEnhancePollingRef.current) {
+      clearInterval(aiEnhancePollingRef.current);
+    }
+    fetchAiEnhanceJobStatus();
+    aiEnhancePollingRef.current = setInterval(() => {
+      fetchAiEnhanceJobStatus();
+    }, 5000);
+  }, [fetchAiEnhanceJobStatus]);
+  
+  // Cleanup AI Enhancement polling on unmount
+  useEffect(() => {
+    return () => {
+      if (aiEnhancePollingRef.current) {
+        clearInterval(aiEnhancePollingRef.current);
+      }
+    };
+  }, []);
+  
+  // Check for in-progress AI Enhancement job on mount
+  useEffect(() => {
+    if (shop) {
+      fetchAiEnhanceJobStatus().then(status => {
+        if (status?.inProgress) {
+          startAiEnhancePolling();
+        }
+      });
+    }
+  }, [shop, fetchAiEnhanceJobStatus, startAiEnhancePolling]);
+
+  // AI Enhancement handler - now uses background queue
   const handleStartEnhancement = async () => {
     const selectedProducts = products.filter(p => selectedItems.includes(p.id));
     const selectedWithSEO = selectedProducts.filter(p =>
@@ -558,6 +636,15 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       !p.optimizationSummary?.optimizedLanguages?.length
     );
 
+    // Check if there are products with SEO to enhance
+    if (selectedWithSEO.length === 0) {
+      if (selectedWithoutSEO.length > 0) {
+        setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
+      } else {
+        setToast('Please select products with Basic SEO');
+      }
+      return;
+    }
 
     // Check product limit before processing
     const selectedCount = selectedWithSEO.length;
@@ -581,166 +668,69 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Show progress modal
-    setShowAIEnhanceModal(true);
-    setAIEnhanceProgress({
-      processing: true,
-      current: 0,
-      total: selectedWithSEO.length,
-      currentItem: '',
-      results: null
-    });
-      
-      const results = { 
-        successful: 0, 
-        failed: 0, 
-        skipped: selectedWithoutSEO.length,
-        skipReasons: selectedWithoutSEO.length > 0 ? [`${selectedWithoutSEO.length} product(s): No Basic Optimization`] : []
-      };
-      
-      for (let i = 0; i < selectedWithSEO.length; i++) {
-        const product = selectedWithSEO[i];
-        
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i,
-          currentItem: product.title
-        }));
-        
-        try {
-          const productGid = product.gid || toProductGID(product.id);
-          
-          if (!productGid) {
-            console.error('[AI-ENHANCE] Missing product GID, skipping:', product);
-            results.failed++;
-            continue;
-          }
-          
-          const enhanceData = await api('/ai-enhance/product', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              languages: product.optimizationSummary.optimizedLanguages,
-            },
-          });
-          
-          
-          // Apply the enhanced SEO
-          if (enhanceData.results && enhanceData.results.length > 0) {
-            const applyData = {
-              shop,
-              productId: product.gid || toProductGID(product.id),
-              results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
-                
-                const seoResult = {
-                  language: r.language,
-                  seo: {
-                    ...r.updatedSeo,  // Използвайте пълния SEO обект от AI enhance!
-                    bullets: r.bullets || [],  // AI-generated bullets (ensure array)
-                    faq: r.faq || []           // AI-generated FAQ (ensure array)
-                  }
-                };
-                
-                
-                return seoResult;
-              }),
-              options: { updateBullets: true, updateFaq: true }
-            };
-            
-            
-            const applyResult = await api('/api/seo/apply-multi', {
-              method: 'POST',
-              shop,
-              body: applyData
-            });
-            
-            results.successful++;
-          } else {
-            results.failed++;
-          }
-        } catch (error) {
-          // Check if it's a 403 error (plan restriction - Products require Professional+)
-          if (error.status === 403) {
-            // Stop processing
-            setAIEnhanceProgress({
-              processing: false,
-              current: 0,
-              total: 0,
-              currentItem: '',
-              results: null
-            });
-            
-            setTokenError({
-              ...error,
-              message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
-            });
-            setCurrentPlan(error.currentPlan || currentPlan);
-            
-            // Check if Plus plan with insufficient tokens (needsUpgrade=false)
-            // OR base plan needing upgrade (needsUpgrade=true)
-            if (error.needsUpgrade === false && error.requiresPurchase) {
-              // Plus plan user - just needs tokens
-              setShowInsufficientTokensModal(true);
-            } else {
-              // Base plan user - needs upgrade
-              setShowPlanUpgradeModal(true);
-            }
-            return; // Stop processing
-          }
-          
-          // Check if it's a 402 error (insufficient tokens or trial restriction)
-          if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
-            // Stop processing and show appropriate modal
-            setAIEnhanceProgress({
-              processing: false,
-              current: 0,
-              total: 0,
-              currentItem: '',
-              results: null
-            });
-            
-            setTokenError(error);
-            setCurrentPlan(error.currentPlan || plan || 'starter');
-            
-            // Show appropriate modal based on error type
-            if (error.trialRestriction && error.requiresActivation) {
-              // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
-              setShowTrialActivationModal(true);
-            } else if (error.trialRestriction) {
-              // Old trial restriction logic (fallback)
-              setShowPlanUpgradeModal(true);
-            } else {
-              // Insufficient tokens (with or without upgrade suggestion)
-              // InsufficientTokensModal handles both cases via needsUpgrade prop
-              setShowInsufficientTokensModal(true);
-            }
-            return; // Stop processing other products
-          }
-          
-          results.failed++;
+    // Prepare products for batch processing
+    const productsForBatch = selectedWithSEO.map(product => ({
+      productId: product.gid || toProductGID(product.id),
+      languages: product.optimizationSummary.optimizedLanguages,
+      title: product.title
+    }));
+
+    try {
+      const response = await api('/ai-enhance/batch', {
+        method: 'POST',
+        shop,
+        body: {
+          products: productsForBatch
         }
+      });
+
+      if (response.queued) {
+        setToast(`Enhancing ${productsForBatch.length} products in background...`);
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        startAiEnhancePolling();
+      } else {
+        setToast(response.message || 'Failed to queue AI Enhancement job');
+      }
+    } catch (error) {
+      // Handle plan/token errors
+      if (error.status === 403) {
+        setTokenError({
+          ...error,
+          message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
+        });
+        setCurrentPlan(error.currentPlan || currentPlan);
         
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i + 1
-        }));
+        if (error.needsUpgrade === false && error.requiresPurchase) {
+          setShowInsufficientTokensModal(true);
+        } else {
+          setShowPlanUpgradeModal(true);
+        }
+        return;
       }
       
-      setAIEnhanceProgress(prev => ({
-        ...prev,
-        processing: false,
-        results
-      }));
+      if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+        setTokenError(error);
+        setCurrentPlan(error.currentPlan || plan || 'starter');
+        
+        if (error.trialRestriction && error.requiresActivation) {
+          setShowTrialActivationModal(true);
+        } else if (error.trialRestriction) {
+          setShowPlanUpgradeModal(true);
+        } else {
+          setShowInsufficientTokensModal(true);
+        }
+        return;
+      }
       
-      setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
-    };
+      setToast(`Error: ${error.message || 'Failed to start AI Enhancement'}`);
+    }
+  };
 
-  // Close AI Enhancement modal
+  // Legacy: Close AI Enhancement modal (kept for compatibility but no longer used)
   const handleCloseAIEnhancement = () => {
-    // Save results BEFORE resetting state
-    const results = aiEnhanceProgress.results;
+    // No longer needed - background processing doesn't use modal
+    const results = null;
     
     setShowAIEnhanceModal(false);
     setAIEnhanceProgress({
@@ -750,95 +740,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       currentItem: '',
       results: null
     });
-    
-    // Refresh product list if any products were successfully enhanced
-    if (results && results.successful > 0) {
-      // Backend already invalidated Redis cache (invalidateShop)
-      // Use setTimeout to avoid async race condition with modal close
-      setTimeout(() => {
-        setProducts([]); // Clear current products to force re-render
-        loadProducts(1, false, Date.now()); // Cache already invalidated by backend
-      }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
-    }
   };
 
-  // AI Enhancement Modal - използва Polaris компоненти като другите модали
-  const AIEnhanceModal = () => {
-    // Progress modal
-    if (aiEnhanceProgress.processing) {
-      return (
-        <Modal
-          open={showAIEnhanceModal}
-          title="Processing AI Enhancement"
-          onClose={handleCloseAIEnhancement}
-          noScroll
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd">
-                Processing: {aiEnhanceProgress.currentItem}
-              </Text>
-              <ProgressBar progress={(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100} />
-              <Text variant="bodySm" tone="subdued">
-                {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products 
-                ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      );
-    }
-    
-    // Results modal
-    if (aiEnhanceProgress.results !== null) {
-      return (
-        <Modal
-          open={showAIEnhanceModal}
-          title="AI Enhancement Results"
-          onClose={handleCloseAIEnhancement}
-          primaryAction={{
-            content: 'Done',
-            onAction: handleCloseAIEnhancement,
-          }}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <InlineStack gap="400">
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="success">
-                    {aiEnhanceProgress.results.successful}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="critical">
-                    {aiEnhanceProgress.results.failed}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="info">
-                    {aiEnhanceProgress.results.skipped}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              {aiEnhanceProgress.results.skipReasons && aiEnhanceProgress.results.skipReasons.length > 0 && (
-                <BlockStack gap="200">
-                  <Text variant="bodyMd" fontWeight="semibold">Skipped products:</Text>
-                  {aiEnhanceProgress.results.skipReasons.map((reason, index) => (
-                    <Text key={index} variant="bodySm" tone="subdued">• {reason}</Text>
-                  ))}
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      );
-    }
-    
-    return null;
+  // Helper function to format time ago
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
   
   // Generate SEO for selected products
@@ -1745,6 +1659,68 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         </Box>
       )}
 
+      {/* Background AI Enhancement Job Status Indicator */}
+      {(aiEnhanceJobStatus.inProgress || aiEnhanceJobStatus.status === 'completed' || aiEnhanceJobStatus.status === 'failed') && (
+        <Box paddingBlockStart="400">
+          <Card>
+            <Box padding="400">
+              {aiEnhanceJobStatus.inProgress ? (
+                // In Progress state
+                <InlineStack gap="300" align="start" blockAlign="center">
+                  <Spinner size="small" />
+                  <BlockStack gap="100">
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      AI Enhancing Products...
+                    </Text>
+                    <Text variant="bodySm" tone="subdued">
+                      {aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`}
+                    </Text>
+                    {aiEnhanceJobStatus.totalProducts > 0 && (
+                      <Box paddingBlockStart="100">
+                        <ProgressBar 
+                          progress={(aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} 
+                          size="small"
+                        />
+                      </Box>
+                    )}
+                  </BlockStack>
+                </InlineStack>
+              ) : aiEnhanceJobStatus.status === 'completed' ? (
+                // Completed state
+                <InlineStack gap="200" align="start" blockAlign="center">
+                  <Badge tone="success">AI Enhanced</Badge>
+                  <Text variant="bodyMd">
+                    Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
+                    {aiEnhanceJobStatus.skippedProducts > 0 && (
+                      <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
+                    )}
+                    {aiEnhanceJobStatus.failedProducts > 0 && (
+                      <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>
+                    )}
+                  </Text>
+                  <Text variant="bodySm" tone="subdued">
+                    · {timeAgo(aiEnhanceJobStatus.completedAt)}
+                  </Text>
+                </InlineStack>
+              ) : (
+                // Failed state
+                <InlineStack gap="200" align="start" blockAlign="center">
+                  <Badge tone="critical">AI Enhancement Failed</Badge>
+                  <Text variant="bodyMd" tone="critical">
+                    {aiEnhanceJobStatus.message || 'Enhancement failed'}
+                  </Text>
+                  {aiEnhanceJobStatus.successfulProducts > 0 && (
+                    <Text variant="bodySm" tone="subdued">
+                      · {aiEnhanceJobStatus.successfulProducts} succeeded before failure
+                    </Text>
+                  )}
+                </InlineStack>
+              )}
+            </Box>
+          </Card>
+        </Box>
+      )}
+
       <Box paddingBlockStart="400">
         <Card>
           {/* Filter buttons */}
@@ -1990,7 +1966,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       {languageModal}
       {deleteModal}
       {deleteConfirmModal}
-      {AIEnhanceModal()}
       
       {/* Help Modal for first-time users */}
       <Modal

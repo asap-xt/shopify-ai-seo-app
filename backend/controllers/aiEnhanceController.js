@@ -1367,4 +1367,203 @@ Guidelines:
   }
 });
 
+// ============================================================
+// BATCH ENDPOINT FOR BACKGROUND PROCESSING
+// ============================================================
+
+import aiEnhanceQueue from '../services/aiEnhanceQueue.js';
+
+/**
+ * POST /ai-enhance/batch
+ * Add AI Enhancement job to background queue
+ * Body: { products: [{ productId, languages, title }] }
+ */
+router.post('/batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { products = [] } = req.body;
+    
+    if (!products || products.length === 0) {
+      return res.status(400).json({ error: 'No products provided' });
+    }
+    
+    // Get subscription for plan checks
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    
+    // === PLAN CHECK: Professional+ required for Products AI enhancement ===
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const productsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    
+    if (!productsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
+      return res.status(403).json({
+        error: 'AI-enhanced add-ons for Products require Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Products'
+      });
+    }
+    
+    // === PRODUCT LIMIT CHECK ===
+    const planConfig = getPlanConfig(planKey);
+    const productLimit = planConfig?.productLimit || 10;
+    
+    if (products.length > productLimit) {
+      return res.status(403).json({
+        error: `Product limit exceeded`,
+        message: `Your ${planKey} plan supports up to ${productLimit} products for AI Enhancement. You have selected ${products.length} products.`,
+        currentPlan: planKey,
+        productLimit
+      });
+    }
+    
+    // === TOKEN CHECK (estimate for all products) ===
+    const feature = 'ai-seo-product-enhanced';
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Estimate tokens for all products
+    const totalLanguages = products.reduce((sum, p) => sum + (p.languages?.length || 0), 0);
+    const tokenEstimate = estimateTokensWithMargin(feature, { languages: totalLanguages });
+    
+    // Check if plan has included tokens
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
+    const isActivated = !!subscription?.activatedAt;
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
+    // TRIAL RESTRICTION
+    if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
+      return res.status(402).json({
+        error: 'AI-enhanced product optimization is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        tokensRequired: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
+      });
+    }
+    
+    // Check token balance
+    if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan);
+      
+      return res.status(402).json({
+        error: 'Insufficient token balance',
+        requiresPurchase: true,
+        needsUpgrade,
+        currentPlan: planKey,
+        tokensRequired: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+        feature,
+        message: needsUpgrade 
+          ? 'Purchase more tokens or upgrade to Growth Extra plan'
+          : 'You need more tokens to use this feature'
+      });
+    }
+    
+    // Create enhance function that will be called for each product
+    const enhanceProduct = async (productData) => {
+      const { productId, languages, title } = productData;
+      
+      try {
+        // Call the existing /product endpoint logic internally
+        // We'll make an internal API call to reuse all the existing logic
+        const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/ai-enhance/product`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Forward auth headers
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            productId,
+            languages
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          // Check for token/plan errors
+          if (response.status === 402 || response.status === 403) {
+            const error = new Error(result.error || 'Token or plan restriction');
+            error.status = response.status;
+            error.trialRestriction = result.trialRestriction;
+            throw error;
+          }
+          return { success: false, error: result.error };
+        }
+        
+        // Check if all languages were skipped
+        if (result.summary?.successful === 0 && result.summary?.alreadyEnhanced > 0) {
+          return { 
+            skipped: true, 
+            reason: 'Already enhanced',
+            data: result 
+          };
+        }
+        
+        if (result.summary?.successful === 0 && result.summary?.noBasicSeo > 0) {
+          return { 
+            skipped: true, 
+            reason: 'No Basic SEO',
+            data: result 
+          };
+        }
+        
+        return { success: true, data: result };
+        
+      } catch (error) {
+        // Re-throw token/plan errors to stop processing
+        if (error.status === 402 || error.status === 403) {
+          throw error;
+        }
+        return { success: false, error: error.message };
+      }
+    };
+    
+    // Add job to queue
+    const jobInfo = await aiEnhanceQueue.addJob(shop, products, enhanceProduct);
+    
+    return res.json({
+      success: true,
+      message: jobInfo.queued ? 'AI Enhancement job queued' : jobInfo.message,
+      ...jobInfo
+    });
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/BATCH] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /ai-enhance/job-status
+ * Get status of background AI Enhancement job
+ */
+router.get('/job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const status = await aiEnhanceQueue.getJobStatus(shop);
+    return res.json(status);
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
