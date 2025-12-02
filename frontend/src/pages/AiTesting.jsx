@@ -20,6 +20,7 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
 import { PLAN_HIERARCHY, PLAN_HIERARCHY_LOWERCASE, getPlanIndex, isPlanAtLeast } from '../hooks/usePlanHierarchy.js';
 
@@ -45,6 +46,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
   const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
@@ -1196,6 +1198,10 @@ export default function AiTesting({ shop: shopProp }) {
         shop={shop}
         needsUpgrade={false}
         returnTo="/ai-testing"
+        onBuyTokens={() => {
+          setShowTokenModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
       />
       
       {/* Trial Activation Modal for Growth Extra/Enterprise */}
@@ -1243,14 +1249,24 @@ export default function AiTesting({ shop: shopProp }) {
             }
           }}
           onPurchaseTokens={() => {
-            // Navigate to billing page to purchase tokens (with returnTo)
-            const params = new URLSearchParams(window.location.search);
-            const host = params.get('host');
-            const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-testing')}`;
+            setShowTrialActivationModal(false);
+            setShowTokenPurchaseModal(true);
           }}
         />
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+          loadTokenBalance();
+        }}
+        shop={shop}
+        returnTo="/ai-testing"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
     </>
   );
 }

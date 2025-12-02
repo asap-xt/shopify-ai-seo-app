@@ -28,6 +28,7 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
@@ -118,6 +119,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
@@ -1711,6 +1713,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || currentPlan}
             returnTo="/ai-seo/collections"
+            onBuyTokens={() => {
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -1758,15 +1764,24 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               }
             }}
             onPurchaseTokens={() => {
-              // Navigate to billing page to purchase tokens (with returnTo)
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-seo/collections')}`;
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
           />
         </>
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/ai-seo/collections"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

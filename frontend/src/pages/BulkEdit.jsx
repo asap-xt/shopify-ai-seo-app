@@ -31,6 +31,7 @@ import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
@@ -135,6 +136,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
@@ -2103,6 +2105,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || currentPlan}
             returnTo="/ai-seo"
+            onBuyTokens={() => {
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -2151,15 +2157,24 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               }
             }}
             onPurchaseTokens={() => {
-              // Navigate to billing page to purchase tokens (with returnTo)
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-seo')}`;
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
           />
         </>
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/ai-seo"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />
