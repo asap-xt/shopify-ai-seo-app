@@ -2025,6 +2025,32 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// POST /api/schema/dismiss-error - Dismiss schema error status
+router.post('/dismiss-error', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Reset the schema status to idle
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.status': 'idle',
+          'schemaStatus.message': null,
+          'schemaStatus.lastError': null,
+          'schemaStatus.inProgress': false,
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    res.json({ success: true, message: 'Schema error dismissed' });
+  } catch (error) {
+    console.error('[SCHEMA-DISMISS] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/schema/site-faq - Get site FAQ
 router.get('/site-faq', async (req, res) => {
   try {

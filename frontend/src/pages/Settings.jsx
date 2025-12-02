@@ -2501,15 +2501,23 @@ export default function Settings() {
         <Modal
           open={true}
           title="No Optimized Products Found"
-          onClose={() => {
+          onClose={async () => {
             setShowSchemaErrorModal(false);
             setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
           }}
           primaryAction={{
             content: 'Go to Search Optimization',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
               // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
@@ -2518,9 +2526,13 @@ export default function Settings() {
           }}
           secondaryActions={[{
             content: 'Cancel',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
             }
           }]}
         >
@@ -2552,15 +2564,23 @@ export default function Settings() {
         <Modal
           open={true}
           title="AI-Enhanced Optimization Recommended"
-          onClose={() => {
+          onClose={async () => {
             setShowSchemaErrorModal(false);
             setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
           }}
           primaryAction={{
             content: 'Generate AI-Enhanced Add-ons',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
               // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
