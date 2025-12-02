@@ -180,9 +180,9 @@ export default function Billing({ shop }) {
   //   Input:  $0.10 per 1M tokens (80% of usage)
   //   Output: $0.40 per 1M tokens (20% of usage)
   //   Weighted average: $0.16 per 1M tokens
-  // Example: $10 → $3 for tokens → $3 / $0.16 per 1M = 18,750,000 tokens
+  // Example: $10 → $1.50 for tokens → $1.50 / $0.16 per 1M = 9,375,000 tokens
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (revenue split)
+    const tokenBudget = usdAmount * 0.15; // 15% goes to tokens (revenue split)
     
     // OpenRouter pricing for Gemini 2.5 Flash Lite:
     // Input: $0.10 per 1M, Output: $0.40 per 1M
