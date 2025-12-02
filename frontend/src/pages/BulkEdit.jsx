@@ -222,6 +222,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     };
   }, [applyPollingInterval]);
   
+  // Fetch apply status on mount (to restore state after navigation)
+  useEffect(() => {
+    if (shop && api) {
+      fetchApplyStatus().then(status => {
+        // If there's an active job, start polling
+        if (status?.inProgress) {
+          startApplyPolling();
+        }
+      });
+    }
+  }, [shop]); // Only run on mount, not on every fetchApplyStatus change
+  
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   // NOTE: This should only be used as fallback - GraphQL query is primary source
   useEffect(() => {
@@ -1821,29 +1833,73 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       </Card>
 
       {/* Background Apply Status Indicator */}
-      {applyStatus.inProgress && (
+      {(applyStatus.inProgress || applyStatus.status === 'completed' || applyStatus.status === 'failed') && (
         <Box paddingBlockStart="400">
           <Card>
             <Box padding="400">
-              <InlineStack gap="300" align="start" blockAlign="center">
-                <Spinner size="small" />
-                <BlockStack gap="100">
-                  <Text variant="bodyMd" fontWeight="semibold">
-                    Applying SEO Optimization...
-                  </Text>
+              {applyStatus.inProgress ? (
+                // In Progress state
+                <InlineStack gap="300" align="start" blockAlign="center">
+                  <Spinner size="small" />
+                  <BlockStack gap="100">
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      Applying SEO Optimization...
+                    </Text>
+                    <Text variant="bodySm" tone="subdued">
+                      {applyStatus.message || `Processing ${applyStatus.processedProducts}/${applyStatus.totalProducts} products`}
+                    </Text>
+                    {applyStatus.totalProducts > 0 && (
+                      <Box paddingBlockStart="100">
+                        <ProgressBar 
+                          progress={(applyStatus.processedProducts / applyStatus.totalProducts) * 100} 
+                          size="small"
+                        />
+                      </Box>
+                    )}
+                  </BlockStack>
+                </InlineStack>
+              ) : applyStatus.status === 'completed' ? (
+                // Completed state
+                <InlineStack gap="300" align="space-between" blockAlign="center">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="success">Completed</Badge>
+                    <Text variant="bodyMd">
+                      Applied SEO to {applyStatus.successfulProducts} product{applyStatus.successfulProducts !== 1 ? 's' : ''}
+                      {applyStatus.failedProducts > 0 && (
+                        <Text as="span" tone="critical"> ({applyStatus.failedProducts} failed)</Text>
+                      )}
+                    </Text>
+                  </InlineStack>
                   <Text variant="bodySm" tone="subdued">
-                    {applyStatus.message || `Processing ${applyStatus.processedProducts}/${applyStatus.totalProducts} products`}
+                    {applyStatus.completedAt && (() => {
+                      const completed = new Date(applyStatus.completedAt);
+                      const now = new Date();
+                      const diffMs = now - completed;
+                      const diffMins = Math.floor(diffMs / 60000);
+                      const diffHours = Math.floor(diffMs / 3600000);
+                      const diffDays = Math.floor(diffMs / 86400000);
+                      
+                      if (diffMins < 1) return 'Just now';
+                      if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+                      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                    })()}
                   </Text>
-                  {applyStatus.totalProducts > 0 && (
-                    <Box paddingBlockStart="100">
-                      <ProgressBar 
-                        progress={(applyStatus.processedProducts / applyStatus.totalProducts) * 100} 
-                        size="small"
-                      />
-                    </Box>
-                  )}
-                </BlockStack>
-              </InlineStack>
+                </InlineStack>
+              ) : (
+                // Failed state
+                <InlineStack gap="300" align="space-between" blockAlign="center">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone="critical">Failed</Badge>
+                    <Text variant="bodyMd" tone="critical">
+                      {applyStatus.message || 'Apply operation failed'}
+                    </Text>
+                  </InlineStack>
+                  <Text variant="bodySm" tone="subdued">
+                    {applyStatus.successfulProducts > 0 && `${applyStatus.successfulProducts} succeeded before failure`}
+                  </Text>
+                </InlineStack>
+              )}
             </Box>
           </Card>
         </Box>
