@@ -1802,7 +1802,6 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
         // Refund the full reserved amount (0 actual usage)
         await tokenBalance.finalizeReservation(reservationId, 0);
         
-        console.log(`[SCHEMA] Refunded reserved tokens due to error (reservation: ${reservationId})`);
         
         // Invalidate cache
         try {
