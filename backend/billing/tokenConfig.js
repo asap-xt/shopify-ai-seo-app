@@ -21,8 +21,8 @@ export const TOKEN_CONFIG = {
   customAllowed: true,               // User can enter custom amount
   
   // Revenue split (INTERNAL ONLY - not shown to users)
-  appRevenuePercent: 0.70,           // 70% to app
-  tokenBudgetPercent: 0.30,          // 30% for Gemini tokens
+  appRevenuePercent: 0.85,           // 85% to app
+  tokenBudgetPercent: 0.15,          // 15% for Gemini tokens
   
   // Provider (internal only)
   provider: 'gemini-2.5-flash-lite',
@@ -33,9 +33,9 @@ export const TOKEN_CONFIG = {
   rollover: true,
   
   // Calculate tokens from USD amount
-  // Example: $10 → $3 for tokens (30% budget) → $3 / $0.10 per 1M = 30M tokens
+  // Example: $10 → $1.50 for tokens (15% budget) → $1.50 / $0.10 per 1M = 15M tokens
   calculateTokens(usdAmount) {
-    const tokenBudget = usdAmount * this.tokenBudgetPercent; // 30% goes to tokens
+    const tokenBudget = usdAmount * this.tokenBudgetPercent; // 15% goes to tokens
     const tokensInMillions = tokenBudget / this.providerRatePer1M;
     const tokens = Math.floor(tokensInMillions * 1_000_000);
     return tokens;
