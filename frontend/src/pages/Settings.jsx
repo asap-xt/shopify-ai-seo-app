@@ -24,6 +24,7 @@ import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/p
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 
 // Dev-only debug logger (hidden in production builds)
@@ -79,6 +80,7 @@ export default function Settings() {
   // Insufficient Tokens Modal state
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenModalData, setTokenModalData] = useState({
     feature: '',
     tokensRequired: 0,
@@ -2704,11 +2706,9 @@ export default function Settings() {
               }
             }}
             onPurchaseTokens={() => {
-              // Redirect to billing page for token purchase
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              // Close TrialActivationModal and open TokenPurchaseModal
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
             shop={shop}
           />
@@ -2731,6 +2731,18 @@ export default function Settings() {
           returnTo="/settings"
         />
       )}
+
+      {/* Token Purchase Modal - opens directly from TrialActivationModal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/settings"
+        inTrial={true}
+      />
       
     </BlockStack>
     );
