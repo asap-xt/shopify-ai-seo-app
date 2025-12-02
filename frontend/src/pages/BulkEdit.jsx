@@ -1585,141 +1585,109 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         </Box>
       </Card>
 
-      {/* Background SEO Job Status Indicator */}
-      {(seoJobStatus.inProgress || seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed') && (
-        <Box paddingBlockStart="400">
-          <Card>
-            <Box padding="400">
-              {seoJobStatus.inProgress ? (
-                // In Progress state
-                <InlineStack gap="300" align="start" blockAlign="center">
-                  <Spinner size="small" />
-                  <BlockStack gap="100">
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
-                    </Text>
-                    <Text variant="bodySm" tone="subdued">
-                      {seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`}
-                    </Text>
-                    {seoJobStatus.totalProducts > 0 && (
-                      <Box paddingBlockStart="100">
-                        <ProgressBar 
-                          progress={(seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} 
-                          size="small"
-                        />
-                      </Box>
-                    )}
-                  </BlockStack>
-                </InlineStack>
-              ) : seoJobStatus.status === 'completed' ? (
-                // Completed state
-                <InlineStack gap="200" align="start" blockAlign="center">
-                  <Badge tone="success">Completed</Badge>
-                  <Text variant="bodyMd">
-                    Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
-                    {seoJobStatus.skippedProducts > 0 && (
-                      <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>
-                    )}
-                    {seoJobStatus.failedProducts > 0 && (
-                      <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>
-                    )}
-                  </Text>
-                  <Text variant="bodySm" tone="subdued">
-                    · {seoJobStatus.completedAt && (() => {
-                      const completed = new Date(seoJobStatus.completedAt);
-                      const now = new Date();
-                      const diffMs = now - completed;
-                      const diffMins = Math.floor(diffMs / 60000);
-                      const diffHours = Math.floor(diffMs / 3600000);
-                      const diffDays = Math.floor(diffMs / 86400000);
-                      
-                      if (diffMins < 1) return 'Just now';
-                      if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
-                      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-                      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-                    })()}
-                  </Text>
-                </InlineStack>
-              ) : (
-                // Failed state
-                <InlineStack gap="200" align="start" blockAlign="center">
-                  <Badge tone="critical">Failed</Badge>
-                  <Text variant="bodyMd" tone="critical">
-                    {seoJobStatus.message || 'Optimization failed'}
-                  </Text>
-                  {seoJobStatus.successfulProducts > 0 && (
-                    <Text variant="bodySm" tone="subdued">
-                      · {seoJobStatus.successfulProducts} succeeded before failure
-                    </Text>
+      {/* Background Job Status Indicator - Show only the most recent/important one */}
+      {/* Priority: AI Enhancement > SEO Job (AI Enhancement requires Basic SEO first) */}
+      {(() => {
+        // Determine which status to show (AI Enhancement has priority as it's the "higher" operation)
+        const hasAiEnhanceStatus = aiEnhanceJobStatus.inProgress || aiEnhanceJobStatus.status === 'completed' || aiEnhanceJobStatus.status === 'failed';
+        const hasSeoJobStatus = seoJobStatus.inProgress || seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed';
+        
+        // If AI Enhancement has any status, show it (it's the more advanced operation)
+        if (hasAiEnhanceStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {aiEnhanceJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`}
+                        </Text>
+                        {aiEnhanceJobStatus.totalProducts > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : aiEnhanceJobStatus.status === 'completed' ? (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="success">AI Enhanced</Badge>
+                      <Text variant="bodyMd">
+                        Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
+                        {aiEnhanceJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>}
+                        {aiEnhanceJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">· {timeAgo(aiEnhanceJobStatus.completedAt)}</Text>
+                    </InlineStack>
+                  ) : (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="critical">AI Enhancement Failed</Badge>
+                      <Text variant="bodyMd" tone="critical">{aiEnhanceJobStatus.message || 'Enhancement failed'}</Text>
+                      {aiEnhanceJobStatus.successfulProducts > 0 && (
+                        <Text variant="bodySm" tone="subdued">· {aiEnhanceJobStatus.successfulProducts} succeeded before failure</Text>
+                      )}
+                    </InlineStack>
                   )}
-                </InlineStack>
-              )}
+                </Box>
+              </Card>
             </Box>
-          </Card>
-        </Box>
-      )}
-
-      {/* Background AI Enhancement Job Status Indicator */}
-      {(aiEnhanceJobStatus.inProgress || aiEnhanceJobStatus.status === 'completed' || aiEnhanceJobStatus.status === 'failed') && (
-        <Box paddingBlockStart="400">
-          <Card>
-            <Box padding="400">
-              {aiEnhanceJobStatus.inProgress ? (
-                // In Progress state
-                <InlineStack gap="300" align="start" blockAlign="center">
-                  <Spinner size="small" />
-                  <BlockStack gap="100">
-                    <Text variant="bodyMd" fontWeight="semibold">
-                      AI Enhancing Products...
-                    </Text>
-                    <Text variant="bodySm" tone="subdued">
-                      {aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`}
-                    </Text>
-                    {aiEnhanceJobStatus.totalProducts > 0 && (
-                      <Box paddingBlockStart="100">
-                        <ProgressBar 
-                          progress={(aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} 
-                          size="small"
-                        />
-                      </Box>
-                    )}
-                  </BlockStack>
-                </InlineStack>
-              ) : aiEnhanceJobStatus.status === 'completed' ? (
-                // Completed state
-                <InlineStack gap="200" align="start" blockAlign="center">
-                  <Badge tone="success">AI Enhanced</Badge>
-                  <Text variant="bodyMd">
-                    Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
-                    {aiEnhanceJobStatus.skippedProducts > 0 && (
-                      <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
-                    )}
-                    {aiEnhanceJobStatus.failedProducts > 0 && (
-                      <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>
-                    )}
-                  </Text>
-                  <Text variant="bodySm" tone="subdued">
-                    · {timeAgo(aiEnhanceJobStatus.completedAt)}
-                  </Text>
-                </InlineStack>
-              ) : (
-                // Failed state
-                <InlineStack gap="200" align="start" blockAlign="center">
-                  <Badge tone="critical">AI Enhancement Failed</Badge>
-                  <Text variant="bodyMd" tone="critical">
-                    {aiEnhanceJobStatus.message || 'Enhancement failed'}
-                  </Text>
-                  {aiEnhanceJobStatus.successfulProducts > 0 && (
-                    <Text variant="bodySm" tone="subdued">
-                      · {aiEnhanceJobStatus.successfulProducts} succeeded before failure
-                    </Text>
+          );
+        }
+        
+        // Otherwise, show SEO job status if available
+        if (hasSeoJobStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {seoJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">
+                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                        </Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`}
+                        </Text>
+                        {seoJobStatus.totalProducts > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : seoJobStatus.status === 'completed' ? (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="success">Completed</Badge>
+                      <Text variant="bodyMd">
+                        Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                        {seoJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>}
+                        {seoJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">· {timeAgo(seoJobStatus.completedAt)}</Text>
+                    </InlineStack>
+                  ) : (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="critical">Failed</Badge>
+                      <Text variant="bodyMd" tone="critical">{seoJobStatus.message || 'Optimization failed'}</Text>
+                      {seoJobStatus.successfulProducts > 0 && (
+                        <Text variant="bodySm" tone="subdued">· {seoJobStatus.successfulProducts} succeeded before failure</Text>
+                      )}
+                    </InlineStack>
                   )}
-                </InlineStack>
-              )}
+                </Box>
+              </Card>
             </Box>
-          </Card>
-        </Box>
-      )}
+          );
+        }
+        
+        return null;
+      })()}
 
       <Box paddingBlockStart="400">
         <Card>
