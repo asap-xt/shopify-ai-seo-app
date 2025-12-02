@@ -159,53 +159,61 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const fetchSeoJobStatus = useCallback(async () => {
     try {
       const status = await api(`/api/seo/job-status?shop=${shop}`);
-      setSeoJobStatus(status);
       
-      // If completed or failed, stop polling and handle result
-      if ((status.status === 'completed' || status.status === 'failed') && seoJobStarted) {
-        // Stop polling
-        if (seoJobPollingInterval) {
-          clearInterval(seoJobPollingInterval);
-          setSeoJobPollingInterval(null);
+      // Check previous state to detect completion
+      setSeoJobStatus(prevStatus => {
+        const wasInProgress = prevStatus.inProgress;
+        const justCompleted = wasInProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          // Stop polling
+          if (seoJobPollingInterval) {
+            clearInterval(seoJobPollingInterval);
+            setSeoJobPollingInterval(null);
+          }
+          
+          // Reset flag
+          setSeoJobStarted(false);
+          
+          // Show toast
+          if (status.status === 'completed') {
+            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+            setToast(msg);
+          } else {
+            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          // Refresh products list to update badges
+          const params = new URLSearchParams({
+            shop,
+            page: 1,
+            limit: 50,
+            ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+            ...(searchValue && { search: searchValue }),
+            sortBy,
+            sortOrder,
+            _t: Date.now()
+          });
+          
+          api(`/api/products/list?${params}`, { shop }).then(data => {
+            setProducts(data.products || []);
+            setPage(1);
+            setHasMore(data.pagination?.hasNext || false);
+            setTotalCount(data.pagination?.total || 0);
+          });
         }
         
-        // Reset flag
-        setSeoJobStarted(false);
-        
-        // Show toast
-        if (status.status === 'completed') {
-          const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
-            (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
-            (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
-          setToast(msg);
-        } else {
-          setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
-        }
-        
-        // Refresh products list to update badges
-        const params = new URLSearchParams({
-          shop,
-          page: 1,
-          limit: 50,
-          ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-          ...(searchValue && { search: searchValue }),
-          sortBy,
-          sortOrder,
-          _t: Date.now()
-        });
-        
-        const data = await api(`/api/products/list?${params}`, { shop });
-        setProducts(data.products || []);
-        setPage(1);
-        setHasMore(data.pagination?.hasNext || false);
-        setTotalCount(data.pagination?.total || 0);
-      }
+        return status;
+      });
       
       return status;
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, seoJobPollingInterval, seoJobStarted, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, seoJobPollingInterval, optimizedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
