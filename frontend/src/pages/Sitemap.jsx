@@ -249,15 +249,22 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     try {
       const status = await api(`/api/sitemap/status?shop=${shop}`);
+      console.log('[AI-SITEMAP] Status response:', {
+        generatedAt: status.sitemap?.generatedAt,
+        isAiEnhanced: status.sitemap?.isAiEnhanced,
+        productCount: status.sitemap?.productCount
+      });
       // Check BOTH generatedAt AND isAiEnhanced flag
       // If sitemap exists but is NOT AI-enhanced, don't show as AI-generated
       if (status.sitemap?.generatedAt && status.sitemap?.isAiEnhanced === true) {
+        console.log('[AI-SITEMAP] Setting AI sitemap as GENERATED');
         setAiSitemapInfo({
           generated: true,
           generatedAt: status.sitemap.generatedAt,
           productCount: status.sitemap.productCount || 0
         });
       } else {
+        console.log('[AI-SITEMAP] Resetting AI sitemap info (not AI-enhanced)');
         // Reset AI sitemap info if not AI-enhanced
         setAiSitemapInfo(null);
       }
