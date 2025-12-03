@@ -243,6 +243,29 @@ export default function SitemapPage({ shop: shopProp }) {
     return `${days}d ago`;
   };
   
+  // Load AI Sitemap info from database
+  // CRITICAL: Only show AI-Optimized Sitemap as generated if isAiEnhanced is true
+  const loadAiSitemapInfo = useCallback(async () => {
+    if (!shop) return;
+    try {
+      const status = await api(`/api/sitemap/status?shop=${shop}`);
+      // Check BOTH generatedAt AND isAiEnhanced flag
+      // If sitemap exists but is NOT AI-enhanced, don't show as AI-generated
+      if (status.sitemap?.generatedAt && status.sitemap?.isAiEnhanced === true) {
+        setAiSitemapInfo({
+          generated: true,
+          generatedAt: status.sitemap.generatedAt,
+          productCount: status.sitemap.productCount || 0
+        });
+      } else {
+        // Reset AI sitemap info if not AI-enhanced
+        setAiSitemapInfo(null);
+      }
+    } catch (e) {
+      console.error('[SITEMAP] Failed to load AI sitemap info:', e);
+    }
+  }, [shop, api]);
+  
   // Fetch AI Sitemap status from backend
   const fetchAiSitemapStatus = useCallback(async () => {
     try {
@@ -283,7 +306,7 @@ export default function SitemapPage({ shop: shopProp }) {
     } catch (error) {
       console.error('[SITEMAP] Failed to fetch AI sitemap status:', error);
     }
-  }, [shop, api]);
+  }, [shop, api, loadAiSitemapInfo]);
   
   // Start polling for AI Sitemap status
   const startAiSitemapPolling = useCallback(() => {
@@ -295,23 +318,6 @@ export default function SitemapPage({ shop: shopProp }) {
       fetchAiSitemapStatus();
     }, 5000);
   }, [fetchAiSitemapStatus]);
-  
-  // Load AI Sitemap info from database
-  const loadAiSitemapInfo = useCallback(async () => {
-    if (!shop) return;
-    try {
-      const status = await api(`/api/sitemap/status?shop=${shop}`);
-      if (status.sitemap?.generatedAt) {
-        setAiSitemapInfo({
-          generated: true,
-          generatedAt: status.sitemap.generatedAt,
-          productCount: status.sitemap.productCount || 0
-        });
-      }
-    } catch (e) {
-      console.error('[SITEMAP] Failed to load AI sitemap info:', e);
-    }
-  }, [shop, api]);
   
   // Helper function to normalize plan names
   const normalizePlan = (planName) => {

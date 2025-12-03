@@ -1000,7 +1000,8 @@ async function handleStatus(req, res) {
         exists: !!sitemapDoc,
         generatedAt: sitemapDoc?.generatedAt || null,
         productCount: sitemapDoc?.productCount || 0,
-        size: sitemapDoc?.size || 0
+        size: sitemapDoc?.size || 0,
+        isAiEnhanced: sitemapDoc?.isAiEnhanced || false
       },
       // Detailed shop status from DB
       shopStatus: shopDoc?.sitemapStatus || null
