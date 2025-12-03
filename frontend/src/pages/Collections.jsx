@@ -403,7 +403,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   // Fetch Collection SEO job status
   const fetchCollectionSeoJobStatus = useCallback(async () => {
     try {
-      const status = await api(`/api/seo/collection-job-status?shop=${shop}&type=seo`);
+      const status = await api(`/seo/collection-job-status?shop=${shop}&type=seo`);
       
       setCollectionSeoJobStatus(prevStatus => {
         const justCompleted = prevStatus.inProgress && !status.inProgress && 
@@ -579,10 +579,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     }));
 
     try {
-      const response = await api('/ai-enhance/collection-batch', {
+      const response = await api(`/ai-enhance/collection-batch?shop=${shop}`, {
         method: 'POST',
-        shop,
         body: {
+          shop,
           collections: collectionsForBatch
         }
       });
@@ -856,10 +856,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         title: collection.title
       }));
       
-      const response = await api('/api/seo/collection-generate-apply-batch', {
+      const response = await api(`/seo/collection-generate-apply-batch?shop=${shop}`, {
         method: 'POST',
-        shop,
         body: {
+          shop,
           collections: collectionsForBatch,
           model: model || 'google/gemini-1.5-flash'
         }
