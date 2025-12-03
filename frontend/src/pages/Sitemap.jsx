@@ -768,8 +768,8 @@ export default function SitemapPage({ shop: shopProp }) {
                     </Banner>
                   )}
                   
-                  {/* AI Sitemap Completed Status */}
-                  {!aiSitemapStatus.inProgress && (aiSitemapInfo?.generated || aiSitemapStatus.status === 'completed') && (
+                  {/* AI Sitemap Completed Status - ONLY show if isAiEnhanced is true */}
+                  {!aiSitemapStatus.inProgress && aiSitemapInfo?.generated && (
                     <Box background="bg-surface-secondary" padding="400" borderRadius="200">
                       <BlockStack gap="300">
                         <InlineStack gap="200" blockAlign="center">
