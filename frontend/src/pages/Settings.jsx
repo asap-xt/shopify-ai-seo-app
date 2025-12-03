@@ -808,8 +808,14 @@ export default function Settings() {
   // Test log to check if generateRobotsTxt function exists (after definition)
 
   const toggleBot = (botKey) => {
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.bots) {
+      console.warn('[SETTINGS] toggleBot called but settings not loaded yet');
+      return;
+    }
+    
     if (!settings?.availableBots?.includes(botKey)) {
-      setToast(`Upgrade to ${requiredPlan} plan to enable ${settings.bots[botKey].name}`);
+      setToast(`Upgrade to ${requiredPlan} plan to enable ${settings.bots[botKey]?.name || botKey}`);
       return;
     }
     
@@ -828,6 +834,12 @@ export default function Settings() {
   };
 
   const toggleFeature = async (featureKey) => {
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.features) {
+      console.warn('[SETTINGS] toggleFeature called but settings not loaded yet');
+      return;
+    }
+    
     if (!isFeatureAvailable(featureKey)) {
       const feature = {
         productsJson: 'Products JSON Feed',
@@ -1244,6 +1256,19 @@ export default function Settings() {
               <Spinner size="small" />
               <Text>Loading settings...</Text>
             </InlineStack>
+          </Box>
+        </Card>
+      );
+    }
+
+    // Safety check - don't render if settings not loaded
+    if (!settings || !settings.features) {
+      return (
+        <Card>
+          <Box padding="400">
+            <Banner status="critical">
+              <Text>Failed to load settings. Please refresh the page.</Text>
+            </Banner>
           </Box>
         </Card>
       );
