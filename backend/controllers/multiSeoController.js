@@ -201,7 +201,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
       );
 
       if (languagesToGenerate.length === 0) {
-        return { success: true, skipped: true, message: 'All languages already optimized' };
+        return { success: true, skipped: true, reason: 'All languages already optimized' };
       }
 
       const results = [];
