@@ -2041,6 +2041,27 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           content: 'Close',
           onAction: () => setShowReasonsModal(false)
         }}
+        secondaryActions={[
+          {
+            content: 'Copy to Clipboard',
+            onAction: async () => {
+              const text = reasonsModalData.join('\n');
+              try {
+                await navigator.clipboard.writeText(text);
+                setToast('Copied to clipboard');
+              } catch (err) {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                setToast('Copied to clipboard');
+              }
+            }
+          }
+        ]}
       >
         <Modal.Section>
           <BlockStack gap="300">
