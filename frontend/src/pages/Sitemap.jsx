@@ -311,12 +311,59 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [shop, api]);
   
+  // Helper function to normalize plan names
+  const normalizePlan = (planName) => {
+    return (planName || 'starter').toLowerCase().replace(' ', '_');
+  };
+  
   // Generate AI-Optimized Sitemap (calls GraphQL mutation)
   const generateAiSitemap = useCallback(async () => {
     if (!shop) return;
     setAiSitemapBusy(true);
     
     try {
+      // ===== FRONTEND PLAN/TOKEN CHECKS (same as Settings.jsx) =====
+      const normalizedPlan = normalizePlan(plan?.plan);
+      const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
+      const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
+      
+      const isPlusPlan = plusPlans.includes(normalizedPlan);
+      const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
+      
+      // Check plan access
+      if (!hasUnlimitedAccess && !isPlusPlan) {
+        setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
+        setAiSitemapBusy(false);
+        return;
+      }
+      
+      // Check token balance for Plus plans
+      if (isPlusPlan) {
+        try {
+          const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
+          const currentTokenBalance = tokenData.balance || 0;
+          const hasTokens = currentTokenBalance > 0;
+          
+          if (!hasTokens) {
+            setTokenError({
+              feature: 'ai-sitemap-optimized',
+              tokensRequired: 3000,
+              tokensAvailable: currentTokenBalance,
+              tokensNeeded: 3000
+            });
+            setShowInsufficientTokensModal(true);
+            setAiSitemapBusy(false);
+            return;
+          }
+        } catch (error) {
+          console.error('[SITEMAP] Failed to fetch token balance:', error);
+          setToast('Failed to check token balance');
+          setAiSitemapBusy(false);
+          return;
+        }
+      }
+      
+      // ===== CALL GRAPHQL MUTATION =====
       const response = await api('/graphql', {
         method: 'POST',
         body: JSON.stringify({
