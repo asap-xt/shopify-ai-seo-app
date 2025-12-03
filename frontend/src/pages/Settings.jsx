@@ -64,7 +64,7 @@ export default function Settings() {
   const [showProductsJsonView, setShowProductsJsonView] = useState(false);
   const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
   const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
-  const [showAiSitemapView, setShowAiSitemapView] = useState(false);
+  // const [showAiSitemapView, setShowAiSitemapView] = useState(false); // MOVED TO Sitemap.jsx
   const [showWelcomePageView, setShowWelcomePageView] = useState(false);
   const [showSchemaDataView, setShowSchemaDataView] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -99,17 +99,17 @@ export default function Settings() {
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
-  // AI Sitemap background generation status
-  const [sitemapStatus, setSitemapStatus] = useState({
-    inProgress: false,
-    status: 'idle', // idle, queued, processing, completed, failed
-    message: null,
-    position: null,
-    estimatedTime: null,
-    generatedAt: null,
-    productCount: 0
-  });
-  const [sitemapPollingInterval, setSitemapPollingInterval] = useState(null);
+  // AI Sitemap background generation status - MOVED TO Sitemap.jsx
+  // const [sitemapStatus, setSitemapStatus] = useState({
+  //   inProgress: false,
+  //   status: 'idle',
+  //   message: null,
+  //   position: null,
+  //   estimatedTime: null,
+  //   generatedAt: null,
+  //   productCount: 0
+  // });
+  // const [sitemapPollingInterval, setSitemapPollingInterval] = useState(null);
   
   // Advanced Schema background generation status (same as sitemap)
   const [schemaStatus, setSchemaStatus] = useState({
@@ -165,84 +165,10 @@ export default function Settings() {
     }
   }, [toast]);
   
-  // Function to fetch sitemap status from backend
-  const fetchSitemapStatus = useCallback(async () => {
-    try {
-      const status = await api(`/api/sitemap/status?shop=${shop}`);
-      
-      setSitemapStatus({
-        inProgress: status.inProgress || false,
-        status: status.status || 'idle',
-        message: status.message || null,
-        position: status.queue?.position || null,
-        estimatedTime: status.queue?.estimatedTime || null,
-        generatedAt: status.sitemap?.generatedAt || null,
-        productCount: status.sitemap?.productCount || 0
-      });
-      
-      // If completed, show View button, stop polling, and uncheck the checkbox
-      if (status.status === 'completed' && !status.inProgress) {
-        setShowAiSitemapView(true);
-        if (sitemapPollingInterval) {
-          clearInterval(sitemapPollingInterval);
-          setSitemapPollingInterval(null);
-        }
-        // Show success toast only once
-        if (sitemapStatus.inProgress) {
-          setToast(`AI-Optimized Sitemap generated successfully! (${status.sitemap?.productCount || 0} products)`);
-          
-          // Uncheck the AI Sitemap checkbox to prevent accidental re-generation
-          setSettings(prev => ({
-            ...prev,
-            features: {
-              ...prev.features,
-              aiSitemap: false
-            }
-          }));
-        }
-      }
-      
-      // If failed, stop polling and show error
-      if (status.status === 'failed') {
-        if (sitemapPollingInterval) {
-          clearInterval(sitemapPollingInterval);
-          setSitemapPollingInterval(null);
-        }
-        setToast('AI-Optimized Sitemap generation failed. Please try again.');
-      }
-      
-      return status;
-    } catch (error) {
-      console.error('[SETTINGS] Failed to fetch sitemap status:', error);
-    }
-  }, [shop, api, sitemapPollingInterval, sitemapStatus.inProgress]);
-  
-  // Function to start polling for sitemap status
-  const startSitemapPolling = useCallback(() => {
-    // Clear any existing polling
-    if (sitemapPollingInterval) {
-      clearInterval(sitemapPollingInterval);
-    }
-    
-    // Poll immediately
-    fetchSitemapStatus();
-    
-    // Then poll every 10 seconds
-    const interval = setInterval(() => {
-      fetchSitemapStatus();
-    }, 10000); // 10 seconds
-    
-    setSitemapPollingInterval(interval);
-  }, [fetchSitemapStatus, sitemapPollingInterval]);
-  
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (sitemapPollingInterval) {
-        clearInterval(sitemapPollingInterval);
-      }
-    };
-  }, [sitemapPollingInterval]);
+  // AI Sitemap polling functions - MOVED TO Sitemap.jsx
+  // const fetchSitemapStatus = useCallback(async () => { ... });
+  // const startSitemapPolling = useCallback(() => { ... });
+  // useEffect cleanup for sitemapPollingInterval - removed
   
   // Function to fetch schema status from backend (same as sitemap)
   const fetchSchemaStatus = useCallback(async () => {
@@ -363,16 +289,16 @@ export default function Settings() {
     };
   }, [schemaPollingInterval]);
   
-  // Start polling on mount if sitemap is generating
-  useEffect(() => {
-    if (shop && !sitemapPollingInterval) {
-      fetchSitemapStatus().then(status => {
-        if (status?.inProgress) {
-          startSitemapPolling();
-        }
-      });
-    }
-  }, [shop]); // Only run on mount
+  // Start polling on mount if sitemap is generating - MOVED TO Sitemap.jsx
+  // useEffect(() => {
+  //   if (shop && !sitemapPollingInterval) {
+  //     fetchSitemapStatus().then(status => {
+  //       if (status?.inProgress) {
+  //         startSitemapPolling();
+  //       }
+  //     });
+  //   }
+  // }, [shop]);
   
   // Start polling on mount if schema is generating
   useEffect(() => {
@@ -385,58 +311,8 @@ export default function Settings() {
     }
   }, [shop]); // Only run on mount
   
-  // DEPRECATED: Old polling function (kept for backward compatibility)
-  const startPollingForCompletion = () => {
-    
-    // Clear any existing polling
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-    }
-    
-    let attempts = 0;
-    const maxAttempts = 30; // Poll for up to 5 minutes (30 * 10 seconds)
-    
-    const interval = setInterval(async () => {
-      attempts++;
-      
-      try {
-        // Check sitemap info to see if it was recently updated
-        const info = await api(`/api/sitemap/info?shop=${shop}`);
-        
-        if (info && info.generatedAt) {
-          const generatedTime = new Date(info.generatedAt).getTime();
-          const now = Date.now();
-          const timeDiff = now - generatedTime;
-          
-          // If sitemap was generated within the last 2 minutes, consider it complete
-          if (timeDiff < 120000) { // 2 minutes
-            clearInterval(interval);
-            setPollingInterval(null);
-            
-              // Show completion toast
-              setToast('AI-Optimized Sitemap regeneration completed successfully!');
-              
-              // Show View button only for AI Sitemap
-              setShowAiSitemapView(true);
-              return;
-          }
-        }
-        
-        // If we've reached max attempts, stop polling
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-          setPollingInterval(null);
-          setToast('Background regeneration is taking longer than expected. Please check the sitemap manually.');
-        }
-        
-      } catch (error) {
-        console.error('[SETTINGS] Polling error:', error);
-        // Continue polling on error
-      }
-    }, 10000); // Poll every 10 seconds
-    
-    setPollingInterval(interval);
-  };
+  // DEPRECATED: Old polling function - MOVED TO Sitemap.jsx
+  // const startPollingForCompletion = () => { ... };
   
   // ===== 4. API MEMO (ÐŸÐ Ð•Ð”Ð˜ Ð´Ð° ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð° Ð² useCallback) =====
   
@@ -888,10 +764,10 @@ export default function Settings() {
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
       
-      // Show AI Sitemap View button if AI sitemap exists
-      if (data.hasAiSitemap) {
-        setShowAiSitemapView(true);
-      }
+      // Show AI Sitemap View button - MOVED TO Sitemap.jsx
+      // if (data.hasAiSitemap) {
+      //   setShowAiSitemapView(true);
+      // }
       
       // Generate robots.txt preview
       generateRobotsTxt(data);
@@ -1023,124 +899,25 @@ export default function Settings() {
       setOriginalSettings(settings);
       generateRobotsTxt();
       
-      const normalizedPlan = normalizePlan(settings?.plan);
-      const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
-      const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
+      // AI-Optimized Sitemap logic moved to Store Optimization → Sitemap page
+      // const normalizedPlan = normalizePlan(settings?.plan);
+      // const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
+      // const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
+      // const isPlusPlan = plusPlans.includes(normalizedPlan);
+      // const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
+      // if (settings.features?.aiSitemap) { ... } - REMOVED
       
-      const isPlusPlan = plusPlans.includes(normalizedPlan);
-      const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
+      // Show success toast
+      setToast('');
+      setTimeout(() => {
+        const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+        if (hasEnabledBots) {
+          setToast('Settings saved! Scroll down to configure robots.txt (REQUIRED for AI Discovery).');
+        } else {
+          setToast('Settings saved successfully');
+        }
+      }, 100);
       
-      if (settings.features?.aiSitemap) {
-        if (!hasUnlimitedAccess && !isPlusPlan) {
-          setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
-          return;
-        }
-        
-        if (isPlusPlan) {
-          try {
-            const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
-            const currentTokenBalance = tokenData.balance || 0;
-            const hasTokens = currentTokenBalance > 0;
-            
-            if (!hasTokens) {
-              setTokenModalData({
-                feature: 'ai-sitemap-optimized',
-                tokensRequired: 3000,
-                tokensAvailable: currentTokenBalance,
-                tokensNeeded: 3000
-              });
-              setShowInsufficientTokensModal(true);
-              return;
-            }
-          } catch (error) {
-            console.error('[SETTINGS] Failed to fetch token balance:', error);
-            setToast('Failed to check token balance');
-            return;
-          }
-        }
-        
-        // Hide View button while regenerating
-        setShowAiSitemapView(false);
-        
-        try {
-          const REGENERATE_SITEMAP_MUTATION = `
-            mutation RegenerateSitemap($shop: String!) {
-              regenerateSitemap(shop: $shop) {
-                success
-                message
-                shop
-              }
-            }
-          `;
-          
-          const result = await api('/graphql', {
-            method: 'POST',
-            body: JSON.stringify({
-              query: REGENERATE_SITEMAP_MUTATION,
-              variables: { shop }
-            }),
-            shop: shop
-          });
-          
-          if (result?.data?.regenerateSitemap?.success) {
-            setToast('');
-            setTimeout(() => {
-              setToast('Settings saved! AI-Optimized Sitemap generation started in background. You can navigate away - it will continue processing.');
-              // Start polling for status updates
-              startSitemapPolling();
-            }, 100);
-          } else {
-            // Check if error message indicates trial restriction
-            const errorMessage = result?.data?.regenerateSitemap?.message || '';
-            if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
-              setSaving(false);
-              
-              // Show Trial Activation Modal instead of redirect
-              setTokenError({
-                trialRestriction: true,
-                requiresActivation: true,
-                feature: 'ai-sitemap-optimized',
-                currentPlan: settings?.plan || 'enterprise'
-              });
-              setShowTrialActivationModal(true);
-              return;
-            }
-            
-            setToast('');
-            setTimeout(() => {
-              setToast('Settings saved, but sitemap regeneration failed');
-            }, 100);
-          }
-        } catch (error) {
-          console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
-          setSaving(false);
-          
-          // Check if error is trial restriction (402 with trialRestriction flag)
-          if (error.status === 402 && error.trialRestriction && error.requiresActivation) {
-            // Show Trial Activation Modal instead of redirect
-            setTokenError({
-              trialRestriction: true,
-              requiresActivation: true,
-              feature: 'ai-sitemap-optimized',
-              currentPlan: settings?.plan || 'enterprise'
-            });
-            setShowTrialActivationModal(true);
-            return;
-          }
-          
-          setToast('Settings saved, but sitemap regeneration failed');
-        }
-      } else {
-        setToast('');
-        setTimeout(() => {
-          const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-          if (hasEnabledBots) {
-            setToast('Settings saved! Scroll down to configure robots.txt (REQUIRED for AI Discovery).');
-          } else {
-            setToast('Settings saved successfully');
-          }
-        }, 100);
-      }
     } catch (error) {
       console.error('Failed to save settings:', error);
       
@@ -1741,12 +1518,13 @@ export default function Settings() {
                   description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
                 },
-                {
-                  key: 'aiSitemap',
-                  name: 'AI-Optimized Sitemap',
-                  description: 'Enhanced sitemap with AI hints',
-                  requiredPlan: 'Growth Extra'
-                },
+                // AI-Optimized Sitemap moved to Store Optimization → Sitemap page
+                // {
+                //   key: 'aiSitemap',
+                //   name: 'AI-Optimized Sitemap',
+                //   description: 'Enhanced sitemap with AI hints',
+                //   requiredPlan: 'Growth Extra'
+                // },
                 {
                   key: 'schemaData',
                   name: 'Advanced Schema Data',
@@ -1777,15 +1555,15 @@ export default function Settings() {
                             />
                           </Box>
                           
-                          {/* AI Sitemap View button */}
-                          {feature.key === 'aiSitemap' && showAiSitemapView && !sitemapStatus.inProgress && (
+                          {/* AI Sitemap View button - MOVED TO Sitemap.jsx */}
+                          {/* {feature.key === 'aiSitemap' && showAiSitemapView && !sitemapStatus.inProgress && (
                             <Button
                               size="slim"
                               onClick={() => viewJson(feature.key, feature.name)}
                             >
                               View
                             </Button>
-                          )}
+                          )} */}
                           
                           {/* Products JSON View button */}
                           {feature.key === 'productsJson' && showProductsJsonView && (
