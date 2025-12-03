@@ -357,14 +357,23 @@ export default function SitemapPage({ shop: shopProp }) {
         try {
           const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
           const currentTokenBalance = tokenData.balance || 0;
-          const hasTokens = currentTokenBalance > 0;
           
-          if (!hasTokens) {
+          // Calculate tokens dynamically based on product count
+          // Formula: base (5000) + perProduct (20) × productCount, with 1.5× safety margin
+          const productCount = info?.productCount || 0;
+          const baseTokens = 5000;
+          const perProductTokens = 20;
+          const estimatedTokens = baseTokens + (perProductTokens * productCount);
+          const tokensWithMargin = Math.ceil(estimatedTokens * 1.5);
+          
+          const hasEnoughTokens = currentTokenBalance >= tokensWithMargin;
+          
+          if (!hasEnoughTokens) {
             setTokenError({
               feature: 'ai-sitemap-optimized',
-              tokensRequired: 3000,
+              tokensRequired: tokensWithMargin,
               tokensAvailable: currentTokenBalance,
-              tokensNeeded: 3000
+              tokensNeeded: Math.max(0, tokensWithMargin - currentTokenBalance)
             });
             setShowInsufficientTokensModal(true);
             setAiSitemapBusy(false);
