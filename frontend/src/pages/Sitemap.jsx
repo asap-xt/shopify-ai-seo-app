@@ -571,290 +571,173 @@ export default function SitemapPage({ shop: shopProp }) {
     <Card>
       <Box padding="400">
         <BlockStack gap="400">
-          {/* Plan Info Banner (restored) */}
+          {/* Plan Info Banner - compact */}
           <Banner tone="info">
-            <p>
-              Your {plan?.plan || 'Starter'} plan includes up to{' '}
-              <strong>
-                {plan?.product_limit?.toLocaleString() || '70'} products in up to {plan?.language_limit || 1} language{(plan?.language_limit || 1) > 1 ? 's' : ''}
-              </strong>
-              .
-              {info?.productCount && plan?.product_limit &&
-                (info.productCount > plan.product_limit) && (
-                  <> You have {info.productCount} products, so only the first{' '}
-                    {plan.product_limit.toLocaleString()}{' '}
-                    will be included in the sitemap.</>
-                )}
-            </p>
+            Your <strong>{plan?.plan || 'Starter'}</strong> plan: up to <strong>{plan?.product_limit?.toLocaleString() || '70'} products</strong> in {plan?.language_limit || 1} language{(plan?.language_limit || 1) > 1 ? 's' : ''}.
+            {info?.productCount && plan?.product_limit && (info.productCount > plan.product_limit) && (
+              <> (You have {info.productCount}, only first {plan.product_limit.toLocaleString()} included)</>
+            )}
           </Banner>
 
-          {/* PHASE 4: Queue Status Banner */}
-          {(polling || queueStatus) && (
-            <Banner tone={queueStatus?.status === 'processing' ? 'info' : queueStatus?.status === 'failed' ? 'critical' : 'success'}>
-              <BlockStack gap="200">
-                <InlineStack gap="200" blockAlign="center">
-                  {polling && <Spinner size="small" />}
-                  <Text variant="bodyMd" fontWeight="medium">
-                    {queueStatus?.message || 'Processing...'}
-                  </Text>
-                </InlineStack>
-                
-                {queueStatus?.position > 0 && (
-                  <Text variant="bodySm" tone="subdued">
-                    Position in queue: {queueStatus.position} | Estimated time: ~{queueStatus.estimatedTime}s
-                  </Text>
-                )}
-                
-                {queueStatus?.queueLength > 0 && (
-                  <Text variant="bodySm" tone="subdued">
-                    Queue length: {queueStatus.queueLength} job(s)
-                  </Text>
-                )}
-              </BlockStack>
+          {/* Queue Status Banner - only when processing */}
+          {(polling || queueStatus || aiSitemapStatus.inProgress) && (
+            <Banner tone="info">
+              <InlineStack gap="200" blockAlign="center">
+                <Spinner size="small" />
+                <Text variant="bodyMd">
+                  {aiSitemapStatus.inProgress 
+                    ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
+                    : queueStatus?.message || 'Generating sitemap...'}
+                  {(queueStatus?.position > 0 || aiSitemapStatus.position > 0) && 
+                    ` (Queue: ${queueStatus?.position || aiSitemapStatus.position})`}
+                </Text>
+              </InlineStack>
             </Banner>
           )}
 
-          <InlineStack align="space-between" blockAlign="center">
-            <Box>
-              <Text variant="headingMd" as="h3">Sitemap Generator</Text>
-              <Text variant="bodySm" tone="subdued">
-                Generate structured sitemap for AI models to discover and index your products
-              </Text>
-            </Box>
-            
-            <Button
-              primary
-              onClick={generate}
-              loading={busy}
-              disabled={busy}
-            >
-              {busy ? 'Generating...' : 'Generate Sitemap'}
-            </Button>
-          </InlineStack>
-
-          {info && (
-            <Box background="bg-surface-secondary" padding="400" borderRadius="200">
-              <BlockStack gap="300">
-                <InlineStack gap="200" blockAlign="center">
-                  {info.generated ? (
-                    <>
-                      <Icon source={CheckIcon} tone="success" />
-                      <Text variant="bodyMd" fontWeight="semibold" tone="success">
-                        Sitemap Active
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Icon source={ClockIcon} />
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        No Sitemap Found
-                      </Text>
-                    </>
-                  )}
-                </InlineStack>
-
-                {info.generated && (
-                  <BlockStack gap="400">
-                    <Box>
-                      <BlockStack gap="200">
-                        <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
-                          <InlineStack align="space-between">
-                            <Text variant="bodyMd" color="subdued">Products included</Text>
-                            <Text variant="bodyMd" fontWeight="semibold">{info.lastProductCount || 0} URLs</Text>
-                          </InlineStack>
-                        </Box>
-                        <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
-                          <InlineStack align="space-between">
-                            <Text variant="bodyMd" color="subdued">File size</Text>
-                            <Text variant="bodyMd" fontWeight="semibold">{info.size ? `${(info.size / 1024).toFixed(2)} KB` : 'Unknown'}</Text>
-                          </InlineStack>
-                        </Box>
-                        <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
-                          <InlineStack align="space-between">
-                            <Text variant="bodyMd" color="subdued">Last updated</Text>
-                            <Text variant="bodyMd" fontWeight="semibold">{info.generatedAt ? new Date(info.generatedAt).toLocaleString() : 'Unknown'}</Text>
-                          </InlineStack>
-                        </Box>
-                      </BlockStack>
-                    </Box>
-
-                    <Box>
-                      <Button
-                        fullWidth
-                        onClick={viewSitemap}
-                      >
-                        View Sitemap
-                      </Button>
-                    </Box>
-                  </BlockStack>
+          {/* ===== BASIC SITEMAP ROW ===== */}
+          <Box 
+            background="bg-surface-secondary" 
+            padding="300" 
+            borderRadius="200"
+            borderWidth="025"
+            borderColor={info?.generated ? "border-success" : "border"}
+          >
+            <InlineStack align="space-between" blockAlign="center" gap="400">
+              <InlineStack gap="300" blockAlign="center">
+                {info?.generated ? (
+                  <Icon source={CheckIcon} tone="success" />
+                ) : (
+                  <Icon source={ClockIcon} tone="subdued" />
                 )}
-              </BlockStack>
-            </Box>
+                <BlockStack gap="050">
+                  <Text variant="bodyMd" fontWeight="semibold">
+                    Basic Sitemap
+                  </Text>
+                  {info?.generated ? (
+                    <Text variant="bodySm" tone="subdued">
+                      {info.lastProductCount || 0} products · {timeAgo(info.generatedAt)}
+                    </Text>
+                  ) : (
+                    <Text variant="bodySm" tone="subdued">Not generated yet</Text>
+                  )}
+                </BlockStack>
+              </InlineStack>
+              
+              <Button
+                onClick={generate}
+                loading={busy}
+                disabled={busy}
+                size="slim"
+              >
+                {info?.generated ? 'Regenerate' : 'Generate'}
+              </Button>
+            </InlineStack>
+          </Box>
+
+          {/* ===== AI-OPTIMIZED SITEMAP ROW ===== */}
+          <Box 
+            background="bg-surface-secondary" 
+            padding="300" 
+            borderRadius="200"
+            borderWidth="025"
+            borderColor={aiSitemapInfo?.generated ? "border-success" : "border"}
+          >
+            <BlockStack gap="200">
+              <InlineStack align="space-between" blockAlign="center" gap="400">
+                <InlineStack gap="300" blockAlign="center">
+                  {aiSitemapInfo?.generated ? (
+                    <Icon source={CheckIcon} tone="success" />
+                  ) : info?.generated ? (
+                    <Icon source={ClockIcon} tone="subdued" />
+                  ) : (
+                    <Icon source={LockIcon} tone="subdued" />
+                  )}
+                  <BlockStack gap="050">
+                    <InlineStack gap="200" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        AI-Optimized Sitemap
+                      </Text>
+                      <Badge tone="info" size="small">Premium</Badge>
+                    </InlineStack>
+                    {aiSitemapInfo?.generated ? (
+                      <Text variant="bodySm" tone="subdued">
+                        {aiSitemapInfo.productCount || 0} products · {timeAgo(aiSitemapInfo.generatedAt)}
+                      </Text>
+                    ) : info?.generated ? (
+                      <Text variant="bodySm" tone="subdued">
+                        Adds AI descriptions & enhanced metadata
+                      </Text>
+                    ) : (
+                      <Text variant="bodySm" tone="subdued">Generate basic sitemap first</Text>
+                    )}
+                  </BlockStack>
+                </InlineStack>
+                
+                <Button
+                  primary
+                  onClick={generateAiSitemap}
+                  loading={aiSitemapBusy || aiSitemapStatus.inProgress}
+                  disabled={!info?.generated || aiSitemapBusy || aiSitemapStatus.inProgress}
+                  size="slim"
+                >
+                  {aiSitemapInfo?.generated ? 'Regenerate' : 'Generate'}
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Box>
+
+          {/* ===== VIEW SITEMAP BUTTON - One button shows best available ===== */}
+          {(info?.generated || aiSitemapInfo?.generated) && (
+            <Button
+              fullWidth
+              onClick={aiSitemapInfo?.generated ? viewAiSitemap : viewSitemap}
+              icon={ExternalIcon}
+            >
+              View {aiSitemapInfo?.generated ? 'AI-Optimized' : 'Basic'} Sitemap
+            </Button>
           )}
 
-          <Box paddingBlockStart="400">
-            <Text variant="headingMd" as="h4">What's included:</Text>
-            <Box paddingBlockStart="200">
-              <BlockStack gap="200">
-                <InlineStack gap="200" blockAlign="start">
-                  <Box minWidth="24px">
-                    <Icon source={CheckIcon} tone="positive" />
-                  </Box>
-                  <Text>All active products with structured URLs for AI parsing</Text>
-                </InlineStack>
-                <InlineStack gap="200" blockAlign="start">
-                  <Box minWidth="24px">
-                    <Icon source={CheckIcon} tone="positive" />
-                  </Box>
-                  <Text>Priority rankings to help AI models understand product importance</Text>
-                </InlineStack>
-                <InlineStack gap="200" blockAlign="start">
-                  <Box minWidth="24px">
-                    <Icon source={CheckIcon} tone="positive" />
-                  </Box>
-                  <Text>Multi-language URLs for international AI search coverage</Text>
-                </InlineStack>
-                <InlineStack gap="200" blockAlign="start">
-                  <Box minWidth="24px">
-                    <Icon source={CheckIcon} tone="positive" />
-                  </Box>
-                  <Text>Standard XML format that AI crawlers understand</Text>
-                </InlineStack>
-              </BlockStack>
-            </Box>
-          </Box>
-
-          <Box paddingBlockStart="200">
-            <Text variant="headingMd" as="h4">How it helps AI models:</Text>
-            <Box paddingBlockStart="200">
-              <BlockStack gap="200">
-                <Text>1. Click "Generate Sitemap" to create a structured map of your products</Text>
-                <Text>2. The sitemap is automatically saved and available to AI crawlers</Text>
-                <Text>3. AI models can discover and understand your product catalog structure</Text>
-                <Text>4. Regenerate when you add new products to keep AI models updated</Text>
-              </BlockStack>
-            </Box>
-          </Box>
+          {/* ===== WHAT'S INCLUDED SECTION ===== */}
+          <Divider />
           
-          {/* ===== AI-OPTIMIZED SITEMAP SECTION ===== */}
-          {/* Only show if basic sitemap is generated */}
-          {info?.generated && (
-            <>
-              <Divider />
+          <Box>
+            <BlockStack gap="300">
+              {/* Basic Sitemap Features */}
+              <Box>
+                <Text variant="headingSm" as="h4">Basic Sitemap includes:</Text>
+                <Box paddingBlockStart="100">
+                  <Text variant="bodySm" tone="subdued">
+                    ✓ All active products with structured URLs · Priority rankings · Multi-language URLs · Standard XML format
+                  </Text>
+                </Box>
+              </Box>
               
-              <Box paddingBlockStart="200">
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Box>
-                      <InlineStack gap="200" blockAlign="center">
-                        <Text variant="headingMd" as="h3">AI-Optimized Sitemap</Text>
-                        <Badge tone="info">Premium</Badge>
-                      </InlineStack>
-                      <Text variant="bodySm" tone="subdued">
-                        Enhance your sitemap with AI-generated descriptions for better AI discovery
-                      </Text>
-                    </Box>
-                    
-                    <Button
-                      primary
-                      onClick={generateAiSitemap}
-                      loading={aiSitemapBusy}
-                      disabled={aiSitemapBusy || aiSitemapStatus.inProgress}
-                    >
-                      {aiSitemapBusy || aiSitemapStatus.inProgress ? 'Generating...' : 'Generate AI-Optimized'}
-                    </Button>
+              {/* AI-Optimized Features - show as value proposition */}
+              <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                <BlockStack gap="200">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text variant="headingSm" as="h4">Why AI-Optimized?</Text>
+                    <Badge tone="info" size="small">Premium</Badge>
                   </InlineStack>
-                  
-                  {/* AI Sitemap Status Indicator */}
-                  {aiSitemapStatus.inProgress && (
-                    <Banner tone="info">
-                      <InlineStack gap="300" blockAlign="center">
-                        <Spinner size="small" />
-                        <BlockStack gap="100">
-                          <Text variant="bodyMd" fontWeight="semibold">
-                            Generating AI-Optimized Sitemap...
-                          </Text>
-                          <Text variant="bodySm" tone="subdued">
-                            {aiSitemapStatus.message || 'Processing in background...'}
-                          </Text>
-                          {aiSitemapStatus.position > 0 && (
-                            <Text variant="bodySm" tone="subdued">
-                              Queue position: {aiSitemapStatus.position} · Est. {Math.ceil((aiSitemapStatus.estimatedTime || 60) / 60)} min
-                            </Text>
-                          )}
-                        </BlockStack>
-                      </InlineStack>
-                    </Banner>
-                  )}
-                  
-                  {/* AI Sitemap Completed Status - ONLY show if isAiEnhanced is true */}
-                  {!aiSitemapStatus.inProgress && aiSitemapInfo?.generated && (
-                    <Box background="bg-surface-secondary" padding="400" borderRadius="200">
-                      <BlockStack gap="300">
-                        <InlineStack gap="200" blockAlign="center">
-                          <Icon source={CheckIcon} tone="success" />
-                          <Text variant="bodyMd" fontWeight="semibold" tone="success">
-                            AI-Optimized Sitemap Active
-                          </Text>
-                          <Badge tone="success">Generated</Badge>
-                        </InlineStack>
-                        
-                        <BlockStack gap="200">
-                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
-                            <InlineStack align="space-between">
-                              <Text variant="bodyMd" color="subdued">Products included</Text>
-                              <Text variant="bodyMd" fontWeight="semibold">
-                                {aiSitemapInfo?.productCount || aiSitemapStatus.productCount || 0} products
-                              </Text>
-                            </InlineStack>
-                          </Box>
-                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
-                            <InlineStack align="space-between">
-                              <Text variant="bodyMd" color="subdued">Last generated</Text>
-                              <Text variant="bodyMd" fontWeight="semibold">
-                                {timeAgo(aiSitemapInfo?.generatedAt || aiSitemapStatus.generatedAt)}
-                              </Text>
-                            </InlineStack>
-                          </Box>
-                        </BlockStack>
-                        
-                        <Button fullWidth onClick={viewAiSitemap}>
-                          View AI-Optimized Sitemap
-                        </Button>
-                      </BlockStack>
-                    </Box>
-                  )}
-                  
-                  {/* What's included in AI-Optimized Sitemap */}
-                  <Box paddingBlockStart="200">
-                    <Text variant="headingSm" as="h4">What AI-Optimization adds:</Text>
-                    <Box paddingBlockStart="200">
-                      <BlockStack gap="200">
-                        <InlineStack gap="200" blockAlign="start">
-                          <Box minWidth="24px">
-                            <Icon source={CheckIcon} tone="positive" />
-                          </Box>
-                          <Text>AI-generated product descriptions optimized for AI crawlers</Text>
-                        </InlineStack>
-                        <InlineStack gap="200" blockAlign="start">
-                          <Box minWidth="24px">
-                            <Icon source={CheckIcon} tone="positive" />
-                          </Box>
-                          <Text>Enhanced metadata for better AI understanding</Text>
-                        </InlineStack>
-                        <InlineStack gap="200" blockAlign="start">
-                          <Box minWidth="24px">
-                            <Icon source={CheckIcon} tone="positive" />
-                          </Box>
-                          <Text>Structured data annotations for AI parsing</Text>
-                        </InlineStack>
-                      </BlockStack>
-                    </Box>
-                  </Box>
+                  <BlockStack gap="100">
+                    <InlineStack gap="200" blockAlign="start">
+                      <Text variant="bodySm">🤖</Text>
+                      <Text variant="bodySm"><strong>AI-generated descriptions</strong> — helps ChatGPT, Perplexity, and other AI models better understand your products</Text>
+                    </InlineStack>
+                    <InlineStack gap="200" blockAlign="start">
+                      <Text variant="bodySm">📊</Text>
+                      <Text variant="bodySm"><strong>Enhanced metadata</strong> — category, price range, and key features formatted for AI consumption</Text>
+                    </InlineStack>
+                    <InlineStack gap="200" blockAlign="start">
+                      <Text variant="bodySm">🎯</Text>
+                      <Text variant="bodySm"><strong>Structured annotations</strong> — special AI-readable tags that increase visibility in AI search results</Text>
+                    </InlineStack>
+                  </BlockStack>
                 </BlockStack>
               </Box>
-            </>
-          )}
+            </BlockStack>
+          </Box>
         </BlockStack>
       </Box>
       
