@@ -870,9 +870,12 @@ export default function Settings() {
             storeMetadata: 'ai-store-metadata'
           };
           
-          // Use dynamic token estimation
+          // Use dynamic token estimation with actual product count
           const featureId = featureMapping[featureKey] || featureKey;
-          const tokenEstimate = estimateTokens(featureId, { productCount: 0 });
+          const productCount = settings?.productCount || 0;
+          const tokenEstimate = estimateTokens(featureId, { productCount });
+          
+          console.log('[SETTINGS] Token estimate for', featureId, ':', { productCount, ...tokenEstimate });
           
           setTokenModalData({
             feature: featureId,
@@ -1102,9 +1105,12 @@ export default function Settings() {
           storeMetadata: 'ai-store-metadata'
         };
         
-        // Use dynamic token estimation
+        // Use dynamic token estimation with actual product count
         const featureId = featureMapping[featureKey] || featureKey;
-        const tokenEstimate = estimateTokens(featureId, { productCount: 0 });
+        const productCount = settings?.productCount || 0;
+        const tokenEstimate = estimateTokens(featureId, { productCount });
+        
+        console.log('[SETTINGS] Token estimate for trial check', featureId, ':', { productCount, ...tokenEstimate });
         
         setTokenModalData({
           feature: featureId,

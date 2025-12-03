@@ -88,8 +88,8 @@ export const TOKEN_COSTS = {
   },
   
   'ai-schema-advanced': {
-    base: 3000,           // Site FAQ + overhead
-    perProduct: 100,      // ~88 tokens for ratings (default), more if reviews/descriptions enabled
+    base: 5000,           // Site FAQ + Organization + WebSite schemas
+    perProduct: 1500,     // ~19 schemas per product × ~80 tokens = ~1500 tokens/product
     description: 'Advanced schema data generation'
   },
   

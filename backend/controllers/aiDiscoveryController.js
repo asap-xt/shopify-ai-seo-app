@@ -95,6 +95,13 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
     const existingSchema = await AdvancedSchema.findOne({ shop }).select('schemas generatedAt').lean();
     const hasAdvancedSchema = existingSchema && existingSchema.schemas && existingSchema.schemas.length > 0;
+    
+    // Get optimized products count for token estimation
+    const { default: Product } = await import('../db/Product.js');
+    const optimizedProductCount = await Product.countDocuments({
+      shop,
+      'seoStatus.optimized': true
+    });
 
     const mergedFeatures = isFreshShop ? defaultFeatures : savedSettings.features;
     
@@ -117,7 +124,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString(),
       hasAiSitemap: hasAiSitemap, // NEW: indicate if AI sitemap exists
-      hasAdvancedSchema: hasAdvancedSchema // NEW: indicate if Advanced Schema exists
+      hasAdvancedSchema: hasAdvancedSchema, // NEW: indicate if Advanced Schema exists
+      productCount: optimizedProductCount // For token estimation in modals
     };
 
     res.json(mergedSettings);
