@@ -6,6 +6,7 @@ import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import { buildStoreContext } from '../utils/storeContextBuilder.js';
+import { estimateTokensWithMargin } from '../billing/tokenConfig.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -192,12 +193,14 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       // This applies to plans WITHOUT included tokens (Starter, Professional, Growth, Plus plans)
       // OR to users who already have purchased tokens but used them all
       if (!hasPurchasedTokens && !hasTokenBalance) {
+        // Use base estimate (actual will be calculated at generation time based on product count)
+        const baseEstimate = estimateTokensWithMargin('ai-sitemap-optimized', { productCount: 0 });
         return res.status(402).json({
           error: 'Insufficient tokens for AI-Optimized Sitemap',
           requiresPurchase: true,
           currentPlan: subscription?.plan,
           tokensAvailable: 0,
-          tokensNeeded: 10000,
+          tokensNeeded: baseEstimate.withMargin,
           feature: 'ai-sitemap-optimized',
           message: 'Purchase tokens to enable AI-Optimized Sitemap'
         });
