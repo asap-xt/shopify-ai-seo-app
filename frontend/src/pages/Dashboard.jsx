@@ -43,6 +43,7 @@ export default function Dashboard({ shop: shopProp }) {
   const [stats, setStats] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [tokens, setTokens] = useState(null);
+  const [plansData, setPlansData] = useState([]);
   
   // Test results for AIEO Score (loaded from localStorage, same as AI Testing page)
   const [testResults, setTestResults] = useState({});
@@ -207,9 +208,10 @@ export default function Dashboard({ shop: shopProp }) {
         try {
           setLoading(true);
           // makeSessionFetch връща директно JSON, не Response
-          const [statsData, tokensData] = await Promise.all([
+          const [statsData, tokensData, billingData] = await Promise.all([
             api(`/api/dashboard/stats?shop=${shop}`),
-            api(`/api/billing/tokens/balance?shop=${shop}`)
+            api(`/api/billing/tokens/balance?shop=${shop}`),
+            api(`/api/billing/info?shop=${shop}`)
           ]);
 
           if (statsData) {
@@ -229,6 +231,9 @@ export default function Dashboard({ shop: shopProp }) {
             } catch (err) {
               console.error('[Dashboard] Error saving stats to localStorage:', err);
             }
+          }
+          if (billingData?.plans) {
+            setPlansData(billingData.plans);
           }
           if (tokensData) {
             setTokens(tokensData);
@@ -338,39 +343,29 @@ export default function Dashboard({ shop: shopProp }) {
   const hasAdvancedSchema = planIndex >= 6; // Enterprise (index 6)
   const hasAiSitemap = planIndex >= 5; // Growth Extra+ (index 5)
 
-  // Plan price fallback mapping (if backend doesn't provide price)
-  const planPriceFallback = useMemo(() => ({
-    starter: 9.99,
-    professional: 15.99,
-    professional_plus: 19.99,
-    'professional plus': 19.99,
-    growth: 29.99,
-    growth_plus: 35.99,
-    'growth plus': 35.99,
-    growth_extra: 79.99,
-    'growth extra': 79.99,
-    enterprise: 139.99
-  }), []);
+  // Get plan price from dynamic data or use backend values
+  const getPlanPrice = (planKey) => {
+    const normalizedKey = planKey?.toLowerCase().replace(/_/g, ' ');
+    const plan = plansData.find(p => p.key === normalizedKey || p.key === planKey);
+    return plan?.price || 0;
+  };
+  
   const planPriceValue = subscription?.price && subscription.price > 0
     ? subscription.price
-    : (subscription?.plan ? planPriceFallback[subscription.plan] : undefined);
+    : (subscription?.plan ? getPlanPrice(subscription.plan) : undefined);
 
-  // Plan recommendation logic
-  // NOTE: These limits should match backend/plans.js
+  // Plan recommendation logic - uses dynamic data from backend
   const getPlanLimits = (planKey) => {
-    switch (planKey) {
-      case 'starter': return { products: 70, languages: 1 };
-      case 'professional': return { products: 70, languages: 1 };
-      case 'professional_plus':
-      case 'professional plus': return { products: 200, languages: 2 };
-      case 'growth': return { products: 450, languages: 3 };
-      case 'growth_plus':
-      case 'growth plus': return { products: 450, languages: 3 };
-      case 'growth_extra':
-      case 'growth extra': return { products: 750, languages: 6 };
-      case 'enterprise': return { products: 1200, languages: 10 };
-      default: return { products: 0, languages: 0 };
+    const normalizedKey = planKey?.toLowerCase().replace(/_/g, ' ');
+    const plan = plansData.find(p => p.key === normalizedKey || p.key === planKey);
+    if (plan) {
+      return { 
+        products: plan.productLimit || 0, 
+        languages: plan.languageLimit || 1 
+      };
     }
+    // Fallback if plans not loaded yet
+    return { products: 0, languages: 0 };
   };
 
   const getPlanOrder = (planKey) => {
@@ -390,34 +385,36 @@ export default function Dashboard({ shop: shopProp }) {
   };
 
   const recommendPlan = () => {
-    if (!stats) return null;
+    if (!stats || plansData.length === 0) return null;
     
     const totalProducts = stats.products?.total || 0;
     const totalLanguages = stats.languages?.length || 1;
     const currentPlan = subscription?.plan || 'starter';
     const currentPlanOrder = getPlanOrder(currentPlan);
 
-    // Find the most suitable plan based on store data
-    const plans = PLAN_HIERARCHY_LOWERCASE;
+    // Find the most suitable plan based on store data using dynamic plan data
     let recommendedPlan = null;
+    let recommendedPlanData = null;
 
-    for (const plan of plans) {
-      const limits = getPlanLimits(plan);
-      if (totalProducts <= limits.products && totalLanguages <= limits.languages) {
-        recommendedPlan = plan;
+    for (const planData of plansData) {
+      if (totalProducts <= planData.productLimit && totalLanguages <= planData.languageLimit) {
+        recommendedPlan = planData.key;
+        recommendedPlanData = planData;
         break;
       }
     }
 
     // If no plan fits, recommend enterprise
-    if (!recommendedPlan) recommendedPlan = 'enterprise';
+    if (!recommendedPlan) {
+      recommendedPlanData = plansData.find(p => p.key === 'enterprise');
+      recommendedPlan = 'enterprise';
+    }
 
     // Only show recommendation if it's higher than current plan
     const recommendedPlanOrder = getPlanOrder(recommendedPlan);
     if (recommendedPlanOrder <= currentPlanOrder) return null;
 
     const currentLimits = getPlanLimits(currentPlan);
-    const recommendedLimits = getPlanLimits(recommendedPlan);
     
     let reason = '';
     if (totalProducts > currentLimits.products) {
@@ -428,15 +425,15 @@ export default function Dashboard({ shop: shopProp }) {
 
     return {
       plan: recommendedPlan,
-      planName: recommendedPlan.replace('_', ' ').toUpperCase(),
-      price: planPriceFallback[recommendedPlan],
-      productLimit: recommendedLimits.products,
-      languageLimit: recommendedLimits.languages,
+      planName: recommendedPlanData?.name || recommendedPlan.replace('_', ' ').toUpperCase(),
+      price: recommendedPlanData?.price || getPlanPrice(recommendedPlan),
+      productLimit: recommendedPlanData?.productLimit || 0,
+      languageLimit: recommendedPlanData?.languageLimit || 1,
       reason
     };
   };
 
-  const recommendation = useMemo(() => recommendPlan(), [stats, subscription]);
+  const recommendation = useMemo(() => recommendPlan(), [stats, subscription, plansData]);
 
   // Token recommendation for Professional/Growth/Plus plans (pay-per-use)
   const shouldRecommendTokens = useMemo(() => {
