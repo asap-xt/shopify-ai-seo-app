@@ -417,18 +417,36 @@ export default function SitemapPage({ shop: shopProp }) {
           startAiSitemapPolling();
         }
       } else {
+        // Check if error message indicates trial restriction (same as Settings.jsx)
+        const errorMessage = result?.message || '';
+        if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
+          setAiSitemapBusy(false);
+          
+          // Show Trial Activation Modal instead of redirect
+          setTokenError({
+            trialRestriction: true,
+            requiresActivation: true,
+            feature: 'ai-sitemap-optimized',
+            currentPlan: plan?.plan || 'enterprise'
+          });
+          setShowTrialActivationModal(true);
+          return;
+        }
+        
         setToast(result?.message || 'Failed to start AI-Optimized Sitemap generation');
       }
       
     } catch (error) {
       console.error('[SITEMAP] AI generation error:', error);
       
-      // Handle specific errors
-      if (error.message?.includes('TRIAL_RESTRICTION') || error.trialRestriction) {
+      // Check if error is trial restriction (402 with trialRestriction flag) - same as Settings.jsx
+      if (error.status === 402 && error.trialRestriction && error.requiresActivation) {
+        // Show Trial Activation Modal instead of redirect
         setTokenError({
           trialRestriction: true,
           requiresActivation: true,
-          message: error.message
+          feature: 'ai-sitemap-optimized',
+          currentPlan: plan?.plan || 'enterprise'
         });
         setShowTrialActivationModal(true);
       } else if (error.status === 402 || error.requiresPurchase) {
@@ -440,7 +458,7 @@ export default function SitemapPage({ shop: shopProp }) {
     } finally {
       setAiSitemapBusy(false);
     }
-  }, [shop, api, startAiSitemapPolling]);
+  }, [shop, api, plan, startAiSitemapPolling]);
   
   // View AI-Optimized Sitemap in Modal
   const viewAiSitemap = useCallback(async () => {
