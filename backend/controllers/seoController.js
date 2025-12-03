@@ -3121,5 +3121,143 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
   }
 });
 
+// ============================================================
+// COLLECTION BATCH ENDPOINTS FOR BACKGROUND PROCESSING
+// ============================================================
+
+import collectionJobQueue from '../services/collectionJobQueue.js';
+
+/**
+ * POST /api/seo/collection-generate-apply-batch
+ * Add Collection SEO job to background queue (generate + apply combined)
+ * Body: { collections: [{ collectionId, languages, title }], model }
+ */
+router.post('/seo/collection-generate-apply-batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { collections = [], model } = req.body;
+    
+    if (!collections || collections.length === 0) {
+      return res.status(400).json({ error: 'No collections provided' });
+    }
+    
+    // Check if shop's plan allows Collections SEO
+    const accessCheck = await checkCollectionAccess(shop);
+    if (!accessCheck.allowed) {
+      return res.status(403).json({
+        error: 'Collections SEO requires Professional plan or higher',
+        currentPlan: accessCheck.plan,
+        collectionLimit: accessCheck.collectionLimit,
+        upgradeMessage: 'Upgrade to Professional plan to optimize collections for AI search'
+      });
+    }
+    
+    // Create process function for each collection
+    const processCollection = async (collectionData) => {
+      const { collectionId, languages, title } = collectionData;
+      
+      try {
+        // Step 1: Generate SEO
+        const generateResponse = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/seo/generate-collection-multi`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            collectionId,
+            model: model || 'google/gemini-1.5-flash',
+            languages
+          })
+        });
+        
+        const generateResult = await generateResponse.json();
+        
+        if (!generateResponse.ok) {
+          if (generateResponse.status === 403) {
+            const error = new Error(generateResult.error || 'Plan restriction');
+            error.status = 403;
+            throw error;
+          }
+          return { success: false, error: generateResult.error };
+        }
+        
+        // Step 2: Apply SEO
+        const applyResponse = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/seo/apply-collection-multi`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            collectionId,
+            results: generateResult.results.map(r => ({
+              language: r.language,
+              seo: r.data
+            })),
+            options: {
+              updateTitle: true,
+              updateDescription: true,
+              updateSeo: true,
+              updateMetafields: true
+            }
+          })
+        });
+        
+        const applyResult = await applyResponse.json();
+        
+        if (!applyResponse.ok || !applyResult.ok) {
+          return { success: false, error: applyResult.error || 'Apply failed' };
+        }
+        
+        return { success: true, data: applyResult };
+        
+      } catch (error) {
+        if (error.status === 403) throw error;
+        return { success: false, error: error.message };
+      }
+    };
+    
+    // Add job to queue
+    const jobInfo = await collectionJobQueue.addJob(shop, collections, 'seo', processCollection);
+    
+    return res.json({
+      success: true,
+      message: jobInfo.queued ? 'Collection SEO job queued' : jobInfo.message,
+      ...jobInfo
+    });
+    
+  } catch (error) {
+    console.error('[COLLECTION-SEO/BATCH] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/seo/collection-job-status
+ * Get status of background Collection SEO job
+ */
+router.get('/seo/collection-job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const jobType = req.query.type || 'seo'; // 'seo' or 'aiEnhance'
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const status = await collectionJobQueue.getJobStatus(shop, jobType);
+    return res.json(status);
+    
+  } catch (error) {
+    console.error('[COLLECTION-SEO/JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export { applySEOForLanguage };
 export default router;

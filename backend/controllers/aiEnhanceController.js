@@ -1566,4 +1566,170 @@ router.get('/job-status', validateRequest(), async (req, res) => {
   }
 });
 
+// ============================================================
+// COLLECTION AI ENHANCEMENT BATCH ENDPOINTS
+// ============================================================
+
+import collectionJobQueue from '../services/collectionJobQueue.js';
+
+/**
+ * POST /ai-enhance/collection-batch
+ * Add Collection AI Enhancement job to background queue
+ * Body: { collections: [{ collectionId, languages, title }] }
+ */
+router.post('/collection-batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { collections = [] } = req.body;
+    
+    if (!collections || collections.length === 0) {
+      return res.status(400).json({ error: 'No collections provided' });
+    }
+    
+    // Get subscription for plan checks
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    
+    // === PLAN CHECK: Professional+ required for Collections AI enhancement ===
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const collectionsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
+      return res.status(403).json({
+        error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Collections'
+      });
+    }
+    
+    // === TOKEN CHECK (estimate for all collections) ===
+    const feature = 'ai-seo-collection';
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Estimate tokens for all collections
+    const totalLanguages = collections.reduce((sum, c) => sum + (c.languages?.length || 0), 0);
+    const tokenEstimate = estimateTokensWithMargin(feature, { languages: totalLanguages });
+    
+    // Check if plan has included tokens
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
+    const isActivated = !!subscription?.activatedAt;
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
+    // TRIAL RESTRICTION
+    if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
+      return res.status(402).json({
+        error: 'AI-enhanced collection optimization is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        tokensRequired: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
+      });
+    }
+    
+    // Check token balance
+    if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan);
+      
+      return res.status(402).json({
+        error: 'Insufficient token balance',
+        requiresPurchase: true,
+        needsUpgrade,
+        currentPlan: planKey,
+        tokensRequired: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+        feature,
+        message: needsUpgrade 
+          ? 'Purchase more tokens or upgrade to Growth Extra plan'
+          : 'You need more tokens to use this feature'
+      });
+    }
+    
+    // Create enhance function for each collection
+    const enhanceCollection = async (collectionData) => {
+      const { collectionId, languages, title } = collectionData;
+      
+      try {
+        // Call the existing collection enhancement endpoint
+        const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/ai-enhance/collection/${encodeURIComponent(collectionId)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            languages
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          if (response.status === 402 || response.status === 403) {
+            const error = new Error(result.error || 'Token or plan restriction');
+            error.status = response.status;
+            error.trialRestriction = result.trialRestriction;
+            throw error;
+          }
+          return { success: false, error: result.error };
+        }
+        
+        if (!result.ok) {
+          return { success: false, error: result.error || 'Enhancement failed' };
+        }
+        
+        return { success: true, data: result };
+        
+      } catch (error) {
+        if (error.status === 402 || error.status === 403) throw error;
+        return { success: false, error: error.message };
+      }
+    };
+    
+    // Add job to queue
+    const jobInfo = await collectionJobQueue.addJob(shop, collections, 'aiEnhance', enhanceCollection);
+    
+    return res.json({
+      success: true,
+      message: jobInfo.queued ? 'Collection AI Enhancement job queued' : jobInfo.message,
+      ...jobInfo
+    });
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/COLLECTION-BATCH] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /ai-enhance/collection-job-status
+ * Get status of background Collection AI Enhancement job
+ */
+router.get('/collection-job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const status = await collectionJobQueue.getJobStatus(shop, 'aiEnhance');
+    return res.json(status);
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/COLLECTION-JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
