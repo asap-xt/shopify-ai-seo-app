@@ -35,6 +35,37 @@ export function sessionFetch(shop) {
 // Helper: delay function
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Track if we're in initial load phase (App Bridge may not be ready)
+let appBridgeReady = false;
+let readyPromise = null;
+
+// Wait for App Bridge to be ready
+function waitForAppBridge() {
+  if (appBridgeReady) return Promise.resolve();
+  
+  if (!readyPromise) {
+    readyPromise = new Promise((resolve) => {
+      // Give App Bridge time to initialize after page load
+      const checkReady = () => {
+        if (window.shopify?.idToken || document.readyState === 'complete') {
+          appBridgeReady = true;
+          resolve();
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      // Start checking after a short delay
+      setTimeout(checkReady, 500);
+      // Fallback - assume ready after 3 seconds
+      setTimeout(() => {
+        appBridgeReady = true;
+        resolve();
+      }, 3000);
+    });
+  }
+  return readyPromise;
+}
+
 // Legacy compatibility - синхронна фабрика with retry logic
 export function makeSessionFetch(debug = true) {
   if (debug) devLog('[SFETCH] Creating session fetch for App Bridge v4');
@@ -54,13 +85,19 @@ export function makeSessionFetch(debug = true) {
     };
 
     // Retry logic for CORS/network errors during initial load
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
+    const MAX_RETRIES = 5; // Increased for better resilience
+    const BASE_DELAY = 800; // Start with 800ms
     
     let lastError = null;
     
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
+        // On first attempt, wait for App Bridge to be ready
+        if (attempt === 1 && !appBridgeReady) {
+          devLog('[SFETCH] Waiting for App Bridge to be ready...');
+          await waitForAppBridge();
+        }
+        
         const response = await fetch(url, baseInit);
         devLog('[SFETCH] Response:', response.status, response.statusText);
         
@@ -111,17 +148,36 @@ export function makeSessionFetch(debug = true) {
           error.message?.includes('Failed to fetch') ||
           error.message?.includes('NetworkError') ||
           error.message?.includes('CORS') ||
+          error.message?.includes('access control') ||
           error.name === 'TypeError'
         );
         
         if (isCorsOrNetworkError && attempt < MAX_RETRIES) {
-          devLog(`[SFETCH] CORS/Network error on attempt ${attempt}, retrying in ${RETRY_DELAY}ms...`);
-          await delay(RETRY_DELAY * attempt); // Exponential backoff
+          const retryDelay = BASE_DELAY * attempt; // Exponential backoff
+          devLog(`[SFETCH] CORS/Network error on attempt ${attempt}/${MAX_RETRIES}, retrying in ${retryDelay}ms...`);
+          // Reset App Bridge ready flag to re-check
+          if (attempt === 1) {
+            appBridgeReady = false;
+            readyPromise = null;
+          }
+          await delay(retryDelay);
           continue;
+        }
+        
+        // Mark error as temporary if it's CORS-related
+        if (isCorsOrNetworkError) {
+          error.isTemporary = true;
+          error.isCorsError = true;
         }
         
         throw error;
       }
+    }
+    
+    // Mark final error as temporary CORS error
+    if (lastError && !lastError.status) {
+      lastError.isTemporary = true;
+      lastError.isCorsError = true;
     }
     
     throw lastError || new Error('Request failed after retries');

@@ -815,16 +815,46 @@ export default function App() {
         devLog('[APP] GraphQL variables:', { shop });
         devLog('[APP] Fetching from:', graphqlUrl);
         
+        // Retry logic for CORS errors during App Bridge initialization
+        const MAX_RETRIES = 5;
+        const BASE_DELAY = 800;
+        let plansResponse = null;
+        let lastFetchError = null;
         
-        const fetchStartTime = Date.now();
-        const plansResponse = await fetch(graphqlUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: Q, variables: { shop } }),
-        });
-        const fetchDuration = Date.now() - fetchStartTime;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const fetchStartTime = Date.now();
+            plansResponse = await fetch(graphqlUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: Q, variables: { shop } }),
+            });
+            const fetchDuration = Date.now() - fetchStartTime;
+            devLog('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
+            break; // Success, exit retry loop
+          } catch (fetchError) {
+            lastFetchError = fetchError;
+            const isCorsError = fetchError.message?.includes('Failed to fetch') || 
+                               fetchError.message?.includes('NetworkError') ||
+                               fetchError.message?.includes('CORS') ||
+                               fetchError.message?.includes('access control') ||
+                               fetchError.name === 'TypeError';
+            
+            if (isCorsError && attempt < MAX_RETRIES) {
+              const retryDelay = BASE_DELAY * attempt;
+              devLog(`[APP] CORS/Network error on attempt ${attempt}/${MAX_RETRIES}, retrying in ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              continue;
+            }
+            throw fetchError;
+          }
+        }
         
-        devLog('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
+        if (!plansResponse) {
+          throw lastFetchError || new Error('GraphQL fetch failed after retries');
+        }
+        
+        devLog('[APP] GraphQL fetch successful after retries');
         
         if (plansResponse.status === 202) {
           // Token exchange required - но това не трябва да се случва ако token exchange е направен на сървъра
