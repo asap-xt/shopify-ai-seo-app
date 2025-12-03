@@ -730,6 +730,8 @@ ${JSON.stringify(allSchemas, null, 2)}
                           
                           <InlineStack gap="300">
                             <Button
+                              loading={advancedSchemaStatus.inProgress}
+                              disabled={advancedSchemaStatus.inProgress}
                               onClick={async () => {
                                 try {
                                   // First check if there's existing data
@@ -749,7 +751,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                                   });
                                   
                                   // Show success toast
-                                  setToastContent('Advanced Schema Data generation started in background. You can navigate away - it will continue processing.');
+                                  setToastContent('Generating Advanced Schema Data... This runs in the background.');
                                   
                                   // Start polling for status updates
                                   startAdvancedSchemaPolling();
@@ -797,12 +799,14 @@ ${JSON.stringify(allSchemas, null, 2)}
                               onClick={() => {
                                 window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
                               }}
+                              disabled={advancedSchemaStatus.inProgress}
                             >
                               View Generated Schema
                             </Button>
                             
                             <Button
                               tone="critical"
+                              disabled={advancedSchemaStatus.inProgress}
                               onClick={async () => {
                                 if (confirm('This will delete all advanced schema data. Are you sure?')) {
                                   try {
@@ -812,6 +816,16 @@ ${JSON.stringify(allSchemas, null, 2)}
                                     });
                                     
                                     setToastContent('Schema data deleted successfully');
+                                    // Reset status
+                                    setAdvancedSchemaStatus({
+                                      inProgress: false,
+                                      status: 'idle',
+                                      message: null,
+                                      position: null,
+                                      estimatedTime: null,
+                                      generatedAt: null,
+                                      schemaCount: 0
+                                    });
                                   } catch (err) {
                                     setToastContent('Failed to delete schema data');
                                   }
@@ -821,6 +835,52 @@ ${JSON.stringify(allSchemas, null, 2)}
                               Delete Schema Data
                             </Button>
                           </InlineStack>
+                          
+                          {/* Progress indicator while generating */}
+                          {advancedSchemaStatus.inProgress && (
+                            <Box paddingBlockStart="200">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Spinner size="small" />
+                                <BlockStack gap="100">
+                                  <Text variant="bodyMd" tone="subdued">
+                                    {advancedSchemaStatus.message || 'Generating Advanced Schema Data...'}
+                                  </Text>
+                                  {advancedSchemaStatus.position > 0 && (
+                                    <Text variant="bodySm" tone="subdued">
+                                      Queue position: {advancedSchemaStatus.position} · Est. {Math.ceil(advancedSchemaStatus.estimatedTime / 60)} min
+                                    </Text>
+                                  )}
+                                  {advancedSchemaStatus.status === 'processing' && advancedSchemaStatus.schemaCount > 0 && (
+                                    <Text variant="bodySm" tone="subdued">
+                                      Processing {advancedSchemaStatus.schemaCount} schemas...
+                                    </Text>
+                                  )}
+                                </BlockStack>
+                              </InlineStack>
+                            </Box>
+                          )}
+                          
+                          {/* Completion status */}
+                          {!advancedSchemaStatus.inProgress && advancedSchemaStatus.status === 'completed' && advancedSchemaStatus.generatedAt && (
+                            <Box paddingBlockStart="200">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Badge tone="success">Generated</Badge>
+                                <Text variant="bodySm" tone="subdued">
+                                  {advancedSchemaStatus.schemaCount} schemas · {(() => {
+                                    const now = new Date();
+                                    const generated = new Date(advancedSchemaStatus.generatedAt);
+                                    const diff = Math.floor((now - generated) / 1000 / 60);
+                                    if (diff < 1) return 'Just now';
+                                    if (diff < 60) return `${diff} min ago`;
+                                    const hours = Math.floor(diff / 60);
+                                    if (hours < 24) return `${hours}h ago`;
+                                    const days = Math.floor(hours / 24);
+                                    return `${days}d ago`;
+                                  })()}
+                                </Text>
+                              </InlineStack>
+                            </Box>
+                          )}
                           
                           {/* Rich Attributes Options */}
                           <Card>
