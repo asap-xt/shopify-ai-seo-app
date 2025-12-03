@@ -22,6 +22,7 @@ import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import UpgradeModal from '../components/UpgradeModal.jsx';
+import { estimateTokens } from '../utils/tokenEstimates.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -358,34 +359,27 @@ export default function SitemapPage({ shop: shopProp }) {
           const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
           const currentTokenBalance = tokenData.balance || 0;
           
-          // Calculate tokens dynamically based on product count
-          // Formula: base (2000) + perProduct (2500) × productCount, with 1.5× safety margin
-          // Each product requires ~5 AI calls × ~500 tokens each = ~2500 tokens per product
+          // Use centralized token estimation
           const productCount = info?.productCount || 0;
-          const baseTokens = 2000;
-          const perProductTokens = 2500;
-          const estimatedTokens = baseTokens + (perProductTokens * productCount);
-          const tokensWithMargin = Math.ceil(estimatedTokens * 1.5);
+          const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           // DEBUG: Log token estimation
           console.log('[SITEMAP] Token estimation:', {
             productCount,
-            baseTokens,
-            perProductTokens,
-            estimatedTokens,
-            tokensWithMargin,
+            estimated: tokenEstimate.estimated,
+            withMargin: tokenEstimate.withMargin,
             currentTokenBalance,
-            formula: `(${baseTokens} + ${perProductTokens} × ${productCount}) × 1.5 = ${tokensWithMargin}`
+            formula: tokenEstimate.formula
           });
           
-          const hasEnoughTokens = currentTokenBalance >= tokensWithMargin;
+          const hasEnoughTokens = currentTokenBalance >= tokenEstimate.withMargin;
           
           if (!hasEnoughTokens) {
             setTokenError({
               feature: 'ai-sitemap-optimized',
-              tokensRequired: tokensWithMargin,
+              tokensRequired: tokenEstimate.withMargin,
               tokensAvailable: currentTokenBalance,
-              tokensNeeded: Math.max(0, tokensWithMargin - currentTokenBalance)
+              tokensNeeded: Math.max(0, tokenEstimate.withMargin - currentTokenBalance)
             });
             setShowInsufficientTokensModal(true);
             setAiSitemapBusy(false);
@@ -473,16 +467,15 @@ export default function SitemapPage({ shop: shopProp }) {
         if (errorMessage.startsWith('INSUFFICIENT_TOKENS:')) {
           setAiSitemapBusy(false);
           
-          // Calculate tokens dynamically using same formula as above
-          // base: 2000, perProduct: 2500, with 1.5× margin
+          // Use centralized token estimation
           const productCount = info?.productCount || 0;
-          const tokensRequired = Math.ceil((2000 + 2500 * productCount) * 1.5);
+          const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           setTokenError({
             feature: 'ai-sitemap-optimized',
-            tokensRequired: tokensRequired,
+            tokensRequired: tokenEstimate.withMargin,
             tokensAvailable: 0,
-            tokensNeeded: tokensRequired
+            tokensNeeded: tokenEstimate.withMargin
           });
           setShowInsufficientTokensModal(true);
           return;
@@ -890,9 +883,10 @@ export default function SitemapPage({ shop: shopProp }) {
           setShowTrialActivationModal(false);
           setTokenError(null);
         }}
-        featureName="AI-Optimized Sitemap"
+        feature="ai-sitemap-optimized"
         currentPlan={plan?.plan || 'Starter'}
         trialEndsAt={plan?.trial?.ends_at}
+        tokensRequired={estimateTokens('ai-sitemap-optimized', { productCount: info?.productCount || 0 }).withMargin}
         onActivatePlan={handleActivatePlan}
         onPurchaseTokens={() => {
           setShowTrialActivationModal(false);
