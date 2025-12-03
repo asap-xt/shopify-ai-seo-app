@@ -360,11 +360,14 @@ export default function SitemapPage({ shop: shopProp }) {
           const currentTokenBalance = tokenData.balance || 0;
           
           // Use centralized token estimation
-          const productCount = info?.productCount || 0;
+          // Fallback to lastProductCount if productCount not available
+          const productCount = info?.productCount || info?.lastProductCount || 17;
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           // DEBUG: Log token estimation
           console.log('[SITEMAP] Token estimation:', {
+            infoProductCount: info?.productCount,
+            infoLastProductCount: info?.lastProductCount,
             productCount,
             estimated: tokenEstimate.estimated,
             withMargin: tokenEstimate.withMargin,
@@ -467,8 +470,8 @@ export default function SitemapPage({ shop: shopProp }) {
         if (errorMessage.startsWith('INSUFFICIENT_TOKENS:')) {
           setAiSitemapBusy(false);
           
-          // Use centralized token estimation
-          const productCount = info?.productCount || 0;
+          // Use centralized token estimation with fallback
+          const productCount = info?.productCount || info?.lastProductCount || 17;
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           setTokenError({
@@ -512,8 +515,8 @@ export default function SitemapPage({ shop: shopProp }) {
         });
         setShowTrialActivationModal(true);
       } else if (error.status === 402 || error.requiresPurchase) {
-        // Calculate tokens properly using centralized function
-        const productCount = info?.productCount || 0;
+        // Calculate tokens properly using centralized function with fallback
+        const productCount = info?.productCount || info?.lastProductCount || 17;
         const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
         
         setTokenError({
@@ -896,7 +899,7 @@ export default function SitemapPage({ shop: shopProp }) {
         feature="ai-sitemap-optimized"
         currentPlan={plan?.plan || 'Starter'}
         trialEndsAt={plan?.trial?.ends_at}
-        tokensRequired={estimateTokens('ai-sitemap-optimized', { productCount: info?.productCount || 0 }).withMargin}
+        tokensRequired={estimateTokens('ai-sitemap-optimized', { productCount: info?.productCount || info?.lastProductCount || 17 }).withMargin}
         onActivatePlan={handleActivatePlan}
         onPurchaseTokens={() => {
           setShowTrialActivationModal(false);
