@@ -1168,6 +1168,7 @@ ${JSON.stringify(allSchemas, null, 2)}
       <TokenPurchaseModal
         open={showTokenPurchaseModal}
         onClose={() => setShowTokenPurchaseModal(false)}
+        shop={shop}
         tokensNeeded={tokenError?.tokensNeeded || 0}
         returnTo="/ai-seo/schema-data"
       />
