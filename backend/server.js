@@ -108,7 +108,30 @@ const IS_PROD = process.env.NODE_ENV === 'production';
     // ---------------------------------------------------------------------------
     // Core middleware
     // ---------------------------------------------------------------------------
-    app.use(cors({ origin: true, credentials: true }));
+    
+    // Enhanced CORS configuration for Shopify iframe embedding
+    const corsOptions = {
+      origin: true, // Allow all origins (required for Shopify iframe)
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'X-Shopify-Access-Token',
+        'X-Shop-Domain'
+      ],
+      exposedHeaders: ['Content-Length', 'X-Request-Id'],
+      maxAge: 86400 // Cache preflight for 24 hours
+    };
+    
+    app.use(cors(corsOptions));
+    
+    // Handle preflight OPTIONS requests explicitly
+    app.options('*', cors(corsOptions));
+    
     app.use(compression()); // Enable gzip compression
     app.use(cookieParser());
 
