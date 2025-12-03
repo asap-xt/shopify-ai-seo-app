@@ -488,8 +488,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     setSelectedItems(items);
     if (items.length === 0) {
       setSelectAllPages(false);
+    } else if (selectAllPages && items.length < products.length) {
+      // If some items are deselected while selectAllPages is true, turn it off
+      setSelectAllPages(false);
     }
-  }, []); // Remove products dependency - not needed for this callback
+  }, [selectAllPages, products.length]);
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
