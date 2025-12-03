@@ -1154,7 +1154,7 @@ ${JSON.stringify(allSchemas, null, 2)}
       <InsufficientTokensModal
         open={showInsufficientTokensModal}
         onClose={() => setShowInsufficientTokensModal(false)}
-        onPurchase={() => {
+        onBuyTokens={() => {
           setShowInsufficientTokensModal(false);
           setShowTokenPurchaseModal(true);
         }}
