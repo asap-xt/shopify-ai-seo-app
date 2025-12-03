@@ -579,17 +579,16 @@ export default function SitemapPage({ shop: shopProp }) {
             )}
           </Banner>
 
-          {/* Queue Status Banner - only when processing */}
-          {(polling || queueStatus || aiSitemapStatus.inProgress) && (
+          {/* Queue Status Banner - only when ACTIVELY processing */}
+          {(busy || aiSitemapBusy || aiSitemapStatus.inProgress) && (
             <Banner tone="info">
               <InlineStack gap="200" blockAlign="center">
                 <Spinner size="small" />
                 <Text variant="bodyMd">
-                  {aiSitemapStatus.inProgress 
+                  {aiSitemapStatus.inProgress || aiSitemapBusy
                     ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
-                    : queueStatus?.message || 'Generating sitemap...'}
-                  {(queueStatus?.position > 0 || aiSitemapStatus.position > 0) && 
-                    ` (Queue: ${queueStatus?.position || aiSitemapStatus.position})`}
+                    : 'Generating basic sitemap...'}
+                  {(aiSitemapStatus.position > 0) && ` (Queue: ${aiSitemapStatus.position})`}
                 </Text>
               </InlineStack>
             </Banner>
@@ -615,9 +614,12 @@ export default function SitemapPage({ shop: shopProp }) {
                     Basic Sitemap
                   </Text>
                   {info?.generated ? (
-                    <Text variant="bodySm" tone="subdued">
-                      {info.lastProductCount || 0} products · {timeAgo(info.generatedAt)}
-                    </Text>
+                    <InlineStack gap="200" blockAlign="center">
+                      <Text variant="bodySm" tone="subdued">
+                        {info.lastProductCount || 0} products · {timeAgo(info.generatedAt)}
+                      </Text>
+                      <Button variant="plain" size="slim" onClick={viewSitemap}>View</Button>
+                    </InlineStack>
                   ) : (
                     <Text variant="bodySm" tone="subdued">Not generated yet</Text>
                   )}
@@ -643,60 +645,50 @@ export default function SitemapPage({ shop: shopProp }) {
             borderWidth="025"
             borderColor={aiSitemapInfo?.generated ? "border-success" : "border"}
           >
-            <BlockStack gap="200">
-              <InlineStack align="space-between" blockAlign="center" gap="400">
-                <InlineStack gap="300" blockAlign="center">
+            <InlineStack align="space-between" blockAlign="center" gap="400">
+              <InlineStack gap="300" blockAlign="center">
+                {aiSitemapInfo?.generated ? (
+                  <Icon source={CheckIcon} tone="success" />
+                ) : info?.generated ? (
+                  <Icon source={ClockIcon} tone="subdued" />
+                ) : (
+                  <Icon source={LockIcon} tone="subdued" />
+                )}
+                <BlockStack gap="050">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text variant="bodyMd" fontWeight="semibold">
+                      AI-Optimized Sitemap
+                    </Text>
+                    <Badge tone="info" size="small">Premium</Badge>
+                  </InlineStack>
                   {aiSitemapInfo?.generated ? (
-                    <Icon source={CheckIcon} tone="success" />
-                  ) : info?.generated ? (
-                    <Icon source={ClockIcon} tone="subdued" />
-                  ) : (
-                    <Icon source={LockIcon} tone="subdued" />
-                  )}
-                  <BlockStack gap="050">
                     <InlineStack gap="200" blockAlign="center">
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        AI-Optimized Sitemap
-                      </Text>
-                      <Badge tone="info" size="small">Premium</Badge>
-                    </InlineStack>
-                    {aiSitemapInfo?.generated ? (
                       <Text variant="bodySm" tone="subdued">
                         {aiSitemapInfo.productCount || 0} products · {timeAgo(aiSitemapInfo.generatedAt)}
                       </Text>
-                    ) : info?.generated ? (
-                      <Text variant="bodySm" tone="subdued">
-                        Adds AI descriptions & enhanced metadata
-                      </Text>
-                    ) : (
-                      <Text variant="bodySm" tone="subdued">Generate basic sitemap first</Text>
-                    )}
-                  </BlockStack>
-                </InlineStack>
-                
-                <Button
-                  primary
-                  onClick={generateAiSitemap}
-                  loading={aiSitemapBusy || aiSitemapStatus.inProgress}
-                  disabled={!info?.generated || aiSitemapBusy || aiSitemapStatus.inProgress}
-                  size="slim"
-                >
-                  {aiSitemapInfo?.generated ? 'Regenerate' : 'Generate'}
-                </Button>
+                      <Button variant="plain" size="slim" onClick={viewAiSitemap}>View</Button>
+                    </InlineStack>
+                  ) : info?.generated ? (
+                    <Text variant="bodySm" tone="subdued">
+                      Adds AI descriptions & enhanced metadata
+                    </Text>
+                  ) : (
+                    <Text variant="bodySm" tone="subdued">Generate basic sitemap first</Text>
+                  )}
+                </BlockStack>
               </InlineStack>
-            </BlockStack>
+              
+              <Button
+                primary
+                onClick={generateAiSitemap}
+                loading={aiSitemapBusy || aiSitemapStatus.inProgress}
+                disabled={!info?.generated || aiSitemapBusy || aiSitemapStatus.inProgress}
+                size="slim"
+              >
+                {aiSitemapInfo?.generated ? 'Regenerate' : 'Generate'}
+              </Button>
+            </InlineStack>
           </Box>
-
-          {/* ===== VIEW SITEMAP BUTTON - One button shows best available ===== */}
-          {(info?.generated || aiSitemapInfo?.generated) && (
-            <Button
-              fullWidth
-              onClick={aiSitemapInfo?.generated ? viewAiSitemap : viewSitemap}
-              icon={ExternalIcon}
-            >
-              View {aiSitemapInfo?.generated ? 'AI-Optimized' : 'Basic'} Sitemap
-            </Button>
-          )}
 
           {/* ===== WHAT'S INCLUDED SECTION ===== */}
           <Divider />
@@ -720,21 +712,28 @@ export default function SitemapPage({ shop: shopProp }) {
                     <Text variant="headingSm" as="h4">Why AI-Optimized?</Text>
                     <Badge tone="info" size="small">Premium</Badge>
                   </InlineStack>
+                  <Text variant="bodySm" tone="subdued">
+                    Make your products stand out when customers search with AI assistants like ChatGPT, Perplexity, or Google AI.
+                  </Text>
                   <BlockStack gap="100">
-                    <InlineStack gap="200" blockAlign="start">
-                      <Text variant="bodySm">🤖</Text>
-                      <Text variant="bodySm"><strong>AI-generated descriptions</strong> — helps ChatGPT, Perplexity, and other AI models better understand your products</Text>
-                    </InlineStack>
-                    <InlineStack gap="200" blockAlign="start">
-                      <Text variant="bodySm">📊</Text>
-                      <Text variant="bodySm"><strong>Enhanced metadata</strong> — category, price range, and key features formatted for AI consumption</Text>
-                    </InlineStack>
-                    <InlineStack gap="200" blockAlign="start">
-                      <Text variant="bodySm">🎯</Text>
-                      <Text variant="bodySm"><strong>Structured annotations</strong> — special AI-readable tags that increase visibility in AI search results</Text>
-                    </InlineStack>
+                    <Text variant="bodySm">
+                      ✓ <strong>AI-generated descriptions</strong> — helps AI models better understand and recommend your products
+                    </Text>
+                    <Text variant="bodySm">
+                      ✓ <strong>Enhanced metadata</strong> — category, price range, and key features formatted for AI consumption
+                    </Text>
+                    <Text variant="bodySm">
+                      ✓ <strong>Structured annotations</strong> — special AI-readable tags that increase visibility in AI search results
+                    </Text>
                   </BlockStack>
                 </BlockStack>
+              </Box>
+              
+              {/* Tip for regeneration */}
+              <Box>
+                <Text variant="bodySm" tone="subdued">
+                  💡 <strong>Tip:</strong> Regenerate your sitemaps after adding new products or updating existing ones to keep AI models up to date with your catalog.
+                </Text>
               </Box>
             </BlockStack>
           </Box>
