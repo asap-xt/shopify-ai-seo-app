@@ -1854,8 +1854,8 @@ export default function Settings() {
         </Card>
       )} */}
 
-      {/* Advanced Schema Data Management - shows for Professional Plus, Growth Plus, and Enterprise plans if enabled */}
-      {(() => {
+      {/* Advanced Schema Data Management - MOVED TO Store Optimization → Schema Data page */}
+      {/* {(() => {
         const plan = normalizePlan(settings?.plan);
         const planIndex = getPlanIndex(plan);
         const planCheck = planIndex >= 2; // Professional Plus+ (index 2)
@@ -1877,36 +1877,26 @@ export default function Settings() {
                   primary
                   onClick={async () => {
                     try {
-                      // First check if there's existing data
                       const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
                       
                       if (existingData.schemas && existingData.schemas.length > 0) {
-                        // Has data - ask if to regenerate
                         if (!confirm('This will replace existing schema data. Continue?')) {
                           return;
                         }
                       }
                       
-                      // Call API to start background generation (WITHOUT forceBasicSeo first)
                       const data = await api(`/api/schema/generate-all?shop=${shop}`, {
                         method: 'POST',
                         shop,
-                        body: { shop } // Do NOT send forceBasicSeo on first attempt
+                        body: { shop }
                       });
                       
-                      // Show success toast
-                      setToast('Advanced Schema Data generation started in background. You can navigate away - it will continue processing.');
-                      
-                      // Start polling for status updates
+                      setToast('Advanced Schema Data generation started in background.');
                       startSchemaPolling();
                       
                     } catch (apiError) {
-                      // Check for 402 error (payment/activation required)
                       if (apiError.status === 402) {
-                        // Set error data for modals
                         setTokenError(apiError);
-                        
-                        // Show appropriate modal based on error type
                         if (apiError.trialRestriction && apiError.requiresActivation) {
                           setShowTrialActivationModal(true);
                         } else if (apiError.requiresPurchase) {
@@ -1917,7 +1907,6 @@ export default function Settings() {
                         return;
                       }
                       
-                      // Check for schema-specific errors (NO_OPTIMIZED_PRODUCTS, ONLY_BASIC_SEO)
                       if (apiError.message?.includes('NO_OPTIMIZED_PRODUCTS') || apiError.error?.includes('NO_OPTIMIZED_PRODUCTS')) {
                         setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
                         setShowSchemaErrorModal(true);
@@ -1930,7 +1919,6 @@ export default function Settings() {
                         return;
                       }
                       
-                      // Other errors
                       console.error('[SCHEMA-GEN] Error:', apiError);
                       setToast('Failed to generate schema: ' + (apiError.message || 'Unknown error'));
                     }
@@ -1939,11 +1927,7 @@ export default function Settings() {
                   Generate/Update Schema Data
                 </Button>
                 
-                <Button
-                  onClick={() => {
-                    window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-                  }}
-                >
+                <Button onClick={() => { window.open(`/ai/schema-data.json?shop=${shop}`, '_blank'); }}>
                   View Generated Schema
                 </Button>
                 
@@ -1952,12 +1936,7 @@ export default function Settings() {
                   onClick={async () => {
                     if (confirm('This will delete all advanced schema data. Are you sure?')) {
                       try {
-                        await api(`/api/schema/delete?shop=${shop}`, {
-                          method: 'DELETE',
-                          shop,
-                          body: { shop }
-                        });
-                        
+                        await api(`/api/schema/delete?shop=${shop}`, { method: 'DELETE', shop, body: { shop } });
                         setToast('Schema data deleted successfully');
                       } catch (err) {
                         setToast('Failed to delete schema data');
@@ -1969,7 +1948,6 @@ export default function Settings() {
                 </Button>
               </InlineStack>
               
-              {/* Rich Attributes Options */}
               <Card>
                 <Box padding="300">
                   <BlockStack gap="300">
@@ -2000,10 +1978,7 @@ export default function Settings() {
                           onChange={(checked) => {
                             setSettings(prev => ({
                               ...prev,
-                              richAttributes: {
-                                ...prev.richAttributes,
-                                [attr.key]: checked
-                              }
+                              richAttributes: { ...prev.richAttributes, [attr.key]: checked }
                             }));
                           }}
                         />
@@ -2014,12 +1989,12 @@ export default function Settings() {
               </Card>
               
               <Banner status="info" tone="subdued">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
+                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product.</p>
               </Banner>
             </BlockStack>
           </Box>
         </Card>
-      )}
+      )} */}
 
       {/* Save and Reset Buttons */}
       <InlineStack gap="200" align="end">
