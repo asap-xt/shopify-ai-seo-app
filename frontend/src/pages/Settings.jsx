@@ -905,12 +905,15 @@ export default function Settings() {
   const saveSettings = async () => {
     setSaving(true);
     try {
+      // Exclude aiSitemap and schemaData from features - they are now managed in Store Optimization pages
+      const { aiSitemap, schemaData, ...otherFeatures } = settings.features || {};
+      
       await api(`/api/ai-discovery/settings?shop=${shop}`, {
         method: 'POST',
         body: {
           shop,
           bots: settings.bots,
-          features: settings.features,
+          features: otherFeatures, // Don't send aiSitemap or schemaData
           richAttributes: settings.richAttributes
         }
       });
@@ -1076,12 +1079,17 @@ export default function Settings() {
 
   // Check if Plus plan needs tokens for a feature
   const requiresTokensForPlusPlans = (featureKey) => {
+    // aiSitemap and schemaData are now managed in Store Optimization pages - skip token checks here
+    if (featureKey === 'aiSitemap' || featureKey === 'schemaData') {
+      return false;
+    }
+    
     const plan = normalizePlan(settings?.plan);
     
-    // Features that Plus plans need tokens for
+    // Features that Plus plans need tokens for (aiSitemap and schemaData removed - moved to Store Optimization)
     const plusPlansRequireTokens = {
-      professional_plus: ['welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // Store Metadata is included (no tokens)
-      growth_plus: ['aiSitemap', 'schemaData'] // Store Metadata, Welcome Page, Collections JSON are included (no tokens)
+      professional_plus: ['welcomePage', 'collectionsJson'], // Store Metadata is included (no tokens)
+      growth_plus: [] // All features included for Growth Plus
     };
     
     return plusPlansRequireTokens[plan]?.includes(featureKey) || false;
