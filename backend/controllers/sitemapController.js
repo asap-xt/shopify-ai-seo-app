@@ -222,7 +222,22 @@ async function generateSitemapCore(shop, options = {}) {
         const { default: Shop } = await import('../db/Shop.js');
         
         const shopRecord = await Shop.findOne({ shop: normalizedShop });
-        if (shopRecord?.accessToken) {
+        
+        // DEBUG: Log shop record check
+        console.log('[AI-SITEMAP] Shop record check:', {
+          shop: normalizedShop,
+          hasShopRecord: !!shopRecord,
+          hasAccessToken: !!shopRecord?.accessToken,
+          enableAIEnhancement
+        });
+        
+        if (!shopRecord?.accessToken) {
+          console.error('[AI-SITEMAP] No access token for shop, cannot enable AI enhancement');
+          throw new Error('Shop access token not found. Please reinstall the app.');
+        }
+        
+        // Continue with eligibility checks (removed if block since we throw above)
+        {
           // Check eligibility for AI-enhanced sitemap based on plan
           const planKey = (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const plansWithAccess = ['growth_extra', 'enterprise'];
@@ -352,7 +367,15 @@ async function generateSitemapCore(shop, options = {}) {
           // === END TOKEN RESERVATION ===
         }
       } catch (error) {
-        // Could not fetch AI Discovery settings, continue with basic sitemap
+        // Re-throw specific error codes that should stop generation
+        if (error.code === 'TRIAL_RESTRICTION' || 
+            error.code === 'INSUFFICIENT_TOKENS' || 
+            error.code === 'PLAN_NOT_ELIGIBLE') {
+          console.log('[AI-SITEMAP] Throwing error:', error.code, error.message);
+          throw error;
+        }
+        // For other errors (e.g., could not fetch shop record), log and continue with basic sitemap
+        console.error('[AI-SITEMAP] Error during eligibility check, continuing with basic sitemap:', error.message);
       }
     }
     
