@@ -338,6 +338,17 @@ export default function SitemapPage({ shop: shopProp }) {
     setAiSitemapBusy(true);
     
     try {
+      // Ensure info is loaded before proceeding (for accurate token estimation)
+      let currentInfo = info;
+      if (!currentInfo?.productCount && !currentInfo?.lastProductCount) {
+        console.log('[SITEMAP] Info not loaded, fetching...');
+        try {
+          currentInfo = await api(`/api/sitemap/info?shop=${shop}`);
+          setInfo(currentInfo);
+        } catch (e) {
+          console.error('[SITEMAP] Failed to load info:', e);
+        }
+      }
       // ===== FRONTEND PLAN/TOKEN CHECKS (same as Settings.jsx) =====
       const normalizedPlan = normalizePlan(plan?.plan);
       const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
@@ -360,14 +371,14 @@ export default function SitemapPage({ shop: shopProp }) {
           const currentTokenBalance = tokenData.balance || 0;
           
           // Use centralized token estimation
-          // Fallback to lastProductCount if productCount not available
-          const productCount = info?.productCount || info?.lastProductCount || 17;
+          // Use currentInfo (freshly loaded) for accurate product count
+          const productCount = currentInfo?.productCount || currentInfo?.lastProductCount || 0;
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           // DEBUG: Log token estimation
           console.log('[SITEMAP] Token estimation:', {
-            infoProductCount: info?.productCount,
-            infoLastProductCount: info?.lastProductCount,
+            currentInfoProductCount: currentInfo?.productCount,
+            currentInfoLastProductCount: currentInfo?.lastProductCount,
             productCount,
             estimated: tokenEstimate.estimated,
             withMargin: tokenEstimate.withMargin,
@@ -470,8 +481,8 @@ export default function SitemapPage({ shop: shopProp }) {
         if (errorMessage.startsWith('INSUFFICIENT_TOKENS:')) {
           setAiSitemapBusy(false);
           
-          // Use centralized token estimation with fallback
-          const productCount = info?.productCount || info?.lastProductCount || 17;
+          // Use centralized token estimation with currentInfo
+          const productCount = currentInfo?.productCount || currentInfo?.lastProductCount || 0;
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           setTokenError({
@@ -515,8 +526,8 @@ export default function SitemapPage({ shop: shopProp }) {
         });
         setShowTrialActivationModal(true);
       } else if (error.status === 402 || error.requiresPurchase) {
-        // Calculate tokens properly using centralized function with fallback
-        const productCount = info?.productCount || info?.lastProductCount || 17;
+        // Calculate tokens properly using currentInfo
+        const productCount = currentInfo?.productCount || currentInfo?.lastProductCount || 0;
         const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
         
         setTokenError({
@@ -899,7 +910,7 @@ export default function SitemapPage({ shop: shopProp }) {
         feature="ai-sitemap-optimized"
         currentPlan={plan?.plan || 'Starter'}
         trialEndsAt={plan?.trial?.ends_at}
-        tokensRequired={estimateTokens('ai-sitemap-optimized', { productCount: info?.productCount || info?.lastProductCount || 17 }).withMargin}
+        tokensRequired={estimateTokens('ai-sitemap-optimized', { productCount: info?.productCount || info?.lastProductCount || 0 }).withMargin}
         onActivatePlan={handleActivatePlan}
         onPurchaseTokens={() => {
           setShowTrialActivationModal(false);
