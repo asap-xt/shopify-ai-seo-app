@@ -324,11 +324,9 @@ export default function SitemapPage({ shop: shopProp }) {
             regenerateSitemap(shop: $shop) {
               success
               message
-              job {
-                queued
-                position
-                estimatedTime
-              }
+              queued
+              position
+              estimatedTime
             }
           }`,
           variables: { shop }
@@ -359,13 +357,13 @@ export default function SitemapPage({ shop: shopProp }) {
         setToast(result.message || 'AI-Optimized Sitemap generation started!');
         
         // Start polling if queued
-        if (result.job?.queued) {
+        if (result.queued) {
           setAiSitemapStatus({
             inProgress: true,
             status: 'queued',
             message: 'Queued for processing...',
-            position: result.job.position,
-            estimatedTime: result.job.estimatedTime,
+            position: result.position,
+            estimatedTime: result.estimatedTime,
             generatedAt: null,
             productCount: 0
           });

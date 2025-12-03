@@ -892,6 +892,9 @@ import debugRouter from './controllers/debugRouter.js';
         success: Boolean!
         message: String!
         shop: String!
+        queued: Boolean
+        position: Int
+        estimatedTime: Int
       }
       
       type ProductEdge {
