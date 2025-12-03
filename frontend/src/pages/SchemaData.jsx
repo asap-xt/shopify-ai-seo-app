@@ -1127,56 +1127,145 @@ ${JSON.stringify(allSchemas, null, 2)}
         returnTo="/ai-seo/schema-data"
       />
       
-      {/* Schema Error Modal */}
-      <Modal
-        open={showSchemaErrorModal}
-        onClose={() => setShowSchemaErrorModal(false)}
-        title={schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' ? 'No Optimized Products' : 'Only Basic SEO Found'}
-        primaryAction={
-          schemaErrorType === 'ONLY_BASIC_SEO' 
-            ? {
-                content: 'Generate with Basic SEO',
-                onAction: () => {
-                  setShowSchemaErrorModal(false);
-                  generateAdvancedSchema(true);
-                }
-              }
-            : {
-                content: 'Go to Products',
-                onAction: () => {
-                  setShowSchemaErrorModal(false);
-                  const params = new URLSearchParams(window.location.search);
-                  window.location.href = `/ai-seo/bulk-edit?shop=${shop}&host=${params.get('host')}&embedded=${params.get('embedded')}`;
-                }
-              }
-        }
-        secondaryActions={[
-          {
+      {/* Schema Error Modal - No Optimized Products (1:1 from Settings.jsx) */}
+      {showSchemaErrorModal && schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' && (
+        <Modal
+          open={true}
+          title="No Optimized Products Found"
+          onClose={async () => {
+            setShowSchemaErrorModal(false);
+            setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
+          }}
+          primaryAction={{
+            content: 'Go to Search Optimization',
+            onAction: async () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
+              // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
+              const currentParams = new URLSearchParams(window.location.search);
+              const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+              window.location.href = `/ai-seo${paramString}`;
+            }
+          }}
+          secondaryActions={[{
             content: 'Cancel',
-            onAction: () => setShowSchemaErrorModal(false)
-          }
-        ]}
-      >
-        <Modal.Section>
-          {schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' ? (
-            <Text>
-              Advanced Schema Data requires products with AI Search Optimisation. 
-              Please run Basic or AI Enhanced SEO on your products first.
-            </Text>
-          ) : (
-            <BlockStack gap="200">
+            onAction: async () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner tone="warning">
+                <p>No optimized products were found in your store.</p>
+              </Banner>
+              
               <Text>
-                Your products only have Basic SEO optimisation. For best results, 
-                we recommend using AI Enhanced SEO which provides richer data for schemas.
+                Advanced Schema Data requires at least basic AISEO optimization on your products. 
+                Please run AISEO optimization first, then try generating schemas again.
               </Text>
-              <Text tone="subdued">
-                You can still generate Advanced Schemas using Basic SEO data, 
-                but the results may be less comprehensive.
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                You can choose:
               </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Basic AISEO</strong> - Free AISEO optimization</Text>
+                <Text>• <strong>AI-Enhanced AISEO</strong> - Advanced optimization (requires tokens)</Text>
+              </BlockStack>
             </BlockStack>
-          )}
-        </Modal.Section>
-      </Modal>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Schema Error Modal - Only Basic SEO (1:1 from Settings.jsx) */}
+      {showSchemaErrorModal && schemaErrorType === 'ONLY_BASIC_SEO' && (
+        <Modal
+          open={true}
+          title="AI-Enhanced Optimization Recommended"
+          onClose={async () => {
+            setShowSchemaErrorModal(false);
+            setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
+          }}
+          primaryAction={{
+            content: 'Generate AI-Enhanced Add-ons',
+            onAction: async () => {
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
+              // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
+              const currentParams = new URLSearchParams(window.location.search);
+              const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+              window.location.href = `/ai-seo${paramString}`;
+            }
+          }}
+          secondaryActions={[{
+            content: 'Proceed with Basic AISEO',
+            onAction: async () => {
+              // Close modal first
+              setShowSchemaErrorModal(false);
+              setSchemaErrorType(null);
+              
+              // Trigger schema generation with forceBasicSeo flag
+              try {
+                setToastContent('Starting schema generation with basic AISEO...');
+                
+                await api(`/api/schema/generate-all?shop=${shop}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ forceBasicSeo: true })
+                });
+                
+                // Start polling for status updates (new background queue approach)
+                startAdvancedSchemaPolling();
+              } catch (err) {
+                console.error('[SCHEMA-GEN] Error:', err);
+                setToastContent('Failed to generate schema: ' + (err.message || 'Unknown error'));
+              }
+            }
+          }]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner tone="info">
+                <p>Only basic AISEO optimization was found on your products.</p>
+              </Banner>
+              
+              <Text>
+                For best results with Advanced Schema Data, we recommend running AI-Enhanced 
+                AISEO optimization first. This will provide richer product data for schema generation.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                What would you like to do?
+              </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Generate AI-Enhanced Add-ons</strong> - Get the best results (requires tokens)</Text>
+                <Text>• <strong>Proceed with Basic AISEO</strong> - Continue with current basic AISEO</Text>
+              </BlockStack>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
       
     </>
   );
