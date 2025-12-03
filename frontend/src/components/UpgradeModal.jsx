@@ -13,15 +13,22 @@ export default function UpgradeModal({
 }) {
   const handleUpgrade = () => {
     onClose();
-    // Navigate to billing page - copy ALL current URL parameters (including embedded=1)
+    // Navigate to billing page - only keep essential parameters to avoid URL length issues
+    // Shopify has a 255 character limit for return URLs
     const currentParams = new URLSearchParams(window.location.search);
+    const essentialParams = new URLSearchParams();
     
-    // Add returnTo parameter if provided
+    // Only keep essential parameters
+    if (currentParams.get('shop')) essentialParams.set('shop', currentParams.get('shop'));
+    if (currentParams.get('embedded')) essentialParams.set('embedded', currentParams.get('embedded'));
+    if (currentParams.get('host')) essentialParams.set('host', currentParams.get('host'));
+    
+    // Add returnTo parameter if provided (should be just the path, not full URL)
     if (returnTo) {
-      currentParams.set('returnTo', returnTo);
+      essentialParams.set('returnTo', returnTo);
     }
     
-    const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
+    const paramString = essentialParams.toString() ? `?${essentialParams.toString()}` : '';
     window.location.href = `/billing${paramString}`;
   };
   

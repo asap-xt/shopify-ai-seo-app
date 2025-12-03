@@ -970,7 +970,7 @@ export default function SitemapPage({ shop: shopProp }) {
         open={showTokenPurchaseModal}
         onClose={() => setShowTokenPurchaseModal(false)}
         shop={shop}
-        returnTo={window.location.pathname + window.location.search}
+        returnTo={window.location.pathname}
       />
       
       {/* Upgrade Modal */}
@@ -986,7 +986,7 @@ export default function SitemapPage({ shop: shopProp }) {
           'Professional Plus, Growth Plus, Growth Extra, or Enterprise plan',
           'Or purchase tokens on any Plus plan'
         ]}
-        returnTo={window.location.pathname + window.location.search}
+        returnTo={window.location.pathname}
       />
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
