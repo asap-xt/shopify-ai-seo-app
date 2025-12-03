@@ -1061,6 +1061,30 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setShowDeleteModal(false);
       setDeleteTarget(null);
       
+      // Reset status indicators after delete
+      setCollectionSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      setCollectionAiEnhanceJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      
       // Reload collections to update badges
       await loadCollections();
       
@@ -1104,6 +1128,30 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       }
       
       setToast(`Deleted optimization for ${deleteLanguages.join(', ').toUpperCase()}`);
+      
+      // Reset status indicators after bulk delete
+      setCollectionSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      setCollectionAiEnhanceJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
       
       // Important: reload AFTER we finish
       setTimeout(async () => {
