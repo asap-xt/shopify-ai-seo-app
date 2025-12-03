@@ -147,7 +147,9 @@ const shopSchema = new mongoose.Schema({
     processedProducts: { type: Number, default: 0 },
     successfulProducts: { type: Number, default: 0 },
     failedProducts: { type: Number, default: 0 },
-    skippedProducts: { type: Number, default: 0 }
+    skippedProducts: { type: Number, default: 0 },
+    skipReasons: [{ type: String }],
+    failReasons: [{ type: String }]
   },
   // Collection SEO Job queue status (Generate + Apply)
   collectionSeoJobStatus: {

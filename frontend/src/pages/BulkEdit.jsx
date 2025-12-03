@@ -1614,23 +1614,50 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       </BlockStack>
                     </InlineStack>
                   ) : aiEnhanceJobStatus.status === 'completed' ? (
-                    <InlineStack gap="200" align="start" blockAlign="center">
-                      <Badge tone="success">AI Enhanced</Badge>
-                      <Text variant="bodyMd">
-                        Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
-                        {aiEnhanceJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>}
-                        {aiEnhanceJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>}
-                      </Text>
-                      <Text variant="bodySm" tone="subdued">· {timeAgo(aiEnhanceJobStatus.completedAt)}</Text>
-                    </InlineStack>
-                  ) : (
-                    <InlineStack gap="200" align="start" blockAlign="center">
-                      <Badge tone="critical">AI Enhancement Failed</Badge>
-                      <Text variant="bodyMd" tone="critical">{aiEnhanceJobStatus.message || 'Enhancement failed'}</Text>
-                      {aiEnhanceJobStatus.successfulProducts > 0 && (
-                        <Text variant="bodySm" tone="subdued">· {aiEnhanceJobStatus.successfulProducts} succeeded before failure</Text>
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="success">AI Enhanced</Badge>
+                        <Text variant="bodyMd">
+                          Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
+                          {aiEnhanceJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>}
+                          {aiEnhanceJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>}
+                        </Text>
+                        <Text variant="bodySm" tone="subdued">· {timeAgo(aiEnhanceJobStatus.completedAt)}</Text>
+                      </InlineStack>
+                      {/* Show skip/fail reasons if available */}
+                      {(aiEnhanceJobStatus.skipReasons?.length > 0 || aiEnhanceJobStatus.failReasons?.length > 0) && (
+                        <Box paddingInlineStart="400">
+                          {aiEnhanceJobStatus.skipReasons?.length > 0 && (
+                            <Text variant="bodySm" tone="subdued">
+                              Skipped: {aiEnhanceJobStatus.skipReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.skipReasons.length > 3 ? ` (+${aiEnhanceJobStatus.skipReasons.length - 3} more)` : ''}
+                            </Text>
+                          )}
+                          {aiEnhanceJobStatus.failReasons?.length > 0 && (
+                            <Text variant="bodySm" tone="critical">
+                              Failed: {aiEnhanceJobStatus.failReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.failReasons.length > 3 ? ` (+${aiEnhanceJobStatus.failReasons.length - 3} more)` : ''}
+                            </Text>
+                          )}
+                        </Box>
                       )}
-                    </InlineStack>
+                    </BlockStack>
+                  ) : (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="critical">AI Enhancement Failed</Badge>
+                        <Text variant="bodyMd" tone="critical">{aiEnhanceJobStatus.message || 'Enhancement failed'}</Text>
+                        {aiEnhanceJobStatus.successfulProducts > 0 && (
+                          <Text variant="bodySm" tone="subdued">· {aiEnhanceJobStatus.successfulProducts} succeeded before failure</Text>
+                        )}
+                      </InlineStack>
+                      {/* Show fail reasons if available */}
+                      {aiEnhanceJobStatus.failReasons?.length > 0 && (
+                        <Box paddingInlineStart="400">
+                          <Text variant="bodySm" tone="critical">
+                            Reasons: {aiEnhanceJobStatus.failReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.failReasons.length > 3 ? ` (+${aiEnhanceJobStatus.failReasons.length - 3} more)` : ''}
+                          </Text>
+                        </Box>
+                      )}
+                    </BlockStack>
                   )}
                 </Box>
               </Card>

@@ -54,7 +54,8 @@ class AIEnhanceQueue {
       successfulProducts: 0,
       failedProducts: 0,
       skippedProducts: 0,
-      skipReasons: []
+      skipReasons: [],
+      failReasons: []
     };
 
     this.queue.push(job);
@@ -137,6 +138,9 @@ class AIEnhanceQueue {
               job.successfulProducts++;
             } else {
               job.failedProducts++;
+              if (result.error || result.reason) {
+                job.failReasons.push(`${productData.title}: ${result.error || result.reason}`);
+              }
             }
 
           } catch (error) {
@@ -166,6 +170,7 @@ class AIEnhanceQueue {
             }
             
             job.failedProducts++;
+            job.failReasons.push(`${productData.title}: ${error.message}`);
           }
 
           job.processedProducts++;
@@ -214,7 +219,9 @@ class AIEnhanceQueue {
           processedProducts: job.processedProducts,
           successfulProducts: job.successfulProducts,
           failedProducts: job.failedProducts,
-          skippedProducts: job.skippedProducts
+          skippedProducts: job.skippedProducts,
+          skipReasons: job.skipReasons.slice(0, 10),
+          failReasons: job.failReasons.slice(0, 10)
         });
 
       } catch (error) {
@@ -267,6 +274,8 @@ class AIEnhanceQueue {
       if (statusUpdate.successfulProducts !== undefined) updateFields['aiEnhanceJobStatus.successfulProducts'] = statusUpdate.successfulProducts;
       if (statusUpdate.failedProducts !== undefined) updateFields['aiEnhanceJobStatus.failedProducts'] = statusUpdate.failedProducts;
       if (statusUpdate.skippedProducts !== undefined) updateFields['aiEnhanceJobStatus.skippedProducts'] = statusUpdate.skippedProducts;
+      if (statusUpdate.skipReasons !== undefined) updateFields['aiEnhanceJobStatus.skipReasons'] = statusUpdate.skipReasons;
+      if (statusUpdate.failReasons !== undefined) updateFields['aiEnhanceJobStatus.failReasons'] = statusUpdate.failReasons;
 
       await Shop.findOneAndUpdate(
         { shop },
@@ -324,6 +333,8 @@ class AIEnhanceQueue {
           successfulProducts: shopDoc.aiEnhanceJobStatus.successfulProducts || 0,
           failedProducts: shopDoc.aiEnhanceJobStatus.failedProducts || 0,
           skippedProducts: shopDoc.aiEnhanceJobStatus.skippedProducts || 0,
+          skipReasons: shopDoc.aiEnhanceJobStatus.skipReasons || [],
+          failReasons: shopDoc.aiEnhanceJobStatus.failReasons || [],
           completedAt: shopDoc.aiEnhanceJobStatus.completedAt || null
         };
       }
