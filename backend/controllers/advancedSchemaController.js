@@ -1756,6 +1756,14 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // === FINALIZE TOKEN USAGE ===
+    console.log(`[SCHEMA] 📊 Token Usage Summary for ${shop}:`, {
+      productsProcessed: allProductSchemas.length,
+      schemasGenerated: allProductSchemas.length,
+      totalAITokens,
+      tokensPerProduct: allProductSchemas.length > 0 ? Math.round(totalAITokens / allProductSchemas.length) : 0,
+      reservationId
+    });
+    
     if (reservationId && totalAITokens > 0) {
       try {
         const tokenBalance = await TokenBalance.getOrCreate(shop);
