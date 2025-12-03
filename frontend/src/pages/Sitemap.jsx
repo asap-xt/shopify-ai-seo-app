@@ -512,7 +512,17 @@ export default function SitemapPage({ shop: shopProp }) {
         });
         setShowTrialActivationModal(true);
       } else if (error.status === 402 || error.requiresPurchase) {
-        setTokenError(error);
+        // Calculate tokens properly using centralized function
+        const productCount = info?.productCount || 0;
+        const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
+        
+        setTokenError({
+          ...error,
+          feature: 'ai-sitemap-optimized',
+          tokensRequired: tokenEstimate.withMargin,
+          tokensAvailable: error.tokensAvailable || 0,
+          tokensNeeded: tokenEstimate.withMargin
+        });
         setShowInsufficientTokensModal(true);
       } else {
         setToast(error.message || 'Failed to generate AI-Optimized Sitemap');
