@@ -1,5 +1,5 @@
 // frontend/src/pages/Sitemap.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Card,
   Box,
@@ -12,9 +12,15 @@ import {
   Icon,
   Spinner,
   Modal,
+  Badge,
+  ProgressBar,
+  Divider,
 } from '@shopify/polaris';
-import { CheckIcon, AlertCircleIcon, ClockIcon, ExternalIcon } from '@shopify/polaris-icons';
+import { CheckIcon, AlertCircleIcon, ClockIcon, ExternalIcon, LockIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -34,6 +40,34 @@ export default function SitemapPage({ shop: shopProp }) {
   const [sitemapModalOpen, setSitemapModalOpen] = useState(false);
   const [sitemapModalContent, setSitemapModalContent] = useState(null);
   const [loadingSitemap, setLoadingSitemap] = useState(false);
+  
+  // ===== AI-OPTIMIZED SITEMAP STATES =====
+  // AI Sitemap generation status (background queue)
+  const [aiSitemapStatus, setAiSitemapStatus] = useState({
+    inProgress: false,
+    status: 'idle', // idle, queued, processing, completed, failed
+    message: null,
+    position: null,
+    estimatedTime: null,
+    generatedAt: null,
+    productCount: 0
+  });
+  const aiSitemapPollingRef = useRef(null);
+  const [aiSitemapBusy, setAiSitemapBusy] = useState(false);
+  
+  // AI Sitemap info (from database)
+  const [aiSitemapInfo, setAiSitemapInfo] = useState(null);
+  
+  // Token/Plan modals
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
+  
+  // AI Sitemap View modal
+  const [aiSitemapModalOpen, setAiSitemapModalOpen] = useState(false);
+  const [aiSitemapModalContent, setAiSitemapModalContent] = useState(null);
+  const [loadingAiSitemap, setLoadingAiSitemap] = useState(false);
 
   const loadInfo = useCallback(async () => {
     if (!shop) return;
@@ -192,10 +226,249 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [shop]);
 
+  // ===== AI-OPTIMIZED SITEMAP FUNCTIONS =====
+  
+  // Helper function to format time ago
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+  
+  // Fetch AI Sitemap status from backend
+  const fetchAiSitemapStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/sitemap/status?shop=${shop}`);
+      
+      setAiSitemapStatus(prevStatus => {
+        const justCompleted = prevStatus.inProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          // Stop polling
+          if (aiSitemapPollingRef.current) {
+            clearInterval(aiSitemapPollingRef.current);
+            aiSitemapPollingRef.current = null;
+          }
+          
+          if (status.status === 'completed') {
+            setToast(`AI-Optimized Sitemap generated! (${status.sitemap?.productCount || 0} products)`);
+            // Reload AI sitemap info
+            loadAiSitemapInfo();
+          } else if (status.status === 'failed') {
+            setToast('AI-Optimized Sitemap generation failed');
+          }
+        }
+        
+        return {
+          inProgress: status.inProgress || false,
+          status: status.status || 'idle',
+          message: status.message || null,
+          position: status.queue?.position || null,
+          estimatedTime: status.queue?.estimatedTime || null,
+          generatedAt: status.sitemap?.generatedAt || null,
+          productCount: status.sitemap?.productCount || 0
+        };
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[SITEMAP] Failed to fetch AI sitemap status:', error);
+    }
+  }, [shop, api]);
+  
+  // Start polling for AI Sitemap status
+  const startAiSitemapPolling = useCallback(() => {
+    if (aiSitemapPollingRef.current) {
+      clearInterval(aiSitemapPollingRef.current);
+    }
+    fetchAiSitemapStatus();
+    aiSitemapPollingRef.current = setInterval(() => {
+      fetchAiSitemapStatus();
+    }, 5000);
+  }, [fetchAiSitemapStatus]);
+  
+  // Load AI Sitemap info from database
+  const loadAiSitemapInfo = useCallback(async () => {
+    if (!shop) return;
+    try {
+      const status = await api(`/api/sitemap/status?shop=${shop}`);
+      if (status.sitemap?.generatedAt) {
+        setAiSitemapInfo({
+          generated: true,
+          generatedAt: status.sitemap.generatedAt,
+          productCount: status.sitemap.productCount || 0
+        });
+      }
+    } catch (e) {
+      console.error('[SITEMAP] Failed to load AI sitemap info:', e);
+    }
+  }, [shop, api]);
+  
+  // Generate AI-Optimized Sitemap (calls GraphQL mutation)
+  const generateAiSitemap = useCallback(async () => {
+    if (!shop) return;
+    setAiSitemapBusy(true);
+    
+    try {
+      const response = await api('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: `mutation RegenerateSitemap($shop: String!) {
+            regenerateSitemap(shop: $shop) {
+              success
+              message
+              job {
+                queued
+                position
+                estimatedTime
+              }
+            }
+          }`,
+          variables: { shop }
+        })
+      });
+      
+      // Check for GraphQL errors
+      if (response?.errors?.length) {
+        const errorMessage = response.errors[0]?.message || 'GraphQL error';
+        
+        // Handle trial restriction error
+        if (errorMessage.includes('TRIAL_RESTRICTION')) {
+          setTokenError({
+            trialRestriction: true,
+            requiresActivation: true,
+            message: 'AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.'
+          });
+          setShowTrialActivationModal(true);
+          return;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const result = response?.data?.regenerateSitemap;
+      
+      if (result?.success) {
+        setToast(result.message || 'AI-Optimized Sitemap generation started!');
+        
+        // Start polling if queued
+        if (result.job?.queued) {
+          setAiSitemapStatus({
+            inProgress: true,
+            status: 'queued',
+            message: 'Queued for processing...',
+            position: result.job.position,
+            estimatedTime: result.job.estimatedTime,
+            generatedAt: null,
+            productCount: 0
+          });
+          startAiSitemapPolling();
+        }
+      } else {
+        setToast(result?.message || 'Failed to start AI-Optimized Sitemap generation');
+      }
+      
+    } catch (error) {
+      console.error('[SITEMAP] AI generation error:', error);
+      
+      // Handle specific errors
+      if (error.message?.includes('TRIAL_RESTRICTION') || error.trialRestriction) {
+        setTokenError({
+          trialRestriction: true,
+          requiresActivation: true,
+          message: error.message
+        });
+        setShowTrialActivationModal(true);
+      } else if (error.status === 402 || error.requiresPurchase) {
+        setTokenError(error);
+        setShowInsufficientTokensModal(true);
+      } else {
+        setToast(error.message || 'Failed to generate AI-Optimized Sitemap');
+      }
+    } finally {
+      setAiSitemapBusy(false);
+    }
+  }, [shop, api, startAiSitemapPolling]);
+  
+  // View AI-Optimized Sitemap in Modal
+  const viewAiSitemap = useCallback(async () => {
+    if (!shop) return;
+    
+    setAiSitemapModalOpen(true);
+    setLoadingAiSitemap(true);
+    setAiSitemapModalContent(null);
+    
+    try {
+      const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&ai=true&t=${Date.now()}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+        }
+      });
+      
+      if (response.ok) {
+        const xmlContent = await response.text();
+        setAiSitemapModalContent(xmlContent);
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('[SITEMAP] Error loading AI sitemap:', error);
+      setAiSitemapModalContent(`Error loading AI sitemap: ${error.message}`);
+    } finally {
+      setLoadingAiSitemap(false);
+    }
+  }, [shop]);
+  
+  // Handle plan activation
+  const handleActivatePlan = useCallback(async () => {
+    try {
+      const response = await api('/api/billing/activate', {
+        method: 'POST',
+        body: { shop }
+      });
+      
+      if (response?.confirmationUrl) {
+        // Redirect to Shopify for plan approval
+        window.top.location.href = response.confirmationUrl;
+      } else {
+        setToast('Failed to activate plan');
+      }
+    } catch (error) {
+      console.error('[SITEMAP] Activation error:', error);
+      setToast(error.message || 'Failed to activate plan');
+    }
+  }, [shop, api]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (aiSitemapPollingRef.current) {
+        clearInterval(aiSitemapPollingRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     loadInfo();
     loadPlan();
-  }, [loadInfo, loadPlan]);
+    loadAiSitemapInfo();
+    
+    // Check for in-progress AI sitemap generation
+    fetchAiSitemapStatus().then(status => {
+      if (status?.inProgress) {
+        startAiSitemapPolling();
+      }
+    });
+  }, [loadInfo, loadPlan, loadAiSitemapInfo, fetchAiSitemapStatus, startAiSitemapPolling]);
 
   return (
     <Card>
@@ -365,6 +638,126 @@ export default function SitemapPage({ shop: shopProp }) {
               </BlockStack>
             </Box>
           </Box>
+          
+          {/* ===== AI-OPTIMIZED SITEMAP SECTION ===== */}
+          {/* Only show if basic sitemap is generated */}
+          {info?.generated && (
+            <>
+              <Divider />
+              
+              <Box paddingBlockStart="200">
+                <BlockStack gap="400">
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Box>
+                      <InlineStack gap="200" blockAlign="center">
+                        <Text variant="headingMd" as="h3">AI-Optimized Sitemap</Text>
+                        <Badge tone="info">Premium</Badge>
+                      </InlineStack>
+                      <Text variant="bodySm" tone="subdued">
+                        Enhance your sitemap with AI-generated descriptions for better AI discovery
+                      </Text>
+                    </Box>
+                    
+                    <Button
+                      primary
+                      onClick={generateAiSitemap}
+                      loading={aiSitemapBusy}
+                      disabled={aiSitemapBusy || aiSitemapStatus.inProgress}
+                    >
+                      {aiSitemapBusy || aiSitemapStatus.inProgress ? 'Generating...' : 'Generate AI-Optimized'}
+                    </Button>
+                  </InlineStack>
+                  
+                  {/* AI Sitemap Status Indicator */}
+                  {aiSitemapStatus.inProgress && (
+                    <Banner tone="info">
+                      <InlineStack gap="300" blockAlign="center">
+                        <Spinner size="small" />
+                        <BlockStack gap="100">
+                          <Text variant="bodyMd" fontWeight="semibold">
+                            Generating AI-Optimized Sitemap...
+                          </Text>
+                          <Text variant="bodySm" tone="subdued">
+                            {aiSitemapStatus.message || 'Processing in background...'}
+                          </Text>
+                          {aiSitemapStatus.position > 0 && (
+                            <Text variant="bodySm" tone="subdued">
+                              Queue position: {aiSitemapStatus.position} · Est. {Math.ceil((aiSitemapStatus.estimatedTime || 60) / 60)} min
+                            </Text>
+                          )}
+                        </BlockStack>
+                      </InlineStack>
+                    </Banner>
+                  )}
+                  
+                  {/* AI Sitemap Completed Status */}
+                  {!aiSitemapStatus.inProgress && (aiSitemapInfo?.generated || aiSitemapStatus.status === 'completed') && (
+                    <Box background="bg-surface-secondary" padding="400" borderRadius="200">
+                      <BlockStack gap="300">
+                        <InlineStack gap="200" blockAlign="center">
+                          <Icon source={CheckIcon} tone="success" />
+                          <Text variant="bodyMd" fontWeight="semibold" tone="success">
+                            AI-Optimized Sitemap Active
+                          </Text>
+                          <Badge tone="success">Generated</Badge>
+                        </InlineStack>
+                        
+                        <BlockStack gap="200">
+                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">Products included</Text>
+                              <Text variant="bodyMd" fontWeight="semibold">
+                                {aiSitemapInfo?.productCount || aiSitemapStatus.productCount || 0} products
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                          <Box paddingBlockEnd="200" borderBlockEndWidth="025" borderColor="border-subdued">
+                            <InlineStack align="space-between">
+                              <Text variant="bodyMd" color="subdued">Last generated</Text>
+                              <Text variant="bodyMd" fontWeight="semibold">
+                                {timeAgo(aiSitemapInfo?.generatedAt || aiSitemapStatus.generatedAt)}
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                        </BlockStack>
+                        
+                        <Button fullWidth onClick={viewAiSitemap}>
+                          View AI-Optimized Sitemap
+                        </Button>
+                      </BlockStack>
+                    </Box>
+                  )}
+                  
+                  {/* What's included in AI-Optimized Sitemap */}
+                  <Box paddingBlockStart="200">
+                    <Text variant="headingSm" as="h4">What AI-Optimization adds:</Text>
+                    <Box paddingBlockStart="200">
+                      <BlockStack gap="200">
+                        <InlineStack gap="200" blockAlign="start">
+                          <Box minWidth="24px">
+                            <Icon source={CheckIcon} tone="positive" />
+                          </Box>
+                          <Text>AI-generated product descriptions optimized for AI crawlers</Text>
+                        </InlineStack>
+                        <InlineStack gap="200" blockAlign="start">
+                          <Box minWidth="24px">
+                            <Icon source={CheckIcon} tone="positive" />
+                          </Box>
+                          <Text>Enhanced metadata for better AI understanding</Text>
+                        </InlineStack>
+                        <InlineStack gap="200" blockAlign="start">
+                          <Box minWidth="24px">
+                            <Icon source={CheckIcon} tone="positive" />
+                          </Box>
+                          <Text>Structured data annotations for AI parsing</Text>
+                        </InlineStack>
+                      </BlockStack>
+                    </Box>
+                  </Box>
+                </BlockStack>
+              </Box>
+            </>
+          )}
         </BlockStack>
       </Box>
       
@@ -416,6 +809,98 @@ export default function SitemapPage({ shop: shopProp }) {
           </Modal.Section>
         </Modal>
       )}
+
+      {/* AI-Optimized Sitemap View Modal */}
+      {aiSitemapModalOpen && (
+        <Modal
+          open={aiSitemapModalOpen}
+          onClose={() => {
+            setAiSitemapModalOpen(false);
+            setAiSitemapModalContent(null);
+          }}
+          title="AI-Optimized Sitemap"
+          primaryAction={{
+            content: 'Copy',
+            onAction: () => {
+              navigator.clipboard.writeText(aiSitemapModalContent);
+              setToast('Copied to clipboard!');
+            },
+            disabled: loadingAiSitemap
+          }}
+          secondaryActions={[{
+            content: 'Close',
+            onAction: () => {
+              setAiSitemapModalOpen(false);
+              setAiSitemapModalContent(null);
+            }
+          }]}
+        >
+          <Modal.Section>
+            <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+              {loadingAiSitemap ? (
+                <InlineStack align="center" gap="200">
+                  <Spinner size="small" />
+                  <Text variant="bodyMd">Loading AI-optimized sitemap...</Text>
+                </InlineStack>
+              ) : (
+                <pre style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  margin: 0,
+                  overflow: 'auto',
+                  maxHeight: '400px'
+                }}>
+                  {aiSitemapModalContent}
+                </pre>
+              )}
+            </Box>
+          </Modal.Section>
+        </Modal>
+      )}
+      
+      {/* Trial Activation Modal */}
+      <TrialActivationModal
+        open={showTrialActivationModal}
+        onClose={() => {
+          setShowTrialActivationModal(false);
+          setTokenError(null);
+        }}
+        featureName="AI-Optimized Sitemap"
+        currentPlan={plan?.plan || 'Starter'}
+        trialEndsAt={plan?.trial?.ends_at}
+        onActivatePlan={handleActivatePlan}
+        onPurchaseTokens={() => {
+          setShowTrialActivationModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
+      />
+      
+      {/* Insufficient Tokens Modal */}
+      <InsufficientTokensModal
+        open={showInsufficientTokensModal}
+        onClose={() => {
+          setShowInsufficientTokensModal(false);
+          setTokenError(null);
+        }}
+        featureName="AI-Optimized Sitemap"
+        tokensRequired={tokenError?.tokensRequired}
+        tokensAvailable={tokenError?.tokensAvailable}
+        currentPlan={plan?.plan || 'Starter'}
+        needsUpgrade={tokenError?.needsUpgrade}
+        onBuyTokens={() => {
+          setShowInsufficientTokensModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
+      />
+      
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => setShowTokenPurchaseModal(false)}
+        shop={shop}
+        returnTo={window.location.pathname + window.location.search}
+      />
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
     </Card>
