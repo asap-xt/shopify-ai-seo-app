@@ -520,12 +520,22 @@ export default function SitemapPage({ shop: shopProp }) {
     try {
       const response = await api('/api/billing/activate', {
         method: 'POST',
-        body: { shop }
+        body: { 
+          shop,
+          endTrial: true,  // CRITICAL: Must be true to actually activate the plan
+          returnTo: window.location.pathname  // Return here after approval
+        }
       });
       
       if (response?.confirmationUrl) {
         // Redirect to Shopify for plan approval
         window.top.location.href = response.confirmationUrl;
+      } else if (response?.success) {
+        // Already activated (shouldn't happen but handle it)
+        setToast('Plan activated successfully!');
+        setShowTrialActivationModal(false);
+        // Reload plan info
+        loadPlan();
       } else {
         setToast('Failed to activate plan');
       }
@@ -533,7 +543,7 @@ export default function SitemapPage({ shop: shopProp }) {
       console.error('[SITEMAP] Activation error:', error);
       setToast(error.message || 'Failed to activate plan');
     }
-  }, [shop, api]);
+  }, [shop, api, loadPlan]);
   
   // Cleanup polling on unmount
   useEffect(() => {
