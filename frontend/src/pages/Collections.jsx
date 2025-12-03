@@ -424,7 +424,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[COLLECTIONS] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api]);
+  }, [shop, api, loadCollections]);
   
   // Start polling for Collection SEO job status
   const startCollectionSeoPolling = useCallback(() => {
@@ -468,7 +468,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[COLLECTIONS] Failed to fetch AI Enhancement job status:', error);
     }
-  }, [shop, api]);
+  }, [shop, api, loadCollections]);
   
   // Start polling for Collection AI Enhancement job status
   const startCollectionAiEnhancePolling = useCallback(() => {
