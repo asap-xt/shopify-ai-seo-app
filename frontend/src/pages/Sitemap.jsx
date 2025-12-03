@@ -961,9 +961,10 @@ export default function SitemapPage({ shop: shopProp }) {
           setShowInsufficientTokensModal(false);
           setTokenError(null);
         }}
-        featureName="AI-Optimized Sitemap"
-        tokensRequired={tokenError?.tokensRequired}
-        tokensAvailable={tokenError?.tokensAvailable}
+        feature={tokenError?.feature || 'ai-sitemap-optimized'}
+        tokensRequired={tokenError?.tokensRequired || 0}
+        tokensAvailable={tokenError?.tokensAvailable || 0}
+        tokensNeeded={tokenError?.tokensNeeded || tokenError?.tokensRequired || 0}
         currentPlan={plan?.plan || 'Starter'}
         needsUpgrade={tokenError?.needsUpgrade}
         onBuyTokens={() => {
