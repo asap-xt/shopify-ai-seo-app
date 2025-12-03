@@ -125,6 +125,8 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
       productCount: totalProductCount // For token estimation in modals
     };
 
+    // Prevent caching so productCount is always fresh
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(mergedSettings);
   } catch (error) {
     console.error('Failed to get AI Discovery settings:', error);
