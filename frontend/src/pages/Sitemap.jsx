@@ -359,12 +359,24 @@ export default function SitemapPage({ shop: shopProp }) {
           const currentTokenBalance = tokenData.balance || 0;
           
           // Calculate tokens dynamically based on product count
-          // Formula: base (5000) + perProduct (20) × productCount, with 1.5× safety margin
+          // Formula: base (2000) + perProduct (2500) × productCount, with 1.5× safety margin
+          // Each product requires ~5 AI calls × ~500 tokens each = ~2500 tokens per product
           const productCount = info?.productCount || 0;
-          const baseTokens = 5000;
-          const perProductTokens = 20;
+          const baseTokens = 2000;
+          const perProductTokens = 2500;
           const estimatedTokens = baseTokens + (perProductTokens * productCount);
           const tokensWithMargin = Math.ceil(estimatedTokens * 1.5);
+          
+          // DEBUG: Log token estimation
+          console.log('[SITEMAP] Token estimation:', {
+            productCount,
+            baseTokens,
+            perProductTokens,
+            estimatedTokens,
+            tokensWithMargin,
+            currentTokenBalance,
+            formula: `(${baseTokens} + ${perProductTokens} × ${productCount}) × 1.5 = ${tokensWithMargin}`
+          });
           
           const hasEnoughTokens = currentTokenBalance >= tokensWithMargin;
           
@@ -461,9 +473,10 @@ export default function SitemapPage({ shop: shopProp }) {
         if (errorMessage.startsWith('INSUFFICIENT_TOKENS:')) {
           setAiSitemapBusy(false);
           
-          // Calculate tokens dynamically
+          // Calculate tokens dynamically using same formula as above
+          // base: 2000, perProduct: 2500, with 1.5× margin
           const productCount = info?.productCount || 0;
-          const tokensRequired = Math.ceil((5000 + 20 * productCount) * 1.5);
+          const tokensRequired = Math.ceil((2000 + 2500 * productCount) * 1.5);
           
           setTokenError({
             feature: 'ai-sitemap-optimized',

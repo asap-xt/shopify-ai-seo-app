@@ -316,6 +316,16 @@ async function generateSitemapCore(shop, options = {}) {
               const actualProductCount = Math.min(countData.productsCount?.count || 0, limit);
               
               const tokenEstimate = estimateTokensWithMargin(feature, { productCount: actualProductCount });
+              
+              // DEBUG: Log token estimation
+              console.log('[AI-SITEMAP] Token estimation:', {
+                shop: normalizedShop,
+                productCount: actualProductCount,
+                estimated: tokenEstimate.estimated,
+                withMargin: tokenEstimate.withMargin,
+                formula: `2000 + (${actualProductCount} × 2500) = ${2000 + actualProductCount * 2500}`
+              });
+              
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
               // Determine plan type
