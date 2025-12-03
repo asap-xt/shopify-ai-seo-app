@@ -1895,8 +1895,8 @@ router.post('/generate-all', async (req, res) => {
         trialEndsAt: subscription.trialEndsAt,
         currentPlan: subscription.plan,
         feature,
-        tokensRequired: tokenEstimate.estimated,
-        tokensWithMargin: tokenEstimate.withMargin,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
         tokensAvailable: tokenBalance.balance,
         tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
         message: 'Activate your plan to unlock Advanced Schema Data with included tokens'
@@ -1919,8 +1919,8 @@ router.post('/generate-all', async (req, res) => {
           requiresPurchase: true, // ← Show Insufficient Tokens Modal
           needsUpgrade: false,
           currentPlan: subscription?.plan || 'none',
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalanceForCheck.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalanceForCheck.balance,
           feature: 'ai-schema-advanced',

@@ -118,8 +118,8 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
             trialEndsAt: subscription.trialEndsAt,
             currentPlan: subscription.plan,
             feature,
-            tokensRequired: tokenEstimate.estimated,
-            tokensWithMargin: tokenEstimate.withMargin,
+            tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+            tokensEstimated: tokenEstimate.estimated,
             tokensAvailable: tokenBalance.balance, // During trial, balance = only purchased tokens
             tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
             message: 'Activate your plan to unlock AI Testing with included tokens, or purchase tokens to use during trial'
@@ -137,8 +137,8 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
