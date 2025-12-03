@@ -115,8 +115,15 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   // Toast
   const [toast, setToast] = useState('');
   
-  // AI Enhancement Modal state
+  // AI Enhancement Modal state (legacy - kept for backward compatibility)
   const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
+  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
+    processing: false,
+    current: 0,
+    total: 0,
+    currentItem: '',
+    results: null
+  });
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
