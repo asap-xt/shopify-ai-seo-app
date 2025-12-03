@@ -316,7 +316,7 @@ export default function AIEOScoreCard({
       }
       if (scoreBreakdown.optimizationCoverage < 15) {
         recommendations.push('Low optimization coverage. Optimize more products and collections to improve your score.');
-        recommendations.push('Go to Search Optimization for AI and optimize your products/collections');
+        recommendations.push('Go to Store Optimization for AI and optimize your products/collections');
       }
       if (scoreBreakdown.structuredDataQuality < 7) {
         recommendations.push('Structured data could be improved. Add organization schema and enhance product schema.');

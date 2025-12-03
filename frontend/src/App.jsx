@@ -123,8 +123,8 @@ function AdminNavMenu({ active, shop }) {
     <ui-nav-menu>
       <a href={`/${paramString}`} rel="home">Home</a>
       <a href={`/dashboard${paramString}`}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
-      <a href={`/settings${paramString}`}>Settings</a>
+      <a href={`/ai-seo${paramString}`}>Store Optimization for AI</a>
+      <a href={`/settings${paramString}`}>AI Discovery Features</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
       <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
@@ -971,9 +971,9 @@ export default function App() {
   }, []);
   
   const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
+    if (path.startsWith('/ai-seo')) return 'Store Optimization for AI';
     if (path.startsWith('/billing')) return 'Plans & Billing';
-    if (path.startsWith('/settings')) return 'Settings';
+    if (path.startsWith('/settings')) return 'AI Discovery Features';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
     if (path.startsWith('/clean-uninstall')) return 'Clean & Uninstall';
     if (path.startsWith('/contact-support')) return 'Contact Support';
@@ -990,7 +990,7 @@ export default function App() {
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       return <Dashboard shop={shop} />;
     } 
-    // Search Optimization for AI и под-страници
+    // Store Optimization for AI и под-страници
     else if (normalizedPath.startsWith('/ai-seo')) {
       return <AiSearchOptimisationPanel shop={shop} plan={plan} />;
     } 

@@ -602,7 +602,7 @@ export default function Dashboard({ shop: shopProp }) {
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Go to "Search Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
+                        Go to "Store Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
                         existing titles, descriptions, and metadata for better AI consumption. This is essential - without basic optimization, 
                         AI-enhanced features cannot be applied.
                       </Text>
@@ -644,7 +644,7 @@ export default function Dashboard({ shop: shopProp }) {
                       
                       <Text variant="bodyMd" fontWeight="semibold">7. Configure AI Discovery Settings</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Visit "Settings" to configure AI Discovery features:
+                        Visit "AI Discovery Features" to configure:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • <strong>AI Bot Access Control:</strong> Select which AI bots (OpenAI, Claude, Google, etc.) can access your store's structured data

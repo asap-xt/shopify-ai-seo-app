@@ -1,5 +1,13 @@
 {
-  "nav": { "dashboard": "Dashboard", "seo": "AI SEO", "billing": "Billing", "settings": "Settings" },
+  "nav": { 
+    "dashboard": "Dashboard", 
+    "storeOptimization": "Store Optimization for AI",
+    "aiDiscovery": "AI Discovery Features",
+    "billing": "Plans & Billing",
+    "aiTesting": "AI Testing",
+    "cleanUninstall": "Clean & Uninstall",
+    "contactSupport": "Contact Support"
+  },
   "dashboard": {
     "plan": "Current plan",
     "shop": "Shop",
@@ -10,5 +18,5 @@
   },
   "seo": { "title": "Generate SEO", "productId": "Product ID", "provider": "AI Provider", "generate": "Generate", "result": "Result" },
   "billing": { "title": "Plans & Billing", "choose": "Choose your plan:", "activate": "Activate" },
-  "settings": { "title": "Settings", "languageInfo": "Use the top-right menu to switch UI language.", "notes": "More settings will appear here later." }
+  "settings": { "title": "AI Discovery Features", "languageInfo": "Use the top-right menu to switch UI language.", "notes": "More settings will appear here later." }
 }
