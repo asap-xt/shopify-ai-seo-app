@@ -1565,12 +1565,13 @@ export default function Settings() {
                 //   description: 'Enhanced sitemap with AI hints',
                 //   requiredPlan: 'Growth Extra'
                 // },
-                {
-                  key: 'schemaData',
-                  name: 'Advanced Schema Data',
-                  description: 'BreadcrumbList, FAQPage & more',
-                  requiredPlan: 'Enterprise'
-                }
+                // Advanced Schema Data moved to Store Optimization → Schema Data page
+                // {
+                //   key: 'schemaData',
+                //   name: 'Advanced Schema Data',
+                //   description: 'BreadcrumbList, FAQPage & more',
+                //   requiredPlan: 'Enterprise'
+                // }
               ].map((feature) => {
                 const isAvailable = isFeatureAvailable(feature.key);
                 const isEnabled = !!settings?.features?.[feature.key];
@@ -1712,8 +1713,8 @@ export default function Settings() {
                           </Box>
                         )}
                         
-                        {/* Advanced Schema Status Indicator */}
-                        {feature.key === 'schemaData' && isEnabled && schemaStatus.inProgress && (
+                        {/* Advanced Schema Status Indicator - MOVED TO Schema Data page */}
+                        {/* {feature.key === 'schemaData' && isEnabled && schemaStatus.inProgress && (
                           <Box paddingInlineStart="800" paddingBlockStart="200">
                             <InlineStack gap="200" blockAlign="center">
                               <Spinner size="small" />
@@ -1734,10 +1735,10 @@ export default function Settings() {
                               </BlockStack>
                             </InlineStack>
                           </Box>
-                        )}
+                        )} */}
                         
-                        {/* Advanced Schema Completion Status - shown even if checkbox is unchecked */}
-                        {feature.key === 'schemaData' && !schemaStatus.inProgress && schemaStatus.status === 'completed' && schemaStatus.generatedAt && (
+                        {/* Advanced Schema Completion Status - MOVED TO Schema Data page */}
+                        {/* {feature.key === 'schemaData' && !schemaStatus.inProgress && schemaStatus.status === 'completed' && schemaStatus.generatedAt && (
                           <Box paddingInlineStart="800" paddingBlockStart="200">
                             <InlineStack gap="200" blockAlign="center">
                               <Badge tone="success">Generated</Badge>
@@ -1756,7 +1757,7 @@ export default function Settings() {
                               </Text>
                             </InlineStack>
                           </Box>
-                        )}
+                        )} */}
                       </BlockStack>
                     ) : (
                       <Checkbox
