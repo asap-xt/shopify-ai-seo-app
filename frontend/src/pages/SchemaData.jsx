@@ -1,5 +1,5 @@
 // frontend/src/pages/SchemaData.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Card,
   Box,
@@ -20,6 +20,11 @@ import {
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY, getPlanIndex } from '../hooks/usePlanHierarchy.js';
+import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
+import { estimateTokens } from '../utils/tokenEstimates.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -51,13 +56,49 @@ export default function SchemaData({ shop: shopProp }) {
   const api = useMemo(() => makeSessionFetch(), []);
   const [schemaScript, setSchemaScript] = useState('');
   const [currentPlan, setCurrentPlan] = useState(null);
+  const [planKey, setPlanKey] = useState(null);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
+  const [productCount, setProductCount] = useState(0);
+  
+  // Advanced Schema states
+  const [advancedSchemaStatus, setAdvancedSchemaStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    position: null,
+    estimatedTime: null,
+    generatedAt: null,
+    schemaCount: 0
+  });
+  const [advancedSchemaPollingRef, setAdvancedSchemaPollingRef] = useState(null);
+  const [advancedSchemaBusy, setAdvancedSchemaBusy] = useState(false);
+  
+  // Modal states
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalData, setUpgradeModalData] = useState({});
+  const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
+  const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
+  const [schemaErrorType, setSchemaErrorType] = useState(null);
 
   useEffect(() => {
     if (shop) {
       loadSchemas();
       loadPlan();
+      fetchAdvancedSchemaStatus();
     }
   }, [shop, api]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (advancedSchemaPollingRef) {
+        clearInterval(advancedSchemaPollingRef);
+      }
+    };
+  }, [advancedSchemaPollingRef]);
 
   const loadPlan = async () => {
     try {
@@ -67,6 +108,8 @@ export default function SchemaData({ shop: shopProp }) {
             shop
             plan
             planKey
+            trialEndsAt
+            activatedAt
           }
         }
       `;
@@ -79,9 +122,239 @@ export default function SchemaData({ shop: shopProp }) {
       
       debugLog('[SCHEMA-DATA] Plan data:', data);
       setCurrentPlan(data?.data?.plansMe?.plan);
+      setPlanKey(data?.data?.plansMe?.planKey);
+      setSubscriptionInfo(data?.data?.plansMe);
+      
+      // Also get product count for token estimation
+      try {
+        const settingsData = await api(`/api/ai-discovery/settings?shop=${shop}`);
+        setProductCount(settingsData?.productCount || 0);
+      } catch (e) {
+        debugLog('[SCHEMA-DATA] Could not load product count:', e);
+      }
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
     }
+  };
+  
+  // Fetch Advanced Schema status
+  const fetchAdvancedSchemaStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/schema/status?shop=${shop}`);
+      
+      setAdvancedSchemaStatus({
+        inProgress: status.inProgress || false,
+        status: status.status || 'idle',
+        message: status.message || null,
+        position: status.queue?.position || null,
+        estimatedTime: status.queue?.estimatedTime || null,
+        generatedAt: status.schema?.generatedAt || null,
+        schemaCount: status.schema?.schemaCount || 0
+      });
+      
+      // If completed, stop polling
+      if (status.status === 'completed' && !status.inProgress) {
+        if (advancedSchemaPollingRef) {
+          clearInterval(advancedSchemaPollingRef);
+          setAdvancedSchemaPollingRef(null);
+        }
+        
+        if (advancedSchemaStatus.inProgress) {
+          setToastContent(`Advanced Schema Data generated! (${status.schema?.schemaCount || 0} schemas)`);
+        }
+      }
+      
+      // Handle errors
+      if (status.status === 'failed') {
+        if (advancedSchemaPollingRef) {
+          clearInterval(advancedSchemaPollingRef);
+          setAdvancedSchemaPollingRef(null);
+        }
+        
+        if (status.message === 'NO_OPTIMIZED_PRODUCTS') {
+          setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+          setShowSchemaErrorModal(true);
+        } else if (status.message === 'ONLY_BASIC_SEO') {
+          setSchemaErrorType('ONLY_BASIC_SEO');
+          setShowSchemaErrorModal(true);
+        }
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('[SCHEMA-DATA] Failed to fetch schema status:', error);
+    }
+  }, [shop, api, advancedSchemaPollingRef, advancedSchemaStatus.inProgress]);
+  
+  // Start polling for schema status
+  const startAdvancedSchemaPolling = useCallback(() => {
+    if (advancedSchemaPollingRef) {
+      clearInterval(advancedSchemaPollingRef);
+    }
+    
+    fetchAdvancedSchemaStatus();
+    
+    const interval = setInterval(() => {
+      fetchAdvancedSchemaStatus();
+    }, 10000);
+    
+    setAdvancedSchemaPollingRef(interval);
+  }, [fetchAdvancedSchemaStatus, advancedSchemaPollingRef]);
+  
+  // Generate Advanced Schema with all plan/token checks
+  const generateAdvancedSchema = async (forceBasicSeo = false) => {
+    setAdvancedSchemaBusy(true);
+    
+    try {
+      const normalizedPlan = (planKey || currentPlan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      
+      // Plans with included tokens (full access)
+      const plansWithIncludedTokens = ['growth_extra', 'enterprise'];
+      // Plus plans (require purchased tokens)
+      const plusPlans = ['professional_plus', 'growth_plus', 'starter_plus'];
+      
+      const hasIncludedAccess = plansWithIncludedTokens.includes(normalizedPlan);
+      const isPlusPlan = plusPlans.includes(normalizedPlan);
+      
+      // Token estimation
+      const tokenEstimate = estimateTokens('ai-schema-advanced', { productCount: productCount || 0 });
+      const tokensRequired = tokenEstimate.withMargin;
+      
+      // Plan check - show upgrade modal if not eligible
+      if (!hasIncludedAccess && !isPlusPlan) {
+        setUpgradeModalData({
+          feature: 'Advanced Schema Data',
+          currentPlan: currentPlan,
+          requiredPlan: 'Professional Plus, Growth Plus, Growth Extra, or Enterprise',
+          tokensRequired
+        });
+        setShowUpgradeModal(true);
+        setAdvancedSchemaBusy(false);
+        return;
+      }
+      
+      // For Plus plans, check token balance first
+      if (isPlusPlan) {
+        try {
+          const balanceData = await api(`/api/billing/tokens/balance?shop=${shop}`);
+          const currentBalance = balanceData?.balance || 0;
+          
+          if (currentBalance < tokensRequired) {
+            setTokenError({
+              feature: 'ai-schema-advanced',
+              tokensRequired,
+              tokensAvailable: currentBalance,
+              tokensNeeded: tokensRequired - currentBalance
+            });
+            setShowInsufficientTokensModal(true);
+            setAdvancedSchemaBusy(false);
+            return;
+          }
+        } catch (e) {
+          console.error('[SCHEMA-DATA] Token balance check failed:', e);
+        }
+      }
+      
+      // Call the backend to generate
+      const result = await api(`/api/schema/generate-all?shop=${shop}`, {
+        method: 'POST',
+        body: { shop, forceBasicSeo }
+      });
+      
+      if (result.queued) {
+        setToastContent('Advanced Schema generation started...');
+        startAdvancedSchemaPolling();
+      } else if (result.error) {
+        // Handle specific errors
+        if (result.error === 'NO_OPTIMIZED_PRODUCTS') {
+          setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+          setShowSchemaErrorModal(true);
+        } else if (result.error === 'ONLY_BASIC_SEO') {
+          setSchemaErrorType('ONLY_BASIC_SEO');
+          setShowSchemaErrorModal(true);
+        } else {
+          setToastContent(`Error: ${result.error}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('[SCHEMA-DATA] Generate advanced schema error:', error);
+      
+      // Handle 402 errors (trial/tokens)
+      if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          setTokenError(error);
+          setShowTrialActivationModal(true);
+        } else if (error.requiresPurchase) {
+          setTokenError(error);
+          setShowInsufficientTokensModal(true);
+        } else {
+          setToastContent(error.message || 'Payment required');
+        }
+      } else if (error.status === 403) {
+        setUpgradeModalData({
+          feature: 'Advanced Schema Data',
+          currentPlan: currentPlan,
+          requiredPlan: 'Professional Plus, Growth Plus, Growth Extra, or Enterprise'
+        });
+        setShowUpgradeModal(true);
+      } else if (error.status === 400) {
+        // NO_OPTIMIZED_PRODUCTS or ONLY_BASIC_SEO
+        if (error.error === 'NO_OPTIMIZED_PRODUCTS') {
+          setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+          setShowSchemaErrorModal(true);
+        } else if (error.error === 'ONLY_BASIC_SEO') {
+          setSchemaErrorType('ONLY_BASIC_SEO');
+          setShowSchemaErrorModal(true);
+        } else {
+          setToastContent(error.message || 'Error generating schema');
+        }
+      } else {
+        setToastContent(`Error: ${error.message}`);
+      }
+    } finally {
+      setAdvancedSchemaBusy(false);
+    }
+  };
+  
+  // Handle plan activation from trial
+  const handleActivatePlan = async () => {
+    try {
+      const result = await api(`/api/billing/activate?shop=${shop}`, {
+        method: 'POST',
+        body: { 
+          shop, 
+          endTrial: true,
+          returnTo: window.location.pathname
+        }
+      });
+      
+      if (result.confirmationUrl) {
+        window.top.location.href = result.confirmationUrl;
+      } else if (result.success) {
+        setShowTrialActivationModal(false);
+        setToastContent('Plan activated! You can now generate Advanced Schema Data.');
+        // Retry generation
+        setTimeout(() => generateAdvancedSchema(), 1000);
+      }
+    } catch (error) {
+      console.error('[SCHEMA-DATA] Activate plan error:', error);
+      setToastContent('Failed to activate plan');
+    }
+  };
+  
+  // Time ago helper
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const generated = new Date(date);
+    const diff = Math.floor((now - generated) / 1000 / 60);
+    if (diff < 1) return 'Just now';
+    if (diff < 60) return `${diff} min ago`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
 
   // Plan-based feature availability
@@ -379,9 +652,84 @@ ${JSON.stringify(allSchemas, null, 2)}
                       </Box>
                     </Card>
 
+                    {/* Advanced Schema Data */}
+                    <Divider />
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="300">
+                          <InlineStack align="space-between" blockAlign="center">
+                            <BlockStack gap="100">
+                              <Text as="h4" variant="headingSm">Advanced Schema Data</Text>
+                              <Text variant="bodySm" tone="subdued">
+                                BreadcrumbList, FAQPage, AggregateRating & more AI-generated schemas
+                              </Text>
+                            </BlockStack>
+                            
+                            {advancedSchemaStatus.status === 'completed' && advancedSchemaStatus.generatedAt ? (
+                              <Badge tone="success">Generated</Badge>
+                            ) : advancedSchemaStatus.inProgress ? (
+                              <Badge tone="attention">Generating...</Badge>
+                            ) : (
+                              <Badge tone="info">Not generated</Badge>
+                            )}
+                          </InlineStack>
+                          
+                          {/* Status indicator when generating */}
+                          {advancedSchemaStatus.inProgress && (
+                            <Box paddingBlockStart="200">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Spinner size="small" />
+                                <BlockStack gap="100">
+                                  <Text variant="bodyMd" tone="subdued">
+                                    {advancedSchemaStatus.message || 'Generating schema data...'}
+                                  </Text>
+                                  {advancedSchemaStatus.position > 0 && (
+                                    <Text variant="bodySm" tone="subdued">
+                                      Queue position: {advancedSchemaStatus.position} · Est. {Math.ceil(advancedSchemaStatus.estimatedTime / 60)} min
+                                    </Text>
+                                  )}
+                                </BlockStack>
+                              </InlineStack>
+                            </Box>
+                          )}
+                          
+                          {/* Completion status */}
+                          {!advancedSchemaStatus.inProgress && advancedSchemaStatus.status === 'completed' && advancedSchemaStatus.generatedAt && (
+                            <Box paddingBlockStart="200">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="bodySm" tone="subdued">
+                                  {advancedSchemaStatus.schemaCount} schemas · {timeAgo(advancedSchemaStatus.generatedAt)}
+                                </Text>
+                              </InlineStack>
+                            </Box>
+                          )}
+                          
+                          {/* Generate button */}
+                          <Box paddingBlockStart="200">
+                            <InlineStack gap="200">
+                              <Button
+                                onClick={() => generateAdvancedSchema(false)}
+                                loading={advancedSchemaBusy}
+                                disabled={advancedSchemaStatus.inProgress}
+                              >
+                                {advancedSchemaStatus.status === 'completed' ? 'Regenerate Advanced Schemas' : 'Generate Advanced Schemas'}
+                              </Button>
+                            </InlineStack>
+                          </Box>
+                          
+                          {/* Benefits info */}
+                          <Box paddingBlockStart="100">
+                            <Text variant="bodySm" tone="subdued">
+                              ✓ AI-generated FAQ schemas · ✓ Aggregate ratings · ✓ Enhanced product data · ✓ Better AI visibility
+                            </Text>
+                          </Box>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+
                     <InlineStack gap="300">
                       <Button onClick={handleRegenerate} loading={loading}>
-                        Regenerate Schemas
+                        Regenerate Basic Schemas
                       </Button>
                       <Button variant="plain" url="https://developers.google.com/search/docs/appearance/structured-data">
                         Learn about Schema.org
@@ -577,6 +925,98 @@ ${JSON.stringify(allSchemas, null, 2)}
       {toastContent && (
         <Toast content={toastContent} onDismiss={() => setToastContent('')} />
       )}
+      
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature={upgradeModalData.feature}
+        currentPlan={upgradeModalData.currentPlan}
+        requiredPlan={upgradeModalData.requiredPlan}
+        returnTo="/ai-seo/schema-data"
+      />
+      
+      {/* Trial Activation Modal */}
+      <TrialActivationModal
+        open={showTrialActivationModal}
+        onClose={() => setShowTrialActivationModal(false)}
+        onActivate={handleActivatePlan}
+        feature="Advanced Schema Data"
+        tokensRequired={tokenError?.tokensRequired || estimateTokens('ai-schema-advanced', { productCount }).withMargin}
+      />
+      
+      {/* Insufficient Tokens Modal */}
+      <InsufficientTokensModal
+        open={showInsufficientTokensModal}
+        onClose={() => setShowInsufficientTokensModal(false)}
+        onPurchase={() => {
+          setShowInsufficientTokensModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
+        feature="ai-schema-advanced"
+        tokensRequired={tokenError?.tokensRequired || 0}
+        tokensAvailable={tokenError?.tokensAvailable || 0}
+        tokensNeeded={tokenError?.tokensNeeded || tokenError?.tokensRequired || 0}
+      />
+      
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => setShowTokenPurchaseModal(false)}
+        tokensNeeded={tokenError?.tokensNeeded || 0}
+        returnTo="/ai-seo/schema-data"
+      />
+      
+      {/* Schema Error Modal */}
+      <Modal
+        open={showSchemaErrorModal}
+        onClose={() => setShowSchemaErrorModal(false)}
+        title={schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' ? 'No Optimized Products' : 'Only Basic SEO Found'}
+        primaryAction={
+          schemaErrorType === 'ONLY_BASIC_SEO' 
+            ? {
+                content: 'Generate with Basic SEO',
+                onAction: () => {
+                  setShowSchemaErrorModal(false);
+                  generateAdvancedSchema(true);
+                }
+              }
+            : {
+                content: 'Go to Products',
+                onAction: () => {
+                  setShowSchemaErrorModal(false);
+                  const params = new URLSearchParams(window.location.search);
+                  window.location.href = `/ai-seo/bulk-edit?shop=${shop}&host=${params.get('host')}&embedded=${params.get('embedded')}`;
+                }
+              }
+        }
+        secondaryActions={[
+          {
+            content: 'Cancel',
+            onAction: () => setShowSchemaErrorModal(false)
+          }
+        ]}
+      >
+        <Modal.Section>
+          {schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' ? (
+            <Text>
+              Advanced Schema Data requires products with AI Search Optimisation. 
+              Please run Basic or AI Enhanced SEO on your products first.
+            </Text>
+          ) : (
+            <BlockStack gap="200">
+              <Text>
+                Your products only have Basic SEO optimisation. For best results, 
+                we recommend using AI Enhanced SEO which provides richer data for schemas.
+              </Text>
+              <Text tone="subdued">
+                You can still generate Advanced Schemas using Basic SEO data, 
+                but the results may be less comprehensive.
+              </Text>
+            </BlockStack>
+          )}
+        </Modal.Section>
+      </Modal>
       
     </>
   );
