@@ -980,6 +980,7 @@ export default function SitemapPage({ shop: shopProp }) {
           'Professional Plus, Growth Plus, Growth Extra, or Enterprise plan',
           'Or purchase tokens on any Plus plan'
         ]}
+        returnTo={window.location.pathname + window.location.search}
       />
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}

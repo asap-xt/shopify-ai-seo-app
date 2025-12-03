@@ -373,7 +373,7 @@ router.get('/info', verifyRequest, async (req, res) => {
 router.post('/subscribe', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { plan, endTrial } = req.body;
+    const { plan, endTrial, returnTo } = req.body;
     
     if (!plan || !PLANS[plan]) {
       return res.status(400).json({ error: 'Invalid plan' });
@@ -467,7 +467,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       shop,
       plan,
       shopDoc.accessToken,
-      { trialDays }
+      { trialDays, returnTo: returnTo || '/billing' }
     );
     
     // Save subscription to MongoDB

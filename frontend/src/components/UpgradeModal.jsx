@@ -8,12 +8,19 @@ export default function UpgradeModal({
   currentPlan = "starter",
   errorMessage = null,
   minimumPlanRequired = null,
-  features = null // Array of features to unlock, or null for default
+  features = null, // Array of features to unlock, or null for default
+  returnTo = null // Path to return to after upgrade (e.g., '/ai-seo/sitemap')
 }) {
   const handleUpgrade = () => {
     onClose();
     // Navigate to billing page - copy ALL current URL parameters (including embedded=1)
     const currentParams = new URLSearchParams(window.location.search);
+    
+    // Add returnTo parameter if provided
+    if (returnTo) {
+      currentParams.set('returnTo', returnTo);
+    }
+    
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
     window.location.href = `/billing${paramString}`;
   };

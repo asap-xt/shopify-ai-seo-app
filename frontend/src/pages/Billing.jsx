@@ -101,6 +101,10 @@ export default function Billing({ shop }) {
       // Hide welcome banner when user selects a plan
       setShowWelcomeBanner(false);
       
+      // Get returnTo from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo') || '/billing';
+      
       const response = await fetch('/api/billing/subscribe', {
         method: 'POST',
         headers: {
@@ -109,7 +113,8 @@ export default function Billing({ shop }) {
         body: JSON.stringify({
           shop,
           plan,
-          endTrial: isActivatingPlan // Only end trial if user clicked "Activate Plan" button
+          endTrial: isActivatingPlan, // Only end trial if user clicked "Activate Plan" button
+          returnTo: returnTo
         })
       });
       
