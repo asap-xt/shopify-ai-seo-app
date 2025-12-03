@@ -215,19 +215,16 @@ async function generateSitemapCore(shop, options = {}) {
     let reservationId = null;
     let totalAITokens = 0;
     
-    // Check AI Discovery settings ONLY if enableAIEnhancement is requested
+    // Check plan eligibility ONLY if enableAIEnhancement is requested
+    // NOTE: We no longer check AI Discovery settings - the button is now on Sitemap page
     if (enableAIEnhancement) {
       try {
-        const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
         const { default: Shop } = await import('../db/Shop.js');
         
         const shopRecord = await Shop.findOne({ shop: normalizedShop });
         if (shopRecord?.accessToken) {
-          const session = { accessToken: shopRecord.accessToken };
-          const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
-          
-          // Check eligibility for AI-enhanced sitemap
-          const planKey = (settings?.planKey || plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+          // Check eligibility for AI-enhanced sitemap based on plan
+          const planKey = (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const plansWithAccess = ['growth_extra', 'enterprise'];
           const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
           
@@ -245,7 +242,18 @@ async function generateSitemapCore(shop, options = {}) {
             }
           }
           
-          isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
+          // enableAIEnhancement means user clicked "Generate AI-Optimized" button
+          // We only need to check plan eligibility, not AI Discovery settings
+          isAISitemapEnabled = isEligiblePlan;
+          
+          // DEBUG: Log AI sitemap eligibility
+          console.log('[AI-SITEMAP] Eligibility check:', {
+            shop: normalizedShop,
+            planKey,
+            isEligiblePlan,
+            enableAIEnhancement,
+            isAISitemapEnabled
+          });
           
           // === TRIAL PERIOD CHECK ===
           const { default: Subscription } = await import('../db/Subscription.js');
@@ -289,40 +297,35 @@ async function generateSitemapCore(shop, options = {}) {
               // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
               // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
               if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
-                // Return error response instead of generating basic sitemap
-                return res.status(402).json({
-                  error: 'AI-Optimized Sitemap is locked during trial period',
-                  trialRestriction: true,
-                  requiresActivation: true,
-                  trialEndsAt: subscription.trialEndsAt,
-                  currentPlan: subscription.plan,
-                  message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens'
-                });
+                // Throw error instead of generating basic sitemap
+                const trialError = new Error('TRIAL_RESTRICTION');
+                trialError.code = 'TRIAL_RESTRICTION';
+                trialError.trialRestriction = true;
+                trialError.requiresActivation = true;
+                trialError.trialEndsAt = subscription.trialEndsAt;
+                trialError.currentPlan = subscription.plan;
+                throw trialError;
               } else if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
                 // Has tokens AND (plan active OR trial ended OR purchased tokens) → Reserve tokens
                 const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
                 reservationId = reservation.reservationId;
                 await reservation.save();
               } else {
-                // Insufficient tokens → Return error for purchase
-                const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
-                const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(planKey);
+                // Insufficient tokens → Throw error for purchase
+                const currentPlanKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+                const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(currentPlanKey);
                 
-                return res.status(402).json({
-                  error: 'Insufficient tokens for AI-Optimized Sitemap',
-                  requiresPurchase: true,
-                  needsUpgrade: needsUpgrade,
-                  minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
-                  currentPlan: subscription?.plan,
-                  tokensRequired: tokenEstimate.estimated,
-                  tokensWithMargin: tokenEstimate.withMargin,
-                  tokensAvailable: tokenBalance.balance,
-                  tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
-                  feature,
-                  message: needsUpgrade 
-                    ? 'Purchase more tokens or upgrade to Growth Extra plan for AI-Optimized Sitemap'
-                    : 'You need more tokens to use AI-Optimized Sitemap'
-                });
+                const tokenError = new Error('INSUFFICIENT_TOKENS');
+                tokenError.code = 'INSUFFICIENT_TOKENS';
+                tokenError.requiresPurchase = true;
+                tokenError.needsUpgrade = needsUpgrade;
+                tokenError.minimumPlanForFeature = needsUpgrade ? 'Growth Extra' : null;
+                tokenError.currentPlan = subscription?.plan;
+                tokenError.tokensRequired = tokenEstimate.estimated;
+                tokenError.tokensWithMargin = tokenEstimate.withMargin;
+                tokenError.tokensAvailable = tokenBalance.balance;
+                tokenError.tokensNeeded = tokenEstimate.withMargin - tokenBalance.balance;
+                throw tokenError;
               }
             }
           }

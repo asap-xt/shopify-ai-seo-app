@@ -1045,6 +1045,24 @@ import debugRouter from './controllers/debugRouter.js';
         } catch (error) {
           console.error('[GRAPHQL] ❌ Error starting sitemap regeneration:', error);
           console.error('[GRAPHQL] Error stack:', error.stack);
+          
+          // Handle specific error codes
+          if (error.code === 'TRIAL_RESTRICTION' || error.message?.includes('TRIAL_RESTRICTION')) {
+            return {
+              success: false,
+              message: 'TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.',
+              shop: shop
+            };
+          }
+          
+          if (error.code === 'INSUFFICIENT_TOKENS') {
+            return {
+              success: false,
+              message: 'INSUFFICIENT_TOKENS: Not enough tokens for AI-Optimized Sitemap.',
+              shop: shop
+            };
+          }
+          
           return {
             success: false,
             message: error.message,
