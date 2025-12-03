@@ -906,6 +906,10 @@ ${JSON.stringify(allSchemas, null, 2)}
                 Generate and manage AI-enhanced structured data for your products
               </Text>
               
+              <Banner tone="info">
+                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
+              </Banner>
+              
               <InlineStack gap="300">
                 <Button
                   loading={advancedSchemaStatus.inProgress}
@@ -1111,10 +1115,6 @@ ${JSON.stringify(allSchemas, null, 2)}
                   </BlockStack>
                 </Box>
               </Card>
-              
-              <Banner tone="info">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
-              </Banner>
             </BlockStack>
           </Box>
         </Card>
