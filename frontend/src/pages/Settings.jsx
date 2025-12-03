@@ -26,6 +26,7 @@ import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
+import { estimateTokens } from '../utils/tokenEstimates.js';
 
 // Dev-only debug logger (hidden in production builds)
 const isDev = import.meta.env.DEV;
@@ -857,11 +858,15 @@ export default function Settings() {
             storeMetadata: 'ai-store-metadata'
           };
           
+          // Use dynamic token estimation
+          const featureId = featureMapping[featureKey] || featureKey;
+          const tokenEstimate = estimateTokens(featureId, { productCount: 0 });
+          
           setTokenModalData({
-            feature: featureMapping[featureKey] || featureKey,
-            tokensRequired: 1000, // Estimate
+            feature: featureId,
+            tokensRequired: tokenEstimate.withMargin,
             tokensAvailable: balance.balance || 0,
-            tokensNeeded: 1000 // Estimate
+            tokensNeeded: tokenEstimate.withMargin
           });
           setShowInsufficientTokensModal(true);
           return; // Don't toggle the feature ON
@@ -1085,11 +1090,15 @@ export default function Settings() {
           storeMetadata: 'ai-store-metadata'
         };
         
+        // Use dynamic token estimation
+        const featureId = featureMapping[featureKey] || featureKey;
+        const tokenEstimate = estimateTokens(featureId, { productCount: 0 });
+        
         setTokenModalData({
-          feature: featureMapping[featureKey] || featureKey,
-          tokensRequired: 1000, // Estimate
+          feature: featureId,
+          tokensRequired: tokenEstimate.withMargin,
           tokensAvailable: balance.balance || 0,
-          tokensNeeded: 1000 // Estimate
+          tokensNeeded: tokenEstimate.withMargin
         });
         setShowInsufficientTokensModal(true);
         return false;
