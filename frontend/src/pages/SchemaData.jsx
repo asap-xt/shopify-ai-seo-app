@@ -16,7 +16,9 @@ import {
   Badge,
   List,
   Divider,
-  Modal
+  Modal,
+  InlineGrid,
+  Checkbox
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY, getPlanIndex } from '../hooks/usePlanHierarchy.js';
@@ -87,6 +89,22 @@ export default function SchemaData({ shop: shopProp }) {
   const [tokenError, setTokenError] = useState(null);
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null);
+  
+  // Rich Attributes state (same as Settings.jsx)
+  const [richAttributes, setRichAttributes] = useState({
+    material: false,
+    color: false,
+    size: false,
+    weight: false,
+    dimensions: false,
+    category: false,
+    audience: false,
+    reviews: false,
+    ratings: true, // Default enabled
+    enhancedDescription: false,
+    organization: false
+  });
+  const [savingAttributes, setSavingAttributes] = useState(false);
 
   useEffect(() => {
     if (shop) {
@@ -115,6 +133,14 @@ export default function SchemaData({ shop: shopProp }) {
       setPlanKey(normalizePlan(settingsData?.plan));
       setProductCount(settingsData?.productCount || 0);
       
+      // Load rich attributes if available
+      if (settingsData?.richAttributes) {
+        setRichAttributes(prev => ({
+          ...prev,
+          ...settingsData.richAttributes
+        }));
+      }
+      
       // Also get subscription info for trial checks
       try {
         const query = `
@@ -141,6 +167,26 @@ export default function SchemaData({ shop: shopProp }) {
       }
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
+    }
+  };
+  
+  // Save rich attributes to backend
+  const saveRichAttributes = async () => {
+    setSavingAttributes(true);
+    try {
+      await api(`/api/ai-discovery/settings?shop=${shop}`, {
+        method: 'POST',
+        body: {
+          shop,
+          richAttributes
+        }
+      });
+      setToastContent('Rich attributes saved!');
+    } catch (err) {
+      console.error('[SCHEMA-DATA] Error saving rich attributes:', err);
+      setToastContent('Failed to save attributes');
+    } finally {
+      setSavingAttributes(false);
     }
   };
   
@@ -666,77 +712,166 @@ ${JSON.stringify(allSchemas, null, 2)}
                       </Box>
                     </Card>
 
-                    {/* Advanced Schema Data */}
+                    {/* Advanced Schema Data Management - EXACT COPY from Settings.jsx */}
                     <Divider />
                     <Card>
-                      <Box padding="300">
-                        <BlockStack gap="300">
-                          <InlineStack align="space-between" blockAlign="center">
-                            <BlockStack gap="100">
-                              <Text as="h4" variant="headingSm">Advanced Schema Data</Text>
-                              <Text variant="bodySm" tone="subdued">
-                                BreadcrumbList, FAQPage, AggregateRating & more AI-generated schemas
-                              </Text>
-                            </BlockStack>
+                      <Box padding="400">
+                        <BlockStack gap="400">
+                          <Text as="h2" variant="headingMd">Advanced Schema Data Management</Text>
+                          <Text variant="bodyMd" tone="subdued">
+                            Generate and manage structured data for your products
+                          </Text>
+                          
+                          <InlineStack gap="300">
+                            <Button
+                              variant="primary"
+                              onClick={async () => {
+                                try {
+                                  // First check if there's existing data
+                                  const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
+                                  
+                                  if (existingData.schemas && existingData.schemas.length > 0) {
+                                    // Has data - ask if to regenerate
+                                    if (!confirm('This will replace existing schema data. Continue?')) {
+                                      return;
+                                    }
+                                  }
+                                  
+                                  // Call API to start background generation (WITHOUT forceBasicSeo first)
+                                  const data = await api(`/api/schema/generate-all?shop=${shop}`, {
+                                    method: 'POST',
+                                    body: { shop } // Do NOT send forceBasicSeo on first attempt
+                                  });
+                                  
+                                  // Show success toast
+                                  setToastContent('Advanced Schema Data generation started in background. You can navigate away - it will continue processing.');
+                                  
+                                  // Start polling for status updates
+                                  startAdvancedSchemaPolling();
+                                  
+                                } catch (apiError) {
+                                  // Check for 402 error (payment/activation required)
+                                  if (apiError.status === 402) {
+                                    // Set error data for modals
+                                    setTokenError(apiError);
+                                    
+                                    // Show appropriate modal based on error type
+                                    if (apiError.trialRestriction && apiError.requiresActivation) {
+                                      setShowTrialActivationModal(true);
+                                    } else if (apiError.requiresPurchase) {
+                                      setShowInsufficientTokensModal(true);
+                                    } else {
+                                      setToastContent('Advanced Schema Data requires activation or token purchase.');
+                                    }
+                                    return;
+                                  }
+                                  
+                                  // Check for schema-specific errors (NO_OPTIMIZED_PRODUCTS, ONLY_BASIC_SEO)
+                                  if (apiError.message?.includes('NO_OPTIMIZED_PRODUCTS') || apiError.error?.includes('NO_OPTIMIZED_PRODUCTS')) {
+                                    setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+                                    setShowSchemaErrorModal(true);
+                                    return;
+                                  }
+                                  
+                                  if (apiError.message?.includes('ONLY_BASIC_SEO') || apiError.error?.includes('ONLY_BASIC_SEO')) {
+                                    setSchemaErrorType('ONLY_BASIC_SEO');
+                                    setShowSchemaErrorModal(true);
+                                    return;
+                                  }
+                                  
+                                  // Other errors
+                                  console.error('[SCHEMA-GEN] Error:', apiError);
+                                  setToastContent('Failed to generate schema: ' + (apiError.message || 'Unknown error'));
+                                }
+                              }}
+                            >
+                              Generate/Update Schema Data
+                            </Button>
                             
-                            {advancedSchemaStatus.status === 'completed' && advancedSchemaStatus.generatedAt ? (
-                              <Badge tone="success">Generated</Badge>
-                            ) : advancedSchemaStatus.inProgress ? (
-                              <Badge tone="attention">Generating...</Badge>
-                            ) : (
-                              <Badge tone="info">Not generated</Badge>
-                            )}
+                            <Button
+                              onClick={() => {
+                                window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
+                              }}
+                            >
+                              View Generated Schema
+                            </Button>
+                            
+                            <Button
+                              tone="critical"
+                              onClick={async () => {
+                                if (confirm('This will delete all advanced schema data. Are you sure?')) {
+                                  try {
+                                    await api(`/api/schema/delete?shop=${shop}`, {
+                                      method: 'DELETE',
+                                      body: { shop }
+                                    });
+                                    
+                                    setToastContent('Schema data deleted successfully');
+                                  } catch (err) {
+                                    setToastContent('Failed to delete schema data');
+                                  }
+                                }
+                              }}
+                            >
+                              Delete Schema Data
+                            </Button>
                           </InlineStack>
                           
-                          {/* Status indicator when generating */}
-                          {advancedSchemaStatus.inProgress && (
-                            <Box paddingBlockStart="200">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Spinner size="small" />
-                                <BlockStack gap="100">
-                                  <Text variant="bodyMd" tone="subdued">
-                                    {advancedSchemaStatus.message || 'Generating schema data...'}
-                                  </Text>
-                                  {advancedSchemaStatus.position > 0 && (
-                                    <Text variant="bodySm" tone="subdued">
-                                      Queue position: {advancedSchemaStatus.position} · Est. {Math.ceil(advancedSchemaStatus.estimatedTime / 60)} min
+                          {/* Rich Attributes Options */}
+                          <Card>
+                            <Box padding="300">
+                              <BlockStack gap="300">
+                                <InlineStack align="space-between" blockAlign="center">
+                                  <BlockStack gap="100">
+                                    <Text as="h3" variant="headingSm">Rich Product Attributes</Text>
+                                    <Text variant="bodyMd" tone="subdued">
+                                      Select which AI-generated attributes to include in product schemas
                                     </Text>
-                                  )}
-                                </BlockStack>
-                              </InlineStack>
+                                  </BlockStack>
+                                  <Button
+                                    size="slim"
+                                    onClick={saveRichAttributes}
+                                    loading={savingAttributes}
+                                  >
+                                    Save Attributes
+                                  </Button>
+                                </InlineStack>
+                                
+                                <InlineGrid columns={2} gap="400">
+                                  {[
+                                    { key: 'material', label: 'Material', description: 'Product material (cotton, leather, metal, etc.)' },
+                                    { key: 'color', label: 'Color', description: 'Product color information' },
+                                    { key: 'size', label: 'Size', description: 'Product size or dimensions' },
+                                    { key: 'weight', label: 'Weight', description: 'Product weight information' },
+                                    { key: 'dimensions', label: 'Dimensions', description: 'Product measurements' },
+                                    { key: 'category', label: 'Category', description: 'Product category classification' },
+                                    { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' },
+                                    { key: 'reviews', label: 'Review Schemas', description: 'AI-generated product reviews for schema.org' },
+                                    { key: 'ratings', label: 'Rating Schemas', description: 'AI-generated ratings and aggregate ratings' },
+                                    { key: 'enhancedDescription', label: 'Enhanced Descriptions', description: 'AI-enhanced product descriptions' },
+                                    { key: 'organization', label: 'Organization Schema', description: 'Brand organization information' }
+                                  ].map(attr => (
+                                    <Checkbox
+                                      key={attr.key}
+                                      label={attr.label}
+                                      helpText={attr.description}
+                                      checked={richAttributes[attr.key] || false}
+                                      onChange={(checked) => {
+                                        setRichAttributes(prev => ({
+                                          ...prev,
+                                          [attr.key]: checked
+                                        }));
+                                      }}
+                                    />
+                                  ))}
+                                </InlineGrid>
+                              </BlockStack>
                             </Box>
-                          )}
+                          </Card>
                           
-                          {/* Completion status */}
-                          {!advancedSchemaStatus.inProgress && advancedSchemaStatus.status === 'completed' && advancedSchemaStatus.generatedAt && (
-                            <Box paddingBlockStart="200">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Text variant="bodySm" tone="subdued">
-                                  {advancedSchemaStatus.schemaCount} schemas · {timeAgo(advancedSchemaStatus.generatedAt)}
-                                </Text>
-                              </InlineStack>
-                            </Box>
-                          )}
-                          
-                          {/* Generate button */}
-                          <Box paddingBlockStart="200">
-                            <InlineStack gap="200">
-                              <Button
-                                onClick={() => generateAdvancedSchema(false)}
-                                loading={advancedSchemaBusy}
-                                disabled={advancedSchemaStatus.inProgress}
-                              >
-                                {advancedSchemaStatus.status === 'completed' ? 'Regenerate Advanced Schemas' : 'Generate Advanced Schemas'}
-                              </Button>
-                            </InlineStack>
-                          </Box>
-                          
-                          {/* Benefits info */}
-                          <Box paddingBlockStart="100">
-                            <Text variant="bodySm" tone="subdued">
-                              ✓ AI-generated FAQ schemas · ✓ Aggregate ratings · ✓ Enhanced product data · ✓ Better AI visibility
-                            </Text>
-                          </Box>
+                          <Banner tone="info">
+                            <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
+                          </Banner>
                         </BlockStack>
                       </Box>
                     </Card>
