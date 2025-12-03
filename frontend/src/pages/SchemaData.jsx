@@ -37,6 +37,11 @@ const debugLog = (...args) => {
   }
 };
 
+// Normalize plan name (same as Settings.jsx)
+const normalizePlan = (plan) => {
+  return (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+};
+
 export default function SchemaData({ shop: shopProp }) {
   const shop = shopProp || qs('shop', '');
   
@@ -102,35 +107,37 @@ export default function SchemaData({ shop: shopProp }) {
 
   const loadPlan = async () => {
     try {
-      const query = `
-        query PlansMe($shop:String!) {
-          plansMe(shop:$shop) {
-            shop
-            plan
-            planKey
-            trialEndsAt
-            activatedAt
-          }
-        }
-      `;
+      // Load settings from the same endpoint as Settings.jsx
+      const settingsData = await api(`/api/ai-discovery/settings?shop=${shop}`);
       
-      const data = await api('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables: { shop } })
-      });
+      debugLog('[SCHEMA-DATA] Settings data:', settingsData);
+      setCurrentPlan(settingsData?.plan);
+      setPlanKey(normalizePlan(settingsData?.plan));
+      setProductCount(settingsData?.productCount || 0);
       
-      debugLog('[SCHEMA-DATA] Plan data:', data);
-      setCurrentPlan(data?.data?.plansMe?.plan);
-      setPlanKey(data?.data?.plansMe?.planKey);
-      setSubscriptionInfo(data?.data?.plansMe);
-      
-      // Also get product count for token estimation
+      // Also get subscription info for trial checks
       try {
-        const settingsData = await api(`/api/ai-discovery/settings?shop=${shop}`);
-        setProductCount(settingsData?.productCount || 0);
+        const query = `
+          query PlansMe($shop:String!) {
+            plansMe(shop:$shop) {
+              shop
+              plan
+              planKey
+              trialEndsAt
+              activatedAt
+            }
+          }
+        `;
+        
+        const data = await api('/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, variables: { shop } })
+        });
+        
+        setSubscriptionInfo(data?.data?.plansMe);
       } catch (e) {
-        debugLog('[SCHEMA-DATA] Could not load product count:', e);
+        debugLog('[SCHEMA-DATA] Could not load subscription info:', e);
       }
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
@@ -201,26 +208,32 @@ export default function SchemaData({ shop: shopProp }) {
     setAdvancedSchemaPollingRef(interval);
   }, [fetchAdvancedSchemaStatus, advancedSchemaPollingRef]);
   
-  // Generate Advanced Schema with all plan/token checks
+  // Generate Advanced Schema with all plan/token checks (same as Settings.jsx)
   const generateAdvancedSchema = async (forceBasicSeo = false) => {
     setAdvancedSchemaBusy(true);
     
     try {
-      const normalizedPlan = (planKey || currentPlan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      // Normalize plan exactly like Settings.jsx
+      const plan = normalizePlan(currentPlan);
       
-      // Plans with included tokens (full access)
+      debugLog('[SCHEMA-DATA] generateAdvancedSchema - plan:', plan, 'currentPlan:', currentPlan);
+      
+      // Plans with included tokens (full access) - same as Settings.jsx
       const plansWithIncludedTokens = ['growth_extra', 'enterprise'];
-      // Plus plans (require purchased tokens)
+      // Plus plans (require purchased tokens) - same as Settings.jsx
       const plusPlans = ['professional_plus', 'growth_plus', 'starter_plus'];
       
-      const hasIncludedAccess = plansWithIncludedTokens.includes(normalizedPlan);
-      const isPlusPlan = plusPlans.includes(normalizedPlan);
+      const hasIncludedAccess = plansWithIncludedTokens.includes(plan);
+      const isPlusPlan = plusPlans.includes(plan);
+      
+      debugLog('[SCHEMA-DATA] hasIncludedAccess:', hasIncludedAccess, 'isPlusPlan:', isPlusPlan);
       
       // Token estimation
       const tokenEstimate = estimateTokens('ai-schema-advanced', { productCount: productCount || 0 });
       const tokensRequired = tokenEstimate.withMargin;
       
       // Plan check - show upgrade modal if not eligible
+      // Enterprise and Growth Extra have full access, Plus plans need tokens
       if (!hasIncludedAccess && !isPlusPlan) {
         setUpgradeModalData({
           feature: 'Advanced Schema Data',
@@ -255,7 +268,8 @@ export default function SchemaData({ shop: shopProp }) {
         }
       }
       
-      // Call the backend to generate
+      // For included tokens plans (Growth Extra, Enterprise), let the backend handle trial checks
+      // Call the backend to generate - it will return 402 if trial restriction applies
       const result = await api(`/api/schema/generate-all?shop=${shop}`, {
         method: 'POST',
         body: { shop, forceBasicSeo }
