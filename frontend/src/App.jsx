@@ -104,7 +104,7 @@ function useRoute() {
   return { path };
 }
 
-// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
+// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>. Updated 2025-12-03.
 function AdminNavMenu({ active, shop }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo = active.startsWith('/ai-seo');
