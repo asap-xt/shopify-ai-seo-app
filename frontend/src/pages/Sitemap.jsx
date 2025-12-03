@@ -642,15 +642,16 @@ export default function SitemapPage({ shop: shopProp }) {
           </Banner>
 
           {/* Queue Status Banner - only when ACTIVELY processing */}
-          {(busy || aiSitemapBusy || aiSitemapStatus.inProgress) && (
+          {(busy || polling || aiSitemapBusy || aiSitemapStatus.inProgress) && (
             <Banner tone="info">
               <InlineStack gap="200" blockAlign="center">
                 <Spinner size="small" />
                 <Text variant="bodyMd">
                   {aiSitemapStatus.inProgress || aiSitemapBusy
                     ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
-                    : 'Generating basic sitemap...'}
+                    : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
                   {(aiSitemapStatus.position > 0) && ` (Queue: ${aiSitemapStatus.position})`}
+                  {(queueStatus?.position > 0 && !aiSitemapStatus.inProgress) && ` (Queue: ${queueStatus.position})`}
                 </Text>
               </InlineStack>
             </Banner>
@@ -690,8 +691,8 @@ export default function SitemapPage({ shop: shopProp }) {
               
               <Button
                 onClick={generate}
-                loading={busy}
-                disabled={busy}
+                loading={busy || polling}
+                disabled={busy || polling}
                 size="slim"
               >
                 {info?.generated ? 'Regenerate' : 'Generate'}
