@@ -1086,6 +1086,14 @@ import debugRouter from './controllers/debugRouter.js';
             };
           }
           
+          if (error.code === 'PLAN_NOT_ELIGIBLE') {
+            return {
+              success: false,
+              message: `PLAN_NOT_ELIGIBLE: ${error.message}`,
+              shop: shop
+            };
+          }
+          
           return {
             success: false,
             message: error.message,

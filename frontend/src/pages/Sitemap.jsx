@@ -441,8 +441,9 @@ export default function SitemapPage({ shop: shopProp }) {
           startAiSitemapPolling();
         }
       } else {
-        // Check if error message indicates trial restriction (same as Settings.jsx)
+        // Check if error message indicates specific error types
         const errorMessage = result?.message || '';
+        
         if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
           setAiSitemapBusy(false);
           
@@ -454,6 +455,37 @@ export default function SitemapPage({ shop: shopProp }) {
             currentPlan: plan?.plan || 'enterprise'
           });
           setShowTrialActivationModal(true);
+          return;
+        }
+        
+        if (errorMessage.startsWith('INSUFFICIENT_TOKENS:')) {
+          setAiSitemapBusy(false);
+          
+          // Calculate tokens dynamically
+          const productCount = info?.productCount || 0;
+          const tokensRequired = Math.ceil((5000 + 20 * productCount) * 1.5);
+          
+          setTokenError({
+            feature: 'ai-sitemap-optimized',
+            tokensRequired: tokensRequired,
+            tokensAvailable: 0,
+            tokensNeeded: tokensRequired
+          });
+          setShowInsufficientTokensModal(true);
+          return;
+        }
+        
+        if (errorMessage.startsWith('PLAN_NOT_ELIGIBLE:')) {
+          setAiSitemapBusy(false);
+          
+          // Show upgrade modal for plans without AI Sitemap access
+          setUpgradeModalData({
+            featureName: 'AI-Optimized Sitemap',
+            currentPlan: plan?.plan || 'starter',
+            minimumPlanRequired: 'Growth Extra',
+            errorMessage: 'Your plan does not include AI-Optimized Sitemap. Upgrade to Growth Extra or Enterprise, or purchase tokens on a Plus plan.'
+          });
+          setShowUpgradeModal(true);
           return;
         }
         

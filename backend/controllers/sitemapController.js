@@ -235,6 +235,15 @@ async function generateSitemapCore(shop, options = {}) {
             const { default: TokenBalance } = await import('../db/TokenBalance.js');
             const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
             
+            // DEBUG: Log token balance details
+            console.log('[AI-SITEMAP] Token balance check:', {
+              shop: normalizedShop,
+              balance: tokenBalance.balance,
+              totalPurchased: tokenBalance.totalPurchased,
+              totalUsed: tokenBalance.totalUsed,
+              hasBalance: tokenBalance.balance > 0
+            });
+            
             if (tokenBalance.balance > 0) {
               isEligiblePlan = true;
             } else {
@@ -254,6 +263,17 @@ async function generateSitemapCore(shop, options = {}) {
             enableAIEnhancement,
             isAISitemapEnabled
           });
+          
+          // CRITICAL: If AI enhancement was requested but plan is not eligible, throw error
+          // This prevents generating basic sitemap when user clicked "AI-Optimized" button
+          if (enableAIEnhancement && !isEligiblePlan) {
+            const planError = new Error('PLAN_NOT_ELIGIBLE');
+            planError.code = 'PLAN_NOT_ELIGIBLE';
+            planError.message = `Your plan (${planKey}) does not have access to AI-Optimized Sitemap. Please upgrade or purchase tokens.`;
+            planError.needsUpgrade = true;
+            planError.needsTokens = plusPlansRequireTokens.includes(planKey);
+            throw planError;
+          }
           
           // === TRIAL PERIOD CHECK ===
           const { default: Subscription } = await import('../db/Subscription.js');
