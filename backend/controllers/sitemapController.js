@@ -981,6 +981,14 @@ async function handleStatus(req, res) {
     const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
     const inProgress = shopDoc?.sitemapStatus?.inProgress || false;
     
+    // DEBUG: Log isAiEnhanced value
+    console.log('[SITEMAP-STATUS] isAiEnhanced check:', {
+      shop,
+      sitemapExists: !!sitemapDoc,
+      isAiEnhanced: sitemapDoc?.isAiEnhanced,
+      generatedAt: sitemapDoc?.generatedAt
+    });
+    
     res.json({
       shop,
       // Overall status for frontend
@@ -1003,6 +1011,8 @@ async function handleStatus(req, res) {
         size: sitemapDoc?.size || 0,
         isAiEnhanced: sitemapDoc?.isAiEnhanced || false
       },
+      // DEBUG: Log isAiEnhanced value
+      _debug_isAiEnhanced: sitemapDoc?.isAiEnhanced,
       // Detailed shop status from DB
       shopStatus: shopDoc?.sitemapStatus || null
     });
