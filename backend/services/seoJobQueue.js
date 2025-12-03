@@ -56,7 +56,9 @@ class SeoJobQueue {
       processedProducts: 0,
       successfulProducts: 0,
       failedProducts: 0,
-      skippedProducts: 0
+      skippedProducts: 0,
+      skipReasons: [],
+      failReasons: []
     };
 
     this.queue.push(job);
@@ -134,6 +136,9 @@ class SeoJobQueue {
             // Check if skipped (already optimized)
             if (generateResult.skipped) {
               job.skippedProducts++;
+              if (generateResult.reason) {
+                job.skipReasons.push(`${productData.title || productData.productId}: ${generateResult.reason}`);
+              }
               job.processedProducts++;
               continue;
             }
@@ -141,6 +146,9 @@ class SeoJobQueue {
             // Check if generate failed
             if (!generateResult.success) {
               job.failedProducts++;
+              if (generateResult.error || generateResult.reason) {
+                job.failReasons.push(`${productData.title || productData.productId}: ${generateResult.error || generateResult.reason}`);
+              }
               job.processedProducts++;
               continue;
             }
@@ -165,6 +173,7 @@ class SeoJobQueue {
           } catch (error) {
             dbLogger.error(`[SEO-JOB-QUEUE] Product failed: ${productData.productId}`, error.message);
             job.failedProducts++;
+            job.failReasons.push(`${productData.title || productData.productId}: ${error.message}`);
           }
 
           job.processedProducts++;
@@ -209,7 +218,9 @@ class SeoJobQueue {
           processedProducts: job.processedProducts,
           successfulProducts: job.successfulProducts,
           failedProducts: job.failedProducts,
-          skippedProducts: job.skippedProducts
+          skippedProducts: job.skippedProducts,
+          skipReasons: job.skipReasons.slice(0, 10), // Limit to 10 reasons
+          failReasons: job.failReasons.slice(0, 10)
         });
 
       } catch (error) {
@@ -264,6 +275,8 @@ class SeoJobQueue {
       if (statusUpdate.successfulProducts !== undefined) updateFields['seoJobStatus.successfulProducts'] = statusUpdate.successfulProducts;
       if (statusUpdate.failedProducts !== undefined) updateFields['seoJobStatus.failedProducts'] = statusUpdate.failedProducts;
       if (statusUpdate.skippedProducts !== undefined) updateFields['seoJobStatus.skippedProducts'] = statusUpdate.skippedProducts;
+      if (statusUpdate.skipReasons !== undefined) updateFields['seoJobStatus.skipReasons'] = statusUpdate.skipReasons;
+      if (statusUpdate.failReasons !== undefined) updateFields['seoJobStatus.failReasons'] = statusUpdate.failReasons;
 
       await Shop.findOneAndUpdate(
         { shop },
@@ -326,6 +339,8 @@ class SeoJobQueue {
           successfulProducts: shopDoc.seoJobStatus.successfulProducts || 0,
           failedProducts: shopDoc.seoJobStatus.failedProducts || 0,
           skippedProducts: shopDoc.seoJobStatus.skippedProducts || 0,
+          skipReasons: shopDoc.seoJobStatus.skipReasons || [],
+          failReasons: shopDoc.seoJobStatus.failReasons || [],
           completedAt: shopDoc.seoJobStatus.completedAt || null
         };
       }

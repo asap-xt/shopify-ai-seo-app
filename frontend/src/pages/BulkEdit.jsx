@@ -1662,23 +1662,50 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       </BlockStack>
                     </InlineStack>
                   ) : seoJobStatus.status === 'completed' ? (
-                    <InlineStack gap="200" align="start" blockAlign="center">
-                      <Badge tone="success">Completed</Badge>
-                      <Text variant="bodyMd">
-                        Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
-                        {seoJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>}
-                        {seoJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>}
-                      </Text>
-                      <Text variant="bodySm" tone="subdued">· {timeAgo(seoJobStatus.completedAt)}</Text>
-                    </InlineStack>
-                  ) : (
-                    <InlineStack gap="200" align="start" blockAlign="center">
-                      <Badge tone="critical">Failed</Badge>
-                      <Text variant="bodyMd" tone="critical">{seoJobStatus.message || 'Optimization failed'}</Text>
-                      {seoJobStatus.successfulProducts > 0 && (
-                        <Text variant="bodySm" tone="subdued">· {seoJobStatus.successfulProducts} succeeded before failure</Text>
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="success">Completed</Badge>
+                        <Text variant="bodyMd">
+                          Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                          {seoJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>}
+                          {seoJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>}
+                        </Text>
+                        <Text variant="bodySm" tone="subdued">· {timeAgo(seoJobStatus.completedAt)}</Text>
+                      </InlineStack>
+                      {/* Show skip/fail reasons if available */}
+                      {(seoJobStatus.skipReasons?.length > 0 || seoJobStatus.failReasons?.length > 0) && (
+                        <Box paddingInlineStart="400">
+                          {seoJobStatus.skipReasons?.length > 0 && (
+                            <Text variant="bodySm" tone="subdued">
+                              Skipped: {seoJobStatus.skipReasons.slice(0, 3).join('; ')}{seoJobStatus.skipReasons.length > 3 ? ` (+${seoJobStatus.skipReasons.length - 3} more)` : ''}
+                            </Text>
+                          )}
+                          {seoJobStatus.failReasons?.length > 0 && (
+                            <Text variant="bodySm" tone="critical">
+                              Failed: {seoJobStatus.failReasons.slice(0, 3).join('; ')}{seoJobStatus.failReasons.length > 3 ? ` (+${seoJobStatus.failReasons.length - 3} more)` : ''}
+                            </Text>
+                          )}
+                        </Box>
                       )}
-                    </InlineStack>
+                    </BlockStack>
+                  ) : (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="critical">Failed</Badge>
+                        <Text variant="bodyMd" tone="critical">{seoJobStatus.message || 'Optimization failed'}</Text>
+                        {seoJobStatus.successfulProducts > 0 && (
+                          <Text variant="bodySm" tone="subdued">· {seoJobStatus.successfulProducts} succeeded before failure</Text>
+                        )}
+                      </InlineStack>
+                      {/* Show fail reasons if available */}
+                      {seoJobStatus.failReasons?.length > 0 && (
+                        <Box paddingInlineStart="400">
+                          <Text variant="bodySm" tone="critical">
+                            Reasons: {seoJobStatus.failReasons.slice(0, 3).join('; ')}{seoJobStatus.failReasons.length > 3 ? ` (+${seoJobStatus.failReasons.length - 3} more)` : ''}
+                          </Text>
+                        </Box>
+                      )}
+                    </BlockStack>
                   )}
                 </Box>
               </Card>
