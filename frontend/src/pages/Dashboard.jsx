@@ -393,10 +393,15 @@ export default function Dashboard({ shop: shopProp }) {
     const currentPlanOrder = getPlanOrder(currentPlan);
 
     // Find the most suitable plan based on store data using dynamic plan data
+    // Skip hidden plans (growth is hidden, use growth plus instead)
+    const hiddenPlans = ['growth'];
     let recommendedPlan = null;
     let recommendedPlanData = null;
 
     for (const planData of plansData) {
+      // Skip hidden plans
+      if (hiddenPlans.includes(planData.key)) continue;
+      
       if (totalProducts <= planData.productLimit && totalLanguages <= planData.languageLimit) {
         recommendedPlan = planData.key;
         recommendedPlanData = planData;
