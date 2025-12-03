@@ -141,27 +141,12 @@ export default function SchemaData({ shop: shopProp }) {
         }));
       }
       
-      // Also get subscription info for trial checks
+      // Get subscription info from billing endpoint for trial checks
       try {
-        const query = `
-          query PlansMe($shop:String!) {
-            plansMe(shop:$shop) {
-              shop
-              plan
-              planKey
-              trialEndsAt
-              activatedAt
-            }
-          }
-        `;
-        
-        const data = await api('/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, variables: { shop } })
-        });
-        
-        setSubscriptionInfo(data?.data?.plansMe);
+        const billingData = await api(`/api/billing/info?shop=${shop}`);
+        if (billingData?.subscription) {
+          setSubscriptionInfo(billingData.subscription);
+        }
       } catch (e) {
         debugLog('[SCHEMA-DATA] Could not load subscription info:', e);
       }
