@@ -170,21 +170,27 @@ export default function SchemaData({ shop: shopProp }) {
     }
   };
   
-  // Save rich attributes to backend
+  // Save rich attributes to backend (PATCH-style - only update richAttributes)
   const saveRichAttributes = async () => {
     setSavingAttributes(true);
     try {
+      // First get current settings to preserve other fields
+      const currentSettings = await api(`/api/ai-discovery/settings?shop=${shop}`);
+      
+      // Save with all fields preserved, only update richAttributes
       await api(`/api/ai-discovery/settings?shop=${shop}`, {
         method: 'POST',
         body: {
           shop,
-          richAttributes
+          bots: currentSettings.bots,
+          features: currentSettings.features,
+          richAttributes: richAttributes
         }
       });
       setToastContent('Rich attributes saved!');
     } catch (err) {
       console.error('[SCHEMA-DATA] Error saving rich attributes:', err);
-      setToastContent('Failed to save attributes');
+      setToastContent('Failed to save attributes: ' + (err.message || 'Unknown error'));
     } finally {
       setSavingAttributes(false);
     }
@@ -724,7 +730,6 @@ ${JSON.stringify(allSchemas, null, 2)}
                           
                           <InlineStack gap="300">
                             <Button
-                              variant="primary"
                               onClick={async () => {
                                 try {
                                   // First check if there's existing data
