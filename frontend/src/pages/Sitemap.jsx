@@ -21,6 +21,7 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
 
@@ -62,6 +63,7 @@ export default function SitemapPage({ shop: shopProp }) {
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   
   // AI Sitemap View modal
@@ -330,9 +332,9 @@ export default function SitemapPage({ shop: shopProp }) {
       const isPlusPlan = plusPlans.includes(normalizedPlan);
       const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
       
-      // Check plan access
+      // Check plan access - show UpgradeModal if plan doesn't support AI Sitemap
       if (!hasUnlimitedAccess && !isPlusPlan) {
-        setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
+        setShowUpgradeModal(true);
         setAiSitemapBusy(false);
         return;
       }
@@ -963,6 +965,21 @@ export default function SitemapPage({ shop: shopProp }) {
         onClose={() => setShowTokenPurchaseModal(false)}
         shop={shop}
         returnTo={window.location.pathname + window.location.search}
+      />
+      
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        featureName="AI-Optimized Sitemap"
+        currentPlan={plan?.plan || 'Starter'}
+        minimumPlanRequired="Professional Plus"
+        features={[
+          'AI-enhanced product descriptions in sitemap',
+          'Better AI crawler understanding',
+          'Professional Plus, Growth Plus, Growth Extra, or Enterprise plan',
+          'Or purchase tokens on any Plus plan'
+        ]}
       />
 
       {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
