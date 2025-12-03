@@ -954,8 +954,14 @@ ${JSON.stringify(allSchemas, null, 2)}
       <TrialActivationModal
         open={showTrialActivationModal}
         onClose={() => setShowTrialActivationModal(false)}
-        onActivate={handleActivatePlan}
-        feature="Advanced Schema Data"
+        onActivatePlan={handleActivatePlan}
+        onPurchaseTokens={() => {
+          setShowTrialActivationModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
+        feature="ai-schema-advanced"
+        trialEndsAt={subscriptionInfo?.trialEndsAt || tokenError?.trialEndsAt}
+        currentPlan={currentPlan || tokenError?.currentPlan || 'Enterprise'}
         tokensRequired={tokenError?.tokensRequired || estimateTokens('ai-schema-advanced', { productCount }).withMargin}
       />
       
