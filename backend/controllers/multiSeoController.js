@@ -189,6 +189,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
     // Prepare products for queue
     const productsToProcess = products.map(p => ({
       productId: toGID(String(p.productId)),
+      title: p.title || null,
       languages: p.languages || [],
       existingLanguages: p.existingLanguages || [],
       model

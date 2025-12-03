@@ -111,6 +111,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [selectedDeleteLanguages, setSelectedDeleteLanguages] = useState([]);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   
+  // Skip/Fail Reasons Modal
+  const [showReasonsModal, setShowReasonsModal] = useState(false);
+  const [reasonsModalType, setReasonsModalType] = useState('skipped'); // 'skipped' or 'failed'
+  const [reasonsModalData, setReasonsModalData] = useState([]);
+  
   // Toast
   const [toast, setToast] = useState('');
   
@@ -812,6 +817,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Prepare batch data for background processing
       const productsForBatch = productsToProcess.map(product => ({
         productId: product.gid || toProductGID(product.productId || product.id),
+        title: product.title || 'Unknown product',
         languages: selectedLanguages,
         existingLanguages: product.optimizationSummary?.optimizedLanguages || []
       }));
@@ -1622,26 +1628,39 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         <Badge tone="success">AI Enhanced</Badge>
                         <Text variant="bodyMd">
                           Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
-                          {aiEnhanceJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({aiEnhanceJobStatus.skippedProducts} skipped)</Text>}
-                          {aiEnhanceJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({aiEnhanceJobStatus.failedProducts} failed)</Text>}
                         </Text>
+                        {aiEnhanceJobStatus.skippedProducts > 0 && aiEnhanceJobStatus.skipReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('skipped');
+                              setReasonsModalData(aiEnhanceJobStatus.skipReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="subdued">({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
+                          </Button>
+                        )}
+                        {aiEnhanceJobStatus.skippedProducts > 0 && !aiEnhanceJobStatus.skipReasons?.length && (
+                          <Text variant="bodySm" tone="subdued">({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
+                        )}
+                        {aiEnhanceJobStatus.failedProducts > 0 && aiEnhanceJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(aiEnhanceJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">({aiEnhanceJobStatus.failedProducts} failed)</Text>
+                          </Button>
+                        )}
+                        {aiEnhanceJobStatus.failedProducts > 0 && !aiEnhanceJobStatus.failReasons?.length && (
+                          <Text variant="bodySm" tone="critical">({aiEnhanceJobStatus.failedProducts} failed)</Text>
+                        )}
                         <Text variant="bodySm" tone="subdued">· {timeAgo(aiEnhanceJobStatus.completedAt)}</Text>
                       </InlineStack>
-                      {/* Show skip/fail reasons if available */}
-                      {(aiEnhanceJobStatus.skipReasons?.length > 0 || aiEnhanceJobStatus.failReasons?.length > 0) && (
-                        <Box paddingInlineStart="400">
-                          {aiEnhanceJobStatus.skipReasons?.length > 0 && (
-                            <Text variant="bodySm" tone="subdued">
-                              Skipped: {aiEnhanceJobStatus.skipReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.skipReasons.length > 3 ? ` (+${aiEnhanceJobStatus.skipReasons.length - 3} more)` : ''}
-                            </Text>
-                          )}
-                          {aiEnhanceJobStatus.failReasons?.length > 0 && (
-                            <Text variant="bodySm" tone="critical">
-                              Failed: {aiEnhanceJobStatus.failReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.failReasons.length > 3 ? ` (+${aiEnhanceJobStatus.failReasons.length - 3} more)` : ''}
-                            </Text>
-                          )}
-                        </Box>
-                      )}
                     </BlockStack>
                   ) : (
                     <BlockStack gap="100">
@@ -1651,15 +1670,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         {aiEnhanceJobStatus.successfulProducts > 0 && (
                           <Text variant="bodySm" tone="subdued">· {aiEnhanceJobStatus.successfulProducts} succeeded before failure</Text>
                         )}
+                        {aiEnhanceJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(aiEnhanceJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">View {aiEnhanceJobStatus.failReasons.length} errors</Text>
+                          </Button>
+                        )}
                       </InlineStack>
-                      {/* Show fail reasons if available */}
-                      {aiEnhanceJobStatus.failReasons?.length > 0 && (
-                        <Box paddingInlineStart="400">
-                          <Text variant="bodySm" tone="critical">
-                            Reasons: {aiEnhanceJobStatus.failReasons.slice(0, 3).join('; ')}{aiEnhanceJobStatus.failReasons.length > 3 ? ` (+${aiEnhanceJobStatus.failReasons.length - 3} more)` : ''}
-                          </Text>
-                        </Box>
-                      )}
                     </BlockStack>
                   )}
                 </Box>
@@ -1697,26 +1720,39 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         <Badge tone="success">Completed</Badge>
                         <Text variant="bodyMd">
                           Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
-                          {seoJobStatus.skippedProducts > 0 && <Text as="span" tone="subdued"> ({seoJobStatus.skippedProducts} skipped)</Text>}
-                          {seoJobStatus.failedProducts > 0 && <Text as="span" tone="critical"> ({seoJobStatus.failedProducts} failed)</Text>}
                         </Text>
+                        {seoJobStatus.skippedProducts > 0 && seoJobStatus.skipReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('skipped');
+                              setReasonsModalData(seoJobStatus.skipReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="subdued">({seoJobStatus.skippedProducts} skipped)</Text>
+                          </Button>
+                        )}
+                        {seoJobStatus.skippedProducts > 0 && !seoJobStatus.skipReasons?.length && (
+                          <Text variant="bodySm" tone="subdued">({seoJobStatus.skippedProducts} skipped)</Text>
+                        )}
+                        {seoJobStatus.failedProducts > 0 && seoJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(seoJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">({seoJobStatus.failedProducts} failed)</Text>
+                          </Button>
+                        )}
+                        {seoJobStatus.failedProducts > 0 && !seoJobStatus.failReasons?.length && (
+                          <Text variant="bodySm" tone="critical">({seoJobStatus.failedProducts} failed)</Text>
+                        )}
                         <Text variant="bodySm" tone="subdued">· {timeAgo(seoJobStatus.completedAt)}</Text>
                       </InlineStack>
-                      {/* Show skip/fail reasons if available */}
-                      {(seoJobStatus.skipReasons?.length > 0 || seoJobStatus.failReasons?.length > 0) && (
-                        <Box paddingInlineStart="400">
-                          {seoJobStatus.skipReasons?.length > 0 && (
-                            <Text variant="bodySm" tone="subdued">
-                              Skipped: {seoJobStatus.skipReasons.slice(0, 3).join('; ')}{seoJobStatus.skipReasons.length > 3 ? ` (+${seoJobStatus.skipReasons.length - 3} more)` : ''}
-                            </Text>
-                          )}
-                          {seoJobStatus.failReasons?.length > 0 && (
-                            <Text variant="bodySm" tone="critical">
-                              Failed: {seoJobStatus.failReasons.slice(0, 3).join('; ')}{seoJobStatus.failReasons.length > 3 ? ` (+${seoJobStatus.failReasons.length - 3} more)` : ''}
-                            </Text>
-                          )}
-                        </Box>
-                      )}
                     </BlockStack>
                   ) : (
                     <BlockStack gap="100">
@@ -1726,15 +1762,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         {seoJobStatus.successfulProducts > 0 && (
                           <Text variant="bodySm" tone="subdued">· {seoJobStatus.successfulProducts} succeeded before failure</Text>
                         )}
+                        {seoJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(seoJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">View {seoJobStatus.failReasons.length} errors</Text>
+                          </Button>
+                        )}
                       </InlineStack>
-                      {/* Show fail reasons if available */}
-                      {seoJobStatus.failReasons?.length > 0 && (
-                        <Box paddingInlineStart="400">
-                          <Text variant="bodySm" tone="critical">
-                            Reasons: {seoJobStatus.failReasons.slice(0, 3).join('; ')}{seoJobStatus.failReasons.length > 3 ? ` (+${seoJobStatus.failReasons.length - 3} more)` : ''}
-                          </Text>
-                        </Box>
-                      )}
                     </BlockStack>
                   )}
                 </Box>
@@ -1991,6 +2031,38 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       {languageModal}
       {deleteModal}
       {deleteConfirmModal}
+      
+      {/* Skip/Fail Reasons Modal */}
+      <Modal
+        open={showReasonsModal}
+        onClose={() => setShowReasonsModal(false)}
+        title={reasonsModalType === 'skipped' ? 'Skipped Products' : 'Failed Products'}
+        primaryAction={{
+          content: 'Close',
+          onAction: () => setShowReasonsModal(false)
+        }}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd" tone="subdued">
+              {reasonsModalType === 'skipped' 
+                ? 'These products were skipped because they are already optimized for the selected languages:'
+                : 'These products failed to optimize:'}
+            </Text>
+            <Box paddingBlockStart="200">
+              <BlockStack gap="200">
+                {reasonsModalData.map((reason, index) => (
+                  <Box key={index} padding="200" background="bg-surface-secondary" borderRadius="100">
+                    <Text variant="bodySm" tone={reasonsModalType === 'failed' ? 'critical' : 'subdued'}>
+                      {reason}
+                    </Text>
+                  </Box>
+                ))}
+              </BlockStack>
+            </Box>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
       
       {/* Help Modal for first-time users */}
       <Modal
