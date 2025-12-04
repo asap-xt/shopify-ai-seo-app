@@ -8,8 +8,7 @@ import {
   InlineStack,
   Divider,
   ProgressBar,
-  Button,
-  Spinner
+  Button
 } from '@shopify/polaris';
 
 // Map technical endpoint keys to public display names (constant, outside component)
