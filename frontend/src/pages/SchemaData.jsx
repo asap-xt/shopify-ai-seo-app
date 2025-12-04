@@ -903,7 +903,9 @@ ${JSON.stringify(allSchemas, null, 2)}
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">Advanced Schema Data</Text>
               <Text variant="bodyMd" tone="subdued">
-                Generate and manage AI-enhanced structured data for your products
+                Boost your store's visibility in AI-powered search engines like ChatGPT, Perplexity, and Google AI Overviews. 
+                Advanced schemas help AI models understand your products better, leading to more accurate recommendations 
+                and higher click-through rates from AI-generated answers.
               </Text>
               
               <Banner tone="info">
