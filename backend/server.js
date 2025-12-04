@@ -54,6 +54,7 @@
     // ---------------------------------------------------------------------------
     const PORT = process.env.PORT || 8080;
     const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+    const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // ---------------------------------------------------------------------------
 const app = express();
@@ -1586,7 +1587,7 @@ if (!IS_PROD) {
 
     app.get('/apps/:app_identifier/*', (req, res, next) => {
       // Skip our App Proxy routes
-      if (req.params.app_identifier === 'new-ai-seo') {
+      if (req.params.app_identifier === APP_PROXY_SUBPATH) {
         return next();
       }
       
@@ -2216,7 +2217,7 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
       });
 
       // APP PROXY ROUTES (MUST be first, before all other middleware)
-      app.use('/apps/new-ai-seo', appProxyRouter);
+      app.use(`/apps/${APP_PROXY_SUBPATH}`, appProxyRouter);
 
         // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
         // Direct public sitemap endpoint - no authentication required

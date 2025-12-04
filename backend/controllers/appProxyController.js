@@ -12,6 +12,7 @@ import aiDiscoveryService from '../services/aiDiscoveryService.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
+const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // Helper: normalize shop domain
 function normalizeShop(s) {
@@ -466,7 +467,7 @@ async function handleSitemapProxy(req, res) {
         {
           shop,
           generatedAt: new Date(),
-          url: `${primaryDomain}/apps/new-ai-seo/sitemap.xml`,
+          url: `${primaryDomain}/apps/${APP_PROXY_SUBPATH}/sitemap.xml`,
           productCount: allProducts.length,
           size: Buffer.byteLength(xml, 'utf8'),
           plan: plan,
@@ -541,7 +542,7 @@ router.get('/debug-sitemap', (req, res) => {
 });
 
 // AI Discovery Endpoints via App Proxy
-// These will be accessible at: https://{shop}.myshopify.com/apps/new-ai-seo/ai/*
+// These will be accessible at: https://{shop}.myshopify.com/apps/{APP_PROXY_SUBPATH}/ai/*
 
 // AI Welcome Page
 router.get('/ai/welcome', appProxyAuth, async (req, res) => {
@@ -627,7 +628,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
   <meta property="og:title" content="AI Data Endpoints - ${shopInfo?.name}">
   <meta property="og:description" content="Structured e-commerce data optimized for AI consumption">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/new-ai-seo/ai/welcome">
+  <meta property="og:url" content="${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/${APP_PROXY_SUBPATH}/ai/welcome">
   
   <script type="application/ld+json">
   {
@@ -635,7 +636,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
     "@type": "WebAPI",
     "name": "${shopInfo?.name} AI Data API",
     "description": "Structured e-commerce data endpoints for AI agents",
-    "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/new-ai-seo/ai/welcome",
+    "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/${APP_PROXY_SUBPATH}/ai/welcome",
     "provider": {
       "@type": "Organization",
       "name": "${shopInfo?.name}",
@@ -734,7 +735,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
       ${settings?.features?.productsJson ? `
       <div class="endpoint">
         <h3>Products Feed <span class="badge">Active</span></h3>
-        <a href="/apps/new-ai-seo/ai/products.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/products.json?shop=${shop}</a>
+        <a href="/apps/${APP_PROXY_SUBPATH}/ai/products.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/products.json?shop=${shop}</a>
         <p>Complete product catalog with descriptions, prices, and AI-optimized metadata</p>
       </div>
       ` : ''}
@@ -742,7 +743,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
       ${settings?.features?.collectionsJson ? `
       <div class="endpoint">
         <h3>Collections Feed <span class="badge">Active</span></h3>
-        <a href="/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/collections-feed.json?shop=${shop}</a>
+        <a href="/apps/${APP_PROXY_SUBPATH}/ai/collections-feed.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/collections-feed.json?shop=${shop}</a>
         <p>Product categories and collections with semantic groupings</p>
       </div>
       ` : ''}
@@ -750,7 +751,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
       ${settings?.features?.storeMetadata ? `
       <div class="endpoint">
         <h3>Store Metadata <span class="badge">Active</span></h3>
-        <a href="/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/store-metadata.json?shop=${shop}</a>
+        <a href="/apps/${APP_PROXY_SUBPATH}/ai/store-metadata.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/store-metadata.json?shop=${shop}</a>
         <p>Organization and LocalBusiness schema data</p>
       </div>
       ` : ''}
@@ -758,7 +759,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
       ${settings?.features?.aiSitemap ? `
       <div class="endpoint">
         <h3>AI Sitemap <span class="badge">Active</span></h3>
-        <a href="/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}</a>
+        <a href="/apps/${APP_PROXY_SUBPATH}/ai/sitemap-feed.xml?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/sitemap-feed.xml?shop=${shop}</a>
         <p>Enhanced sitemap with AI-optimized hints and metadata</p>
       </div>
       ` : ''}
@@ -766,7 +767,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
       ${settings?.features?.schemaData ? `
       <div class="endpoint">
         <h3>Advanced Schema Data <span class="badge">Active</span></h3>
-        <a href="/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}" target="_blank">/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}</a>
+        <a href="/apps/${APP_PROXY_SUBPATH}/ai/schema-sitemap.xml?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/schema-sitemap.xml?shop=${shop}</a>
         <p>BreadcrumbList, FAQPage, and other advanced schema markup</p>
       </div>
       ` : ''}

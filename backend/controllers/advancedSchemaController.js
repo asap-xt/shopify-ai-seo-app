@@ -18,6 +18,7 @@ import {
 import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
 
 const router = express.Router();
+const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // Constants
 const AI_MODEL = 'google/gemini-2.5-flash-lite'; // Важно: flash-lite, не flash
@@ -2266,7 +2267,7 @@ router.get('/schema-sitemap.xml', async (req, res) => {
   products.forEach(product => {
     // Use app proxy path for schema endpoint
     sitemap += `  <url>
-    <loc>https://${shopDomain}/apps/new-ai-seo/ai/product/${product.handle}/schemas.json?shop=${shop}</loc>
+    <loc>https://${shopDomain}/apps/${APP_PROXY_SUBPATH}/ai/product/${product.handle}/schemas.json?shop=${shop}</loc>
     <lastmod>${new Date().toISOString()}</lastmod>
   </url>\n`;
   });
