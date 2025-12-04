@@ -223,14 +223,6 @@ async function generateSitemapCore(shop, options = {}) {
         
         const shopRecord = await Shop.findOne({ shop: normalizedShop });
         
-        // DEBUG: Log shop record check
-        console.log('[AI-SITEMAP] Shop record check:', {
-          shop: normalizedShop,
-          hasShopRecord: !!shopRecord,
-          hasAccessToken: !!shopRecord?.accessToken,
-          enableAIEnhancement
-        });
-        
         if (!shopRecord?.accessToken) {
           console.error('[AI-SITEMAP] No access token for shop, cannot enable AI enhancement');
           throw new Error('Shop access token not found. Please reinstall the app.');
@@ -250,15 +242,6 @@ async function generateSitemapCore(shop, options = {}) {
             const { default: TokenBalance } = await import('../db/TokenBalance.js');
             const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
             
-            // DEBUG: Log token balance details
-            console.log('[AI-SITEMAP] Token balance check:', {
-              shop: normalizedShop,
-              balance: tokenBalance.balance,
-              totalPurchased: tokenBalance.totalPurchased,
-              totalUsed: tokenBalance.totalUsed,
-              hasBalance: tokenBalance.balance > 0
-            });
-            
             if (tokenBalance.balance > 0) {
               isEligiblePlan = true;
             } else {
@@ -269,15 +252,6 @@ async function generateSitemapCore(shop, options = {}) {
           // enableAIEnhancement means user clicked "Generate AI-Optimized" button
           // We only need to check plan eligibility, not AI Discovery settings
           isAISitemapEnabled = isEligiblePlan;
-          
-          // DEBUG: Log AI sitemap eligibility
-          console.log('[AI-SITEMAP] Eligibility check:', {
-            shop: normalizedShop,
-            planKey,
-            isEligiblePlan,
-            enableAIEnhancement,
-            isAISitemapEnabled
-          });
           
           // CRITICAL: If AI enhancement was requested but plan is not eligible, throw error
           // This prevents generating basic sitemap when user clicked "AI-Optimized" button
@@ -316,15 +290,6 @@ async function generateSitemapCore(shop, options = {}) {
               const actualProductCount = Math.min(countData.productsCount?.count || 0, limit);
               
               const tokenEstimate = estimateTokensWithMargin(feature, { productCount: actualProductCount });
-              
-              // DEBUG: Log token estimation
-              console.log('[AI-SITEMAP] Token estimation:', {
-                shop: normalizedShop,
-                productCount: actualProductCount,
-                estimated: tokenEstimate.estimated,
-                withMargin: tokenEstimate.withMargin,
-                formula: `2000 + (${actualProductCount} × 2500) = ${2000 + actualProductCount * 2500}`
-              });
               
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
@@ -381,7 +346,6 @@ async function generateSitemapCore(shop, options = {}) {
         if (error.code === 'TRIAL_RESTRICTION' || 
             error.code === 'INSUFFICIENT_TOKENS' || 
             error.code === 'PLAN_NOT_ELIGIBLE') {
-          console.log('[AI-SITEMAP] Throwing error:', error.code, error.message);
           throw error;
         }
         // For other errors (e.g., could not fetch shop record), log and continue with basic sitemap
@@ -1036,14 +1000,6 @@ async function handleStatus(req, res) {
     // Determine overall status for frontend
     const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
     const inProgress = shopDoc?.sitemapStatus?.inProgress || false;
-    
-    // DEBUG: Log isAiEnhanced value
-    console.log('[SITEMAP-STATUS] isAiEnhanced check:', {
-      shop,
-      sitemapExists: !!sitemapDoc,
-      isAiEnhanced: sitemapDoc?.isAiEnhanced,
-      generatedAt: sitemapDoc?.generatedAt
-    });
     
     res.json({
       shop,

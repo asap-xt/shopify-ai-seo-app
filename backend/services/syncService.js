@@ -87,11 +87,9 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
       });
     }
 
-    console.log(`[SYNC] Fetched page ${pageCount}, total products: ${allProducts.length}`);
   }
 
   // Save products to database
-  console.log(`[SYNC] Saving ${allProducts.length} products to database...`);
   
   for (const { node: product } of allProducts) {
     try {
@@ -200,11 +198,9 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
       });
     }
 
-    console.log(`[SYNC] Fetched page ${pageCount}, total collections: ${allCollections.length}`);
   }
 
   // Save collections to database
-  console.log(`[SYNC] Saving ${allCollections.length} collections to database...`);
   
   for (const { node: collection } of allCollections) {
     try {
@@ -244,7 +240,6 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
  * Get store languages from Shopify
  */
 export async function syncLanguages(adminGraphql, shop, progressCallback = null) {
-  console.log(`[SYNC] Fetching store languages for ${shop}`);
 
   const query = `
     query {
@@ -284,7 +279,6 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
       }
     );
 
-    console.log(`[SYNC] Languages sync complete:`, languages);
     return languages;
   } catch (error) {
     console.error('[SYNC] Error fetching languages:', error);
@@ -296,7 +290,6 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
  * Get store markets from Shopify
  */
 export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
-  console.log(`[SYNC] Fetching store markets for ${shop}`);
 
   const query = `
     query {
@@ -334,7 +327,6 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
       }
     );
 
-    console.log(`[SYNC] Markets sync complete:`, markets.length);
     return markets;
   } catch (error) {
     console.error('[SYNC] Error fetching markets:', error);
@@ -440,8 +432,6 @@ export async function syncStore(adminGraphql, shop, progressCallback = null) {
     results.success = true;
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[SYNC] ===== FULL STORE SYNC COMPLETE in ${duration}s =====`);
-    console.log(`[SYNC] Results:`, results);
 
     if (progressCallback) {
       progressCallback({
