@@ -1106,6 +1106,7 @@ export default function Dashboard({ shop: shopProp }) {
         open={showTokenPurchaseModal}
         onClose={() => setShowTokenPurchaseModal(false)}
         shop={shop}
+        returnTo="/dashboard"
         onPurchaseComplete={() => {
           setShowTokenPurchaseModal(false);
           loadDashboardData(true); // Refresh token balance
