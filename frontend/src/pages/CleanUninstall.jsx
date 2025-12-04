@@ -137,6 +137,25 @@ export default function CleanUninstall() {
                 });
                 
                 console.log('[UNINSTALL] Cleanup result:', result);
+                
+                // Clear localStorage data related to the app
+                try {
+                  console.log('[UNINSTALL] Clearing localStorage...');
+                  const keysToRemove = [
+                    `ai-test-results-${shop}`,
+                    `ai-validation-results-${shop}`,
+                    `dashboard-stats-${shop}`,
+                    `syncCardExpanded_${shop}`,
+                    `gettingStartedSeenOnce_${shop}`,
+                    `dismissedUpgradeBanner_${shop}`,
+                    `dismissedTokenBanner_${shop}`
+                  ];
+                  keysToRemove.forEach(key => localStorage.removeItem(key));
+                  console.log('[UNINSTALL] localStorage cleared');
+                } catch (lsError) {
+                  console.warn('[UNINSTALL] Could not clear localStorage:', lsError);
+                }
+                
                 setUninstallResults(result);
                 setShowUninstallConfirm(false);
                 setShowUninstallModal(true);

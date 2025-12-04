@@ -30,6 +30,33 @@ export default function AIEOScoreCard({
   stats = {} 
 }) {
 
+  // Check if we have any test results at all
+  const hasTestResults = Object.keys(testResults).length > 0;
+  
+  // If no test results, show a prompt to run tests
+  if (!hasTestResults) {
+    return (
+      <Card>
+        <Box padding="400">
+          <BlockStack gap="300">
+            <BlockStack gap="100">
+              <Text as="h3" variant="headingMd">AIEO Score</Text>
+              <Text variant="bodySm" tone="subdued">
+                Overall AI Engine Optimization rating
+              </Text>
+            </BlockStack>
+            
+            <Divider />
+            
+            <Banner tone="info">
+              <p>No test results found. Go to <strong>AI Testing</strong> to run endpoint tests and calculate your AIEO Score.</p>
+            </Banner>
+          </BlockStack>
+        </Box>
+      </Card>
+    );
+  }
+
   // Function to interpolate color from red to green based on score (0-100)
   const getScoreColor = (score) => {
     // Clamp score between 0 and 100
