@@ -903,9 +903,11 @@ ${JSON.stringify(allSchemas, null, 2)}
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">Advanced Schema Data</Text>
               <Text variant="bodyMd" tone="subdued">
-                Boost your store's visibility in AI-powered search engines like ChatGPT, Perplexity, and Google AI Overviews. 
-                Advanced schemas help AI models understand your products better, leading to more accurate recommendations 
-                and higher click-through rates from AI-generated answers.
+                Unlike standard schemas that only include basic product info, AI-powered schemas use artificial intelligence 
+                to generate rich, contextual data for each product — including FAQs, breadcrumbs, detailed attributes, 
+                and semantic descriptions that standard schemas simply can't provide. This enhanced structured data helps 
+                AI search engines like ChatGPT, Perplexity, and Google AI understand your products deeply, resulting in 
+                better visibility and more accurate recommendations.
               </Text>
               
               <Banner tone="info">
