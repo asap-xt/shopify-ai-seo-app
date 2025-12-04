@@ -36,7 +36,6 @@ class ProductDigestScheduler {
 
     // Weekly digest job
     const digestJob = cron.schedule(schedule, async () => {
-      console.log(`[PRODUCT-DIGEST] 📧 Running digest job - ${modeLabel}`);
       await this.sendDigests();
     }, {
       scheduled: true,
@@ -57,8 +56,6 @@ class ProductDigestScheduler {
       const shops = await Shop.find({
         accessToken: { $exists: true, $ne: null, $ne: '', $ne: 'jwt-pending' }
       }).lean();
-
-      console.log(`[PRODUCT-DIGEST] Found ${shops.length} active shops`);
 
       let sent = 0;
       let skipped = 0;
@@ -119,19 +116,13 @@ class ProductDigestScheduler {
       }
       
       if (changes.length < minThreshold) {
-        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - ${changes.length} changes < ${minThreshold} threshold (${totalProducts} total products)`);
         return { success: true, skipped: true, reason: 'below_threshold' };
       }
       
-      console.log(`[PRODUCT-DIGEST] Sending digest for ${shop.shop} - ${changes.length} changes >= ${minThreshold} threshold (${totalProducts} total products)`);
-
       // Skip if no changes at all
       if (changes.length === 0) {
-        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - no changes`);
         return { success: true, skipped: true, reason: 'no_changes' };
       }
-
-      console.log(`[PRODUCT-DIGEST] Sending digest to ${shop.shop} with ${changes.length} products`);
 
       // Send email
       const result = await emailService.sendWeeklyProductDigest(shop, changes);
@@ -150,7 +141,7 @@ class ProductDigestScheduler {
             }
           }
         );
-        console.log(`[PRODUCT-DIGEST] ✅ Marked ${changes.length} changes as notified for ${shop.shop}`);
+        // Marked changes as notified
       }
 
       return result;
@@ -173,8 +164,6 @@ class ProductDigestScheduler {
    * Manual trigger for testing
    */
   async triggerNow(shopDomain = null) {
-    console.log('[PRODUCT-DIGEST] 🧪 Manual trigger initiated');
-    
     if (shopDomain) {
       // Send for specific shop
       const shop = await Shop.findOne({ shop: shopDomain }).lean();
