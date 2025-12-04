@@ -406,50 +406,6 @@ class EmailService {
   }
 
   /**
-   * Trial expiring reminder
-   */
-  async sendTrialExpiringEmail(store, daysLeft) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping trial expiring email');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      const subscription = store.subscription || {};
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: `⏰ Your trial expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}!`,
-        html: this.getTrialExpiringEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          daysLeft,
-          productsOptimized: subscription.usage?.productsOptimized || 0,
-          upgradeUrl: this.getBillingUrl(store.shop),
-          stats: {
-            totalOptimizations: store.analytics?.totalAIQueries || 0,
-            topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
-          }
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      await this.logEmail(store._id || store.id, store.shop, 'trial-expiring', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Trial expiring email error:', error);
-      return { success: false };
-    }
-  }
-
-  /**
    * Uninstall follow-up email
    */
   async sendUninstallFollowupEmail(store, reason = null) {
@@ -485,50 +441,6 @@ class EmailService {
       return { success: true };
     } catch (error) {
       console.error('❌ Uninstall follow-up error:', error);
-      return { success: false };
-    }
-  }
-
-  /**
-   * Weekly digest email
-   */
-  async sendWeeklyDigest(store, stats) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping weekly digest');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: '📊 Your weekly SEO report',
-        html: this.getWeeklyDigestEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          weeklyStats: {
-            productsOptimized: stats.productsOptimized || 0,
-            aiQueriesUsed: stats.aiQueries || 0,
-            topProducts: stats.topProducts || [],
-            improvement: stats.seoImprovement || '0%'
-          },
-          dashboardUrl: this.getDashboardUrl(store.shop),
-          tips: this.getWeeklyTips(stats)
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      await this.logEmail(store._id || store.id, store.shop, 'weekly-digest', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Weekly digest error:', error);
       return { success: false };
     }
   }
@@ -570,46 +482,6 @@ class EmailService {
       return { success: true };
     } catch (error) {
       console.error('❌ Upgrade success error:', error);
-      return { success: false };
-    }
-  }
-
-  /**
-   * Re-engagement email (inactive users)
-   */
-  async sendReengagementEmail(store, daysSinceLastActive) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping re-engagement email');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: 'We miss you! 🎁',
-        html: this.getReengagementEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          daysSinceActive: daysSinceLastActive,
-          incentive: '50% off next month if you upgrade this week!',
-          dashboardUrl: this.getDashboardUrl(store.shop),
-          supportUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/support`
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      await this.logEmail(store._id || store.id, store.shop, 'reengagement', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Re-engagement error:', error);
       return { success: false };
     }
   }
