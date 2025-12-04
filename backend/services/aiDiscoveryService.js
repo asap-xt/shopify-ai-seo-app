@@ -2,6 +2,8 @@
 import AIDiscoverySettings from '../db/AIDiscoverySettings.js';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
+import Sitemap from '../db/Sitemap.js';
+import AdvancedSchema from '../db/AdvancedSchema.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -480,6 +482,16 @@ class AIDiscoveryService {
       
       const availableFeatures = planFeatures[normalizedPlan] || planFeatures.starter;
       
+      // Check if AI Sitemap and Advanced Schema are generated (these are now managed in Store Optimization pages)
+      const sitemapDoc = await Sitemap.findOne({ shop });
+      const hasAiSitemap = sitemapDoc?.isAiEnhanced === true;
+      
+      const schemaDoc = await AdvancedSchema.findOne({ shop });
+      const hasAdvancedSchema = schemaDoc?.schemas?.length > 0;
+      
+      console.log('[ROBOTS] Has AI Sitemap:', hasAiSitemap);
+      console.log('[ROBOTS] Has Advanced Schema:', hasAdvancedSchema);
+      
       // Bot-specific sections
       for (const bot of enabledBots) {
         const botConfig = BOT_USER_AGENTS[bot];
@@ -501,8 +513,8 @@ class AIDiscoveryService {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/collections-feed.json\n';
         }
         
-        // AI Sitemap (use app proxy path)
-        if (settings.features?.aiSitemap && availableFeatures.includes('aiSitemap')) {
+        // AI Sitemap (use app proxy path) - check if generated, not settings
+        if (hasAiSitemap && availableFeatures.includes('aiSitemap')) {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/sitemap-feed.xml\n';
         }
         
@@ -516,9 +528,9 @@ class AIDiscoveryService {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/store-metadata.json\n';
         }
         
-        // Advanced Schema Data - Plus plans and Enterprise (use app proxy path)
+        // Advanced Schema Data - Plus plans and Enterprise (use app proxy path) - check if generated
         const plusPlansWithSchema = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
-        if (settings.features?.schemaData && plusPlansWithSchema.includes(normalizedPlan)) {
+        if (hasAdvancedSchema && plusPlansWithSchema.includes(normalizedPlan)) {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/product/*/schemas.json\n';
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/schema-data.json\n';
         }
@@ -546,14 +558,14 @@ class AIDiscoveryService {
       // Sitemap references (XML sitemaps only - NOT for JSON endpoints)
       robotsTxt += '\n# AI Discovery Sitemaps (XML only)\n';
       
-      // Only XML sitemaps should be listed here
-      if (settings.features?.aiSitemap && availableFeatures.includes('aiSitemap')) {
+      // Only XML sitemaps should be listed here - check if generated
+      if (hasAiSitemap && availableFeatures.includes('aiSitemap')) {
         robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}\n`;
       }
       
-      // Advanced Schema Data Sitemap - Plus plans and Enterprise
+      // Advanced Schema Data Sitemap - Plus plans and Enterprise - check if generated
       const schemaPlans = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
-      if (settings.features?.schemaData && schemaPlans.includes(normalizedPlan)) {
+      if (hasAdvancedSchema && schemaPlans.includes(normalizedPlan)) {
         robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}\n`;
       }
       
