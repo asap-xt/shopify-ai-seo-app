@@ -53,11 +53,10 @@ function useRoute() {
   // Normalize path - remove app prefix for embedded apps
   const normalizePath = (pathname) => {
     // Remove app prefixes:
-    // - /apps/new-ai-seo (dev)
-    // - /apps/2749a2f6d38ff5796ed256b5c9dc70a1 (embedded)
+    // - /apps/{subpath} (any app proxy subpath like indexaize, indexaize-staging, etc.)
     // - /indexaize-unlock-ai-search (production custom handle)
     const normalized = pathname
-      .replace(/^\/apps\/[^/]+/, '') // Remove /apps/* prefix
+      .replace(/^\/apps\/[^/]+/, '') // Remove /apps/{subpath} prefix
       .replace(/^\/indexaize-unlock-ai-search/, '') // Remove custom handle prefix
       || '/';
     return normalized;
@@ -531,10 +530,10 @@ const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
   const path = window.location.pathname;
   
   // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
-  // CRITICAL: Also support paths with /apps/new-ai-seo prefix (from redirects after token purchase)
+  // CRITICAL: Also support paths with /apps/{subpath} prefix (from redirects after token purchase)
   const getActiveTab = () => {
-    // Normalize path: remove /apps/new-ai-seo prefix if present
-    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    // Normalize path: remove /apps/{subpath} prefix if present (matches any app proxy subpath)
+    const normalizedPath = path.replace(/^\/apps\/[^/]+/, '');
     
     if (normalizedPath === '/ai-seo' || normalizedPath === '/ai-seo/products') return 'products';
     if (normalizedPath === '/ai-seo/collections') return 'collections';
@@ -1013,8 +1012,8 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
-    // Normalize path: remove /apps/new-ai-seo prefix if present (from redirects)
-    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    // Normalize path: remove /apps/{subpath} prefix if present (from redirects after token purchase)
+    const normalizedPath = path.replace(/^\/apps\/[^/]+/, '');
     
     // Dashboard
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {

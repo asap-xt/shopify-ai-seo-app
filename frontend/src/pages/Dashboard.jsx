@@ -21,6 +21,7 @@ import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 import { devLog } from '../utils/devLog.js';
 import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 
 // Query string helper
 const qs = (k, d = '') => {
@@ -95,6 +96,9 @@ export default function Dashboard({ shop: shopProp }) {
       return false;
     }
   });
+  
+  // Token purchase modal state
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   
   // Debounce timer for dashboard data loading
   const loadDataTimeoutRef = useRef(null);
@@ -867,9 +871,7 @@ export default function Dashboard({ shop: shopProp }) {
             <BlockStack gap="200">
               <Text>{recommendation.reason}</Text>
               <Text variant="bodySm" tone="subdued">
-                The {recommendation.planName} plan supports up to {recommendation.productLimit} products 
-                in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} 
-                for ${recommendation.price}/month.
+                The {recommendation.planName} plan supports up to {recommendation.productLimit} products in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} for ${recommendation.price}/month.
               </Text>
             </BlockStack>
           </Banner>
@@ -884,7 +886,7 @@ export default function Dashboard({ shop: shopProp }) {
             tone="info"
             action={{
               content: 'Buy Tokens',
-              onAction: () => navigate('/billing')
+              onAction: () => setShowTokenPurchaseModal(true)
             }}
             onDismiss={handleDismissTokenBanner}
           >
@@ -1099,6 +1101,16 @@ export default function Dashboard({ shop: shopProp }) {
         </div>
       </Layout.Section>
 
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => setShowTokenPurchaseModal(false)}
+        shop={shop}
+        onPurchaseComplete={() => {
+          setShowTokenPurchaseModal(false);
+          loadDashboardData(true); // Refresh token balance
+        }}
+      />
     </Layout>
   );
 }
