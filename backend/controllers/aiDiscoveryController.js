@@ -462,7 +462,7 @@ Keep the answer concise (2–3 sentences).`;
         // Refund the full reserved amount (0 actual usage)
         await tokenBalance.finalizeReservation(reservationId, 0);
         
-        console.log(`[AI-SIMULATE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        // Refunded reserved tokens due to error
         
         // Invalidate cache
         try {

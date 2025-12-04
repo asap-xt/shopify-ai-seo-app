@@ -943,15 +943,6 @@ Format:
         'seoStatus.optimized': true 
       });
       
-      console.log('[AI-TESTING] Calculating AIEO score with:', {
-        endpointResultsCount: Object.keys(endpointResults || {}).length,
-        aiValidationResultsCount: Object.keys(results || {}).length,
-        totalProducts,
-        optimizedProducts,
-        totalCollections,
-        optimizedCollections
-      });
-      
       aiEOScore = calculateAIEOScore(
         endpointResults, // Basic test results
         results,         // AI validation results
@@ -962,12 +953,6 @@ Format:
           optimizedCollections
         }
       );
-      
-      console.log('[AI-TESTING] AIEO Score calculated:', {
-        score: aiEOScore?.score,
-        grade: aiEOScore?.grade,
-        breakdown: aiEOScore?.breakdown
-      });
     } catch (scoreError) {
       console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
       console.error('[AI-TESTING] Score error stack:', scoreError.stack);
@@ -982,17 +967,6 @@ Format:
       tokenBalance: tokenBalance.balance,
       aiEOScore // Add score to response
     };
-    
-    console.log('[AI-TESTING] Response data keys:', Object.keys(responseData));
-    console.log('[AI-TESTING] aiEOScore in response:', responseData.aiEOScore ? 'PRESENT' : 'MISSING');
-    if (responseData.aiEOScore) {
-      console.log('[AI-TESTING] aiEOScore details:', {
-        hasScore: !!responseData.aiEOScore.score,
-        hasGrade: !!responseData.aiEOScore.grade,
-        hasBreakdown: !!responseData.aiEOScore.breakdown,
-        hasRecommendations: !!responseData.aiEOScore.recommendations
-      });
-    }
     
     res.json(responseData);
     
