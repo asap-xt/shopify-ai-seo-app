@@ -866,6 +866,13 @@ export default function Settings() {
   };
 
   const saveSettings = async () => {
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.features || !settings.bots) {
+      console.warn('[SETTINGS] saveSettings called but settings not loaded yet');
+      setToast('Settings not loaded yet. Please wait and try again.');
+      return;
+    }
+    
     setSaving(true);
     try {
       // Exclude aiSitemap and schemaData from features - they are now managed in Store Optimization pages
