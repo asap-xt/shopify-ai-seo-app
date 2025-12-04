@@ -903,15 +903,16 @@ ${JSON.stringify(allSchemas, null, 2)}
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">Advanced Schema Data</Text>
               <Text variant="bodyMd" tone="subdued">
-                Unlike standard schemas that only include basic product info, AI-powered schemas use artificial intelligence 
-                to generate rich, contextual data for each product — including FAQs, breadcrumbs, detailed attributes, 
-                and semantic descriptions that standard schemas simply can't provide. This enhanced structured data helps 
-                AI search engines like ChatGPT, Perplexity, and Google AI understand your products deeply, resulting in 
+                Advanced schemas use artificial intelligence to generate rich, contextual data for each product. 
+                This AI-enhanced structured data helps AI bots to understand your products deeply, resulting in 
                 better visibility and more accurate recommendations.
               </Text>
               
               <Banner tone="info">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
+                <p>Generation creates BreadcrumbList, FAQPage, WebPage, Product and more schema types for each product. 
+                These include AI-generated FAQs based on product features, navigation breadcrumbs for better context, 
+                detailed product attributes (material, size, color), aggregate ratings, and semantic descriptions 
+                that standard Shopify schemas don't provide.</p>
               </Banner>
               
               <InlineStack gap="300">
