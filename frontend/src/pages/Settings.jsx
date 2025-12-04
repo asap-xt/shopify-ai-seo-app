@@ -478,10 +478,7 @@ export default function Settings() {
     if (advancedSchemaEnabled) {
       checkSchemaStatus();
     }
-  }, [advancedSchemaEnabled]);
-
-  // Auto-enable AI Discovery when features are selected - DISABLED
-  // This was causing features to be auto-enabled on first load
+    }, [advancedSchemaEnabled]);
 
   const checkSchemaStatus = async () => {
     try {
