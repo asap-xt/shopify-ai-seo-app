@@ -1148,6 +1148,10 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
       product(id: $id) {
         id title handle descriptionHtml productType vendor tags
         seo { title description }
+        featuredImage {
+          url
+          altText
+        }
         images(first: 10) {
           edges { node { id altText url } }
         }
@@ -1253,6 +1257,9 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     });
   }
 
+  // Get featured image alt text from Shopify (null if not set)
+  const featuredImageAlt = p.featuredImage?.altText || null;
+  
   const localSeoData = {
     title: seoTitle || localizedTitle || 'Product',
     metaDescription: metaDescription,
@@ -1260,7 +1267,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     bodyHtml: localizedBody || `<p>${localizedTitle}</p>`,
     bullets: bullets,
     faq: simpleFaq,
-    imageAlt: []
+    imageAlt: featuredImageAlt  // Shopify alt text or null (AI will generate later if null)
   };
 
   const fixed = {

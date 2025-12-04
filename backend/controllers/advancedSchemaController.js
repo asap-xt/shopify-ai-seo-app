@@ -1220,6 +1220,22 @@ async function generateLangSchemas(product, seoData, shop, language) {
   // Count variants for offerCount
   const variantCount = product.variants?.edges?.length || 0;
   
+  // Build images array with ImageObject for better SEO
+  // Priority for alt text: AI-generated imageAlt > Shopify altText > product title
+  const images = (product.images?.edges || []).map((edge, index) => {
+    const img = edge.node;
+    // For featured image (first), prefer AI-generated alt text from seoData
+    const altText = index === 0 
+      ? (seoData.imageAlt || img.altText || seoData.title)
+      : (img.altText || seoData.title);
+    
+    return {
+      "@type": "ImageObject",
+      "url": img.url,
+      "name": altText
+    };
+  });
+  
   const productSchema = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -1227,7 +1243,7 @@ async function generateLangSchemas(product, seoData, shop, language) {
     "name": seoData.title,
     "description": seoData.metaDescription,
     "url": productUrl,
-    "image": product.images?.edges?.map(e => e.node.url) || [],
+    "image": images.length > 0 ? images : [],
     "brand": {
       "@type": "Brand",
       "name": product.vendor || "Unknown"

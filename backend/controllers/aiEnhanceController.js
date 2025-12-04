@@ -96,6 +96,72 @@ async function openrouterChat(model, messages, response_format_json = true) {
   }, { model, messageCount: messages.length });
 }
 
+/**
+ * Generate AI alt text for featured image
+ * Only called if Shopify image has no alt text
+ * Returns: { altText: string, usage: object }
+ */
+async function generateImageAltText(data) {
+  const { product, language, model } = data;
+  
+  const productTitle = product.title || '';
+  const productType = product.productType || 'product';
+  const vendor = product.vendor || '';
+  const description = product.description || '';
+  
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an AI assistant that generates SEO-optimized alt text for e-commerce product images.
+Language: ${language}
+Guidelines:
+- Create a concise, descriptive alt text (max 125 characters)
+- Describe what the product looks like based on the product information
+- Include relevant keywords naturally
+- Do NOT start with "image of" or "photo of"
+- Keep the same language as specified
+- Return ONLY a JSON object with key "altText" containing the alt text string`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        productTitle,
+        productType,
+        vendor,
+        description: description.slice(0, 500)  // Limit description length
+      })
+    }
+  ];
+  
+  try {
+    const { content, usage } = await openrouterChat(model, messages, true);
+    
+    let parsed;
+    try {
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+        cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+      }
+      parsed = JSON.parse(cleanContent);
+    } catch {
+      console.error('[AI-ENHANCE] Failed to parse alt text response:', content.substring(0, 100));
+      return { altText: null, usage };
+    }
+    
+    // Validate and truncate alt text
+    let altText = parsed.altText || null;
+    if (altText && altText.length > 125) {
+      altText = altText.slice(0, 122) + '...';
+    }
+    
+    return { altText, usage };
+  } catch (error) {
+    console.error('[AI-ENHANCE] Error generating alt text:', error.message);
+    return { altText: null, usage: null };
+  }
+}
+
 async function generateEnhancedBulletsFAQ(data) {
   const { shop, productId, model, language, product, existingSeo } = data;
   
@@ -376,6 +442,10 @@ router.post('/product', validateRequest(), async (req, res) => {
               productType
               vendor
               tags
+              featuredImage {
+                url
+                altText
+              }
               priceRangeV2 {
                 minVariantPrice {
                   amount
@@ -437,11 +507,25 @@ router.post('/product', validateRequest(), async (req, res) => {
           existingSeo  // Подаваме цялото съществуващо SEO
         });
         
-        // Обновяваме САМО bullets и FAQ в съществуващия SEO обект
+        // Generate AI alt text if missing (only for featured image)
+        let imageAltResult = { altText: existingSeo.imageAlt, usage: null };
+        const needsAltText = !existingSeo.imageAlt && data.product.featuredImage?.url;
+        
+        if (needsAltText) {
+          console.log(`[AI-ENHANCE] Generating alt text for ${language} (featured image has no alt)`);
+          imageAltResult = await generateImageAltText({
+            product: data.product,
+            language,
+            model
+          });
+        }
+        
+        // Обновяваме bullets, FAQ, и imageAlt в съществуващия SEO обект
         const updatedSeo = {
           ...existingSeo,  // Запазва title, metaDescription, bodyHtml, jsonLd и всичко друго
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
+          imageAlt: imageAltResult.altText || existingSeo.imageAlt || null,  // AI-generated or existing
           enhancedAt: new Date().toISOString() // Маркираме че това е AI Enhanced, не само Basic SEO
         };
 
@@ -473,11 +557,20 @@ router.post('/product', validateRequest(), async (req, res) => {
           throw new Error(userErrors.map(e => e.message).join(', '));
         }
         
+        // Combine usage from bullets/FAQ and imageAlt generation
+        const combinedUsage = {
+          prompt_tokens: (enhancedResult.usage?.prompt_tokens || 0) + (imageAltResult.usage?.prompt_tokens || 0),
+          completion_tokens: (enhancedResult.usage?.completion_tokens || 0) + (imageAltResult.usage?.completion_tokens || 0),
+          total_tokens: (enhancedResult.usage?.total_tokens || 0) + (imageAltResult.usage?.total_tokens || 0)
+        };
+        
         const result = {
           language,
           bullets: enhancedResult.bullets || [],
           faq: enhancedResult.faq || [],
-          usage: enhancedResult.usage,
+          imageAlt: updatedSeo.imageAlt,
+          imageAltGenerated: needsAltText && imageAltResult.altText !== null,
+          usage: combinedUsage,
           updatedSeo
         };
         
