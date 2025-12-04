@@ -713,6 +713,18 @@ export default function Settings() {
       
       const data = await api(`/api/ai-discovery/settings?shop=${shop}`);
       
+      // Validate response has required fields
+      if (!data || !data.features || !data.bots) {
+        console.error('[SETTINGS] Invalid API response - missing features or bots');
+        setSettings({
+          features: {},
+          bots: {},
+          plan: 'starter',
+          enabled: false
+        });
+        setToast('Failed to load settings - please refresh the page');
+        return;
+      }
       
       // Debug: Check if any features are true
       const trueFeatures = Object.entries(data?.features || {}).filter(([key, value]) => value === true);
@@ -739,7 +751,14 @@ export default function Settings() {
     } catch (error) {
       console.error('[SETTINGS] ===== LOAD SETTINGS ERROR =====');
       console.error('[SETTINGS] Failed to load settings:', error);
-      setToast('Failed to load settings');
+      // Set default settings to prevent null errors
+      setSettings({
+        features: {},
+        bots: {},
+        plan: 'starter',
+        enabled: false
+      });
+      setToast('Failed to load settings - please refresh the page');
     } finally {
       setLoading(false);
     }

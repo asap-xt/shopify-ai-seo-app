@@ -74,8 +74,6 @@ function verifyHmac(query, secret) {
 }
 
 async function exchangeToken(shop, code) {
-  console.log(`[AUTH] Exchanging code for offline access token: ${shop}`);
-  
   try {
     const tokenUrl = `https://${shop}/admin/oauth/access_token`;
     const requestBody = { 
