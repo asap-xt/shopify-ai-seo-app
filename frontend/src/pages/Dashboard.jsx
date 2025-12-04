@@ -1056,6 +1056,13 @@ export default function Dashboard({ shop: shopProp }) {
               optimizedCollections: 0
             };
           })()}
+          shop={shop}
+          api={api}
+          onTestsComplete={(results) => {
+            setTestResults(results);
+            // Reload dashboard data to get fresh stats
+            loadDashboardData(true);
+          }}
         />
       </Layout.Section>
 

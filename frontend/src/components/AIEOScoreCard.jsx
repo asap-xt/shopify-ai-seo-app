@@ -1,5 +1,5 @@
 // frontend/src/components/AIEOScoreCard.jsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Card,
   Box,
@@ -8,7 +8,8 @@ import {
   InlineStack,
   Divider,
   ProgressBar,
-  Banner
+  Button,
+  Spinner
 } from '@shopify/polaris';
 
 // Map technical endpoint keys to public display names (constant, outside component)
@@ -27,35 +28,53 @@ const endpointDisplayNames = {
 export default function AIEOScoreCard({ 
   testResults = {}, 
   aiTestResults = {}, 
-  stats = {} 
+  stats = {},
+  shop = '',
+  api = null,
+  onTestsComplete = null
 }) {
 
+  const [testing, setTesting] = useState(false);
+  
   // Check if we have any test results at all
   const hasTestResults = Object.keys(testResults).length > 0;
   
-  // If no test results, show a prompt to run tests
-  if (!hasTestResults) {
-    return (
-      <Card>
-        <Box padding="400">
-          <BlockStack gap="300">
-            <BlockStack gap="100">
-              <Text as="h3" variant="headingMd">AIEO Score</Text>
-              <Text variant="bodySm" tone="subdued">
-                Overall AI Engine Optimization rating
-              </Text>
-            </BlockStack>
-            
-            <Divider />
-            
-            <Banner tone="info">
-              <p>No test results found. Go to <strong>AI Testing</strong> to run endpoint tests and calculate your AIEO Score.</p>
-            </Banner>
-          </BlockStack>
-        </Box>
-      </Card>
-    );
-  }
+  // Run basic tests from this component
+  const handleRunTests = async () => {
+    if (!api || !shop) {
+      console.warn('[AIEOScoreCard] Cannot run tests: missing api or shop');
+      return;
+    }
+    
+    setTesting(true);
+    try {
+      const response = await api('/api/ai-testing/run-tests', {
+        method: 'POST',
+        body: { shop }
+      });
+      
+      if (response.results) {
+        // Save to localStorage (same keys as AiTesting page)
+        try {
+          localStorage.setItem(`ai-test-results-${shop}`, JSON.stringify({
+            results: response.results,
+            timestamp: new Date().toISOString()
+          }));
+        } catch (e) {
+          console.warn('[AIEOScoreCard] Could not save to localStorage:', e);
+        }
+        
+        // Notify parent to update results
+        if (onTestsComplete) {
+          onTestsComplete(response.results);
+        }
+      }
+    } catch (error) {
+      console.error('[AIEOScoreCard] Error running tests:', error);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   // Function to interpolate color from red to green based on score (0-100)
   const getScoreColor = (score) => {
@@ -370,12 +389,26 @@ export default function AIEOScoreCard({
     <Card>
       <Box padding="400">
         <BlockStack gap="300">
-          <BlockStack gap="100">
-            <Text as="h3" variant="headingMd">AIEO Score</Text>
-            <Text variant="bodySm" tone="subdued">
-              Overall AI Engine Optimization rating
-            </Text>
-          </BlockStack>
+          <InlineStack align="space-between" blockAlign="center">
+            <BlockStack gap="100">
+              <Text as="h3" variant="headingMd">AIEO Score</Text>
+              <Text variant="bodySm" tone="subdued">
+                Overall AI Engine Optimization rating
+              </Text>
+            </BlockStack>
+            
+            {/* Run Tests Button - only show if api and shop are provided */}
+            {api && shop && (
+              <Button
+                size="slim"
+                onClick={handleRunTests}
+                loading={testing}
+                disabled={testing}
+              >
+                {testing ? 'Testing...' : (hasTestResults ? 'Refresh Tests' : 'Run Basic Tests')}
+              </Button>
+            )}
+          </InlineStack>
           
           <Divider />
           
