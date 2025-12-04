@@ -61,7 +61,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ Welcome email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
@@ -205,7 +204,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ Token purchase email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
@@ -322,7 +320,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ App Store rating email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
