@@ -131,7 +131,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Welcome email sent to: ${store.shop}`);
       
       // Log email activity
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'sent');
@@ -289,7 +288,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Token purchase email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'token-purchase', 'sent');
       return { success: true };
     } catch (error) {
@@ -398,7 +396,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ App Store rating email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'appstore-rating', 'sent');
       return { success: true };
     } catch (error) {
@@ -444,7 +441,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Trial expiring email sent (${daysLeft} days): ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'trial-expiring', 'sent');
       return { success: true };
     } catch (error) {
@@ -485,7 +481,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Uninstall follow-up sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'uninstall-followup', 'sent');
       return { success: true };
     } catch (error) {
@@ -530,7 +525,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Weekly digest sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'weekly-digest', 'sent');
       return { success: true };
     } catch (error) {
@@ -572,7 +566,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Upgrade success email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'upgrade-success', 'sent');
       return { success: true };
     } catch (error) {
@@ -613,7 +606,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Re-engagement email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'reengagement', 'sent');
       return { success: true };
     } catch (error) {
@@ -1341,7 +1333,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Weekly product digest sent to: ${store.shop}`);
       
       // Log email activity
       await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'sent');

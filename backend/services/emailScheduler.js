@@ -17,7 +17,6 @@ class EmailScheduler {
    */
   startAll() {
     if (this.isRunning) {
-      console.log('📧 Email scheduler already running');
       return;
     }
 
@@ -31,7 +30,6 @@ class EmailScheduler {
     // Token purchase email check (every day at 10:00 UTC) - Day 3 after installation (72 hours)
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
     );
@@ -39,7 +37,6 @@ class EmailScheduler {
     // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running app store rating email check...');
         await this.checkAppStoreRatingEmail();
       })
     );
@@ -49,7 +46,6 @@ class EmailScheduler {
     // REMOVED: Re-engagement check - too aggressive
 
     this.isRunning = true;
-    console.log('✅ Email scheduler started');
   }
 
   /**
@@ -129,7 +125,6 @@ class EmailScheduler {
         await this.delay(1000); // 1 second delay between emails
       }
 
-      if (sentCount > 0) console.log(`[TOKEN-EMAIL] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[TOKEN-EMAIL] Error:', error);
     }
@@ -208,7 +203,6 @@ class EmailScheduler {
         await this.delay(1000); // 1 second delay between emails
       }
 
-      if (sentCount > 0) console.log(`[APPSTORE-RATING] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[APPSTORE-RATING] Error:', error);
     }
@@ -258,7 +252,6 @@ class EmailScheduler {
         }
       }
 
-      console.log('✅ Trial expiring check completed');
     } catch (error) {
       console.error('❌ Trial expiring check error:', error);
     }
@@ -282,7 +275,6 @@ class EmailScheduler {
         await this.delay(1000);
       }
 
-      console.log('✅ Weekly digests sent');
     } catch (error) {
       console.error('❌ Weekly digest error:', error);
     }
@@ -314,7 +306,6 @@ class EmailScheduler {
         await this.delay(1000);
       }
 
-      console.log('✅ Inactive users check completed');
     } catch (error) {
       console.error('❌ Inactive users check error:', error);
     }
@@ -342,7 +333,6 @@ class EmailScheduler {
         topProducts = products.map(p => p.title);
       } catch (e) {
         // Product model might not exist
-        console.log('Product model not available for weekly stats');
       }
 
       // For now, return basic stats
@@ -371,7 +361,6 @@ class EmailScheduler {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
     this.isRunning = false;
-    console.log('⏹️ Email scheduler stopped');
   }
 
   delay(ms) {

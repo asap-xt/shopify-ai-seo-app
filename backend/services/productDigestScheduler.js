@@ -43,8 +43,6 @@ class ProductDigestScheduler {
     });
 
     this.jobs.push(digestJob);
-    console.log(`[PRODUCT-DIGEST] ✅ Scheduler started - ${modeLabel}`);
-    console.log(`[PRODUCT-DIGEST] Schedule: ${schedule}`);
   }
 
   /**
@@ -79,7 +77,6 @@ class ProductDigestScheduler {
         }
       }
 
-      console.log(`[PRODUCT-DIGEST] ✅ Digest job complete: ${sent} sent, ${skipped} skipped, ${errors} errors`);
     } catch (error) {
       console.error('[PRODUCT-DIGEST] ❌ Digest job error:', error);
     }
@@ -157,7 +154,6 @@ class ProductDigestScheduler {
   stop() {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
-    console.log('[PRODUCT-DIGEST] ⏹️ Scheduler stopped');
   }
 
   /**
