@@ -304,25 +304,7 @@ if (!IS_PROD) {
     // DEBUG: Log all incoming requests
     // Normalize shop domain for all requests
     app.use((req, res, next) => {
-      // Log ALL POST requests to help debug
-      if (req.method === 'POST') {
-        console.log('[MIDDLEWARE] POST request detected:', {
-          path: req.path,
-          method: req.method,
-          contentType: req.headers['content-type'],
-          hasBody: !!req.body,
-          bodyKeys: req.body ? Object.keys(req.body) : []
-        });
-      }
-      // Log GraphQL requests specifically
-      if (req.path === '/graphql' && req.method === 'POST') {
-        console.log('[MIDDLEWARE] GraphQL request detected:', {
-          path: req.path,
-          method: req.method,
-          hasBody: !!req.body,
-          shop: req.query.shop || req.body?.variables?.shop || 'unknown'
-        });
-      }
+      // Verbose middleware logging disabled for production
       next();
     });
     app.use(attachShop);
@@ -1293,13 +1275,6 @@ import debugRouter from './controllers/debugRouter.js';
       try {
         const { query, variables } = req.body || {};
         
-        // Log incoming GraphQL requests for debugging
-        console.log(`[GRAPHQL] Request received:`, {
-          query: query?.substring(0, 100),
-          variables: variables,
-          shop: variables?.shop || req.shopDomain || 'unknown'
-        });
-        
         if (!query) {
           console.error(`[GRAPHQL] Error: No query provided`);
           return res.status(400).json({ errors: [{ message: 'No query provided' }] });
@@ -1317,7 +1292,6 @@ import debugRouter from './controllers/debugRouter.js';
           console.error(`[GRAPHQL] Errors:`, result.errors);
           res.status(400).json(result);
         } else {
-          console.log(`[GRAPHQL] Success for shop:`, variables?.shop || 'unknown');
           res.json(result);
         }
       } catch (e) {
@@ -1633,14 +1607,6 @@ if (!IS_PROD) {
     app.get('/', async (req, res) => {
       const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
       
-      // ALWAYS log - critical for debugging
-      console.log('[ROOT] GET / request:', {
-        shop: shop ? shop.substring(0, 20) + '...' : 'MISSING',
-        embedded: embedded,
-        hasIdToken: !!id_token,
-        host: host ? host.substring(0, 20) + '...' : 'MISSING'
-      });
-      
       // If no shop parameter, show install form
       if (!shop) {
         let html = `
@@ -1781,8 +1747,6 @@ if (!IS_PROD) {
           // For embedded apps, we use Token Exchange to get Admin API access tokens
           // The tokenResolver will handle JWT -> Admin token exchange automatically
           if (id_token || embedded === '1') {
-              console.log('[ROOT] Serving HTML for embedded app, shop:', shop);
-              
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
               
@@ -1976,7 +1940,6 @@ if (!IS_PROD) {
         const injection = `
           <script>
             window.__SHOPIFY_API_KEY = '${apiKey}';
-            console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
           </script>
           <meta name="shopify-api-key" content="${apiKey}">
         `;
@@ -2287,17 +2250,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
 
 
         // Serve assets with aggressive caching for production (MUST be before catch-all)
-        // Add logging middleware for assets
-        app.use((req, res, next) => {
-          // Log asset requests (JS, CSS, images, etc.)
-          if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/)) {
-            console.log('[ASSETS] Request:', req.method, req.path, {
-              exists: fs.existsSync(path.join(distPath, req.path)),
-              distPath: distPath
-            });
-          }
-          next();
-        });
         
         // Serve logo for emails (public endpoint)
         app.get('/assets/logo/:size', (req, res) => {
@@ -2574,14 +2526,10 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
 
     // Unsubscribe endpoint (must be before catch-all, public endpoint - no auth required)
     app.get('/api/email/unsubscribe', async (req, res) => {
-      console.log('[UNSUBSCRIBE] Request received:', req.url, req.method);
       try {
         const { shop, email } = req.query;
         
-        console.log('[UNSUBSCRIBE] Params:', { shop, email });
-        
         if (!shop) {
-          console.log('[UNSUBSCRIBE] Missing shop parameter');
           return res.status(400).send('Missing shop parameter');
         }
 
@@ -2589,7 +2537,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
         const shopRecord = await Shop.findOne({ shop });
         
         if (!shopRecord) {
-          console.log('[UNSUBSCRIBE] Shop not found:', shop);
           return res.status(404).send('Shop not found');
         }
 
@@ -2607,8 +2554,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
             console.error('[UNSUBSCRIBE] Failed to add to SendGrid suppression list:', error.message);
           });
         }
-
-        console.log(`[UNSUBSCRIBE] ✅ Shop ${shop} (${emailToUnsubscribe || 'N/A'}) unsubscribed from marketing emails`);
 
         // Return a simple HTML confirmation page
         res.send(`
@@ -2676,14 +2621,10 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
           const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Cache bust:', '${cacheBust}');
             </script>
           `;
           html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
         }
-        
-        // Log for debugging
-        console.log('[SERVER] Serving index.html with cache bust:', cacheBust);
         
         res.send(html);
       } else {

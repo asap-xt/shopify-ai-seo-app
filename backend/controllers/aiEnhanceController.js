@@ -591,7 +591,6 @@ router.post('/product', validateRequest(), async (req, res) => {
           
           if (!existingAltText) {
             // Case 1: No alt text at all → Generate with AI
-            console.log(`[AI-ENHANCE] Generating alt text for ${language} (no alt text exists)`);
             imageAltResult = await generateImageAltText({
               product: data.product,
               language,
@@ -600,18 +599,12 @@ router.post('/product', validateRequest(), async (req, res) => {
             imageAltResult.translated = false;
           } else {
             // Case 2: Alt text exists → AI compares languages and translates if needed
-            console.log(`[AI-ENHANCE] Checking alt text language for ${language}...`);
             imageAltResult = await translateImageAltText({
               existingAltText: existingAltText,
               description: currentDescription,
               model,
               productTitle: data.product.title
             });
-            if (imageAltResult.translated) {
-              console.log(`[AI-ENHANCE] Alt text translated to ${language}`);
-            } else {
-              console.log(`[AI-ENHANCE] Alt text already in correct language for ${language}`);
-            }
           }
         }
         
