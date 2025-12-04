@@ -715,7 +715,9 @@ const seoSchema = {
           },
         },
         imageAlt: {
-          type: 'array',
+          // Can be: string (featured image alt), null, or legacy array format
+          type: ['string', 'null', 'array'],
+          // If array (legacy format), validate items
           items: {
             type: 'object',
             additionalProperties: false,
