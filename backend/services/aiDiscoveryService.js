@@ -432,13 +432,20 @@ class AIDiscoveryService {
       
       // If no settings, use defaults
       if (!settings) {
+        console.log('[ROBOTS] No settings found, using defaults');
         settings = this.getDefaultSettings();
       }
+      
+      // Debug: Log bots from settings
+      console.log('[ROBOTS] Settings bots:', JSON.stringify(settings.bots, null, 2));
+      console.log('[ROBOTS] Settings features:', JSON.stringify(settings.features, null, 2));
       
       // Get enabled bots
       const enabledBots = Object.entries(settings.bots || {})
         .filter(([_, bot]) => bot.enabled)
         .map(([key, _]) => key);
+      
+      console.log('[ROBOTS] Enabled bots:', enabledBots);
 
       // If no bots are enabled, return minimal configuration
       // Do NOT block all crawlers - this would block Google, Bing, etc.
@@ -507,8 +514,9 @@ class AIDiscoveryService {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/store-metadata.json\n';
         }
         
-        // Advanced Schema Data - Enterprise only (use app proxy path)
-        if (settings.features?.schemaData && normalizedPlan === 'enterprise') {
+        // Advanced Schema Data - Plus plans and Enterprise (use app proxy path)
+        const plusPlansWithSchema = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
+        if (settings.features?.schemaData && plusPlansWithSchema.includes(normalizedPlan)) {
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/product/*/schemas.json\n';
           robotsTxt += 'Allow: /apps/new-ai-seo/ai/schema-data.json\n';
         }
@@ -541,8 +549,9 @@ class AIDiscoveryService {
         robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/sitemap-feed.xml?shop=${shop}\n`;
       }
       
-      // Advanced Schema Data Sitemap - Only for Enterprise
-      if (settings.features?.schemaData && normalizedPlan === 'enterprise') {
+      // Advanced Schema Data Sitemap - Plus plans and Enterprise
+      const schemaPlans = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
+      if (settings.features?.schemaData && schemaPlans.includes(normalizedPlan)) {
         robotsTxt += `Sitemap: https://${shop}/apps/new-ai-seo/ai/schema-sitemap.xml?shop=${shop}\n`;
       }
       
