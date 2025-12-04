@@ -65,7 +65,6 @@ export default function Settings() {
   const [showProductsJsonView, setShowProductsJsonView] = useState(false);
   const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
   const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
-  // const [showAiSitemapView, setShowAiSitemapView] = useState(false); // MOVED TO Sitemap.jsx
   const [showWelcomePageView, setShowWelcomePageView] = useState(false);
   const [showSchemaDataView, setShowSchemaDataView] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -100,19 +99,7 @@ export default function Settings() {
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
-  // AI Sitemap background generation status - MOVED TO Sitemap.jsx
-  // const [sitemapStatus, setSitemapStatus] = useState({
-  //   inProgress: false,
-  //   status: 'idle',
-  //   message: null,
-  //   position: null,
-  //   estimatedTime: null,
-  //   generatedAt: null,
-  //   productCount: 0
-  // });
-  // const [sitemapPollingInterval, setSitemapPollingInterval] = useState(null);
-  
-  // Advanced Schema background generation status (same as sitemap)
+  // Advanced Schema background generation status
   const [schemaStatus, setSchemaStatus] = useState({
     inProgress: false,
     status: 'idle', // idle, queued, processing, completed, failed
@@ -165,11 +152,6 @@ export default function Settings() {
       setToastTimeout(timeout);
     }
   }, [toast]);
-  
-  // AI Sitemap polling functions - MOVED TO Sitemap.jsx
-  // const fetchSitemapStatus = useCallback(async () => { ... });
-  // const startSitemapPolling = useCallback(() => { ... });
-  // useEffect cleanup for sitemapPollingInterval - removed
   
   // Function to fetch schema status from backend (same as sitemap)
   const fetchSchemaStatus = useCallback(async () => {
@@ -290,17 +272,6 @@ export default function Settings() {
     };
   }, [schemaPollingInterval]);
   
-  // Start polling on mount if sitemap is generating - MOVED TO Sitemap.jsx
-  // useEffect(() => {
-  //   if (shop && !sitemapPollingInterval) {
-  //     fetchSitemapStatus().then(status => {
-  //       if (status?.inProgress) {
-  //         startSitemapPolling();
-  //       }
-  //     });
-  //   }
-  // }, [shop]);
-  
   // Start polling on mount if schema is generating
   useEffect(() => {
     if (shop && !schemaPollingInterval) {
@@ -311,9 +282,6 @@ export default function Settings() {
       });
     }
   }, [shop]); // Only run on mount
-  
-  // DEPRECATED: Old polling function - MOVED TO Sitemap.jsx
-  // const startPollingForCompletion = () => { ... };
   
   // ===== 4. API MEMO (ÐŸÐ Ð•Ð”Ð˜ Ð´Ð° ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð° Ð² useCallback) =====
   
@@ -765,11 +733,6 @@ export default function Settings() {
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
       
-      // Show AI Sitemap View button - MOVED TO Sitemap.jsx
-      // if (data.hasAiSitemap) {
-      //   setShowAiSitemapView(true);
-      // }
-      
       // Generate robots.txt preview
       generateRobotsTxt(data);
       
@@ -921,14 +884,6 @@ export default function Settings() {
       setHasUnsavedChanges(false);
       setOriginalSettings(settings);
       generateRobotsTxt();
-      
-      // AI-Optimized Sitemap logic moved to Store Optimization → Sitemap page
-      // const normalizedPlan = normalizePlan(settings?.plan);
-      // const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
-      // const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
-      // const isPlusPlan = plusPlans.includes(normalizedPlan);
-      // const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
-      // if (settings.features?.aiSitemap) { ... } - REMOVED
       
       // Show success toast
       setToast('');
@@ -1565,21 +1520,7 @@ export default function Settings() {
                   name: 'Collections JSON Feed',
                   description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
-                },
-                // AI-Optimized Sitemap moved to Store Optimization → Sitemap page
-                // {
-                //   key: 'aiSitemap',
-                //   name: 'AI-Optimized Sitemap',
-                //   description: 'Enhanced sitemap with AI hints',
-                //   requiredPlan: 'Growth Extra'
-                // },
-                // Advanced Schema Data moved to Store Optimization → Schema Data page
-                // {
-                //   key: 'schemaData',
-                //   name: 'Advanced Schema Data',
-                //   description: 'BreadcrumbList, FAQPage & more',
-                //   requiredPlan: 'Enterprise'
-                // }
+                }
               ].map((feature) => {
                 const isAvailable = isFeatureAvailable(feature.key);
                 const isEnabled = !!settings?.features?.[feature.key];
@@ -1603,16 +1544,6 @@ export default function Settings() {
                               helpText={feature.description}
                             />
                           </Box>
-                          
-                          {/* AI Sitemap View button - MOVED TO Sitemap.jsx */}
-                          {/* {feature.key === 'aiSitemap' && showAiSitemapView && !sitemapStatus.inProgress && (
-                            <Button
-                              size="slim"
-                              onClick={() => viewJson(feature.key, feature.name)}
-                            >
-                              View
-                            </Button>
-                          )} */}
                           
                           {/* Products JSON View button */}
                           {feature.key === 'productsJson' && showProductsJsonView && (
@@ -1675,97 +1606,6 @@ export default function Settings() {
                           )}
                         </InlineStack>
                         
-                        {/* AI Sitemap Status Indicator */}
-                        {feature.key === 'aiSitemap' && isEnabled && sitemapStatus.inProgress && (
-                          <Box paddingInlineStart="800" paddingBlockStart="200">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Spinner size="small" />
-                              <BlockStack gap="100">
-                                <Text variant="bodyMd" tone="subdued">
-                                  {sitemapStatus.message || 'Generating sitemap...'}
-                                </Text>
-                                {sitemapStatus.position > 0 && (
-                                  <Text variant="bodySm" tone="subdued">
-                                    Queue position: {sitemapStatus.position} · Est. {Math.ceil(sitemapStatus.estimatedTime / 60)} min
-                                  </Text>
-                                )}
-                                {sitemapStatus.status === 'processing' && sitemapStatus.productCount > 0 && (
-                                  <Text variant="bodySm" tone="subdued">
-                                    Processing {sitemapStatus.productCount} products...
-                                  </Text>
-                                )}
-                              </BlockStack>
-                            </InlineStack>
-                          </Box>
-                        )}
-                        
-                        {/* AI Sitemap Completion Status - shown even if checkbox is unchecked */}
-                        {feature.key === 'aiSitemap' && !sitemapStatus.inProgress && sitemapStatus.status === 'completed' && sitemapStatus.generatedAt && (
-                          <Box paddingInlineStart="800" paddingBlockStart="200">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Badge tone="success">Generated</Badge>
-                              <Text variant="bodySm" tone="subdued">
-                                {sitemapStatus.productCount} products · {(() => {
-                                  const now = new Date();
-                                  const generated = new Date(sitemapStatus.generatedAt);
-                                  const diff = Math.floor((now - generated) / 1000 / 60);
-                                  if (diff < 1) return 'Just now';
-                                  if (diff < 60) return `${diff} min ago`;
-                                  const hours = Math.floor(diff / 60);
-                                  if (hours < 24) return `${hours}h ago`;
-                                  const days = Math.floor(hours / 24);
-                                  return `${days}d ago`;
-                                })()}
-                              </Text>
-                            </InlineStack>
-                          </Box>
-                        )}
-                        
-                        {/* Advanced Schema Status Indicator - MOVED TO Schema Data page */}
-                        {/* {feature.key === 'schemaData' && isEnabled && schemaStatus.inProgress && (
-                          <Box paddingInlineStart="800" paddingBlockStart="200">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Spinner size="small" />
-                              <BlockStack gap="100">
-                                <Text variant="bodyMd" tone="subdued">
-                                  {schemaStatus.message || 'Generating schema data...'}
-                                </Text>
-                                {schemaStatus.position > 0 && (
-                                  <Text variant="bodySm" tone="subdued">
-                                    Queue position: {schemaStatus.position} · Est. {Math.ceil(schemaStatus.estimatedTime / 60)} min
-                                  </Text>
-                                )}
-                                {schemaStatus.status === 'processing' && schemaStatus.schemaCount > 0 && (
-                                  <Text variant="bodySm" tone="subdued">
-                                    Processing {schemaStatus.schemaCount} schemas...
-                                  </Text>
-                                )}
-                              </BlockStack>
-                            </InlineStack>
-                          </Box>
-                        )} */}
-                        
-                        {/* Advanced Schema Completion Status - MOVED TO Schema Data page */}
-                        {/* {feature.key === 'schemaData' && !schemaStatus.inProgress && schemaStatus.status === 'completed' && schemaStatus.generatedAt && (
-                          <Box paddingInlineStart="800" paddingBlockStart="200">
-                            <InlineStack gap="200" blockAlign="center">
-                              <Badge tone="success">Generated</Badge>
-                              <Text variant="bodySm" tone="subdued">
-                                {schemaStatus.schemaCount} schemas · {(() => {
-                                  const now = new Date();
-                                  const generated = new Date(schemaStatus.generatedAt);
-                                  const diff = Math.floor((now - generated) / 1000 / 60);
-                                  if (diff < 1) return 'Just now';
-                                  if (diff < 60) return `${diff} min ago`;
-                                  const hours = Math.floor(diff / 60);
-                                  if (hours < 24) return `${hours}h ago`;
-                                  const days = Math.floor(hours / 24);
-                                  return `${days}d ago`;
-                                })()}
-                              </Text>
-                            </InlineStack>
-                          </Box>
-                        )} */}
                       </BlockStack>
                     ) : (
                       <Checkbox
@@ -1794,215 +1634,6 @@ export default function Settings() {
           </BlockStack>
         </Box>
       </Card>
-
-      {/* Available Endpoints - commented out, now using View buttons */}
-      {/* {(settings?.features?.productsJson || settings?.features?.collectionsJson || settings?.features?.storeMetadata || settings?.features?.schemaData || settings?.features?.aiSitemap || settings?.features?.welcomePage) && (
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Available AI Endpoints</Text>
-              
-              <BlockStack gap="200">
-                {settings?.features?.productsJson && (
-                  <InlineStack align="space-between">
-                    <Text>Products Feed:</Text>
-                    <Link url={`/ai/products.json?shop=${shop}`} external>
-                      /ai/products.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.collectionsJson && (
-                  <InlineStack align="space-between">
-                    <Text>Collections Feed:</Text>
-                    <Link url={`/ai/collections-feed.json?shop=${shop}`} external>
-                      /ai/collections-feed.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.storeMetadata && (
-                  <InlineStack align="space-between">
-                    <Text>Store Metadata:</Text>
-                    <Link url={`/ai/store-metadata.json?shop=${shop}`} external>
-                      /ai/store-metadata.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.schemaData && (
-                  <InlineStack align="space-between">
-                    <Text>Advanced Schema Data:</Text>
-                    <Link url={`/ai/schema-data.json?shop=${shop}`} external>
-                      /ai/schema-data.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.aiSitemap && (
-                  <InlineStack align="space-between">
-                    <Text>AI Sitemap:</Text>
-                    <Link url={`/ai/sitemap-feed.xml?shop=${shop}`} external>
-                      /ai/sitemap-feed.xml
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.welcomePage && (
-                  <InlineStack align="space-between">
-                    <Text>Welcome Page:</Text>
-                    <Link url={`/ai/welcome?shop=${shop}`} external>
-                      /ai/welcome
-                    </Link>
-                  </InlineStack>
-                )}
-              </BlockStack>
-            </BlockStack>
-          </Box>
-        </Card>
-      )} */}
-
-      {/* Advanced Schema Data Management - MOVED TO Store Optimization → Schema Data page */}
-      {/* {(() => {
-        const plan = normalizePlan(settings?.plan);
-        const planIndex = getPlanIndex(plan);
-        const planCheck = planIndex >= 2; // Professional Plus+ (index 2)
-        const settingsCheck = settings?.features?.schemaData;
-        const originalCheck = originalSettings?.features?.schemaData;
-        
-        return planCheck && settingsCheck && originalCheck;
-      })() && (
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Advanced Schema Data Management</Text>
-              <Text variant="bodyMd" tone="subdued">
-                Generate and manage structured data for your products
-              </Text>
-              
-              <InlineStack gap="300">
-                <Button
-                  primary
-                  onClick={async () => {
-                    try {
-                      const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
-                      
-                      if (existingData.schemas && existingData.schemas.length > 0) {
-                        if (!confirm('This will replace existing schema data. Continue?')) {
-                          return;
-                        }
-                      }
-                      
-                      const data = await api(`/api/schema/generate-all?shop=${shop}`, {
-                        method: 'POST',
-                        shop,
-                        body: { shop }
-                      });
-                      
-                      setToast('Advanced Schema Data generation started in background.');
-                      startSchemaPolling();
-                      
-                    } catch (apiError) {
-                      if (apiError.status === 402) {
-                        setTokenError(apiError);
-                        if (apiError.trialRestriction && apiError.requiresActivation) {
-                          setShowTrialActivationModal(true);
-                        } else if (apiError.requiresPurchase) {
-                          setShowInsufficientTokensModal(true);
-                        } else {
-                          setToast('Advanced Schema Data requires activation or token purchase.');
-                        }
-                        return;
-                      }
-                      
-                      if (apiError.message?.includes('NO_OPTIMIZED_PRODUCTS') || apiError.error?.includes('NO_OPTIMIZED_PRODUCTS')) {
-                        setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
-                        setShowSchemaErrorModal(true);
-                        return;
-                      }
-                      
-                      if (apiError.message?.includes('ONLY_BASIC_SEO') || apiError.error?.includes('ONLY_BASIC_SEO')) {
-                        setSchemaErrorType('ONLY_BASIC_SEO');
-                        setShowSchemaErrorModal(true);
-                        return;
-                      }
-                      
-                      console.error('[SCHEMA-GEN] Error:', apiError);
-                      setToast('Failed to generate schema: ' + (apiError.message || 'Unknown error'));
-                    }
-                  }}
-                >
-                  Generate/Update Schema Data
-                </Button>
-                
-                <Button onClick={() => { window.open(`/ai/schema-data.json?shop=${shop}`, '_blank'); }}>
-                  View Generated Schema
-                </Button>
-                
-                <Button
-                  destructive
-                  onClick={async () => {
-                    if (confirm('This will delete all advanced schema data. Are you sure?')) {
-                      try {
-                        await api(`/api/schema/delete?shop=${shop}`, { method: 'DELETE', shop, body: { shop } });
-                        setToast('Schema data deleted successfully');
-                      } catch (err) {
-                        setToast('Failed to delete schema data');
-                      }
-                    }
-                  }}
-                >
-                  Delete Schema Data
-                </Button>
-              </InlineStack>
-              
-              <Card>
-                <Box padding="300">
-                  <BlockStack gap="300">
-                    <Text as="h3" variant="headingSm">Rich Product Attributes</Text>
-                    <Text variant="bodyMd" tone="subdued">
-                      Select which AI-generated attributes to include in product schemas
-                    </Text>
-                    
-                    <InlineGrid columns={2} gap="400">
-                      {[
-                        { key: 'material', label: 'Material', description: 'Product material (cotton, leather, metal, etc.)' },
-                        { key: 'color', label: 'Color', description: 'Product color information' },
-                        { key: 'size', label: 'Size', description: 'Product size or dimensions' },
-                        { key: 'weight', label: 'Weight', description: 'Product weight information' },
-                        { key: 'dimensions', label: 'Dimensions', description: 'Product measurements' },
-                        { key: 'category', label: 'Category', description: 'Product category classification' },
-                        { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' },
-                        { key: 'reviews', label: 'Review Schemas', description: 'AI-generated product reviews for schema.org' },
-                        { key: 'ratings', label: 'Rating Schemas', description: 'AI-generated ratings and aggregate ratings' },
-                        { key: 'enhancedDescription', label: 'Enhanced Descriptions', description: 'AI-enhanced product descriptions' },
-                        { key: 'organization', label: 'Organization Schema', description: 'Brand organization information' }
-                      ].map(attr => (
-                        <Checkbox
-                          key={attr.key}
-                          label={attr.label}
-                          helpText={attr.description}
-                          checked={settings?.richAttributes?.[attr.key] || false}
-                          onChange={(checked) => {
-                            setSettings(prev => ({
-                              ...prev,
-                              richAttributes: { ...prev.richAttributes, [attr.key]: checked }
-                            }));
-                          }}
-                        />
-                      ))}
-                    </InlineGrid>
-                  </BlockStack>
-                </Box>
-              </Card>
-              
-              <Banner status="info" tone="subdued">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product.</p>
-              </Banner>
-            </BlockStack>
-          </Box>
-        </Card>
-      )} */}
 
       {/* Save and Reset Buttons */}
       <InlineStack gap="200" align="end">
