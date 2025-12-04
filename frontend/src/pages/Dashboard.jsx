@@ -341,15 +341,15 @@ export default function Dashboard({ shop: shopProp }) {
   // Plan price fallback mapping (if backend doesn't provide price)
   const planPriceFallback = useMemo(() => ({
     starter: 9.99,
-    professional: 15.99,
-    professional_plus: 19.99,
-    'professional plus': 19.99,
-    growth: 29.99,
-    growth_plus: 35.99,
-    'growth plus': 35.99,
-    growth_extra: 79.99,
-    'growth extra': 79.99,
-    enterprise: 139.99
+    professional: 25.99,
+    professional_plus: 39.99,
+    'professional plus': 39.99,
+    growth: 35.99,
+    growth_plus: 59.99,
+    'growth plus': 59.99,
+    growth_extra: 119.99,
+    'growth extra': 119.99,
+    enterprise: 199.99
   }), []);
   const planPriceValue = subscription?.price && subscription.price > 0
     ? subscription.price
