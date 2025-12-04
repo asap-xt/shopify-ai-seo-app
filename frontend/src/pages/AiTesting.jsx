@@ -557,10 +557,12 @@ export default function AiTesting({ shop: shopProp }) {
                               <BlockStack gap="100">
                                 <InlineStack gap="200" blockAlign="center">
                                   <Text variant="bodyMd" fontWeight="semibold">{result.name}</Text>
-                                  {result.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                  {result.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                  {result.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                  {result.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                                  {result.status === 'success' && <Badge tone="success">OK</Badge>}
+                                  {result.status === 'fair' && <Badge tone="info">Fair</Badge>}
+                                  {result.status === 'poor' && <Badge tone="warning">Poor</Badge>}
+                                  {result.status === 'warning' && <Badge tone="critical">Warning</Badge>}
+                                  {result.status === 'error' && <Badge tone="critical">Failed</Badge>}
+                                  {result.status === 'locked' && <Badge>Locked</Badge>}
                                 </InlineStack>
                                 <Text variant="bodySm" tone="subdued">
                                   {result.message}

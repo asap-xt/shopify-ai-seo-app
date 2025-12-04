@@ -161,13 +161,17 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             // Use DB counts (Products model is source of truth for optimization status)
             const optimizationPercent = totalProducts > 0 ? Math.round((optimizedProducts / totalProducts) * 100) : 0;
             
-            if (optimizedProducts === 0) {
+            if (optimizationPercent <= 20) {
               validationStatus = 'warning';
-              validationMessage = `0/${totalProducts} products optimized (0%)`;
-            } else if (optimizationPercent < 50) {
-              validationStatus = 'warning';
-              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%) - needs more optimization`;
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
+            } else if (optimizationPercent <= 49) {
+              validationStatus = 'poor';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
+            } else if (optimizationPercent <= 70) {
+              validationStatus = 'fair';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
             } else {
+              validationStatus = 'success';
               validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
             }
           }
@@ -185,13 +189,17 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
             
             const collectionPercent = actualTotal > 0 ? Math.round((actualOptimized / actualTotal) * 100) : 0;
             
-            if (actualOptimized === 0) {
+            if (collectionPercent <= 20) {
               validationStatus = 'warning';
-              validationMessage = `0/${actualTotal} collections optimized (0%)`;
-            } else if (collectionPercent < 50) {
-              validationStatus = 'warning';
-              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%) - needs more optimization`;
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
+            } else if (collectionPercent <= 49) {
+              validationStatus = 'poor';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
+            } else if (collectionPercent <= 70) {
+              validationStatus = 'fair';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
             } else {
+              validationStatus = 'success';
               validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
             }
           }
