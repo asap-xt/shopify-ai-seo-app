@@ -159,11 +159,16 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           // Products JSON Feed validation
           if (endpoint.key === 'productsJson') {
             // Use DB counts (Products model is source of truth for optimization status)
+            const optimizationPercent = totalProducts > 0 ? Math.round((optimizedProducts / totalProducts) * 100) : 0;
+            
             if (optimizedProducts === 0) {
               validationStatus = 'warning';
-              validationMessage = `0/${totalProducts} products optimized`;
+              validationMessage = `0/${totalProducts} products optimized (0%)`;
+            } else if (optimizationPercent < 50) {
+              validationStatus = 'warning';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%) - needs more optimization`;
             } else {
-              validationMessage = `${optimizedProducts}/${totalProducts} products optimized`;
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
             }
           }
           
@@ -178,11 +183,16 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               actualOptimized = data.collections.length; // Collections with metafields
             }
             
+            const collectionPercent = actualTotal > 0 ? Math.round((actualOptimized / actualTotal) * 100) : 0;
+            
             if (actualOptimized === 0) {
               validationStatus = 'warning';
-              validationMessage = `0/${actualTotal} collections optimized`;
+              validationMessage = `0/${actualTotal} collections optimized (0%)`;
+            } else if (collectionPercent < 50) {
+              validationStatus = 'warning';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%) - needs more optimization`;
             } else {
-              validationMessage = `${actualOptimized}/${actualTotal} collections optimized`;
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
             }
           }
           

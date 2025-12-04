@@ -70,6 +70,7 @@ export default function AiTesting({ shop: shopProp }) {
     optimizedCollections: 0
   });
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
+  const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
 
 
   useEffect(() => {
@@ -99,6 +100,9 @@ export default function AiTesting({ shop: shopProp }) {
         const parsed = JSON.parse(savedAiData);
         if (parsed.results) {
           setAiTestResults(parsed.results);
+        }
+        if (parsed.timestamp) {
+          setLastAiTestTimestamp(new Date(parsed.timestamp));
         }
       }
     } catch (err) {
@@ -381,6 +385,7 @@ export default function AiTesting({ shop: shopProp }) {
             timestamp: new Date().toISOString()
           };
           localStorage.setItem(`ai-validation-results-${shop}`, JSON.stringify(dataToSave));
+          setLastAiTestTimestamp(new Date());
         } catch (err) {
           console.error('[AI-TESTING] Error saving AI test results:', err);
         }
@@ -504,7 +509,7 @@ export default function AiTesting({ shop: shopProp }) {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <Text as="h3" variant="headingMd">🔧 Basic AIEO Tests</Text>
+                      <Text as="h3" variant="headingMd">Basic AIEO Tests</Text>
                       <Text variant="bodySm" tone="subdued">
                         Quick check if endpoints are accessible and returning data
                       </Text>
@@ -596,7 +601,8 @@ export default function AiTesting({ shop: shopProp }) {
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
                       <InlineStack gap="200" blockAlign="center">
-                        <Text as="h3" variant="headingMd">🤖 AI-Powered Validation</Text>
+                        <Text as="h3" variant="headingMd">AI-Powered Validation</Text>
+                        {/* Token balance hidden - kept for potential future use
                         {tokenBalance !== null && (
                           <Badge tone={tokenBalance > 50 ? 'success' : 'warning'}>
                             {tokenBalance} tokens
@@ -609,6 +615,7 @@ export default function AiTesting({ shop: shopProp }) {
                         >
                           🔄
                         </Button>
+                        */}
                       </InlineStack>
                       <Text variant="bodySm" tone="subdued">
                         Deep analysis with AI bot
@@ -629,6 +636,19 @@ export default function AiTesting({ shop: shopProp }) {
                     </Button>
                   </InlineStack>
 
+                  {/* Show banner if there are saved AI test results */}
+                  {lastAiTestTimestamp && Object.keys(aiTestResults).length > 0 && !aiTesting && (
+                    <Banner tone="info">
+                      <Text variant="bodySm">
+                        These results are from {lastAiTestTimestamp.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}. Test with AI Bot again to refresh.
+                      </Text>
+                    </Banner>
+                  )}
 
                   {aiTesting && (
                     <Box>
