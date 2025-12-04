@@ -78,11 +78,9 @@ class EmailScheduler {
       }).lean();
 
       if (day3Stores.length === 0) {
-        console.log('[TOKEN-EMAIL] No stores found installed 3-4 days ago (72-96 hour window)');
         return;
       }
 
-      console.log(`[TOKEN-EMAIL] Checking ${day3Stores.length} stores installed 3-4 days ago (72-96 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
@@ -125,14 +123,13 @@ class EmailScheduler {
         const result = await emailService.sendTokenPurchaseEmail({ ...store, subscription });
         if (result.success) {
           sentCount++;
-          console.log(`[TOKEN-EMAIL] ✅ Sent to ${store.shop}`);
         } else {
           console.error(`[TOKEN-EMAIL] ❌ Failed for ${store.shop}:`, result.error);
         }
         await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log(`[TOKEN-EMAIL] Completed: ${sentCount} sent, ${skippedCount} skipped`);
+      if (sentCount > 0) console.log(`[TOKEN-EMAIL] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[TOKEN-EMAIL] Error:', error);
     }
@@ -162,11 +159,8 @@ class EmailScheduler {
       }).lean();
 
       if (day6Stores.length === 0) {
-        console.log('[APPSTORE-RATING] No stores found installed 6-7 days ago (144-168 hour window)');
         return;
       }
-
-      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 6-7 days ago (144-168 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
@@ -208,14 +202,13 @@ class EmailScheduler {
         const result = await emailService.sendAppStoreRatingEmail({ ...store, subscription });
         if (result.success) {
           sentCount++;
-          console.log(`[APPSTORE-RATING] ✅ Sent to ${store.shop}`);
         } else {
           console.error(`[APPSTORE-RATING] ❌ Failed for ${store.shop}:`, result.error);
         }
         await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log(`[APPSTORE-RATING] Completed: ${sentCount} sent, ${skippedCount} skipped`);
+      if (sentCount > 0) console.log(`[APPSTORE-RATING] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[APPSTORE-RATING] Error:', error);
     }

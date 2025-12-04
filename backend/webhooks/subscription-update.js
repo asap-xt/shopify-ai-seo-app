@@ -142,7 +142,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       if (subscription.pendingPlan) {
         updateData.plan = subscription.pendingPlan;
         updateData.pendingPlan = null;
-        console.log('[SUBSCRIPTION-UPDATE] Activating pendingPlan:', subscription.pendingPlan);
       }
       
       // Handle activation
@@ -153,7 +152,6 @@ export default async function handleSubscriptionUpdate(req, res) {
         if (!hasBeenActivated) {
           updateData.activatedAt = now;
           updateData.trialEndsAt = null; // End trial on activation
-          console.log('[SUBSCRIPTION-UPDATE] First activation - setting activatedAt');
         }
       }
       
@@ -163,29 +161,15 @@ export default async function handleSubscriptionUpdate(req, res) {
         // Preserve the original activation date
         updateData.activatedAt = originalActivatedAt;
         updateData.trialEndsAt = null; // No trial for upgrades after activation
-        console.log('[SUBSCRIPTION-UPDATE] Upgrade after activation - preserving activatedAt:', originalActivatedAt);
       } else if (!subscription.pendingActivation && !subscription.trialEndsAt) {
         // Only set trial for brand new subscriptions (not activated, no existing trial)
         const { TRIAL_DAYS } = await import('../plans.js');
         const trialDays = trial_days || TRIAL_DAYS;
         updateData.trialEndsAt = new Date(now.getTime() + (trialDays * 24 * 60 * 60 * 1000));
-        console.log('[SUBSCRIPTION-UPDATE] New subscription - setting trial period');
       } else if (subscription.trialEndsAt && !hasBeenActivated) {
         // Preserve existing trial if still in trial period
         updateData.trialEndsAt = subscription.trialEndsAt;
-        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trial period');
       }
-      
-      // CRITICAL: Log update data before applying
-      console.log('[SUBSCRIPTION-UPDATE] Trial logic check:', {
-        originalActivatedAt,
-        hasBeenActivated,
-        updateDataActivatedAt: updateData.activatedAt,
-        updateDataTrialEndsAt: updateData.trialEndsAt,
-        hadPendingPlan,
-        wasPendingActivation,
-        plan: updateData.plan || subscription.plan
-      });
       
       // CRITICAL: Use findByIdAndUpdate since we're using lean() (subscription is plain object)
       const updatedSubscription = await Subscription.findByIdAndUpdate(
@@ -194,12 +178,7 @@ export default async function handleSubscriptionUpdate(req, res) {
         { new: true, runValidators: true }
       );
       
-      console.log('[SUBSCRIPTION-UPDATE] Updated subscription:', {
-        plan: updatedSubscription.plan,
-        status: updatedSubscription.status,
-        activatedAt: updatedSubscription.activatedAt,
-        trialEndsAt: updatedSubscription.trialEndsAt
-      });
+      // Subscription updated successfully
       
       // Set included tokens for the plan (replaces old, keeps purchased)
       // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
@@ -229,13 +208,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       // - Status is active
       // REMOVED hadPendingPlan check: callback clears it before webhook arrives (race condition)
       const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active';
-      
-      console.log('[SUBSCRIPTION-UPDATE] Welcome email check:', {
-        originalActivatedAt,
-        hadPendingPlan,
-        currentStatus: updatedSubscription.status,
-        isNewSubscription
-      });
       
       if (isNewSubscription) {
         // Send welcome email asynchronously (non-blocking)
@@ -302,7 +274,7 @@ export default async function handleSubscriptionUpdate(req, res) {
                     { shop },
                     { $set: updateFields }
                   );
-                  console.log('[SUBSCRIPTION-UPDATE] ✅ Updated shop data in DB:', updateFields);
+                  // Shop data updated in DB
                 }
               } catch (updateError) {
                 console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to update shop email:', updateError.message);
@@ -319,11 +291,7 @@ export default async function handleSubscriptionUpdate(req, res) {
             
             const result = await emailService.sendWelcomeEmail(storeWithSubscription);
             if (result.success) {
-              if (result.skipped) {
-                console.log('[SUBSCRIPTION-UPDATE] Welcome email skipped:', result.reason);
-              } else {
-                console.log('[SUBSCRIPTION-UPDATE] ✅ Welcome email sent successfully');
-              }
+              // Welcome email sent/skipped successfully
             } else {
               console.error('[SUBSCRIPTION-UPDATE] ❌ Welcome email failed:', result.error);
             }
@@ -350,7 +318,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       const shouldClearPending = subscriptionIdMatches; // CRITICAL: Only clear if IDs match!
       
       if (hasPendingState && shouldClearPending) {
-        console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending state but keeping previous plan status');
+        // User clicked "back" - clearing pending state but keeping previous plan status
         const updateData = {
           pendingPlan: null,
           pendingActivation: false
