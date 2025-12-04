@@ -176,13 +176,17 @@ export default function Settings() {
         }
         
         // Always uncheck the schemaData checkbox after successful generation
-        setSettings(prev => ({
-          ...prev,
-          features: {
-            ...prev.features,
-            schemaData: false
-          }
-        }));
+        // Safety check: only update if settings exists
+        setSettings(prev => {
+          if (!prev || !prev.features) return prev;
+          return {
+            ...prev,
+            features: {
+              ...prev.features,
+              schemaData: false
+            }
+          };
+        });
         
         // Show success toast only once (when transitioning from inProgress to completed)
         if (schemaStatus.inProgress) {
@@ -205,13 +209,17 @@ export default function Settings() {
           }
           
           // Always uncheck the schemaData checkbox after successful generation
-          setSettings(prev => ({
-            ...prev,
-            features: {
-              ...prev.features,
-              schemaData: false
-            }
-          }));
+          // Safety check: only update if settings exists
+          setSettings(prev => {
+            if (!prev || !prev.features) return prev;
+            return {
+              ...prev,
+              features: {
+                ...prev.features,
+                schemaData: false
+              }
+            };
+          });
           
           // Show success toast only once (when transitioning from inProgress to completed)
           if (schemaStatus.inProgress) {
@@ -472,17 +480,8 @@ export default function Settings() {
     }
   }, [advancedSchemaEnabled]);
 
-  // Auto-enable AI Discovery when features are selected
-  useEffect(() => {
-    if (false && settings && Object.values(settings.features || {}).some(f => f)) { // DISABLED: This was causing features to be auto-enabled on first load
-      // ÐÐ²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡Ð½Ð¾ Ð²ÐºÐ»ÑŽÑ‡Ð²Ð°Ð¼Ðµ AI Discovery Ð°ÐºÐ¾ Ð¸Ð¼Ð° Ð¸Ð·Ð±Ñ€Ð°Ð½Ð¸ features
-      setSettings(prev => ({
-        ...prev,
-        enabled: true,
-        discoveryEnabled: true
-      }));
-    }
-  }, [settings?.features]);
+  // Auto-enable AI Discovery when features are selected - DISABLED
+  // This was causing features to be auto-enabled on first load
 
   const checkSchemaStatus = async () => {
     try {
@@ -801,16 +800,19 @@ export default function Settings() {
       return;
     }
     
-    setSettings(prev => ({
-      ...prev,
-      bots: {
-        ...prev.bots,
-        [botKey]: {
-          ...prev.bots[botKey],
-          enabled: !prev.bots[botKey].enabled
+    setSettings(prev => {
+      if (!prev || !prev.bots) return prev;
+      return {
+        ...prev,
+        bots: {
+          ...prev.bots,
+          [botKey]: {
+            ...prev.bots[botKey],
+            enabled: !prev.bots[botKey]?.enabled
+          }
         }
-      }
-    }));
+      };
+    });
     
     setHasUnsavedChanges(true); // Mark that there are changes
   };
@@ -875,13 +877,16 @@ export default function Settings() {
       }
     }
     
-    setSettings(prev => ({
-      ...prev,
-      features: {
-        ...prev.features,
-        [featureKey]: !prev.features[featureKey]
-      }
-    }));
+    setSettings(prev => {
+      if (!prev || !prev.features) return prev;
+      return {
+        ...prev,
+        features: {
+          ...prev.features,
+          [featureKey]: !prev.features[featureKey]
+        }
+      };
+    });
   };
 
   const saveSettings = async () => {
