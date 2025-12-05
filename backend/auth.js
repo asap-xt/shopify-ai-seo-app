@@ -74,8 +74,6 @@ function verifyHmac(query, secret) {
 }
 
 async function exchangeToken(shop, code) {
-  console.log(`[AUTH] Exchanging code for offline access token: ${shop}`);
-  
   try {
     const tokenUrl = `https://${shop}/admin/oauth/access_token`;
     const requestBody = { 
@@ -173,7 +171,6 @@ async function registerWebhooks(shop, accessToken) {
 
 async function fetchShopContactInfo(shop, accessToken) {
   try {
-    console.log('[AUTH] Fetching shop contact info for:', shop);
     const response = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
       method: 'GET',
       headers: {
@@ -201,10 +198,7 @@ async function fetchShopContactInfo(shop, accessToken) {
       shopOwnerEmail: shopData.customer_email || shopData.email || null
     };
     
-    console.log('[AUTH] ✅ Shop contact info fetched:', {
-      email: contactInfo.email,
-      shopOwner: contactInfo.shopOwner
-    });
+    // Shop contact info fetched
     
     return contactInfo;
   } catch (error) {
@@ -223,7 +217,6 @@ function scheduleWelcomeEmail(shop) {
       }
       
       if (shopDoc.welcomeEmailSent) {
-        console.log('[AUTH] Welcome email already sent for', shop);
         return;
       }
       
@@ -240,8 +233,6 @@ function scheduleWelcomeEmail(shop) {
 
 // GET /?shop=asapxt-teststore.myshopify.com
 router.get('/', async (req, res) => {
-  console.log('[AUTH] Starting OAuth flow', { query: req.query });
-  
   // Check environment variables
   if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
     console.error('[AUTH] Missing required environment variables');
@@ -317,8 +308,6 @@ router.get('/callback', async (req, res) => {
     }
 
     // 6) Save shop record to database
-    console.log('[AUTH] Saving shop record to database...');
-    
     // Ensure accessToken is always a string
     const accessTokenString = typeof accessToken === 'object' && accessToken.accessToken 
       ? accessToken.accessToken 
@@ -355,11 +344,7 @@ router.get('/callback', async (req, res) => {
           { $set: contactUpdate },
           { new: true }
         );
-        console.log('[AUTH] ✅ Shop contact info updated in DB:', {
-          shop,
-          email: contactUpdate.email,
-          shopOwner: contactUpdate.shopOwner
-        });
+        // Shop contact info updated in DB
       } else {
         console.warn('[AUTH] ⚠️ No contact info to update (all fields were null)');
       }
@@ -420,20 +405,12 @@ router.get('/callback', async (req, res) => {
     res.clearCookie('shopify_oauth_state');
 
     // 10) Check for active subscription
-    console.log('[AUTH] Checking for active subscription...');
     const subscription = await Subscription.findOne({ shop }).lean();
     
     const hasActiveSubscription = subscription && 
       subscription.status === 'active' && 
       !subscription.cancelledAt;
     
-    console.log('[AUTH] Subscription status:', {
-      exists: !!subscription,
-      status: subscription?.status,
-      plan: subscription?.plan,
-      hasActive: hasActiveSubscription
-    });
-
     // 11) Redirect to appropriate page
     const finalHost = host
       ? host.toString()
@@ -448,13 +425,11 @@ router.get('/callback', async (req, res) => {
     if (!hasActiveSubscription) {
       // No subscription → Billing page (plan selection)
       const billingUrl = `${baseUrl}/billing?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
-      console.log('[AUTH] No active subscription, redirecting to billing:', billingUrl);
       return res.redirect(302, billingUrl);
     }
     
     // Active subscription → Dashboard
     const dashboardUrl = `${baseUrl}/?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
-    console.log('[AUTH] Active subscription found, redirecting to dashboard:', dashboardUrl);
     return res.redirect(302, dashboardUrl);
     
   } catch (error) {

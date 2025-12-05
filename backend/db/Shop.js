@@ -99,6 +99,94 @@ const shopSchema = new mongoose.Schema({
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null }
   },
+  schemaStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed, retrying
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null }
+  },
+  // SEO Job queue status (Generate + Apply combined)
+  seoJobStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, generating, applying, completed, failed
+    phase: { type: String, default: null }, // 'generate' or 'apply'
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null },
+    // Progress tracking
+    totalProducts: { type: Number, default: 0 },
+    processedProducts: { type: Number, default: 0 },
+    successfulProducts: { type: Number, default: 0 },
+    failedProducts: { type: Number, default: 0 },
+    skippedProducts: { type: Number, default: 0 },
+    skipReasons: [{ type: String }],
+    failReasons: [{ type: String }]
+  },
+  // AI Enhancement Job queue status (Products)
+  aiEnhanceJobStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null },
+    // Progress tracking
+    totalProducts: { type: Number, default: 0 },
+    processedProducts: { type: Number, default: 0 },
+    successfulProducts: { type: Number, default: 0 },
+    failedProducts: { type: Number, default: 0 },
+    skippedProducts: { type: Number, default: 0 },
+    skipReasons: [{ type: String }],
+    failReasons: [{ type: String }]
+  },
+  // Collection SEO Job queue status (Generate + Apply)
+  collectionSeoJobStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null },
+    // Progress tracking
+    totalCollections: { type: Number, default: 0 },
+    processedCollections: { type: Number, default: 0 },
+    successfulCollections: { type: Number, default: 0 },
+    failedCollections: { type: Number, default: 0 },
+    skippedCollections: { type: Number, default: 0 }
+  },
+  // Collection AI Enhancement Job queue status
+  collectionAiEnhanceJobStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    message: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    updatedAt: { type: Date, default: null },
+    // Progress tracking
+    totalCollections: { type: Number, default: 0 },
+    processedCollections: { type: Number, default: 0 },
+    successfulCollections: { type: Number, default: 0 },
+    failedCollections: { type: Number, default: 0 },
+    skippedCollections: { type: Number, default: 0 }
+  },
   storeLanguages: [{
     locale: String,
     name: String,

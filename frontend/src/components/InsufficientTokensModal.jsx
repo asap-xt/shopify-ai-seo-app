@@ -29,16 +29,21 @@ export default function InsufficientTokensModal({
   needsUpgrade = false,
   minimumPlan = null,
   currentPlan = null,
-  returnTo = '/billing' // Where to return after purchase
+  returnTo = '/billing', // Where to return after purchase
+  onBuyTokens = null // Optional: custom handler to open TokenPurchaseModal instead of redirect
 }) {
-  // Navigate to billing page within Shopify iframe
+  // Navigate to billing page within Shopify iframe (fallback if no custom handler)
   const handleBuyTokens = () => {
-    // Copy ALL current URL parameters (including embedded=1, shop, host, etc.)
+    // If parent provides a custom handler, use it (opens TokenPurchaseModal)
+    if (onBuyTokens) {
+      onBuyTokens();
+      return;
+    }
+    
+    // Fallback: redirect to billing page
     const currentParams = new URLSearchParams(window.location.search);
-    // Remove existing returnTo if present (avoid overwriting the new one)
     currentParams.delete('returnTo');
     const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
-    // Add returnTo so user returns to origin page after purchase
     const separator = paramString ? '&' : '?';
     window.location.href = `/billing${paramString}${separator}returnTo=${encodeURIComponent(returnTo)}`;
   };
@@ -60,7 +65,7 @@ export default function InsufficientTokensModal({
       onClose={onClose}
       title="💳 Insufficient Tokens"
       primaryAction={{
-        content: 'Go to Billing',
+        content: onBuyTokens ? 'Buy Tokens' : 'Go to Billing',
         onAction: handleBuyTokens
       }}
       secondaryActions={[

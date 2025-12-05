@@ -54,6 +54,7 @@
     // ---------------------------------------------------------------------------
     const PORT = process.env.PORT || 8080;
     const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+    const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // ---------------------------------------------------------------------------
 const app = express();
@@ -108,7 +109,30 @@ const IS_PROD = process.env.NODE_ENV === 'production';
     // ---------------------------------------------------------------------------
     // Core middleware
     // ---------------------------------------------------------------------------
-    app.use(cors({ origin: true, credentials: true }));
+    
+    // Enhanced CORS configuration for Shopify iframe embedding
+    const corsOptions = {
+      origin: true, // Allow all origins (required for Shopify iframe)
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'X-Shopify-Access-Token',
+        'X-Shop-Domain'
+      ],
+      exposedHeaders: ['Content-Length', 'X-Request-Id'],
+      maxAge: 86400 // Cache preflight for 24 hours
+    };
+    
+    app.use(cors(corsOptions));
+    
+    // Handle preflight OPTIONS requests explicitly
+    app.options('*', cors(corsOptions));
+    
     app.use(compression()); // Enable gzip compression
     app.use(cookieParser());
 
@@ -280,25 +304,7 @@ if (!IS_PROD) {
     // DEBUG: Log all incoming requests
     // Normalize shop domain for all requests
     app.use((req, res, next) => {
-      // Log ALL POST requests to help debug
-      if (req.method === 'POST') {
-        console.log('[MIDDLEWARE] POST request detected:', {
-          path: req.path,
-          method: req.method,
-          contentType: req.headers['content-type'],
-          hasBody: !!req.body,
-          bodyKeys: req.body ? Object.keys(req.body) : []
-        });
-      }
-      // Log GraphQL requests specifically
-      if (req.path === '/graphql' && req.method === 'POST') {
-        console.log('[MIDDLEWARE] GraphQL request detected:', {
-          path: req.path,
-          method: req.method,
-          hasBody: !!req.body,
-          shop: req.query.shop || req.body?.variables?.shop || 'unknown'
-        });
-      }
+      // Verbose middleware logging disabled for production
       next();
     });
     app.use(attachShop);
@@ -583,29 +589,21 @@ if (!IS_PROD) {
         case 'token-purchase':
           result = await emailService.sendTokenPurchaseEmail(storeWithSubscription);
           break;
-        case 'trial':
-          result = await emailService.sendTrialExpiringEmail(storeWithSubscription, 3);
-          break;
-        case 'weekly':
-          const weeklyStats = {
-            productsOptimized: 10,
-            aiQueries: 25,
-            topProducts: ['Product 1', 'Product 2'],
-            seoImprovement: '15%'
-          };
-          result = await emailService.sendWeeklyDigest(storeWithSubscription, weeklyStats);
+        case 'appstore-rating':
+          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
           break;
         case 'upgrade':
           result = await emailService.sendUpgradeSuccessEmail(storeWithSubscription, 'professional');
           break;
+        // DEPRECATED: These emails are no longer sent automatically
+        case 'trial':
+          return res.status(410).json({ error: 'Trial expiring email has been deprecated (use in-app banner instead)' });
+        case 'weekly':
+          return res.status(410).json({ error: 'Weekly digest has been deprecated (use /api/test/product-digest instead)' });
         case 'reengagement':
-          result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
-          break;
-        case 'appstore-rating':
-          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
-          break;
+          return res.status(410).json({ error: 'Re-engagement email has been deprecated' });
         default:
-          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, trial, weekly, upgrade, reengagement' });
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, upgrade' });
       }
       
       res.json({
@@ -693,6 +691,73 @@ if (!IS_PROD) {
     }
   });
 }
+
+// Send Contact Support email via SendGrid (available in all environments)
+app.post('/api/support/send', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  
+  try {
+    const { name, email, subject, message, file } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Missing required fields: name, email, message' });
+    }
+    
+    // Import email service
+    const emailService = (await import('./services/emailService.js')).default;
+    
+    const result = await emailService.sendContactSupportEmail({
+      name,
+      email,
+      subject: subject || 'General Question',
+      message,
+      shop,
+      file: file ? {
+        content: file.content, // base64 string
+        filename: file.filename,
+        type: file.type,
+        size: file.size
+      } : null
+    });
+    
+    if (result.success) {
+      res.json({ success: true, message: 'Message sent successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error || 'Failed to send message' });
+    }
+  } catch (error) {
+    console.error('[SUPPORT] Error sending message:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to send message' });
+  }
+});
+
+// Get shop info for Contact Support page (available in all environments)
+app.get('/api/shop/info', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  try {
+    const Shop = (await import('./db/Shop.js')).default;
+    const shopRecord = await Shop.findOne({ shop }).lean();
+    
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    res.json({
+      name: shopRecord.name || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
+      email: shopRecord.contactEmail || shopRecord.shopOwnerEmail || shopRecord.email || ''
+    });
+  } catch (error) {
+    console.error('[SHOP INFO] Error:', error.message);
+    res.status(500).json({ error: 'Failed to load shop info' });
+  }
+});
 
 // Fetch and update shop email from Shopify (works in production for fixing missing emails)
 app.post('/api/test/fetch-shop-email', async (req, res) => {
@@ -900,6 +965,9 @@ import debugRouter from './controllers/debugRouter.js';
         success: Boolean!
         message: String!
         shop: String!
+        queued: Boolean
+        position: Int
+        estimatedTime: Int
       }
       
       type ProductEdge {
@@ -1017,31 +1085,65 @@ import debugRouter from './controllers/debugRouter.js';
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
-          // Import the core sitemap generation logic
+          // Import the core sitemap generation logic and queue
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
+          const { default: sitemapQueue } = await import('./services/sitemapQueue.js');
           
-          // ===== CRITICAL: AI Enhancement enabled from Settings =====
+          // ===== BACKGROUND QUEUE: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
-          generateSitemapCore(shop, { enableAIEnhancement: true })
-            .then((result) => {
-              // Success - sitemap generation completed
-            })
-            .catch((error) => {
-              console.error('[GRAPHQL] Background sitemap generation failed:', error);
-            });
+          // 
+          // Use queue system for reliable background processing:
+          // - Works independently of frontend connection
+          // - Prevents duplicate jobs
+          // - Handles retries on failure
+          // - Updates status in Shop.sitemapStatus
+          const jobInfo = await sitemapQueue.addJob(shop, async () => {
+            return await generateSitemapCore(shop, { enableAIEnhancement: true });
+          });
           
-          // Return immediately
+          // Return immediately with job info
           return {
             success: true,
-            message: 'AI-Optimized Sitemap regeneration started in background',
-            shop: shop
+            message: jobInfo.queued 
+              ? 'AI-Optimized Sitemap regeneration started in background. You can navigate away - the process will continue.'
+              : jobInfo.message,
+            shop: shop,
+            queued: jobInfo.queued,
+            position: jobInfo.position,
+            estimatedTime: jobInfo.estimatedTime
           };
           
         } catch (error) {
           console.error('[GRAPHQL] ❌ Error starting sitemap regeneration:', error);
           console.error('[GRAPHQL] Error stack:', error.stack);
+          
+          // Handle specific error codes
+          if (error.code === 'TRIAL_RESTRICTION' || error.message?.includes('TRIAL_RESTRICTION')) {
+            return {
+              success: false,
+              message: 'TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.',
+              shop: shop
+            };
+          }
+          
+          if (error.code === 'INSUFFICIENT_TOKENS') {
+            return {
+              success: false,
+              message: 'INSUFFICIENT_TOKENS: Not enough tokens for AI-Optimized Sitemap.',
+              shop: shop
+            };
+          }
+          
+          if (error.code === 'PLAN_NOT_ELIGIBLE') {
+            return {
+              success: false,
+              message: `PLAN_NOT_ELIGIBLE: ${error.message}`,
+              shop: shop
+            };
+          }
+          
           return {
             success: false,
             message: error.message,
@@ -1240,13 +1342,6 @@ import debugRouter from './controllers/debugRouter.js';
       try {
         const { query, variables } = req.body || {};
         
-        // Log incoming GraphQL requests for debugging
-        console.log(`[GRAPHQL] Request received:`, {
-          query: query?.substring(0, 100),
-          variables: variables,
-          shop: variables?.shop || req.shopDomain || 'unknown'
-        });
-        
         if (!query) {
           console.error(`[GRAPHQL] Error: No query provided`);
           return res.status(400).json({ errors: [{ message: 'No query provided' }] });
@@ -1264,7 +1359,6 @@ import debugRouter from './controllers/debugRouter.js';
           console.error(`[GRAPHQL] Errors:`, result.errors);
           res.status(400).json(result);
         } else {
-          console.log(`[GRAPHQL] Success for shop:`, variables?.shop || 'unknown');
           res.json(result);
         }
       } catch (e) {
@@ -1534,7 +1628,7 @@ if (!IS_PROD) {
 
     app.get('/apps/:app_identifier/*', (req, res, next) => {
       // Skip our App Proxy routes
-      if (req.params.app_identifier === 'new-ai-seo') {
+      if (req.params.app_identifier === APP_PROXY_SUBPATH) {
         return next();
       }
       
@@ -1579,14 +1673,6 @@ if (!IS_PROD) {
     // Handle root request - this is the App URL endpoint
     app.get('/', async (req, res) => {
       const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
-      
-      // ALWAYS log - critical for debugging
-      console.log('[ROOT] GET / request:', {
-        shop: shop ? shop.substring(0, 20) + '...' : 'MISSING',
-        embedded: embedded,
-        hasIdToken: !!id_token,
-        host: host ? host.substring(0, 20) + '...' : 'MISSING'
-      });
       
       // If no shop parameter, show install form
       if (!shop) {
@@ -1728,8 +1814,6 @@ if (!IS_PROD) {
           // For embedded apps, we use Token Exchange to get Admin API access tokens
           // The tokenResolver will handle JWT -> Admin token exchange automatically
           if (id_token || embedded === '1') {
-              console.log('[ROOT] Serving HTML for embedded app, shop:', shop);
-              
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
               
@@ -1923,7 +2007,6 @@ if (!IS_PROD) {
         const injection = `
           <script>
             window.__SHOPIFY_API_KEY = '${apiKey}';
-            console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
           </script>
           <meta name="shopify-api-key" content="${apiKey}">
         `;
@@ -2164,7 +2247,7 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
       });
 
       // APP PROXY ROUTES (MUST be first, before all other middleware)
-      app.use('/apps/new-ai-seo', appProxyRouter);
+      app.use(`/apps/${APP_PROXY_SUBPATH}`, appProxyRouter);
 
         // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
         // Direct public sitemap endpoint - no authentication required
@@ -2234,17 +2317,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
 
 
         // Serve assets with aggressive caching for production (MUST be before catch-all)
-        // Add logging middleware for assets
-        app.use((req, res, next) => {
-          // Log asset requests (JS, CSS, images, etc.)
-          if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/)) {
-            console.log('[ASSETS] Request:', req.method, req.path, {
-              exists: fs.existsSync(path.join(distPath, req.path)),
-              distPath: distPath
-            });
-          }
-          next();
-        });
         
         // Serve logo for emails (public endpoint)
         app.get('/assets/logo/:size', (req, res) => {
@@ -2521,14 +2593,10 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
 
     // Unsubscribe endpoint (must be before catch-all, public endpoint - no auth required)
     app.get('/api/email/unsubscribe', async (req, res) => {
-      console.log('[UNSUBSCRIBE] Request received:', req.url, req.method);
       try {
         const { shop, email } = req.query;
         
-        console.log('[UNSUBSCRIBE] Params:', { shop, email });
-        
         if (!shop) {
-          console.log('[UNSUBSCRIBE] Missing shop parameter');
           return res.status(400).send('Missing shop parameter');
         }
 
@@ -2536,7 +2604,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
         const shopRecord = await Shop.findOne({ shop });
         
         if (!shopRecord) {
-          console.log('[UNSUBSCRIBE] Shop not found:', shop);
           return res.status(404).send('Shop not found');
         }
 
@@ -2554,8 +2621,6 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
             console.error('[UNSUBSCRIBE] Failed to add to SendGrid suppression list:', error.message);
           });
         }
-
-        console.log(`[UNSUBSCRIBE] ✅ Shop ${shop} (${emailToUnsubscribe || 'N/A'}) unsubscribed from marketing emails`);
 
         // Return a simple HTML confirmation page
         res.send(`
@@ -2623,14 +2688,10 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
           const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Cache bust:', '${cacheBust}');
             </script>
           `;
           html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
         }
-        
-        // Log for debugging
-        console.log('[SERVER] Serving index.html with cache bust:', cacheBust);
         
         res.send(html);
       } else {

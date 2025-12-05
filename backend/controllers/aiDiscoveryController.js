@@ -6,6 +6,7 @@ import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import { buildStoreContext } from '../utils/storeContextBuilder.js';
+import { estimateTokensWithMargin } from '../billing/tokenConfig.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -89,18 +90,43 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const { default: Sitemap } = await import('../db/Sitemap.js');
     const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced updatedAt').lean();
     const hasAiSitemap = existingSitemap && existingSitemap.isAiEnhanced === true;
+    
+    // Check if Advanced Schema Data exists in database
+    const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
+    const existingSchema = await AdvancedSchema.findOne({ shop }).select('schemas generatedAt').lean();
+    const hasAdvancedSchema = existingSchema && existingSchema.schemas && existingSchema.schemas.length > 0;
+    
+    // Get total products count for token estimation (Advanced Schema uses ALL products)
+    const { default: Product } = await import('../db/Product.js');
+    const totalProductCount = await Product.countDocuments({ shop });
 
+    const mergedFeatures = isFreshShop ? defaultFeatures : savedSettings.features;
+    
+    // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAiSitemap && mergedFeatures?.aiSitemap) {
+      mergedFeatures.aiSitemap = false;
+    }
+    
+    // If Advanced Schema already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAdvancedSchema && mergedFeatures?.schemaData) {
+      mergedFeatures.schemaData = false;
+    }
+    
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: isFreshShop ? defaultFeatures : savedSettings.features,
+      features: mergedFeatures,
       richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString(),
-      hasAiSitemap: hasAiSitemap // NEW: indicate if AI sitemap exists
+      hasAiSitemap: hasAiSitemap, // NEW: indicate if AI sitemap exists
+      hasAdvancedSchema: hasAdvancedSchema, // NEW: indicate if Advanced Schema exists
+      productCount: totalProductCount // For token estimation in modals
     };
 
+    // Prevent caching so productCount is always fresh
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(mergedSettings);
   } catch (error) {
     console.error('Failed to get AI Discovery settings:', error);
@@ -174,12 +200,14 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       // This applies to plans WITHOUT included tokens (Starter, Professional, Growth, Plus plans)
       // OR to users who already have purchased tokens but used them all
       if (!hasPurchasedTokens && !hasTokenBalance) {
+        // Use base estimate (actual will be calculated at generation time based on product count)
+        const baseEstimate = estimateTokensWithMargin('ai-sitemap-optimized', { productCount: 0 });
         return res.status(402).json({
           error: 'Insufficient tokens for AI-Optimized Sitemap',
           requiresPurchase: true,
           currentPlan: subscription?.plan,
           tokensAvailable: 0,
-          tokensNeeded: 10000,
+          tokensNeeded: baseEstimate.withMargin,
           feature: 'ai-sitemap-optimized',
           message: 'Purchase tokens to enable AI-Optimized Sitemap'
         });
@@ -425,28 +453,24 @@ Keep the answer concise (2–3 sentences).`;
   } catch (error) {
     console.error('[AI-SIMULATE] Error:', error);
     
-    // Refund reserved tokens on error (Professional & Growth only)
+    // CRITICAL: Refund reserved tokens on error using finalizeReservation (0 actual usage)
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
       try {
         const tokenBalance = res.locals.tokenBalance;
         const reservationId = res.locals.tokenReservationId;
         
-        // Find the reservation and mark as cancelled, refund the tokens
-        const reservationIndex = tokenBalance.usage.findIndex(
-          u => u.metadata?.reservationId === reservationId && u.metadata?.status === 'reserved'
-        );
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
         
-        if (reservationIndex !== -1) {
-          const estimatedAmount = tokenBalance.usage[reservationIndex].tokensUsed;
-          
-          // Refund the estimated amount back to balance
-          tokenBalance.balance += estimatedAmount;
-          
-          // Mark reservation as cancelled
-          tokenBalance.usage[reservationIndex].metadata.status = 'cancelled';
-          tokenBalance.usage[reservationIndex].metadata.cancelledAt = new Date();
-          
-          await tokenBalance.save();
+        // Refunded reserved tokens due to error
+        
+        // Invalidate cache
+        try {
+          const shop = res.locals.shop;
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-SIMULATE] Failed to invalidate cache:', cacheErr);
         }
       } catch (refundError) {
         console.error('[AI-SIMULATE] Error refunding tokens:', refundError);

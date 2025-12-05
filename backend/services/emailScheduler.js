@@ -17,7 +17,6 @@ class EmailScheduler {
    */
   startAll() {
     if (this.isRunning) {
-      console.log('📧 Email scheduler already running');
       return;
     }
 
@@ -31,7 +30,6 @@ class EmailScheduler {
     // Token purchase email check (every day at 10:00 UTC) - Day 3 after installation (72 hours)
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running token purchase email check...');
         await this.checkTokenPurchaseEmail();
       })
     );
@@ -39,37 +37,15 @@ class EmailScheduler {
     // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running app store rating email check...');
         await this.checkAppStoreRatingEmail();
       })
     );
 
-    // Trial expiring check (every day at 9 AM)
-    this.jobs.push(
-      cron.schedule('0 9 * * *', async () => {
-        console.log('⏰ Running trial expiring check...');
-        await this.checkTrialExpiring();
-      })
-    );
-
-    // Weekly digest (every Monday at 10 AM)
-    this.jobs.push(
-      cron.schedule('0 10 * * 1', async () => {
-        console.log('⏰ Sending weekly digests...');
-        await this.sendWeeklyDigests();
-      })
-    );
-
-    // Re-engagement check (every day at 2 PM)
-    this.jobs.push(
-      cron.schedule('0 14 * * *', async () => {
-        console.log('⏰ Running re-engagement check...');
-        await this.checkInactiveUsers();
-      })
-    );
+    // REMOVED: Trial expiring check - replaced with in-app banner
+    // REMOVED: Weekly digest - replaced with Weekly Product Digest
+    // REMOVED: Re-engagement check - too aggressive
 
     this.isRunning = true;
-    console.log('✅ Email scheduler started');
   }
 
   /**
@@ -98,11 +74,9 @@ class EmailScheduler {
       }).lean();
 
       if (day3Stores.length === 0) {
-        console.log('[TOKEN-EMAIL] No stores found installed 3-4 days ago (72-96 hour window)');
         return;
       }
 
-      console.log(`[TOKEN-EMAIL] Checking ${day3Stores.length} stores installed 3-4 days ago (72-96 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
@@ -145,14 +119,12 @@ class EmailScheduler {
         const result = await emailService.sendTokenPurchaseEmail({ ...store, subscription });
         if (result.success) {
           sentCount++;
-          console.log(`[TOKEN-EMAIL] ✅ Sent to ${store.shop}`);
         } else {
           console.error(`[TOKEN-EMAIL] ❌ Failed for ${store.shop}:`, result.error);
         }
         await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log(`[TOKEN-EMAIL] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[TOKEN-EMAIL] Error:', error);
     }
@@ -182,11 +154,8 @@ class EmailScheduler {
       }).lean();
 
       if (day6Stores.length === 0) {
-        console.log('[APPSTORE-RATING] No stores found installed 6-7 days ago (144-168 hour window)');
         return;
       }
-
-      console.log(`[APPSTORE-RATING] Checking ${day6Stores.length} stores installed 6-7 days ago (144-168 hour window)`);
       let sentCount = 0;
       let skippedCount = 0;
 
@@ -228,163 +197,14 @@ class EmailScheduler {
         const result = await emailService.sendAppStoreRatingEmail({ ...store, subscription });
         if (result.success) {
           sentCount++;
-          console.log(`[APPSTORE-RATING] ✅ Sent to ${store.shop}`);
         } else {
           console.error(`[APPSTORE-RATING] ❌ Failed for ${store.shop}:`, result.error);
         }
         await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log(`[APPSTORE-RATING] Completed: ${sentCount} sent, ${skippedCount} skipped`);
     } catch (error) {
       console.error('[APPSTORE-RATING] Error:', error);
-    }
-  }
-
-  /**
-   * Check trial expiring
-   */
-  async checkTrialExpiring() {
-    try {
-      const now = new Date();
-      
-      // 3 days before expiry
-      const threeDaysBefore = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-      const subscriptions3Days = await Subscription.find({
-        status: 'active',
-        trialEndsAt: {
-          $gte: now,
-          $lte: threeDaysBefore
-        }
-      }).lean();
-
-      for (const subscription of subscriptions3Days) {
-        const store = await Shop.findOne({ shop: subscription.shop }).lean();
-        if (store) {
-          await emailService.sendTrialExpiringEmail({ ...store, subscription }, 3);
-          await this.delay(1000);
-        }
-      }
-
-      // 1 day before expiry
-      const oneDayBefore = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
-      const subscriptions1Day = await Subscription.find({
-        status: 'active',
-        trialEndsAt: {
-          $gte: now,
-          $lte: oneDayBefore
-        }
-      }).lean();
-
-      for (const subscription of subscriptions1Day) {
-        const store = await Shop.findOne({ shop: subscription.shop }).lean();
-        if (store) {
-          await emailService.sendTrialExpiringEmail({ ...store, subscription }, 1);
-          await this.delay(1000);
-        }
-      }
-
-      console.log('✅ Trial expiring check completed');
-    } catch (error) {
-      console.error('❌ Trial expiring check error:', error);
-    }
-  }
-
-  /**
-   * Send weekly digest
-   */
-  async sendWeeklyDigests() {
-    try {
-      const shops = await Shop.find({}).lean();
-
-      for (const store of shops) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        
-        // Calculate weekly stats
-        const weeklyStats = await this.calculateWeeklyStats(store.shop);
-        
-        await emailService.sendWeeklyDigest({ ...store, subscription }, weeklyStats);
-        await this.delay(1000);
-      }
-
-      console.log('✅ Weekly digests sent');
-    } catch (error) {
-      console.error('❌ Weekly digest error:', error);
-    }
-  }
-
-  /**
-   * Check inactive users
-   */
-  async checkInactiveUsers() {
-    try {
-      const inactiveDays = 14; // 14 days inactive
-      const inactiveDate = new Date(Date.now() - inactiveDays * 24 * 60 * 60 * 1000);
-
-      const inactiveStores = await Shop.find({
-        updatedAt: { $lte: inactiveDate }
-      }).lean();
-
-      for (const store of inactiveStores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        
-        // Skip if subscription is cancelled
-        if (subscription && subscription.status === 'cancelled') {
-          continue;
-        }
-
-        const daysSinceActive = Math.floor((Date.now() - new Date(store.updatedAt)) / (1000 * 60 * 60 * 24));
-        await emailService.sendReengagementEmail({ ...store, subscription }, daysSinceActive);
-        await this.delay(1000);
-      }
-
-      console.log('✅ Inactive users check completed');
-    } catch (error) {
-      console.error('❌ Inactive users check error:', error);
-    }
-  }
-
-  /**
-   * Calculate weekly stats
-   */
-  async calculateWeeklyStats(shop) {
-    try {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-      // Try to import Product model if it exists
-      let productsOptimized = 0;
-      let topProducts = [];
-      
-      try {
-        const Product = (await import('../db/Product.js')).default;
-        const products = await Product.find({
-          shop,
-          'seo.lastOptimized': { $gte: weekAgo }
-        }).limit(5).select('title seo.lastOptimized').lean();
-        
-        productsOptimized = products.length;
-        topProducts = products.map(p => p.title);
-      } catch (e) {
-        // Product model might not exist
-        console.log('Product model not available for weekly stats');
-      }
-
-      // For now, return basic stats
-      // In the future, you can add AI query tracking
-      return {
-        aiQueries: 0, // Can be calculated from AI query logs if you have them
-        productsOptimized,
-        topProducts,
-        seoImprovement: '15%' // Calculate based on your metrics
-      };
-    } catch (error) {
-      console.error('Error calculating weekly stats:', error);
-      return {
-        aiQueries: 0,
-        productsOptimized: 0,
-        topProducts: [],
-        seoImprovement: '0%'
-      };
     }
   }
 
@@ -395,7 +215,6 @@ class EmailScheduler {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
     this.isRunning = false;
-    console.log('⏹️ Email scheduler stopped');
   }
 
   delay(ms) {

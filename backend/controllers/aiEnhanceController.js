@@ -96,6 +96,140 @@ async function openrouterChat(model, messages, response_format_json = true) {
   }, { model, messageCount: messages.length });
 }
 
+/**
+ * Generate AI alt text for featured image
+ * Only called if Shopify image has no alt text
+ * Returns: { altText: string, usage: object }
+ */
+async function generateImageAltText(data) {
+  const { product, language, model } = data;
+  
+  const productTitle = product.title || '';
+  const productType = product.productType || 'product';
+  const vendor = product.vendor || '';
+  const description = product.description || '';
+  
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an AI assistant that generates SEO-optimized alt text for e-commerce product images.
+Language: ${language}
+Guidelines:
+- Create a concise, descriptive alt text (max 125 characters)
+- Describe what the product looks like based on the product information
+- Include relevant keywords naturally
+- Do NOT start with "image of" or "photo of"
+- Keep the same language as specified
+- Return ONLY a JSON object with key "altText" containing the alt text string`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        productTitle,
+        productType,
+        vendor,
+        description: description.slice(0, 500)  // Limit description length
+      })
+    }
+  ];
+  
+  try {
+    const { content, usage } = await openrouterChat(model, messages, true);
+    
+    let parsed;
+    try {
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+        cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+      }
+      parsed = JSON.parse(cleanContent);
+    } catch {
+      console.error('[AI-ENHANCE] Failed to parse alt text response:', content.substring(0, 100));
+      return { altText: null, usage };
+    }
+    
+    // Validate and truncate alt text
+    let altText = parsed.altText || null;
+    if (altText && altText.length > 125) {
+      altText = altText.slice(0, 122) + '...';
+    }
+    
+    return { altText, usage };
+  } catch (error) {
+    console.error('[AI-ENHANCE] Error generating alt text:', error.message);
+    return { altText: null, usage: null };
+  }
+}
+
+/**
+ * Translate/adapt existing alt text to match description language
+ * AI compares the language of alt text vs description and:
+ * - If different languages → translates alt text to description's language
+ * - If same language → returns alt text unchanged
+ * Returns: { altText: string, translated: boolean, usage: object }
+ */
+async function translateImageAltText(data) {
+  const { existingAltText, description, model, productTitle } = data;
+  
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an AI assistant that ensures image alt text matches the language of product descriptions.
+
+Your task:
+1. Detect the language of the provided alt text
+2. Detect the language of the provided description
+3. If they are in DIFFERENT languages: translate the alt text to match the description's language
+4. If they are in the SAME language: return the alt text unchanged
+
+Guidelines for translation:
+- Keep it concise (max 125 characters)
+- Preserve SEO keywords where possible
+- Maintain the descriptive nature of the original
+
+Return ONLY a JSON object with:
+- "altText": the final alt text (translated or unchanged)
+- "translated": boolean (true if translation was needed, false if languages matched)`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({
+        altText: existingAltText,
+        description: description?.slice(0, 300), // Enough to detect language
+        productTitle: productTitle // For context
+      })
+    }
+  ];
+  
+  try {
+    const { content, usage } = await openrouterChat(model, messages, true);
+    
+    let parsed;
+    try {
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '');
+        cleanContent = cleanContent.replace(/\n?```\s*$/, '');
+      }
+      parsed = JSON.parse(cleanContent);
+    } catch {
+      console.error('[AI-ENHANCE] Failed to parse alt text response:', content.substring(0, 100));
+      return { altText: existingAltText, translated: false, usage }; // Fallback to original
+    }
+    
+    let altText = parsed.altText || existingAltText;
+    if (altText && altText.length > 125) {
+      altText = altText.slice(0, 122) + '...';
+    }
+    
+    return { altText, translated: parsed.translated === true, usage };
+  } catch (error) {
+    console.error('[AI-ENHANCE] Error processing alt text:', error.message);
+    return { altText: existingAltText, translated: false, usage: null }; // Fallback to original
+  }
+}
+
 async function generateEnhancedBulletsFAQ(data) {
   const { shop, productId, model, language, product, existingSeo } = data;
   
@@ -298,8 +432,8 @@ router.post('/product', validateRequest(), async (req, res) => {
           trialEndsAt: subscription.trialEndsAt,
           currentPlan: subscription.plan,
           feature,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
           message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
@@ -322,8 +456,8 @@ router.post('/product', validateRequest(), async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
@@ -376,6 +510,10 @@ router.post('/product', validateRequest(), async (req, res) => {
               productType
               vendor
               tags
+              featuredImage {
+                url
+                altText
+              }
               priceRangeV2 {
                 minVariantPrice {
                   amount
@@ -437,11 +575,45 @@ router.post('/product', validateRequest(), async (req, res) => {
           existingSeo  // Подаваме цялото съществуващо SEO
         });
         
-        // Обновяваме САМО bullets и FAQ в съществуващия SEO обект
+        // Handle image alt text for featured image
+        // Logic:
+        // 1. No alt text exists → Generate with AI in the language of description
+        // 2. Alt text exists → AI checks if it matches description's language:
+        //    - Different language → Translate to match description
+        //    - Same language → Keep unchanged
+        let imageAltResult = { altText: existingSeo.imageAlt, usage: null, translated: false };
+        const hasFeaturedImage = data.product.featuredImage?.url;
+        const shopifyAltText = data.product.featuredImage?.altText;
+        const currentDescription = existingSeo.metaDescription || data.product.description || '';
+        
+        if (hasFeaturedImage) {
+          const existingAltText = existingSeo.imageAlt || shopifyAltText;
+          
+          if (!existingAltText) {
+            // Case 1: No alt text at all → Generate with AI
+            imageAltResult = await generateImageAltText({
+              product: data.product,
+              language,
+              model
+            });
+            imageAltResult.translated = false;
+          } else {
+            // Case 2: Alt text exists → AI compares languages and translates if needed
+            imageAltResult = await translateImageAltText({
+              existingAltText: existingAltText,
+              description: currentDescription,
+              model,
+              productTitle: data.product.title
+            });
+          }
+        }
+        
+        // Обновяваме bullets, FAQ, и imageAlt в съществуващия SEO обект
         const updatedSeo = {
           ...existingSeo,  // Запазва title, metaDescription, bodyHtml, jsonLd и всичко друго
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
+          imageAlt: imageAltResult.altText || existingSeo.imageAlt || null,  // AI-generated or existing
           enhancedAt: new Date().toISOString() // Маркираме че това е AI Enhanced, не само Basic SEO
         };
 
@@ -473,11 +645,27 @@ router.post('/product', validateRequest(), async (req, res) => {
           throw new Error(userErrors.map(e => e.message).join(', '));
         }
         
+        // Combine usage from bullets/FAQ and imageAlt generation
+        const combinedUsage = {
+          prompt_tokens: (enhancedResult.usage?.prompt_tokens || 0) + (imageAltResult.usage?.prompt_tokens || 0),
+          completion_tokens: (enhancedResult.usage?.completion_tokens || 0) + (imageAltResult.usage?.completion_tokens || 0),
+          total_tokens: (enhancedResult.usage?.total_tokens || 0) + (imageAltResult.usage?.total_tokens || 0)
+        };
+        
+        // Determine what happened with imageAlt
+        const existingAltText = existingSeo.imageAlt || shopifyAltText;
+        const imageAltAction = !hasFeaturedImage ? 'no_image' 
+          : !existingAltText ? 'generated'
+          : imageAltResult.translated ? 'translated'
+          : 'kept_existing';
+        
         const result = {
           language,
           bullets: enhancedResult.bullets || [],
           faq: enhancedResult.faq || [],
-          usage: enhancedResult.usage,
+          imageAlt: updatedSeo.imageAlt,
+          imageAltAction, // 'generated', 'translated', 'kept_existing', or 'no_image'
+          usage: combinedUsage,
           updatedSeo
         };
         
@@ -615,6 +803,29 @@ router.post('/product', validateRequest(), async (req, res) => {
     
   } catch (error) {
     console.error('[AI-ENHANCE] Error:', error.message);
+    
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -705,8 +916,8 @@ router.post('/collection', validateRequest(), async (req, res) => {
           trialEndsAt: subscription.trialEndsAt,
           currentPlan: subscription.plan,
           feature,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
           message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
@@ -729,8 +940,8 @@ router.post('/collection', validateRequest(), async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
@@ -915,6 +1126,28 @@ Output JSON with:
     });
     
   } catch (error) {
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -1000,8 +1233,8 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
           trialEndsAt: subscription.trialEndsAt,
           currentPlan: subscription.plan,
           feature,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
           message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
@@ -1024,8 +1257,8 @@ router.post('/collection/:collectionId', validateRequest(), async (req, res) => 
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
@@ -1295,7 +1528,399 @@ Guidelines:
     
   } catch (error) {
     console.error('[AI-ENHANCE] Fatal error:', error);
+    
+    // CRITICAL: If we reserved tokens but enhancement failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-ENHANCE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-ENHANCE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-ENHANCE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// BATCH ENDPOINT FOR BACKGROUND PROCESSING
+// ============================================================
+
+import aiEnhanceQueue from '../services/aiEnhanceQueue.js';
+
+/**
+ * POST /ai-enhance/batch
+ * Add AI Enhancement job to background queue
+ * Body: { products: [{ productId, languages, title }] }
+ */
+router.post('/batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { products = [] } = req.body;
+    
+    if (!products || products.length === 0) {
+      return res.status(400).json({ error: 'No products provided' });
+    }
+    
+    // Get subscription for plan checks
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    
+    // === PLAN CHECK: Professional+ required for Products AI enhancement ===
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const productsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    
+    if (!productsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
+      return res.status(403).json({
+        error: 'AI-enhanced add-ons for Products require Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Products'
+      });
+    }
+    
+    // === PRODUCT LIMIT CHECK ===
+    const planConfig = getPlanConfig(planKey);
+    const productLimit = planConfig?.productLimit || 10;
+    
+    if (products.length > productLimit) {
+      return res.status(403).json({
+        error: `Product limit exceeded`,
+        message: `Your ${planKey} plan supports up to ${productLimit} products for AI Enhancement. You have selected ${products.length} products.`,
+        currentPlan: planKey,
+        productLimit
+      });
+    }
+    
+    // === TOKEN CHECK (estimate for all products) ===
+    const feature = 'ai-seo-product-enhanced';
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Estimate tokens for all products
+    const totalLanguages = products.reduce((sum, p) => sum + (p.languages?.length || 0), 0);
+    const tokenEstimate = estimateTokensWithMargin(feature, { languages: totalLanguages });
+    
+    // Check if plan has included tokens
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
+    const isActivated = !!subscription?.activatedAt;
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
+    // TRIAL RESTRICTION
+    if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
+      return res.status(402).json({
+        error: 'AI-enhanced product optimization is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
+      });
+    }
+    
+    // Check token balance
+    if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan);
+      
+      return res.status(402).json({
+        error: 'Insufficient token balance',
+        requiresPurchase: true,
+        needsUpgrade,
+        currentPlan: planKey,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+        feature,
+        message: needsUpgrade 
+          ? 'Purchase more tokens or upgrade to Growth Extra plan'
+          : 'You need more tokens to use this feature'
+      });
+    }
+    
+    // Create enhance function that will be called for each product
+    const enhanceProduct = async (productData) => {
+      const { productId, languages, title } = productData;
+      
+      try {
+        // Call the existing /product endpoint logic internally
+        // We'll make an internal API call to reuse all the existing logic
+        const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/ai-enhance/product`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Forward auth headers
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            productId,
+            languages
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          // Check for token/plan errors
+          if (response.status === 402 || response.status === 403) {
+            const error = new Error(result.error || 'Token or plan restriction');
+            error.status = response.status;
+            error.trialRestriction = result.trialRestriction;
+            throw error;
+          }
+          return { success: false, error: result.error };
+        }
+        
+        // Check if all languages were skipped
+        if (result.summary?.successful === 0 && result.summary?.alreadyEnhanced > 0) {
+          return { 
+            skipped: true, 
+            reason: 'Already enhanced',
+            data: result 
+          };
+        }
+        
+        if (result.summary?.successful === 0 && result.summary?.noBasicSeo > 0) {
+          return { 
+            skipped: true, 
+            reason: 'No Basic SEO',
+            data: result 
+          };
+        }
+        
+        return { success: true, data: result };
+        
+      } catch (error) {
+        // Re-throw token/plan errors to stop processing
+        if (error.status === 402 || error.status === 403) {
+          throw error;
+        }
+        return { success: false, error: error.message };
+      }
+    };
+    
+    // Add job to queue
+    const jobInfo = await aiEnhanceQueue.addJob(shop, products, enhanceProduct);
+    
+    return res.json({
+      success: true,
+      message: jobInfo.queued ? 'AI Enhancement job queued' : jobInfo.message,
+      ...jobInfo
+    });
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/BATCH] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /ai-enhance/job-status
+ * Get status of background AI Enhancement job
+ */
+router.get('/job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const status = await aiEnhanceQueue.getJobStatus(shop);
+    return res.json(status);
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// COLLECTION AI ENHANCEMENT BATCH ENDPOINTS
+// ============================================================
+
+import collectionJobQueue from '../services/collectionJobQueue.js';
+
+/**
+ * POST /ai-enhance/collection-batch
+ * Add Collection AI Enhancement job to background queue
+ * Body: { collections: [{ collectionId, languages, title }] }
+ */
+router.post('/collection-batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { collections = [] } = req.body;
+    
+    if (!collections || collections.length === 0) {
+      return res.status(400).json({ error: 'No collections provided' });
+    }
+    
+    // Get subscription for plan checks
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = subscription?.plan || '';
+    
+    // === PLAN CHECK: Professional+ required for Collections AI enhancement ===
+    const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+    const collectionsAllowedPlans = ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+    
+    if (!collectionsAllowedPlans.includes(normalizedPlan) && planKey !== 'growth extra' && planKey !== 'professional plus' && planKey !== 'growth plus') {
+      return res.status(403).json({
+        error: 'AI-enhanced add-ons for Collections require Professional plan or higher',
+        currentPlan: planKey,
+        minimumPlanRequired: 'Professional',
+        message: 'Upgrade to Professional plan to access AI-enhanced optimization for Collections'
+      });
+    }
+    
+    // === TOKEN CHECK (estimate for all collections) ===
+    const feature = 'ai-seo-collection';
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Estimate tokens for all collections
+    const totalLanguages = collections.reduce((sum, c) => sum + (c.languages?.length || 0), 0);
+    const tokenEstimate = estimateTokensWithMargin(feature, { languages: totalLanguages });
+    
+    // Check if plan has included tokens
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizedPlan);
+    const isActivated = !!subscription?.activatedAt;
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
+    // TRIAL RESTRICTION
+    if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
+      return res.status(402).json({
+        error: 'AI-enhanced collection optimization is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        feature,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
+      });
+    }
+    
+    // Check token balance
+    if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(normalizedPlan);
+      
+      return res.status(402).json({
+        error: 'Insufficient token balance',
+        requiresPurchase: true,
+        needsUpgrade,
+        currentPlan: planKey,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+        feature,
+        message: needsUpgrade 
+          ? 'Purchase more tokens or upgrade to Growth Extra plan'
+          : 'You need more tokens to use this feature'
+      });
+    }
+    
+    // Create enhance function for each collection
+    const enhanceCollection = async (collectionData) => {
+      const { collectionId, languages, title } = collectionData;
+      
+      try {
+        // Call the existing collection enhancement endpoint
+        const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/ai-enhance/collection/${encodeURIComponent(collectionId)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || '',
+            'x-shopify-shop-domain': shop
+          },
+          body: JSON.stringify({
+            shop,
+            languages
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          if (response.status === 402 || response.status === 403) {
+            const error = new Error(result.error || 'Token or plan restriction');
+            error.status = response.status;
+            error.trialRestriction = result.trialRestriction;
+            throw error;
+          }
+          return { success: false, error: result.error };
+        }
+        
+        if (!result.ok) {
+          return { success: false, error: result.error || 'Enhancement failed' };
+        }
+        
+        return { success: true, data: result };
+        
+      } catch (error) {
+        if (error.status === 402 || error.status === 403) throw error;
+        return { success: false, error: error.message };
+      }
+    };
+    
+    // Add job to queue
+    const jobInfo = await collectionJobQueue.addJob(shop, collections, 'aiEnhance', enhanceCollection);
+    
+    return res.json({
+      success: true,
+      message: jobInfo.queued ? 'Collection AI Enhancement job queued' : jobInfo.message,
+      ...jobInfo
+    });
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/COLLECTION-BATCH] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /ai-enhance/collection-job-status
+ * Get status of background Collection AI Enhancement job
+ */
+router.get('/collection-job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const status = await collectionJobQueue.getJobStatus(shop, 'aiEnhance');
+    return res.json(status);
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/COLLECTION-JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 

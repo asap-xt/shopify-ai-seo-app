@@ -10,10 +10,11 @@ import emailService from './emailService.js';
 class ProductDigestScheduler {
   constructor() {
     this.jobs = [];
-    // TEST MODE: 10 minutes for testing, comment out for production
+    // Test mode: DIGEST_TEST_MODE=true (default: false for production)
+    // Set DIGEST_TEST_MODE=true in staging Railway environment
     this.testMode = process.env.DIGEST_TEST_MODE === 'true';
     this.testInterval = '*/10 * * * *'; // Every 10 minutes
-    this.productionSchedule = '0 9 * * 1'; // Every Monday at 9 AM
+    this.productionSchedule = '0 9 * * 1'; // Every Monday at 9 AM UTC
   }
 
   /**
@@ -35,7 +36,6 @@ class ProductDigestScheduler {
 
     // Weekly digest job
     const digestJob = cron.schedule(schedule, async () => {
-      console.log(`[PRODUCT-DIGEST] 📧 Running digest job - ${modeLabel}`);
       await this.sendDigests();
     }, {
       scheduled: true,
@@ -43,8 +43,6 @@ class ProductDigestScheduler {
     });
 
     this.jobs.push(digestJob);
-    console.log(`[PRODUCT-DIGEST] ✅ Scheduler started - ${modeLabel}`);
-    console.log(`[PRODUCT-DIGEST] Schedule: ${schedule}`);
   }
 
   /**
@@ -52,13 +50,10 @@ class ProductDigestScheduler {
    */
   async sendDigests() {
     try {
-      // Find all shops with active subscriptions
+      // Find all shops with valid access tokens (active installations)
       const shops = await Shop.find({
-        isActive: true,
-        accessToken: { $exists: true, $ne: null, $ne: 'jwt-pending' }
+        accessToken: { $exists: true, $ne: null, $ne: '', $ne: 'jwt-pending' }
       }).lean();
-
-      console.log(`[PRODUCT-DIGEST] Found ${shops.length} active shops`);
 
       let sent = 0;
       let skipped = 0;
@@ -82,7 +77,6 @@ class ProductDigestScheduler {
         }
       }
 
-      console.log(`[PRODUCT-DIGEST] ✅ Digest job complete: ${sent} sent, ${skipped} skipped, ${errors} errors`);
     } catch (error) {
       console.error('[PRODUCT-DIGEST] ❌ Digest job error:', error);
     }
@@ -119,19 +113,13 @@ class ProductDigestScheduler {
       }
       
       if (changes.length < minThreshold) {
-        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - ${changes.length} changes < ${minThreshold} threshold (${totalProducts} total products)`);
         return { success: true, skipped: true, reason: 'below_threshold' };
       }
       
-      console.log(`[PRODUCT-DIGEST] Sending digest for ${shop.shop} - ${changes.length} changes >= ${minThreshold} threshold (${totalProducts} total products)`);
-
       // Skip if no changes at all
       if (changes.length === 0) {
-        console.log(`[PRODUCT-DIGEST] Skipping ${shop.shop} - no changes`);
         return { success: true, skipped: true, reason: 'no_changes' };
       }
-
-      console.log(`[PRODUCT-DIGEST] Sending digest to ${shop.shop} with ${changes.length} products`);
 
       // Send email
       const result = await emailService.sendWeeklyProductDigest(shop, changes);
@@ -150,7 +138,7 @@ class ProductDigestScheduler {
             }
           }
         );
-        console.log(`[PRODUCT-DIGEST] ✅ Marked ${changes.length} changes as notified for ${shop.shop}`);
+        // Marked changes as notified
       }
 
       return result;
@@ -166,15 +154,12 @@ class ProductDigestScheduler {
   stop() {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
-    console.log('[PRODUCT-DIGEST] ⏹️ Scheduler stopped');
   }
 
   /**
    * Manual trigger for testing
    */
   async triggerNow(shopDomain = null) {
-    console.log('[PRODUCT-DIGEST] 🧪 Manual trigger initiated');
-    
     if (shopDomain) {
       // Send for specific shop
       const shop = await Shop.findOne({ shop: shopDomain }).lean();

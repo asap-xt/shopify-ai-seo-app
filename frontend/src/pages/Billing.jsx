@@ -101,6 +101,10 @@ export default function Billing({ shop }) {
       // Hide welcome banner when user selects a plan
       setShowWelcomeBanner(false);
       
+      // Get returnTo from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo') || '/billing';
+      
       const response = await fetch('/api/billing/subscribe', {
         method: 'POST',
         headers: {
@@ -109,7 +113,8 @@ export default function Billing({ shop }) {
         body: JSON.stringify({
           shop,
           plan,
-          endTrial: isActivatingPlan // Only end trial if user clicked "Activate Plan" button
+          endTrial: isActivatingPlan, // Only end trial if user clicked "Activate Plan" button
+          returnTo: returnTo
         })
       });
       
@@ -180,9 +185,9 @@ export default function Billing({ shop }) {
   //   Input:  $0.10 per 1M tokens (80% of usage)
   //   Output: $0.40 per 1M tokens (20% of usage)
   //   Weighted average: $0.16 per 1M tokens
-  // Example: $10 → $3 for tokens → $3 / $0.16 per 1M = 18,750,000 tokens
+  // Example: $10 → $1.50 for tokens → $1.50 / $0.16 per 1M = 9,375,000 tokens
   const calculateTokens = (usdAmount) => {
-    const tokenBudget = usdAmount * 0.30; // 30% goes to tokens (revenue split)
+    const tokenBudget = usdAmount * 0.15; // 15% goes to tokens (revenue split)
     
     // OpenRouter pricing for Gemini 2.5 Flash Lite:
     // Input: $0.10 per 1M, Output: $0.40 per 1M

@@ -159,11 +159,20 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           // Products JSON Feed validation
           if (endpoint.key === 'productsJson') {
             // Use DB counts (Products model is source of truth for optimization status)
-            if (optimizedProducts === 0) {
+            const optimizationPercent = totalProducts > 0 ? Math.round((optimizedProducts / totalProducts) * 100) : 0;
+            
+            if (optimizationPercent <= 20) {
               validationStatus = 'warning';
-              validationMessage = `0/${totalProducts} products optimized`;
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
+            } else if (optimizationPercent <= 49) {
+              validationStatus = 'poor';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
+            } else if (optimizationPercent <= 70) {
+              validationStatus = 'fair';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
             } else {
-              validationMessage = `${optimizedProducts}/${totalProducts} products optimized`;
+              validationStatus = 'success';
+              validationMessage = `${optimizedProducts}/${totalProducts} products optimized (${optimizationPercent}%)`;
             }
           }
           
@@ -178,11 +187,20 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               actualOptimized = data.collections.length; // Collections with metafields
             }
             
-            if (actualOptimized === 0) {
+            const collectionPercent = actualTotal > 0 ? Math.round((actualOptimized / actualTotal) * 100) : 0;
+            
+            if (collectionPercent <= 20) {
               validationStatus = 'warning';
-              validationMessage = `0/${actualTotal} collections optimized`;
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
+            } else if (collectionPercent <= 49) {
+              validationStatus = 'poor';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
+            } else if (collectionPercent <= 70) {
+              validationStatus = 'fair';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
             } else {
-              validationMessage = `${actualOptimized}/${actualTotal} collections optimized`;
+              validationStatus = 'success';
+              validationMessage = `${actualOptimized}/${actualTotal} collections optimized (${collectionPercent}%)`;
             }
           }
           
@@ -943,15 +961,6 @@ Format:
         'seoStatus.optimized': true 
       });
       
-      console.log('[AI-TESTING] Calculating AIEO score with:', {
-        endpointResultsCount: Object.keys(endpointResults || {}).length,
-        aiValidationResultsCount: Object.keys(results || {}).length,
-        totalProducts,
-        optimizedProducts,
-        totalCollections,
-        optimizedCollections
-      });
-      
       aiEOScore = calculateAIEOScore(
         endpointResults, // Basic test results
         results,         // AI validation results
@@ -962,12 +971,6 @@ Format:
           optimizedCollections
         }
       );
-      
-      console.log('[AI-TESTING] AIEO Score calculated:', {
-        score: aiEOScore?.score,
-        grade: aiEOScore?.grade,
-        breakdown: aiEOScore?.breakdown
-      });
     } catch (scoreError) {
       console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
       console.error('[AI-TESTING] Score error stack:', scoreError.stack);
@@ -982,17 +985,6 @@ Format:
       tokenBalance: tokenBalance.balance,
       aiEOScore // Add score to response
     };
-    
-    console.log('[AI-TESTING] Response data keys:', Object.keys(responseData));
-    console.log('[AI-TESTING] aiEOScore in response:', responseData.aiEOScore ? 'PRESENT' : 'MISSING');
-    if (responseData.aiEOScore) {
-      console.log('[AI-TESTING] aiEOScore details:', {
-        hasScore: !!responseData.aiEOScore.score,
-        hasGrade: !!responseData.aiEOScore.grade,
-        hasBreakdown: !!responseData.aiEOScore.breakdown,
-        hasRecommendations: !!responseData.aiEOScore.recommendations
-      });
-    }
     
     res.json(responseData);
     

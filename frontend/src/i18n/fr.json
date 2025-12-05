@@ -1,5 +1,13 @@
 {
-  "nav": { "dashboard": "Tableau de bord", "seo": "SEO IA", "billing": "Facturation", "settings": "Paramètres" },
+  "nav": { 
+    "dashboard": "Tableau de bord", 
+    "storeOptimization": "Optimisation Boutique pour IA",
+    "aiDiscovery": "Fonctionnalités Découverte IA",
+    "billing": "Abonnements",
+    "aiTesting": "Tests IA",
+    "cleanUninstall": "Nettoyer et Désinstaller",
+    "contactSupport": "Contacter le Support"
+  },
   "dashboard": {
     "plan": "Forfait actuel",
     "shop": "Boutique",
@@ -10,5 +18,5 @@
   },
   "seo": { "title": "Générer le SEO", "productId": "ID du produit", "provider": "Fournisseur IA", "generate": "Générer", "result": "Résultat" },
   "billing": { "title": "Abonnements", "choose": "Choisissez votre forfait :", "activate": "Activer" },
-  "settings": { "title": "Paramètres", "languageInfo": "Utilisez le menu en haut à droite pour changer la langue.", "notes": "Plus d’options arriveront ici." }
+  "settings": { "title": "Fonctionnalités Découverte IA", "languageInfo": "Utilisez le menu en haut à droite pour changer la langue.", "notes": "Plus d'options arriveront ici." }
 }

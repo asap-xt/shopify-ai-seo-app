@@ -1,11 +1,5 @@
 // frontend/src/pages/ContactSupport.jsx
-// Contact Support form using EmailJS
-// 
-// Environment Variables needed:
-// EMAILJS_SERVICE_ID=service_c8j657n
-// EMAILJS_TEMPLATE_ID=template_zrftkfg
-// EMAILJS_PUBLIC_KEY=-0N7g1SCh9fSknb6q
-// CONTACT_EMAIL=support@shopify-ai-seo.com
+// Contact Support form using SendGrid via backend API
 
 import { useState, useEffect } from 'react';
 import {
@@ -20,15 +14,14 @@ import {
   Banner,
   Spinner
 } from '@shopify/polaris';
-import emailjs from '@emailjs/browser';
 import { useShopApi } from '../hooks/useShopApi';
 
 const SUBJECT_OPTIONS = [
-  { label: 'Bug Report', value: 'bug_report' },
-  { label: 'Feature Request', value: 'feature_request' },
-  { label: 'Billing Issue', value: 'billing_issue' },
-  { label: 'General Question', value: 'general_question' },
-  { label: 'Technical Support', value: 'technical_support' }
+  { label: 'Bug Report', value: 'Bug Report' },
+  { label: 'Feature Request', value: 'Feature Request' },
+  { label: 'Billing Issue', value: 'Billing Issue' },
+  { label: 'General Question', value: 'General Question' },
+  { label: 'Technical Support', value: 'Technical Support' }
 ];
 
 export default function ContactSupport({ shop: shopProp }) {
@@ -36,7 +29,7 @@ export default function ContactSupport({ shop: shopProp }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    subject: 'general_question',
+    subject: 'General Question',
     message: '',
     file: null
   });
@@ -86,7 +79,7 @@ export default function ContactSupport({ shop: shopProp }) {
     if (files.length > 0) {
       const file = files[0];
       
-      // Check file size (500KB limit)
+      // Check file size (500KB limit - SendGrid supports up to 30MB)
       if (file.size > 500 * 1024) {
         setStatus('error');
         setStatusMessage('File size must be less than 500KB');
@@ -104,7 +97,11 @@ export default function ContactSupport({ shop: shopProp }) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => {
+        // Remove data URL prefix to get just base64
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
       reader.onerror = error => reject(error);
     });
   };
@@ -140,67 +137,62 @@ export default function ContactSupport({ shop: shopProp }) {
     setStatusMessage('');
 
     try {
-      // Prepare template parameters
-      let templateParams = {
+      // Prepare request body
+      const requestBody = {
         name: formData.name,
         email: formData.email,
-        subject: SUBJECT_OPTIONS.find(opt => opt.value === formData.subject)?.label || formData.subject,
-        message: formData.message,
-        shop_name: shopInfo?.name || shop,
-        shop_url: `https://${shop}`,
-        time: new Date().toLocaleString()
+        subject: formData.subject,
+        message: formData.message
       };
 
       // Add file attachment if present
       if (formData.file) {
         try {
-          const base64File = await convertFileToBase64(formData.file);
-          templateParams.file_name = formData.file.name;
-          templateParams.file_size = `${(formData.file.size / 1024).toFixed(1)} KB`;
-          templateParams.file_type = formData.file.type;
-          templateParams.file_data = base64File;
+          const base64Content = await convertFileToBase64(formData.file);
+          requestBody.file = {
+            content: base64Content,
+            filename: formData.file.name,
+            type: formData.file.type,
+            size: `${(formData.file.size / 1024).toFixed(1)} KB`
+          };
         } catch (error) {
           console.error('[ContactSupport] Error converting file to base64:', error);
           // Continue without file if conversion fails
-          templateParams.message += `\n\n📎 ATTACHED FILE (conversion failed):\nName: ${formData.file.name}\nSize: ${(formData.file.size / 1024).toFixed(1)} KB\nType: ${formData.file.type}`;
         }
       }
 
-      // Send email using EmailJS
-      console.log('[ContactSupport] Sending email with params:', templateParams);
-      
-      const result = await emailjs.send(
-        'service_c8j657n', // Service ID
-        'template_zrftkfg', // Template ID
-        templateParams,
-        '-0N7g1SCh9fSknb6q' // Public Key
-      );
-
-      console.log('[ContactSupport] Email sent successfully:', result);
-      
-      setStatus('success');
-      setStatusMessage('Message sent successfully! We\'ll get back to you within 24 hours.');
-      
-      // Reset form
-      setFormData({
-        name: shopInfo?.name || '',
-        email: shopInfo?.email || '',
-        subject: 'general_question',
-        message: '',
-        file: null
+      // Send via our backend API (uses SendGrid)
+      // Note: useShopApi.api() automatically handles JSON stringification
+      const result = await api(`/api/support/send?shop=${encodeURIComponent(shop)}`, {
+        method: 'POST',
+        body: requestBody
       });
+
+      if (result.success) {
+        setStatus('success');
+        setStatusMessage('Message sent successfully! We\'ll get back to you within 24 hours.');
+        
+        // Reset form
+        setFormData({
+          name: shopInfo?.name || '',
+          email: shopInfo?.email || '',
+          subject: 'General Question',
+          message: '',
+          file: null
+        });
+        
+        // Clear file input
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) fileInput.value = '';
+      } else {
+        throw new Error(result.error || 'Failed to send message');
+      }
 
     } catch (error) {
-      console.error('[ContactSupport] Error sending email:', error);
-      console.error('[ContactSupport] Error details:', {
-        message: error.message,
-        status: error.status,
-        text: error.text,
-        stack: error.stack
-      });
+      console.error('[ContactSupport] Error sending message:', error);
       
       setStatus('error');
-      setStatusMessage(`Failed to send message: ${error.message || 'Unknown error'}`);
+      setStatusMessage(`Failed to send message: ${error.message || 'Please try again or email us at indexaize@gmail.com'}`);
     } finally {
       setLoading(false);
     }

@@ -122,6 +122,28 @@ router.get('/ai/products.json', async (req, res) => {
     data.data.products.edges.forEach(({ node: product }) => {
       if (product.metafields.edges.length > 0) {
         productsWithMetafields++;
+        
+        // Първо парсваме всички metafields
+        const parsedMetafields = {};
+        product.metafields.edges.forEach(({ node: metafield }) => {
+          try {
+            parsedMetafields[metafield.key] = JSON.parse(metafield.value);
+          } catch {
+            parsedMetafields[metafield.key] = metafield.value;
+          }
+        });
+        
+        // Търсим AI-генериран imageAlt в някой от SEO metafields
+        // Priority: AI-generated > Shopify altText > product title
+        let aiImageAlt = null;
+        for (const key of Object.keys(parsedMetafields)) {
+          const seoData = parsedMetafields[key];
+          if (seoData && typeof seoData === 'object' && seoData.imageAlt) {
+            aiImageAlt = seoData.imageAlt;
+            break; // Взимаме първия намерен
+          }
+        }
+        
         const productData = {
           id: product.id,
           title: product.title,
@@ -134,19 +156,11 @@ router.get('/ai/products.json', async (req, res) => {
           url: `https://${shop}/products/${product.handle}`,
           image: product.featuredImage ? {
             url: product.featuredImage.url,
-            alt: product.featuredImage.altText || product.title
+            // Priority: AI-generated imageAlt > Shopify altText > product title
+            alt: aiImageAlt || product.featuredImage.altText || product.title
           } : null,
-          metafields: {}
+          metafields: parsedMetafields
         };
-        
-        // Просто парсваме всички metafields
-        product.metafields.edges.forEach(({ node: metafield }) => {
-          try {
-            productData.metafields[metafield.key] = JSON.parse(metafield.value);
-          } catch {
-            productData.metafields[metafield.key] = metafield.value;
-          }
-        });
         
         optimizedProducts.push(productData);
       }

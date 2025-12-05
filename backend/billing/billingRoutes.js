@@ -25,6 +25,9 @@ import { verifyRequest } from '../middleware/verifyRequest.js';
 
 const router = express.Router();
 
+// App proxy subpath from environment (default: 'indexaize')
+const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
+
 // Helper: Get badge text for a plan
 function getPlanBadge(planKey) {
   const badges = {
@@ -373,7 +376,7 @@ router.get('/info', verifyRequest, async (req, res) => {
 router.post('/subscribe', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { plan, endTrial } = req.body;
+    const { plan, endTrial, returnTo } = req.body;
     
     if (!plan || !PLANS[plan]) {
       return res.status(400).json({ error: 'Invalid plan' });
@@ -467,7 +470,7 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       shop,
       plan,
       shopDoc.accessToken,
-      { trialDays }
+      { trialDays, returnTo: returnTo || '/billing' }
     );
     
     // Save subscription to MongoDB
@@ -793,7 +796,7 @@ router.get('/callback', async (req, res) => {
     // Redirect back to app (use returnTo if provided, otherwise default to billing)
     const redirectPath = returnTo || '/billing';
     
-    res.redirect(`/apps/new-ai-seo${redirectPath}?shop=${shop}&success=true`);
+    res.redirect(`/apps/${APP_PROXY_SUBPATH}${redirectPath}?shop=${shop}&success=true`);
   } catch (error) {
     console.error('[Billing] Callback error:', error);
     res.status(500).send('Failed to process subscription');
@@ -883,7 +886,7 @@ router.get('/tokens/callback', async (req, res) => {
     
     // Redirect to returnTo path or default to /billing
     const redirectPath = returnTo || '/billing';
-    res.redirect(`/apps/new-ai-seo${redirectPath}?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
+    res.redirect(`/apps/${APP_PROXY_SUBPATH}${redirectPath}?shop=${shop}&tokens_purchased=true&amount=${tokens}`);
   } catch (error) {
     console.error('[Billing] Token callback error:', error);
     res.status(500).send('Failed to process token purchase');

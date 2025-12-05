@@ -1,5 +1,5 @@
 // frontend/src/pages/BulkEdit.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useShopApi } from '../hooks/useShopApi.js';
 import {
   Page,
@@ -26,11 +26,13 @@ import {
   Popover,
   ActionList,
   Banner,
+  Spinner,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
@@ -104,25 +106,46 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [errors, setErrors] = useState([]);
   
   // Results state
-  const [results, setResults] = useState({});
-  const [showResultsModal, setShowResultsModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedDeleteLanguages, setSelectedDeleteLanguages] = useState([]);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   
+  // Skip/Fail Reasons Modal
+  const [showReasonsModal, setShowReasonsModal] = useState(false);
+  const [reasonsModalType, setReasonsModalType] = useState('skipped'); // 'skipped' or 'failed'
+  const [reasonsModalData, setReasonsModalData] = useState([]);
+  
   // Toast
   const [toast, setToast] = useState('');
   
-  // AI Enhancement Modal state
-  const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
-  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
-    processing: false,
-    current: 0,
-    total: 0,
-    currentItem: '',
-    results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
+  // AI Enhancement Job status (background processing)
+  const [aiEnhanceJobStatus, setAiEnhanceJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalProducts: 0,
+    processedProducts: 0,
+    successfulProducts: 0,
+    failedProducts: 0,
+    skippedProducts: 0,
+    completedAt: null
   });
+  const aiEnhancePollingRef = useRef(null);
+  
+  // Background SEO Job status (Generate + Apply combined)
+  const [seoJobStatus, setSeoJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    phase: null,
+    message: null,
+    totalProducts: 0,
+    processedProducts: 0,
+    successfulProducts: 0,
+    failedProducts: 0,
+    skippedProducts: 0
+  });
+  const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
@@ -135,9 +158,105 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [graphqlDataLoaded, setGraphqlDataLoaded] = useState(false); // Track if GraphQL data has been loaded
+  
+  // Fetch SEO job status from backend
+  const fetchSeoJobStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/seo/job-status?shop=${shop}`);
+      
+      // Check previous state to detect completion
+      setSeoJobStatus(prevStatus => {
+        const wasInProgress = prevStatus.inProgress;
+        const justCompleted = wasInProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          // Stop polling using ref (no stale closure)
+          if (seoJobPollingRef.current) {
+            clearInterval(seoJobPollingRef.current);
+            seoJobPollingRef.current = null;
+          }
+          
+          // Show toast
+          if (status.status === 'completed') {
+            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+            setToast(msg);
+          } else {
+            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          // Refresh products list to update badges
+          const params = new URLSearchParams({
+            shop,
+            page: 1,
+            limit: 50,
+            ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+            ...(searchValue && { search: searchValue }),
+            sortBy,
+            sortOrder,
+            _t: Date.now()
+          });
+          
+          api(`/api/products/list?${params}`, { shop }).then(data => {
+            setProducts(data.products || []);
+            setPage(1);
+            setHasMore(data.pagination?.hasNext || false);
+            setTotalCount(data.pagination?.total || 0);
+          });
+        }
+        
+        return status;
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
+    }
+  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder]);
+  
+  // Start polling for SEO job status
+  const startSeoJobPolling = useCallback(() => {
+    // Clear any existing polling
+    if (seoJobPollingRef.current) {
+      clearInterval(seoJobPollingRef.current);
+    }
+    
+    // Set initial state to inProgress so we can detect completion
+    setSeoJobStatus(prev => ({ ...prev, inProgress: true }));
+    
+    fetchSeoJobStatus();
+    
+    seoJobPollingRef.current = setInterval(() => {
+      fetchSeoJobStatus();
+    }, 5000); // Poll every 5 seconds
+  }, [fetchSeoJobStatus]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (seoJobPollingRef.current) {
+        clearInterval(seoJobPollingRef.current);
+      }
+    };
+  }, []);
+  
+  // Fetch SEO job status on mount (to restore state after navigation)
+  useEffect(() => {
+    if (shop && api) {
+      fetchSeoJobStatus().then(status => {
+        // If there's an active job, start polling
+        if (status?.inProgress) {
+          startSeoJobPolling();
+        }
+      });
+    }
+  }, [shop]); // Only run on mount
   
   // Update currentPlan when globalPlan changes (e.g., after upgrade)
   // NOTE: This should only be used as fallback - GraphQL query is primary source
@@ -374,8 +493,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     setSelectedItems(items);
     if (items.length === 0) {
       setSelectAllPages(false);
+    } else if (selectAllPages && items.length < products.length) {
+      // If some items are deselected while selectAllPages is true, turn it off
+      setSelectAllPages(false);
     }
-  }, []); // Remove products dependency - not needed for this callback
+  }, [selectAllPages, products.length]);
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
@@ -438,7 +560,81 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     setShowDeleteModal(true);
   };
 
-  // AI Enhancement handler
+  // ============================================================
+  // AI Enhancement Background Job Functions
+  // ============================================================
+  
+  // Fetch AI Enhancement job status
+  const fetchAiEnhanceJobStatus = useCallback(async () => {
+    try {
+      const status = await api(`/ai-enhance/job-status?shop=${shop}`);
+      
+      setAiEnhanceJobStatus(prevStatus => {
+        const justCompleted = prevStatus.inProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          // Stop polling
+          if (aiEnhancePollingRef.current) {
+            clearInterval(aiEnhancePollingRef.current);
+            aiEnhancePollingRef.current = null;
+          }
+          
+          // Show toast
+          if (status.status === 'completed') {
+            const msg = `AI Enhanced ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+              (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
+              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+            setToast(msg);
+          } else if (status.status === 'failed') {
+            setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          // Refresh products to update badges
+          loadProducts(1, false, Date.now());
+        }
+        
+        return status;
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[BULK-EDIT] Failed to fetch AI Enhance job status:', error);
+    }
+  }, [shop, api, loadProducts]);
+  
+  // Start polling for AI Enhancement job status
+  const startAiEnhancePolling = useCallback(() => {
+    if (aiEnhancePollingRef.current) {
+      clearInterval(aiEnhancePollingRef.current);
+    }
+    fetchAiEnhanceJobStatus();
+    aiEnhancePollingRef.current = setInterval(() => {
+      fetchAiEnhanceJobStatus();
+    }, 5000);
+  }, [fetchAiEnhanceJobStatus]);
+  
+  // Cleanup AI Enhancement polling on unmount
+  useEffect(() => {
+    return () => {
+      if (aiEnhancePollingRef.current) {
+        clearInterval(aiEnhancePollingRef.current);
+      }
+    };
+  }, []);
+  
+  // Check for in-progress AI Enhancement job on mount
+  useEffect(() => {
+    if (shop) {
+      fetchAiEnhanceJobStatus().then(status => {
+        if (status?.inProgress) {
+          startAiEnhancePolling();
+        }
+      });
+    }
+  }, [shop, fetchAiEnhanceJobStatus, startAiEnhancePolling]);
+
+  // AI Enhancement handler - now uses background queue
   const handleStartEnhancement = async () => {
     const selectedProducts = products.filter(p => selectedItems.includes(p.id));
     const selectedWithSEO = selectedProducts.filter(p =>
@@ -448,6 +644,15 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       !p.optimizationSummary?.optimizedLanguages?.length
     );
 
+    // Check if there are products with SEO to enhance
+    if (selectedWithSEO.length === 0) {
+      if (selectedWithoutSEO.length > 0) {
+        setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
+      } else {
+        setToast('Please select products with Basic SEO');
+      }
+      return;
+    }
 
     // Check product limit before processing
     const selectedCount = selectedWithSEO.length;
@@ -471,166 +676,69 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Show progress modal
-    setShowAIEnhanceModal(true);
-    setAIEnhanceProgress({
-      processing: true,
-      current: 0,
-      total: selectedWithSEO.length,
-      currentItem: '',
-      results: null
-    });
-      
-      const results = { 
-        successful: 0, 
-        failed: 0, 
-        skipped: selectedWithoutSEO.length,
-        skipReasons: selectedWithoutSEO.length > 0 ? [`${selectedWithoutSEO.length} product(s): No Basic Optimization`] : []
-      };
-      
-      for (let i = 0; i < selectedWithSEO.length; i++) {
-        const product = selectedWithSEO[i];
-        
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i,
-          currentItem: product.title
-        }));
-        
-        try {
-          const productGid = product.gid || toProductGID(product.id);
-          
-          if (!productGid) {
-            console.error('[AI-ENHANCE] Missing product GID, skipping:', product);
-            results.failed++;
-            continue;
-          }
-          
-          const enhanceData = await api('/ai-enhance/product', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              languages: product.optimizationSummary.optimizedLanguages,
-            },
-          });
-          
-          
-          // Apply the enhanced SEO
-          if (enhanceData.results && enhanceData.results.length > 0) {
-            const applyData = {
-              shop,
-              productId: product.gid || toProductGID(product.id),
-              results: enhanceData.results.filter(r => r.bullets && r.faq).map(r => {
-                
-                const seoResult = {
-                  language: r.language,
-                  seo: {
-                    ...r.updatedSeo,  // Използвайте пълния SEO обект от AI enhance!
-                    bullets: r.bullets || [],  // AI-generated bullets (ensure array)
-                    faq: r.faq || []           // AI-generated FAQ (ensure array)
-                  }
-                };
-                
-                
-                return seoResult;
-              }),
-              options: { updateBullets: true, updateFaq: true }
-            };
-            
-            
-            const applyResult = await api('/api/seo/apply-multi', {
-              method: 'POST',
-              shop,
-              body: applyData
-            });
-            
-            results.successful++;
-          } else {
-            results.failed++;
-          }
-        } catch (error) {
-          // Check if it's a 403 error (plan restriction - Products require Professional+)
-          if (error.status === 403) {
-            // Stop processing
-            setAIEnhanceProgress({
-              processing: false,
-              current: 0,
-              total: 0,
-              currentItem: '',
-              results: null
-            });
-            
-            setTokenError({
-              ...error,
-              message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
-            });
-            setCurrentPlan(error.currentPlan || currentPlan);
-            
-            // Check if Plus plan with insufficient tokens (needsUpgrade=false)
-            // OR base plan needing upgrade (needsUpgrade=true)
-            if (error.needsUpgrade === false && error.requiresPurchase) {
-              // Plus plan user - just needs tokens
-              setShowInsufficientTokensModal(true);
-            } else {
-              // Base plan user - needs upgrade
-              setShowPlanUpgradeModal(true);
-            }
-            return; // Stop processing
-          }
-          
-          // Check if it's a 402 error (insufficient tokens or trial restriction)
-          if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
-            // Stop processing and show appropriate modal
-            setAIEnhanceProgress({
-              processing: false,
-              current: 0,
-              total: 0,
-              currentItem: '',
-              results: null
-            });
-            
-            setTokenError(error);
-            setCurrentPlan(error.currentPlan || plan || 'starter');
-            
-            // Show appropriate modal based on error type
-            if (error.trialRestriction && error.requiresActivation) {
-              // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
-              setShowTrialActivationModal(true);
-            } else if (error.trialRestriction) {
-              // Old trial restriction logic (fallback)
-              setShowPlanUpgradeModal(true);
-            } else {
-              // Insufficient tokens (with or without upgrade suggestion)
-              // InsufficientTokensModal handles both cases via needsUpgrade prop
-              setShowInsufficientTokensModal(true);
-            }
-            return; // Stop processing other products
-          }
-          
-          results.failed++;
+    // Prepare products for batch processing
+    const productsForBatch = selectedWithSEO.map(product => ({
+      productId: product.gid || toProductGID(product.id),
+      languages: product.optimizationSummary.optimizedLanguages,
+      title: product.title
+    }));
+
+    try {
+      const response = await api('/ai-enhance/batch', {
+        method: 'POST',
+        shop,
+        body: {
+          products: productsForBatch
         }
+      });
+
+      if (response.queued) {
+        setToast(`Enhancing ${productsForBatch.length} products in background...`);
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        startAiEnhancePolling();
+      } else {
+        setToast(response.message || 'Failed to queue AI Enhancement job');
+      }
+    } catch (error) {
+      // Handle plan/token errors
+      if (error.status === 403) {
+        setTokenError({
+          ...error,
+          message: error.message || 'AI-enhanced add-ons for Products require Professional plan or higher'
+        });
+        setCurrentPlan(error.currentPlan || currentPlan);
         
-        setAIEnhanceProgress(prev => ({
-          ...prev,
-          current: i + 1
-        }));
+        if (error.needsUpgrade === false && error.requiresPurchase) {
+          setShowInsufficientTokensModal(true);
+        } else {
+          setShowPlanUpgradeModal(true);
+        }
+        return;
       }
       
-      setAIEnhanceProgress(prev => ({
-        ...prev,
-        processing: false,
-        results
-      }));
+      if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+        setTokenError(error);
+        setCurrentPlan(error.currentPlan || plan || 'starter');
+        
+        if (error.trialRestriction && error.requiresActivation) {
+          setShowTrialActivationModal(true);
+        } else if (error.trialRestriction) {
+          setShowPlanUpgradeModal(true);
+        } else {
+          setShowInsufficientTokensModal(true);
+        }
+        return;
+      }
       
-      setToast(`AI enhancement complete! ${results.successful} products enhanced.`);
-    };
+      setToast(`Error: ${error.message || 'Failed to start AI Enhancement'}`);
+    }
+  };
 
-  // Close AI Enhancement modal
+  // Legacy: Close AI Enhancement modal (kept for compatibility but no longer used)
   const handleCloseAIEnhancement = () => {
-    // Save results BEFORE resetting state
-    const results = aiEnhanceProgress.results;
+    // No longer needed - background processing doesn't use modal
+    const results = null;
     
     setShowAIEnhanceModal(false);
     setAIEnhanceProgress({
@@ -640,95 +748,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       currentItem: '',
       results: null
     });
-    
-    // Refresh product list if any products were successfully enhanced
-    if (results && results.successful > 0) {
-      // Backend already invalidated Redis cache (invalidateShop)
-      // Use setTimeout to avoid async race condition with modal close
-      setTimeout(() => {
-        setProducts([]); // Clear current products to force re-render
-        loadProducts(1, false, Date.now()); // Cache already invalidated by backend
-      }, 1500); // 1.5s delay for MongoDB write + Redis invalidation propagation
-    }
   };
 
-  // AI Enhancement Modal - използва Polaris компоненти като другите модали
-  const AIEnhanceModal = () => {
-    // Progress modal
-    if (aiEnhanceProgress.processing) {
-      return (
-        <Modal
-          open={showAIEnhanceModal}
-          title="Processing AI Enhancement"
-          onClose={handleCloseAIEnhancement}
-          noScroll
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd">
-                Processing: {aiEnhanceProgress.currentItem}
-              </Text>
-              <ProgressBar progress={(aiEnhanceProgress.current / aiEnhanceProgress.total) * 100} />
-              <Text variant="bodySm" tone="subdued">
-                {aiEnhanceProgress.current} of {aiEnhanceProgress.total} products 
-                ({Math.round((aiEnhanceProgress.current / aiEnhanceProgress.total) * 100)}%)
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      );
-    }
-    
-    // Results modal
-    if (aiEnhanceProgress.results !== null) {
-      return (
-        <Modal
-          open={showAIEnhanceModal}
-          title="AI Enhancement Results"
-          onClose={handleCloseAIEnhancement}
-          primaryAction={{
-            content: 'Done',
-            onAction: handleCloseAIEnhancement,
-          }}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <InlineStack gap="400">
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="success">
-                    {aiEnhanceProgress.results.successful}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="critical">
-                    {aiEnhanceProgress.results.failed}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
-                  <Text variant="headingLg" fontWeight="bold" tone="info">
-                    {aiEnhanceProgress.results.skipped}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              {aiEnhanceProgress.results.skipReasons && aiEnhanceProgress.results.skipReasons.length > 0 && (
-                <BlockStack gap="200">
-                  <Text variant="bodyMd" fontWeight="semibold">Skipped products:</Text>
-                  {aiEnhanceProgress.results.skipReasons.map((reason, index) => (
-                    <Text key={index} variant="bodySm" tone="subdued">• {reason}</Text>
-                  ))}
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      );
-    }
-    
-    return null;
+  // Helper function to format time ago
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   };
   
   // Generate SEO for selected products
@@ -745,16 +777,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       finalModel = modelOptions[0]?.value || 'anthropic/claude-3.5-sonnet';
     }
     
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    setErrors([]);
-    setResults({});
-    
     try {
       let productsToProcess = [];
       
       if (selectAllPages) {
-        // тук URL вече има shop → не подаваме {shop}
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
@@ -765,9 +791,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const selectedCount = productsToProcess.length;
       
       if (selectedCount > productLimit) {
-        setIsProcessing(false);
-        setProgress({ current: 0, total: 0, percent: 0 });
-        setShowLanguageModal(false); // Close language modal
+        setShowLanguageModal(false);
         
         // Show upgrade modal with product limit specific message
         const nextPlan = getNextPlanForLimit(selectedCount);
@@ -787,217 +811,44 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         return;
       }
       
-      // Close language modal only after passing limit check
+      // Close language modal
       setShowLanguageModal(false);
       
-      const total = selectedCount;
-      const skippedDueToPlan = 0;
+      // Prepare batch data for background processing
+      const productsForBatch = productsToProcess.map(product => ({
+        productId: product.gid || toProductGID(product.productId || product.id),
+        title: product.title || 'Unknown product',
+        languages: selectedLanguages,
+        existingLanguages: product.optimizationSummary?.optimizedLanguages || []
+      }));
       
-      setProgress({ current: 0, total, percent: 0 });
+      // Send batch request for background Generate + Apply
+      const response = await api('/api/seo/generate-apply-batch', {
+        method: 'POST',
+        shop,
+        body: {
+          shop,
+          products: productsForBatch,
+          model: finalModel
+        }
+      });
       
-      const batchSize = 5;
-      const results = {};
-      
-      for (let i = 0; i < productsToProcess.length; i += batchSize) {
-        const batch = productsToProcess.slice(i, Math.min(i + batchSize, productsToProcess.length));
+      if (response.queued) {
+        // Clear selected items
+        setSelectedItems([]);
+        setSelectAllPages(false);
         
-        const batchPromises = batch.map(async (product) => {
-          setCurrentProduct(product.title || product.handle || 'Product');
-          
-          try {
-            const productGid = product.gid || toProductGID(product.productId || product.id);
-            
-            const existingLanguages = product.optimizationSummary?.optimizedLanguages || [];
-            const languagesToGenerate = selectedLanguages.filter(lang => !existingLanguages.includes(lang));
-            
-            if (languagesToGenerate.length === 0) {
-              results[product.id] = {
-                success: true,
-                skipped: true,
-                message: 'All selected languages already have AI Search Optimisation'
-              };
-              return;
-            }
-            
-            
-            const data = await api('/api/seo/generate-multi', {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                productId: productGid,
-                model: finalModel,
-                languages: languagesToGenerate,
-              }
-            });
-            
-            results[product.id] = {
-              success: true,
-              data,
-              languages: languagesToGenerate,
-            };
-          } catch (err) {
-            results[product.id] = {
-              success: false,
-              error: err.message,
-            };
-            setErrors(prev => [...prev, { product: product.title, error: err.message }]);
-          }
-        });
+        // Show toast
+        setToast(`Optimizing ${productsForBatch.length} products in background...`);
         
-        await Promise.all(batchPromises);
-        
-        const current = Math.min(i + batchSize, productsToProcess.length);
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
+        // Start polling for status
+        startSeoJobPolling();
+      } else {
+        setToast(response.message || 'Failed to queue optimization job');
       }
-      
-      setResults(results);
-      setShowResultsModal(true);
-      
-      const successCount = Object.keys(results).filter(k => results[k].success && !results[k].skipped).length;
-      const skippedCount = Object.keys(results).filter(k => results[k].skipped).length;
-      
-      let toastMessage = `Generated Optimization for AI Search for ${successCount} products`;
-      if (skippedCount > 0) {
-        toastMessage += ` (${skippedCount} already optimised)`;
-      }
-      if (skippedDueToPlan > 0) {
-        toastMessage += ` (${skippedDueToPlan} skipped due to plan limit)`;
-      }
-      
-      setToast(toastMessage);
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentProduct('');
-    }
-  };
-  
-  // Apply SEO results
-  const applySEO = async () => {
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    
-    try {
-      const successfulResults = Object.entries(results).filter(([_, r]) => r.success && !r.skipped);
-      const total = successfulResults.length;
-      setProgress({ current: 0, total, percent: 0 });
-      
-      for (let i = 0; i < successfulResults.length; i++) {
-        const [productId, result] = successfulResults[i];
-        const product = products.find(p => p.id === productId);
-        
-        if (!product) continue;
-        
-        setCurrentProduct(product.title || 'Product');
-        
-        try {
-          const productGid = product.gid || toProductGID(product.productId || product.id);
-          
-          const data = await api('/api/seo/apply-multi', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              results: result.data.results.filter(r => r?.seo).map(r => ({
-                language: r.language,
-                seo: r.seo,
-              })),
-              options: {
-                updateTitle: true,
-                updateBody: true,
-                updateSeo: true,
-                updateBullets: true,
-                updateFaq: true,
-                updateAlt: false,
-                dryRun: false,
-              }
-            }
-          });
-          
-          // Optimistic update - веднага обновяваме локалното състояние
-          if (data.appliedLanguages && data.appliedLanguages.length > 0) {
-            setProducts(prevProducts => 
-              prevProducts.map(prod => {
-                if (prod.id === productId) {
-                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
-                  const newOptimized = [...new Set([...currentOptimized, ...data.appliedLanguages])];
-                  
-                  return {
-                    ...prod,
-                    optimizationSummary: {
-                      ...prod.optimizationSummary,
-                      optimizedLanguages: newOptimized,
-                      optimized: true,
-                      lastOptimized: new Date().toISOString()
-                    }
-                  };
-                }
-                return prod;
-              })
-            );
-          }
-          
-        } catch (err) {
-          setErrors(prev => [...prev, { product: product.title, error: `Apply failed: ${err.message}` }]);
-        }
-        
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
-      }
-      
-      setToast('AI Search Optimisation applied successfully!');
-      setShowResultsModal(false);
-      
-      // Clear selected items
-      setSelectedItems([]);
-      setSelectAllPages(false);
-      
-      // Add delay to ensure MongoDB writes are propagated
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Force a complete refresh of the products list
-      setProducts([]); // Clear current products to force re-render
-      
-      // Load products with cache bypass
-      const params = new URLSearchParams({
-        shop,
-        page: 1,
-        limit: 50,
-        ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-        ...(searchValue && { search: searchValue }),
-        ...(languageFilter && { languageFilter }),
-        ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
-        sortBy,
-        sortOrder,
-        _t: Date.now() // Cache buster
-      });
-      
-      const data = await api(`/api/products/list?${params}`, { 
-        shop,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      
-      
-      setProducts(data.products || []);
-      setPage(1);
-      setHasMore(data.pagination?.hasNext || false);
-      setTotalCount(data.pagination?.total || 0);
-      
-    } catch (err) {
-      setToast(`Error applying AI Search Optimisation: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentProduct('');
     }
   };
   
@@ -1126,7 +977,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setToast(`Deleted Optimization for AI Search from ${successCount} products`);
       }
       
-      // Apply the same fix pattern as apply function
+      // Always hide the "Completed" status bar after delete operation
+      // This prevents showing stale "Applied AIEO to X products" after deletion
+      setSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        phase: null,
+        message: null,
+        totalProducts: 0,
+        processedProducts: 0,
+        successfulProducts: 0,
+        failedProducts: 0,
+        skippedProducts: 0
+      });
       
       // Force refetch with delay and cache busting
       setTimeout(() => {
@@ -1367,69 +1230,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     </Modal>
   );
   
-  // Results modal
-  const resultsModal = (
-    <Modal
-      open={showResultsModal && !isProcessing}
-      title="AI Search Optimisation Results"
-      primaryAction={{
-        content: 'Apply Optimisation',
-        onAction: applySEO,
-        disabled: !Object.values(results).some(r => r.success && !r.skipped),
-      }}
-      secondaryActions={[
-        {
-          content: 'Cancel',
-          onAction: () => setShowResultsModal(false),
-        },
-      ]}
-    >
-      <Modal.Section>
-        <BlockStack gap="300">
-          <InlineStack gap="400">
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Successful:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="success">
-                {Object.values(results).filter(r => r.success && !r.skipped).length}
-              </Text>
-            </Box>
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Skipped:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="info">
-                {Object.values(results).filter(r => r.skipped).length}
-              </Text>
-            </Box>
-            <Box>
-              <Text variant="bodyMd" fontWeight="semibold">Failed:</Text>
-              <Text variant="headingLg" fontWeight="bold" tone="critical">
-                {Object.values(results).filter(r => !r.success).length}
-              </Text>
-            </Box>
-          </InlineStack>
-          
-          {errors.length > 0 && (
-            <>
-              <Divider />
-              <Text variant="bodyMd" fontWeight="semibold">Errors:</Text>
-              <Box maxHeight="200px" overflowY="scroll">
-                {errors.slice(0, 10).map((err, idx) => (
-                  <Text key={idx} variant="bodySm" tone="critical">
-                    {err.product}: {err.error}
-                  </Text>
-                ))}
-                {errors.length > 10 && (
-                  <Text variant="bodySm" tone="subdued">
-                    ... and {errors.length - 10} more errors
-                  </Text>
-                )}
-              </Box>
-            </>
-          )}
-        </BlockStack>
-      </Modal.Section>
-    </Modal>
-  );
-  
   // Delete language selection modal
   const deleteModal = (
     <Modal
@@ -1593,17 +1393,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     </EmptyState>
   );
   
-  // const bulkActions = [
-  //   {
-  //     content: 'Generate AI Search Optimisation',
-  //     onAction: openLanguageModal,
-  //   },
-  //   {
-  //     content: 'Delete AI Search Optimisation',
-  //     onAction: openDeleteModal,
-  //     destructive: true,
-  //   }
-  // ];
   
   const sortOptions = [
     { label: 'Newest first', value: 'newest' },
@@ -1793,6 +1582,198 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           )}
         </Box>
       </Card>
+
+      {/* Background Job Status Indicator - Show only the most recent/important one */}
+      {/* Priority: AI Enhancement > SEO Job (AI Enhancement requires Basic SEO first) */}
+      {(() => {
+        // Determine which status to show (AI Enhancement has priority as it's the "higher" operation)
+        const hasAiEnhanceStatus = aiEnhanceJobStatus.inProgress || aiEnhanceJobStatus.status === 'completed' || aiEnhanceJobStatus.status === 'failed';
+        const hasSeoJobStatus = seoJobStatus.inProgress || seoJobStatus.status === 'completed' || seoJobStatus.status === 'failed';
+        
+        // If AI Enhancement has any status, show it (it's the more advanced operation)
+        if (hasAiEnhanceStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {aiEnhanceJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`}
+                        </Text>
+                        {aiEnhanceJobStatus.totalProducts > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : aiEnhanceJobStatus.status === 'completed' ? (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="success">AI Enhanced</Badge>
+                        <Text variant="bodyMd">
+                          Enhanced {aiEnhanceJobStatus.successfulProducts} product{aiEnhanceJobStatus.successfulProducts !== 1 ? 's' : ''}
+                        </Text>
+                        {aiEnhanceJobStatus.skippedProducts > 0 && aiEnhanceJobStatus.skipReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('skipped');
+                              setReasonsModalData(aiEnhanceJobStatus.skipReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="subdued">({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
+                          </Button>
+                        )}
+                        {aiEnhanceJobStatus.skippedProducts > 0 && !aiEnhanceJobStatus.skipReasons?.length && (
+                          <Text variant="bodySm" tone="subdued">({aiEnhanceJobStatus.skippedProducts} skipped)</Text>
+                        )}
+                        {aiEnhanceJobStatus.failedProducts > 0 && aiEnhanceJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(aiEnhanceJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">({aiEnhanceJobStatus.failedProducts} failed)</Text>
+                          </Button>
+                        )}
+                        {aiEnhanceJobStatus.failedProducts > 0 && !aiEnhanceJobStatus.failReasons?.length && (
+                          <Text variant="bodySm" tone="critical">({aiEnhanceJobStatus.failedProducts} failed)</Text>
+                        )}
+                        <Text variant="bodySm" tone="subdued">· {timeAgo(aiEnhanceJobStatus.completedAt)}</Text>
+                      </InlineStack>
+                    </BlockStack>
+                  ) : (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="critical">AI Enhancement Failed</Badge>
+                        <Text variant="bodyMd" tone="critical">{aiEnhanceJobStatus.message || 'Enhancement failed'}</Text>
+                        {aiEnhanceJobStatus.successfulProducts > 0 && (
+                          <Text variant="bodySm" tone="subdued">· {aiEnhanceJobStatus.successfulProducts} succeeded before failure</Text>
+                        )}
+                        {aiEnhanceJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(aiEnhanceJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">View {aiEnhanceJobStatus.failReasons.length} errors</Text>
+                          </Button>
+                        )}
+                      </InlineStack>
+                    </BlockStack>
+                  )}
+                </Box>
+              </Card>
+            </Box>
+          );
+        }
+        
+        // Otherwise, show SEO job status if available
+        if (hasSeoJobStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {seoJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">
+                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                        </Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`}
+                        </Text>
+                        {seoJobStatus.totalProducts > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : seoJobStatus.status === 'completed' ? (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="success">Completed</Badge>
+                        <Text variant="bodyMd">
+                          Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                        </Text>
+                        {seoJobStatus.skippedProducts > 0 && seoJobStatus.skipReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('skipped');
+                              setReasonsModalData(seoJobStatus.skipReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="subdued">({seoJobStatus.skippedProducts} skipped)</Text>
+                          </Button>
+                        )}
+                        {seoJobStatus.skippedProducts > 0 && !seoJobStatus.skipReasons?.length && (
+                          <Text variant="bodySm" tone="subdued">({seoJobStatus.skippedProducts} skipped)</Text>
+                        )}
+                        {seoJobStatus.failedProducts > 0 && seoJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(seoJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">({seoJobStatus.failedProducts} failed)</Text>
+                          </Button>
+                        )}
+                        {seoJobStatus.failedProducts > 0 && !seoJobStatus.failReasons?.length && (
+                          <Text variant="bodySm" tone="critical">({seoJobStatus.failedProducts} failed)</Text>
+                        )}
+                        <Text variant="bodySm" tone="subdued">· {timeAgo(seoJobStatus.completedAt)}</Text>
+                      </InlineStack>
+                    </BlockStack>
+                  ) : (
+                    <BlockStack gap="100">
+                      <InlineStack gap="200" align="start" blockAlign="center">
+                        <Badge tone="critical">Failed</Badge>
+                        <Text variant="bodyMd" tone="critical">{seoJobStatus.message || 'Optimization failed'}</Text>
+                        {seoJobStatus.successfulProducts > 0 && (
+                          <Text variant="bodySm" tone="subdued">· {seoJobStatus.successfulProducts} succeeded before failure</Text>
+                        )}
+                        {seoJobStatus.failReasons?.length > 0 && (
+                          <Button
+                            variant="plain"
+                            onClick={() => {
+                              setReasonsModalType('failed');
+                              setReasonsModalData(seoJobStatus.failReasons);
+                              setShowReasonsModal(true);
+                            }}
+                          >
+                            <Text variant="bodySm" tone="critical">View {seoJobStatus.failReasons.length} errors</Text>
+                          </Button>
+                        )}
+                      </InlineStack>
+                    </BlockStack>
+                  )}
+                </Box>
+              </Card>
+            </Box>
+          );
+        }
+        
+        return null;
+      })()}
 
       <Box paddingBlockStart="400">
         <Card>
@@ -2037,10 +2018,61 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
       {progressModal}
       {languageModal}
-      {resultsModal}
       {deleteModal}
       {deleteConfirmModal}
-      {AIEnhanceModal()}
+      
+      {/* Skip/Fail Reasons Modal */}
+      <Modal
+        open={showReasonsModal}
+        onClose={() => setShowReasonsModal(false)}
+        title={reasonsModalType === 'skipped' ? 'Skipped Products' : 'Failed Products'}
+        primaryAction={{
+          content: 'Close',
+          onAction: () => setShowReasonsModal(false)
+        }}
+        secondaryActions={[
+          {
+            content: 'Copy to Clipboard',
+            onAction: async () => {
+              const text = reasonsModalData.join('\n');
+              try {
+                await navigator.clipboard.writeText(text);
+                setToast('Copied to clipboard');
+              } catch (err) {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                setToast('Copied to clipboard');
+              }
+            }
+          }
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="300">
+            <Text variant="bodyMd" tone="subdued">
+              {reasonsModalType === 'skipped' 
+                ? 'These products were skipped because they are already optimized for the selected languages:'
+                : 'These products failed to optimize:'}
+            </Text>
+            <Box paddingBlockStart="200">
+              <BlockStack gap="200">
+                {reasonsModalData.map((reason, index) => (
+                  <Box key={index} padding="200" background="bg-surface-secondary" borderRadius="100">
+                    <Text variant="bodySm" tone={reasonsModalType === 'failed' ? 'critical' : 'subdued'}>
+                      {reason}
+                    </Text>
+                  </Box>
+                ))}
+              </BlockStack>
+            </Box>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
       
       {/* Help Modal for first-time users */}
       <Modal
@@ -2103,6 +2135,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || currentPlan}
             returnTo="/ai-seo"
+            onBuyTokens={() => {
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -2118,7 +2154,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             onActivatePlan={async () => {
               // Direct API call to activate plan (no billing page redirect)
               try {
-                console.log('[BULK-EDIT] 🔓 Activating plan directly...');
                 
                 const response = await api('/api/billing/activate', {
                   method: 'POST',
@@ -2151,15 +2186,24 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               }
             }}
             onPurchaseTokens={() => {
-              // Navigate to billing page to purchase tokens (with returnTo)
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-seo')}`;
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
           />
         </>
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/ai-seo"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

@@ -24,7 +24,9 @@ import { ClipboardIcon, ExternalIcon, ViewIcon, ArrowDownIcon } from '@shopify/p
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
+import { estimateTokens } from '../utils/tokenEstimates.js';
 
 // Dev-only debug logger (hidden in production builds)
 const isDev = import.meta.env.DEV;
@@ -63,7 +65,6 @@ export default function Settings() {
   const [showProductsJsonView, setShowProductsJsonView] = useState(false);
   const [showCollectionsJsonView, setShowCollectionsJsonView] = useState(false);
   const [showStoreMetadataView, setShowStoreMetadataView] = useState(false);
-  const [showAiSitemapView, setShowAiSitemapView] = useState(false);
   const [showWelcomePageView, setShowWelcomePageView] = useState(false);
   const [showSchemaDataView, setShowSchemaDataView] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -79,6 +80,7 @@ export default function Settings() {
   // Insufficient Tokens Modal state
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenModalData, setTokenModalData] = useState({
     feature: '',
     tokensRequired: 0,
@@ -94,8 +96,24 @@ export default function Settings() {
     generated: false,
     progress: ''
   });
-  // Schema generation states - start with false
+  const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
+  const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
+  
+  // Advanced Schema background generation status
+  const [schemaStatus, setSchemaStatus] = useState({
+    inProgress: false,
+    status: 'idle', // idle, queued, processing, completed, failed
+    message: null,
+    position: null,
+    estimatedTime: null,
+    generatedAt: null,
+    schemaCount: 0
+  });
+  const [schemaPollingInterval, setSchemaPollingInterval] = useState(null);
+  
+  // DEPRECATED: Old schema generation states (kept for backward compatibility with old code)
   const [schemaGenerating, setSchemaGenerating] = useState(false);
+  const [schemaComplete, setSchemaComplete] = useState(false);
   const [schemaProgress, setSchemaProgress] = useState({
     current: 0,
     total: 0,
@@ -107,9 +125,6 @@ export default function Settings() {
       totalSchemas: 0
     }
   });
-  const [schemaComplete, setSchemaComplete] = useState(false);
-  const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
-  const [schemaErrorType, setSchemaErrorType] = useState(null); // 'NO_OPTIMIZED_PRODUCTS' or 'ONLY_BASIC_SEO'
   
   // ===== 4. API MEMO =====
   const api = useMemo(() => makeSessionFetch(), []);
@@ -138,58 +153,143 @@ export default function Settings() {
     }
   }, [toast]);
   
-  // Function to start polling for background regeneration completion
-  const startPollingForCompletion = () => {
-    
+  // Function to fetch schema status from backend (same as sitemap)
+  const fetchSchemaStatus = useCallback(async () => {
+    try {
+      const status = await api(`/api/schema/status?shop=${shop}`);
+      
+      setSchemaStatus({
+        inProgress: status.inProgress || false,
+        status: status.status || 'idle',
+        message: status.message || null,
+        position: status.queue?.position || null,
+        estimatedTime: status.queue?.estimatedTime || null,
+        generatedAt: status.schema?.generatedAt || null,
+        schemaCount: status.schema?.schemaCount || 0
+      });
+      
+      // If completed, stop polling and uncheck the checkbox
+      if (status.status === 'completed' && !status.inProgress) {
+        if (schemaPollingInterval) {
+          clearInterval(schemaPollingInterval);
+          setSchemaPollingInterval(null);
+        }
+        
+        // Always uncheck the schemaData checkbox after successful generation
+        // Safety check: only update if settings exists
+        setSettings(prev => {
+          if (!prev || !prev.features) return prev;
+          return {
+            ...prev,
+            features: {
+              ...prev.features,
+              schemaData: false
+            }
+          };
+        });
+        
+        // Show success toast only once (when transitioning from inProgress to completed)
+        if (schemaStatus.inProgress) {
+          setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
+        }
+      }
+      
+      // If failed, check if there's a newer successful generation
+      if (status.status === 'failed') {
+        // Check if schema was generated AFTER the failure (user retried with forceBasicSeo)
+        const failedAt = status.shopStatus?.failedAt ? new Date(status.shopStatus.failedAt) : null;
+        const generatedAt = status.schema?.generatedAt ? new Date(status.schema.generatedAt) : null;
+        
+        // If schema exists and was generated after the failure, treat as success
+        if (status.schema?.exists && generatedAt && failedAt && generatedAt > failedAt) {
+          // This is actually a success - a new generation completed after the failure
+          if (schemaPollingInterval) {
+            clearInterval(schemaPollingInterval);
+            setSchemaPollingInterval(null);
+          }
+          
+          // Always uncheck the schemaData checkbox after successful generation
+          // Safety check: only update if settings exists
+          setSettings(prev => {
+            if (!prev || !prev.features) return prev;
+            return {
+              ...prev,
+              features: {
+                ...prev.features,
+                schemaData: false
+              }
+            };
+          });
+          
+          // Show success toast only once (when transitioning from inProgress to completed)
+          if (schemaStatus.inProgress) {
+            setToast(`Advanced Schema Data generated successfully! (${status.schema?.schemaCount || 0} schemas)`);
+          }
+          return status;
+        }
+        
+        // It's a real failure - stop polling and show appropriate error modal
+        if (schemaPollingInterval) {
+          clearInterval(schemaPollingInterval);
+          setSchemaPollingInterval(null);
+        }
+        
+        // Check for specific error types and show modals
+        if (status.message === 'NO_OPTIMIZED_PRODUCTS') {
+          setSchemaErrorType('NO_OPTIMIZED_PRODUCTS');
+          setShowSchemaErrorModal(true);
+        } else if (status.message === 'ONLY_BASIC_SEO') {
+          setSchemaErrorType('ONLY_BASIC_SEO');
+          setShowSchemaErrorModal(true);
+        } else {
+          // Generic error toast
+          setToast(`Advanced Schema Data generation failed: ${status.message || 'Unknown error'}`);
+        }
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('[SETTINGS] Failed to fetch schema status:', error);
+    }
+  }, [shop, api, schemaPollingInterval, schemaStatus.inProgress]);
+  
+  // Function to start polling for schema status
+  const startSchemaPolling = useCallback(() => {
     // Clear any existing polling
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
+    if (schemaPollingInterval) {
+      clearInterval(schemaPollingInterval);
     }
     
-    let attempts = 0;
-    const maxAttempts = 30; // Poll for up to 5 minutes (30 * 10 seconds)
+    // Poll immediately
+    fetchSchemaStatus();
     
-    const interval = setInterval(async () => {
-      attempts++;
-      
-      try {
-        // Check sitemap info to see if it was recently updated
-        const info = await api(`/api/sitemap/info?shop=${shop}`);
-        
-        if (info && info.generatedAt) {
-          const generatedTime = new Date(info.generatedAt).getTime();
-          const now = Date.now();
-          const timeDiff = now - generatedTime;
-          
-          // If sitemap was generated within the last 2 minutes, consider it complete
-          if (timeDiff < 120000) { // 2 minutes
-            clearInterval(interval);
-            setPollingInterval(null);
-            
-              // Show completion toast
-              setToast('AI-Optimized Sitemap regeneration completed successfully!');
-              
-              // Show View button only for AI Sitemap
-              setShowAiSitemapView(true);
-              return;
-          }
-        }
-        
-        // If we've reached max attempts, stop polling
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-          setPollingInterval(null);
-          setToast('Background regeneration is taking longer than expected. Please check the sitemap manually.');
-        }
-        
-      } catch (error) {
-        console.error('[SETTINGS] Polling error:', error);
-        // Continue polling on error
+    // Then poll every 10 seconds
+    const interval = setInterval(() => {
+      fetchSchemaStatus();
+    }, 10000); // 10 seconds
+    
+    setSchemaPollingInterval(interval);
+  }, [fetchSchemaStatus, schemaPollingInterval]);
+  
+  // Cleanup schema polling on unmount
+  useEffect(() => {
+    return () => {
+      if (schemaPollingInterval) {
+        clearInterval(schemaPollingInterval);
       }
-    }, 10000); // Poll every 10 seconds
-    
-    setPollingInterval(interval);
-  };
+    };
+  }, [schemaPollingInterval]);
+  
+  // Start polling on mount if schema is generating
+  useEffect(() => {
+    if (shop && !schemaPollingInterval) {
+      fetchSchemaStatus().then(status => {
+        if (status?.inProgress) {
+          startSchemaPolling();
+        }
+      });
+    }
+  }, [shop]); // Only run on mount
   
   // ===== 4. API MEMO (ÐŸÐ Ð•Ð”Ð˜ Ð´Ð° ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð° Ð² useCallback) =====
   
@@ -378,19 +478,7 @@ export default function Settings() {
     if (advancedSchemaEnabled) {
       checkSchemaStatus();
     }
-  }, [advancedSchemaEnabled]);
-
-  // Auto-enable AI Discovery when features are selected
-  useEffect(() => {
-    if (false && settings && Object.values(settings.features || {}).some(f => f)) { // DISABLED: This was causing features to be auto-enabled on first load
-      // ÐÐ²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡Ð½Ð¾ Ð²ÐºÐ»ÑŽÑ‡Ð²Ð°Ð¼Ðµ AI Discovery Ð°ÐºÐ¾ Ð¸Ð¼Ð° Ð¸Ð·Ð±Ñ€Ð°Ð½Ð¸ features
-      setSettings(prev => ({
-        ...prev,
-        enabled: true,
-        discoveryEnabled: true
-      }));
-    }
-  }, [settings?.features]);
+    }, [advancedSchemaEnabled]);
 
   const checkSchemaStatus = async () => {
     try {
@@ -621,9 +709,31 @@ export default function Settings() {
       
       const data = await api(`/api/ai-discovery/settings?shop=${shop}`);
       
+      // Validate response has required fields
+      if (!data || !data.features || !data.bots) {
+        console.error('[SETTINGS] Invalid API response - missing features or bots');
+        setSettings({
+          features: {},
+          bots: {},
+          plan: 'starter',
+          enabled: false
+        });
+        setToast('Failed to load settings - please refresh the page');
+        return;
+      }
       
       // Debug: Check if any features are true
       const trueFeatures = Object.entries(data?.features || {}).filter(([key, value]) => value === true);
+      
+      // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
+      if (data.hasAiSitemap && data.features?.aiSitemap) {
+        data.features.aiSitemap = false;
+      }
+      
+      // If Advanced Schema already exists, uncheck the checkbox to prevent accidental re-generation
+      if (data.hasAdvancedSchema && data.features?.schemaData) {
+        data.features.schemaData = false;
+      }
       
       setSettings(data);
       setOriginalSettings(data); // Save original settings
@@ -631,18 +741,20 @@ export default function Settings() {
       // Set Advanced Schema enabled state
       setAdvancedSchemaEnabled(data.advancedSchemaEnabled || false);
       
-      // Show AI Sitemap View button if AI sitemap exists
-      if (data.hasAiSitemap) {
-        setShowAiSitemapView(true);
-      }
-      
       // Generate robots.txt preview
       generateRobotsTxt(data);
       
     } catch (error) {
       console.error('[SETTINGS] ===== LOAD SETTINGS ERROR =====');
       console.error('[SETTINGS] Failed to load settings:', error);
-      setToast('Failed to load settings');
+      // Set default settings to prevent null errors
+      setSettings({
+        features: {},
+        bots: {},
+        plan: 'starter',
+        enabled: false
+      });
+      setToast('Failed to load settings - please refresh the page');
     } finally {
       setLoading(false);
     }
@@ -674,26 +786,41 @@ export default function Settings() {
   // Test log to check if generateRobotsTxt function exists (after definition)
 
   const toggleBot = (botKey) => {
-    if (!settings?.availableBots?.includes(botKey)) {
-      setToast(`Upgrade to ${requiredPlan} plan to enable ${settings.bots[botKey].name}`);
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.bots) {
+      console.warn('[SETTINGS] toggleBot called but settings not loaded yet');
       return;
     }
     
-    setSettings(prev => ({
-      ...prev,
-      bots: {
-        ...prev.bots,
-        [botKey]: {
-          ...prev.bots[botKey],
-          enabled: !prev.bots[botKey].enabled
+    if (!settings?.availableBots?.includes(botKey)) {
+      setToast(`Upgrade to ${requiredPlan} plan to enable ${settings.bots[botKey]?.name || botKey}`);
+      return;
+    }
+    
+    setSettings(prev => {
+      if (!prev || !prev.bots) return prev;
+      return {
+        ...prev,
+        bots: {
+          ...prev.bots,
+          [botKey]: {
+            ...prev.bots[botKey],
+            enabled: !prev.bots[botKey]?.enabled
+          }
         }
-      }
-    }));
+      };
+    });
     
     setHasUnsavedChanges(true); // Mark that there are changes
   };
 
   const toggleFeature = async (featureKey) => {
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.features) {
+      console.warn('[SETTINGS] toggleFeature called but settings not loaded yet');
+      return;
+    }
+    
     if (!isFeatureAvailable(featureKey)) {
       const feature = {
         productsJson: 'Products JSON Feed',
@@ -724,11 +851,16 @@ export default function Settings() {
             storeMetadata: 'ai-store-metadata'
           };
           
+          // Use dynamic token estimation with actual product count
+          const featureId = featureMapping[featureKey] || featureKey;
+          const productCount = settings?.productCount || 0;
+          const tokenEstimate = estimateTokens(featureId, { productCount });
+          
           setTokenModalData({
-            feature: featureMapping[featureKey] || featureKey,
-            tokensRequired: 1000, // Estimate
+            feature: featureId,
+            tokensRequired: tokenEstimate.withMargin,
             tokensAvailable: balance.balance || 0,
-            tokensNeeded: 1000 // Estimate
+            tokensNeeded: tokenEstimate.withMargin
           });
           setShowInsufficientTokensModal(true);
           return; // Don't toggle the feature ON
@@ -740,24 +872,37 @@ export default function Settings() {
       }
     }
     
-    setSettings(prev => ({
-      ...prev,
-      features: {
-        ...prev.features,
-        [featureKey]: !prev.features[featureKey]
-      }
-    }));
+    setSettings(prev => {
+      if (!prev || !prev.features) return prev;
+      return {
+        ...prev,
+        features: {
+          ...prev.features,
+          [featureKey]: !prev.features[featureKey]
+        }
+      };
+    });
   };
 
   const saveSettings = async () => {
+    // Safety check - don't proceed if settings not loaded
+    if (!settings || !settings.features || !settings.bots) {
+      console.warn('[SETTINGS] saveSettings called but settings not loaded yet');
+      setToast('Settings not loaded yet. Please wait and try again.');
+      return;
+    }
+    
     setSaving(true);
     try {
+      // Exclude aiSitemap and schemaData from features - they are now managed in Store Optimization pages
+      const { aiSitemap, schemaData, ...otherFeatures } = settings.features || {};
+      
       await api(`/api/ai-discovery/settings?shop=${shop}`, {
         method: 'POST',
         body: {
           shop,
           bots: settings.bots,
-          features: settings.features,
+          features: otherFeatures, // Don't send aiSitemap or schemaData
           richAttributes: settings.richAttributes
         }
       });
@@ -766,123 +911,17 @@ export default function Settings() {
       setOriginalSettings(settings);
       generateRobotsTxt();
       
-      const normalizedPlan = normalizePlan(settings?.plan);
-      const plansWithUnlimitedAISitemap = ['growth_extra', 'growth extra', 'enterprise'];
-      const plusPlans = ['professional_plus', 'professional plus', 'growth_plus', 'growth plus'];
+      // Show success toast
+      setToast('');
+      setTimeout(() => {
+        const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+        if (hasEnabledBots) {
+          setToast('Settings saved! Scroll down to configure robots.txt (REQUIRED for AI Discovery).');
+        } else {
+          setToast('Settings saved successfully');
+        }
+      }, 100);
       
-      const isPlusPlan = plusPlans.includes(normalizedPlan);
-      const hasUnlimitedAccess = plansWithUnlimitedAISitemap.includes(normalizedPlan);
-      
-      if (settings.features?.aiSitemap) {
-        if (!hasUnlimitedAccess && !isPlusPlan) {
-          setToast('AI-Optimized Sitemap requires Growth Extra+ or Plus plan');
-          return;
-        }
-        
-        if (isPlusPlan) {
-          try {
-            const tokenData = await api(`/api/billing/tokens/balance?shop=${shop}`);
-            const currentTokenBalance = tokenData.balance || 0;
-            const hasTokens = currentTokenBalance > 0;
-            
-            if (!hasTokens) {
-              setTokenModalData({
-                feature: 'ai-sitemap-optimized',
-                tokensRequired: 3000,
-                tokensAvailable: currentTokenBalance,
-                tokensNeeded: 3000
-              });
-              setShowInsufficientTokensModal(true);
-              return;
-            }
-          } catch (error) {
-            console.error('[SETTINGS] Failed to fetch token balance:', error);
-            setToast('Failed to check token balance');
-            return;
-          }
-        }
-        
-        // Hide View button while regenerating
-        setShowAiSitemapView(false);
-        
-        try {
-          const REGENERATE_SITEMAP_MUTATION = `
-            mutation RegenerateSitemap($shop: String!) {
-              regenerateSitemap(shop: $shop) {
-                success
-                message
-                shop
-              }
-            }
-          `;
-          
-          const result = await api('/graphql', {
-            method: 'POST',
-            body: JSON.stringify({
-              query: REGENERATE_SITEMAP_MUTATION,
-              variables: { shop }
-            }),
-            shop: shop
-          });
-          
-          if (result?.data?.regenerateSitemap?.success) {
-            setToast('');
-            setTimeout(() => {
-              setToast('Settings saved! AI-Optimized Sitemap is being regenerated in the background. This may take a few moments.');
-              startPollingForCompletion();
-            }, 100);
-          } else {
-            // Check if error message indicates trial restriction
-            const errorMessage = result?.data?.regenerateSitemap?.message || '';
-            if (errorMessage.startsWith('TRIAL_RESTRICTION:')) {
-              setSaving(false);
-              
-              // Show Trial Activation Modal instead of redirect
-              setTokenError({
-                trialRestriction: true,
-                requiresActivation: true,
-                feature: 'ai-sitemap-optimized',
-                currentPlan: settings?.plan || 'enterprise'
-              });
-              setShowTrialActivationModal(true);
-              return;
-            }
-            
-            setToast('');
-            setTimeout(() => {
-              setToast('Settings saved, but sitemap regeneration failed');
-            }, 100);
-          }
-        } catch (error) {
-          console.error('[SETTINGS] Failed to start sitemap regeneration:', error);
-          setSaving(false);
-          
-          // Check if error is trial restriction (402 with trialRestriction flag)
-          if (error.status === 402 && error.trialRestriction && error.requiresActivation) {
-            // Show Trial Activation Modal instead of redirect
-            setTokenError({
-              trialRestriction: true,
-              requiresActivation: true,
-              feature: 'ai-sitemap-optimized',
-              currentPlan: settings?.plan || 'enterprise'
-            });
-            setShowTrialActivationModal(true);
-            return;
-          }
-          
-          setToast('Settings saved, but sitemap regeneration failed');
-        }
-      } else {
-        setToast('');
-        setTimeout(() => {
-          const hasEnabledBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-          if (hasEnabledBots) {
-            setToast('Settings saved! Scroll down to configure robots.txt (REQUIRED for AI Discovery).');
-          } else {
-            setToast('Settings saved successfully');
-          }
-        }, 100);
-      }
     } catch (error) {
       console.error('Failed to save settings:', error);
       
@@ -1021,12 +1060,17 @@ export default function Settings() {
 
   // Check if Plus plan needs tokens for a feature
   const requiresTokensForPlusPlans = (featureKey) => {
+    // aiSitemap and schemaData are now managed in Store Optimization pages - skip token checks here
+    if (featureKey === 'aiSitemap' || featureKey === 'schemaData') {
+      return false;
+    }
+    
     const plan = normalizePlan(settings?.plan);
     
-    // Features that Plus plans need tokens for
+    // Features that Plus plans need tokens for (aiSitemap and schemaData removed - moved to Store Optimization)
     const plusPlansRequireTokens = {
-      professional_plus: ['welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // Store Metadata is included (no tokens)
-      growth_plus: ['aiSitemap', 'schemaData'] // Store Metadata, Welcome Page, Collections JSON are included (no tokens)
+      professional_plus: ['welcomePage', 'collectionsJson'], // Store Metadata is included (no tokens)
+      growth_plus: [] // All features included for Growth Plus
     };
     
     return plusPlansRequireTokens[plan]?.includes(featureKey) || false;
@@ -1050,11 +1094,16 @@ export default function Settings() {
           storeMetadata: 'ai-store-metadata'
         };
         
+        // Use dynamic token estimation with actual product count
+        const featureId = featureMapping[featureKey] || featureKey;
+        const productCount = settings?.productCount || 0;
+        const tokenEstimate = estimateTokens(featureId, { productCount });
+        
         setTokenModalData({
-          feature: featureMapping[featureKey] || featureKey,
-          tokensRequired: 1000, // Estimate
+          feature: featureId,
+          tokensRequired: tokenEstimate.withMargin,
           tokensAvailable: balance.balance || 0,
-          tokensNeeded: 1000 // Estimate
+          tokensNeeded: tokenEstimate.withMargin
         });
         setShowInsufficientTokensModal(true);
         return false;
@@ -1200,6 +1249,19 @@ export default function Settings() {
               <Spinner size="small" />
               <Text>Loading settings...</Text>
             </InlineStack>
+          </Box>
+        </Card>
+      );
+    }
+
+    // Safety check - don't render if settings not loaded
+    if (!settings || !settings.features) {
+      return (
+        <Card>
+          <Box padding="400">
+            <Banner status="critical">
+              <Text>Failed to load settings. Please refresh the page.</Text>
+            </Banner>
           </Box>
         </Card>
       );
@@ -1482,18 +1544,6 @@ export default function Settings() {
                   name: 'Collections JSON Feed',
                   description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
-                },
-                {
-                  key: 'aiSitemap',
-                  name: 'AI-Optimized Sitemap',
-                  description: 'Enhanced sitemap with AI hints',
-                  requiredPlan: 'Growth Extra'
-                },
-                {
-                  key: 'schemaData',
-                  name: 'Advanced Schema Data',
-                  description: 'BreadcrumbList, FAQPage & more',
-                  requiredPlan: 'Enterprise'
                 }
               ].map((feature) => {
                 const isAvailable = isFeatureAvailable(feature.key);
@@ -1508,93 +1558,79 @@ export default function Settings() {
                     borderColor="border"
                   >
                     {isAvailable ? (
-                      <InlineStack align="space-between" blockAlign="center">
-                        <Box flexGrow={1}>
-                          <Checkbox
-                            label={feature.name}
-                            checked={isEnabled}
-                            onChange={() => toggleFeature(feature.key)}
-                            helpText={feature.description}
-                          />
-                        </Box>
-                        {/* AI Sitemap View button */}
-                        {feature.key === 'aiSitemap' && showAiSitemapView && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        
-                        {/* Products JSON View button */}
-                        {feature.key === 'productsJson' && (() => {
-                          return feature.key === 'productsJson' && showProductsJsonView;
-                        })() && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        
-                        {/* Collections JSON View button */}
-                        {feature.key === 'collectionsJson' && (() => {
-                          return feature.key === 'collectionsJson' && showCollectionsJsonView;
-                        })() && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                        
-                        {/* Store Metadata - View button or Configure button */}
-                        {feature.key === 'storeMetadata' && (() => {
+                      <BlockStack gap="200">
+                        <InlineStack align="space-between" blockAlign="center">
+                          <Box flexGrow={1}>
+                            <Checkbox
+                              label={feature.name}
+                              checked={isEnabled}
+                              onChange={() => toggleFeature(feature.key)}
+                              helpText={feature.description}
+                            />
+                          </Box>
                           
-                          return feature.key === 'storeMetadata' && isEnabled;
-                        })() && (
-                          showStoreMetadataView ? (
+                          {/* Products JSON View button */}
+                          {feature.key === 'productsJson' && showProductsJsonView && (
                             <Button
                               size="slim"
                               onClick={() => viewJson(feature.key, feature.name)}
                             >
                               View
                             </Button>
-                          ) : (
+                          )}
+                          
+                          {/* Collections JSON View button */}
+                          {feature.key === 'collectionsJson' && showCollectionsJsonView && (
                             <Button
                               size="slim"
-                              variant="primary"
-                              onClick={async () => {
-                                
-                                // Check tokens first for Plus plans
-                                const canProceed = await checkTokensBeforeAction('storeMetadata');
-                                if (!canProceed) {
-                                  return; // Stop if tokens are required but not available
-                                }
-                                
-                                // Open Store Metadata tab in new window
-                                const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
-                                window.open(storeMetadataUrl, '_blank');
-                              }}
+                              onClick={() => viewJson(feature.key, feature.name)}
                             >
-                              Configure
+                              View
                             </Button>
-                          )
-                        )}
+                          )}
+                          
+                          {/* Store Metadata - View button or Configure button */}
+                          {feature.key === 'storeMetadata' && isEnabled && (
+                            showStoreMetadataView ? (
+                              <Button
+                                size="slim"
+                                onClick={() => viewJson(feature.key, feature.name)}
+                              >
+                                View
+                              </Button>
+                            ) : (
+                              <Button
+                                size="slim"
+                                variant="primary"
+                                onClick={async () => {
+                                  // Check tokens first for Plus plans
+                                  const canProceed = await checkTokensBeforeAction('storeMetadata');
+                                  if (!canProceed) {
+                                    return; // Stop if tokens are required but not available
+                                  }
+                                  
+                                  // Open Store Metadata tab in new window
+                                  const storeMetadataUrl = `/ai-seo/store-metadata?shop=${shop}`;
+                                  window.open(storeMetadataUrl, '_blank');
+                                }}
+                              >
+                                Configure
+                              </Button>
+                            )
+                          )}
+                          
+                          {/* Welcome Page View button */}
+                          {feature.key === 'welcomePage' && showWelcomePageView && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                        </InlineStack>
                         
-                        {/* Welcome Page View button */}
-                        {feature.key === 'welcomePage' && showWelcomePageView && (
-                          <Button
-                            size="slim"
-                            onClick={() => viewJson(feature.key, feature.name)}
-                          >
-                            View
-                          </Button>
-                        )}
-                      </InlineStack>
+                      </BlockStack>
                     ) : (
                       <Checkbox
                         label={
@@ -1622,259 +1658,6 @@ export default function Settings() {
           </BlockStack>
         </Box>
       </Card>
-
-      {/* Available Endpoints - commented out, now using View buttons */}
-      {/* {(settings?.features?.productsJson || settings?.features?.collectionsJson || settings?.features?.storeMetadata || settings?.features?.schemaData || settings?.features?.aiSitemap || settings?.features?.welcomePage) && (
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Available AI Endpoints</Text>
-              
-              <BlockStack gap="200">
-                {settings?.features?.productsJson && (
-                  <InlineStack align="space-between">
-                    <Text>Products Feed:</Text>
-                    <Link url={`/ai/products.json?shop=${shop}`} external>
-                      /ai/products.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.collectionsJson && (
-                  <InlineStack align="space-between">
-                    <Text>Collections Feed:</Text>
-                    <Link url={`/ai/collections-feed.json?shop=${shop}`} external>
-                      /ai/collections-feed.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.storeMetadata && (
-                  <InlineStack align="space-between">
-                    <Text>Store Metadata:</Text>
-                    <Link url={`/ai/store-metadata.json?shop=${shop}`} external>
-                      /ai/store-metadata.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.schemaData && (
-                  <InlineStack align="space-between">
-                    <Text>Advanced Schema Data:</Text>
-                    <Link url={`/ai/schema-data.json?shop=${shop}`} external>
-                      /ai/schema-data.json
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.aiSitemap && (
-                  <InlineStack align="space-between">
-                    <Text>AI Sitemap:</Text>
-                    <Link url={`/ai/sitemap-feed.xml?shop=${shop}`} external>
-                      /ai/sitemap-feed.xml
-                    </Link>
-                  </InlineStack>
-                )}
-                
-                {settings?.features?.welcomePage && (
-                  <InlineStack align="space-between">
-                    <Text>Welcome Page:</Text>
-                    <Link url={`/ai/welcome?shop=${shop}`} external>
-                      /ai/welcome
-                    </Link>
-                  </InlineStack>
-                )}
-              </BlockStack>
-            </BlockStack>
-          </Box>
-        </Card>
-      )} */}
-
-      {/* Advanced Schema Data Management - shows for Professional Plus, Growth Plus, and Enterprise plans if enabled */}
-      {(() => {
-        const plan = normalizePlan(settings?.plan);
-        const planIndex = getPlanIndex(plan);
-        const planCheck = planIndex >= 2; // Professional Plus+ (index 2)
-        const settingsCheck = settings?.features?.schemaData;
-        const originalCheck = originalSettings?.features?.schemaData;
-        
-        return planCheck && settingsCheck && originalCheck;
-      })() && (
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Advanced Schema Data Management</Text>
-              <Text variant="bodyMd" tone="subdued">
-                Generate and manage structured data for your products
-              </Text>
-              
-              <InlineStack gap="300">
-                <Button
-                  primary
-                  onClick={async () => {
-                    // Prevent multiple simultaneous generations
-                    if (isGeneratingRef.current) {
-                      return;
-                    }
-                    
-                    try {
-                      // First check if there's existing data
-                      const existingData = await api(`/ai/schema-data.json?shop=${shop}`);
-                      
-                      if (existingData.schemas && existingData.schemas.length > 0) {
-                        // Has data - ask if to regenerate
-                        if (!confirm('This will replace existing schema data. Continue?')) {
-                          return;
-                        }
-                      }
-                      
-                      // Set ref FIRST (no closure issues)
-                      isGeneratingRef.current = true;
-                      checkCountRef.current = 0; // Reset counter
-                      
-                      // Set state immediately after ref to avoid sync issues
-                      setSchemaGenerating(true);
-                      setSchemaComplete(false);
-                      setSchemaProgress({
-                        current: 0,
-                        total: 0,
-                        percent: 10, // Start with 10% to show progress immediately
-                        currentProduct: 'Initializing...',
-                        stats: {
-                          siteFAQ: false,
-                          products: 0,
-                          totalSchemas: 0
-                        }
-                      });
-                      
-                      let data;
-                      try {
-                        data = await api(`/api/schema/generate-all?shop=${shop}`, {
-                          method: 'POST',
-                          shop,
-                          body: { shop }
-                        });
-                      } catch (apiError) {
-                        // Check for 402 error (payment/activation required) - SHOW MODAL INSTEAD OF REDIRECT
-                        if (apiError.status === 402) {
-                          setSchemaGenerating(false);
-                          isGeneratingRef.current = false;
-                          
-                          // Set error data for modals
-                          setTokenError(apiError);
-                          
-                          // Show appropriate modal based on error type (same logic as AI Sitemap)
-                          if (apiError.trialRestriction && apiError.requiresActivation) {
-                            // Growth Extra/Enterprise in trial → Show "Activate Plan or Buy Tokens" modal
-                            setShowTrialActivationModal(true);
-                          } else if (apiError.requiresPurchase) {
-                            // Insufficient tokens → Show "Purchase Tokens" modal
-                            setShowInsufficientTokensModal(true);
-                          } else {
-                            // Fallback: Generic trial restriction toast
-                            setToast('Advanced Schema Data requires activation or token purchase.');
-                          }
-                          return;
-                        }
-                        
-                        throw apiError; // Re-throw for other errors
-                      }
-                      
-                      // Start checking progress after 3 seconds (longer delay to reduce load)
-                      setTimeout(() => {
-                        checkGenerationProgress();
-                      }, 3000);
-                    } catch (err) {
-                      console.error('[SCHEMA-GEN] Error:', err);
-                      setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
-                      setSchemaGenerating(false);
-                    }
-                  }}
-                >
-                  Generate/Update Schema Data
-                </Button>
-                
-                <Button
-                  onClick={() => {
-                    window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-                  }}
-                >
-                  View Generated Schema
-                </Button>
-                
-                <Button
-                  destructive
-                  onClick={async () => {
-                    if (confirm('This will delete all advanced schema data. Are you sure?')) {
-                      try {
-                        await api(`/api/schema/delete?shop=${shop}`, {
-                          method: 'DELETE',
-                          shop,
-                          body: { shop }
-                        });
-                        
-                        setToast('Schema data deleted successfully');
-                      } catch (err) {
-                        setToast('Failed to delete schema data');
-                      }
-                    }
-                  }}
-                >
-                  Delete Schema Data
-                </Button>
-              </InlineStack>
-              
-              {/* Rich Attributes Options */}
-              <Card>
-                <Box padding="300">
-                  <BlockStack gap="300">
-                    <Text as="h3" variant="headingSm">Rich Product Attributes</Text>
-                    <Text variant="bodyMd" tone="subdued">
-                      Select which AI-generated attributes to include in product schemas
-                    </Text>
-                    
-                    <InlineGrid columns={2} gap="400">
-                      {[
-                        { key: 'material', label: 'Material', description: 'Product material (cotton, leather, metal, etc.)' },
-                        { key: 'color', label: 'Color', description: 'Product color information' },
-                        { key: 'size', label: 'Size', description: 'Product size or dimensions' },
-                        { key: 'weight', label: 'Weight', description: 'Product weight information' },
-                        { key: 'dimensions', label: 'Dimensions', description: 'Product measurements' },
-                        { key: 'category', label: 'Category', description: 'Product category classification' },
-                        { key: 'audience', label: 'Target Audience', description: 'Intended user group (men, women, kids, etc.)' },
-                        { key: 'reviews', label: 'Review Schemas', description: 'AI-generated product reviews for schema.org' },
-                        { key: 'ratings', label: 'Rating Schemas', description: 'AI-generated ratings and aggregate ratings' },
-                        { key: 'enhancedDescription', label: 'Enhanced Descriptions', description: 'AI-enhanced product descriptions' },
-                        { key: 'organization', label: 'Organization Schema', description: 'Brand organization information' }
-                      ].map(attr => (
-                        <Checkbox
-                          key={attr.key}
-                          label={attr.label}
-                          helpText={attr.description}
-                          checked={settings?.richAttributes?.[attr.key] || false}
-                          onChange={(checked) => {
-                            setSettings(prev => ({
-                              ...prev,
-                              richAttributes: {
-                                ...prev.richAttributes,
-                                [attr.key]: checked
-                              }
-                            }));
-                          }}
-                        />
-                      ))}
-                    </InlineGrid>
-                  </BlockStack>
-                </Box>
-              </Card>
-              
-              <Banner status="info" tone="subdued">
-                <p>Generation creates BreadcrumbList, FAQPage, WebPage and more schemas for each product. These structured schemas help AI bots understand your product hierarchy, answer customer questions automatically, and improve your store's visibility in AI-powered search results.</p>
-              </Banner>
-            </BlockStack>
-          </Box>
-        </Card>
-      )}
 
       {/* Save and Reset Buttons */}
       <InlineStack gap="200" align="end">
@@ -2172,196 +1955,30 @@ export default function Settings() {
         </Modal>
       )}
 
-      {/* Simple test modal */}
-      {schemaGenerating && !schemaComplete && (
-        <Modal
-          open={schemaGenerating}
-          title="Generating Advanced Schema Data"
-          onClose={() => {
-            isGeneratingRef.current = false;
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-        >
-          <Modal.Section>
-            <Text>Modal is showing! Progress: {schemaProgress.percent}%</Text>
-          </Modal.Section>
-        </Modal>
-      )}
-
-      {/* Schema Generation Complete Modal */}
-      {schemaComplete && (
-        <Modal
-          open={true}
-          title="Schema Generation Complete"
-          onClose={() => {
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          primaryAction={{
-            content: 'View Generated Schemas',
-            onAction: () => {
-              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }}
-          secondaryActions={[{
-            content: 'Close',
-            onAction: () => {
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Banner status="success" title="Generation successful!">
-                <p>Advanced schema data has been generated for your products.</p>
-              </Banner>
-              
-              <Text variant="headingMd">Generation Statistics</Text>
-              
-              <InlineStack gap="600" wrap>
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.products}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.totalSchemas}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              <Box paddingBlockStart="200">
-                <Text variant="bodySm" tone="subdued">
-                  Structured schemas are now generated and help AI bots better understand your products.
-                </Text>
-              </Box>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
-
-      {/* Schema Generation Progress Modal */}
-      {schemaGenerating && !schemaComplete && (
-        <Modal
-          open={true}
-          title="Generating Advanced Schema Data"
-          onClose={() => {
-            isGeneratingRef.current = false;
-            checkCountRef.current = 0; // Reset counter
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          noScroll
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd">
-                Generating schemas for your products...
-              </Text>
-              <ProgressBar progress={schemaProgress.percent} size="small" />
-              <Text variant="bodySm" tone="subdued">
-                This process may take 1-2 minutes depending on the number of products.
-              </Text>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
-
-      {/* Schema Generation Complete Modal */}
-      {schemaComplete && (
-        <Modal
-          open={true}
-          title="Schema Generation Complete"
-          onClose={() => {
-            setSchemaGenerating(false);
-            setSchemaComplete(false);
-          }}
-          primaryAction={{
-            content: 'View Generated Schemas',
-            onAction: () => {
-              window.open(`/ai/schema-data.json?shop=${shop}`, '_blank');
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }}
-          secondaryActions={[{
-            content: 'Close',
-            onAction: () => {
-              setSchemaGenerating(false);
-              setSchemaComplete(false);
-            }
-          }]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Banner status="success" title="Generation successful!">
-                <p>Advanced schema data has been generated for your products.</p>
-              </Banner>
-              
-              <Text variant="headingMd">Generation Statistics</Text>
-              
-              <InlineStack gap="600" wrap>
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Site FAQ</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.siteFAQ ? '✓' : '—'}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Products Processed</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.products}
-                  </Text>
-                </Box>
-                
-                <Box>
-                  <Text variant="bodyMd" tone="subdued">Total Schemas</Text>
-                  <Text variant="headingLg" fontWeight="bold">
-                    {schemaProgress.stats.totalSchemas}
-                  </Text>
-                </Box>
-              </InlineStack>
-              
-              <Box paddingBlockStart="200">
-                <Text variant="bodySm" tone="subdued">
-                  Structured schemas are now generated and help AI bots better understand your products.
-                </Text>
-              </Box>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-      )}
+      {/* Schema modals removed - now using background queue with status indicator (like AI Sitemap) */}
 
       {/* Schema Error Modal - No Optimized Products */}
       {showSchemaErrorModal && schemaErrorType === 'NO_OPTIMIZED_PRODUCTS' && (
         <Modal
           open={true}
           title="No Optimized Products Found"
-          onClose={() => {
+          onClose={async () => {
             setShowSchemaErrorModal(false);
             setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
           }}
           primaryAction={{
             content: 'Go to Search Optimization',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
               // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
@@ -2370,9 +1987,13 @@ export default function Settings() {
           }}
           secondaryActions={[{
             content: 'Cancel',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
             }
           }]}
         >
@@ -2404,15 +2025,23 @@ export default function Settings() {
         <Modal
           open={true}
           title="AI-Enhanced Optimization Recommended"
-          onClose={() => {
+          onClose={async () => {
             setShowSchemaErrorModal(false);
             setSchemaErrorType(null);
+            // Dismiss the error in backend so it doesn't show again on page reload
+            try {
+              await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+            } catch (e) { /* ignore */ }
           }}
           primaryAction={{
             content: 'Generate AI-Enhanced Add-ons',
-            onAction: () => {
+            onAction: async () => {
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
+              // Dismiss the error in backend
+              try {
+                await api(`/api/schema/dismiss-error?shop=${shop}`, { method: 'POST' });
+              } catch (e) { /* ignore */ }
               // Navigate to AISEO generation page with current params (embedded=1, shop, host, etc.)
               const currentParams = new URLSearchParams(window.location.search);
               const paramString = currentParams.toString() ? `?${currentParams.toString()}` : '';
@@ -2422,15 +2051,13 @@ export default function Settings() {
           secondaryActions={[{
             content: 'Proceed with Basic AISEO',
             onAction: async () => {
+              // Close modal first
               setShowSchemaErrorModal(false);
               setSchemaErrorType(null);
               
-              // Trigger schema generation anyway (with basic AISEO products)
+              // Trigger schema generation with forceBasicSeo flag
               try {
-                setSchemaGenerating(true);
-                setSchemaComplete(false);
-                isGeneratingRef.current = true;
-                checkCountRef.current = 0;
+                setToast('Starting schema generation with basic AISEO...');
                 
                 await api(`/api/schema/generate-all?shop=${shop}`, {
                   method: 'POST',
@@ -2438,14 +2065,11 @@ export default function Settings() {
                   body: JSON.stringify({ forceBasicSeo: true })
                 });
                 
-                // Start checking progress
-                setTimeout(() => {
-                  checkGenerationProgress();
-                }, 3000);
+                // Start polling for status updates (new background queue approach)
+                startSchemaPolling();
               } catch (err) {
                 console.error('[SCHEMA-GEN] Error:', err);
                 setToast('Failed to generate schema: ' + (err.message || 'Unknown error'));
-                setSchemaGenerating(false);
               }
             }
           }]}
@@ -2494,6 +2118,11 @@ export default function Settings() {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || settings?.plan || 'starter'}
             returnTo="/settings"
+            onBuyTokens={() => {
+              // Close InsufficientTokensModal and open TokenPurchaseModal
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -2539,11 +2168,9 @@ export default function Settings() {
               }
             }}
             onPurchaseTokens={() => {
-              // Redirect to billing page for token purchase
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+              // Close TrialActivationModal and open TokenPurchaseModal
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
             shop={shop}
           />
@@ -2564,8 +2191,25 @@ export default function Settings() {
           minimumPlan={null}
           currentPlan={settings?.plan || 'starter'}
           returnTo="/settings"
+          onBuyTokens={() => {
+            // Close InsufficientTokensModal and open TokenPurchaseModal
+            setShowInsufficientTokensModal(false);
+            setShowTokenPurchaseModal(true);
+          }}
         />
       )}
+
+      {/* Token Purchase Modal - opens directly from TrialActivationModal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/settings"
+        inTrial={true}
+      />
       
     </BlockStack>
     );
@@ -2585,61 +2229,3 @@ export default function Settings() {
     );
   }
 }
-
-/* 
-COMMENTED OLD CODE FOR ADVANCED SCHEMA CHECKBOX - FOR TESTING
-
-onChange={async (checked) => {
-  setAdvancedSchemaEnabled(checked);
-  setSchemaError('');
-  
-  // Save the setting in AI Discovery settings
-  try {
-    await api(`/api/ai-discovery/settings?shop=${shop}`, {
-      method: 'POST',
-      shop,
-      body: {
-        shop,
-        ...settings,
-        advancedSchemaEnabled: checked
-      }
-    });
-  } catch (err) {
-    console.error('Failed to save Advanced Schema setting:', err);
-    setSchemaError('Failed to save settings');
-    setAdvancedSchemaEnabled(false);
-    return;
-  }
-  
-  // Trigger schema generation if enabled
-  if (checked) {
-    console.log('Triggering schema generation...');
-    console.log('Shop:', shop);
-    setSchemaGenerating(true);
-    
-    try {
-      const url = '/api/schema/generate-all';
-      console.log('Calling:', url);
-      
-      const result = await api(url, {
-        method: 'POST', 
-        shop,
-        body: { shop }
-      });
-      
-      console.log('Schema generation result:', result);
-      
-      // Show progress for 30 seconds
-      setTimeout(() => {
-        setSchemaGenerating(false);
-      }, 30000);
-      
-    } catch (err) {
-      console.error('Schema generation error:', err);
-      setSchemaError(err.message);
-      setSchemaGenerating(false);
-      setAdvancedSchemaEnabled(false);
-    }
-  }
-}}
-*/

@@ -1,5 +1,5 @@
 // frontend/src/pages/Collections.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Card,
   ResourceList,
@@ -22,12 +22,14 @@ import {
   Popover,
   Checkbox,
   Banner,
+  Spinner,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import { StoreMetadataBanner } from '../components/StoreMetadataBanner.jsx';
 
 const qs = (k, d = '') => {
@@ -113,11 +115,19 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   // Toast
   const [toast, setToast] = useState('');
   
-  // AI Enhancement Modal state
+  // AI Enhancement Modal state (legacy - kept for backward compatibility)
   const [showAIEnhanceModal, setShowAIEnhanceModal] = useState(false);
+  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
+    processing: false,
+    current: 0,
+    total: 0,
+    currentItem: '',
+    results: null
+  });
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showInsufficientTokensModal, setShowInsufficientTokensModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [currentPlan, setCurrentPlan] = useState('starter');
   const [languageLimit, setLanguageLimit] = useState(1); // Default to 1 for Starter
@@ -152,13 +162,33 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     }
   }, [globalPlan, currentPlan, graphqlDataLoaded]);
   
-  const [aiEnhanceProgress, setAIEnhanceProgress] = useState({
-    processing: false,
-    current: 0,
-    total: 0,
-    currentItem: '',
-    results: null  // Уверете се че е NULL, не {} или {successful:0, failed:0, skipped:0}
+  // Background Collection SEO Job status (Generate + Apply combined)
+  const [collectionSeoJobStatus, setCollectionSeoJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalCollections: 0,
+    processedCollections: 0,
+    successfulCollections: 0,
+    failedCollections: 0,
+    skippedCollections: 0,
+    completedAt: null
   });
+  const collectionSeoPollingRef = useRef(null);
+  
+  // Background Collection AI Enhancement Job status
+  const [collectionAiEnhanceJobStatus, setCollectionAiEnhanceJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalCollections: 0,
+    processedCollections: 0,
+    successfulCollections: 0,
+    failedCollections: 0,
+    skippedCollections: 0,
+    completedAt: null
+  });
+  const collectionAiEnhancePollingRef = useRef(null);
   
   // Load models and plan on mount
   useEffect(() => {
@@ -353,6 +383,139 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     }
   };
 
+  // ============================================================
+  // Background Job Polling Functions
+  // ============================================================
+  
+  // Helper function to format time ago
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+  
+  // Fetch Collection SEO job status
+  const fetchCollectionSeoJobStatus = useCallback(async () => {
+    try {
+      const status = await api(`/seo/collection-job-status?shop=${shop}&type=seo`);
+      
+      setCollectionSeoJobStatus(prevStatus => {
+        const justCompleted = prevStatus.inProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          if (collectionSeoPollingRef.current) {
+            clearInterval(collectionSeoPollingRef.current);
+            collectionSeoPollingRef.current = null;
+          }
+          
+          if (status.status === 'completed') {
+            setToast(`Optimized ${status.successfulCollections} collection${status.successfulCollections !== 1 ? 's' : ''}`);
+          } else if (status.status === 'failed') {
+            setToast(`Collection SEO failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          loadCollections();
+        }
+        
+        return status;
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[COLLECTIONS] Failed to fetch SEO job status:', error);
+    }
+  }, [shop, api, loadCollections]);
+  
+  // Start polling for Collection SEO job status
+  const startCollectionSeoPolling = useCallback(() => {
+    if (collectionSeoPollingRef.current) {
+      clearInterval(collectionSeoPollingRef.current);
+    }
+    fetchCollectionSeoJobStatus();
+    collectionSeoPollingRef.current = setInterval(() => {
+      fetchCollectionSeoJobStatus();
+    }, 5000);
+  }, [fetchCollectionSeoJobStatus]);
+  
+  // Fetch Collection AI Enhancement job status
+  const fetchCollectionAiEnhanceJobStatus = useCallback(async () => {
+    try {
+      const status = await api(`/ai-enhance/collection-job-status?shop=${shop}`);
+      
+      setCollectionAiEnhanceJobStatus(prevStatus => {
+        const justCompleted = prevStatus.inProgress && !status.inProgress && 
+          (status.status === 'completed' || status.status === 'failed');
+        
+        if (justCompleted) {
+          if (collectionAiEnhancePollingRef.current) {
+            clearInterval(collectionAiEnhancePollingRef.current);
+            collectionAiEnhancePollingRef.current = null;
+          }
+          
+          if (status.status === 'completed') {
+            setToast(`AI Enhanced ${status.successfulCollections} collection${status.successfulCollections !== 1 ? 's' : ''}`);
+          } else if (status.status === 'failed') {
+            setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
+          }
+          
+          loadCollections();
+        }
+        
+        return status;
+      });
+      
+      return status;
+    } catch (error) {
+      console.error('[COLLECTIONS] Failed to fetch AI Enhancement job status:', error);
+    }
+  }, [shop, api, loadCollections]);
+  
+  // Start polling for Collection AI Enhancement job status
+  const startCollectionAiEnhancePolling = useCallback(() => {
+    if (collectionAiEnhancePollingRef.current) {
+      clearInterval(collectionAiEnhancePollingRef.current);
+    }
+    fetchCollectionAiEnhanceJobStatus();
+    collectionAiEnhancePollingRef.current = setInterval(() => {
+      fetchCollectionAiEnhanceJobStatus();
+    }, 5000);
+  }, [fetchCollectionAiEnhanceJobStatus]);
+  
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (collectionSeoPollingRef.current) {
+        clearInterval(collectionSeoPollingRef.current);
+      }
+      if (collectionAiEnhancePollingRef.current) {
+        clearInterval(collectionAiEnhancePollingRef.current);
+      }
+    };
+  }, []);
+  
+  // Check for in-progress jobs on mount
+  useEffect(() => {
+    if (shop) {
+      fetchCollectionSeoJobStatus().then(status => {
+        if (status?.inProgress) {
+          startCollectionSeoPolling();
+        }
+      });
+      fetchCollectionAiEnhanceJobStatus().then(status => {
+        if (status?.inProgress) {
+          startCollectionAiEnhancePolling();
+        }
+      });
+    }
+  }, [shop, fetchCollectionSeoJobStatus, fetchCollectionAiEnhanceJobStatus, startCollectionSeoPolling, startCollectionAiEnhancePolling]);
+
   // Calculate maximum NEW languages that can be added
   // Takes into account already optimized languages across selected collections
   // Check if the selected languages would exceed the plan limit for any selected collection
@@ -395,7 +558,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     setShowLanguageModal(true);
   };
   
-  // AI Enhancement function - same logic as Products
+  // AI Enhancement function - now uses background queue
   const handleStartEnhancement = async () => {
     // Get selected collections with Basic SEO
     const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
@@ -408,7 +571,69 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Start AI Enhancement with progress tracking
+    // Prepare collections for batch processing
+    const collectionsForBatch = selectedWithSEO.map(collection => ({
+      collectionId: collection.id,
+      languages: collection.optimizedLanguages || [],
+      title: collection.title
+    }));
+
+    try {
+      const response = await api(`/ai-enhance/collection-batch?shop=${shop}`, {
+        method: 'POST',
+        body: {
+          shop,
+          collections: collectionsForBatch
+        }
+      });
+
+      if (response.queued) {
+        setToast(`Enhancing ${collectionsForBatch.length} collections in background...`);
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        startCollectionAiEnhancePolling();
+      } else {
+        setToast(response.message || 'Failed to queue AI Enhancement job');
+      }
+    } catch (error) {
+      // Handle plan/token errors
+      if (error.status === 403) {
+        setTokenError(error);
+        setCurrentPlan(error.currentPlan || currentPlan || 'starter');
+        setShowUpgradeModal(true);
+        return;
+      }
+      
+      if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
+        setTokenError(error);
+        setCurrentPlan(error.currentPlan || currentPlan || 'starter');
+        
+        if (error.trialRestriction && error.requiresActivation) {
+          setShowTrialActivationModal(true);
+        } else if (error.trialRestriction) {
+          setShowUpgradeModal(true);
+        } else {
+          setShowInsufficientTokensModal(true);
+        }
+        return;
+      }
+      
+      setToast(`Error: ${error.message || 'Failed to start AI Enhancement'}`);
+    }
+  };
+
+  // Legacy AI Enhancement function (kept for reference but not used)
+  const handleStartEnhancementLegacy = async () => {
+    const selectedCollections = collections.filter(c => selectedItems.includes(c.id));
+    const selectedWithSEO = selectedCollections.filter(c => 
+      c.optimizedLanguages?.length > 0
+    );
+    
+    if (selectedWithSEO.length === 0) {
+      setToast('Please select collections with Basic SEO optimization');
+      return;
+    }
+
     setShowAIEnhanceModal(true);
     setAIEnhanceProgress({
       processing: true,
@@ -430,7 +655,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       }));
       
       try {
-        // Get languages for this collection
         const languagesToEnhance = collection.optimizedLanguages || [];
         
         if (languagesToEnhance.length === 0) {
@@ -438,7 +662,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           continue;
         }
         
-        // Call AI Enhancement endpoint
         const enhanceData = await api(`/ai-enhance/collection/${encodeURIComponent(collection.id)}`, {
           method: 'POST',
           shop,
@@ -455,10 +678,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         }
         
       } catch (error) {
-        
-        // Check if it's a 403 error (plan restriction - Collections require Professional+)
         if (error.status === 403) {
-          // Stop processing and show upgrade modal
           setAIEnhanceProgress({
             processing: false,
             current: 0,
@@ -470,12 +690,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           setTokenError(error);
           setCurrentPlan(error.currentPlan || currentPlan || 'starter');
           setShowUpgradeModal(true);
-          return; // Stop processing
+          return;
         }
         
-        // Check if it's a 402 error (insufficient tokens or trial restriction)
         if (error.status === 402 || error.requiresPurchase || error.trialRestriction) {
-          // Stop processing and show appropriate modal
           setAIEnhanceProgress({
             processing: false,
             current: 0,
@@ -487,19 +705,14 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
           setTokenError(error);
           setCurrentPlan(error.currentPlan || currentPlan || 'starter');
           
-          // Show appropriate modal based on error type
           if (error.trialRestriction && error.requiresActivation) {
-            // Growth Extra/Enterprise in trial → Show "Activate Plan" modal
             setShowTrialActivationModal(true);
           } else if (error.trialRestriction) {
-            // Old trial restriction logic (fallback)
             setShowUpgradeModal(true);
           } else {
-            // Insufficient tokens (with or without upgrade suggestion)
-            // InsufficientTokensModal handles both cases via needsUpgrade prop
             setShowInsufficientTokensModal(true);
           }
-          return; // Stop processing other collections
+          return;
         }
         
         results.failed++;
@@ -622,8 +835,62 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     return null;
   };
   
-  // Generate SEO for selected collections
+  // Generate SEO for selected collections - now uses background queue
   const generateSEO = async () => {
+    if (!selectedLanguages.length) {
+      setToast('Please select at least one language');
+      return;
+    }
+    
+    setShowLanguageModal(false);
+    
+    try {
+      const collectionsToProcess = selectAllPages 
+        ? collections 
+        : collections.filter(c => selectedItems.includes(c.id));
+      
+      // Prepare collections for batch processing
+      const collectionsForBatch = collectionsToProcess.map(collection => ({
+        collectionId: collection.id,
+        languages: selectedLanguages,
+        title: collection.title
+      }));
+      
+      const response = await api(`/seo/collection-generate-apply-batch?shop=${shop}`, {
+        method: 'POST',
+        body: {
+          shop,
+          collections: collectionsForBatch,
+          model: model || 'google/gemini-1.5-flash'
+        }
+      });
+      
+      if (response.queued) {
+        setToast(`Optimizing ${collectionsForBatch.length} collections in background...`);
+        setSelectedItems([]);
+        setSelectAllPages(false);
+        startCollectionSeoPolling();
+      } else {
+        setToast(response.message || 'Failed to queue optimization job');
+      }
+    } catch (error) {
+      // Handle plan restriction errors
+      if (error.status === 403 || error.message?.includes('requires Professional plan')) {
+        setTokenError({
+          error: error.message || 'Collections SEO requires Professional plan or higher',
+          currentPlan: error.currentPlan || currentPlan || 'starter',
+          upgradeMessage: error.upgradeMessage || 'Upgrade to Professional plan to optimize collections for AI search'
+        });
+        setShowUpgradeModal(true);
+        return;
+      }
+      
+      setToast(`Error: ${error.message || 'Failed to start optimization'}`);
+    }
+  };
+  
+  // Legacy generateSEO with progress modal (kept for reference but not used)
+  const generateSEOLegacy = async () => {
     if (!selectedLanguages.length) {
       setToast('Please select at least one language');
       return;
@@ -794,6 +1061,30 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setShowDeleteModal(false);
       setDeleteTarget(null);
       
+      // Reset status indicators after delete
+      setCollectionSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      setCollectionAiEnhanceJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      
       // Reload collections to update badges
       await loadCollections();
       
@@ -837,6 +1128,30 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       }
       
       setToast(`Deleted optimization for ${deleteLanguages.join(', ').toUpperCase()}`);
+      
+      // Reset status indicators after bulk delete
+      setCollectionSeoJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
+      setCollectionAiEnhanceJobStatus({
+        inProgress: false,
+        status: 'idle',
+        message: null,
+        totalCollections: 0,
+        processedCollections: 0,
+        successfulCollections: 0,
+        failedCollections: 0,
+        skippedCollections: 0,
+        completedAt: null
+      });
       
       // Important: reload AFTER we finish
       setTimeout(async () => {
@@ -1659,7 +1974,104 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               />
             </Box>
           )}
+        </Card>
+      </Box>
 
+      {/* Background Job Status Indicator - Show only the most recent/important one */}
+      {/* Priority: AI Enhancement > SEO Job (AI Enhancement requires Basic SEO first) */}
+      {(() => {
+        const hasAiEnhanceStatus = collectionAiEnhanceJobStatus.inProgress || collectionAiEnhanceJobStatus.status === 'completed' || collectionAiEnhanceJobStatus.status === 'failed';
+        const hasSeoJobStatus = collectionSeoJobStatus.inProgress || collectionSeoJobStatus.status === 'completed' || collectionSeoJobStatus.status === 'failed';
+        
+        if (hasAiEnhanceStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {collectionAiEnhanceJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Collections...</Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {collectionAiEnhanceJobStatus.message || `Processing ${collectionAiEnhanceJobStatus.processedCollections}/${collectionAiEnhanceJobStatus.totalCollections} collections`}
+                        </Text>
+                        {collectionAiEnhanceJobStatus.totalCollections > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(collectionAiEnhanceJobStatus.processedCollections / collectionAiEnhanceJobStatus.totalCollections) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : collectionAiEnhanceJobStatus.status === 'completed' ? (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="success">AI Enhanced</Badge>
+                      <Text variant="bodyMd">
+                        Enhanced {collectionAiEnhanceJobStatus.successfulCollections} collection{collectionAiEnhanceJobStatus.successfulCollections !== 1 ? 's' : ''}
+                        {collectionAiEnhanceJobStatus.skippedCollections > 0 && <Text as="span" tone="subdued"> ({collectionAiEnhanceJobStatus.skippedCollections} skipped)</Text>}
+                        {collectionAiEnhanceJobStatus.failedCollections > 0 && <Text as="span" tone="critical"> ({collectionAiEnhanceJobStatus.failedCollections} failed)</Text>}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">· {timeAgo(collectionAiEnhanceJobStatus.completedAt)}</Text>
+                    </InlineStack>
+                  ) : (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="critical">AI Enhancement Failed</Badge>
+                      <Text variant="bodyMd" tone="critical">{collectionAiEnhanceJobStatus.message || 'Enhancement failed'}</Text>
+                    </InlineStack>
+                  )}
+                </Box>
+              </Card>
+            </Box>
+          );
+        }
+        
+        if (hasSeoJobStatus) {
+          return (
+            <Box paddingBlockStart="400">
+              <Card>
+                <Box padding="400">
+                  {collectionSeoJobStatus.inProgress ? (
+                    <InlineStack gap="300" align="start" blockAlign="center">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Optimizing Collections...</Text>
+                        <Text variant="bodySm" tone="subdued">
+                          {collectionSeoJobStatus.message || `Processing ${collectionSeoJobStatus.processedCollections}/${collectionSeoJobStatus.totalCollections} collections`}
+                        </Text>
+                        {collectionSeoJobStatus.totalCollections > 0 && (
+                          <Box paddingBlockStart="100">
+                            <ProgressBar progress={(collectionSeoJobStatus.processedCollections / collectionSeoJobStatus.totalCollections) * 100} size="small" />
+                          </Box>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+                  ) : collectionSeoJobStatus.status === 'completed' ? (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="success">Completed</Badge>
+                      <Text variant="bodyMd">
+                        Optimized {collectionSeoJobStatus.successfulCollections} collection{collectionSeoJobStatus.successfulCollections !== 1 ? 's' : ''}
+                        {collectionSeoJobStatus.skippedCollections > 0 && <Text as="span" tone="subdued"> ({collectionSeoJobStatus.skippedCollections} skipped)</Text>}
+                        {collectionSeoJobStatus.failedCollections > 0 && <Text as="span" tone="critical"> ({collectionSeoJobStatus.failedCollections} failed)</Text>}
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">· {timeAgo(collectionSeoJobStatus.completedAt)}</Text>
+                    </InlineStack>
+                  ) : (
+                    <InlineStack gap="200" align="start" blockAlign="center">
+                      <Badge tone="critical">Failed</Badge>
+                      <Text variant="bodyMd" tone="critical">{collectionSeoJobStatus.message || 'Optimization failed'}</Text>
+                    </InlineStack>
+                  )}
+                </Box>
+              </Card>
+            </Box>
+          );
+        }
+        
+        return null;
+      })()}
+
+      <Box paddingBlockStart="400">
+        <Card>
           <ResourceList
             key={`collections-${collections.length}-${selectedItems.length}`}
             resourceName={{ singular: 'collection', plural: 'collections' }}
@@ -1711,6 +2123,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             minimumPlan={tokenError.minimumPlanForFeature || null}
             currentPlan={tokenError.currentPlan || currentPlan}
             returnTo="/ai-seo/collections"
+            onBuyTokens={() => {
+              setShowInsufficientTokensModal(false);
+              setShowTokenPurchaseModal(true);
+            }}
           />
           
           <TrialActivationModal
@@ -1726,7 +2142,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             onActivatePlan={async () => {
               // Direct API call to activate plan (no billing page redirect)
               try {
-                console.log('[COLLECTIONS] 🔓 Activating plan directly...');
                 
                 const response = await api('/api/billing/activate', {
                   method: 'POST',
@@ -1758,15 +2173,24 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               }
             }}
             onPurchaseTokens={() => {
-              // Navigate to billing page to purchase tokens (with returnTo)
-              const params = new URLSearchParams(window.location.search);
-              const host = params.get('host');
-              const embedded = params.get('embedded');
-              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-seo/collections')}`;
+              setShowTrialActivationModal(false);
+              setShowTokenPurchaseModal(true);
             }}
           />
         </>
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+        }}
+        shop={shop}
+        returnTo="/ai-seo/collections"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
       
       {toast && (
         <Toast content={toast} onDismiss={() => setToast('')} />

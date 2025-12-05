@@ -319,68 +319,56 @@ export async function enhanceProductForSitemap(product, allProducts = [], option
   } = options;
 
   try {
-    // CRITICAL CHANGE: Run enhancements SEQUENTIALLY (not parallel)
-    // This prevents overwhelming the AI API with 5 simultaneous requests per product
-    // getGeminiResponse now uses aiQueue with 'bulk' priority internally
+    // OPTIMIZED: Run enhancements in PARALLEL with Promise.allSettled
+    // aiQueue handles concurrency limiting (3-10 concurrent) and rate limiting (5-10/sec)
+    // Using 'bulk' priority ensures sitemap generation doesn't block user-facing features
+    // Promise.allSettled ensures one failure doesn't break the entire batch
     
-    const results = [];
-    const names = ['summary', 'semanticTags', 'contextHints', 'qa', 'sentiment'];
+    const promises = [];
     
-    // Execute sequentially with proper error handling
     if (enableSummary) {
-      try {
-        results.push(await generateAISummary(product));
-      } catch (error) {
-        console.error(`[AI-SITEMAP] Failed to generate summary for ${product.title}:`, error.message);
-        results.push({data: null, usage: null});
-      }
+      promises.push(generateAISummary(product));
     } else {
-      results.push({data: null, usage: null});
+      promises.push(Promise.resolve({data: null, usage: null}));
     }
     
     if (enableSemanticTags) {
-      try {
-        results.push(await generateSemanticTags(product));
-      } catch (error) {
-        console.error(`[AI-SITEMAP] Failed to generate semanticTags for ${product.title}:`, error.message);
-        results.push({data: null, usage: null});
-      }
+      promises.push(generateSemanticTags(product));
     } else {
-      results.push({data: null, usage: null});
+      promises.push(Promise.resolve({data: null, usage: null}));
     }
     
     if (enableContextHints) {
-      try {
-        results.push(await generateContextHints(product));
-      } catch (error) {
-        console.error(`[AI-SITEMAP] Failed to generate contextHints for ${product.title}:`, error.message);
-        results.push({data: null, usage: null});
-      }
+      promises.push(generateContextHints(product));
     } else {
-      results.push({data: null, usage: null});
+      promises.push(Promise.resolve({data: null, usage: null}));
     }
     
     if (enableQA) {
-      try {
-        results.push(await generateProductQA(product));
-      } catch (error) {
-        console.error(`[AI-SITEMAP] Failed to generate QA for ${product.title}:`, error.message);
-        results.push({data: null, usage: null});
-      }
+      promises.push(generateProductQA(product));
     } else {
-      results.push({data: null, usage: null});
+      promises.push(Promise.resolve({data: null, usage: null}));
     }
     
     if (enableSentiment) {
-      try {
-        results.push(await analyzeSentiment(product));
-      } catch (error) {
-        console.error(`[AI-SITEMAP] Failed to generate sentiment for ${product.title}:`, error.message);
-        results.push({data: null, usage: null});
-      }
+      promises.push(analyzeSentiment(product));
     } else {
-      results.push({data: null, usage: null});
+      promises.push(Promise.resolve({data: null, usage: null}));
     }
+    
+    // Execute all in parallel (aiQueue manages concurrency)
+    const settledResults = await Promise.allSettled(promises);
+    
+    // Extract results with error handling
+    const results = settledResults.map((result, index) => {
+      const names = ['summary', 'semanticTags', 'contextHints', 'qa', 'sentiment'];
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        console.error(`[AI-SITEMAP] Failed to generate ${names[index]} for ${product.title}:`, result.reason?.message || result.reason);
+        return {data: null, usage: null};
+      }
+    });
 
     const [summaryResult, semanticTagsResult, contextHintsResult, qaResult, sentimentResult] = results;
 

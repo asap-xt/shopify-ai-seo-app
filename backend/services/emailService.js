@@ -22,7 +22,7 @@ class EmailService {
     // Use verified sender email from SendGrid
     this.fromEmail = process.env.FROM_EMAIL || 'hello@indexaize.com';
     this.fromName = process.env.FROM_NAME || 'indexAIze Team';
-    this.supportEmail = process.env.SUPPORT_EMAIL || 'hello@indexaize.com';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'indexaize@gmail.com';
     
     // Load logo as base64 for email templates
     this.logoBase64 = this.loadLogoBase64();
@@ -61,7 +61,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ Welcome email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
@@ -132,7 +131,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Welcome email sent to: ${store.shop}`);
       
       // Log email activity
       await this.logEmail(store._id || store.id, store.shop, 'welcome', 'sent');
@@ -205,7 +203,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ Token purchase email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
@@ -291,7 +288,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Token purchase email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'token-purchase', 'sent');
       return { success: true };
     } catch (error) {
@@ -322,7 +318,6 @@ class EmailService {
         });
         
         if (existingLog) {
-          console.log(`ℹ️ App Store rating email already sent to ${store.shop}, skipping duplicate`);
           return { success: true, skipped: true, reason: 'already_sent' };
         }
       }
@@ -401,58 +396,12 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ App Store rating email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'appstore-rating', 'sent');
       return { success: true };
     } catch (error) {
       console.error('❌ App Store rating email error:', error);
       await this.logEmail(store._id || store.id, store.shop, 'appstore-rating', 'failed', error.message);
       return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Trial expiring reminder
-   */
-  async sendTrialExpiringEmail(store, daysLeft) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping trial expiring email');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      const subscription = store.subscription || {};
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: `⏰ Your trial expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}!`,
-        html: this.getTrialExpiringEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          daysLeft,
-          productsOptimized: subscription.usage?.productsOptimized || 0,
-          upgradeUrl: this.getBillingUrl(store.shop),
-          stats: {
-            totalOptimizations: store.analytics?.totalAIQueries || 0,
-            topProvider: this.getTopProvider(store.analytics?.aiQueryHistory || [])
-          }
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      console.log(`✅ Trial expiring email sent (${daysLeft} days): ${store.shop}`);
-      await this.logEmail(store._id || store.id, store.shop, 'trial-expiring', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Trial expiring email error:', error);
-      return { success: false };
     }
   }
 
@@ -488,56 +437,10 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Uninstall follow-up sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'uninstall-followup', 'sent');
       return { success: true };
     } catch (error) {
       console.error('❌ Uninstall follow-up error:', error);
-      return { success: false };
-    }
-  }
-
-  /**
-   * Weekly digest email
-   */
-  async sendWeeklyDigest(store, stats) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping weekly digest');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: '📊 Your weekly SEO report',
-        html: this.getWeeklyDigestEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          weeklyStats: {
-            productsOptimized: stats.productsOptimized || 0,
-            aiQueriesUsed: stats.aiQueries || 0,
-            topProducts: stats.topProducts || [],
-            improvement: stats.seoImprovement || '0%'
-          },
-          dashboardUrl: this.getDashboardUrl(store.shop),
-          tips: this.getWeeklyTips(stats)
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      console.log(`✅ Weekly digest sent: ${store.shop}`);
-      await this.logEmail(store._id || store.id, store.shop, 'weekly-digest', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Weekly digest error:', error);
       return { success: false };
     }
   }
@@ -575,52 +478,10 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Upgrade success email sent: ${store.shop}`);
       await this.logEmail(store._id || store.id, store.shop, 'upgrade-success', 'sent');
       return { success: true };
     } catch (error) {
       console.error('❌ Upgrade success error:', error);
-      return { success: false };
-    }
-  }
-
-  /**
-   * Re-engagement email (inactive users)
-   */
-  async sendReengagementEmail(store, daysSinceLastActive) {
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn('⚠️ SendGrid not configured - skipping re-engagement email');
-      return { success: false, error: 'SendGrid not configured' };
-    }
-
-    try {
-      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      
-      const msg = {
-        to: store.email || `${shopName}@example.com`,
-        from: { email: this.fromEmail, name: this.fromName },
-        subject: 'We miss you! 🎁',
-        html: this.getReengagementEmailTemplate({
-          shopName,
-          shop: store.shop,
-          email: store.email,
-          daysSinceActive: daysSinceLastActive,
-          incentive: '50% off next month if you upgrade this week!',
-          dashboardUrl: this.getDashboardUrl(store.shop),
-          supportUrl: `${this.getDashboardUrl(store.shop).replace('/dashboard?shop=' + store.shop, '')}/support`
-        }),
-        trackingSettings: {
-          clickTracking: { enable: false },
-          openTracking: { enable: true }
-        }
-      };
-
-      await sgMail.send(msg);
-      console.log(`✅ Re-engagement email sent: ${store.shop}`);
-      await this.logEmail(store._id || store.id, store.shop, 'reengagement', 'sent');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Re-engagement error:', error);
       return { success: false };
     }
   }
@@ -1344,7 +1205,6 @@ class EmailService {
       };
 
       await sgMail.send(msg);
-      console.log(`✅ Weekly product digest sent to: ${store.shop}`);
       
       // Log email activity
       await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'sent');
@@ -1355,6 +1215,130 @@ class EmailService {
       await this.logEmail(store._id || store.id, store.shop, 'product_digest', 'failed', error.message);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Send Contact Support email with optional attachment
+   */
+  async sendContactSupportEmail({ name, email, subject, message, shop, file }) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - cannot send support email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const attachments = [];
+      
+      // Add file attachment if present
+      if (file && file.content && file.filename) {
+        attachments.push({
+          content: file.content, // Already base64
+          filename: file.filename,
+          type: file.type || 'application/octet-stream',
+          disposition: 'attachment'
+        });
+      }
+
+      const msg = {
+        to: this.supportEmail,
+        from: { email: this.fromEmail, name: this.fromName },
+        replyTo: { email: email, name: name },
+        subject: `[Contact Support] ${subject} - ${shop}`,
+        html: this.getContactSupportEmailTemplate({
+          name,
+          email,
+          subject,
+          message,
+          shop,
+          hasAttachment: !!file,
+          attachmentName: file?.filename,
+          attachmentSize: file?.size,
+          time: new Date().toLocaleString()
+        }),
+        attachments: attachments.length > 0 ? attachments : undefined,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: false }
+        }
+      };
+
+      await sgMail.send(msg);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Contact support email error:', error);
+      console.error('❌ SendGrid error details:', {
+        message: error.message,
+        statusCode: error.response?.statusCode,
+        body: error.response?.body
+      });
+      return { success: false, error: error.message };
+    }
+  }
+
+  getContactSupportEmailTemplate(data) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Contact Support Request</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+        <div style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); padding: 25px; text-align: center;">
+            <h2 style="color: white; margin: 0; font-size: 20px;">New Support Request</h2>
+          </div>
+          
+          <!-- Content -->
+          <div style="padding: 30px;">
+            <!-- Meta info -->
+            <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 15px; margin-bottom: 25px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px; width: 100px;"><strong>From:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.name} &lt;${data.email}&gt;</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Shop:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.shop}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Subject:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.subject}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Time:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.time}</td>
+                </tr>
+                ${data.hasAttachment ? `
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Attachment:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">📎 ${data.attachmentName} (${data.attachmentSize})</td>
+                </tr>
+                ` : ''}
+              </table>
+            </div>
+            
+            <!-- Message -->
+            <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600;">Message:</h3>
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #334155;">
+${data.message}
+            </div>
+            
+            <!-- Quick Links -->
+            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #64748b; font-size: 13px;">
+                <strong>Quick Links:</strong><br>
+                <a href="https://admin.shopify.com/store/${data.shop.replace('.myshopify.com', '')}" style="color: #2563eb;">Shopify Admin</a> | 
+                <a href="mailto:${data.email}" style="color: #2563eb;">Reply to Customer</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
   getProductDigestTemplate(data) {

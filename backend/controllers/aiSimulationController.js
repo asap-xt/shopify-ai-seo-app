@@ -118,8 +118,8 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
             trialEndsAt: subscription.trialEndsAt,
             currentPlan: subscription.plan,
             feature,
-            tokensRequired: tokenEstimate.estimated,
-            tokensWithMargin: tokenEstimate.withMargin,
+            tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+            tokensEstimated: tokenEstimate.estimated,
             tokensAvailable: tokenBalance.balance, // During trial, balance = only purchased tokens
             tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
             message: 'Activate your plan to unlock AI Testing with included tokens, or purchase tokens to use during trial'
@@ -137,8 +137,8 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
           needsUpgrade: needsUpgrade,
           minimumPlanForFeature: needsUpgrade ? 'Growth Extra' : null,
           currentPlan: planKey,
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
           tokensAvailable: tokenBalance.balance,
           tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
           feature,
@@ -282,6 +282,29 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     
   } catch (error) {
     console.error('[AI-SIMULATION] Error:', error);
+    
+    // CRITICAL: If we reserved tokens but simulation failed, refund them!
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[AI-SIMULATION] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-SIMULATION] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[AI-SIMULATION] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     res.status(500).json({ 
       success: false, 
       error: error.message,

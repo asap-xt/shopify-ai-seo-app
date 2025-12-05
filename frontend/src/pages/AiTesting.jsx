@@ -20,6 +20,7 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
 import { PLAN_HIERARCHY, PLAN_HIERARCHY_LOWERCASE, getPlanIndex, isPlanAtLeast } from '../hooks/usePlanHierarchy.js';
 
@@ -45,6 +46,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
   const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
@@ -68,6 +70,7 @@ export default function AiTesting({ shop: shopProp }) {
     optimizedCollections: 0
   });
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
+  const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
 
 
   useEffect(() => {
@@ -97,6 +100,9 @@ export default function AiTesting({ shop: shopProp }) {
         const parsed = JSON.parse(savedAiData);
         if (parsed.results) {
           setAiTestResults(parsed.results);
+        }
+        if (parsed.timestamp) {
+          setLastAiTestTimestamp(new Date(parsed.timestamp));
         }
       }
     } catch (err) {
@@ -379,6 +385,7 @@ export default function AiTesting({ shop: shopProp }) {
             timestamp: new Date().toISOString()
           };
           localStorage.setItem(`ai-validation-results-${shop}`, JSON.stringify(dataToSave));
+          setLastAiTestTimestamp(new Date());
         } catch (err) {
           console.error('[AI-TESTING] Error saving AI test results:', err);
         }
@@ -502,7 +509,7 @@ export default function AiTesting({ shop: shopProp }) {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <Text as="h3" variant="headingMd">🔧 Basic AIEO Tests</Text>
+                      <Text as="h3" variant="headingMd">Basic AIEO Tests</Text>
                       <Text variant="bodySm" tone="subdued">
                         Quick check if endpoints are accessible and returning data
                       </Text>
@@ -550,10 +557,12 @@ export default function AiTesting({ shop: shopProp }) {
                               <BlockStack gap="100">
                                 <InlineStack gap="200" blockAlign="center">
                                   <Text variant="bodyMd" fontWeight="semibold">{result.name}</Text>
-                                  {result.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                  {result.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                  {result.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                  {result.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                                  {result.status === 'success' && <Badge tone="success">OK</Badge>}
+                                  {result.status === 'fair' && <Badge tone="info">Fair</Badge>}
+                                  {result.status === 'poor' && <Badge tone="warning">Poor</Badge>}
+                                  {result.status === 'warning' && <Badge tone="critical">Warning</Badge>}
+                                  {result.status === 'error' && <Badge tone="critical">Failed</Badge>}
+                                  {result.status === 'locked' && <Badge>Locked</Badge>}
                                 </InlineStack>
                                 <Text variant="bodySm" tone="subdued">
                                   {result.message}
@@ -594,7 +603,8 @@ export default function AiTesting({ shop: shopProp }) {
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
                       <InlineStack gap="200" blockAlign="center">
-                        <Text as="h3" variant="headingMd">🤖 AI-Powered Validation</Text>
+                        <Text as="h3" variant="headingMd">AI-Powered Validation</Text>
+                        {/* Token balance hidden - kept for potential future use
                         {tokenBalance !== null && (
                           <Badge tone={tokenBalance > 50 ? 'success' : 'warning'}>
                             {tokenBalance} tokens
@@ -607,6 +617,7 @@ export default function AiTesting({ shop: shopProp }) {
                         >
                           🔄
                         </Button>
+                        */}
                       </InlineStack>
                       <Text variant="bodySm" tone="subdued">
                         Deep analysis with AI bot
@@ -627,6 +638,19 @@ export default function AiTesting({ shop: shopProp }) {
                     </Button>
                   </InlineStack>
 
+                  {/* Show banner if there are saved AI test results */}
+                  {lastAiTestTimestamp && Object.keys(aiTestResults).length > 0 && !aiTesting && (
+                    <Banner tone="info">
+                      <Text variant="bodySm">
+                        These results are from {lastAiTestTimestamp.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}. Test with AI Bot again to refresh.
+                      </Text>
+                    </Banner>
+                  )}
 
                   {aiTesting && (
                     <Box>
@@ -646,10 +670,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
-                                {aiTestResults.productsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.productsJson.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.productsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.productsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -674,10 +698,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
-                                {aiTestResults.storeMetadata.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -702,10 +726,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
-                                {aiTestResults.welcomePage.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.welcomePage.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.welcomePage.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.welcomePage.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -730,10 +754,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
-                                {aiTestResults.collectionsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -758,10 +782,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
-                                {aiTestResults.aiSitemap.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -785,10 +809,10 @@ export default function AiTesting({ shop: shopProp }) {
                           <BlockStack gap="100">
                             <InlineStack gap="200" blockAlign="center">
                               <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
-                              {aiTestResults.schemaData.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                              {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                              {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                              {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              {aiTestResults.schemaData.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                              {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">Good</Badge>}
+                              {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                              {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                               {aiTestResults.schemaData.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                               {aiTestResults.schemaData.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                             </InlineStack>
@@ -1196,6 +1220,10 @@ export default function AiTesting({ shop: shopProp }) {
         shop={shop}
         needsUpgrade={false}
         returnTo="/ai-testing"
+        onBuyTokens={() => {
+          setShowTokenModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
       />
       
       {/* Trial Activation Modal for Growth Extra/Enterprise */}
@@ -1243,14 +1271,24 @@ export default function AiTesting({ shop: shopProp }) {
             }
           }}
           onPurchaseTokens={() => {
-            // Navigate to billing page to purchase tokens (with returnTo)
-            const params = new URLSearchParams(window.location.search);
-            const host = params.get('host');
-            const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-testing')}`;
+            setShowTrialActivationModal(false);
+            setShowTokenPurchaseModal(true);
           }}
         />
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+          loadTokenBalance();
+        }}
+        shop={shop}
+        returnTo="/ai-testing"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
     </>
   );
 }
