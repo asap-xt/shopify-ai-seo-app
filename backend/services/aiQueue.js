@@ -37,10 +37,10 @@ class AIQueue {
     
     // Low Priority Queue - For bulk operations
     this.bulkQueue = new PQueue({
-      concurrency: 2,        // Max 2 parallel calls (was 1)
-      intervalCap: 10,       // Max 10 calls (was 5)
+      concurrency: 4,        // Max 4 parallel calls (was 2)
+      intervalCap: 20,       // Max 20 calls per second (was 10)
       interval: 1000,        // per second
-      timeout: 120000,       // 120s timeout (was 60s - bulk can take longer)
+      timeout: 120000,       // 120s timeout
       throwOnTimeout: true
     });
     
