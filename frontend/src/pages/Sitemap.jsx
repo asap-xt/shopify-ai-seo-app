@@ -250,6 +250,7 @@ export default function SitemapPage({ shop: shopProp }) {
       if (status.sitemap?.generatedAt && status.sitemap?.isAiEnhanced === true) {
         setAiSitemapInfo({
           generated: true,
+          isAiEnhanced: true,  // CRITICAL: Include this for View button logic
           generatedAt: status.sitemap.generatedAt,
           productCount: status.sitemap.productCount || 0
         });
