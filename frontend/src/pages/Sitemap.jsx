@@ -192,7 +192,7 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [polling, checkStatus]);
 
-  // View Sitemap in Modal (copied from Settings.jsx viewJson function)
+  // View Sitemap in Modal (only fetches cached version, no regeneration)
   const viewSitemap = useCallback(async () => {
     if (!shop) return;
     
@@ -201,9 +201,8 @@ export default function SitemapPage({ shop: shopProp }) {
     setSitemapModalContent(null);
     
     try {
-      // Read existing sitemap from database (does NOT regenerate)
-      // Uses force=true to trigger the "view existing" code path in backend
-      const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`, {
+      // Use view endpoint to get cached version without regenerating
+      const response = await fetch(`/api/sitemap/view?shop=${encodeURIComponent(shop)}&t=${Date.now()}`, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -523,7 +522,7 @@ export default function SitemapPage({ shop: shopProp }) {
     }
   }, [shop, api, plan, startAiSitemapPolling]);
   
-  // View AI-Optimized Sitemap in Modal
+  // View AI-Optimized Sitemap in Modal (only fetches cached version, no regeneration)
   const viewAiSitemap = useCallback(async () => {
     if (!shop) return;
     
@@ -532,7 +531,8 @@ export default function SitemapPage({ shop: shopProp }) {
     setAiSitemapModalContent(null);
     
     try {
-      const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&ai=true&t=${Date.now()}`, {
+      // Use view endpoint without force=true to get cached version without regenerating
+      const response = await fetch(`/api/sitemap/view?shop=${encodeURIComponent(shop)}&t=${Date.now()}`, {
         method: 'GET',
         credentials: 'include',
         headers: {
