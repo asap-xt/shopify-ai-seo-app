@@ -22,7 +22,7 @@ class EmailService {
     // Use verified sender email from SendGrid
     this.fromEmail = process.env.FROM_EMAIL || 'hello@indexaize.com';
     this.fromName = process.env.FROM_NAME || 'indexAIze Team';
-    this.supportEmail = process.env.SUPPORT_EMAIL || 'hello@indexaize.com';
+    this.supportEmail = process.env.SUPPORT_EMAIL || 'indexaize@gmail.com';
     
     // Load logo as base64 for email templates
     this.logoBase64 = this.loadLogoBase64();
