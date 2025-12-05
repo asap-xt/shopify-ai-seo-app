@@ -1262,8 +1262,20 @@ class EmailService {
         }
       };
 
-      await sgMail.send(msg);
-      console.log(`[SUPPORT] Email sent successfully from ${email} for shop ${shop}`);
+      console.log(`[SUPPORT] Sending email:`, {
+        to: this.supportEmail,
+        from: this.fromEmail,
+        replyTo: email,
+        subject: msg.subject
+      });
+      
+      const result = await sgMail.send(msg);
+      console.log(`[SUPPORT] ✅ Email sent successfully!`, {
+        statusCode: result[0]?.statusCode,
+        to: this.supportEmail,
+        replyTo: email,
+        shop: shop
+      });
       return { success: true };
     } catch (error) {
       console.error('❌ Contact support email error:', error);
