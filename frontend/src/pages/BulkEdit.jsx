@@ -1393,17 +1393,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     </EmptyState>
   );
   
-  // const bulkActions = [
-  //   {
-  //     content: 'Generate AI Search Optimisation',
-  //     onAction: openLanguageModal,
-  //   },
-  //   {
-  //     content: 'Delete AI Search Optimisation',
-  //     onAction: openDeleteModal,
-  //     destructive: true,
-  //   }
-  // ];
   
   const sortOptions = [
     { label: 'Newest first', value: 'newest' },
