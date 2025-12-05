@@ -152,9 +152,9 @@ export default function SchemaData({ shop: shopProp }) {
       }
     } catch (err) {
       console.error('[SCHEMA-DATA] Error loading plan:', err);
-    }
+          }
   };
-  
+      
   // Save rich attributes to backend (PATCH-style - only update richAttributes)
   const saveRichAttributes = async () => {
     setSavingAttributes(true);
@@ -700,11 +700,11 @@ ${JSON.stringify(allSchemas, null, 2)}
                             Product schemas are automatically generated from your AI Optimisation data when pages load.
                             {schemas.products.length > 0 && ` ${schemas.products.length} products have SEO data.`}
                           </Text>
-                          
+
                           <Box paddingBlockStart="200">
-                            <Button onClick={handleRegenerate} loading={loading}>
+                      <Button onClick={handleRegenerate} loading={loading}>
                               Regenerate Basic Schemas
-                            </Button>
+                      </Button>
                           </Box>
                         </BlockStack>
                       </Box>
