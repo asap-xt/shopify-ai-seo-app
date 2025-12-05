@@ -363,16 +363,6 @@ export default function SitemapPage({ shop: shopProp }) {
           const productCount = currentInfo?.productCount || currentInfo?.lastProductCount || 0;
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
-          // DEBUG: Log token estimation
-            currentInfoProductCount: currentInfo?.productCount,
-            currentInfoLastProductCount: currentInfo?.lastProductCount,
-            productCount,
-            estimated: tokenEstimate.estimated,
-            withMargin: tokenEstimate.withMargin,
-            currentTokenBalance,
-            formula: tokenEstimate.formula
-          });
-          
           const hasEnoughTokens = currentTokenBalance >= tokenEstimate.withMargin;
           
           if (!hasEnoughTokens) {
