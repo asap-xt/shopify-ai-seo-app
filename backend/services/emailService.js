@@ -1217,6 +1217,131 @@ class EmailService {
     }
   }
 
+  /**
+   * Send Contact Support email with optional attachment
+   */
+  async sendContactSupportEmail({ name, email, subject, message, shop, file }) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - cannot send support email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const attachments = [];
+      
+      // Add file attachment if present
+      if (file && file.content && file.filename) {
+        attachments.push({
+          content: file.content, // Already base64
+          filename: file.filename,
+          type: file.type || 'application/octet-stream',
+          disposition: 'attachment'
+        });
+      }
+
+      const msg = {
+        to: this.supportEmail,
+        from: { email: this.fromEmail, name: this.fromName },
+        replyTo: { email: email, name: name },
+        subject: `[Contact Support] ${subject} - ${shop}`,
+        html: this.getContactSupportEmailTemplate({
+          name,
+          email,
+          subject,
+          message,
+          shop,
+          hasAttachment: !!file,
+          attachmentName: file?.filename,
+          attachmentSize: file?.size,
+          time: new Date().toLocaleString()
+        }),
+        attachments: attachments.length > 0 ? attachments : undefined,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: false }
+        }
+      };
+
+      await sgMail.send(msg);
+      console.log(`[SUPPORT] Email sent successfully from ${email} for shop ${shop}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Contact support email error:', error);
+      console.error('❌ SendGrid error details:', {
+        message: error.message,
+        statusCode: error.response?.statusCode,
+        body: error.response?.body
+      });
+      return { success: false, error: error.message };
+    }
+  }
+
+  getContactSupportEmailTemplate(data) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Contact Support Request</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+        <div style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); padding: 25px; text-align: center;">
+            <h2 style="color: white; margin: 0; font-size: 20px;">New Support Request</h2>
+          </div>
+          
+          <!-- Content -->
+          <div style="padding: 30px;">
+            <!-- Meta info -->
+            <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 15px; margin-bottom: 25px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px; width: 100px;"><strong>From:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.name} &lt;${data.email}&gt;</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Shop:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.shop}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Subject:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.subject}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Time:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">${data.time}</td>
+                </tr>
+                ${data.hasAttachment ? `
+                <tr>
+                  <td style="padding: 5px 0; color: #64748b; font-size: 13px;"><strong>Attachment:</strong></td>
+                  <td style="padding: 5px 0; color: #1e293b; font-size: 14px;">📎 ${data.attachmentName} (${data.attachmentSize})</td>
+                </tr>
+                ` : ''}
+              </table>
+            </div>
+            
+            <!-- Message -->
+            <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600;">Message:</h3>
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #334155;">
+${data.message}
+            </div>
+            
+            <!-- Quick Links -->
+            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #64748b; font-size: 13px;">
+                <strong>Quick Links:</strong><br>
+                <a href="https://admin.shopify.com/store/${data.shop.replace('.myshopify.com', '')}" style="color: #2563eb;">Shopify Admin</a> | 
+                <a href="mailto:${data.email}" style="color: #2563eb;">Reply to Customer</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   getProductDigestTemplate(data) {
     const { shopName, dashboardUrl, totalCount, newProducts, updatedProducts, needsOptimization, productChanges } = data;
     

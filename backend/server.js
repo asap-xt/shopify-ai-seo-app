@@ -655,6 +655,49 @@ if (!IS_PROD) {
     }
   });
 
+  // Send Contact Support email via SendGrid
+  app.post('/api/support/send', async (req, res) => {
+    const { shop } = req.query;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    try {
+      const { name, email, subject, message, file } = req.body;
+      
+      // Validate required fields
+      if (!name || !email || !message) {
+        return res.status(400).json({ error: 'Missing required fields: name, email, message' });
+      }
+      
+      // Import email service
+      const emailService = (await import('./services/emailService.js')).default;
+      
+      const result = await emailService.sendContactSupportEmail({
+        name,
+        email,
+        subject: subject || 'General Question',
+        message,
+        shop,
+        file: file ? {
+          content: file.content, // base64 string
+          filename: file.filename,
+          type: file.type,
+          size: file.size
+        } : null
+      });
+      
+      if (result.success) {
+        res.json({ success: true, message: 'Message sent successfully' });
+      } else {
+        res.status(500).json({ success: false, error: result.error || 'Failed to send message' });
+      }
+    } catch (error) {
+      console.error('[SUPPORT] Error sending message:', error.message);
+      res.status(500).json({ success: false, error: 'Failed to send message' });
+    }
+  });
+
   // Get shop info for Contact Support page
   app.get('/api/shop/info', async (req, res) => {
     const { shop } = req.query;
