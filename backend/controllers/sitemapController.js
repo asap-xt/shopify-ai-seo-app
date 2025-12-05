@@ -201,7 +201,6 @@ function cleanHtmlForXml(html) {
 // options.enableAIEnhancement: if true, makes real-time AI calls for each product (Enterprise/Growth Extra only)
 async function generateSitemapCore(shop, options = {}) {
   const { enableAIEnhancement = false } = options;
-  console.log('[SITEMAP-DEBUG] generateSitemapCore called with enableAIEnhancement:', enableAIEnhancement, 'options:', JSON.stringify(options));
   
   try {
     const normalizedShop = normalizeShop(shop);
@@ -475,7 +474,6 @@ async function generateSitemapCore(shop, options = {}) {
       
       // Add AI metadata structure ONLY if AI sitemap is explicitly enabled
       // Basic sitemap should NOT include ai: namespace elements
-      console.log('[SITEMAP-DEBUG] isAISitemapEnabled:', isAISitemapEnabled, 'enableAIEnhancement:', enableAIEnhancement, 'product:', product.handle);
       if (isAISitemapEnabled) {
         hasAnyAIProducts = true; // Track that we have at least one AI product
         xml += '    <ai:product>\n';
@@ -1051,11 +1049,13 @@ async function serveSitemap(req, res) {
     }
     
     const forceRegenerate = req.query.force === 'true';
+    const enableAIEnhancement = req.query.ai === 'true';
     
     // Check if we should force regenerate
     if (forceRegenerate) {
       try {
-        const result = await generateSitemapCore(shop);
+        // Pass AI enhancement flag if specified
+        const result = await generateSitemapCore(shop, { enableAIEnhancement });
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
@@ -1079,7 +1079,7 @@ async function serveSitemap(req, res) {
     if (!sitemapDoc || !sitemapDoc.content) {
       // Try to generate new one if none exists
       try {
-        const result = await generateSitemapCore(shop);
+        const result = await generateSitemapCore(shop, { enableAIEnhancement });
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
