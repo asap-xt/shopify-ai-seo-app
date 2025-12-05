@@ -86,10 +86,10 @@ export default function ContactSupport({ shop: shopProp }) {
     if (files.length > 0) {
       const file = files[0];
       
-      // Check file size (500KB limit)
-      if (file.size > 500 * 1024) {
+      // Check file size (30KB limit - EmailJS has ~50KB payload limit, base64 adds ~33%)
+      if (file.size > 30 * 1024) {
         setStatus('error');
-        setStatusMessage('File size must be less than 500KB');
+        setStatusMessage('File size must be less than 30KB. For larger files, please email us directly at indexaize@gmail.com');
         return;
       }
       
@@ -190,15 +190,19 @@ export default function ContactSupport({ shop: shopProp }) {
 
     } catch (error) {
       console.error('[ContactSupport] Error sending email:', error);
-      console.error('[ContactSupport] Error details:', {
-        message: error.message,
-        status: error.status,
-        text: error.text,
-        stack: error.stack
-      });
       
       setStatus('error');
-      setStatusMessage(`Failed to send message: ${error.message || 'Unknown error'}`);
+      
+      // Handle specific error cases
+      if (error.status === 413 || error.message?.includes('413') || error.text?.includes('too large')) {
+        setStatusMessage('Message too large. Please remove the attachment or reduce message length, then try again.');
+      } else if (error.status === 400) {
+        setStatusMessage('Invalid request. Please check your email address and try again.');
+      } else if (error.status === 429) {
+        setStatusMessage('Too many requests. Please wait a minute and try again.');
+      } else {
+        setStatusMessage(`Failed to send message: ${error.text || error.message || 'Please try again or email us at indexaize@gmail.com'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -282,7 +286,7 @@ export default function ContactSupport({ shop: shopProp }) {
                     />
                   </Box>
                   <Text variant="bodySm" tone="subdued">
-                    Any file type allowed • Maximum file size: 500KB
+                    Any file type allowed • Maximum file size: 30KB • For larger files, email us directly
                   </Text>
                 </Box>
 

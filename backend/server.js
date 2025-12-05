@@ -655,6 +655,30 @@ if (!IS_PROD) {
     }
   });
 
+  // Get shop info for Contact Support page
+  app.get('/api/shop/info', async (req, res) => {
+    const { shop } = req.query;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    try {
+      const Shop = (await import('./db/Shop.js')).default;
+      const shopRecord = await Shop.findOne({ shop }).lean();
+      
+      if (!shopRecord) {
+        return res.status(404).json({ error: 'Shop not found' });
+      }
+
+      res.json({
+        name: shopRecord.name || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
+        email: shopRecord.contactEmail || shopRecord.shopOwnerEmail || shopRecord.email || ''
+      });
+    } catch (error) {
+      console.error('[SHOP INFO] Error:', error.message);
+      res.status(500).json({ error: 'Failed to load shop info' });
+    }
+  });
+
   // Check shop email (debug endpoint)
   app.get('/api/test/check-shop-email', async (req, res) => {
     const { shop } = req.query;
