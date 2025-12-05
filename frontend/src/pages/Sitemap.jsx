@@ -658,7 +658,10 @@ export default function SitemapPage({ shop: shopProp }) {
                       <Text variant="bodySm" tone="subdued">
                         {info.lastProductCount || 0} products · {timeAgo(info.generatedAt)}
                       </Text>
-                      <Button variant="plain" size="slim" onClick={viewSitemap}>View</Button>
+                      {/* Hide View button if AI-Enhanced sitemap exists (there's only one sitemap file) */}
+                      {!(aiSitemapInfo?.generated && aiSitemapInfo?.isAiEnhanced) && (
+                        <Button variant="plain" size="slim" onClick={viewSitemap}>View</Button>
+                      )}
                     </InlineStack>
                   ) : (
                     <Text variant="bodySm" tone="subdued">Not generated yet</Text>
