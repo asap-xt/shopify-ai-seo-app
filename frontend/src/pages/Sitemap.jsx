@@ -246,10 +246,6 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     try {
       const status = await api(`/api/sitemap/status?shop=${shop}`);
-        generatedAt: status.sitemap?.generatedAt,
-        isAiEnhanced: status.sitemap?.isAiEnhanced,
-        productCount: status.sitemap?.productCount
-      });
       // Check BOTH generatedAt AND isAiEnhanced flag
       // If sitemap exists but is NOT AI-enhanced, don't show as AI-generated
       if (status.sitemap?.generatedAt && status.sitemap?.isAiEnhanced === true) {
