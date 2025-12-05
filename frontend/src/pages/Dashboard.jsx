@@ -578,7 +578,7 @@ export default function Dashboard({ shop: shopProp }) {
                             height: '100%',
                             border: 'none'
                           }}
-                          src="https://www.youtube-nocookie.com/embed/bNfDsyDQEkc?origin=https://admin.shopify.com"
+                          src="https://www.youtube-nocookie.com/embed/v253h9ucKNk?origin=https://admin.shopify.com"
                           title="Video Tutorial"
                           referrerPolicy="no-referrer-when-downgrade"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -600,52 +600,42 @@ export default function Dashboard({ shop: shopProp }) {
                         This is required before you can start optimizing. Enable "Auto-sync on load" to keep your data fresh.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">2. Plan Selection & Token Management</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">2. Token Management</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Plan selection happens during app installation. Visit "Plans & Billing" to upgrade your plan 
-                        or purchase additional tokens for AI-enhanced features (Professional/Growth plans).
+                        AI-enhanced features (AI SEO, Advanced Schema, AI Sitemap) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Go to "Store Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
-                        existing titles, descriptions, and metadata for better AI consumption. This is essential - without basic optimization, 
-                        AI-enhanced features cannot be applied.
+                        existing titles, descriptions, and metadata for better AI consumption. Data is saved to Shopify metafields (seo_ai namespace). This is essential - without basic optimization, AI-enhanced features cannot be applied.
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         Also optimize your <strong>Collections</strong> to help AI bots understand your product categories 
                         and relationships.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">4. Configure Store Metadata</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">4. Generate Sitemaps</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Go to "Store Metadata" to configure store description, keywords, business information, 
-                        and contact details (Professional+ plans). This helps AI bots understand your brand and business context.
+                        Navigate to "Store Optimization for AI" → Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
+                        AI-Optimized Sitemap with structured data for AI search engines is available in the same tab (Growth Extra+ plans or with tokens).
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">5. Generate Sitemaps</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">5. Configure Store Metadata</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Navigate to Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
-                        For advanced optimization, go to Settings → Sitemap to configure <strong>AI-enhanced sitemap</strong> 
-                         with structured data that helps AI search engines discover and index your products (Growth Extra+ plans).
+                        Go to "Store Optimization for AI" → Store Metadata tab to configure store description, keywords, business information, 
+                        and contact details (Professional+ plans). Some data is automatically synced from Shopify but can be manually edited. This helps AI bots understand your brand and business context.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">6. AI-Enhanced Features (Optional)</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">6. Schema Data & Advanced Features</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Use AI-enhanced add-ons to <strong>supplement and strengthen</strong> your data discovery by AI bots, 
-                        increasing your store's chances of being well-represented. These include:
+                        Go to "Store Optimization for AI" → Schema Data tab:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+)
+                        • Copy basic schema Liquid code to your theme (reads from metafields)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Discovery Endpoints:</strong> Advanced AI simulation features (Growth Extra+)
-                      </Text>
-                      <Text variant="bodyMd" tone="subdued">
-                        • <strong>Advanced Schema Data:</strong> Rich structured data markup (Enterprise only)
-                      </Text>
-                      <Text variant="bodyMd" tone="subdued">
-                        These features require additional tokens unless you're on Growth Extra or Enterprise plans.
+                        • <strong>Advanced Schema Data:</strong> Generate rich AI-enhanced structured data markup (Plus plans: Professional Plus, Growth Plus, Growth Extra, Enterprise)
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">7. Configure AI Discovery Settings</Text>
@@ -656,7 +646,7 @@ export default function Dashboard({ shop: shopProp }) {
                         • <strong>AI Bot Access Control:</strong> Select which AI bots (OpenAI, Claude, Google, etc.) can access your store's structured data
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page, AI-Enhanced Sitemap, and Advanced Schema Data
+                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • Click <strong>"Save Settings"</strong> to save your configuration
@@ -667,7 +657,7 @@ export default function Dashboard({ shop: shopProp }) {
                         <strong>Critical:</strong> After saving Settings, you must manually install robots.txt in your theme for AI bots to access your endpoints:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • In Settings, scroll to "robots.txt Configuration" section and click <strong>"View & Copy robots.txt Code"</strong>
+                        • In AI Discovery Features, scroll to "robots.txt Configuration" section and click <strong>"View & Copy robots.txt Code"</strong>
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • Copy the generated robots.txt content
@@ -685,24 +675,23 @@ export default function Dashboard({ shop: shopProp }) {
                         <strong>Without this step, AI bots cannot discover your store's endpoints!</strong>
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">9. Optional: Advanced Features</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">9. AI Testing</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Additional features available in Settings:
+                        Go to "AI Testing" to validate your optimization:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>Advanced Schema Data:</strong> Generate rich structured data markup for your products (Professional Plus/Enterprise plans)
+                        • Run Basic Tests to check endpoint availability
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+ plans)
+                        • Run AI-Powered Validation for detailed analysis (requires tokens)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        These features may require additional tokens depending on your plan.
+                        • Check your AIEO Score breakdown
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">10. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Return to Dashboard regularly to track optimization progress, monitor token usage, 
-                        and review plan recommendations.
+                        Return to Dashboard regularly to track optimization progress and AIEO Score. Re-optimize when adding new products or editing existing ones to keep AI-structured data current.
                       </Text>
                     </BlockStack>
                   </BlockStack>
