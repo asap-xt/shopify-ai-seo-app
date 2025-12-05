@@ -130,17 +130,14 @@ export default function CleanUninstall() {
             onAction: async () => {
               setUninstallProcessing(true);
               try {
-                console.log('[UNINSTALL] Starting cleanup...');
                 const result = await api(`/api/store/prepare-uninstall?shop=${shop}`, {
                   method: 'POST',
                   shop
                 });
                 
-                console.log('[UNINSTALL] Cleanup result:', result);
                 
                 // Clear localStorage data related to the app
                 try {
-                  console.log('[UNINSTALL] Clearing localStorage...');
                   const keysToRemove = [
                     `ai-test-results-${shop}`,
                     `ai-validation-results-${shop}`,
@@ -151,7 +148,6 @@ export default function CleanUninstall() {
                     `dismissedTokenBanner_${shop}`
                   ];
                   keysToRemove.forEach(key => localStorage.removeItem(key));
-                  console.log('[UNINSTALL] localStorage cleared');
                 } catch (lsError) {
                   console.warn('[UNINSTALL] Could not clear localStorage:', lsError);
                 }

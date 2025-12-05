@@ -140,7 +140,6 @@ export default function SitemapPage({ shop: shopProp }) {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('[SITEMAP] Generation response:', data);
         
         if (data.success) {
           setToast(data.message || 'Sitemap generation started!');
@@ -171,7 +170,6 @@ export default function SitemapPage({ shop: shopProp }) {
     
     try {
       const status = await api(`/api/sitemap/status?shop=${shop}`);
-      console.log('[SITEMAP] Status:', status);
       
       setQueueStatus(status.queue);
       
@@ -203,7 +201,6 @@ export default function SitemapPage({ shop: shopProp }) {
     setSitemapModalContent(null);
     
     try {
-      console.log('[SITEMAP] Loading existing sitemap from database...');
       // Read existing sitemap from database (does NOT regenerate)
       // Uses force=true to trigger the "view existing" code path in backend
       const response = await fetch(`/api/sitemap/generate?shop=${encodeURIComponent(shop)}&force=true&t=${Date.now()}`, {
@@ -215,7 +212,6 @@ export default function SitemapPage({ shop: shopProp }) {
       });
       
       if (response.ok) {
-        console.log('[SITEMAP] Sitemap XML loaded successfully');
         const xmlContent = await response.text();
         setSitemapModalContent(xmlContent);
       } else {
@@ -250,7 +246,6 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     try {
       const status = await api(`/api/sitemap/status?shop=${shop}`);
-      console.log('[AI-SITEMAP] Status response:', {
         generatedAt: status.sitemap?.generatedAt,
         isAiEnhanced: status.sitemap?.isAiEnhanced,
         productCount: status.sitemap?.productCount
@@ -258,14 +253,12 @@ export default function SitemapPage({ shop: shopProp }) {
       // Check BOTH generatedAt AND isAiEnhanced flag
       // If sitemap exists but is NOT AI-enhanced, don't show as AI-generated
       if (status.sitemap?.generatedAt && status.sitemap?.isAiEnhanced === true) {
-        console.log('[AI-SITEMAP] Setting AI sitemap as GENERATED');
         setAiSitemapInfo({
           generated: true,
           generatedAt: status.sitemap.generatedAt,
           productCount: status.sitemap.productCount || 0
         });
       } else {
-        console.log('[AI-SITEMAP] Resetting AI sitemap info (not AI-enhanced)');
         // Reset AI sitemap info if not AI-enhanced
         setAiSitemapInfo(null);
       }
@@ -341,7 +334,6 @@ export default function SitemapPage({ shop: shopProp }) {
       // Ensure info is loaded before proceeding (for accurate token estimation)
       let currentInfo = info;
       if (!currentInfo?.productCount && !currentInfo?.lastProductCount) {
-        console.log('[SITEMAP] Info not loaded, fetching...');
         try {
           currentInfo = await api(`/api/sitemap/info?shop=${shop}`);
           setInfo(currentInfo);
@@ -376,7 +368,6 @@ export default function SitemapPage({ shop: shopProp }) {
           const tokenEstimate = estimateTokens('ai-sitemap-optimized', { productCount });
           
           // DEBUG: Log token estimation
-          console.log('[SITEMAP] Token estimation:', {
             currentInfoProductCount: currentInfo?.productCount,
             currentInfoLastProductCount: currentInfo?.lastProductCount,
             productCount,

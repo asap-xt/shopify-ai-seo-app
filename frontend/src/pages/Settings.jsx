@@ -856,8 +856,6 @@ export default function Settings() {
           const productCount = settings?.productCount || 0;
           const tokenEstimate = estimateTokens(featureId, { productCount });
           
-          console.log('[SETTINGS] Token estimate for', featureId, ':', { productCount, ...tokenEstimate });
-          
           setTokenModalData({
             feature: featureId,
             tokensRequired: tokenEstimate.withMargin,
@@ -1100,8 +1098,6 @@ export default function Settings() {
         const featureId = featureMapping[featureKey] || featureKey;
         const productCount = settings?.productCount || 0;
         const tokenEstimate = estimateTokens(featureId, { productCount });
-        
-        console.log('[SETTINGS] Token estimate for trial check', featureId, ':', { productCount, ...tokenEstimate });
         
         setTokenModalData({
           feature: featureId,

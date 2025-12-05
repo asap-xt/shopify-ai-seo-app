@@ -2142,7 +2142,6 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             onActivatePlan={async () => {
               // Direct API call to activate plan (no billing page redirect)
               try {
-                console.log('[COLLECTIONS] 🔓 Activating plan directly...');
                 
                 const response = await api('/api/billing/activate', {
                   method: 'POST',

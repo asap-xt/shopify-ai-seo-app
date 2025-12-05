@@ -25,9 +25,7 @@ export function StoreMetadataBanner({ globalPlan }) {
   
   const fetchMetadataStatus = async () => {
     try {
-      console.log('[StoreMetadataBanner] Fetching metadata status...');
       const data = await api('/api/store/metadata-status');
-      console.log('[StoreMetadataBanner] Status data:', data);
       setStatus(data);
     } catch (error) {
       console.error('[StoreMetadataBanner] Error fetching metadata status:', error);
@@ -58,7 +56,6 @@ export function StoreMetadataBanner({ globalPlan }) {
   // - No status data
   // - Metadata is already complete
   // - Plan is not Professional or higher (Basic/Starter don't have access to Store Metadata)
-  console.log('[StoreMetadataBanner] Render check:', { 
     loading, 
     dismissed, 
     status, 
@@ -68,7 +65,6 @@ export function StoreMetadataBanner({ globalPlan }) {
   });
   
   if (loading || dismissed || !status || status.hasMetadata || !isProfessionalOrHigher) {
-    console.log('[StoreMetadataBanner] Not showing banner. Reason:', {
       loading,
       dismissed,
       noStatus: !status,
@@ -78,7 +74,6 @@ export function StoreMetadataBanner({ globalPlan }) {
     return null;
   }
   
-  console.log('[StoreMetadataBanner] SHOWING BANNER!');
   
   // Determine banner message based on what's missing
   let title = t('storeMetadata.banner.title', '⚡ Boost AI Quality');

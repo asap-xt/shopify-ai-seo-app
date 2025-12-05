@@ -167,7 +167,6 @@ export default function ContactSupport({ shop: shopProp }) {
       }
 
       // Send email using EmailJS
-      console.log('[ContactSupport] Sending email with params:', templateParams);
       
       const result = await emailjs.send(
         'service_c8j657n', // Service ID
@@ -176,7 +175,6 @@ export default function ContactSupport({ shop: shopProp }) {
         '-0N7g1SCh9fSknb6q' // Public Key
       );
 
-      console.log('[ContactSupport] Email sent successfully:', result);
       
       setStatus('success');
       setStatusMessage('Message sent successfully! We\'ll get back to you within 24 hours.');
