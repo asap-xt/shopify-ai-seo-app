@@ -655,73 +655,6 @@ if (!IS_PROD) {
     }
   });
 
-  // Send Contact Support email via SendGrid
-  app.post('/api/support/send', async (req, res) => {
-    const { shop } = req.query;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
-    
-    try {
-      const { name, email, subject, message, file } = req.body;
-      
-      // Validate required fields
-      if (!name || !email || !message) {
-        return res.status(400).json({ error: 'Missing required fields: name, email, message' });
-      }
-      
-      // Import email service
-      const emailService = (await import('./services/emailService.js')).default;
-      
-      const result = await emailService.sendContactSupportEmail({
-        name,
-        email,
-        subject: subject || 'General Question',
-        message,
-        shop,
-        file: file ? {
-          content: file.content, // base64 string
-          filename: file.filename,
-          type: file.type,
-          size: file.size
-        } : null
-      });
-      
-      if (result.success) {
-        res.json({ success: true, message: 'Message sent successfully' });
-      } else {
-        res.status(500).json({ success: false, error: result.error || 'Failed to send message' });
-      }
-    } catch (error) {
-      console.error('[SUPPORT] Error sending message:', error.message);
-      res.status(500).json({ success: false, error: 'Failed to send message' });
-    }
-  });
-
-  // Get shop info for Contact Support page
-  app.get('/api/shop/info', async (req, res) => {
-    const { shop } = req.query;
-    if (!shop) {
-      return res.status(400).json({ error: 'Missing shop parameter' });
-    }
-    try {
-      const Shop = (await import('./db/Shop.js')).default;
-      const shopRecord = await Shop.findOne({ shop }).lean();
-      
-      if (!shopRecord) {
-        return res.status(404).json({ error: 'Shop not found' });
-      }
-
-      res.json({
-        name: shopRecord.name || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
-        email: shopRecord.contactEmail || shopRecord.shopOwnerEmail || shopRecord.email || ''
-      });
-    } catch (error) {
-      console.error('[SHOP INFO] Error:', error.message);
-      res.status(500).json({ error: 'Failed to load shop info' });
-    }
-  });
-
   // Check shop email (debug endpoint)
   app.get('/api/test/check-shop-email', async (req, res) => {
     const { shop } = req.query;
@@ -758,6 +691,73 @@ if (!IS_PROD) {
     }
   });
 }
+
+// Send Contact Support email via SendGrid (available in all environments)
+app.post('/api/support/send', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  
+  try {
+    const { name, email, subject, message, file } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Missing required fields: name, email, message' });
+    }
+    
+    // Import email service
+    const emailService = (await import('./services/emailService.js')).default;
+    
+    const result = await emailService.sendContactSupportEmail({
+      name,
+      email,
+      subject: subject || 'General Question',
+      message,
+      shop,
+      file: file ? {
+        content: file.content, // base64 string
+        filename: file.filename,
+        type: file.type,
+        size: file.size
+      } : null
+    });
+    
+    if (result.success) {
+      res.json({ success: true, message: 'Message sent successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error || 'Failed to send message' });
+    }
+  } catch (error) {
+    console.error('[SUPPORT] Error sending message:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to send message' });
+  }
+});
+
+// Get shop info for Contact Support page (available in all environments)
+app.get('/api/shop/info', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  try {
+    const Shop = (await import('./db/Shop.js')).default;
+    const shopRecord = await Shop.findOne({ shop }).lean();
+    
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    res.json({
+      name: shopRecord.name || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
+      email: shopRecord.contactEmail || shopRecord.shopOwnerEmail || shopRecord.email || ''
+    });
+  } catch (error) {
+    console.error('[SHOP INFO] Error:', error.message);
+    res.status(500).json({ error: 'Failed to load shop info' });
+  }
+});
 
 // Fetch and update shop email from Shopify (works in production for fixing missing emails)
 app.post('/api/test/fetch-shop-email', async (req, res) => {
