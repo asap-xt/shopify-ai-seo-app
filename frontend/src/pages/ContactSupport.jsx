@@ -162,12 +162,10 @@ export default function ContactSupport({ shop: shopProp }) {
       }
 
       // Send via our backend API (uses SendGrid)
+      // Note: useShopApi.api() automatically handles JSON stringification
       const result = await api(`/api/support/send?shop=${encodeURIComponent(shop)}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
+        body: requestBody
       });
 
       if (result.success) {
