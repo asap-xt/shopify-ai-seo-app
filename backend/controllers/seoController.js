@@ -3284,9 +3284,6 @@ async function processDeleteInBackground(req, shop, items, totalProducts) {
       { new: true } // Return updated document
     );
     
-    console.log(`[BULK-DELETE-BATCH] ✅ Completed for ${shop}: ${deletedProducts} products deleted, ${failedProducts} failed`);
-    console.log(`[BULK-DELETE-BATCH] Updated status:`, updateResult?.deleteJobStatus?.status);
-    
   } catch (error) {
     console.error('[BULK-DELETE-BATCH] Fatal error:', error);
     
@@ -3318,11 +3315,6 @@ router.get('/seo/delete-job-status', validateRequest(), async (req, res) => {
     res.set('Expires', '0');
     
     const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
-    
-    // Debug logging
-    if (shopDoc?.deleteJobStatus?.status && shopDoc.deleteJobStatus.status !== 'idle') {
-      console.log(`[DELETE-JOB-STATUS] Shop: ${shop}, Status: ${shopDoc.deleteJobStatus.status}, Items: ${shopDoc.deleteJobStatus.deletedItems}`);
-    }
     
     const status = shopDoc?.deleteJobStatus || {
       inProgress: false,
