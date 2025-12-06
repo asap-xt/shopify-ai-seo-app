@@ -147,6 +147,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   });
   const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   
+  // Background Delete Job status
+  const [deleteJobStatus, setDeleteJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalItems: 0,
+    processedItems: 0,
+    deletedItems: 0,
+    failedItems: 0,
+    completedAt: null
+  });
+  
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
   const [productLimit, setProductLimit] = useState(70); // Default to Starter limit
@@ -852,7 +864,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   };
   
-  // Delete SEO for selected products - OPTIMIZED: Background processing
+  // Delete SEO for selected products - OPTIMIZED: Background processing with inline status
   const deleteSEO = async () => {
     if (!selectedDeleteLanguages.length) {
       setToast('Please select at least one language to delete');
@@ -861,9 +873,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     
     setShowDeleteModal(false);
     setShowDeleteConfirmModal(false);
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    setErrors([]);
     
     try {
       let productsToProcess = [];
@@ -901,12 +910,22 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       if (itemsToDelete.length === 0) {
         setToast('No optimized products found to delete');
-        setIsProcessing(false);
         return;
       }
       
       const total = itemsToDelete.length;
-      setProgress({ current: 0, total, percent: 0 });
+      
+      // Set initial delete status - shows inline card
+      setDeleteJobStatus({
+        inProgress: true,
+        status: 'processing',
+        message: `Deleting 0/${total} items...`,
+        totalItems: total,
+        processedItems: 0,
+        deletedItems: 0,
+        failedItems: 0,
+        completedAt: null
+      });
       
       // Start background delete
       await api('/seo/bulk-delete-batch', {
@@ -914,8 +933,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         shop,
         body: { items: itemsToDelete }
       });
-      
-      setCurrentProduct(`Deleting ${total} items...`);
       
       // Poll for progress - start immediately, then every 500ms
       const checkStatus = async () => {
@@ -925,9 +942,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           
           if (status.inProgress) {
             const current = status.processedItems || 0;
-            const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-            setProgress({ current, total, percent });
-            setCurrentProduct(`Deleting ${current}/${total}...`);
+            setDeleteJobStatus({
+              inProgress: true,
+              status: 'processing',
+              message: `Deleting ${current}/${total} items...`,
+              totalItems: total,
+              processedItems: current,
+              deletedItems: status.deletedItems || 0,
+              failedItems: status.failedItems || 0,
+              completedAt: null
+            });
             return false; // Not done yet
           } else if (status.status === 'completed') {
             // Job completed - show results
@@ -958,22 +982,25 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setSelectedItems([]);
             setSelectAllPages(false);
             
-            // Clear the "Completed" badge
+            // Clear the "Completed" badge for optimization
             setSeoJobStatus({
               inProgress: false,
               status: 'idle',
               message: null
             });
             
-            // Show result toast
-            if (skippedCount > 0 || failedCount > 0) {
-              setToast(`Deleted SEO from ${deletedCount} items${skippedCount > 0 ? ` (${skippedCount} products skipped)` : ''}${failedCount > 0 ? ` (${failedCount} failed)` : ''}`);
-            } else {
-              setToast(`Deleted SEO from ${deletedCount} items`);
-            }
+            // Update delete status to completed
+            setDeleteJobStatus({
+              inProgress: false,
+              status: 'completed',
+              message: `Deleted ${deletedCount} items${failedCount > 0 ? ` (${failedCount} failed)` : ''}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`,
+              totalItems: total,
+              processedItems: total,
+              deletedItems: deletedCount,
+              failedItems: failedCount,
+              completedAt: new Date().toISOString()
+            });
             
-            setIsProcessing(false);
-            setProgress({ current: total, total, percent: 100 });
             return true; // Done
           }
           return false;
@@ -1002,15 +1029,30 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Safety timeout - stop polling after 5 minutes
       setTimeout(() => {
         clearInterval(pollInterval);
-        setIsProcessing(false);
+        if (deleteJobStatus.inProgress) {
+          setDeleteJobStatus(prev => ({
+            ...prev,
+            inProgress: false,
+            status: 'failed',
+            message: 'Timeout - please refresh to check status'
+          }));
+        }
       }, 5 * 60 * 1000);
       
       return; // Don't continue - polling handles the rest
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
-      setIsProcessing(false);
-      setCurrentProduct('');
+      setDeleteJobStatus({
+        inProgress: false,
+        status: 'failed',
+        message: err.message,
+        totalItems: 0,
+        processedItems: 0,
+        deletedItems: 0,
+        failedItems: 0,
+        completedAt: null
+      });
     }
   };
   
@@ -1783,6 +1825,59 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         
         return null;
       })()}
+      
+      {/* Delete Job Status - shows independently from other statuses */}
+      {(deleteJobStatus.inProgress || deleteJobStatus.status === 'completed' || deleteJobStatus.status === 'failed') && (
+        <Box paddingBlockStart="400">
+          <Card>
+            <Box padding="400">
+              {deleteJobStatus.inProgress ? (
+                <InlineStack gap="300" align="start" blockAlign="center">
+                  <Spinner size="small" />
+                  <BlockStack gap="100">
+                    <Text variant="bodyMd" fontWeight="semibold">Deleting Optimization Data...</Text>
+                    <Text variant="bodySm" tone="subdued">
+                      {deleteJobStatus.message || `Processing ${deleteJobStatus.processedItems}/${deleteJobStatus.totalItems} items`}
+                    </Text>
+                    {deleteJobStatus.totalItems > 0 && (
+                      <Box paddingBlockStart="100">
+                        <ProgressBar progress={(deleteJobStatus.processedItems / deleteJobStatus.totalItems) * 100} size="small" />
+                      </Box>
+                    )}
+                  </BlockStack>
+                </InlineStack>
+              ) : deleteJobStatus.status === 'completed' ? (
+                <BlockStack gap="100">
+                  <InlineStack gap="200" align="start" blockAlign="center">
+                    <Badge tone="info">Deleted</Badge>
+                    <Text variant="bodyMd">{deleteJobStatus.message}</Text>
+                    <Text variant="bodySm" tone="subdued">· {timeAgo(deleteJobStatus.completedAt)}</Text>
+                    <Button
+                      variant="plain"
+                      onClick={() => setDeleteJobStatus({ inProgress: false, status: 'idle', message: null })}
+                    >
+                      <Text variant="bodySm" tone="subdued">Dismiss</Text>
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              ) : (
+                <BlockStack gap="100">
+                  <InlineStack gap="200" align="start" blockAlign="center">
+                    <Badge tone="critical">Delete Failed</Badge>
+                    <Text variant="bodyMd" tone="critical">{deleteJobStatus.message || 'Delete operation failed'}</Text>
+                    <Button
+                      variant="plain"
+                      onClick={() => setDeleteJobStatus({ inProgress: false, status: 'idle', message: null })}
+                    >
+                      <Text variant="bodySm" tone="subdued">Dismiss</Text>
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              )}
+            </Box>
+          </Card>
+        </Box>
+      )}
 
       <Box paddingBlockStart="400">
         <Card>
