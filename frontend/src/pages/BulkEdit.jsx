@@ -152,10 +152,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     inProgress: false,
     status: 'idle',
     message: null,
-    totalItems: 0,
-    processedItems: 0,
-    deletedItems: 0,
-    failedItems: 0,
+    totalProducts: 0,
+    processedProducts: 0,
+    deletedProducts: 0,
+    failedProducts: 0,
     completedAt: null
   });
   
@@ -913,17 +913,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         return;
       }
       
-      const total = itemsToDelete.length;
+      // Count unique products (not metafield items)
+      const uniqueProductIds = [...new Set(itemsToDelete.map(item => item.productId))];
+      const totalProductsToDelete = uniqueProductIds.length;
       
       // Set initial delete status - shows inline card
       setDeleteJobStatus({
         inProgress: true,
         status: 'processing',
-        message: `Deleting 0/${total} items...`,
-        totalItems: total,
-        processedItems: 0,
-        deletedItems: 0,
-        failedItems: 0,
+        message: `Deleting 0/${totalProductsToDelete} products...`,
+        totalProducts: totalProductsToDelete,
+        processedProducts: 0,
+        deletedProducts: 0,
+        failedProducts: 0,
         completedAt: null
       });
       
@@ -941,22 +943,22 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}&_t=${Date.now()}`);
           
           if (status.inProgress) {
-            const current = status.processedItems || 0;
+            const current = status.processedProducts || status.deletedProducts || 0;
             setDeleteJobStatus({
               inProgress: true,
               status: 'processing',
-              message: `Deleting ${current}/${total} items...`,
-              totalItems: total,
-              processedItems: current,
-              deletedItems: status.deletedItems || 0,
-              failedItems: status.failedItems || 0,
+              message: `Deleting ${current}/${totalProductsToDelete} products...`,
+              totalProducts: totalProductsToDelete,
+              processedProducts: current,
+              deletedProducts: status.deletedProducts || 0,
+              failedProducts: status.failedProducts || 0,
               completedAt: null
             });
             return false; // Not done yet
           } else if (status.status === 'completed') {
             // Job completed - show results
-            const deletedCount = status.deletedItems || 0;
-            const failedCount = status.failedItems || 0;
+            const deletedCount = status.deletedProducts || 0;
+            const failedCount = status.failedProducts || 0;
             
             // Update local state - remove all deleted languages
             setProducts(prevProducts => 
@@ -993,11 +995,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setDeleteJobStatus({
               inProgress: false,
               status: 'completed',
-              message: `Deleted ${deletedCount} items${failedCount > 0 ? ` (${failedCount} failed)` : ''}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`,
-              totalItems: total,
-              processedItems: total,
-              deletedItems: deletedCount,
-              failedItems: failedCount,
+              message: `Deleted ${deletedCount} product${deletedCount !== 1 ? 's' : ''}${failedCount > 0 ? ` (${failedCount} failed)` : ''}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`,
+              totalProducts: totalProductsToDelete,
+              processedProducts: deletedCount + failedCount,
+              deletedProducts: deletedCount,
+              failedProducts: failedCount,
               completedAt: new Date().toISOString()
             });
             
@@ -1047,10 +1049,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         inProgress: false,
         status: 'failed',
         message: err.message,
-        totalItems: 0,
-        processedItems: 0,
-        deletedItems: 0,
-        failedItems: 0,
+        totalProducts: 0,
+        processedProducts: 0,
+        deletedProducts: 0,
+        failedProducts: 0,
         completedAt: null
       });
     }
@@ -1837,11 +1839,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   <BlockStack gap="100">
                     <Text variant="bodyMd" fontWeight="semibold">Deleting Optimization Data...</Text>
                     <Text variant="bodySm" tone="subdued">
-                      {deleteJobStatus.message || `Processing ${deleteJobStatus.processedItems}/${deleteJobStatus.totalItems} items`}
+                      {deleteJobStatus.message || `Processing ${deleteJobStatus.processedProducts}/${deleteJobStatus.totalProducts} products`}
                     </Text>
-                    {deleteJobStatus.totalItems > 0 && (
+                    {deleteJobStatus.totalProducts > 0 && (
                       <Box paddingBlockStart="100">
-                        <ProgressBar progress={(deleteJobStatus.processedItems / deleteJobStatus.totalItems) * 100} size="small" />
+                        <ProgressBar progress={(deleteJobStatus.processedProducts / deleteJobStatus.totalProducts) * 100} size="small" />
                       </Box>
                     )}
                   </BlockStack>

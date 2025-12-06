@@ -195,11 +195,11 @@ const shopSchema = new mongoose.Schema({
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
     failedAt: { type: Date, default: null },
-    // Progress tracking
-    totalItems: { type: Number, default: 0 },
-    processedItems: { type: Number, default: 0 },
-    deletedItems: { type: Number, default: 0 },
-    failedItems: { type: Number, default: 0 }
+    // Progress tracking - count products, not metafield items
+    totalProducts: { type: Number, default: 0 },
+    processedProducts: { type: Number, default: 0 },
+    deletedProducts: { type: Number, default: 0 },
+    failedProducts: { type: Number, default: 0 }
   },
   storeLanguages: [{
     locale: String,

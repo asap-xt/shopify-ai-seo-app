@@ -3097,6 +3097,10 @@ router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
       });
     }
     
+    // Count unique products (items can have multiple languages per product)
+    const uniqueProducts = [...new Set(items.map(item => item.productId))];
+    const totalProducts = uniqueProducts.length;
+    
     // Start background delete
     await Shop.findOneAndUpdate(
       { shop },
@@ -3104,11 +3108,11 @@ router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
         $set: {
           'deleteJobStatus.inProgress': true,
           'deleteJobStatus.status': 'processing',
-          'deleteJobStatus.message': `Deleting SEO for ${items.length} items...`,
-          'deleteJobStatus.totalItems': items.length,
-          'deleteJobStatus.processedItems': 0,
-          'deleteJobStatus.deletedItems': 0,
-          'deleteJobStatus.failedItems': 0,
+          'deleteJobStatus.message': `Deleting SEO for ${totalProducts} products...`,
+          'deleteJobStatus.totalProducts': totalProducts,
+          'deleteJobStatus.processedProducts': 0,
+          'deleteJobStatus.deletedProducts': 0,
+          'deleteJobStatus.failedProducts': 0,
           'deleteJobStatus.startedAt': new Date()
         }
       },
@@ -3120,11 +3124,11 @@ router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
       ok: true,
       queued: true,
       message: 'Delete job started in background',
-      totalItems: items.length
+      totalProducts
     });
     
     // Process in background (non-blocking)
-    processDeleteInBackground(req, shop, items).catch(err => {
+    processDeleteInBackground(req, shop, items, totalProducts).catch(err => {
       console.error('[BULK-DELETE-BATCH] Background error:', err);
     });
     
@@ -3137,13 +3141,14 @@ router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
 /**
  * Background delete processor
  */
-async function processDeleteInBackground(req, shop, items) {
+async function processDeleteInBackground(req, shop, items, totalProducts) {
   const BATCH_SIZE = 50; // Items per batch
   const BATCH_DELAY = 200; // ms between batches
   
   let processedItems = 0;
-  let deletedItems = 0;
-  let failedItems = 0;
+  let deletedProducts = 0;
+  let failedProducts = 0;
+  const processedProductIds = new Set(); // Track unique products
   
   try {
     const deleteMutation = `
@@ -3177,9 +3182,15 @@ async function processDeleteInBackground(req, shop, items) {
           metafields: metafieldsToDelete
         });
         
-        const deleted = deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0;
-        deletedItems += deleted;
-        failedItems += batch.length - deleted;
+        const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
+        
+        // Track unique products that were successfully deleted
+        for (const mf of deletedMetafields) {
+          if (mf.ownerId && !processedProductIds.has(mf.ownerId)) {
+            processedProductIds.add(mf.ownerId);
+            deletedProducts++;
+          }
+        }
         
         // Also update MongoDB Products to fix dashboard counts
         const Product = (await import('../db/Product.js')).default;
@@ -3221,20 +3232,26 @@ async function processDeleteInBackground(req, shop, items) {
         
       } catch (e) {
         console.error('[BULK-DELETE-BATCH] Batch error:', e.message);
-        failedItems += batch.length;
+        // Count unique failed products in this batch
+        for (const { productId } of batch) {
+          if (!processedProductIds.has(productId)) {
+            processedProductIds.add(productId);
+            failedProducts++;
+          }
+        }
       }
       
       processedItems += batch.length;
       
-      // Update progress
+      // Update progress - show products count
       await Shop.findOneAndUpdate(
         { shop },
         {
           $set: {
-            'deleteJobStatus.message': `Deleting ${processedItems}/${items.length}...`,
-            'deleteJobStatus.processedItems': processedItems,
-            'deleteJobStatus.deletedItems': deletedItems,
-            'deleteJobStatus.failedItems': failedItems
+            'deleteJobStatus.message': `Deleting ${deletedProducts}/${totalProducts} products...`,
+            'deleteJobStatus.processedProducts': deletedProducts,
+            'deleteJobStatus.deletedProducts': deletedProducts,
+            'deleteJobStatus.failedProducts': failedProducts
           }
         }
       );
@@ -3252,10 +3269,10 @@ async function processDeleteInBackground(req, shop, items) {
         $set: {
           'deleteJobStatus.inProgress': false,
           'deleteJobStatus.status': 'completed',
-          'deleteJobStatus.message': `Deleted ${deletedItems} items${failedItems > 0 ? ` (${failedItems} failed)` : ''}`,
-          'deleteJobStatus.deletedItems': deletedItems,
-          'deleteJobStatus.failedItems': failedItems,
-          'deleteJobStatus.processedItems': processedItems,
+          'deleteJobStatus.message': `Deleted ${deletedProducts} product${deletedProducts !== 1 ? 's' : ''}${failedProducts > 0 ? ` (${failedProducts} failed)` : ''}`,
+          'deleteJobStatus.deletedProducts': deletedProducts,
+          'deleteJobStatus.failedProducts': failedProducts,
+          'deleteJobStatus.processedProducts': deletedProducts + failedProducts,
           'deleteJobStatus.completedAt': new Date()
         },
         // Also clear SEO job status badges
@@ -3267,7 +3284,7 @@ async function processDeleteInBackground(req, shop, items) {
       { new: true } // Return updated document
     );
     
-    console.log(`[BULK-DELETE-BATCH] ✅ Completed for ${shop}: ${deletedItems} deleted, ${failedItems} failed`);
+    console.log(`[BULK-DELETE-BATCH] ✅ Completed for ${shop}: ${deletedProducts} products deleted, ${failedProducts} failed`);
     console.log(`[BULK-DELETE-BATCH] Updated status:`, updateResult?.deleteJobStatus?.status);
     
   } catch (error) {
