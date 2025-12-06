@@ -3181,6 +3181,44 @@ async function processDeleteInBackground(req, shop, items) {
         deletedItems += deleted;
         failedItems += batch.length - deleted;
         
+        // Also update MongoDB Products to fix dashboard counts
+        const Product = (await import('../db/Product.js')).default;
+        for (const { productId, language } of batch) {
+          const numericId = productId.replace('gid://shopify/Product/', '');
+          const langLower = language.toLowerCase();
+          
+          // Remove from optimizedLanguages
+          await Product.findOneAndUpdate(
+            { shop, productId: numericId },
+            { 
+              $pull: { 
+                'optimizationSummary.optimizedLanguages': langLower,
+                'seoStatus.languages': { code: langLower }
+              }
+            }
+          );
+          
+          // Check if product still has any optimized languages
+          const updatedProduct = await Product.findOne({ shop, productId: numericId });
+          if (updatedProduct) {
+            const hasOptimizedLanguages = 
+              (updatedProduct.optimizationSummary?.optimizedLanguages?.length > 0) ||
+              (updatedProduct.seoStatus?.languages?.some(l => l.optimized));
+            
+            if (!hasOptimizedLanguages) {
+              await Product.findOneAndUpdate(
+                { shop, productId: numericId },
+                { 
+                  $set: { 
+                    'seoStatus.optimized': false,
+                    'optimizationSummary.optimized': false
+                  }
+                }
+              );
+            }
+          }
+        }
+        
       } catch (e) {
         console.error('[BULK-DELETE-BATCH] Batch error:', e.message);
         failedItems += batch.length;
@@ -3208,7 +3246,7 @@ async function processDeleteInBackground(req, shop, items) {
     }
     
     // Mark as completed - keep status visible for frontend polling
-    await Shop.findOneAndUpdate(
+    const updateResult = await Shop.findOneAndUpdate(
       { shop },
       {
         $set: {
@@ -3225,10 +3263,12 @@ async function processDeleteInBackground(req, shop, items) {
           seoJobStatus: 1,
           aiEnhanceJobStatus: 1
         }
-      }
+      },
+      { new: true } // Return updated document
     );
     
     console.log(`[BULK-DELETE-BATCH] ✅ Completed for ${shop}: ${deletedItems} deleted, ${failedItems} failed`);
+    console.log(`[BULK-DELETE-BATCH] Updated status:`, updateResult?.deleteJobStatus?.status);
     
   } catch (error) {
     console.error('[BULK-DELETE-BATCH] Fatal error:', error);
@@ -3261,6 +3301,12 @@ router.get('/seo/delete-job-status', validateRequest(), async (req, res) => {
     res.set('Expires', '0');
     
     const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
+    
+    // Debug logging
+    if (shopDoc?.deleteJobStatus?.status && shopDoc.deleteJobStatus.status !== 'idle') {
+      console.log(`[DELETE-JOB-STATUS] Shop: ${shop}, Status: ${shopDoc.deleteJobStatus.status}, Items: ${shopDoc.deleteJobStatus.deletedItems}`);
+    }
+    
     const status = shopDoc?.deleteJobStatus || {
       inProgress: false,
       status: 'idle',
