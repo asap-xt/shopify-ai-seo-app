@@ -915,8 +915,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         body: { items: itemsToDelete }
       });
       
-      // Poll for progress
-      const pollInterval = setInterval(async () => {
+      setCurrentProduct(`Deleting ${total} items...`);
+      
+      // Poll for progress - start immediately, then every 500ms
+      const checkStatus = async () => {
         try {
           const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}`);
           
@@ -925,9 +927,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             const percent = total > 0 ? Math.round((current / total) * 100) : 0;
             setProgress({ current, total, percent });
             setCurrentProduct(`Deleting ${current}/${total}...`);
-          } else {
-            // Job completed
-            clearInterval(pollInterval);
+            return false; // Not done yet
+          } else if (status.status === 'completed') {
+            // Job completed - show results
+            const deletedCount = status.deletedItems || 0;
+            const failedCount = status.failedItems || 0;
             
             // Update local state - remove all deleted languages
             setProducts(prevProducts => 
@@ -953,10 +957,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setSelectedItems([]);
             setSelectAllPages(false);
             
-            // Show result toast
-            const deletedCount = status.deletedItems || 0;
-            const failedCount = status.failedItems || 0;
+            // Clear the "Completed" badge
+            setSeoJobStatus({
+              inProgress: false,
+              status: 'idle',
+              message: null
+            });
             
+            // Show result toast
             if (skippedCount > 0 || failedCount > 0) {
               setToast(`Deleted SEO from ${deletedCount} items${skippedCount > 0 ? ` (${skippedCount} products skipped)` : ''}${failedCount > 0 ? ` (${failedCount} failed)` : ''}`);
             } else {
@@ -965,11 +973,30 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             
             setIsProcessing(false);
             setProgress({ current: total, total, percent: 100 });
+            return true; // Done
           }
+          return false;
         } catch (err) {
           console.error('Poll error:', err);
+          return false;
         }
-      }, 1000);
+      };
+      
+      // Start polling
+      const pollInterval = setInterval(async () => {
+        const done = await checkStatus();
+        if (done) {
+          clearInterval(pollInterval);
+        }
+      }, 500);
+      
+      // Also check immediately after a short delay (in case it's very fast)
+      setTimeout(async () => {
+        const done = await checkStatus();
+        if (done) {
+          clearInterval(pollInterval);
+        }
+      }, 200);
       
       // Safety timeout - stop polling after 5 minutes
       setTimeout(() => {

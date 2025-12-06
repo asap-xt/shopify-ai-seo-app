@@ -3207,7 +3207,7 @@ async function processDeleteInBackground(req, shop, items) {
       }
     }
     
-    // Mark as completed
+    // Mark as completed - keep status visible for frontend polling
     await Shop.findOneAndUpdate(
       { shop },
       {
@@ -3215,6 +3215,9 @@ async function processDeleteInBackground(req, shop, items) {
           'deleteJobStatus.inProgress': false,
           'deleteJobStatus.status': 'completed',
           'deleteJobStatus.message': `Deleted ${deletedItems} items${failedItems > 0 ? ` (${failedItems} failed)` : ''}`,
+          'deleteJobStatus.deletedItems': deletedItems,
+          'deleteJobStatus.failedItems': failedItems,
+          'deleteJobStatus.processedItems': processedItems,
           'deleteJobStatus.completedAt': new Date()
         },
         // Also clear SEO job status badges
