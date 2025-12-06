@@ -1560,10 +1560,290 @@ Guidelines:
 // ============================================================
 
 import aiEnhanceQueue from '../services/aiEnhanceQueue.js';
+import Shop from '../db/Shop.js';
+
+/**
+ * OPTIMIZATION: Direct enhancement function (no HTTP overhead)
+ * Extracted from /product endpoint for use in batch processing
+ * This function handles a single product enhancement directly
+ * 
+ * @param {Object} params - Enhancement parameters
+ * @param {string} params.shop - Shop domain
+ * @param {string} params.productId - Product GID
+ * @param {Array} params.languages - Languages to enhance
+ * @param {string} params.accessToken - Shopify access token
+ * @param {Object} params.subscription - Subscription object
+ * @returns {Object} Enhancement result
+ */
+export async function enhanceProductDirectly({ shop, productId, languages, accessToken, subscription }) {
+  const feature = 'ai-seo-product-enhanced';
+  const model = 'google/gemini-2.5-flash-lite';
+  const planKey = subscription?.plan || '';
+  let reservationId = null;
+  
+  try {
+    // Get token balance
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Check if feature requires tokens
+    if (requiresTokens(feature)) {
+      const tokenEstimate = estimateTokensWithMargin(feature, { languages: languages.length });
+      
+      // Check token balance
+      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+        const error = new Error('Insufficient token balance');
+        error.status = 402;
+        throw error;
+      }
+      
+      // Reserve tokens
+      const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { productId });
+      reservationId = reservation.reservationId;
+      await reservation.save();
+    }
+    
+    const results = [];
+    const skippedDueToTokens = [];
+    let tokensExhausted = false;
+    
+    // Create a mock req object for shopGraphQL calls
+    const mockReq = {
+      shopDomain: shop,
+      headers: {},
+      query: { shop }
+    };
+    
+    for (const language of languages) {
+      // Check if we still have enough tokens
+      if (reservationId && requiresTokens(feature) && !tokensExhausted) {
+        const currentBalance = await TokenBalance.getOrCreate(shop);
+        const estimatePerLanguage = estimateTokensWithMargin(feature, { languages: 1 });
+        
+        if (!currentBalance.hasBalance(estimatePerLanguage.withMargin)) {
+          tokensExhausted = true;
+          const remainingLanguages = languages.slice(languages.indexOf(language));
+          for (const lang of remainingLanguages) {
+            skippedDueToTokens.push(lang);
+          }
+          break;
+        }
+      }
+      
+      try {
+        // Get current SEO + product data
+        const metafieldKey = `seo__${language.toLowerCase()}`;
+        const query = `
+          query GetProductSEO($productId: ID!) {
+            product(id: $productId) {
+              title
+              description
+              productType
+              vendor
+              tags
+              featuredImage {
+                url
+                altText
+              }
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+              metafield(namespace: "seo_ai", key: "${metafieldKey}") {
+                value
+              }
+            }
+          }
+        `;
+        
+        const data = await shopGraphQL(mockReq, shop, query, { productId });
+        
+        // Get existing SEO
+        const metafield = data?.product?.metafield;
+        const existingSeo = metafield?.value ? JSON.parse(metafield.value) : null;
+        
+        // Skip if no basic SEO
+        if (!existingSeo || !existingSeo.title) {
+          results.push({ language, error: 'No basic SEO found', skipped: true });
+          continue;
+        }
+        
+        // Check if already enhanced (for Growth Extra/Enterprise)
+        const normalizedPlan = planKey.toLowerCase().replace(/\s+/g, '_');
+        const shouldSkipEnhanced = ['growth_extra', 'enterprise'].includes(normalizedPlan);
+        const hasAIEnhanced = existingSeo.enhancedAt;
+        const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+        
+        if (shouldSkipEnhanced && hasAIEnhanced && !hasPurchasedTokens) {
+          results.push({ 
+            language, 
+            bullets: existingSeo.bullets,
+            faq: existingSeo.faq,
+            skipped: true,
+            reason: 'Already enhanced'
+          });
+          continue;
+        }
+        
+        // Generate bullets and FAQ
+        const enhancedResult = await generateEnhancedBulletsFAQ({
+          shop,
+          productId,
+          model,
+          language,
+          product: data.product,
+          existingSeo
+        });
+        
+        // Handle image alt text
+        let imageAltResult = { altText: existingSeo.imageAlt, usage: null, translated: false };
+        const hasFeaturedImage = data.product.featuredImage?.url;
+        const shopifyAltText = data.product.featuredImage?.altText;
+        const currentDescription = existingSeo.metaDescription || data.product.description || '';
+        
+        if (hasFeaturedImage) {
+          const existingAltText = existingSeo.imageAlt || shopifyAltText;
+          
+          if (!existingAltText) {
+            imageAltResult = await generateImageAltText({
+              product: data.product,
+              language,
+              model
+            });
+          } else {
+            imageAltResult = await translateImageAltText({
+              existingAltText,
+              description: currentDescription,
+              model,
+              productTitle: data.product.title
+            });
+          }
+        }
+        
+        // Update SEO object (ONLY bullets, faq, imageAlt - preserves everything else!)
+        const updatedSeo = {
+          ...existingSeo,
+          bullets: enhancedResult.bullets || existingSeo.bullets,
+          faq: enhancedResult.faq || existingSeo.faq,
+          imageAlt: imageAltResult.altText || existingSeo.imageAlt || null,
+          enhancedAt: new Date().toISOString()
+        };
+        
+        // Save to metafield
+        const metafieldInput = {
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: metafieldKey,
+          type: 'json',
+          value: JSON.stringify(updatedSeo)
+        };
+        
+        const mutation = `
+          mutation SetMetafield($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+              userErrors { field message }
+              metafields { id }
+            }
+          }
+        `;
+        
+        const mutationResult = await shopGraphQL(mockReq, shop, mutation, {
+          metafields: [metafieldInput]
+        });
+        
+        const userErrors = mutationResult?.metafieldsSet?.userErrors || [];
+        if (userErrors.length > 0) {
+          throw new Error(userErrors.map(e => e.message).join(', '));
+        }
+        
+        // Combine usage
+        const combinedUsage = {
+          prompt_tokens: (enhancedResult.usage?.prompt_tokens || 0) + (imageAltResult.usage?.prompt_tokens || 0),
+          completion_tokens: (enhancedResult.usage?.completion_tokens || 0) + (imageAltResult.usage?.completion_tokens || 0),
+          total_tokens: (enhancedResult.usage?.total_tokens || 0) + (imageAltResult.usage?.total_tokens || 0)
+        };
+        
+        results.push({
+          language,
+          bullets: enhancedResult.bullets || [],
+          faq: enhancedResult.faq || [],
+          imageAlt: updatedSeo.imageAlt,
+          usage: combinedUsage
+        });
+        
+      } catch (error) {
+        console.error(`[AI-ENHANCE-DIRECT] Error for ${language}:`, error.message);
+        results.push({ language, error: error.message });
+      }
+    }
+    
+    // Finalize token usage
+    if (reservationId && requiresTokens(feature)) {
+      let totalActualTokens = 0;
+      for (const result of results) {
+        if (result.usage) {
+          const actual = calculateActualTokens(result.usage);
+          totalActualTokens += actual.totalTokens;
+        }
+      }
+      
+      const tokenBalanceFinal = await TokenBalance.getOrCreate(shop);
+      await tokenBalanceFinal.finalizeReservation(reservationId, totalActualTokens);
+      
+      try {
+        const cacheService = await import('../services/cacheService.js');
+        await cacheService.default.invalidateShop(shop);
+      } catch (e) { /* ignore */ }
+    }
+    
+    // Mark product as AI-enhanced
+    const successfulLanguages = results.filter(r => !r.error && !r.skipped).length;
+    if (successfulLanguages > 0) {
+      try {
+        const numericProductId = productId.includes('gid://') ? productId.split('/').pop() : productId;
+        await Product.findOneAndUpdate(
+          { shop, productId: numericProductId },
+          { $set: { 'seoStatus.aiEnhanced': true } },
+          { upsert: true }
+        );
+      } catch (e) { /* ignore */ }
+    }
+    
+    // Prepare summary
+    const failedLanguages = results.filter(r => r.error && !r.skipped).length;
+    const alreadyEnhanced = results.filter(r => r.skipped && r.reason === 'Already enhanced').length;
+    
+    return {
+      success: successfulLanguages > 0 || alreadyEnhanced > 0,
+      productId,
+      results,
+      summary: {
+        total: languages.length,
+        successful: successfulLanguages,
+        failed: failedLanguages,
+        alreadyEnhanced,
+        skippedDueToTokens: skippedDueToTokens.length,
+        tokensExhausted
+      }
+    };
+    
+  } catch (error) {
+    // Refund tokens on error
+    if (reservationId) {
+      try {
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        await tokenBalance.finalizeReservation(reservationId, 0);
+      } catch (e) { /* ignore */ }
+    }
+    throw error;
+  }
+}
 
 /**
  * POST /ai-enhance/batch
  * Add AI Enhancement job to background queue
+ * OPTIMIZED: Uses direct function calls instead of HTTP fetch
  * Body: { products: [{ productId, languages, title }] }
  */
 router.post('/batch', validateRequest(), async (req, res) => {
@@ -1630,7 +1910,7 @@ router.post('/batch', validateRequest(), async (req, res) => {
         trialEndsAt: subscription.trialEndsAt,
         currentPlan: subscription.plan,
         feature,
-        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensRequired: tokenEstimate.withMargin,
         tokensEstimated: tokenEstimate.estimated,
         tokensAvailable: tokenBalance.balance,
         message: 'Activate your plan to unlock AI-enhanced optimization with included tokens'
@@ -1646,7 +1926,7 @@ router.post('/batch', validateRequest(), async (req, res) => {
         requiresPurchase: true,
         needsUpgrade,
         currentPlan: planKey,
-        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensRequired: tokenEstimate.withMargin,
         tokensEstimated: tokenEstimate.estimated,
         tokensAvailable: tokenBalance.balance,
         tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
@@ -1657,59 +1937,30 @@ router.post('/batch', validateRequest(), async (req, res) => {
       });
     }
     
-    // Create enhance function that will be called for each product
+    // OPTIMIZATION: Create enhance function using DIRECT calls (no HTTP)
     const enhanceProduct = async (productData) => {
       const { productId, languages, title } = productData;
       
       try {
-        // Call the existing /product endpoint logic internally
-        // We'll make an internal API call to reuse all the existing logic
-        const response = await fetch(`${process.env.APP_URL || 'http://localhost:3000'}/ai-enhance/product`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Forward auth headers
-            'Authorization': req.headers.authorization || '',
-            'x-shopify-shop-domain': shop
-          },
-          body: JSON.stringify({
-            shop,
-            productId,
-            languages
-          })
+        // Direct function call - no HTTP overhead!
+        const result = await enhanceProductDirectly({
+          shop,
+          productId,
+          languages,
+          accessToken: null, // shopGraphQL will get it from Shop collection
+          subscription
         });
-        
-        const result = await response.json();
-        
-        if (!response.ok) {
-          // Check for token/plan errors
-          if (response.status === 402 || response.status === 403) {
-            const error = new Error(result.error || 'Token or plan restriction');
-            error.status = response.status;
-            error.trialRestriction = result.trialRestriction;
-            throw error;
-          }
-          return { success: false, error: result.error };
-        }
         
         // Check if all languages were skipped
         if (result.summary?.successful === 0 && result.summary?.alreadyEnhanced > 0) {
-          return { 
-            skipped: true, 
-            reason: 'Already enhanced',
-            data: result 
-          };
+          return { skipped: true, reason: 'Already enhanced', data: result };
         }
         
         if (result.summary?.successful === 0 && result.summary?.noBasicSeo > 0) {
-          return { 
-            skipped: true, 
-            reason: 'No Basic SEO',
-            data: result 
-          };
+          return { skipped: true, reason: 'No Basic SEO', data: result };
         }
         
-        return { success: true, data: result };
+        return { success: result.success, data: result };
         
       } catch (error) {
         // Re-throw token/plan errors to stop processing
