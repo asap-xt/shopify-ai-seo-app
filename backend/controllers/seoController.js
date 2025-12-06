@@ -2905,6 +2905,7 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
 });
 
 // DELETE /seo/bulk-delete - Delete SEO for multiple products
+// OPTIMIZED: Processes in parallel batches for faster deletion
 router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -2930,62 +2931,86 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       }
     });
     
-    // 1. Delete all metafields in one GraphQL call
+    // 1. Delete metafields in batches of 250 (Shopify limit)
+    const BATCH_SIZE = 250;
+    let totalDeleted = 0;
+    
     if (metafieldsToDelete.length > 0) {
-      try {
-        const deleteMutation = `
-          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
-            metafieldsDelete(metafields: $metafields) {
-              deletedMetafields {
-                key
-                namespace
-                ownerId
-              }
-              userErrors {
-                field
-                message
-              }
+      const deleteMutation = `
+        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields {
+              key
+              namespace
+              ownerId
+            }
+            userErrors {
+              field
+              message
             }
           }
-        `;
-        
-        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
-          metafields: metafieldsToDelete
-        });
-        
-        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
-          results.push({
-            type: 'error',
-            source: 'shopify',
-            errors: deleteResult.metafieldsDelete.userErrors
-          });
         }
-        
-        if (deleteResult?.metafieldsDelete?.deletedMetafields) {
-          results.push({
-            type: 'success',
-            source: 'shopify',
-            deletedCount: deleteResult.metafieldsDelete.deletedMetafields.length,
-            deleted: deleteResult.metafieldsDelete.deletedMetafields
+      `;
+      
+      // Process in parallel batches for speed
+      const batches = [];
+      for (let i = 0; i < metafieldsToDelete.length; i += BATCH_SIZE) {
+        batches.push(metafieldsToDelete.slice(i, i + BATCH_SIZE));
+      }
+      
+      // Run batches in parallel (max 3 concurrent to avoid rate limits)
+      const processBatch = async (batch) => {
+        try {
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+            metafields: batch
           });
+          
+          if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+            return { errors: deleteResult.metafieldsDelete.userErrors };
+          }
+          
+          return { 
+            deletedCount: deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0 
+          };
+        } catch (e) {
+          console.error('[BULK-DELETE-SEO] Batch error:', e.message);
+          return { error: e.message };
         }
-      } catch (e) {
-        console.error('[BULK-DELETE-SEO] GraphQL error:', e);
-        results.push({
-          type: 'error',
-          source: 'shopify',
-          error: e.message
+      };
+      
+      // Process batches with concurrency limit of 3
+      const CONCURRENT_BATCHES = 3;
+      for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+        const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+        const batchResults = await Promise.all(concurrentBatches.map(processBatch));
+        
+        batchResults.forEach(result => {
+          if (result.deletedCount) {
+            totalDeleted += result.deletedCount;
+          }
+          if (result.errors) {
+            results.push({ type: 'error', source: 'shopify', errors: result.errors });
+          }
+          if (result.error) {
+            results.push({ type: 'error', source: 'shopify', error: result.error });
+          }
         });
       }
+      
+      results.push({
+        type: 'success',
+        source: 'shopify',
+        deletedCount: totalDeleted
+      });
     }
     
-    // 2. Update MongoDB for all products
+    // 2. Update MongoDB for all products (parallel)
     if (mongoUpdates.length > 0) {
       try {
         const db = await dbConnect();
         const collection = db.collection('shopify_products');
         
-        // Update each product
+        // Update all products in parallel
         const mongoResults = await Promise.all(
           mongoUpdates.map(async ({ productId, language }) => {
             try {
@@ -3002,7 +3027,8 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
         
         results.push({
           type: 'mongodb',
-          updates: mongoResults
+          updates: mongoResults.filter(r => r.modified).length,
+          total: mongoUpdates.length
         });
         
       } catch (e) {
@@ -3015,11 +3041,22 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       }
     }
     
+    // Clear job status badges since SEO was deleted
+    try {
+      await Shop.findOneAndUpdate(
+        { shop },
+        { $unset: { seoJobStatus: 1, aiEnhanceJobStatus: 1 } }
+      );
+    } catch (e) {
+      console.error('[BULK-DELETE-SEO] Failed to clear job status:', e.message);
+    }
+    
     // Return consolidated results
     res.json({
       ok: true,
       shop,
       totalRequested: items.length,
+      totalDeleted,
       results
     });
     
