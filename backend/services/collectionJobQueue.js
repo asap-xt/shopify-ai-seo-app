@@ -92,6 +92,7 @@ class CollectionJobQueue {
 
   /**
    * Start processing the queue
+   * OPTIMIZED: Processes collections in batches of 2 for ~2x speedup
    */
   async startProcessing() {
     if (this.processing) {
@@ -111,77 +112,82 @@ class CollectionJobQueue {
         job.status = 'processing';
         job.startedAt = new Date();
 
-        // Process each collection
-        for (let i = 0; i < job.collections.length; i++) {
-          const collectionData = job.collections[i];
-          
-          try {
-            // Update status
-            await this.updateShopStatus(job.shop, job.statusField, {
-              inProgress: true,
-              status: 'processing',
-              message: `Processing ${job.processedCollections + 1}/${job.totalCollections}: ${collectionData.title || 'Collection'}`,
-              totalCollections: job.totalCollections,
-              processedCollections: job.processedCollections,
-              successfulCollections: job.successfulCollections,
-              failedCollections: job.failedCollections,
-              skippedCollections: job.skippedCollections
-            });
+        // OPTIMIZATION: Process collections in batches of 2 for parallel execution
+        const BATCH_SIZE = 2;
+        const BATCH_DELAY = 300; // ms between batches
+        let shouldStop = false;
 
-            // Call the process function
-            const result = await job.processFn(collectionData);
+        for (let batchStart = 0; batchStart < job.collections.length && !shouldStop; batchStart += BATCH_SIZE) {
+          const batch = job.collections.slice(batchStart, batchStart + BATCH_SIZE);
+          
+          // Update status before batch
+          await this.updateShopStatus(job.shop, job.statusField, {
+            inProgress: true,
+            status: 'processing',
+            message: `Processing ${job.processedCollections + 1}-${Math.min(job.processedCollections + batch.length, job.totalCollections)}/${job.totalCollections}...`,
+            totalCollections: job.totalCollections,
+            processedCollections: job.processedCollections,
+            successfulCollections: job.successfulCollections,
+            failedCollections: job.failedCollections,
+            skippedCollections: job.skippedCollections
+          });
+
+          // Process batch in parallel
+          const batchPromises = batch.map(async (collectionData) => {
+            try {
+              const result = await job.processFn(collectionData);
+              return { collectionData, result, success: true, error: null };
+            } catch (error) {
+              return { collectionData, result: null, success: false, error };
+            }
+          });
+
+          // Wait for all collections in batch to complete
+          const batchResults = await Promise.all(batchPromises);
+
+          // Process batch results
+          for (const batchResult of batchResults) {
+            const { collectionData, result, success, error } = batchResult;
             
-            // Check result
-            if (result.skipped) {
+            if (!success && error) {
+              // Check for token/plan errors that should stop processing
+              if (error.status === 402 || error.status === 403 || error.trialRestriction) {
+                shouldStop = true;
+                job.status = 'failed';
+                job.error = error.message || 'Token or plan restriction';
+                job.failedAt = new Date();
+                
+                await this.updateShopStatus(job.shop, job.statusField, {
+                  inProgress: false,
+                  status: 'failed',
+                  message: error.message || 'Token or plan restriction',
+                  lastError: error.message,
+                  failedAt: new Date(),
+                  totalCollections: job.totalCollections,
+                  processedCollections: job.processedCollections,
+                  successfulCollections: job.successfulCollections,
+                  failedCollections: job.failedCollections,
+                  skippedCollections: job.skippedCollections
+                });
+                break;
+              }
+              
+              job.failedCollections++;
+              dbLogger.error(`[COLLECTION-QUEUE] Collection failed: ${collectionData.collectionId}`, error.message);
+            } else if (result?.skipped) {
               job.skippedCollections++;
-            } else if (result.success) {
+            } else if (result?.success) {
               job.successfulCollections++;
             } else {
               job.failedCollections++;
             }
-
-          } catch (error) {
-            dbLogger.error(`[COLLECTION-QUEUE] Collection failed: ${collectionData.collectionId}`, error.message);
             
-            // Check for token/plan errors that should stop processing
-            if (error.status === 402 || error.status === 403 || error.trialRestriction) {
-              job.status = 'failed';
-              job.error = error.message || 'Token or plan restriction';
-              job.failedAt = new Date();
-              
-              await this.updateShopStatus(job.shop, job.statusField, {
-                inProgress: false,
-                status: 'failed',
-                message: error.message || 'Token or plan restriction',
-                lastError: error.message,
-                failedAt: new Date(),
-                totalCollections: job.totalCollections,
-                processedCollections: job.processedCollections,
-                successfulCollections: job.successfulCollections,
-                failedCollections: job.failedCollections,
-                skippedCollections: job.skippedCollections
-              });
-              
-              break; // Stop processing this job
-            }
-            
-            job.failedCollections++;
+            job.processedCollections++;
           }
 
-          job.processedCollections++;
-
-          // Update progress every 2 collections or on last collection
-          if (job.processedCollections % 2 === 0 || job.processedCollections === job.totalCollections) {
-            await this.updateShopStatus(job.shop, job.statusField, {
-              inProgress: true,
-              status: 'processing',
-              message: `Processing ${job.processedCollections}/${job.totalCollections}...`,
-              totalCollections: job.totalCollections,
-              processedCollections: job.processedCollections,
-              successfulCollections: job.successfulCollections,
-              failedCollections: job.failedCollections,
-              skippedCollections: job.skippedCollections
-            });
+          // Small delay between batches
+          if (!shouldStop && batchStart + BATCH_SIZE < job.collections.length) {
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
           }
         }
 
@@ -200,7 +206,8 @@ class CollectionJobQueue {
           duration,
           successful: job.successfulCollections,
           failed: job.failedCollections,
-          skipped: job.skippedCollections
+          skipped: job.skippedCollections,
+          avgPerCollection: (duration / job.totalCollections).toFixed(2) + 's'
         });
 
         const statusMessage = job.jobType === 'aiEnhance' 
@@ -210,7 +217,7 @@ class CollectionJobQueue {
         await this.updateShopStatus(job.shop, job.statusField, {
           inProgress: false,
           status: 'completed',
-          message: `${statusMessage}${job.skippedCollections > 0 ? ` (${job.skippedCollections} skipped)` : ''}${job.failedCollections > 0 ? ` (${job.failedCollections} failed)` : ''}`,
+          message: `${statusMessage}${job.skippedCollections > 0 ? ` (${job.skippedCollections} skipped)` : ''}${job.failedCollections > 0 ? ` (${job.failedCollections} failed)` : ''} in ${duration.toFixed(1)}s`,
           completedAt: new Date(),
           lastError: null,
           totalCollections: job.totalCollections,

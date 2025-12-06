@@ -2861,6 +2861,19 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
       errors.push(`MongoDB update failed: ${e.message}`);
     }
     
+    // Clear job status badge when SEO is deleted
+    // This ensures the "Completed" badge disappears when user deletes optimization
+    if (deleted.metafield) {
+      try {
+        await Shop.findOneAndUpdate(
+          { shop },
+          { $unset: { seoJobStatus: 1, aiEnhanceJobStatus: 1 } }
+        );
+      } catch (e) {
+        console.error('[DELETE-SEO] Failed to clear job status:', e.message);
+      }
+    }
+    
     // Return response
     if (errors.length === 0) {
       res.json({ 
@@ -3098,6 +3111,19 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
       }
     } catch (e) {
       console.error('[DELETE-COLLECTION-SEO] MongoDB update failed:', e.message);
+    }
+    
+    // Clear collection job status badge when SEO is deleted
+    // This ensures the "Completed" badge disappears when user deletes optimization
+    if (deleted.metafield) {
+      try {
+        await Shop.findOneAndUpdate(
+          { shop },
+          { $unset: { collectionSeoJobStatus: 1, collectionAiEnhanceJobStatus: 1 } }
+        );
+      } catch (e) {
+        console.error('[DELETE-COLLECTION-SEO] Failed to clear job status:', e.message);
+      }
     }
     
     // Return response
