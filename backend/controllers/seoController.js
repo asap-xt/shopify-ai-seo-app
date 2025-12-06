@@ -3255,6 +3255,11 @@ router.get('/seo/delete-job-status', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    // Prevent caching - always return fresh status
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
     const status = shopDoc?.deleteJobStatus || {
       inProgress: false,

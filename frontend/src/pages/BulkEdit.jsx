@@ -920,7 +920,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Poll for progress - start immediately, then every 500ms
       const checkStatus = async () => {
         try {
-          const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}`);
+          // Add cache-buster to prevent 304 responses
+          const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}&_t=${Date.now()}`);
           
           if (status.inProgress) {
             const current = status.processedItems || 0;
