@@ -852,7 +852,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   };
   
-  // Delete SEO for selected products
+  // Delete SEO for selected products - OPTIMIZED: Background processing
   const deleteSEO = async () => {
     if (!selectedDeleteLanguages.length) {
       setToast('Please select at least one language to delete');
@@ -869,137 +869,118 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let productsToProcess = [];
       
       if (selectAllPages) {
-        // тук URL вече има shop → не подаваме {shop}
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
-      const total = productsToProcess.length;
-      setProgress({ current: 0, total, percent: 0 });
-      
-      let successCount = 0;
+      // Prepare all items for batch delete
+      const itemsToDelete = [];
       let skippedCount = 0;
       
-      for (let i = 0; i < productsToProcess.length; i++) {
-        const product = productsToProcess[i];
-        setCurrentProduct(product.title || product.handle || 'Product');
+      for (const product of productsToProcess) {
+        const productGid = product.gid || toProductGID(product.productId || product.id);
+        const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
         
+        // Only delete languages that are actually optimized
+        const languagesToDelete = selectedDeleteLanguages.filter(lang => 
+          optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
+        );
+        
+        if (languagesToDelete.length === 0) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Add each language as separate item
+        for (const language of languagesToDelete) {
+          itemsToDelete.push({ productId: productGid, language });
+        }
+      }
+      
+      if (itemsToDelete.length === 0) {
+        setToast('No optimized products found to delete');
+        setIsProcessing(false);
+        return;
+      }
+      
+      const total = itemsToDelete.length;
+      setProgress({ current: 0, total, percent: 0 });
+      
+      // Start background delete
+      await api('/seo/bulk-delete-batch', {
+        method: 'POST',
+        shop,
+        body: { items: itemsToDelete }
+      });
+      
+      // Poll for progress
+      const pollInterval = setInterval(async () => {
         try {
-          const productGid = product.gid || toProductGID(product.productId || product.id);
-          const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+          const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}`);
           
-          // Only delete languages that are actually optimized
-          const languagesToDelete = selectedDeleteLanguages.filter(lang => 
-            optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
-          );
-
-          
-          if (languagesToDelete.length === 0) {
-            skippedCount++;
-            continue;
-          }
-          
-          const data = await api('/api/seo/delete-multi', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              languages: languagesToDelete,
-            }
-          });
-          
-          // Optimistic update - immediately update local state
-          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
+          if (status.inProgress) {
+            const current = status.processedItems || 0;
+            const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+            setProgress({ current, total, percent });
+            setCurrentProduct(`Deleting ${current}/${total}...`);
+          } else {
+            // Job completed
+            clearInterval(pollInterval);
             
+            // Update local state - remove all deleted languages
             setProducts(prevProducts => 
               prevProducts.map(prod => {
-                if (prod.id === product.id) {
-                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
-                  const newOptimized = currentOptimized.filter(lang => 
-                    !data.deletedLanguages.includes(lang)
-                  );
-                  
-                  
-                  return {
-                    ...prod,
-                    optimizationSummary: {
-                      ...prod.optimizationSummary,
-                      optimizedLanguages: newOptimized,
-                      optimized: newOptimized.length > 0,
-                      aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary.aiEnhanced : false, // Reset AI badge if all languages deleted
-                      lastOptimized: newOptimized.length > 0 
-                        ? prod.optimizationSummary.lastOptimized 
-                        : null
-                    }
-                  };
-                }
-                return prod;
+                const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
+                const newOptimized = currentOptimized.filter(lang => 
+                  !selectedDeleteLanguages.includes(lang)
+                );
+                
+                return {
+                  ...prod,
+                  optimizationSummary: {
+                    ...prod.optimizationSummary,
+                    optimizedLanguages: newOptimized,
+                    optimized: newOptimized.length > 0,
+                    aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary?.aiEnhanced : false
+                  }
+                };
               })
             );
             
-            // Debug log after optimistic update
-          }
-          
-          successCount++;
-          
-          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
-            // Verify deletion in backend
-            await api('/api/products/verify-after-delete', {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                productIds: [productGid],
-                deletedLanguages: data.deletedLanguages
-              }
-            });
+            // Clear selections
+            setSelectedItems([]);
+            setSelectAllPages(false);
+            
+            // Show result toast
+            const deletedCount = status.deletedItems || 0;
+            const failedCount = status.failedItems || 0;
+            
+            if (skippedCount > 0 || failedCount > 0) {
+              setToast(`Deleted SEO from ${deletedCount} items${skippedCount > 0 ? ` (${skippedCount} products skipped)` : ''}${failedCount > 0 ? ` (${failedCount} failed)` : ''}`);
+            } else {
+              setToast(`Deleted SEO from ${deletedCount} items`);
+            }
+            
+            setIsProcessing(false);
+            setProgress({ current: total, total, percent: 100 });
           }
         } catch (err) {
-          setErrors(prev => [...prev, { product: product.title, error: err.message }]);
+          console.error('Poll error:', err);
         }
-        
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
-      }
+      }, 1000);
       
-      // Clear selections
-      setSelectedItems([]);
-      setSelectAllPages(false);
-      
-      // Show result toast
-      if (skippedCount > 0) {
-        setToast(`Deleted Optimization for AI Search from ${successCount} products (${skippedCount} had no optimisation to delete)`);
-      } else {
-        setToast(`Deleted Optimization for AI Search from ${successCount} products`);
-      }
-      
-      // Always hide the "Completed" status bar after delete operation
-      // This prevents showing stale "Applied AIEO to X products" after deletion
-      setSeoJobStatus({
-        inProgress: false,
-        status: 'idle',
-        phase: null,
-        message: null,
-        totalProducts: 0,
-        processedProducts: 0,
-        successfulProducts: 0,
-        failedProducts: 0,
-        skippedProducts: 0
-      });
-      
-      // Force refetch with delay and cache busting
+      // Safety timeout - stop polling after 5 minutes
       setTimeout(() => {
-        const timestamp = Date.now();
-        loadProducts(1, false, timestamp); // Pass timestamp to bypass cache
-      }, 500); // Small delay to ensure backend has completed
+        clearInterval(pollInterval);
+        setIsProcessing(false);
+      }, 5 * 60 * 1000);
+      
+      return; // Don't continue - polling handles the rest
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
-    } finally {
       setIsProcessing(false);
       setCurrentProduct('');
     }
