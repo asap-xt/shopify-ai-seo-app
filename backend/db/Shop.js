@@ -187,6 +187,20 @@ const shopSchema = new mongoose.Schema({
     failedCollections: { type: Number, default: 0 },
     skippedCollections: { type: Number, default: 0 }
   },
+  // Delete Job queue status (for background SEO deletion)
+  deleteJobStatus: {
+    inProgress: { type: Boolean, default: false },
+    status: { type: String, default: 'idle' }, // idle, processing, completed, failed
+    message: { type: String, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    // Progress tracking
+    totalItems: { type: Number, default: 0 },
+    processedItems: { type: Number, default: 0 },
+    deletedItems: { type: Number, default: 0 },
+    failedItems: { type: Number, default: 0 }
+  },
   storeLanguages: [{
     locale: String,
     name: String,
