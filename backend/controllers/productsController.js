@@ -206,9 +206,13 @@ router.get('/list', async (req, res) => {
       const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
       const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
       
+      // FILTER: Only show ACTIVE products (exclude DRAFT and ARCHIVED)
+      // This aligns with sitemap generation which only includes active products
+      const activeProducts = rawProducts.filter(product => product.status === 'ACTIVE');
+      
       // Store basic product data WITHOUT optimization summary
       // (optimization summary will be fetched fresh later)
-      const products = rawProducts.map(product => ({
+      const products = activeProducts.map(product => ({
         ...product,
         // Remove metafields from cached data (we'll fetch them fresh)
         metafields: undefined

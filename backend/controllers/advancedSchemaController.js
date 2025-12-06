@@ -170,9 +170,13 @@ async function syncProductsToMongoDB(shop) {
       if (edges.length === 0) break;
     }
 
+    // FILTER: Only sync ACTIVE products (exclude DRAFT and ARCHIVED)
+    // This aligns with sitemap generation and product list display
+    const activeProducts = allProducts.filter(product => product.status === 'ACTIVE');
+    
     // Save products to MongoDB
     let syncedCount = 0;
-    for (const product of allProducts) {
+    for (const product of activeProducts) {
       const numericId = product.id.replace('gid://shopify/Product/', '');
       
       // Check if product has AI SEO metafields (indicating it's been optimized)

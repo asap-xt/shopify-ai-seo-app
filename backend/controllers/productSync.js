@@ -297,7 +297,10 @@ export async function syncProductsForShop(req) {
     ]);
     
     // Fetch all products
-    const products = await fetchAllProducts(req);
+    const allProducts = await fetchAllProducts(req);
+    
+    // FILTER: Only sync ACTIVE products (exclude DRAFT and ARCHIVED)
+    const products = allProducts.filter(product => product.status === 'ACTIVE');
     
     // Format products for AI
     const formattedProducts = products.map(product =>
