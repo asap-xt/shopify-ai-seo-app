@@ -10,7 +10,7 @@ const router = express.Router();
 // Apply authentication to all routes
 router.use(requireAuth);
 
-// GraphQL query for fetching collections (includes publishedOnCurrentPublication for filtering)
+// GraphQL query for fetching collections (includes resourcePublicationsCount for filtering)
 const COLLECTIONS_QUERY = `
   query GetCollections($first: Int!, $after: String) {
     collections(first: $first, after: $after) {
@@ -22,7 +22,9 @@ const COLLECTIONS_QUERY = `
           description
           descriptionHtml
           updatedAt
-          publishedOnCurrentPublication
+          resourcePublicationsCount {
+            count
+          }
           image {
             id
             url
@@ -69,10 +71,10 @@ async function fetchAllCollections(req) {
       
       const edges = collectionsData.edges || [];
       
-      // FILTER: Only include collections that are published on current sales channel
+      // FILTER: Only include collections that have at least one publication (sales channel)
       const publishedCollections = edges
         .map(edge => edge.node)
-        .filter(collection => collection.publishedOnCurrentPublication === true);
+        .filter(collection => (collection.resourcePublicationsCount?.count || 0) > 0);
       
       collections.push(...publishedCollections);
       
