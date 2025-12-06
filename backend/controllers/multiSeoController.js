@@ -195,7 +195,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
       model
     }));
 
-    // Generate function - calls /seo/generate for each language
+    // OPTIMIZED: Generate function - uses DIRECT function call instead of HTTP fetch
     const generateFn = async (productData) => {
       const languagesToGenerate = productData.languages.filter(
         lang => !productData.existingLanguages.includes(lang)
@@ -205,27 +205,32 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
         return { success: true, skipped: true, reason: 'All languages already optimized' };
       }
 
+      // Import generateSEOForLanguage directly
+      const { generateSEOForLanguage } = await import('./seoController.js');
+      
+      // Create a mock req object for the function
+      const mockReq = {
+        shopDomain: shopDomain,
+        headers: {},
+        query: { shop: shopDomain }
+      };
+
       const results = [];
       for (const lang of languagesToGenerate) {
         try {
-          const url = `${APP_URL}/seo/generate?shop=${encodeURIComponent(shopDomain)}`;
-          const rsp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              shop: shopDomain, 
-              productId: productData.productId, 
-              model: productData.model, 
-              language: lang 
-            }),
-          });
-          const text = await rsp.text();
-          let json;
-          try { json = JSON.parse(text); } catch { throw new Error(text || 'Non-JSON response'); }
-          if (!rsp.ok) {
-            results.push({ language: lang, error: json?.error || `Generate failed (${rsp.status})` });
+          // Direct function call - no HTTP overhead!
+          const result = await generateSEOForLanguage(
+            mockReq,
+            shopDomain,
+            productData.productId,
+            productData.model,
+            lang
+          );
+          
+          if (result?.seo) {
+            results.push({ language: lang, seo: result.seo, quality: result.quality });
           } else {
-            results.push({ language: lang, seo: json.seo, quality: json.quality });
+            results.push({ language: lang, error: 'Generate returned no SEO data' });
           }
         } catch (e) {
           results.push({ language: lang, error: e.message || 'Generate exception' });

@@ -3268,5 +3268,5 @@ router.get('/seo/collection-job-status', validateRequest(), async (req, res) => 
   }
 });
 
-export { applySEOForLanguage };
+export { applySEOForLanguage, generateSEOForLanguage };
 export default router;
