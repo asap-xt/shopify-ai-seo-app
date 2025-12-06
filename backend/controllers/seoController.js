@@ -3069,6 +3069,204 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
   }
 });
 
+// ============================================================
+// BACKGROUND DELETE ENDPOINT
+// ============================================================
+
+/**
+ * POST /seo/bulk-delete-batch
+ * Background delete SEO for multiple products
+ * Returns immediately, processes in background
+ * Body: { items: [{ productId, language }] }
+ */
+router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { items } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Missing or invalid items array' });
+    }
+    
+    // Check if already processing
+    const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
+    if (shopDoc?.deleteJobStatus?.inProgress) {
+      return res.status(409).json({ 
+        error: 'Delete job already in progress',
+        status: shopDoc.deleteJobStatus
+      });
+    }
+    
+    // Start background delete
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': true,
+          'deleteJobStatus.status': 'processing',
+          'deleteJobStatus.message': `Deleting SEO for ${items.length} items...`,
+          'deleteJobStatus.totalItems': items.length,
+          'deleteJobStatus.processedItems': 0,
+          'deleteJobStatus.deletedItems': 0,
+          'deleteJobStatus.failedItems': 0,
+          'deleteJobStatus.startedAt': new Date()
+        }
+      },
+      { upsert: true }
+    );
+    
+    // Return immediately
+    res.json({
+      ok: true,
+      queued: true,
+      message: 'Delete job started in background',
+      totalItems: items.length
+    });
+    
+    // Process in background (non-blocking)
+    processDeleteInBackground(req, shop, items).catch(err => {
+      console.error('[BULK-DELETE-BATCH] Background error:', err);
+    });
+    
+  } catch (error) {
+    console.error('[BULK-DELETE-BATCH] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * Background delete processor
+ */
+async function processDeleteInBackground(req, shop, items) {
+  const BATCH_SIZE = 50; // Items per batch
+  const BATCH_DELAY = 200; // ms between batches
+  
+  let processedItems = 0;
+  let deletedItems = 0;
+  let failedItems = 0;
+  
+  try {
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    // Process in batches
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE);
+      
+      // Prepare metafields for this batch
+      const metafieldsToDelete = batch.map(({ productId, language }) => ({
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: `seo__${language.toLowerCase()}`
+      }));
+      
+      try {
+        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+          metafields: metafieldsToDelete
+        });
+        
+        const deleted = deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0;
+        deletedItems += deleted;
+        failedItems += batch.length - deleted;
+        
+      } catch (e) {
+        console.error('[BULK-DELETE-BATCH] Batch error:', e.message);
+        failedItems += batch.length;
+      }
+      
+      processedItems += batch.length;
+      
+      // Update progress
+      await Shop.findOneAndUpdate(
+        { shop },
+        {
+          $set: {
+            'deleteJobStatus.message': `Deleting ${processedItems}/${items.length}...`,
+            'deleteJobStatus.processedItems': processedItems,
+            'deleteJobStatus.deletedItems': deletedItems,
+            'deleteJobStatus.failedItems': failedItems
+          }
+        }
+      );
+      
+      // Small delay between batches
+      if (i + BATCH_SIZE < items.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+      }
+    }
+    
+    // Mark as completed
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': false,
+          'deleteJobStatus.status': 'completed',
+          'deleteJobStatus.message': `Deleted ${deletedItems} items${failedItems > 0 ? ` (${failedItems} failed)` : ''}`,
+          'deleteJobStatus.completedAt': new Date()
+        },
+        // Also clear SEO job status badges
+        $unset: {
+          seoJobStatus: 1,
+          aiEnhanceJobStatus: 1
+        }
+      }
+    );
+    
+    console.log(`[BULK-DELETE-BATCH] ✅ Completed for ${shop}: ${deletedItems} deleted, ${failedItems} failed`);
+    
+  } catch (error) {
+    console.error('[BULK-DELETE-BATCH] Fatal error:', error);
+    
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': false,
+          'deleteJobStatus.status': 'failed',
+          'deleteJobStatus.message': `Failed: ${error.message}`,
+          'deleteJobStatus.failedAt': new Date()
+        }
+      }
+    );
+  }
+}
+
+/**
+ * GET /seo/delete-job-status
+ * Get status of background delete job
+ */
+router.get('/seo/delete-job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
+    const status = shopDoc?.deleteJobStatus || {
+      inProgress: false,
+      status: 'idle',
+      message: null
+    };
+    
+    res.json(status);
+    
+  } catch (error) {
+    console.error('[DELETE-JOB-STATUS] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // DELETE /collections/delete-seo - Delete collection SEO for specific language
 router.delete('/collections/delete-seo', validateRequest(), async (req, res) => {
   try {
