@@ -404,11 +404,15 @@ router.post('/sync', async (req, res) => {
       if (edges.length === 0) break;
     }
 
+    // Count only ACTIVE products (exclude DRAFT and ARCHIVED)
+    const activeProducts = allProducts.filter(p => p.status === 'ACTIVE');
+    
     return res.json({
       success: true,
-      productsCount: allProducts.length,
+      productsCount: activeProducts.length,
+      totalProducts: allProducts.length,
       shop: req.auth.shop,
-      message: `Successfully synced ${allProducts.length} products`
+      message: `Successfully synced ${activeProducts.length} products`
     });
 
   } catch (error) {
