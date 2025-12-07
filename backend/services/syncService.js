@@ -140,8 +140,10 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
     }
   }
 
-  console.log(`[SYNC] Products sync complete: ${allProducts.length} products`);
-  return allProducts.length;
+  // Count only ACTIVE products for the return value (user-facing count)
+  const activeCount = allProducts.filter(({ node }) => node.status === 'ACTIVE').length;
+  console.log(`[SYNC] Products sync complete: ${activeCount} active products (${allProducts.length} total)`);
+  return activeCount;
 }
 
 /**
