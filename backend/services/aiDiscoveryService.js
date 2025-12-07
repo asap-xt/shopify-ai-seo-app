@@ -342,11 +342,11 @@ class AIDiscoveryService {
         schemaData: false
       },
       growth_plus: {
-        productsJson: true, // Enabled by default
+        productsJson: true, // Enabled by default (static, no tokens)
         aiSitemap: true, // Enabled by default (requires tokens when used)
-        welcomePage: true, // Enabled by default (Growth includes, no tokens)
-        collectionsJson: true, // Enabled by default (Growth includes, no tokens)
-        storeMetadata: true, // Enabled by default (requires tokens when used)
+        welcomePage: true, // Enabled by default (static, no tokens)
+        collectionsJson: true, // Enabled by default (static, no tokens)
+        storeMetadata: true, // Enabled by default (static, no tokens)
         schemaData: true // Enabled by default (requires tokens when used)
       },
       growth_extra: {
