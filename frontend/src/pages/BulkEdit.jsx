@@ -826,6 +826,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Close language modal
       setShowLanguageModal(false);
       
+      // Clear any previous delete badge when starting optimize
+      setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+      
       // Prepare batch data for background processing
       const productsForBatch = productsToProcess.map(product => ({
         productId: product.gid || toProductGID(product.productId || product.id),
@@ -916,6 +919,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Count unique products (not metafield items)
       const uniqueProductIds = [...new Set(itemsToDelete.map(item => item.productId))];
       const totalProductsToDelete = uniqueProductIds.length;
+      
+      // Clear any previous optimize badge when starting delete
+      setSeoJobStatus({ inProgress: false, status: 'idle', message: null });
       
       // Set initial delete status - shows inline card
       setDeleteJobStatus({
