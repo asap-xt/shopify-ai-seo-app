@@ -97,6 +97,23 @@ export default function Dashboard({ shop: shopProp }) {
     }
   });
   
+  // Review banner state (show after 6+ days of activation)
+  const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedReviewBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  const [clickedReviewRate, setClickedReviewRate] = useState(() => {
+    try {
+      return localStorage.getItem(`clickedReviewRate_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
   // Token purchase modal state
   const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   
@@ -456,6 +473,23 @@ export default function Dashboard({ shop: shopProp }) {
     if (balance >= 1000) return false;
     return true;
   }, [subscription, tokens]);
+  
+  // Review banner - show 6+ days after plan activation (syncs with email on day 6)
+  const shouldShowReviewBanner = useMemo(() => {
+    // Must have activated plan (not trial)
+    if (!subscription?.activatedAt) return false;
+    
+    // Must not have dismissed or clicked rate
+    if (dismissedReviewBanner || clickedReviewRate) return false;
+    
+    // Calculate days since activation
+    const activatedAt = new Date(subscription.activatedAt);
+    const now = new Date();
+    const daysSinceActivation = Math.floor((now - activatedAt) / (1000 * 60 * 60 * 24));
+    
+    // Show after 6+ days (same timing as email)
+    return daysSinceActivation >= 6;
+  }, [subscription, dismissedReviewBanner, clickedReviewRate]);
 
   // Handle dismissing the upgrade banner
   const handleDismissUpgradeBanner = () => {
@@ -474,6 +508,28 @@ export default function Dashboard({ shop: shopProp }) {
       setDismissedTokenBanner(true);
     } catch (error) {
       console.error('[Dashboard] Error saving dismissed token banner state:', error);
+    }
+  };
+  
+  // Handle dismissing the review banner
+  const handleDismissReviewBanner = () => {
+    try {
+      localStorage.setItem(`dismissedReviewBanner_${shop}`, 'true');
+      setDismissedReviewBanner(true);
+    } catch (error) {
+      console.error('[Dashboard] Error saving dismissed review banner state:', error);
+    }
+  };
+  
+  // Handle clicking "Rate Us" in review banner
+  const handleClickReviewRate = () => {
+    try {
+      localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
+      setClickedReviewRate(true);
+      // Open App Store in new tab
+      window.open('https://apps.shopify.com/indexaize#modal-show=ReviewListingModal', '_blank');
+    } catch (error) {
+      console.error('[Dashboard] Error saving clicked review rate state:', error);
     }
   };
 
@@ -881,6 +937,25 @@ export default function Dashboard({ shop: shopProp }) {
           >
             <Text>
               Purchase tokens to access AI-enhanced optimization features like AEO generation, AI Discovery and more.
+            </Text>
+          </Banner>
+        </Layout.Section>
+      )}
+      
+      {/* App Store Review Request - shows 6+ days after plan activation */}
+      {shouldShowReviewBanner && (
+        <Layout.Section>
+          <Banner
+            title="Enjoying indexAIze? ⭐"
+            tone="success"
+            action={{
+              content: 'Rate Us',
+              onAction: handleClickReviewRate
+            }}
+            onDismiss={handleDismissReviewBanner}
+          >
+            <Text>
+              Your feedback helps other merchants discover indexAIze. If you're finding value in our app, we'd love a quick review!
             </Text>
           </Banner>
         </Layout.Section>
