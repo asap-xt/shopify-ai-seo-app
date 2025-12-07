@@ -67,8 +67,8 @@ export function getPlanFeatures(planKey) {
   // Professional Plus - all from Professional plus:
   if (planKey === 'professional plus') {
     features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens:');
-    features.push('✓ AI Welcome Page (pay-per-use tokens)');
-    features.push('✓ Collections JSON Feed (pay-per-use tokens)');
+    features.push('✓ AI Welcome Page');
+    features.push('✓ Collections JSON Feed');
     features.push('✓ AI-Optimized Sitemap (pay-per-use tokens)');
     features.push('✓ Store Metadata (pay-per-use tokens)');
     features.push('✓ Advanced Schema Data (pay-per-use tokens)');
