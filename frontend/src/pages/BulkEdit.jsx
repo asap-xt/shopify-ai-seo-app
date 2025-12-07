@@ -960,9 +960,20 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             const deletedCount = status.deletedProducts || 0;
             const failedCount = status.failedProducts || 0;
             
-            // Update local state - remove all deleted languages
+            // Update local state - remove deleted languages ONLY for selected products
+            // FIX: Only update products that were actually selected for deletion
+            const selectedProductIds = new Set(selectedItems.map(id => String(id)));
+            
             setProducts(prevProducts => 
               prevProducts.map(prod => {
+                // Get product ID as string for comparison
+                const prodId = String(prod.productId || prod.id);
+                
+                // Only update products that were selected for deletion
+                if (!selectedProductIds.has(prodId)) {
+                  return prod; // Not selected - don't modify
+                }
+                
                 const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
                 const newOptimized = currentOptimized.filter(lang => 
                   !selectedDeleteLanguages.includes(lang)
