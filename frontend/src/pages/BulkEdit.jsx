@@ -695,6 +695,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       title: product.title
     }));
 
+    // Clear any previous badges when starting AI Enhancement
+    setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+    setSeoJobStatus({ inProgress: false, status: 'idle', message: null });
+
     try {
       const response = await api('/ai-enhance/batch', {
         method: 'POST',
@@ -826,8 +830,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Close language modal
       setShowLanguageModal(false);
       
-      // Clear any previous delete badge when starting optimize
+      // Clear any previous badges when starting optimize
       setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+      setAiEnhanceJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
       
       // Prepare batch data for background processing
       const productsForBatch = productsToProcess.map(product => ({
@@ -920,8 +925,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const uniqueProductIds = [...new Set(itemsToDelete.map(item => item.productId))];
       const totalProductsToDelete = uniqueProductIds.length;
       
-      // Clear any previous optimize badge when starting delete
+      // Clear any previous badges when starting delete
       setSeoJobStatus({ inProgress: false, status: 'idle', message: null });
+      setAiEnhanceJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
       
       // Set initial delete status - shows inline card
       setDeleteJobStatus({
