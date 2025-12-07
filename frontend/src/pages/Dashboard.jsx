@@ -938,20 +938,20 @@ export default function Dashboard({ shop: shopProp }) {
         </Layout.Section>
       )}
       
-      {/* App Store Review Request - shows 6+ days after plan activation */}
+      {/* App Store Review Request - shows when AIEO Score > 50 */}
       {shouldShowReviewBanner && (
         <Layout.Section>
           <Banner
-            title="Enjoying indexAIze? ⭐"
+            title="Your store is AI-optimized! 🎯"
             tone="success"
             action={{
-              content: 'Rate Us',
+              content: 'Leave a Review',
               onAction: handleClickReviewRate
             }}
             onDismiss={handleDismissReviewBanner}
           >
             <Text>
-              Your feedback helps other merchants discover indexAIze. If you're finding value in our app, we'd love a quick review!
+              Your AIEO Score shows real results. A quick review helps other merchants discover how to optimize for AI search.
             </Text>
           </Banner>
         </Layout.Section>
