@@ -942,16 +942,16 @@ export default function Dashboard({ shop: shopProp }) {
       {shouldShowReviewBanner && (
         <Layout.Section>
           <Banner
-            title="Your store is AI-optimized! 🎯"
+            title="Help shape the future of AI Search"
             tone="success"
             action={{
-              content: 'Leave a Review',
+              content: 'Rate indexAIze',
               onAction: handleClickReviewRate
             }}
             onDismiss={handleDismissReviewBanner}
           >
             <Text>
-              Your AIEO Score shows real results. A quick review helps other merchants discover how to optimize for AI search.
+              You've successfully optimized your store for AI engines. Your feedback helps us build better tools for the Shopify community.
             </Text>
           </Banner>
         </Layout.Section>
