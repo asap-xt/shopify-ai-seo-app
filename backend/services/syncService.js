@@ -89,8 +89,21 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
 
   }
 
-  // Save products to database
+  // STEP 1: Clean up orphaned products (from reinstall or deleted in Shopify)
+  // Get all Shopify product IDs we just fetched
+  const currentShopifyIds = allProducts.map(({ node }) => node.id);
   
+  // Delete MongoDB records that don't exist in Shopify anymore
+  const cleanupResult = await Product.deleteMany({
+    shop,
+    shopifyProductId: { $nin: currentShopifyIds }
+  });
+  
+  if (cleanupResult.deletedCount > 0) {
+    console.log(`[SYNC] Cleaned up ${cleanupResult.deletedCount} orphaned product records for ${shop}`);
+  }
+  
+  // STEP 2: Save products to database
   for (const { node: product } of allProducts) {
     try {
       // Process metafields to determine optimization status
@@ -200,8 +213,19 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
 
   }
 
-  // Save collections to database
+  // STEP 1: Clean up orphaned collections (from reinstall or deleted in Shopify)
+  const currentCollectionIds = allCollections.map(({ node }) => node.id);
   
+  const cleanupResult = await Collection.deleteMany({
+    shop,
+    collectionId: { $nin: currentCollectionIds }
+  });
+  
+  if (cleanupResult.deletedCount > 0) {
+    console.log(`[SYNC] Cleaned up ${cleanupResult.deletedCount} orphaned collection records for ${shop}`);
+  }
+  
+  // STEP 2: Save collections to database
   for (const { node: collection } of allCollections) {
     try {
       const seoStatus = processMetafields(collection.metafields);
