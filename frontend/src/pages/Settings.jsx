@@ -1068,8 +1068,9 @@ export default function Settings() {
     const plan = normalizePlan(settings?.plan);
     
     // Features that Plus plans need tokens for (aiSitemap and schemaData removed - moved to Store Optimization)
+    // NOTE: welcomePage and collectionsJson removed - they are static content, NO AI tokens needed!
     const plusPlansRequireTokens = {
-      professional_plus: ['welcomePage', 'collectionsJson'], // Store Metadata is included (no tokens)
+      professional_plus: [], // welcomePage & collectionsJson are static (no tokens). Store Metadata is included.
       growth_plus: [] // All features included for Growth Plus
     };
     
