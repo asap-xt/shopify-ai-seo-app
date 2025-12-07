@@ -1,5 +1,5 @@
 // frontend/src/components/AIEOScoreCard.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Card,
   Box,
@@ -31,7 +31,8 @@ export default function AIEOScoreCard({
   stats = {},
   shop = '',
   api = null,
-  onTestsComplete = null
+  onTestsComplete = null,
+  onScoreCalculated = null // Callback to expose calculated score to parent
 }) {
 
   const [testing, setTesting] = useState(false);
@@ -379,6 +380,13 @@ export default function AIEOScoreCard({
 
     return calculateScore(testResults, aiTestResults, stats, endpointDisplayNames);
   }, [testResults, aiTestResults, stats]);
+  
+  // Notify parent of score changes
+  useEffect(() => {
+    if (onScoreCalculated && calculatedAIEOScore) {
+      onScoreCalculated(calculatedAIEOScore.score);
+    }
+  }, [calculatedAIEOScore, onScoreCalculated]);
 
   // Safety check - ensure calculatedAIEOScore exists
   if (!calculatedAIEOScore) {

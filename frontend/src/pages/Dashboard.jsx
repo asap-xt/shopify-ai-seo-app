@@ -114,6 +114,9 @@ export default function Dashboard({ shop: shopProp }) {
     }
   });
   
+  // AIEO Score for review banner trigger
+  const [aieoScore, setAieoScore] = useState(0);
+  
   // Token purchase modal state
   const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   
@@ -474,7 +477,7 @@ export default function Dashboard({ shop: shopProp }) {
     return true;
   }, [subscription, tokens]);
   
-  // Review banner - show 6+ days after plan activation (syncs with email on day 6)
+  // Review banner - show when AIEO Score > 50 (user sees real value)
   const shouldShowReviewBanner = useMemo(() => {
     // Must have activated plan (not trial)
     if (!subscription?.activatedAt) return false;
@@ -482,14 +485,9 @@ export default function Dashboard({ shop: shopProp }) {
     // Must not have dismissed or clicked rate
     if (dismissedReviewBanner || clickedReviewRate) return false;
     
-    // Calculate days since activation
-    const activatedAt = new Date(subscription.activatedAt);
-    const now = new Date();
-    const daysSinceActivation = Math.floor((now - activatedAt) / (1000 * 60 * 60 * 24));
-    
-    // Show after 6+ days (same timing as email)
-    return daysSinceActivation >= 6;
-  }, [subscription, dismissedReviewBanner, clickedReviewRate]);
+    // Show when AIEO Score is above 50 (means user has optimized and tested)
+    return aieoScore > 50;
+  }, [subscription, dismissedReviewBanner, clickedReviewRate, aieoScore]);
 
   // Handle dismissing the upgrade banner
   const handleDismissUpgradeBanner = () => {
@@ -1129,6 +1127,7 @@ export default function Dashboard({ shop: shopProp }) {
             // Reload dashboard data to get fresh stats
             loadDashboardData(true);
           }}
+          onScoreCalculated={(score) => setAieoScore(score)}
         />
       </Layout.Section>
 
