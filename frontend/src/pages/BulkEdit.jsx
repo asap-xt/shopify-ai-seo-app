@@ -695,6 +695,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       title: product.title
     }));
 
+    // Clear any previous badges when starting AI Enhancement
+    setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+    setSeoJobStatus({ inProgress: false, status: 'idle', message: null });
+
     try {
       const response = await api('/ai-enhance/batch', {
         method: 'POST',
@@ -826,6 +830,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Close language modal
       setShowLanguageModal(false);
       
+      // Clear any previous badges when starting optimize
+      setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+      setAiEnhanceJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+      
       // Prepare batch data for background processing
       const productsForBatch = productsToProcess.map(product => ({
         productId: product.gid || toProductGID(product.productId || product.id),
@@ -917,6 +925,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const uniqueProductIds = [...new Set(itemsToDelete.map(item => item.productId))];
       const totalProductsToDelete = uniqueProductIds.length;
       
+      // Clear any previous badges when starting delete
+      setSeoJobStatus({ inProgress: false, status: 'idle', message: null });
+      setAiEnhanceJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
+      
       // Set initial delete status - shows inline card
       setDeleteJobStatus({
         inProgress: true,
@@ -960,9 +972,20 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             const deletedCount = status.deletedProducts || 0;
             const failedCount = status.failedProducts || 0;
             
-            // Update local state - remove all deleted languages
+            // Update local state - remove deleted languages ONLY for selected products
+            // FIX: Only update products that were actually selected for deletion
+            const selectedProductIds = new Set(selectedItems.map(id => String(id)));
+            
             setProducts(prevProducts => 
               prevProducts.map(prod => {
+                // Get product ID as string for comparison
+                const prodId = String(prod.productId || prod.id);
+                
+                // Only update products that were selected for deletion
+                if (!selectedProductIds.has(prodId)) {
+                  return prod; // Not selected - don't modify
+                }
+                
                 const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
                 const newOptimized = currentOptimized.filter(lang => 
                   !selectedDeleteLanguages.includes(lang)
