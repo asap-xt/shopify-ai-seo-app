@@ -147,6 +147,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   });
   const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   
+  // Background Delete Job status
+  const [deleteJobStatus, setDeleteJobStatus] = useState({
+    inProgress: false,
+    status: 'idle',
+    message: null,
+    totalProducts: 0,
+    processedProducts: 0,
+    deletedProducts: 0,
+    failedProducts: 0,
+    completedAt: null
+  });
+  
   // Plan and help modal state
   const [plan, setPlan] = useState(null);
   const [productLimit, setProductLimit] = useState(70); // Default to Starter limit
@@ -852,7 +864,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   };
   
-  // Delete SEO for selected products
+  // Delete SEO for selected products - OPTIMIZED: Background processing with inline status
   const deleteSEO = async () => {
     if (!selectedDeleteLanguages.length) {
       setToast('Please select at least one language to delete');
@@ -861,147 +873,188 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     
     setShowDeleteModal(false);
     setShowDeleteConfirmModal(false);
-    setIsProcessing(true);
-    setProgress({ current: 0, total: 0, percent: 0 });
-    setErrors([]);
     
     try {
       let productsToProcess = [];
       
       if (selectAllPages) {
-        // тук URL вече има shop → не подаваме {shop}
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
-      const total = productsToProcess.length;
-      setProgress({ current: 0, total, percent: 0 });
-      
-      let successCount = 0;
+      // Prepare all items for batch delete
+      const itemsToDelete = [];
       let skippedCount = 0;
       
-      for (let i = 0; i < productsToProcess.length; i++) {
-        const product = productsToProcess[i];
-        setCurrentProduct(product.title || product.handle || 'Product');
+      for (const product of productsToProcess) {
+        const productGid = product.gid || toProductGID(product.productId || product.id);
+        const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
         
+        // Only delete languages that are actually optimized
+        const languagesToDelete = selectedDeleteLanguages.filter(lang => 
+          optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
+        );
+        
+        if (languagesToDelete.length === 0) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Add each language as separate item
+        for (const language of languagesToDelete) {
+          itemsToDelete.push({ productId: productGid, language });
+        }
+      }
+      
+      if (itemsToDelete.length === 0) {
+        setToast('No optimized products found to delete');
+        return;
+      }
+      
+      // Count unique products (not metafield items)
+      const uniqueProductIds = [...new Set(itemsToDelete.map(item => item.productId))];
+      const totalProductsToDelete = uniqueProductIds.length;
+      
+      // Set initial delete status - shows inline card
+      setDeleteJobStatus({
+        inProgress: true,
+        status: 'processing',
+        message: `Deleting 0/${totalProductsToDelete} products...`,
+        totalProducts: totalProductsToDelete,
+        processedProducts: 0,
+        deletedProducts: 0,
+        failedProducts: 0,
+        completedAt: null
+      });
+      
+      // Start background delete
+      await api('/seo/bulk-delete-batch', {
+        method: 'POST',
+        shop,
+        body: { items: itemsToDelete }
+      });
+      
+      // Poll for progress - start immediately, then every 500ms
+      const checkStatus = async () => {
         try {
-          const productGid = product.gid || toProductGID(product.productId || product.id);
-          const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+          // Add cache-buster to prevent 304 responses
+          const status = await api(`/seo/delete-job-status?shop=${encodeURIComponent(shop)}&_t=${Date.now()}`);
           
-          // Only delete languages that are actually optimized
-          const languagesToDelete = selectedDeleteLanguages.filter(lang => 
-            optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
-          );
-
-          
-          if (languagesToDelete.length === 0) {
-            skippedCount++;
-            continue;
-          }
-          
-          const data = await api('/api/seo/delete-multi', {
-            method: 'POST',
-            shop,
-            body: {
-              shop,
-              productId: productGid,
-              languages: languagesToDelete,
-            }
-          });
-          
-          // Optimistic update - immediately update local state
-          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
+          if (status.inProgress) {
+            const current = status.processedProducts || status.deletedProducts || 0;
+            setDeleteJobStatus({
+              inProgress: true,
+              status: 'processing',
+              message: `Deleting ${current}/${totalProductsToDelete} products...`,
+              totalProducts: totalProductsToDelete,
+              processedProducts: current,
+              deletedProducts: status.deletedProducts || 0,
+              failedProducts: status.failedProducts || 0,
+              completedAt: null
+            });
+            return false; // Not done yet
+          } else if (status.status === 'completed') {
+            // Job completed - show results
+            const deletedCount = status.deletedProducts || 0;
+            const failedCount = status.failedProducts || 0;
             
+            // Update local state - remove all deleted languages
             setProducts(prevProducts => 
               prevProducts.map(prod => {
-                if (prod.id === product.id) {
-                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
-                  const newOptimized = currentOptimized.filter(lang => 
-                    !data.deletedLanguages.includes(lang)
-                  );
-                  
-                  
-                  return {
-                    ...prod,
-                    optimizationSummary: {
-                      ...prod.optimizationSummary,
-                      optimizedLanguages: newOptimized,
-                      optimized: newOptimized.length > 0,
-                      aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary.aiEnhanced : false, // Reset AI badge if all languages deleted
-                      lastOptimized: newOptimized.length > 0 
-                        ? prod.optimizationSummary.lastOptimized 
-                        : null
-                    }
-                  };
-                }
-                return prod;
+                const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
+                const newOptimized = currentOptimized.filter(lang => 
+                  !selectedDeleteLanguages.includes(lang)
+                );
+                
+                return {
+                  ...prod,
+                  optimizationSummary: {
+                    ...prod.optimizationSummary,
+                    optimizedLanguages: newOptimized,
+                    optimized: newOptimized.length > 0,
+                    aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary?.aiEnhanced : false
+                  }
+                };
               })
             );
             
-            // Debug log after optimistic update
-          }
-          
-          successCount++;
-          
-          if (data.deletedLanguages && data.deletedLanguages.length > 0) {
-            // Verify deletion in backend
-            await api('/api/products/verify-after-delete', {
-              method: 'POST',
-              shop,
-              body: {
-                shop,
-                productIds: [productGid],
-                deletedLanguages: data.deletedLanguages
-              }
+            // Clear selections
+            setSelectedItems([]);
+            setSelectAllPages(false);
+            
+            // Clear the "Completed" badge for optimization
+            setSeoJobStatus({
+              inProgress: false,
+              status: 'idle',
+              message: null
             });
+            
+            // Update delete status to completed
+            setDeleteJobStatus({
+              inProgress: false,
+              status: 'completed',
+              message: `Deleted ${deletedCount} product${deletedCount !== 1 ? 's' : ''}${failedCount > 0 ? ` (${failedCount} failed)` : ''}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`,
+              totalProducts: totalProductsToDelete,
+              processedProducts: deletedCount + failedCount,
+              deletedProducts: deletedCount,
+              failedProducts: failedCount,
+              completedAt: new Date().toISOString()
+            });
+            
+            return true; // Done
           }
+          return false;
         } catch (err) {
-          setErrors(prev => [...prev, { product: product.title, error: err.message }]);
+          console.error('Poll error:', err);
+          return false;
         }
-        
-        const current = i + 1;
-        const percent = Math.round((current / total) * 100);
-        setProgress({ current, total, percent });
-      }
+      };
       
-      // Clear selections
-      setSelectedItems([]);
-      setSelectAllPages(false);
+      // Start polling
+      const pollInterval = setInterval(async () => {
+        const done = await checkStatus();
+        if (done) {
+          clearInterval(pollInterval);
+        }
+      }, 500);
       
-      // Show result toast
-      if (skippedCount > 0) {
-        setToast(`Deleted Optimization for AI Search from ${successCount} products (${skippedCount} had no optimisation to delete)`);
-      } else {
-        setToast(`Deleted Optimization for AI Search from ${successCount} products`);
-      }
+      // Also check immediately after a short delay (in case it's very fast)
+      setTimeout(async () => {
+        const done = await checkStatus();
+        if (done) {
+          clearInterval(pollInterval);
+        }
+      }, 200);
       
-      // Always hide the "Completed" status bar after delete operation
-      // This prevents showing stale "Applied AIEO to X products" after deletion
-      setSeoJobStatus({
-        inProgress: false,
-        status: 'idle',
-        phase: null,
-        message: null,
-        totalProducts: 0,
-        processedProducts: 0,
-        successfulProducts: 0,
-        failedProducts: 0,
-        skippedProducts: 0
-      });
-      
-      // Force refetch with delay and cache busting
+      // Safety timeout - stop polling after 5 minutes
       setTimeout(() => {
-        const timestamp = Date.now();
-        loadProducts(1, false, timestamp); // Pass timestamp to bypass cache
-      }, 500); // Small delay to ensure backend has completed
+        clearInterval(pollInterval);
+        if (deleteJobStatus.inProgress) {
+          setDeleteJobStatus(prev => ({
+            ...prev,
+            inProgress: false,
+            status: 'failed',
+            message: 'Timeout - please refresh to check status'
+          }));
+        }
+      }, 5 * 60 * 1000);
+      
+      return; // Don't continue - polling handles the rest
       
     } catch (err) {
       setToast(`Error: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setCurrentProduct('');
+      setDeleteJobStatus({
+        inProgress: false,
+        status: 'failed',
+        message: err.message,
+        totalProducts: 0,
+        processedProducts: 0,
+        deletedProducts: 0,
+        failedProducts: 0,
+        completedAt: null
+      });
     }
   };
   
@@ -1774,6 +1827,59 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         
         return null;
       })()}
+      
+      {/* Delete Job Status - shows independently from other statuses */}
+      {(deleteJobStatus.inProgress || deleteJobStatus.status === 'completed' || deleteJobStatus.status === 'failed') && (
+        <Box paddingBlockStart="400">
+          <Card>
+            <Box padding="400">
+              {deleteJobStatus.inProgress ? (
+                <InlineStack gap="300" align="start" blockAlign="center">
+                  <Spinner size="small" />
+                  <BlockStack gap="100">
+                    <Text variant="bodyMd" fontWeight="semibold">Deleting Optimization Data...</Text>
+                    <Text variant="bodySm" tone="subdued">
+                      {deleteJobStatus.message || `Processing ${deleteJobStatus.processedProducts}/${deleteJobStatus.totalProducts} products`}
+                    </Text>
+                    {deleteJobStatus.totalProducts > 0 && (
+                      <Box paddingBlockStart="100">
+                        <ProgressBar progress={(deleteJobStatus.processedProducts / deleteJobStatus.totalProducts) * 100} size="small" />
+                      </Box>
+                    )}
+                  </BlockStack>
+                </InlineStack>
+              ) : deleteJobStatus.status === 'completed' ? (
+                <BlockStack gap="100">
+                  <InlineStack gap="200" align="start" blockAlign="center">
+                    <Badge tone="info">Deleted</Badge>
+                    <Text variant="bodyMd">{deleteJobStatus.message}</Text>
+                    <Text variant="bodySm" tone="subdued">· {timeAgo(deleteJobStatus.completedAt)}</Text>
+                    <Button
+                      variant="plain"
+                      onClick={() => setDeleteJobStatus({ inProgress: false, status: 'idle', message: null })}
+                    >
+                      <Text variant="bodySm" tone="subdued">Dismiss</Text>
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              ) : (
+                <BlockStack gap="100">
+                  <InlineStack gap="200" align="start" blockAlign="center">
+                    <Badge tone="critical">Delete Failed</Badge>
+                    <Text variant="bodyMd" tone="critical">{deleteJobStatus.message || 'Delete operation failed'}</Text>
+                    <Button
+                      variant="plain"
+                      onClick={() => setDeleteJobStatus({ inProgress: false, status: 'idle', message: null })}
+                    >
+                      <Text variant="bodySm" tone="subdued">Dismiss</Text>
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              )}
+            </Box>
+          </Card>
+        </Box>
+      )}
 
       <Box paddingBlockStart="400">
         <Card>

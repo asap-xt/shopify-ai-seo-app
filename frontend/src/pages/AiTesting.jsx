@@ -71,7 +71,23 @@ export default function AiTesting({ shop: shopProp }) {
   });
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
   const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
-
+  
+  // Review banner state (same as Dashboard)
+  const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedReviewBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  const [clickedReviewRate, setClickedReviewRate] = useState(() => {
+    try {
+      return localStorage.getItem(`clickedReviewRate_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (shop) {
@@ -485,6 +501,32 @@ export default function AiTesting({ shop: shopProp }) {
       setToastContent('Failed to simulate AI response');
     }
   };
+  
+  // Review banner handlers (same as Dashboard)
+  const handleDismissReviewBanner = () => {
+    try {
+      localStorage.setItem(`dismissedReviewBanner_${shop}`, 'true');
+      setDismissedReviewBanner(true);
+    } catch (error) {
+      console.error('[AiTesting] Error saving dismissed review banner state:', error);
+    }
+  };
+  
+  const handleClickReviewRate = () => {
+    try {
+      localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
+      setClickedReviewRate(true);
+      window.open('https://apps.shopify.com/indexaize#modal-show=ReviewListingModal', '_blank');
+    } catch (error) {
+      console.error('[AiTesting] Error saving clicked review rate state:', error);
+    }
+  };
+  
+  // Show review banner when AIEO Score > 50
+  const shouldShowReviewBanner = useMemo(() => {
+    if (dismissedReviewBanner || clickedReviewRate) return false;
+    return (aiEOScore || 0) > 50;
+  }, [dismissedReviewBanner, clickedReviewRate, aiEOScore]);
 
   return (
     <>
@@ -498,7 +540,25 @@ export default function AiTesting({ shop: shopProp }) {
           testResults={testResults}
           aiTestResults={aiTestResults}
           stats={stats}
+          onScoreCalculated={(score) => setAiEOScore(score)}
         />
+        
+        {/* App Store Review Request - shows when AIEO Score > 50 */}
+        {shouldShowReviewBanner && (
+          <Banner
+            title="Help shape the future of AI Search"
+            tone="success"
+            action={{
+              content: 'Rate indexAIze',
+              onAction: handleClickReviewRate
+            }}
+            onDismiss={handleDismissReviewBanner}
+          >
+            <Text>
+              You've successfully optimized your store for AI engines. Your feedback helps us build better tools for the Shopify community.
+            </Text>
+          </Banner>
+        )}
 
         {/* Two-column layout for Basic and AI tests */}
         <Layout>

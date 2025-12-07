@@ -2861,6 +2861,19 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
       errors.push(`MongoDB update failed: ${e.message}`);
     }
     
+    // Clear job status badge when SEO is deleted
+    // This ensures the "Completed" badge disappears when user deletes optimization
+    if (deleted.metafield) {
+      try {
+        await Shop.findOneAndUpdate(
+          { shop },
+          { $unset: { seoJobStatus: 1, aiEnhanceJobStatus: 1 } }
+        );
+      } catch (e) {
+        console.error('[DELETE-SEO] Failed to clear job status:', e.message);
+      }
+    }
+    
     // Return response
     if (errors.length === 0) {
       res.json({ 
@@ -2892,6 +2905,7 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
 });
 
 // DELETE /seo/bulk-delete - Delete SEO for multiple products
+// OPTIMIZED: Processes in parallel batches for faster deletion
 router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
@@ -2917,62 +2931,86 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       }
     });
     
-    // 1. Delete all metafields in one GraphQL call
+    // 1. Delete metafields in batches of 250 (Shopify limit)
+    const BATCH_SIZE = 250;
+    let totalDeleted = 0;
+    
     if (metafieldsToDelete.length > 0) {
-      try {
-        const deleteMutation = `
-          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
-            metafieldsDelete(metafields: $metafields) {
-              deletedMetafields {
-                key
-                namespace
-                ownerId
-              }
-              userErrors {
-                field
-                message
-              }
+      const deleteMutation = `
+        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields {
+              key
+              namespace
+              ownerId
+            }
+            userErrors {
+              field
+              message
             }
           }
-        `;
-        
-        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
-          metafields: metafieldsToDelete
-        });
-        
-        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
-          results.push({
-            type: 'error',
-            source: 'shopify',
-            errors: deleteResult.metafieldsDelete.userErrors
-          });
         }
-        
-        if (deleteResult?.metafieldsDelete?.deletedMetafields) {
-          results.push({
-            type: 'success',
-            source: 'shopify',
-            deletedCount: deleteResult.metafieldsDelete.deletedMetafields.length,
-            deleted: deleteResult.metafieldsDelete.deletedMetafields
+      `;
+      
+      // Process in parallel batches for speed
+      const batches = [];
+      for (let i = 0; i < metafieldsToDelete.length; i += BATCH_SIZE) {
+        batches.push(metafieldsToDelete.slice(i, i + BATCH_SIZE));
+      }
+      
+      // Run batches in parallel (max 3 concurrent to avoid rate limits)
+      const processBatch = async (batch) => {
+        try {
+          const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+            metafields: batch
           });
+          
+          if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+            return { errors: deleteResult.metafieldsDelete.userErrors };
+          }
+          
+          return { 
+            deletedCount: deleteResult?.metafieldsDelete?.deletedMetafields?.length || 0 
+          };
+        } catch (e) {
+          console.error('[BULK-DELETE-SEO] Batch error:', e.message);
+          return { error: e.message };
         }
-      } catch (e) {
-        console.error('[BULK-DELETE-SEO] GraphQL error:', e);
-        results.push({
-          type: 'error',
-          source: 'shopify',
-          error: e.message
+      };
+      
+      // Process batches with concurrency limit of 3
+      const CONCURRENT_BATCHES = 3;
+      for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+        const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+        const batchResults = await Promise.all(concurrentBatches.map(processBatch));
+        
+        batchResults.forEach(result => {
+          if (result.deletedCount) {
+            totalDeleted += result.deletedCount;
+          }
+          if (result.errors) {
+            results.push({ type: 'error', source: 'shopify', errors: result.errors });
+          }
+          if (result.error) {
+            results.push({ type: 'error', source: 'shopify', error: result.error });
+          }
         });
       }
+      
+      results.push({
+        type: 'success',
+        source: 'shopify',
+        deletedCount: totalDeleted
+      });
     }
     
-    // 2. Update MongoDB for all products
+    // 2. Update MongoDB for all products (parallel)
     if (mongoUpdates.length > 0) {
       try {
         const db = await dbConnect();
         const collection = db.collection('shopify_products');
         
-        // Update each product
+        // Update all products in parallel
         const mongoResults = await Promise.all(
           mongoUpdates.map(async ({ productId, language }) => {
             try {
@@ -2989,7 +3027,8 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
         
         results.push({
           type: 'mongodb',
-          updates: mongoResults
+          updates: mongoResults.filter(r => r.modified).length,
+          total: mongoUpdates.length
         });
         
       } catch (e) {
@@ -3002,11 +3041,22 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       }
     }
     
+    // Clear job status badges since SEO was deleted
+    try {
+      await Shop.findOneAndUpdate(
+        { shop },
+        { $unset: { seoJobStatus: 1, aiEnhanceJobStatus: 1 } }
+      );
+    } catch (e) {
+      console.error('[BULK-DELETE-SEO] Failed to clear job status:', e.message);
+    }
+    
     // Return consolidated results
     res.json({
       ok: true,
       shop,
       totalRequested: items.length,
+      totalDeleted,
       results
     });
     
@@ -3016,6 +3066,267 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       ok: false,
       error: error.message
     });
+  }
+});
+
+// ============================================================
+// BACKGROUND DELETE ENDPOINT
+// ============================================================
+
+/**
+ * POST /seo/bulk-delete-batch
+ * Background delete SEO for multiple products
+ * Returns immediately, processes in background
+ * Body: { items: [{ productId, language }] }
+ */
+router.post('/seo/bulk-delete-batch', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    const { items } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Missing or invalid items array' });
+    }
+    
+    // Check if already processing
+    const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
+    if (shopDoc?.deleteJobStatus?.inProgress) {
+      return res.status(409).json({ 
+        error: 'Delete job already in progress',
+        status: shopDoc.deleteJobStatus
+      });
+    }
+    
+    // Count unique products (items can have multiple languages per product)
+    const uniqueProducts = [...new Set(items.map(item => item.productId))];
+    const totalProducts = uniqueProducts.length;
+    
+    // Start background delete
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': true,
+          'deleteJobStatus.status': 'processing',
+          'deleteJobStatus.message': `Deleting SEO for ${totalProducts} products...`,
+          'deleteJobStatus.totalProducts': totalProducts,
+          'deleteJobStatus.processedProducts': 0,
+          'deleteJobStatus.deletedProducts': 0,
+          'deleteJobStatus.failedProducts': 0,
+          'deleteJobStatus.startedAt': new Date()
+        }
+      },
+      { upsert: true }
+    );
+    
+    // Return immediately
+    res.json({
+      ok: true,
+      queued: true,
+      message: 'Delete job started in background',
+      totalProducts
+    });
+    
+    // Process in background (non-blocking)
+    processDeleteInBackground(req, shop, items, totalProducts).catch(err => {
+      console.error('[BULK-DELETE-BATCH] Background error:', err);
+    });
+    
+  } catch (error) {
+    console.error('[BULK-DELETE-BATCH] Error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * Background delete processor
+ */
+async function processDeleteInBackground(req, shop, items, totalProducts) {
+  const BATCH_SIZE = 50; // Items per batch
+  const BATCH_DELAY = 200; // ms between batches
+  
+  let processedItems = 0;
+  let deletedProducts = 0;
+  let failedProducts = 0;
+  const processedProductIds = new Set(); // Track unique products
+  
+  try {
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    // Process in batches
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE);
+      
+      // Prepare metafields for this batch
+      const metafieldsToDelete = batch.map(({ productId, language }) => ({
+        ownerId: productId,
+        namespace: 'seo_ai',
+        key: `seo__${language.toLowerCase()}`
+      }));
+      
+      try {
+        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+          metafields: metafieldsToDelete
+        });
+        
+        const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
+        
+        // Track unique products that were successfully deleted
+        for (const mf of deletedMetafields) {
+          if (mf.ownerId && !processedProductIds.has(mf.ownerId)) {
+            processedProductIds.add(mf.ownerId);
+            deletedProducts++;
+          }
+        }
+        
+        // Also update MongoDB Products to fix dashboard counts
+        const Product = (await import('../db/Product.js')).default;
+        for (const { productId, language } of batch) {
+          const numericId = productId.replace('gid://shopify/Product/', '');
+          const langLower = language.toLowerCase();
+          
+          // Remove from optimizedLanguages
+          await Product.findOneAndUpdate(
+            { shop, productId: numericId },
+            { 
+              $pull: { 
+                'optimizationSummary.optimizedLanguages': langLower,
+                'seoStatus.languages': { code: langLower }
+              }
+            }
+          );
+          
+          // Check if product still has any optimized languages
+          const updatedProduct = await Product.findOne({ shop, productId: numericId });
+          if (updatedProduct) {
+            const hasOptimizedLanguages = 
+              (updatedProduct.optimizationSummary?.optimizedLanguages?.length > 0) ||
+              (updatedProduct.seoStatus?.languages?.some(l => l.optimized));
+            
+            if (!hasOptimizedLanguages) {
+              await Product.findOneAndUpdate(
+                { shop, productId: numericId },
+                { 
+                  $set: { 
+                    'seoStatus.optimized': false,
+                    'optimizationSummary.optimized': false
+                  }
+                }
+              );
+            }
+          }
+        }
+        
+      } catch (e) {
+        console.error('[BULK-DELETE-BATCH] Batch error:', e.message);
+        // Count unique failed products in this batch
+        for (const { productId } of batch) {
+          if (!processedProductIds.has(productId)) {
+            processedProductIds.add(productId);
+            failedProducts++;
+          }
+        }
+      }
+      
+      processedItems += batch.length;
+      
+      // Update progress - show products count
+      await Shop.findOneAndUpdate(
+        { shop },
+        {
+          $set: {
+            'deleteJobStatus.message': `Deleting ${deletedProducts}/${totalProducts} products...`,
+            'deleteJobStatus.processedProducts': deletedProducts,
+            'deleteJobStatus.deletedProducts': deletedProducts,
+            'deleteJobStatus.failedProducts': failedProducts
+          }
+        }
+      );
+      
+      // Small delay between batches
+      if (i + BATCH_SIZE < items.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+      }
+    }
+    
+    // Mark as completed - keep status visible for frontend polling
+    const updateResult = await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': false,
+          'deleteJobStatus.status': 'completed',
+          'deleteJobStatus.message': `Deleted ${deletedProducts} product${deletedProducts !== 1 ? 's' : ''}${failedProducts > 0 ? ` (${failedProducts} failed)` : ''}`,
+          'deleteJobStatus.deletedProducts': deletedProducts,
+          'deleteJobStatus.failedProducts': failedProducts,
+          'deleteJobStatus.processedProducts': deletedProducts + failedProducts,
+          'deleteJobStatus.completedAt': new Date()
+        },
+        // Also clear SEO job status badges
+        $unset: {
+          seoJobStatus: 1,
+          aiEnhanceJobStatus: 1
+        }
+      },
+      { new: true } // Return updated document
+    );
+    
+  } catch (error) {
+    console.error('[BULK-DELETE-BATCH] Fatal error:', error);
+    
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'deleteJobStatus.inProgress': false,
+          'deleteJobStatus.status': 'failed',
+          'deleteJobStatus.message': `Failed: ${error.message}`,
+          'deleteJobStatus.failedAt': new Date()
+        }
+      }
+    );
+  }
+}
+
+/**
+ * GET /seo/delete-job-status
+ * Get status of background delete job
+ */
+router.get('/seo/delete-job-status', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain;
+    
+    // Prevent caching - always return fresh status
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
+    const shopDoc = await Shop.findOne({ shop }).select('deleteJobStatus').lean();
+    
+    const status = shopDoc?.deleteJobStatus || {
+      inProgress: false,
+      status: 'idle',
+      message: null
+    };
+    
+    res.json(status);
+    
+  } catch (error) {
+    console.error('[DELETE-JOB-STATUS] Error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3098,6 +3409,19 @@ router.delete('/collections/delete-seo', validateRequest(), async (req, res) => 
       }
     } catch (e) {
       console.error('[DELETE-COLLECTION-SEO] MongoDB update failed:', e.message);
+    }
+    
+    // Clear collection job status badge when SEO is deleted
+    // This ensures the "Completed" badge disappears when user deletes optimization
+    if (deleted.metafield) {
+      try {
+        await Shop.findOneAndUpdate(
+          { shop },
+          { $unset: { collectionSeoJobStatus: 1, collectionAiEnhanceJobStatus: 1 } }
+        );
+      } catch (e) {
+        console.error('[DELETE-COLLECTION-SEO] Failed to clear job status:', e.message);
+      }
     }
     
     // Return response
@@ -3268,5 +3592,5 @@ router.get('/seo/collection-job-status', validateRequest(), async (req, res) => 
   }
 });
 
-export { applySEOForLanguage };
+export { applySEOForLanguage, generateSEOForLanguage };
 export default router;

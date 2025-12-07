@@ -1256,6 +1256,25 @@ router.post('/prepare-uninstall', validateRequest(), async (req, res) => {
       results.advancedSchemas.error = err.message;
     }
     
+    // 5. Clear job status badges (seoJobStatus, aiEnhanceJobStatus, collectionSeoJobStatus, collectionAiEnhanceJobStatus)
+    try {
+      await Shop.findOneAndUpdate(
+        { shop },
+        {
+          $unset: {
+            seoJobStatus: 1,
+            aiEnhanceJobStatus: 1,
+            collectionSeoJobStatus: 1,
+            collectionAiEnhanceJobStatus: 1
+          }
+        }
+      );
+      results.jobStatusCleared = true;
+    } catch (err) {
+      console.error('[PREPARE-UNINSTALL] Exception clearing job status:', err.message);
+      results.jobStatusCleared = false;
+    }
+    
     res.json({
       success: true,
       message: 'App data cleaned successfully',

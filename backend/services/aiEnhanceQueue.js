@@ -89,6 +89,7 @@ class AIEnhanceQueue {
 
   /**
    * Start processing the queue
+   * OPTIMIZED: Processes products in batches of 2 for ~2x speedup
    */
   async startProcessing() {
     if (this.processing) {
@@ -108,85 +109,89 @@ class AIEnhanceQueue {
         job.status = 'processing';
         job.startedAt = new Date();
 
-        // Process each product
-        for (let i = 0; i < job.products.length; i++) {
-          const productData = job.products[i];
-          
-          try {
-            // Update status
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: 'processing',
-              message: `Enhancing ${job.processedProducts + 1}/${job.totalProducts}: ${productData.title || 'Product'}`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+        // OPTIMIZATION: Process products in batches of 2 for parallel execution
+        const BATCH_SIZE = 2;
+        const BATCH_DELAY = 300; // ms between batches to prevent overload
+        let shouldStop = false;
 
-            // Call the enhance function
-            const result = await job.enhanceFn(productData);
+        for (let batchStart = 0; batchStart < job.products.length && !shouldStop; batchStart += BATCH_SIZE) {
+          const batch = job.products.slice(batchStart, batchStart + BATCH_SIZE);
+          
+          // Update status before batch
+          await this.updateShopStatus(job.shop, {
+            inProgress: true,
+            status: 'processing',
+            message: `Enhancing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
+            totalProducts: job.totalProducts,
+            processedProducts: job.processedProducts,
+            successfulProducts: job.successfulProducts,
+            failedProducts: job.failedProducts,
+            skippedProducts: job.skippedProducts
+          });
+
+          // Process batch in parallel with error isolation
+          const batchPromises = batch.map(async (productData) => {
+            try {
+              const result = await job.enhanceFn(productData);
+              return { productData, result, success: true, error: null };
+            } catch (error) {
+              return { productData, result: null, success: false, error };
+            }
+          });
+
+          // Wait for all products in batch to complete
+          const batchResults = await Promise.all(batchPromises);
+
+          // Process batch results
+          for (const batchResult of batchResults) {
+            const { productData, result, success, error } = batchResult;
             
-            // Check result
-            if (result.skipped) {
+            if (!success && error) {
+              // Check for token/plan errors that should stop processing
+              if (error.status === 402 || error.status === 403 || error.trialRestriction) {
+                shouldStop = true;
+                job.status = 'failed';
+                job.error = error.message || 'Token or plan restriction';
+                job.failedAt = new Date();
+                
+                await this.updateShopStatus(job.shop, {
+                  inProgress: false,
+                  status: 'failed',
+                  message: error.message || 'Token or plan restriction',
+                  lastError: error.message,
+                  failedAt: new Date(),
+                  totalProducts: job.totalProducts,
+                  processedProducts: job.processedProducts,
+                  successfulProducts: job.successfulProducts,
+                  failedProducts: job.failedProducts,
+                  skippedProducts: job.skippedProducts
+                });
+                break;
+              }
+              
+              job.failedProducts++;
+              job.failReasons.push(`${productData.title}: ${error.message}`);
+              dbLogger.error(`[AI-ENHANCE-QUEUE] Product failed: ${productData.productId}`, error.message);
+            } else if (result?.skipped) {
               job.skippedProducts++;
               if (result.reason) {
                 job.skipReasons.push(`${productData.title}: ${result.reason}`);
               }
-            } else if (result.success) {
+            } else if (result?.success) {
               job.successfulProducts++;
             } else {
               job.failedProducts++;
-              if (result.error || result.reason) {
+              if (result?.error || result?.reason) {
                 job.failReasons.push(`${productData.title}: ${result.error || result.reason}`);
               }
             }
-
-          } catch (error) {
-            dbLogger.error(`[AI-ENHANCE-QUEUE] Product failed: ${productData.productId}`, error.message);
             
-            // Check for token/plan errors that should stop processing
-            if (error.status === 402 || error.status === 403 || error.trialRestriction) {
-              // Stop processing - token or plan error
-              job.status = 'failed';
-              job.error = error.message || 'Token or plan restriction';
-              job.failedAt = new Date();
-              
-              await this.updateShopStatus(job.shop, {
-                inProgress: false,
-                status: 'failed',
-                message: error.message || 'Token or plan restriction',
-                lastError: error.message,
-                failedAt: new Date(),
-                totalProducts: job.totalProducts,
-                processedProducts: job.processedProducts,
-                successfulProducts: job.successfulProducts,
-                failedProducts: job.failedProducts,
-                skippedProducts: job.skippedProducts
-              });
-              
-              break; // Stop processing this job
-            }
-            
-            job.failedProducts++;
-            job.failReasons.push(`${productData.title}: ${error.message}`);
+            job.processedProducts++;
           }
 
-          job.processedProducts++;
-
-          // Update progress every 2 products or on last product
-          if (job.processedProducts % 2 === 0 || job.processedProducts === job.totalProducts) {
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: 'processing',
-              message: `Enhancing ${job.processedProducts}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+          // Small delay between batches to prevent server overload
+          if (!shouldStop && batchStart + BATCH_SIZE < job.products.length) {
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
           }
         }
 
@@ -205,14 +210,15 @@ class AIEnhanceQueue {
           duration,
           successful: job.successfulProducts,
           failed: job.failedProducts,
-          skipped: job.skippedProducts
+          skipped: job.skippedProducts,
+          avgPerProduct: (duration / job.totalProducts).toFixed(2) + 's'
         });
 
         // Update shop status to completed
         await this.updateShopStatus(job.shop, {
           inProgress: false,
           status: 'completed',
-          message: `Enhanced ${job.successfulProducts} products${job.skippedProducts > 0 ? ` (${job.skippedProducts} skipped)` : ''}${job.failedProducts > 0 ? ` (${job.failedProducts} failed)` : ''}`,
+          message: `Enhanced ${job.successfulProducts} products${job.skippedProducts > 0 ? ` (${job.skippedProducts} skipped)` : ''}${job.failedProducts > 0 ? ` (${job.failedProducts} failed)` : ''} in ${duration.toFixed(1)}s`,
           completedAt: new Date(),
           lastError: null,
           totalProducts: job.totalProducts,

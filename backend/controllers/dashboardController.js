@@ -29,14 +29,16 @@ router.get('/stats', verifyRequest, async (req, res) => {
       const subscription = await Subscription.findOne({ shop });
       const plan = subscription?.plan || 'starter';
     
-    // Products stats
-    const totalProducts = await Product.countDocuments({ shop });
+    // Products stats - only count ACTIVE products (exclude DRAFT and ARCHIVED)
+    const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
     const optimizedProducts = await Product.countDocuments({ 
       shop, 
+      status: 'ACTIVE',
       'seoStatus.optimized': true 
     });
     const lastOptimizedProduct = await Product.findOne({ 
       shop, 
+      status: 'ACTIVE',
       'seoStatus.optimized': true 
     }).sort({ updatedAt: -1 }).select('updatedAt');
     

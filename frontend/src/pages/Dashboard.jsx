@@ -97,6 +97,26 @@ export default function Dashboard({ shop: shopProp }) {
     }
   });
   
+  // Review banner state (show after 6+ days of activation)
+  const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedReviewBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  const [clickedReviewRate, setClickedReviewRate] = useState(() => {
+    try {
+      return localStorage.getItem(`clickedReviewRate_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // AIEO Score for review banner trigger
+  const [aieoScore, setAieoScore] = useState(0);
+  
   // Token purchase modal state
   const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   
@@ -456,6 +476,16 @@ export default function Dashboard({ shop: shopProp }) {
     if (balance >= 1000) return false;
     return true;
   }, [subscription, tokens]);
+  
+  // Review banner - show when AIEO Score > 50 (user sees real value)
+  // Score > 50 requires AI enhancement = user bought tokens = serious user
+  const shouldShowReviewBanner = useMemo(() => {
+    // Must not have dismissed or clicked rate
+    if (dismissedReviewBanner || clickedReviewRate) return false;
+    
+    // Show when AIEO Score is above 50 (means user has done AI enhancement)
+    return aieoScore > 50;
+  }, [dismissedReviewBanner, clickedReviewRate, aieoScore]);
 
   // Handle dismissing the upgrade banner
   const handleDismissUpgradeBanner = () => {
@@ -474,6 +504,28 @@ export default function Dashboard({ shop: shopProp }) {
       setDismissedTokenBanner(true);
     } catch (error) {
       console.error('[Dashboard] Error saving dismissed token banner state:', error);
+    }
+  };
+  
+  // Handle dismissing the review banner
+  const handleDismissReviewBanner = () => {
+    try {
+      localStorage.setItem(`dismissedReviewBanner_${shop}`, 'true');
+      setDismissedReviewBanner(true);
+    } catch (error) {
+      console.error('[Dashboard] Error saving dismissed review banner state:', error);
+    }
+  };
+  
+  // Handle clicking "Rate Us" in review banner
+  const handleClickReviewRate = () => {
+    try {
+      localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
+      setClickedReviewRate(true);
+      // Open App Store in new tab
+      window.open('https://apps.shopify.com/indexaize#modal-show=ReviewListingModal', '_blank');
+    } catch (error) {
+      console.error('[Dashboard] Error saving clicked review rate state:', error);
     }
   };
 
@@ -885,6 +937,25 @@ export default function Dashboard({ shop: shopProp }) {
           </Banner>
         </Layout.Section>
       )}
+      
+      {/* App Store Review Request - shows when AIEO Score > 50 */}
+      {shouldShowReviewBanner && (
+        <Layout.Section>
+          <Banner
+            title="Help shape the future of AI Search"
+            tone="success"
+            action={{
+              content: 'Rate indexAIze',
+              onAction: handleClickReviewRate
+            }}
+            onDismiss={handleDismissReviewBanner}
+          >
+            <Text>
+              You've successfully optimized your store for AI engines. Your feedback helps us build better tools for the Shopify community.
+            </Text>
+          </Banner>
+        </Layout.Section>
+      )}
 
       {/* Two columns: Left = Products & Collections; Right = Languages & Markets + Last Optimization */}
       <Layout.Section>
@@ -1054,6 +1125,7 @@ export default function Dashboard({ shop: shopProp }) {
             // Reload dashboard data to get fresh stats
             loadDashboardData(true);
           }}
+          onScoreCalculated={(score) => setAieoScore(score)}
         />
       </Layout.Section>
 

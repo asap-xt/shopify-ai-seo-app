@@ -221,28 +221,15 @@ router.get('/ai/collections-feed.json', async (req, res) => {
     }
 
     // Check plan access (skip for AI Testing Bot)
+    // NOTE: Collections JSON is static content - NO AI tokens required!
     if (!isTestingBot) {
       const planKey = (settings?.planKey || '').toLowerCase().replace(/\s+/g, '_');
-      const plansWithAccess = ['growth', 'growth_extra', 'enterprise'];
-      const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+      // All Plus and Growth plans have access (no tokens needed - it's static content)
+      const plansWithAccess = ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
       
-      // Plus plans: Check if they have tokens
-      if (plusPlansRequireTokens.includes(planKey)) {
-        const TokenBalance = (await import('../db/TokenBalance.js')).default;
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        
-        if (tokenBalance.balance <= 0) {
-          return res.status(403).json({ 
-            error: 'Collections JSON requires tokens. Please purchase tokens to enable this feature.',
-            tokensRequired: true
-          });
-        }
-        // Has tokens - allow access
-      } 
-      // Regular plans: Check if plan has access
-      else if (!plansWithAccess.includes(planKey)) {
+      if (!plansWithAccess.includes(planKey)) {
         return res.status(403).json({ 
-          error: 'Collections JSON requires Professional Plus, Growth or higher plan',
+          error: 'Collections JSON requires Professional Plus or Growth plan or higher',
           upgradeRequired: true,
           currentPlan: planKey
         });
@@ -379,28 +366,15 @@ router.get('/ai/welcome', async (req, res) => {
     const planKey = (settings?.planKey || 'starter').toLowerCase().replace(/\s+/g, '_');
     
     // Check plan access for AI Welcome Page (skip for AI Testing Bot)
+    // NOTE: Welcome Page is a static HTML template - NO AI tokens required!
     if (!isTestingBot) {
       const subscription = await Subscription.findOne({ shop });
-      const plansWithAccess = ['growth', 'growth_extra', 'enterprise'];
-      const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
+      // All Plus and Growth plans have access (no tokens needed - it's static HTML)
+      const plansWithAccess = ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
       
-      // Plus plans: Check if they have tokens
-      if (plusPlansRequireTokens.includes(planKey)) {
-        const TokenBalance = (await import('../db/TokenBalance.js')).default;
-        const tokenBalance = await TokenBalance.getOrCreate(shop);
-        
-        if (tokenBalance.balance <= 0) {
-          return res.status(403).json({ 
-            error: 'AI Welcome Page requires tokens. Please purchase tokens to enable this feature.',
-            tokensRequired: true
-          });
-        }
-        // Has tokens - allow access
-      } 
-      // Regular plans: Check if plan has access
-      else if (!plansWithAccess.includes(planKey)) {
+      if (!plansWithAccess.includes(planKey)) {
         return res.status(403).json({ 
-          error: 'AI Welcome Page requires Professional Plus, Growth or higher plan',
+          error: 'AI Welcome Page requires Professional Plus or Growth plan or higher',
           upgradeRequired: true,
           currentPlan: planKey
         });

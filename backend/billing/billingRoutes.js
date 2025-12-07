@@ -67,10 +67,10 @@ export function getPlanFeatures(planKey) {
   // Professional Plus - all from Professional plus:
   if (planKey === 'professional plus') {
     features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens:');
-    features.push('✓ AI Welcome Page (pay-per-use tokens)');
-    features.push('✓ Collections JSON Feed (pay-per-use tokens)');
+    features.push('✓ AI Welcome Page');
+    features.push('✓ Collections JSON Feed');
+    features.push('✓ Store Metadata');
     features.push('✓ AI-Optimized Sitemap (pay-per-use tokens)');
-    features.push('✓ Store Metadata (pay-per-use tokens)');
     features.push('✓ Advanced Schema Data (pay-per-use tokens)');
     return features;
   }
@@ -94,9 +94,9 @@ export function getPlanFeatures(planKey) {
     features.push('✓ AI Bot Access: + ChatGPT (OpenAI)');
     features.push('AI Welcome Page (included)');
     features.push('Collections JSON Feed (included)');
-    features.push('🔓 All AI Discovery features unlocked with pay-per-use tokens');
+    features.push('Store Metadata (included)');
+    features.push('🔓 AI Discovery features with pay-per-use tokens:');
     features.push('AI-Optimized Sitemap (pay-per-use tokens)');
-    features.push('Store Metadata (pay-per-use tokens)');
     features.push('Advanced Schema Data (pay-per-use tokens)');
     return features;
   }

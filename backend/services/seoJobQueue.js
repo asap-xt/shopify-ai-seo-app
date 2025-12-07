@@ -93,6 +93,7 @@ class SeoJobQueue {
 
   /**
    * Start processing the queue
+   * OPTIMIZED: Processes products in batches of 2 for ~2x speedup
    */
   async startProcessing() {
     if (this.processing) {
@@ -112,85 +113,77 @@ class SeoJobQueue {
         job.status = 'processing';
         job.startedAt = new Date();
 
-        // Process each product: Generate then Apply
-        for (let i = 0; i < job.products.length; i++) {
-          const productData = job.products[i];
+        // OPTIMIZATION: Process products in batches of 2 for parallel execution
+        const BATCH_SIZE = 2;
+        const BATCH_DELAY = 300; // ms between batches
+
+        for (let batchStart = 0; batchStart < job.products.length; batchStart += BATCH_SIZE) {
+          const batch = job.products.slice(batchStart, batchStart + BATCH_SIZE);
           
-          try {
-            // Phase 1: Generate
-            job.phase = 'generate';
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: 'generating',
-              phase: 'generate',
-              message: `Generating ${job.processedProducts + 1}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+          // Update status before batch
+          job.phase = 'processing';
+          await this.updateShopStatus(job.shop, {
+            inProgress: true,
+            status: 'processing',
+            phase: 'processing',
+            message: `Processing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
+            totalProducts: job.totalProducts,
+            processedProducts: job.processedProducts,
+            successfulProducts: job.successfulProducts,
+            failedProducts: job.failedProducts,
+            skippedProducts: job.skippedProducts
+          });
 
-            const generateResult = await job.generateFn(productData);
-            
-            // Check if skipped (already optimized)
-            if (generateResult.skipped) {
+          // Process batch in parallel - each product goes through Generate then Apply
+          const batchPromises = batch.map(async (productData) => {
+            try {
+              // Phase 1: Generate
+              const generateResult = await job.generateFn(productData);
+              
+              // Check if skipped
+              if (generateResult.skipped) {
+                return { productData, skipped: true, reason: generateResult.reason };
+              }
+
+              // Check if generate failed
+              if (!generateResult.success) {
+                return { productData, failed: true, error: generateResult.error || generateResult.reason };
+              }
+
+              // Phase 2: Apply
+              await job.applyFn(productData, generateResult.data);
+              return { productData, success: true };
+
+            } catch (error) {
+              return { productData, failed: true, error: error.message };
+            }
+          });
+
+          // Wait for all products in batch to complete
+          const batchResults = await Promise.all(batchPromises);
+
+          // Process batch results
+          for (const result of batchResults) {
+            if (result.skipped) {
               job.skippedProducts++;
-              if (generateResult.reason) {
-                job.skipReasons.push(`${productData.title || productData.productId}: ${generateResult.reason}`);
+              if (result.reason) {
+                job.skipReasons.push(`${result.productData.title || result.productData.productId}: ${result.reason}`);
               }
-              job.processedProducts++;
-              continue;
-            }
-
-            // Check if generate failed
-            if (!generateResult.success) {
+            } else if (result.success) {
+              job.successfulProducts++;
+            } else if (result.failed) {
               job.failedProducts++;
-              if (generateResult.error || generateResult.reason) {
-                job.failReasons.push(`${productData.title || productData.productId}: ${generateResult.error || generateResult.reason}`);
+              if (result.error) {
+                job.failReasons.push(`${result.productData.title || result.productData.productId}: ${result.error}`);
               }
-              job.processedProducts++;
-              continue;
+              dbLogger.error(`[SEO-JOB-QUEUE] Product failed: ${result.productData.productId}`, result.error);
             }
-
-            // Phase 2: Apply
-            job.phase = 'apply';
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: 'applying',
-              phase: 'apply',
-              message: `Applying ${job.processedProducts + 1}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
-
-            await job.applyFn(productData, generateResult.data);
-            job.successfulProducts++;
-
-          } catch (error) {
-            dbLogger.error(`[SEO-JOB-QUEUE] Product failed: ${productData.productId}`, error.message);
-            job.failedProducts++;
-            job.failReasons.push(`${productData.title || productData.productId}: ${error.message}`);
+            job.processedProducts++;
           }
 
-          job.processedProducts++;
-
-          // Update progress every 3 products or on last product
-          if (job.processedProducts % 3 === 0 || job.processedProducts === job.totalProducts) {
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: job.phase === 'generate' ? 'generating' : 'applying',
-              phase: job.phase,
-              message: `${job.phase === 'generate' ? 'Generating' : 'Applying'} ${job.processedProducts}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+          // Small delay between batches
+          if (batchStart + BATCH_SIZE < job.products.length) {
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
           }
         }
 
@@ -203,7 +196,8 @@ class SeoJobQueue {
           duration,
           successful: job.successfulProducts,
           failed: job.failedProducts,
-          skipped: job.skippedProducts
+          skipped: job.skippedProducts,
+          avgPerProduct: (duration / job.totalProducts).toFixed(2) + 's'
         });
 
         // Update shop status to completed
@@ -211,7 +205,7 @@ class SeoJobQueue {
           inProgress: false,
           status: 'completed',
           phase: null,
-          message: `Completed: ${job.successfulProducts} optimized${job.skippedProducts > 0 ? `, ${job.skippedProducts} skipped` : ''}${job.failedProducts > 0 ? `, ${job.failedProducts} failed` : ''}`,
+          message: `Completed: ${job.successfulProducts} optimized${job.skippedProducts > 0 ? `, ${job.skippedProducts} skipped` : ''}${job.failedProducts > 0 ? `, ${job.failedProducts} failed` : ''} in ${duration.toFixed(1)}s`,
           completedAt: new Date(),
           lastError: null,
           totalProducts: job.totalProducts,
@@ -219,7 +213,7 @@ class SeoJobQueue {
           successfulProducts: job.successfulProducts,
           failedProducts: job.failedProducts,
           skippedProducts: job.skippedProducts,
-          skipReasons: job.skipReasons.slice(0, 10), // Limit to 10 reasons
+          skipReasons: job.skipReasons.slice(0, 10),
           failReasons: job.failReasons.slice(0, 10)
         });
 
