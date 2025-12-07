@@ -478,16 +478,14 @@ export default function Dashboard({ shop: shopProp }) {
   }, [subscription, tokens]);
   
   // Review banner - show when AIEO Score > 50 (user sees real value)
+  // Score > 50 requires AI enhancement = user bought tokens = serious user
   const shouldShowReviewBanner = useMemo(() => {
-    // Must have activated plan (not trial)
-    if (!subscription?.activatedAt) return false;
-    
     // Must not have dismissed or clicked rate
     if (dismissedReviewBanner || clickedReviewRate) return false;
     
-    // Show when AIEO Score is above 50 (means user has optimized and tested)
+    // Show when AIEO Score is above 50 (means user has done AI enhancement)
     return aieoScore > 50;
-  }, [subscription, dismissedReviewBanner, clickedReviewRate, aieoScore]);
+  }, [dismissedReviewBanner, clickedReviewRate, aieoScore]);
 
   // Handle dismissing the upgrade banner
   const handleDismissUpgradeBanner = () => {
