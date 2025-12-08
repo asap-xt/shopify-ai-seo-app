@@ -150,6 +150,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     skippedProducts: 0
   });
   const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
+  const loadProductsRef = useRef(null); // Ref to always have latest loadProducts
   
   // Background Delete Job status
   const [deleteJobStatus, setDeleteJobStatus] = useState({
@@ -207,8 +208,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
           }
           
-          // Refresh products list to update badges - use loadProducts to respect current pagination
-          loadProducts(1, false, Date.now());
+          // Refresh products list to update badges - use ref to get latest loadProducts with correct itemsPerPage
+          if (loadProductsRef.current) {
+            loadProductsRef.current(1, false, Date.now());
+          }
         }
         
         return status;
@@ -218,7 +221,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder, loadProducts]);
+  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
@@ -427,7 +430,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
   }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
   
-
+  // Keep ref updated with latest loadProducts (for use in polling callbacks)
+  useEffect(() => {
+    loadProductsRef.current = loadProducts;
+  }, [loadProducts]);
   
   // Initial load and filter changes
   useEffect(() => {
@@ -620,8 +626,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
           }
           
-          // Refresh products to update badges
-          loadProducts(1, false, Date.now());
+          // Refresh products to update badges - use ref to get latest loadProducts with correct itemsPerPage
+          if (loadProductsRef.current) {
+            loadProductsRef.current(1, false, Date.now());
+          }
         }
         
         return status;
@@ -631,7 +639,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch AI Enhance job status:', error);
     }
-  }, [shop, api, loadProducts]);
+  }, [shop, api]);
   
   // Start polling for AI Enhancement job status
   const startAiEnhancePolling = useCallback(() => {
