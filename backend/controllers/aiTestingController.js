@@ -34,10 +34,18 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
   }
   
   // Get stats from database (same as Dashboard) - only count ACTIVE products
-  const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
+  // Include products with status: ACTIVE OR status not set (for backwards compatibility)
+  const activeStatusFilter = {
+    $or: [
+      { status: 'ACTIVE' },
+      { status: { $exists: false } },
+      { status: null }
+    ]
+  };
+  const totalProducts = await Product.countDocuments({ shop, ...activeStatusFilter });
   const optimizedProducts = await Product.countDocuments({ 
     shop, 
-    status: 'ACTIVE',
+    ...activeStatusFilter,
     'seoStatus.optimized': true 
   });
   const totalCollections = await Collection.countDocuments({ shop });
@@ -951,10 +959,22 @@ Format:
       const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
       
       // Get stats for score calculation - only count ACTIVE products
-      const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
+      // Include products with status: ACTIVE OR status not set (for backwards compatibility)
+      const totalProducts = await Product.countDocuments({ 
+        shop, 
+        $or: [
+          { status: 'ACTIVE' },
+          { status: { $exists: false } },
+          { status: null }
+        ]
+      });
       const optimizedProducts = await Product.countDocuments({ 
         shop, 
-        status: 'ACTIVE',
+        $or: [
+          { status: 'ACTIVE' },
+          { status: { $exists: false } },
+          { status: null }
+        ],
         'seoStatus.optimized': true 
       });
       const totalCollections = await Collection.countDocuments({ shop });

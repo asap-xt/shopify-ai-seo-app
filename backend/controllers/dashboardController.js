@@ -50,15 +50,23 @@ router.get('/stats', verifyRequest, async (req, res) => {
       }
     
     // Products stats - only count ACTIVE products (exclude DRAFT and ARCHIVED)
-    const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
+    // Include products with status: ACTIVE OR status not set (for backwards compatibility)
+    const activeStatusFilter = {
+      $or: [
+        { status: 'ACTIVE' },
+        { status: { $exists: false } },
+        { status: null }
+      ]
+    };
+    const totalProducts = await Product.countDocuments({ shop, ...activeStatusFilter });
     const optimizedProducts = await Product.countDocuments({ 
       shop, 
-      status: 'ACTIVE',
+      ...activeStatusFilter,
       'seoStatus.optimized': true 
     });
     const lastOptimizedProduct = await Product.findOne({ 
       shop, 
-      status: 'ACTIVE',
+      ...activeStatusFilter,
       'seoStatus.optimized': true 
     }).sort({ updatedAt: -1 }).select('updatedAt');
     
