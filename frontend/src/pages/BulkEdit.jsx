@@ -207,24 +207,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
           }
           
-          // Refresh products list to update badges
-          const params = new URLSearchParams({
-            shop,
-            page: 1,
-            limit: 50,
-            ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
-            ...(searchValue && { search: searchValue }),
-            sortBy,
-            sortOrder,
-            _t: Date.now()
-          });
-          
-          api(`/api/products/list?${params}`, { shop }).then(data => {
-            setProducts(data.products || []);
-            setPage(1);
-            setHasMore(data.pagination?.hasNext || false);
-            setTotalCount(data.pagination?.total || 0);
-          });
+          // Refresh products list to update badges - use loadProducts to respect current pagination
+          loadProducts(1, false, Date.now());
         }
         
         return status;
@@ -234,7 +218,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder, loadProducts]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
