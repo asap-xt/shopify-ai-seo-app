@@ -23,6 +23,7 @@ import {
   Checkbox,
   Banner,
   Spinner,
+  ActionList,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
@@ -2028,62 +2029,55 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             )}
           </Box>
 
-          {/* Select all with Shopify-style dropdown */}
+          {/* Select all with Shopify-style dropdown - same as Products */}
           {totalCount > 0 && (
             <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-              <InlineStack gap="200" blockAlign="center">
-                <Checkbox
-                  label=""
-                  checked={selectAllPages || selectedItems.length === collections.length}
-                  onChange={(checked) => handleSelectAllPages(checked, false)}
-                />
+              <InlineStack gap="200" align="start" blockAlign="center">
                 <Popover
                   active={showSelectionPopover}
                   activator={
-                    <Button
-                      disclosure="down"
-                      onClick={() => setShowSelectionPopover(!showSelectionPopover)}
-                      removeUnderline
-                      plain
-                    >
-                      Select
-                    </Button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowSelectionPopover(!showSelectionPopover)}>
+                      <Checkbox
+                        checked={selectedItems.length > 0 && (selectedItems.length === collections.length || selectAllInStore)}
+                        indeterminate={selectedItems.length > 0 && selectedItems.length < collections.length && !selectAllInStore}
+                        onChange={handleSelectAllPages}
+                        label=""
+                      />
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {selectedItems.length > 0 
+                          ? selectAllInStore 
+                            ? `All ${totalCount} selected`
+                            : `${selectedItems.length} selected`
+                          : 'Select'}
+                      </Text>
+                      <span style={{ fontSize: '10px', color: '#637381' }}>▼</span>
+                    </div>
                   }
                   onClose={() => setShowSelectionPopover(false)}
+                  preferredAlignment="left"
                 >
-                  <Popover.Pane>
-                    <Popover.Section>
-                      <BlockStack gap="100">
-                        <Button
-                          plain
-                          textAlign="left"
-                          onClick={() => {
-                            handleSelectAllPages(true, false);
-                            setShowSelectionPopover(false);
-                          }}
-                          disabled={selectedItems.length === collections.length && !selectAllInStore}
-                        >
-                          Select all {collections.length} on this page
-                        </Button>
-                        <Button
-                          plain
-                          textAlign="left"
-                          onClick={handleSelectAllInStore}
-                          disabled={selectAllInStore}
-                        >
-                          Select all {totalCount} in this store
-                        </Button>
-                        <Button
-                          plain
-                          textAlign="left"
-                          onClick={handleUnselectAll}
-                          disabled={selectedItems.length === 0}
-                        >
-                          Deselect all
-                        </Button>
-                      </BlockStack>
-                    </Popover.Section>
-                  </Popover.Pane>
+                  <ActionList
+                    items={[
+                      {
+                        content: `Select all ${collections.length} on this page`,
+                        onAction: () => {
+                          handleSelectAllPages(true, false);
+                          setShowSelectionPopover(false);
+                        },
+                        disabled: selectedItems.length === collections.length && !selectAllInStore
+                      },
+                      {
+                        content: `Select all ${totalCount} in this store`,
+                        onAction: handleSelectAllInStore,
+                        disabled: selectAllInStore
+                      },
+                      {
+                        content: 'Deselect all',
+                        onAction: handleUnselectAll,
+                        disabled: selectedItems.length === 0
+                      }
+                    ]}
+                  />
                 </Popover>
               </InlineStack>
             </Box>
