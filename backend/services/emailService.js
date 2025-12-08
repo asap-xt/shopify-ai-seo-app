@@ -359,8 +359,8 @@ class EmailService {
         }
       }
       
-      // App Store URL - placeholder until app is approved
-      const appStoreUrl = process.env.SHOPIFY_APP_STORE_URL || 'https://apps.shopify.com/indexaize';
+      // App Store URL with direct review modal link
+      const appStoreUrl = 'https://apps.shopify.com/indexaize-unlock-ai-search#modal-show=WriteReviewModal';
       
       // Use SendGrid attachment with Content-ID for inline image
       const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');

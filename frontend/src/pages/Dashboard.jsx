@@ -522,8 +522,8 @@ export default function Dashboard({ shop: shopProp }) {
     try {
       localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
       setClickedReviewRate(true);
-      // Open App Store in new tab
-      window.open('https://apps.shopify.com/indexaize#modal-show=ReviewListingModal', '_blank');
+      // Open App Store review modal in new tab
+      window.open('https://apps.shopify.com/indexaize-unlock-ai-search#modal-show=WriteReviewModal', '_blank');
     } catch (error) {
       console.error('[Dashboard] Error saving clicked review rate state:', error);
     }

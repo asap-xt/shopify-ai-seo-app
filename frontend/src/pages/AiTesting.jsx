@@ -516,7 +516,7 @@ export default function AiTesting({ shop: shopProp }) {
     try {
       localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
       setClickedReviewRate(true);
-      window.open('https://apps.shopify.com/indexaize#modal-show=ReviewListingModal', '_blank');
+      window.open('https://apps.shopify.com/indexaize-unlock-ai-search#modal-show=WriteReviewModal', '_blank');
     } catch (error) {
       console.error('[AiTesting] Error saving clicked review rate state:', error);
     }
