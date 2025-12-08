@@ -39,12 +39,14 @@ router.get('/stats', verifyRequest, async (req, res) => {
             primaryDomain { url }
           }
         }`);
+        console.log('[Dashboard] GraphQL result for primaryDomain:', JSON.stringify(result?.shop));
         if (result?.shop?.primaryDomain?.url) {
           primaryDomain = result.shop.primaryDomain.url;
         }
         if (result?.shop?.name) {
           storeName = result.shop.name;
         }
+        console.log('[Dashboard] Using primaryDomain:', primaryDomain, 'storeName:', storeName);
       } catch (err) {
         console.error('[Dashboard] Error fetching primaryDomain:', err.message);
       }

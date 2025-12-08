@@ -238,6 +238,8 @@ export default function AiTesting({ shop: shopProp }) {
       });
       
       // Set store info for AI prompts (use public domain, not myshopify.com)
+      console.log('[AI-TESTING] Store URL from stats:', statsData.storeUrl);
+      console.log('[AI-TESTING] Store Name from stats:', statsData.storeName);
       if (statsData.storeUrl) {
         setStoreUrl(statsData.storeUrl);
       }
