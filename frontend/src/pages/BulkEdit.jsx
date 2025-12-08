@@ -2184,7 +2184,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         disabled: selectAllInStore
                       },
                       {
-                        content: 'Unselect all',
+                        content: 'Deselect all',
                         onAction: handleUnselectAll,
                         disabled: selectedItems.length === 0
                       }

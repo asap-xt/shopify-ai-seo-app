@@ -203,46 +203,68 @@ router.get('/list', async (req, res) => {
     const countData = await executeGraphQL(req, COUNT_QUERY, {});
     const totalProducts = countData?.productsCount?.count || 0;
     
-    // Step 1: Get basic product data from cache (or fetch if cache miss)
-    const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
+    // Step 1: Get product data - fetch enough to cover the requested page
+    // Shopify uses cursor-based pagination, so we need to fetch all products up to (page * limit)
+    const cacheKeyAll = `products:all:${sortBy}:${sortOrder}:${tagsFilter.join(',')}:${searchFilter || ''}`;
+    
+    const allProductsResult = await withShopCache(shop, cacheKeyAll, CACHE_TTL.SHORT, async () => {
       const sortKey = convertSortKey(sortBy);
       const reverse = sortOrder === 'desc';
-
-      const variables = {
-        first: limit,
-        sortKey: sortKey,
-        reverse: reverse
-      };
-
-      const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
-      const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
       
-      // FILTER: Only show ACTIVE products (exclude DRAFT and ARCHIVED)
-      // This aligns with sitemap generation which only includes active products
-      const activeProducts = rawProducts.filter(product => product.status === 'ACTIVE');
+      let allProducts = [];
+      let hasNextPage = true;
+      let cursor = null;
+      const maxFetch = 250; // Shopify max per request
       
-      // Store basic product data WITHOUT optimization summary
-      // (optimization summary will be fetched fresh later)
-      const products = activeProducts.map(product => ({
-        ...product,
-        // Remove metafields from cached data (we'll fetch them fresh)
-        metafields: undefined
-      }));
+      // Fetch all products (cursor-based pagination)
+      while (hasNextPage && allProducts.length < 1000) { // Safety limit
+        const variables = {
+          first: maxFetch,
+          sortKey: sortKey,
+          reverse: reverse,
+          ...(cursor && { after: cursor })
+        };
 
-      return {
-        success: true,
-        products: products,
-        pagination: {
-          page: page,
-          limit: limit,
-          total: totalProducts,
-          hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
-          hasNext: page * limit < totalProducts,
-          endCursor: data?.products?.pageInfo?.endCursor
-        },
-        shop: shop
-      };
+        const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
+        const products = data?.products?.edges?.map(edge => edge.node) || [];
+        
+        // Filter only ACTIVE products
+        const activeProducts = products.filter(p => p.status === 'ACTIVE');
+        allProducts = allProducts.concat(activeProducts);
+        
+        hasNextPage = data?.products?.pageInfo?.hasNextPage || false;
+        cursor = data?.products?.pageInfo?.endCursor;
+        
+        // Stop if we don't have more
+        if (products.length === 0) break;
+      }
+      
+      return allProducts;
     });
+    
+    // Slice products for the requested page
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const pageProducts = allProductsResult.slice(startIndex, endIndex);
+    
+    console.log(`[PAGINATION] page=${page}, limit=${limit}, startIndex=${startIndex}, endIndex=${endIndex}, total=${allProductsResult.length}, pageProducts=${pageProducts.length}`);
+    
+    // Build pagination info
+    const cachedResult = {
+      success: true,
+      products: pageProducts.map(product => ({
+        ...product,
+        metafields: undefined
+      })),
+      pagination: {
+        page: page,
+        limit: limit,
+        total: totalProducts,
+        hasNextPage: endIndex < allProductsResult.length,
+        hasNext: endIndex < allProductsResult.length
+      },
+      shop: shop
+    };
     
     // Step 2: Fetch FRESH optimization status for all products (NOT cached!)
     // This ensures badges update immediately after optimize/delete operations
