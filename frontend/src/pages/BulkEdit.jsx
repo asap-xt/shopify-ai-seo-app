@@ -151,6 +151,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   });
   const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   const loadProductsRef = useRef(null); // Ref to always have latest loadProducts
+  const currentPageRef = useRef(1); // Ref to track current page for refresh after operations
   
   // Background Delete Job status
   const [deleteJobStatus, setDeleteJobStatus] = useState({
@@ -208,9 +209,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
           }
           
-          // Refresh products list to update badges - use ref to get latest loadProducts with correct itemsPerPage
+          // Refresh products list to update badges - stay on current page
           if (loadProductsRef.current) {
-            loadProductsRef.current(1, false, Date.now());
+            loadProductsRef.current(currentPageRef.current, false, Date.now());
           }
         }
         
@@ -439,6 +440,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     loadProductsRef.current = loadProducts;
   }, [loadProducts]);
   
+  // Keep page ref updated (for use in polling callbacks to stay on current page)
+  useEffect(() => {
+    currentPageRef.current = page;
+  }, [page]);
+  
   // Initial load and filter changes
   useEffect(() => {
     if (shop) {
@@ -630,9 +636,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
           }
           
-          // Refresh products to update badges - use ref to get latest loadProducts with correct itemsPerPage
+          // Refresh products to update badges - stay on current page
           if (loadProductsRef.current) {
-            loadProductsRef.current(1, false, Date.now());
+            loadProductsRef.current(currentPageRef.current, false, Date.now());
           }
         }
         
