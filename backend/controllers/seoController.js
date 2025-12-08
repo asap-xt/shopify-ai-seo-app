@@ -84,13 +84,6 @@ export async function getPlansMeForShop(app, shop) {
   }
   
   const planConfig = getPlanConfig(plan);
-  console.log('[PLANS-ME] DEBUG:', { 
-    shop, 
-    rawPlan: plan, 
-    resolvedKey: planConfig?.key,
-    productLimit: planConfig?.productLimit,
-    languageLimit: planConfig?.languageLimit
-  });
   if (!planConfig) {
     console.error('[PLANS-ME] ❌ Failed to get plan config:', { shop, plan, resolved: resolvePlanKey(plan) });
     throw new Error('Invalid plan');

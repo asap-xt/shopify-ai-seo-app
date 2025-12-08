@@ -275,17 +275,21 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       if (globalPlan.planKey && globalPlan.planKey !== '') {
         setCurrentPlan(globalPlan.planKey);
         
-        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-        const newLimit = globalPlan.language_limit || 1;
-        setLanguageLimit(newLimit);
+        // Get limits dynamically from globalPlan (snake_case from GraphQL)
+        const newLanguageLimit = globalPlan.language_limit || 1;
+        const newProductLimit = globalPlan.product_limit || 70;
+        setLanguageLimit(newLanguageLimit);
+        setProductLimit(newProductLimit);
       } else if (globalPlan.plan && globalPlan.plan !== '') {
         // Fallback: if planKey is missing, try to derive it from plan name
         const planKey = globalPlan.plan.toLowerCase().replace(/\s+/g, '-');
         setCurrentPlan(planKey);
         
-        // Get languageLimit dynamically from globalPlan (snake_case from GraphQL)
-        const newLimit = globalPlan.language_limit || 1;
-        setLanguageLimit(newLimit);
+        // Get limits dynamically from globalPlan (snake_case from GraphQL)
+        const newLanguageLimit = globalPlan.language_limit || 1;
+        const newProductLimit = globalPlan.product_limit || 70;
+        setLanguageLimit(newLanguageLimit);
+        setProductLimit(newProductLimit);
       }
     }
   }, [globalPlan, currentPlan, graphqlDataLoaded]);
@@ -807,7 +811,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Generate SEO for selected products
   const generateSEO = async () => {
-    
     if (!selectedLanguages.length) {
       setToast('Please select at least one language');
       return;
