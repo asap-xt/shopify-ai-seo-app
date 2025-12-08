@@ -959,6 +959,54 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
     const planConfig = getPlanConfig(planKey);
     const languageLimit = planConfig?.languageLimit || 1;
     
+    // === CHECK EXISTING OPTIMIZED LANGUAGES ===
+    // Get the product's current metafields to see which languages are already optimized
+    const existingLangsQuery = `
+      query GetProductSeoMetafields($id: ID!) {
+        product(id: $id) {
+          metafields(namespace: "seo_ai", first: 20) {
+            edges {
+              node {
+                key
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    let existingOptimizedLanguages = [];
+    try {
+      const token = await resolveAdminToken(req, shop);
+      const gqlRes = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': token,
+        },
+        body: JSON.stringify({ 
+          query: existingLangsQuery, 
+          variables: { id: productId.includes('gid://') ? productId : `gid://shopify/Product/${productId}` }
+        }),
+      });
+      const gqlData = await gqlRes.json();
+      const metafields = gqlData?.data?.product?.metafields?.edges || [];
+      
+      // Extract languages from metafield keys like "seo__en", "seo__bg", etc.
+      metafields.forEach(edge => {
+        const key = edge.node?.key;
+        if (key && key.startsWith('seo__')) {
+          const lang = key.replace('seo__', '').toLowerCase();
+          if (lang && !existingOptimizedLanguages.includes(lang)) {
+            existingOptimizedLanguages.push(lang);
+          }
+        }
+      });
+    } catch (err) {
+      console.error('[SEO/GENERATE] Error fetching existing languages:', err.message);
+      // Continue without existing languages check
+    }
+    
     // === LANGUAGE LIMIT CHECK ===
     const isAll = String(language || '').toLowerCase() === 'all';
     let languageCount = 1;
@@ -986,6 +1034,24 @@ router.post('/seo/generate', validateRequest(), async (req, res) => {
           message: `Upgrade your plan to optimize ${languageCount} languages. Your ${planConfig.name} plan supports ${languageLimit} language(s).`
         });
       }
+    } else {
+      // Single language request - check if adding this language would exceed limit
+      const requestedLang = String(language).toLowerCase();
+      const isNewLanguage = !existingOptimizedLanguages.includes(requestedLang);
+      
+      if (isNewLanguage) {
+        const totalAfterOptimization = existingOptimizedLanguages.length + 1;
+        if (totalAfterOptimization > languageLimit) {
+          return res.status(403).json({
+            error: `Language limit exceeded`,
+            currentPlan: planKey,
+            languageLimit: languageLimit,
+            existingLanguages: existingOptimizedLanguages.length,
+            message: `This product already has ${existingOptimizedLanguages.length} optimized language(s). Your ${planConfig.name} plan supports ${languageLimit} language(s). Please delete an existing language first or upgrade your plan.`
+          });
+        }
+      }
+      // If language is already optimized, allow re-optimization (update)
     }
     
     // === TOKEN CHECKING ===

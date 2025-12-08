@@ -186,6 +186,15 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Missing model' });
     }
 
+    // Get subscription and language limit
+    const Subscription = (await import('../db/Subscription.js')).default;
+    const { getPlanConfig } = await import('../plans.js');
+    
+    const subscription = await Subscription.findOne({ shop: shopDomain });
+    const planKey = subscription?.plan || 'starter';
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+
     // Prepare products for queue
     const productsToProcess = products.map(p => ({
       productId: toGID(String(p.productId)),
@@ -203,6 +212,15 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
 
       if (languagesToGenerate.length === 0) {
         return { success: true, skipped: true, reason: 'All languages already optimized' };
+      }
+      
+      // CHECK LANGUAGE LIMIT: existing + new languages must not exceed plan limit
+      const totalLanguagesAfterOptimization = productData.existingLanguages.length + languagesToGenerate.length;
+      if (totalLanguagesAfterOptimization > languageLimit) {
+        return { 
+          success: false, 
+          error: `Language limit exceeded: ${totalLanguagesAfterOptimization} languages would exceed your plan limit of ${languageLimit}. Please upgrade your plan or remove existing languages first.`
+        };
       }
 
       // Import generateSEOForLanguage directly
