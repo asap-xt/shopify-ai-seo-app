@@ -1944,8 +1944,8 @@ router.post('/batch', validateRequest(), async (req, res) => {
       try {
         // Direct function call - no HTTP overhead!
         const result = await enhanceProductDirectly({
-          shop,
-          productId,
+            shop,
+            productId,
           languages,
           accessToken: null, // shopGraphQL will get it from Shop collection
           subscription

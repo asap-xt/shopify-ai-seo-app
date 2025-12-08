@@ -228,7 +228,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
       const plansWithAccess = ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
       
       if (!plansWithAccess.includes(planKey)) {
-        return res.status(403).json({ 
+          return res.status(403).json({ 
           error: 'Collections JSON requires Professional Plus or Growth plan or higher',
           upgradeRequired: true,
           currentPlan: planKey
@@ -373,7 +373,7 @@ router.get('/ai/welcome', async (req, res) => {
       const plansWithAccess = ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
       
       if (!plansWithAccess.includes(planKey)) {
-        return res.status(403).json({ 
+          return res.status(403).json({ 
           error: 'AI Welcome Page requires Professional Plus or Growth plan or higher',
           upgradeRequired: true,
           currentPlan: planKey

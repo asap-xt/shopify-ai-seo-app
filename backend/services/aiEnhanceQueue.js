@@ -118,25 +118,25 @@ class AIEnhanceQueue {
           const batch = job.products.slice(batchStart, batchStart + BATCH_SIZE);
           
           // Update status before batch
-          await this.updateShopStatus(job.shop, {
-            inProgress: true,
-            status: 'processing',
+            await this.updateShopStatus(job.shop, {
+              inProgress: true,
+              status: 'processing',
             message: `Enhancing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
-            totalProducts: job.totalProducts,
-            processedProducts: job.processedProducts,
-            successfulProducts: job.successfulProducts,
-            failedProducts: job.failedProducts,
-            skippedProducts: job.skippedProducts
-          });
+              totalProducts: job.totalProducts,
+              processedProducts: job.processedProducts,
+              successfulProducts: job.successfulProducts,
+              failedProducts: job.failedProducts,
+              skippedProducts: job.skippedProducts
+            });
 
           // Process batch in parallel with error isolation
           const batchPromises = batch.map(async (productData) => {
             try {
-              const result = await job.enhanceFn(productData);
+            const result = await job.enhanceFn(productData);
               return { productData, result, success: true, error: null };
             } catch (error) {
               return { productData, result: null, success: false, error };
-            }
+              }
           });
 
           // Wait for all products in batch to complete
@@ -147,30 +147,30 @@ class AIEnhanceQueue {
             const { productData, result, success, error } = batchResult;
             
             if (!success && error) {
-              // Check for token/plan errors that should stop processing
-              if (error.status === 402 || error.status === 403 || error.trialRestriction) {
+            // Check for token/plan errors that should stop processing
+            if (error.status === 402 || error.status === 403 || error.trialRestriction) {
                 shouldStop = true;
-                job.status = 'failed';
-                job.error = error.message || 'Token or plan restriction';
-                job.failedAt = new Date();
-                
-                await this.updateShopStatus(job.shop, {
-                  inProgress: false,
-                  status: 'failed',
-                  message: error.message || 'Token or plan restriction',
-                  lastError: error.message,
-                  failedAt: new Date(),
-                  totalProducts: job.totalProducts,
-                  processedProducts: job.processedProducts,
-                  successfulProducts: job.successfulProducts,
-                  failedProducts: job.failedProducts,
-                  skippedProducts: job.skippedProducts
-                });
-                break;
-              }
+              job.status = 'failed';
+              job.error = error.message || 'Token or plan restriction';
+              job.failedAt = new Date();
               
-              job.failedProducts++;
-              job.failReasons.push(`${productData.title}: ${error.message}`);
+              await this.updateShopStatus(job.shop, {
+                inProgress: false,
+                status: 'failed',
+                message: error.message || 'Token or plan restriction',
+                lastError: error.message,
+                failedAt: new Date(),
+                totalProducts: job.totalProducts,
+                processedProducts: job.processedProducts,
+                successfulProducts: job.successfulProducts,
+                failedProducts: job.failedProducts,
+                skippedProducts: job.skippedProducts
+              });
+                break;
+            }
+            
+            job.failedProducts++;
+            job.failReasons.push(`${productData.title}: ${error.message}`);
               dbLogger.error(`[AI-ENHANCE-QUEUE] Product failed: ${productData.productId}`, error.message);
             } else if (result?.skipped) {
               job.skippedProducts++;

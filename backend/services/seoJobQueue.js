@@ -122,31 +122,31 @@ class SeoJobQueue {
           
           // Update status before batch
           job.phase = 'processing';
-          await this.updateShopStatus(job.shop, {
-            inProgress: true,
+            await this.updateShopStatus(job.shop, {
+              inProgress: true,
             status: 'processing',
             phase: 'processing',
             message: `Processing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
-            totalProducts: job.totalProducts,
-            processedProducts: job.processedProducts,
-            successfulProducts: job.successfulProducts,
-            failedProducts: job.failedProducts,
-            skippedProducts: job.skippedProducts
-          });
+              totalProducts: job.totalProducts,
+              processedProducts: job.processedProducts,
+              successfulProducts: job.successfulProducts,
+              failedProducts: job.failedProducts,
+              skippedProducts: job.skippedProducts
+            });
 
           // Process batch in parallel - each product goes through Generate then Apply
           const batchPromises = batch.map(async (productData) => {
             try {
               // Phase 1: Generate
-              const generateResult = await job.generateFn(productData);
-              
+            const generateResult = await job.generateFn(productData);
+            
               // Check if skipped
-              if (generateResult.skipped) {
+            if (generateResult.skipped) {
                 return { productData, skipped: true, reason: generateResult.reason };
-              }
+            }
 
-              // Check if generate failed
-              if (!generateResult.success) {
+            // Check if generate failed
+            if (!generateResult.success) {
                 return { productData, failed: true, error: generateResult.error || generateResult.reason };
               }
 
@@ -177,8 +177,8 @@ class SeoJobQueue {
                 job.failReasons.push(`${result.productData.title || result.productData.productId}: ${result.error}`);
               }
               dbLogger.error(`[SEO-JOB-QUEUE] Product failed: ${result.productData.productId}`, result.error);
-            }
-            job.processedProducts++;
+          }
+          job.processedProducts++;
           }
 
           // Small delay between batches

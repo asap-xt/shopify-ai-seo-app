@@ -71,7 +71,7 @@ export default function AiTesting({ shop: shopProp }) {
   });
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
   const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
-  
+
   // Review banner state (same as Dashboard)
   const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
     try {

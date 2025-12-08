@@ -2936,22 +2936,22 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
     let totalDeleted = 0;
     
     if (metafieldsToDelete.length > 0) {
-      const deleteMutation = `
-        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
-          metafieldsDelete(metafields: $metafields) {
-            deletedMetafields {
-              key
-              namespace
-              ownerId
-            }
-            userErrors {
-              field
-              message
+        const deleteMutation = `
+          mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+            metafieldsDelete(metafields: $metafields) {
+              deletedMetafields {
+                key
+                namespace
+                ownerId
+              }
+              userErrors {
+                field
+                message
+              }
             }
           }
-        }
-      `;
-      
+        `;
+        
       // Process in parallel batches for speed
       const batches = [];
       for (let i = 0; i < metafieldsToDelete.length; i += BATCH_SIZE) {
@@ -2961,11 +2961,11 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
       // Run batches in parallel (max 3 concurrent to avoid rate limits)
       const processBatch = async (batch) => {
         try {
-          const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
+        const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
             metafields: batch
-          });
-          
-          if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
+        });
+        
+        if (deleteResult?.metafieldsDelete?.userErrors?.length > 0) {
             return { errors: deleteResult.metafieldsDelete.userErrors };
           }
           
@@ -2997,11 +2997,11 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
         });
       }
       
-      results.push({
-        type: 'success',
-        source: 'shopify',
+          results.push({
+            type: 'success',
+            source: 'shopify',
         deletedCount: totalDeleted
-      });
+        });
     }
     
     // 2. Update MongoDB for all products (parallel)

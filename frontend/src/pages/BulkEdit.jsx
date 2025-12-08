@@ -75,10 +75,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
   
   // Selection state
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [selectAllInStore, setSelectAllInStore] = useState(false);
+  const [showSelectionPopover, setShowSelectionPopover] = useState(false);
   
   // Filter state
   const [searchValue, setSearchValue] = useState('');
@@ -302,14 +306,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Auto-close upgrade modal if selection is now within limit
   useEffect(() => {
     if (showPlanUpgradeModal && plan) {
-      const currentSelection = selectAllPages ? totalCount : selectedItems.length;
+      const currentSelection = selectAllInStore ? totalCount : selectedItems.length;
       
       if (currentSelection <= productLimit) {
         setShowPlanUpgradeModal(false);
         setTokenError(null);
       }
     }
-  }, [selectedItems.length, selectAllPages, totalCount, showPlanUpgradeModal, plan]);
+  }, [selectedItems.length, selectAllPages, selectAllInStore, totalCount, showPlanUpgradeModal, plan]);
   
   // Load models and plan on mount
   useEffect(() => {
@@ -401,7 +405,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       const params = new URLSearchParams({
         shop,
         page: pageNum,
-        limit: 50,
+        limit: itemsPerPage,
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
         ...(searchValue && { search: searchValue }),
         ...(languageFilter && { languageFilter }),
@@ -419,23 +423,6 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         }
       });
       
-      // Log първия продукт за проверка
-      if (data.products?.length > 0) {
-        //   id: data.products[0].id,
-        //   _id: data.products[0]._id,
-        //   title: data.products[0].title,
-        //   optimizationSummary: data.products[0].optimizationSummary,
-        //   allKeys: Object.keys(data.products[0])
-        // });
-      }
-      
-      
-      // DEBUG: Log product IDs before setting state
-      if (data.products?.length > 0) {
-        data.products.forEach((p, idx) => {
-        });
-      }
-      
       if (append) {
         setProducts(prev => [...prev, ...data.products]);
       } else {
@@ -444,7 +431,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       setPage(pageNum);
       setHasMore(data.pagination?.hasNext || false);
-      setTotalCount(data.pagination?.total || 0);
+      const total = data.pagination?.total || 0;
+      setTotalCount(total);
+      setTotalPages(Math.ceil(total / itemsPerPage) || 1);
     } catch (err) {
       setProducts(append ? products : []);
       setHasMore(false);
@@ -452,7 +441,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder]);
+  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
   
 
   
@@ -462,7 +451,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       loadProducts(1, false, null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder]);
+  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
   
   // Mark as visited on first load
   useEffect(() => {
@@ -513,19 +502,64 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   const handleSelectAllPages = useCallback((checked) => {
     setSelectAllPages(checked);
+    setSelectAllInStore(false);
     if (checked) {
       setSelectedItems(products.map(p => p.id));
     } else {
       setSelectedItems([]);
     }
   }, [products]);
+  
+  // Handle "Select all in this store" action
+  const handleSelectAllInStore = useCallback(async () => {
+    setSelectAllInStore(true);
+    setSelectAllPages(true);
+    setSelectedItems(products.map(p => p.id));
+    setShowSelectionPopover(false);
+  }, [products]);
+  
+  // Handle "Unselect all" action
+  const handleUnselectAll = useCallback(() => {
+    setSelectAllInStore(false);
+    setSelectAllPages(false);
+    setSelectedItems([]);
+    setShowSelectionPopover(false);
+  }, []);
+  
+  // Handle items per page change
+  const handleItemsPerPageChange = useCallback((value) => {
+    setItemsPerPage(parseInt(value, 10));
+    setPage(1);
+    setSelectedItems([]);
+    setSelectAllPages(false);
+    setSelectAllInStore(false);
+  }, []);
+  
+  // Pagination handlers
+  const handlePreviousPage = useCallback(() => {
+    if (page > 1) {
+      loadProducts(page - 1, false, null);
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      setSelectAllInStore(false);
+    }
+  }, [page, loadProducts]);
+  
+  const handleNextPage = useCallback(() => {
+    if (page < totalPages) {
+      loadProducts(page + 1, false, null);
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      setSelectAllInStore(false);
+    }
+  }, [page, totalPages, loadProducts]);
 
   // Calculate maximum NEW languages that can be added
   // Takes into account already optimized languages across selected products
   // Check if the selected languages would exceed the plan limit for any selected product
   const checkLanguageLimitExceeded = useMemo(() => {
-    if (selectAllPages) {
-      // For "select all", just check if we're selecting more than the plan allows
+    if (selectAllInStore) {
+      // For "select all in store", just check if we're selecting more than the plan allows
       return selectedLanguages.length > languageLimit;
     }
     
@@ -551,11 +585,11 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     }
     
     return false; // All products are within limit
-  }, [products, selectedItems, selectAllPages, languageLimit, selectedLanguages]);
+  }, [products, selectedItems, selectAllInStore, languageLimit, selectedLanguages]);
 
   // Open language selection modal
   const openLanguageModal = () => {
-    if (selectedItems.length === 0 && !selectAllPages) {
+    if (selectedItems.length === 0 && !selectAllPages && !selectAllInStore) {
       setToast('Please select products first');
       return;
     }
@@ -564,7 +598,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   
   // Open delete language selection modal
   const openDeleteModal = () => {
-    if (selectedItems.length === 0 && !selectAllPages) {
+    if (selectedItems.length === 0 && !selectAllPages && !selectAllInStore) {
       setToast('Please select products first');
       return;
     }
@@ -796,7 +830,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     try {
       let productsToProcess = [];
       
-      if (selectAllPages) {
+      if (selectAllInStore) {
+        // Fetch all products in store for "Select all in store"
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
@@ -885,7 +920,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     try {
       let productsToProcess = [];
       
-      if (selectAllPages) {
+      if (selectAllInStore) {
+        // Fetch all products in store for "Select all in store"
         const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
         productsToProcess = data.products || [];
       } else {
@@ -897,19 +933,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let skippedCount = 0;
       
       for (const product of productsToProcess) {
-        const productGid = product.gid || toProductGID(product.productId || product.id);
-        const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
-        
-        // Only delete languages that are actually optimized
-        const languagesToDelete = selectedDeleteLanguages.filter(lang => 
-          optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
-        );
-        
-        if (languagesToDelete.length === 0) {
-          skippedCount++;
-          continue;
-        }
-        
+          const productGid = product.gid || toProductGID(product.productId || product.id);
+          const optimizedLanguages = product.optimizationSummary?.optimizedLanguages || [];
+          
+          // Only delete languages that are actually optimized
+          const languagesToDelete = selectedDeleteLanguages.filter(lang => 
+            optimizedLanguages && optimizedLanguages.length > 0 && optimizedLanguages.includes(lang)
+          );
+          
+          if (languagesToDelete.length === 0) {
+            skippedCount++;
+            continue;
+          }
+          
         // Add each language as separate item
         for (const language of languagesToDelete) {
           itemsToDelete.push({ productId: productGid, language });
@@ -943,8 +979,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       // Start background delete
       await api('/seo/bulk-delete-batch', {
-        method: 'POST',
-        shop,
+            method: 'POST',
+            shop,
         body: { items: itemsToDelete }
       });
       
@@ -986,17 +1022,17 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   return prod; // Not selected - don't modify
                 }
                 
-                const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
-                const newOptimized = currentOptimized.filter(lang => 
+                  const currentOptimized = prod.optimizationSummary?.optimizedLanguages || [];
+                  const newOptimized = currentOptimized.filter(lang => 
                   !selectedDeleteLanguages.includes(lang)
-                );
-                
-                return {
-                  ...prod,
-                  optimizationSummary: {
-                    ...prod.optimizationSummary,
-                    optimizedLanguages: newOptimized,
-                    optimized: newOptimized.length > 0,
+                  );
+                  
+                  return {
+                    ...prod,
+                    optimizationSummary: {
+                      ...prod.optimizationSummary,
+                      optimizedLanguages: newOptimized,
+                      optimized: newOptimized.length > 0,
                     aiEnhanced: newOptimized.length > 0 ? prod.optimizationSummary?.aiEnhanced : false
                   }
                 };
@@ -1227,7 +1263,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     >
       <Modal.Section>
         <BlockStack gap="300">
-          <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllPages ? 'all' : selectedItems.length} selected products:</Text>
+          <Text variant="bodyMd">Select languages to generate AI Search Optimisation for {selectAllInStore ? 'all' : selectedItems.length} selected products:</Text>
           
           {/* Language Limit Warning Banner */}
           {checkLanguageLimitExceeded && (
@@ -1337,7 +1373,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       <Modal.Section>
         <BlockStack gap="300">
           <Text variant="bodyMd">
-            Select languages to delete AI Search Optimisation from {selectAllPages ? 'all' : selectedItems.length} selected products:
+            Select languages to delete AI Search Optimisation from {selectAllInStore ? 'all' : selectedItems.length} selected products:
           </Text>
           <Box paddingBlockStart="200">
             <InlineStack gap="200" wrap>
@@ -1413,7 +1449,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             </InlineStack>
           </Box>
           <Text variant="bodyMd">
-            This will delete optimisation from {selectAllPages ? 'ALL' : selectedItems.length} selected products.
+            This will delete optimisation from {selectAllInStore ? 'ALL' : selectedItems.length} selected products.
           </Text>
           <Text variant="bodySm" tone="critical" fontWeight="semibold">
             This action cannot be undone.
@@ -1494,9 +1530,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       <> You have {totalCount} products, so only the first {productLimit} will be processed.</>
                     )}
                   </Text>
-                  {(selectedItems.length > 0 || selectAllPages) && (
+                  {(selectedItems.length > 0 || selectAllPages || selectAllInStore) && (
                     <Text>
-                      Selected: {selectAllPages ? Math.min(totalCount, productLimit) : selectedItems.length}/{productLimit}
+                      Selected: {selectAllInStore ? Math.min(totalCount, productLimit) : selectedItems.length}/{productLimit}
                     </Text>
                   )}
                 </InlineStack>
@@ -1504,7 +1540,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             )}
             
             {/* Plan Limit Warning Banner */}
-            {plan && (selectedItems.length > productLimit || (selectAllPages && totalCount > productLimit)) && (
+            {plan && (selectedItems.length > productLimit || (selectAllInStore && totalCount > productLimit)) && (
               <Banner tone="critical">
                 <BlockStack gap="200">
                   <Text variant="bodyMd" fontWeight="semibold">
@@ -1512,7 +1548,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   </Text>
                   <Text>
                     Your <strong>{plan}</strong> plan supports up to <strong>{productLimit}</strong> products. 
-                    You have selected <strong>{selectAllPages ? totalCount : selectedItems.length}</strong> products.
+                    You have selected <strong>{selectAllInStore ? totalCount : selectedItems.length}</strong> products.
                   </Text>
                   <Text>
                     Please deselect some products or upgrade your plan to continue.
@@ -1531,8 +1567,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       onClick={() => {
                         setTokenError({
                           error: `Product limit exceeded`,
-                          message: `Your ${plan} plan supports up to ${productLimit} products. Upgrade to ${getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)} to optimize more products.`,
-                          minimumPlanRequired: getNextPlanForLimit(selectAllPages ? totalCount : selectedItems.length)
+                          message: `Your ${plan} plan supports up to ${productLimit} products. Upgrade to ${getNextPlanForLimit(selectAllInStore ? totalCount : selectedItems.length)} to optimize more products.`,
+                          minimumPlanRequired: getNextPlanForLimit(selectAllInStore ? totalCount : selectedItems.length)
                         });
                         setShowPlanUpgradeModal(true);
                       }}
@@ -1562,7 +1598,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 <Button
                   primary
                   onClick={openLanguageModal}
-                  disabled={selectedItems.length === 0 && !selectAllPages}
+                  disabled={selectedItems.length === 0 && !selectAllPages && !selectAllInStore}
                   size="medium"
                   fullWidth
                 >
@@ -1585,7 +1621,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 <BlockStack gap="200" align="end">
                   {/* AI Enhanced Search Optimisation Button - between Generate and Delete */}
                   {(() => {
-                    if (selectedItems.length === 0 && !selectAllPages) return null;
+                    if (selectedItems.length === 0 && !selectAllPages && !selectAllInStore) return null;
                     
                     const selectedProducts = products.filter(p => selectedItems.includes(p.id));
                     const hasOptimizedProducts = selectedProducts.some(p => 
@@ -1618,7 +1654,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                           });
                           setShowPlanUpgradeModal(true);
                         }}
-                        disabled={selectedItems.length === 0 && !selectAllPages}
+                        disabled={selectedItems.length === 0 && !selectAllPages && !selectAllInStore}
                         size="medium"
                         fullWidth
                       >
@@ -1629,7 +1665,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   
                   <Button
                     onClick={openDeleteModal}
-                    disabled={(selectedItems.length === 0 && !selectAllPages) || (() => {
+                    disabled={(selectedItems.length === 0 && !selectAllPages && !selectAllInStore) || (() => {
                       const selectedProducts = products.filter(p => selectedItems.includes(p.id));
                       const hasOptimizedProducts = selectedProducts.some(p => 
                         p.optimizationSummary?.optimizedLanguages?.length > 0
@@ -2108,16 +2144,53 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
           <Box>
             <Box paddingBlockEnd="200" paddingInlineStart="300">
-              <InlineStack gap="200" align="start">
-                <Checkbox
-                  checked={selectedItems.length === products.length && products.length > 0}
-                  onChange={handleSelectAllPages}
-                  label=""
-                />
-                <Text variant="bodyMd" fontWeight="semibold">
-                  Select all
-                  {selectedItems.length > 0 && ` (${selectedItems.length} selected products)`}
-                </Text>
+              <InlineStack gap="200" align="start" blockAlign="center">
+                <Popover
+                  active={showSelectionPopover}
+                  activator={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowSelectionPopover(!showSelectionPopover)}>
+                      <Checkbox
+                        checked={selectedItems.length > 0 && (selectedItems.length === products.length || selectAllInStore)}
+                        indeterminate={selectedItems.length > 0 && selectedItems.length < products.length && !selectAllInStore}
+                        onChange={handleSelectAllPages}
+                        label=""
+                      />
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {selectedItems.length > 0 
+                          ? selectAllInStore 
+                            ? `All ${totalCount} selected`
+                            : `${selectedItems.length} selected`
+                          : 'Select'}
+                      </Text>
+                      <span style={{ fontSize: '10px', color: '#637381' }}>▼</span>
+                    </div>
+                  }
+                  onClose={() => setShowSelectionPopover(false)}
+                  preferredAlignment="left"
+                >
+                  <ActionList
+                    items={[
+                      {
+                        content: `Select all ${products.length} on this page`,
+                        onAction: () => {
+                          handleSelectAllPages(true);
+                          setShowSelectionPopover(false);
+                        },
+                        disabled: selectedItems.length === products.length && !selectAllInStore
+                      },
+                      {
+                        content: `Select all ${totalCount} in this store`,
+                        onAction: handleSelectAllInStore,
+                        disabled: selectAllInStore
+                      },
+                      {
+                        content: 'Unselect all',
+                        onAction: handleUnselectAll,
+                        disabled: selectedItems.length === 0
+                      }
+                    ]}
+                  />
+                </Popover>
               </InlineStack>
             </Box>
             <ResourceList
@@ -2135,13 +2208,51 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             />
           </Box>
           
-          {hasMore && !loading && (
-            <Box padding="400" textAlign="center">
-              <Button onClick={() => loadProducts(page + 1, true, null)}>
-                Load more
-              </Button>
-            </Box>
-          )}
+          {/* Pagination Controls */}
+          <Box padding="400" borderBlockStart="divider">
+            <InlineStack align="space-between" blockAlign="center">
+              {/* Items per page selector */}
+              <InlineStack gap="200" blockAlign="center">
+                <Text variant="bodySm" tone="subdued">Show:</Text>
+                <Select
+                  label=""
+                  labelHidden
+                  options={[
+                    { label: '20', value: '20' },
+                    { label: '50', value: '50' },
+                    { label: '100', value: '100' }
+                  ]}
+                  value={String(itemsPerPage)}
+                  onChange={handleItemsPerPageChange}
+                />
+                <Text variant="bodySm" tone="subdued">per page</Text>
+              </InlineStack>
+              
+              {/* Page info and navigation */}
+              <InlineStack gap="300" blockAlign="center">
+                <Text variant="bodySm" tone="subdued">
+                  {totalCount > 0 
+                    ? `${(page - 1) * itemsPerPage + 1}-${Math.min(page * itemsPerPage, totalCount)} of ${totalCount}`
+                    : '0 products'
+                  }
+                </Text>
+                <InlineStack gap="100">
+                  <Button
+                    icon={<span style={{ fontSize: '16px' }}>‹</span>}
+                    disabled={page <= 1 || loading}
+                    onClick={handlePreviousPage}
+                    accessibilityLabel="Previous page"
+                  />
+                  <Button
+                    icon={<span style={{ fontSize: '16px' }}>›</span>}
+                    disabled={page >= totalPages || loading}
+                    onClick={handleNextPage}
+                    accessibilityLabel="Next page"
+                  />
+                </InlineStack>
+              </InlineStack>
+            </InlineStack>
+          </Box>
         </Card>
       </Box>
 

@@ -121,21 +121,21 @@ class CollectionJobQueue {
           const batch = job.collections.slice(batchStart, batchStart + BATCH_SIZE);
           
           // Update status before batch
-          await this.updateShopStatus(job.shop, job.statusField, {
-            inProgress: true,
-            status: 'processing',
+            await this.updateShopStatus(job.shop, job.statusField, {
+              inProgress: true,
+              status: 'processing',
             message: `Processing ${job.processedCollections + 1}-${Math.min(job.processedCollections + batch.length, job.totalCollections)}/${job.totalCollections}...`,
-            totalCollections: job.totalCollections,
-            processedCollections: job.processedCollections,
-            successfulCollections: job.successfulCollections,
-            failedCollections: job.failedCollections,
-            skippedCollections: job.skippedCollections
-          });
+              totalCollections: job.totalCollections,
+              processedCollections: job.processedCollections,
+              successfulCollections: job.successfulCollections,
+              failedCollections: job.failedCollections,
+              skippedCollections: job.skippedCollections
+            });
 
           // Process batch in parallel
           const batchPromises = batch.map(async (collectionData) => {
             try {
-              const result = await job.processFn(collectionData);
+            const result = await job.processFn(collectionData);
               return { collectionData, result, success: true, error: null };
             } catch (error) {
               return { collectionData, result: null, success: false, error };
@@ -150,29 +150,29 @@ class CollectionJobQueue {
             const { collectionData, result, success, error } = batchResult;
             
             if (!success && error) {
-              // Check for token/plan errors that should stop processing
-              if (error.status === 402 || error.status === 403 || error.trialRestriction) {
+            // Check for token/plan errors that should stop processing
+            if (error.status === 402 || error.status === 403 || error.trialRestriction) {
                 shouldStop = true;
-                job.status = 'failed';
-                job.error = error.message || 'Token or plan restriction';
-                job.failedAt = new Date();
-                
-                await this.updateShopStatus(job.shop, job.statusField, {
-                  inProgress: false,
-                  status: 'failed',
-                  message: error.message || 'Token or plan restriction',
-                  lastError: error.message,
-                  failedAt: new Date(),
-                  totalCollections: job.totalCollections,
-                  processedCollections: job.processedCollections,
-                  successfulCollections: job.successfulCollections,
-                  failedCollections: job.failedCollections,
-                  skippedCollections: job.skippedCollections
-                });
-                break;
-              }
+              job.status = 'failed';
+              job.error = error.message || 'Token or plan restriction';
+              job.failedAt = new Date();
               
-              job.failedCollections++;
+              await this.updateShopStatus(job.shop, job.statusField, {
+                inProgress: false,
+                status: 'failed',
+                message: error.message || 'Token or plan restriction',
+                lastError: error.message,
+                failedAt: new Date(),
+                totalCollections: job.totalCollections,
+                processedCollections: job.processedCollections,
+                successfulCollections: job.successfulCollections,
+                failedCollections: job.failedCollections,
+                skippedCollections: job.skippedCollections
+              });
+                break;
+            }
+            
+            job.failedCollections++;
               dbLogger.error(`[COLLECTION-QUEUE] Collection failed: ${collectionData.collectionId}`, error.message);
             } else if (result?.skipped) {
               job.skippedCollections++;
