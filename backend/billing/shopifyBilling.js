@@ -22,9 +22,9 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
   const returnTo = options.returnTo || '/billing'; // Default to billing page
   
-  // TEMPORARY: Test mode for app owner installation
+  // PRODUCTION MODE: Real payments enabled
   // Set to true for testing, false for real payments
-  const isTest = true;
+  const isTest = false;
   
   const mutation = `
     mutation CreateSubscription(
