@@ -33,20 +33,32 @@ router.get('/stats', verifyRequest, async (req, res) => {
       let primaryDomain = `https://${shop}`;
       let storeName = shop.split('.')[0];
       try {
-        const result = await executeGraphQL(req, `{
-          shop {
-            name
-            primaryDomain { url }
+        // Use Shop record to get access token (verifyRequest doesn't set up executeGraphQL)
+        const shopRecord = await Shop.findOne({ shop });
+        if (shopRecord?.accessToken) {
+          const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: `{
+                shop {
+                  name
+                  primaryDomain { url }
+                }
+              }`
+            }),
+          });
+          const result = await response.json();
+          if (result?.data?.shop?.primaryDomain?.url) {
+            primaryDomain = result.data.shop.primaryDomain.url;
           }
-        }`);
-        console.log('[Dashboard] GraphQL result for primaryDomain:', JSON.stringify(result?.shop));
-        if (result?.shop?.primaryDomain?.url) {
-          primaryDomain = result.shop.primaryDomain.url;
+          if (result?.data?.shop?.name) {
+            storeName = result.data.shop.name;
+          }
         }
-        if (result?.shop?.name) {
-          storeName = result.shop.name;
-        }
-        console.log('[Dashboard] Using primaryDomain:', primaryDomain, 'storeName:', storeName);
       } catch (err) {
         console.error('[Dashboard] Error fetching primaryDomain:', err.message);
       }
