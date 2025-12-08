@@ -130,14 +130,10 @@ class AIEnhanceQueue {
             });
 
           // Process batch in parallel with error isolation and timeout
-          dbLogger.info(`[AI-ENHANCE-QUEUE] 🔧 Starting batch ${batchStart / BATCH_SIZE + 1}, products: ${batch.map(p => p.productId).join(', ')}`);
-          
           const PRODUCT_TIMEOUT = 90000; // 90s timeout per product
           const batchPromises = batch.map(async (productData) => {
             try {
-              dbLogger.info(`[AI-ENHANCE-QUEUE] → Processing product ${productData.productId} (${productData.title?.slice(0, 30)}...)`);
-              
-              // Add timeout wrapper
+              // Add timeout wrapper to prevent stuck jobs
               const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error(`Timeout after ${PRODUCT_TIMEOUT / 1000}s`)), PRODUCT_TIMEOUT);
               });
@@ -147,18 +143,15 @@ class AIEnhanceQueue {
                 timeoutPromise
               ]);
               
-              dbLogger.info(`[AI-ENHANCE-QUEUE] ✓ Product ${productData.productId} done`);
               return { productData, result, success: true, error: null };
             } catch (error) {
-              dbLogger.error(`[AI-ENHANCE-QUEUE] ✗ Product ${productData.productId} error: ${error.message}`);
+              dbLogger.error(`[AI-ENHANCE-QUEUE] Product ${productData.productId} error: ${error.message}`);
               return { productData, result: null, success: false, error };
               }
           });
 
           // Wait for all products in batch to complete
-          dbLogger.info(`[AI-ENHANCE-QUEUE] ⏳ Waiting for batch to complete...`);
           const batchResults = await Promise.all(batchPromises);
-          dbLogger.info(`[AI-ENHANCE-QUEUE] ✅ Batch complete, results: ${batchResults.length}`);
 
           // Process batch results
           for (const batchResult of batchResults) {

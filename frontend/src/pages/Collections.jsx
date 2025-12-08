@@ -196,6 +196,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     completedAt: null
   });
   const collectionAiEnhancePollingRef = useRef(null);
+  const loadCollectionsRef = useRef(null); // Ref to always have latest loadCollections
   
   // Load models and plan on mount
   useEffect(() => {
@@ -335,6 +336,11 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setLoading(false);
     }
   }, [shop, searchValue, optimizedFilter, sortBy, sortOrder, itemsPerPage, api]);
+  
+  // Keep ref updated with latest loadCollections (for use in polling callbacks)
+  useEffect(() => {
+    loadCollectionsRef.current = loadCollections;
+  }, [loadCollections]);
   
   // Initial load and filter changes
   useEffect(() => {
@@ -486,7 +492,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             setToast(`Collection SEO failed: ${status.message || 'Unknown error'}`);
           }
           
-          loadCollections();
+          // Use ref to get latest loadCollections with correct itemsPerPage
+          if (loadCollectionsRef.current) {
+            loadCollectionsRef.current();
+          }
         }
         
         return status;
@@ -496,7 +505,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[COLLECTIONS] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, loadCollections]);
+  }, [shop, api]);
   
   // Start polling for Collection SEO job status
   const startCollectionSeoPolling = useCallback(() => {
@@ -530,7 +539,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
           }
           
-          loadCollections();
+          // Use ref to get latest loadCollections with correct itemsPerPage
+          if (loadCollectionsRef.current) {
+            loadCollectionsRef.current();
+          }
         }
         
         return status;
@@ -540,7 +552,7 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[COLLECTIONS] Failed to fetch AI Enhancement job status:', error);
     }
-  }, [shop, api, loadCollections]);
+  }, [shop, api]);
   
   // Start polling for Collection AI Enhancement job status
   const startCollectionAiEnhancePolling = useCallback(() => {
