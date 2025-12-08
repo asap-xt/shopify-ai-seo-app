@@ -95,15 +95,19 @@ async function fetchStoreData(shop, accessToken) {
 
 /**
  * Fetch store metadata (custom AI SEO metadata)
+ * Includes: seo_metadata, ai_metadata, organization_schema
  */
 async function fetchStoreMetadata(shop, accessToken) {
   const query = `
     query {
       shop {
-        metafield(namespace: "ai_seo_store", key: "seo_metadata") {
+        seoMetadata: metafield(namespace: "ai_seo_store", key: "seo_metadata") {
           value
         }
         aiMetadata: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
+          value
+        }
+        organizationSchema: metafield(namespace: "ai_seo_store", key: "organization_schema") {
           value
         }
       }
@@ -129,10 +133,11 @@ async function fetchStoreMetadata(shop, accessToken) {
     
     let seoMetadata = {};
     let aiMetadata = {};
+    let organizationSchema = {};
     
-    if (shop_data.metafield?.value) {
+    if (shop_data.seoMetadata?.value) {
       try {
-        seoMetadata = JSON.parse(shop_data.metafield.value);
+        seoMetadata = JSON.parse(shop_data.seoMetadata.value);
       } catch (e) {}
     }
     
@@ -142,7 +147,17 @@ async function fetchStoreMetadata(shop, accessToken) {
       } catch (e) {}
     }
     
-    return { ...seoMetadata, ...aiMetadata };
+    if (shop_data.organizationSchema?.value) {
+      try {
+        organizationSchema = JSON.parse(shop_data.organizationSchema.value);
+      } catch (e) {}
+    }
+    
+    return { 
+      seo: seoMetadata, 
+      ai: aiMetadata, 
+      organization: organizationSchema 
+    };
   } catch (error) {
     console.error('[STORE-CONTEXT] Error fetching metadata:', error.message);
     return {};
@@ -155,8 +170,10 @@ async function fetchStoreMetadata(shop, accessToken) {
  */
 async function fetchStorePolicies(shop, accessToken, storeMetadata) {
   // PRIORITY 1: Store Metadata policies (most accurate!)
-  const metadataShipping = storeMetadata?.shippingInfo || storeMetadata?.shipping;
-  const metadataReturns = storeMetadata?.returnPolicy || storeMetadata?.returns;
+  // storeMetadata now has structure: { seo: {}, ai: {}, organization: {} }
+  const ai = storeMetadata?.ai || {};
+  const metadataShipping = ai.shippingInfo || ai.shipping;
+  const metadataReturns = ai.returnPolicy || ai.returns;
   
   if (metadataShipping || metadataReturns) {
     return {
@@ -324,9 +341,16 @@ async function getProductCatalogSummary(shop, accessToken) {
 
 /**
  * Build context string for AI
+ * Includes ALL Store Metadata fields for comprehensive AI context
  */
 function buildContextString({ shop, storeData, storeMetadata, policies, catalogSummary }) {
-  const shopName = storeData.name || shop.split('.')[0];
+  // Extract structured metadata
+  const seo = storeMetadata?.seo || {};
+  const ai = storeMetadata?.ai || {};
+  const org = storeMetadata?.organization || {};
+  
+  // Use custom store name if set, otherwise Shopify name
+  const shopName = seo.storeName || storeData.name || shop.split('.')[0];
   const shopUrl = storeData.primaryDomain?.url || `https://${shop}`;
   const country = storeData.billingAddress?.country || 'Unknown';
   
@@ -340,17 +364,82 @@ Store Name: ${shopName}
 Store URL: ${shopUrl}
 Country: ${country}
 Currency: ${storeData.currencyCode || 'USD'}
-Description: ${storeData.description || 'E-commerce store'}
 `;
   
-  // Add custom metadata if exists
-  if (storeMetadata.targetAudience || storeMetadata.brandVoice) {
+  // Add SEO description (prefer custom over Shopify)
+  const description = seo.fullDescription || seo.shortDescription || storeData.description;
+  if (description) {
+    context += `Description: ${description}\n`;
+  }
+  
+  // Add keywords if set
+  if (seo.keywords) {
+    const keywordsStr = Array.isArray(seo.keywords) ? seo.keywords.join(', ') : seo.keywords;
+    if (keywordsStr) {
+      context += `Keywords: ${keywordsStr}\n`;
+    }
+  }
+  
+  // CONTACT INFORMATION - Critical for AI to answer contact questions!
+  if (org.email || org.phone || storeData.email) {
+    context += `
+📞 CONTACT INFORMATION:
+`;
+    if (org.email || storeData.email) {
+      context += `Email: ${org.email || storeData.email}\n`;
+    }
+    if (org.phone) {
+      context += `Phone: ${org.phone}\n`;
+    }
+    if (org.name) {
+      context += `Company Name: ${org.name}\n`;
+    }
+  }
+  
+  // BRAND IDENTITY - All AI Metadata fields
+  if (ai.targetAudience || ai.brandVoice || ai.businessType || ai.uniqueSellingPoints) {
     context += `
 🎯 BRAND IDENTITY:
-Target Audience: ${storeMetadata.targetAudience || 'General consumers'}
-Brand Voice: ${storeMetadata.brandVoice || 'Professional and friendly'}
-Brand Values: ${storeMetadata.brandValues || 'Quality, Service, Value'}
 `;
+    if (ai.businessType) {
+      context += `Business Type: ${ai.businessType}\n`;
+    }
+    if (ai.targetAudience) {
+      context += `Target Audience: ${ai.targetAudience}\n`;
+    }
+    if (ai.brandVoice) {
+      context += `Brand Voice/Tone: ${ai.brandVoice}\n`;
+    }
+    if (ai.uniqueSellingPoints) {
+      const uspStr = Array.isArray(ai.uniqueSellingPoints) ? ai.uniqueSellingPoints.join(', ') : ai.uniqueSellingPoints;
+      context += `Unique Selling Points: ${uspStr}\n`;
+    }
+    if (ai.primaryCategories) {
+      const catStr = Array.isArray(ai.primaryCategories) ? ai.primaryCategories.join(', ') : ai.primaryCategories;
+      context += `Primary Categories: ${catStr}\n`;
+    }
+  }
+  
+  // MARKET INFORMATION - Languages, currencies, regions
+  if (ai.languages || ai.supportedCurrencies || ai.shippingRegions) {
+    context += `
+🌍 MARKET INFORMATION:
+`;
+    if (ai.languages) {
+      const langStr = Array.isArray(ai.languages) ? ai.languages.join(', ') : ai.languages;
+      context += `Supported Languages: ${langStr}\n`;
+    }
+    if (ai.supportedCurrencies) {
+      const currStr = Array.isArray(ai.supportedCurrencies) ? ai.supportedCurrencies.join(', ') : ai.supportedCurrencies;
+      context += `Supported Currencies: ${currStr}\n`;
+    }
+    if (ai.shippingRegions) {
+      const regStr = Array.isArray(ai.shippingRegions) ? ai.shippingRegions.join(', ') : ai.shippingRegions;
+      context += `Shipping Regions: ${regStr}\n`;
+    }
+    if (ai.culturalConsiderations) {
+      context += `Cultural Considerations: ${ai.culturalConsiderations}\n`;
+    }
   }
   
   // Add catalog summary if available
@@ -365,20 +454,26 @@ Collections: ${catalogSummary.collections.join(', ') || 'Various'}
 `;
   }
   
-  // Add policies if available
-  if (policies.shipping || policies.refund) {
+  // STORE POLICIES - Shipping and Returns
+  // Use AI metadata shipping/returns if available, otherwise use policies object
+  const shippingInfo = ai.shippingInfo || policies?.shipping;
+  const returnPolicy = ai.returnPolicy || policies?.refund;
+  
+  if (shippingInfo || returnPolicy) {
+    const source = (ai.shippingInfo || ai.returnPolicy) ? 'Merchant-verified ✓' : 
+                   (policies?.source === 'store_metadata' ? 'Merchant-verified ✓' : 'Shopify defaults');
     context += `
-📋 STORE POLICIES (Source: ${policies.source === 'store_metadata' ? 'Merchant-verified ✓' : 'Shopify defaults'}):
+📋 STORE POLICIES (Source: ${source}):
 `;
-    if (policies.shipping) {
-      context += `Shipping: ${policies.shipping}\n`;
+    if (shippingInfo) {
+      context += `Shipping: ${shippingInfo}\n`;
     }
-    if (policies.refund) {
-      context += `Returns: ${policies.refund}\n`;
+    if (returnPolicy) {
+      context += `Returns/Refunds: ${returnPolicy}\n`;
     }
     
-    // Add extra emphasis if from Store Metadata
-    if (policies.source === 'store_metadata') {
+    // Add extra emphasis if merchant-verified
+    if (ai.shippingInfo || ai.returnPolicy || policies?.source === 'store_metadata') {
       context += `\n⚠️ These policies are merchant-verified. Use them EXACTLY as stated.\n`;
     }
   }
@@ -390,16 +485,13 @@ Collections: ${catalogSummary.collections.join(', ') || 'Various'}
 ═══════════════════════════════════════════════════════
 
 ⚠️ CONTENT GENERATION RULES:
-1. Use ONLY information from STORE CONTEXT and PRODUCT DATA
-2. Do NOT invent shipping costs, delivery times, or warranty periods
-3. Do NOT add certifications (ISO, CE, FDA) unless specified in product data
-4. Do NOT specify country of origin unless mentioned in product data
-5. Do NOT add material percentages unless specified
-6. If policy information is not provided above, use generic language:
-   - "Check checkout for shipping options"
-   - "Standard return policy applies"
-   - "See product page for warranty details"
-7. Match the brand voice and tone
+1. Use ONLY information from STORE CONTEXT above
+2. For contact information: Use EXACTLY the email/phone shown above
+3. Do NOT invent shipping costs, delivery times, or warranty periods
+4. Do NOT add certifications (ISO, CE, FDA) unless specified
+5. If information is not provided above, say "Please check the website or contact support"
+6. Match the brand voice and tone if specified
+7. Answer questions based ONLY on the data provided in this context
 `;
   
   return context.trim();
@@ -428,20 +520,29 @@ export async function checkStoreMetadataStatus(shop) {
         hasPolicies: false,
         hasShipping: false,
         hasReturns: false,
+        hasContact: false,
         source: 'none'
       };
     }
     
     const storeMetadata = await fetchStoreMetadata(shop, accessToken);
     
+    // storeMetadata now has structure: { seo: {}, ai: {}, organization: {} }
+    const ai = storeMetadata?.ai || {};
+    const org = storeMetadata?.organization || {};
+    const seo = storeMetadata?.seo || {};
+    
     // Check critical fields
-    const hasShipping = !!(storeMetadata?.shippingInfo || storeMetadata?.shipping);
-    const hasReturns = !!(storeMetadata?.returnPolicy || storeMetadata?.returns);
-    const hasTargetAudience = !!storeMetadata?.targetAudience;
-    const hasBrandVoice = !!storeMetadata?.brandVoice;
+    const hasShipping = !!(ai.shippingInfo || ai.shipping);
+    const hasReturns = !!(ai.returnPolicy || ai.returns);
+    const hasTargetAudience = !!ai.targetAudience;
+    const hasBrandVoice = !!ai.brandVoice;
+    const hasContact = !!(org.email || org.phone);
+    const hasStoreName = !!seo.storeName;
+    const hasDescription = !!(seo.fullDescription || seo.shortDescription);
     
     const hasPolicies = hasShipping && hasReturns;
-    const hasMetadata = hasPolicies || hasTargetAudience || hasBrandVoice;
+    const hasMetadata = hasPolicies || hasTargetAudience || hasBrandVoice || hasContact || hasStoreName || hasDescription;
     
     return {
       hasMetadata,
@@ -450,10 +551,14 @@ export async function checkStoreMetadataStatus(shop) {
       hasReturns,
       hasTargetAudience,
       hasBrandVoice,
+      hasContact,
+      hasStoreName,
+      hasDescription,
       completeness: {
         policies: hasPolicies ? 'complete' : (hasShipping || hasReturns ? 'partial' : 'missing'),
         branding: (hasTargetAudience && hasBrandVoice) ? 'complete' : 
-                  (hasTargetAudience || hasBrandVoice) ? 'partial' : 'missing'
+                  (hasTargetAudience || hasBrandVoice) ? 'partial' : 'missing',
+        contact: hasContact ? 'complete' : 'missing'
       },
       source: hasMetadata ? 'store_metadata' : 'none'
     };
@@ -464,6 +569,7 @@ export async function checkStoreMetadataStatus(shop) {
       hasPolicies: false,
       hasShipping: false,
       hasReturns: false,
+      hasContact: false,
       source: 'error'
     };
   }
