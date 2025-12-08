@@ -192,6 +192,17 @@ router.get('/list', async (req, res) => {
     // Cache key WITHOUT optimization filters (they will be applied AFTER fresh metafield fetch)
     const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${tagsFilter.join(',')}:${searchFilter || ''}`;
     
+    // Get total count of ACTIVE products (for pagination)
+    const COUNT_QUERY = `
+      query {
+        productsCount(query: "status:ACTIVE") {
+          count
+        }
+      }
+    `;
+    const countData = await executeGraphQL(req, COUNT_QUERY, {});
+    const totalProducts = countData?.productsCount?.count || 0;
+    
     // Step 1: Get basic product data from cache (or fetch if cache miss)
     const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
       const sortKey = convertSortKey(sortBy);
@@ -224,7 +235,9 @@ router.get('/list', async (req, res) => {
         pagination: {
           page: page,
           limit: limit,
+          total: totalProducts,
           hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
+          hasNext: page * limit < totalProducts,
           endCursor: data?.products?.pageInfo?.endCursor
         },
         shop: shop
@@ -331,10 +344,15 @@ router.get('/list', async (req, res) => {
     }
 
     // Return result with FRESH optimization status
+    // Override pagination with fresh total count (in case it changed)
     return res.json({
       success: true,
       products: products,
-      pagination: cachedResult.pagination,
+      pagination: {
+        ...cachedResult.pagination,
+        total: cachedResult.pagination.total,
+        hasNext: page * limit < cachedResult.pagination.total
+      },
       shop: shop,
       auth: {
         tokenType: req.auth.tokenType,
