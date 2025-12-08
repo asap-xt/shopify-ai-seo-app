@@ -33,10 +33,11 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     return res.status(404).json({ error: 'Shop not found' });
   }
   
-  // Get stats from database (same as Dashboard)
-  const totalProducts = await Product.countDocuments({ shop });
+  // Get stats from database (same as Dashboard) - only count ACTIVE products
+  const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
   const optimizedProducts = await Product.countDocuments({ 
     shop, 
+    status: 'ACTIVE',
     'seoStatus.optimized': true 
   });
   const totalCollections = await Collection.countDocuments({ shop });
@@ -949,10 +950,11 @@ Format:
     try {
       const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
       
-      // Get stats for score calculation
-      const totalProducts = await Product.countDocuments({ shop });
+      // Get stats for score calculation - only count ACTIVE products
+      const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
       const optimizedProducts = await Product.countDocuments({ 
         shop, 
+        status: 'ACTIVE',
         'seoStatus.optimized': true 
       });
       const totalCollections = await Collection.countDocuments({ shop });

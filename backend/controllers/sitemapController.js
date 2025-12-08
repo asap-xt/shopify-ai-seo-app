@@ -278,10 +278,10 @@ async function generateSitemapCore(shop, options = {}) {
             const feature = 'ai-sitemap-optimized';
             
             if (requiresTokens(feature)) {
-              // CRITICAL: Get ACTUAL product count, not plan limit!
+              // CRITICAL: Get ACTUAL product count (only ACTIVE), not plan limit!
               const countQuery = `
                 query {
-                  productsCount {
+                  productsCount(query: "status:active") {
                     count
                   }
                 }
@@ -932,10 +932,10 @@ async function handleInfo(req, res) {
     // Check if sitemap exists
     const existingSitemap = await Sitemap.findOne({ shop }).select('-content').lean();
     
-    // Get actual product count
+    // Get actual product count (only ACTIVE)
     const countData = await shopGraphQL(shop, `
       query {
-        productsCount {
+        productsCount(query: "status:active") {
           count
         }
       }
