@@ -189,6 +189,8 @@ export default function AiTesting({ shop: shopProp }) {
     try {
       // First, try to load from localStorage (synced from Dashboard Sync)
       let statsData = null;
+      let needsFreshData = false;
+      
       try {
         const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
         if (savedStats) {
@@ -197,14 +199,18 @@ export default function AiTesting({ shop: shopProp }) {
           const statsAge = parsed.timestamp ? (Date.now() - new Date(parsed.timestamp).getTime()) : Infinity;
           if (statsAge < 5 * 60 * 1000) { // 5 minutes
             statsData = parsed;
+            // If cache doesn't have storeUrl, we need to fetch fresh data
+            if (!parsed.storeUrl) {
+              needsFreshData = true;
+            }
           }
         }
       } catch (err) {
         console.error('[AI-TESTING] Error loading stats from localStorage:', err);
       }
       
-      // If no recent stats in localStorage, fetch from API
-      if (!statsData) {
+      // If no recent stats in localStorage OR cache is missing storeUrl, fetch from API
+      if (!statsData || needsFreshData) {
         const data = await api(`/api/dashboard/stats?shop=${shop}`);
         statsData = {
           totalProducts: data?.products?.total || 0,
