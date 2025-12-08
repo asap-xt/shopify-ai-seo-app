@@ -69,6 +69,8 @@ export default function AiTesting({ shop: shopProp }) {
     totalCollections: 0,
     optimizedCollections: 0
   });
+  const [storeUrl, setStoreUrl] = useState(''); // Public domain for AI prompts
+  const [storeName, setStoreName] = useState('');
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
   const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
 
@@ -209,6 +211,8 @@ export default function AiTesting({ shop: shopProp }) {
           optimizedProducts: data?.products?.optimized || 0,
           totalCollections: data?.collections?.total || 0,
           optimizedCollections: data?.collections?.optimized || 0,
+          storeName: data?.store?.name || '',
+          storeUrl: data?.store?.primaryDomain || '',
           timestamp: new Date().toISOString()
         };
         
@@ -226,6 +230,14 @@ export default function AiTesting({ shop: shopProp }) {
         totalCollections: statsData.totalCollections || 0,
         optimizedCollections: statsData.optimizedCollections || 0
       });
+      
+      // Set store info for AI prompts (use public domain, not myshopify.com)
+      if (statsData.storeUrl) {
+        setStoreUrl(statsData.storeUrl);
+      }
+      if (statsData.storeName) {
+        setStoreName(statsData.storeName);
+      }
     } catch (err) {
       console.error('[AI-TESTING] Error loading stats:', err);
     }
@@ -1160,7 +1172,8 @@ export default function AiTesting({ shop: shopProp }) {
           {
             content: 'Copy Prompt',
             onAction: () => {
-              navigator.clipboard.writeText(`What products does ${shop} sell? Tell me about this business and what they offer.`);
+              const domain = storeUrl || storeName || shop;
+              navigator.clipboard.writeText(`What products does ${domain} sell? Tell me about this business and what they offer.`);
               setToastContent('Prompt copied to clipboard!');
             }
           }
@@ -1182,7 +1195,7 @@ export default function AiTesting({ shop: shopProp }) {
               <Text variant="bodyMd" fontWeight="semibold">Prompt to test:</Text>
               <Box paddingBlockStart="200">
                 <Text variant="bodyMd" as="p">
-                  What products does {shop} sell? Tell me about this business and what they offer.
+                  What products does {storeUrl || storeName || shop} sell? Tell me about this business and what they offer.
                 </Text>
               </Box>
             </Box>

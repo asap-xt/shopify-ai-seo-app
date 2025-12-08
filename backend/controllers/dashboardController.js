@@ -28,6 +28,26 @@ router.get('/stats', verifyRequest, async (req, res) => {
       // Get subscription to check plan features
       const subscription = await Subscription.findOne({ shop });
       const plan = subscription?.plan || 'starter';
+      
+      // Get primaryDomain from Shopify (public URL for AI prompts)
+      let primaryDomain = `https://${shop}`;
+      let storeName = shop.split('.')[0];
+      try {
+        const result = await executeGraphQL(req, `{
+          shop {
+            name
+            primaryDomain { url }
+          }
+        }`);
+        if (result?.shop?.primaryDomain?.url) {
+          primaryDomain = result.shop.primaryDomain.url;
+        }
+        if (result?.shop?.name) {
+          storeName = result.shop.name;
+        }
+      } catch (err) {
+        console.error('[Dashboard] Error fetching primaryDomain:', err.message);
+      }
     
     // Products stats - only count ACTIVE products (exclude DRAFT and ARCHIVED)
     const totalProducts = await Product.countDocuments({ shop, status: 'ACTIVE' });
@@ -272,6 +292,10 @@ router.get('/stats', verifyRequest, async (req, res) => {
     // Get plan config for correct pricing (now using Subscription virtual property)
     
     const stats = {
+      store: {
+        name: storeName,
+        primaryDomain: primaryDomain // Public URL for AI prompts
+      },
       subscription: {
         plan,
         price: subscription?.price || 0 // Virtual property from Subscription model
