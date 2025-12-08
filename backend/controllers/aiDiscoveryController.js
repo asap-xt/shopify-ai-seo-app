@@ -340,25 +340,26 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
     const contextText = await buildStoreContext(shop, { includeProductAnalysis: true });
     
     // Prepare question text based on type
+    // Questions are phrased naturally to match frontend UI
     let questionText = '';
     switch (type) {
       case 'products':
-        questionText = 'What products does this store sell? Be specific about product types and examples.';
+        questionText = 'What products do they offer according to their website? Be specific about product types and give examples.';
         break;
       case 'business':
-        questionText = 'Tell me about this business (what it offers, who it serves, key value).';
+        questionText = 'What kind of business is this based on their store information? What do they offer and who do they serve?';
         break;
       case 'categories':
-        questionText = 'What product categories does this store have?';
+        questionText = 'What product categories can customers browse in this store?';
         break;
       case 'contact':
-        questionText = "What is this store's contact information (email, phone, address)?";
+        questionText = "How can customers contact this store? What contact options are available on their website?";
         break;
       case 'custom':
         questionText = String(question);
         break;
       default:
-        questionText = 'Provide general information about this store.';
+        questionText = 'Based on the store information, what can you tell me about this business?';
     }
     
     // Final prompt for the AI model

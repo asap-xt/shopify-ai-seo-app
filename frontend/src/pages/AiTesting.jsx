@@ -1079,7 +1079,7 @@ export default function AiTesting({ shop: shopProp }) {
 
                   <BlockStack gap="200">
                     <InlineStack align="space-between">
-                      <Text>What products does this store sell?</Text>
+                      <Text>What products do they offer according to their website?</Text>
                       <Button
                         onClick={() => simulateAIResponse('products')}
                         size="slim"
@@ -1089,7 +1089,7 @@ export default function AiTesting({ shop: shopProp }) {
                     </InlineStack>
 
                     <InlineStack align="space-between">
-                      <Text>Tell me about this business</Text>
+                      <Text>What kind of business is this based on their store?</Text>
                       <Button
                         onClick={() => simulateAIResponse('business')}
                         size="slim"
@@ -1099,7 +1099,7 @@ export default function AiTesting({ shop: shopProp }) {
                     </InlineStack>
 
                     <InlineStack align="space-between">
-                      <Text>What categories does this store have?</Text>
+                      <Text>What product categories can I browse?</Text>
                       <Button
                         onClick={() => simulateAIResponse('categories')}
                         size="slim"
@@ -1109,7 +1109,7 @@ export default function AiTesting({ shop: shopProp }) {
                     </InlineStack>
 
                     <InlineStack align="space-between">
-                      <Text>What is this store's contact information?</Text>
+                      <Text>How can I contact them according to their website?</Text>
                       <Button
                         onClick={() => simulateAIResponse('contact')}
                         size="slim"
@@ -1179,7 +1179,7 @@ export default function AiTesting({ shop: shopProp }) {
             content: 'Copy Prompt',
             onAction: () => {
               const domain = storeUrl || storeName || shop;
-              navigator.clipboard.writeText(`What products does ${domain} sell? Tell me about this business and what they offer.`);
+              navigator.clipboard.writeText(`I want to learn more about ${domain}. Based on their website, what do they sell and what kind of business are they?`);
               setToastContent('Prompt copied to clipboard!');
             }
           }
@@ -1201,13 +1201,13 @@ export default function AiTesting({ shop: shopProp }) {
               <Text variant="bodyMd" fontWeight="semibold">Prompt to test:</Text>
               <Box paddingBlockStart="200">
                 <Text variant="bodyMd" as="p">
-                  What products does {storeUrl || storeName || shop} sell? Tell me about this business and what they offer.
+                  I want to learn more about {storeUrl || storeName || shop}. Based on their website, what do they sell and what kind of business are they?
                 </Text>
               </Box>
             </Box>
             
             <Banner tone="info">
-              <Text>The AI bot will search the web and use your store's structured data to answer.</Text>
+              <Text>The AI bot will search your website and use your optimized store data to answer.</Text>
             </Banner>
           </BlockStack>
         </Modal.Section>
