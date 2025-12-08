@@ -1626,62 +1626,100 @@ router.post('/seo/apply', validateRequest(), async (req, res) => {
 router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 250);
+    const sortBy = req.query.sortBy || 'updatedAt';
+    const sortOrder = req.query.sortOrder || 'desc';
     
-    // Single GraphQL query to get all collections with metafields and product counts
-    const query = `
-      query GetCollectionsWithMetafields {
-        collections(first: 50) {
-          edges {
-            node {
-              id
-              title
-              handle
-              description
-              descriptionHtml
-              seo {
+    // Convert sortBy to Shopify CollectionSortKeys
+    const sortKeyMap = {
+      'title': 'TITLE',
+      'updatedAt': 'UPDATED_AT',
+      'productsCount': 'PRODUCT_COUNT',
+      'id': 'ID'
+    };
+    const sortKey = sortKeyMap[sortBy] || 'UPDATED_AT';
+    const reverse = sortOrder === 'desc';
+    
+    // Fetch ALL collections with pagination to handle large stores
+    const token = await resolveAdminToken(req, shop);
+    let allCollections = [];
+    let hasNextPage = true;
+    let cursor = null;
+    
+    while (hasNextPage) {
+      const paginatedQuery = `
+        query GetCollectionsWithMetafields($first: Int!, $after: String, $sortKey: CollectionSortKeys, $reverse: Boolean) {
+          collections(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse) {
+            edges {
+              node {
+                id
                 title
+                handle
                 description
-              }
-              productsCount {
-                count
-              }
-              updatedAt
-              metafields(namespace: "seo_ai", first: 20) {
-                edges {
-                  node {
-                    key
-                    value
+                descriptionHtml
+                seo {
+                  title
+                  description
+                }
+                productsCount {
+                  count
+                }
+                updatedAt
+                metafields(namespace: "seo_ai", first: 20) {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
                   }
                 }
               }
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
+      `;
+      
+      const variables = { 
+        first: 250, 
+        sortKey,
+        reverse,
+        ...(cursor && { after: cursor })
+      };
+      
+      const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': token,
+        },
+        body: JSON.stringify({ query: paginatedQuery, variables }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
       }
-    `;
-    
-    const token = await resolveAdminToken(req, shop);
-    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': token,
-      },
-      body: JSON.stringify({ query }),
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
+      
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+      }
+      
+      const edges = result.data?.collections?.edges || [];
+      allCollections.push(...edges);
+      
+      hasNextPage = result.data?.collections?.pageInfo?.hasNextPage || false;
+      cursor = result.data?.collections?.pageInfo?.endCursor;
+      
+      if (edges.length === 0) break;
     }
     
-    const result = await response.json();
-    if (result.errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
-    }
-    
-    const data = result.data;
-    const collections = data?.collections?.edges || [];
+    const collections = allCollections;
     
     // Transform to same structure as REST endpoint
     const collectionsWithData = collections.map(edge => {
@@ -1741,7 +1779,31 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       collection.aiEnhanced = aiEnhancedMap[numericId] || false;
     });
     
-    res.json({ collections: collectionsWithData });
+    // Client-side sorting for productsCount (not well supported by Shopify GraphQL)
+    let sortedCollections = [...collectionsWithData];
+    if (sortBy === 'productsCount') {
+      sortedCollections.sort((a, b) => {
+        const diff = (a.productsCount || 0) - (b.productsCount || 0);
+        return reverse ? -diff : diff;
+      });
+    }
+    
+    // Apply pagination
+    const totalCount = sortedCollections.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const pageCollections = sortedCollections.slice(startIndex, endIndex);
+    
+    res.json({ 
+      collections: pageCollections,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        hasNext: endIndex < totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
     
   } catch (e) {
     console.error('[COLLECTIONS-GQL] Error:', e);

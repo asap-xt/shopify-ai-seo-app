@@ -45,10 +45,16 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   
   // Selection state
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [selectAllInStore, setSelectAllInStore] = useState(false);
+  const [showSelectionPopover, setShowSelectionPopover] = useState(false);
   
   // Processing state
   const [processingMessage, setProcessingMessage] = useState('');
@@ -278,11 +284,13 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   };
   
   // Load collections
-  const loadCollections = useCallback(async () => {
+  const loadCollections = useCallback(async (pageNum = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         shop,
+        page: pageNum,
+        limit: itemsPerPage,
         ...(searchValue && { search: searchValue }),
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
         sortBy,
@@ -313,21 +321,27 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       }
       
       setCollections(filteredCollections);
-      setTotalCount(filteredCollections.length);
+      setPage(pageNum);
+      
+      // Use pagination data from API
+      const total = data.pagination?.total || filteredCollections.length;
+      setTotalCount(total);
+      setHasMore(data.pagination?.hasNext || false);
+      setTotalPages(data.pagination?.totalPages || Math.ceil(total / itemsPerPage) || 1);
     } catch (err) {
       setToast(`Error loading collections: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, [shop, searchValue, optimizedFilter, sortBy, sortOrder, api]);
+  }, [shop, searchValue, optimizedFilter, sortBy, sortOrder, itemsPerPage, api]);
   
   // Initial load and filter changes
   useEffect(() => {
     if (shop) {
-      loadCollections();
+      loadCollections(1);
       setSelectedHaveSEO(false); // Reset SEO tracking on reload
     }
-  }, [shop, optimizedFilter, sortBy, sortOrder, loadCollections]);
+  }, [shop, optimizedFilter, sortBy, sortOrder, itemsPerPage]);
   
   // Search debounce effect
   useEffect(() => {
@@ -351,11 +365,16 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     
     if (items.length === 0) {
       setSelectAllPages(false);
+      setSelectAllInStore(false);
+    } else if (items.length < collections.length) {
+      // If not all items on page are selected, disable selectAllInStore
+      setSelectAllInStore(false);
     }
   }, [collections]);
   
-  const handleSelectAllPages = useCallback((checked) => {
+  const handleSelectAllPages = useCallback((checked, forStore = false) => {
     setSelectAllPages(checked);
+    setSelectAllInStore(forStore && checked);
     if (checked) {
       setSelectedItems(collections.map(c => c.id));
       // Check if any collections have SEO
@@ -363,9 +382,54 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       setSelectedHaveSEO(haveSEO);
     } else {
       setSelectedItems([]);
+      setSelectAllInStore(false);
       setSelectedHaveSEO(false);
     }
   }, [collections]);
+
+  const handleSelectAllInStore = useCallback(() => {
+    setSelectAllPages(true);
+    setSelectAllInStore(true);
+    setSelectedItems(collections.map(c => c.id));
+    const haveSEO = collections.some(c => c.hasSeoData);
+    setSelectedHaveSEO(haveSEO);
+    setShowSelectionPopover(false);
+  }, [collections]);
+
+  const handleUnselectAll = useCallback(() => {
+    setSelectedItems([]);
+    setSelectAllPages(false);
+    setSelectAllInStore(false);
+    setSelectedHaveSEO(false);
+    setShowSelectionPopover(false);
+  }, []);
+
+  // Pagination handlers
+  const handlePreviousPage = useCallback(() => {
+    if (page > 1) {
+      loadCollections(page - 1);
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      setSelectAllInStore(false);
+    }
+  }, [page, loadCollections]);
+
+  const handleNextPage = useCallback(() => {
+    if (page < totalPages) {
+      loadCollections(page + 1);
+      setSelectedItems([]);
+      setSelectAllPages(false);
+      setSelectAllInStore(false);
+    }
+  }, [page, totalPages, loadCollections]);
+
+  const handleItemsPerPageChange = useCallback((value) => {
+    setItemsPerPage(parseInt(value));
+    setPage(1);
+    setSelectedItems([]);
+    setSelectAllPages(false);
+    setSelectAllInStore(false);
+  }, []);
 
   // Load SEO data for preview
   const loadSeoDataForPreview = async (collectionId) => {
@@ -1964,14 +2028,64 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             )}
           </Box>
 
-          {/* Select all checkbox in table */}
+          {/* Select all with Shopify-style dropdown */}
           {totalCount > 0 && (
             <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-              <Checkbox
-                label={`Select all ${totalCount} collections`}
-                checked={selectAllPages}
-                onChange={handleSelectAllPages}
-              />
+              <InlineStack gap="200" blockAlign="center">
+                <Checkbox
+                  label=""
+                  checked={selectAllPages || selectedItems.length === collections.length}
+                  onChange={(checked) => handleSelectAllPages(checked, false)}
+                />
+                <Popover
+                  active={showSelectionPopover}
+                  activator={
+                    <Button
+                      disclosure="down"
+                      onClick={() => setShowSelectionPopover(!showSelectionPopover)}
+                      removeUnderline
+                      plain
+                    >
+                      Select
+                    </Button>
+                  }
+                  onClose={() => setShowSelectionPopover(false)}
+                >
+                  <Popover.Pane>
+                    <Popover.Section>
+                      <BlockStack gap="100">
+                        <Button
+                          plain
+                          textAlign="left"
+                          onClick={() => {
+                            handleSelectAllPages(true, false);
+                            setShowSelectionPopover(false);
+                          }}
+                          disabled={selectedItems.length === collections.length && !selectAllInStore}
+                        >
+                          Select all {collections.length} on this page
+                        </Button>
+                        <Button
+                          plain
+                          textAlign="left"
+                          onClick={handleSelectAllInStore}
+                          disabled={selectAllInStore}
+                        >
+                          Select all {totalCount} in this store
+                        </Button>
+                        <Button
+                          plain
+                          textAlign="left"
+                          onClick={handleUnselectAll}
+                          disabled={selectedItems.length === 0}
+                        >
+                          Deselect all
+                        </Button>
+                      </BlockStack>
+                    </Popover.Section>
+                  </Popover.Pane>
+                </Popover>
+              </InlineStack>
             </Box>
           )}
         </Card>
@@ -2085,6 +2199,48 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
             emptyState={emptyState}
             showHeader={false}
           />
+          
+          {/* Pagination Controls */}
+          {totalCount > 0 && (
+            <Box padding="400" borderBlockStartWidth="025" borderColor="border">
+              <InlineStack align="space-between" blockAlign="center">
+                <InlineStack gap="200" blockAlign="center">
+                  <Text variant="bodySm" tone="subdued">Show</Text>
+                  <Select
+                    label=""
+                    labelHidden
+                    options={[
+                      { label: '10', value: '10' },
+                      { label: '20', value: '20' },
+                      { label: '50', value: '50' },
+                      { label: '100', value: '100' }
+                    ]}
+                    value={String(itemsPerPage)}
+                    onChange={handleItemsPerPageChange}
+                  />
+                  <Text variant="bodySm" tone="subdued">per page</Text>
+                </InlineStack>
+                
+                <InlineStack gap="200" blockAlign="center">
+                  <Text variant="bodySm" tone="subdued">
+                    {((page - 1) * itemsPerPage) + 1}-{Math.min(page * itemsPerPage, totalCount)} of {totalCount}
+                  </Text>
+                  <Button
+                    icon={<span>‹</span>}
+                    disabled={page <= 1}
+                    onClick={handlePreviousPage}
+                    size="slim"
+                  />
+                  <Button
+                    icon={<span>›</span>}
+                    disabled={page >= totalPages}
+                    onClick={handleNextPage}
+                    size="slim"
+                  />
+                </InlineStack>
+              </InlineStack>
+            </Box>
+          )}
         </Card>
       </Box>
 

@@ -247,8 +247,6 @@ router.get('/list', async (req, res) => {
     const endIndex = startIndex + limit;
     const pageProducts = allProductsResult.slice(startIndex, endIndex);
     
-    console.log(`[PAGINATION] page=${page}, limit=${limit}, startIndex=${startIndex}, endIndex=${endIndex}, total=${allProductsResult.length}, pageProducts=${pageProducts.length}`);
-    
     // Build pagination info
     const cachedResult = {
       success: true,
