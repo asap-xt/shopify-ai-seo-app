@@ -3345,12 +3345,15 @@ async function processDeleteInBackground(req, shop, items, totalProducts) {
               (updatedProduct.seoStatus?.languages?.some(l => l.optimized));
             
             if (!hasOptimizedLanguages) {
+              // Reset ALL flags when no languages remain (including aiEnhanced!)
               await Product.findOneAndUpdate(
                 { shop, productId: numericId },
                 { 
                   $set: { 
                     'seoStatus.optimized': false,
-                    'optimizationSummary.optimized': false
+                    'seoStatus.aiEnhanced': false, // Reset AI enhanced flag too!
+                    'optimizationSummary.optimized': false,
+                    'optimizationSummary.aiEnhanced': false
                   }
                 }
               );
