@@ -1941,43 +1941,6 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       throw err;
     }
     
-    // OPTIMIZATION 4: Batch update optimization summaries AFTER all schemas are generated
-    // This is done in the background to avoid blocking the main process
-    // and with proper throttling to avoid Shopify rate limits
-    if (processedProductIds.length > 0) {
-      console.log(`[SCHEMA] 📝 Starting batch optimization summary update for ${processedProductIds.length} products...`);
-      
-      // Fire-and-forget: update summaries in background with heavy throttling
-      (async () => {
-        const summaryBatchSize = 5; // Process 5 products at a time
-        const summaryDelay = 2000; // 2 seconds between batches (to stay well under rate limits)
-        
-        for (let i = 0; i < processedProductIds.length; i += summaryBatchSize) {
-          const batch = processedProductIds.slice(i, i + summaryBatchSize);
-          
-          // Process this batch sequentially (one at a time) with small delay
-          for (const productId of batch) {
-            try {
-              await updateOptimizationSummary(shop, productId);
-              await new Promise(resolve => setTimeout(resolve, 300)); // 300ms between each
-            } catch (err) {
-              // Silent fail - summaries are not critical
-              console.error(`[SCHEMA] Summary update failed for ${productId}:`, err.message);
-            }
-          }
-          
-          // Delay between batches
-          if (i + summaryBatchSize < processedProductIds.length) {
-            await new Promise(resolve => setTimeout(resolve, summaryDelay));
-          }
-        }
-        
-        console.log(`[SCHEMA] ✅ Completed optimization summary updates for ${processedProductIds.length} products`);
-      })().catch(err => {
-        console.error('[SCHEMA] Background summary update failed:', err.message);
-      });
-    }
-    
     // === FINALIZE TOKEN USAGE ===
     console.log(`[SCHEMA] 📊 Token Usage Summary for ${shop}:`, {
       productsProcessed: allProductSchemas.length,
@@ -2045,7 +2008,9 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
           await emailService.sendSchemaCompletedEmail(shopDoc, {
             successful: successCount,
             failed: failCount,
-            duration: duration
+            duration: duration,
+            totalSchemas: allProductSchemas.length,
+            totalProducts: products.length
           });
         }
       } catch (emailErr) {
@@ -2053,11 +2018,40 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       }
     }
     
+    // Fire-and-forget: update optimization summaries in background (non-blocking)
+    // This runs AFTER the function returns, so it doesn't block the UI
+    if (processedProductIds.length > 0) {
+      setImmediate(async () => {
+        console.log(`[SCHEMA] 📝 Starting background optimization summary update for ${processedProductIds.length} products...`);
+        const summaryBatchSize = 5;
+        const summaryDelay = 2000;
+        
+        for (let i = 0; i < processedProductIds.length; i += summaryBatchSize) {
+          const batch = processedProductIds.slice(i, i + summaryBatchSize);
+          for (const productId of batch) {
+            try {
+              await updateOptimizationSummary(shop, productId);
+              await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (err) {
+              // Silent fail - summaries are not critical
+            }
+          }
+          if (i + summaryBatchSize < processedProductIds.length) {
+            await new Promise(resolve => setTimeout(resolve, summaryDelay));
+          }
+        }
+        console.log(`[SCHEMA] ✅ Completed background optimization summary updates`);
+      });
+    }
+    
     // CRITICAL: Return schema count for background queue
     return {
       success: true,
       schemaCount: allProductSchemas.length,
-      schemas: allProductSchemas
+      schemas: allProductSchemas,
+      successfulProducts: successCount,
+      failedProducts: failCount,
+      totalProducts: products.length
     };
     
   } catch (error) {

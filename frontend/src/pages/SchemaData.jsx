@@ -18,7 +18,8 @@ import {
   Divider,
   Modal,
   InlineGrid,
-  Checkbox
+  Checkbox,
+  ProgressBar
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY, getPlanIndex } from '../hooks/usePlanHierarchy.js';
@@ -1032,23 +1033,12 @@ ${JSON.stringify(allSchemas, null, 2)}
               {advancedSchemaStatus.inProgress && (
                 <Box paddingBlockStart="400">
                   <BlockStack gap="300">
-                    {/* Progress bar */}
+                    {/* Progress bar - using Polaris ProgressBar for consistency */}
                     {advancedSchemaStatus.progress?.total > 0 && (
-                      <div style={{ 
-                        width: '100%', 
-                        backgroundColor: '#e5e7eb', 
-                        borderRadius: '4px', 
-                        height: '8px',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{ 
-                          width: `${advancedSchemaStatus.progress?.percent || 0}%`, 
-                          backgroundColor: '#3b82f6', 
-                          height: '100%',
-                          borderRadius: '4px',
-                          transition: 'width 0.3s ease'
-                        }} />
-                      </div>
+                      <ProgressBar 
+                        progress={advancedSchemaStatus.progress?.percent || 0} 
+                        size="small" 
+                      />
                     )}
                     
                     <InlineStack gap="200" blockAlign="center" align="space-between">

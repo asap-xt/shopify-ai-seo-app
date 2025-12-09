@@ -651,7 +651,7 @@ class EmailService {
 
     try {
       const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      const { successful, failed, duration } = result;
+      const { successful, failed, duration, totalSchemas = 0, totalProducts = 0 } = result;
       
       // Format duration
       const durationMin = Math.floor(duration / 60);
@@ -679,7 +679,7 @@ class EmailService {
       const msg = {
         to: store.email || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: `${statusEmoji} Schema Data generation ${statusText}`,
+        subject: `${statusEmoji} Advanced Schema Data generation ${statusText}`,
         html: this.getSchemaCompletedEmailTemplate({
           shopName,
           shop: store.shop,
@@ -688,6 +688,8 @@ class EmailService {
           failed,
           duration: durationStr,
           hasFailures,
+          totalSchemas,
+          totalProducts,
           dashboardUrl: this.getDashboardUrl(store.shop)
         }),
         attachments,
@@ -1573,7 +1575,7 @@ class EmailService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Schema Data Generation Complete</title>
+        <title>Advanced Schema Data Generation Complete</title>
       </head>
       <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
         <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
@@ -1592,7 +1594,7 @@ class EmailService {
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
                           <p style="margin: 0 0 5px; color: rgba(255,255,255,0.8); font-size: 14px; letter-spacing: 0.5px;">indexAIze</p>
-                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">${statusIcon} Schema Data Generated</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">${statusIcon} Advanced Schema Data Generated</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>
@@ -1607,7 +1609,7 @@ class EmailService {
                     <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
                     
                     <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
-                      Your Advanced Schema Data generation has completed. Here are the results:
+                      Your Advanced Schema Data generation has completed successfully. Here are the results:
                     </p>
                     
                     <!-- Results Summary -->
@@ -1615,9 +1617,15 @@ class EmailService {
                       <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Results Summary</h3>
                       
                       <table style="width: 100%; border-collapse: collapse;">
+                        ${data.totalSchemas > 0 ? `
                         <tr>
-                          <td style="padding: 10px 0; color: #059669; font-weight: 600; font-size: 14px;">✓ Successful</td>
-                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #059669;">${data.successful} products</td>
+                          <td style="padding: 10px 0; color: #7c3aed; font-weight: 600; font-size: 14px;">✨ Schemas Generated</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #7c3aed;">${data.totalSchemas}</td>
+                        </tr>
+                        ` : ''}
+                        <tr>
+                          <td style="padding: 10px 0; color: #059669; font-weight: 600; font-size: 14px;">✓ Products Processed</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #059669;">${data.successful}${data.totalProducts ? ` / ${data.totalProducts}` : ''}</td>
                         </tr>
                         ${data.failed > 0 ? `
                         <tr>
