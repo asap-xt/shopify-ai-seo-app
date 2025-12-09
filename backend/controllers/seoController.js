@@ -3315,8 +3315,9 @@ async function processDeleteInBackground(req, shop, items, totalProducts) {
         const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
         
         // Track unique products that were successfully deleted
+        // Filter out null entries (metafields that didn't exist)
         for (const mf of deletedMetafields) {
-          if (mf.ownerId && !processedProductIds.has(mf.ownerId)) {
+          if (mf && mf.ownerId && !processedProductIds.has(mf.ownerId)) {
             processedProductIds.add(mf.ownerId);
             deletedProducts++;
           }
