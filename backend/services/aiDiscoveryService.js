@@ -478,9 +478,11 @@ class AIDiscoveryService {
       
       const availableFeatures = planFeatures[normalizedPlan] || planFeatures.starter;
       
-      // Check if AI Sitemap and Advanced Schema are generated (these are now managed in Store Optimization pages)
+      // Check if Sitemap and Advanced Schema are generated (these are now managed in Store Optimization pages)
+      // Sitemap can be standard OR AI-enhanced - both should be accessible
       const sitemapDoc = await Sitemap.findOne({ shop });
-      const hasAiSitemap = sitemapDoc?.isAiEnhanced === true;
+      const hasSitemap = sitemapDoc?.content ? true : false;  // Any sitemap with content
+      const hasAiSitemap = sitemapDoc?.isAiEnhanced === true;  // Specifically AI-enhanced
       
       const schemaDoc = await AdvancedSchema.findOne({ shop });
       const hasAdvancedSchema = schemaDoc?.schemas?.length > 0;
@@ -506,8 +508,8 @@ class AIDiscoveryService {
           robotsTxt += `Allow: /apps/${appProxySubpath}/ai/collections-feed.json\n`;
         }
         
-        // AI Sitemap (use app proxy path) - check if generated, not settings
-        if (hasAiSitemap && availableFeatures.includes('aiSitemap')) {
+        // Sitemap (use app proxy path) - check if generated (standard or AI-enhanced)
+        if (hasSitemap && availableFeatures.includes('aiSitemap')) {
           robotsTxt += `Allow: /apps/${appProxySubpath}/ai/sitemap-feed.xml\n`;
         }
         
@@ -575,9 +577,9 @@ class AIDiscoveryService {
       
       robotsTxt += '\n# AI Discovery Sitemaps (XML only)\n';
       
-      // Only XML sitemaps should be listed here - check if generated
+      // Only XML sitemaps should be listed here - check if generated (standard or AI-enhanced)
       // Use primaryDomain (public URL) for sitemap references
-      if (hasAiSitemap && availableFeatures.includes('aiSitemap')) {
+      if (hasSitemap && availableFeatures.includes('aiSitemap')) {
         robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml?shop=${shop}\n`;
       }
       

@@ -1049,7 +1049,7 @@ router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
 });
 
 // AI Sitemap Feed - Uses the existing sitemap handler
-// Access is determined by whether an AI-enhanced sitemap has been generated (not Settings toggle)
+// Access is determined by whether ANY sitemap has been generated (standard or AI-enhanced)
 router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
@@ -1063,12 +1063,12 @@ router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
       return res.status(404).send('Shop not found');
     }
 
-    // Check if AI-enhanced sitemap has been generated (from Store Optimization / Sitemap)
-    // This replaces the Settings toggle check - if sitemap exists, it's accessible
-    const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced generatedAt').lean();
+    // Check if ANY sitemap has been generated (standard or AI-enhanced)
+    // Both standard and AI-enhanced sitemaps are served from the same endpoint
+    const existingSitemap = await Sitemap.findOne({ shop }).select('generatedAt content').lean();
     
-    if (!existingSitemap || !existingSitemap.isAiEnhanced) {
-      return res.status(403).send('AI Sitemap has not been generated yet. Please generate it from Store Optimization → Sitemap.');
+    if (!existingSitemap || !existingSitemap.content) {
+      return res.status(403).send('Sitemap has not been generated yet. Please generate it from Store Optimization → Sitemap.');
     }
 
     // Call the sitemap handler directly by modifying request
