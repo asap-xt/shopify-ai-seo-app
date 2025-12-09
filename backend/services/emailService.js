@@ -520,6 +520,20 @@ class EmailService {
       const statusEmoji = hasFailures ? '⚠️' : '✅';
       const statusText = hasFailures ? 'completed with some issues' : 'completed successfully';
       
+      // Prepare logo attachment
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo'
+        });
+      }
+      
       const msg = {
         to: store.email || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
@@ -537,6 +551,7 @@ class EmailService {
           hasFailures,
           dashboardUrl: this.getDashboardUrl(store.shop)
         }),
+        attachments,
         trackingSettings: {
           clickTracking: { enable: false },
           openTracking: { enable: true }
@@ -576,6 +591,20 @@ class EmailService {
       const isAiEnhanced = type === 'ai-enhanced';
       const sitemapTypeName = isAiEnhanced ? 'AI-Enhanced Sitemap' : 'Basic Sitemap';
       
+      // Prepare logo attachment
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo'
+        });
+      }
+      
       const msg = {
         to: store.email || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
@@ -590,6 +619,7 @@ class EmailService {
           sitemapTypeName,
           dashboardUrl: this.getDashboardUrl(store.shop)
         }),
+        attachments,
         trackingSettings: {
           clickTracking: { enable: false },
           openTracking: { enable: true }
@@ -1219,11 +1249,7 @@ class EmailService {
   }
 
   getJobCompletedEmailTemplate(data) {
-    const statusColor = data.hasFailures ? '#f59e0b' : '#10b981';
     const statusIcon = data.hasFailures ? '⚠️' : '✅';
-    const headerGradient = data.hasFailures 
-      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
     
     return `
       <!DOCTYPE html>
@@ -1240,10 +1266,22 @@ class EmailService {
               <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <!-- Header -->
                 <tr>
-                  <td style="padding: 40px; background: ${headerGradient}; text-align: center;">
-                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
-                      ${statusIcon} ${data.jobTypeName} Complete
-                    </h1>
+                  <td style="padding: 40px 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="cid:logo" alt="indexAIze Logo" style="width: 80px; height: 80px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0 0 5px; color: rgba(255,255,255,0.8); font-size: 14px; letter-spacing: 0.5px;">indexAIze</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">${statusIcon} ${data.jobTypeName} Complete</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 
@@ -1325,10 +1363,6 @@ class EmailService {
   }
 
   getSitemapCompletedEmailTemplate(data) {
-    const headerGradient = data.isAiEnhanced 
-      ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
-      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-    
     return `
       <!DOCTYPE html>
       <html>
@@ -1344,10 +1378,22 @@ class EmailService {
               <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <!-- Header -->
                 <tr>
-                  <td style="padding: 40px; background: ${headerGradient}; text-align: center;">
-                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
-                      🗺️ ${data.sitemapTypeName} Generated
-                    </h1>
+                  <td style="padding: 40px 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="cid:logo" alt="indexAIze Logo" style="width: 80px; height: 80px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0 0 5px; color: rgba(255,255,255,0.8); font-size: 14px; letter-spacing: 0.5px;">indexAIze</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">🗺️ ${data.sitemapTypeName} Generated</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 
