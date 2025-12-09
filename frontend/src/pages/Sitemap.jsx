@@ -720,25 +720,19 @@ export default function SitemapPage({ shop: shopProp }) {
                     Cancel
                   </Button>
                 </InlineStack>
-                {/* Progress bar for AI sitemap */}
-                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
-                  <Box>
-                    <div style={{ 
-                      width: '100%', 
-                      height: '8px', 
-                      backgroundColor: '#e4e5e7', 
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{ 
-                        width: `${aiSitemapStatus.progress.percent || 0}%`, 
-                        height: '100%', 
-                        backgroundColor: '#2c6ecb',
-                        transition: 'width 0.3s ease'
-                      }} />
-                    </div>
-                  </Box>
-                )}
+                {/* Progress bar - using Polaris ProgressBar for consistency */}
+                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 ? (
+                  <ProgressBar 
+                    progress={aiSitemapStatus.progress.percent || 0} 
+                    size="small" 
+                  />
+                ) : (busy || polling) && !aiSitemapStatus.inProgress && !aiSitemapBusy ? (
+                  /* Basic sitemap: indeterminate-style progress (fast process) */
+                  <ProgressBar 
+                    progress={75} 
+                    size="small" 
+                  />
+                ) : null}
               </BlockStack>
             </Box>
           )}
