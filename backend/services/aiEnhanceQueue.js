@@ -18,9 +18,10 @@ class AIEnhanceQueue {
    * @param {string} shop - Shop domain
    * @param {Array} products - Array of { productId, languages, title }
    * @param {Function} enhanceFn - Function that enhances one product
+   * @param {Object} preFailed - Pre-failed products info { count, reasons }
    * @returns {Object} Job info
    */
-  async addJob(shop, products, enhanceFn) {
+  async addJob(shop, products, enhanceFn, preFailed = { count: 0, reasons: [] }) {
     // Check if job already exists in queue
     const existingJob = this.queue.find(job => job.shop === shop);
     if (existingJob) {
@@ -42,7 +43,7 @@ class AIEnhanceQueue {
       };
     }
 
-    // Create job
+    // Create job (include preFailed for products without Basic SEO)
     const job = {
       id: `${shop}-aienhance-${Date.now()}`,
       shop,
@@ -50,29 +51,31 @@ class AIEnhanceQueue {
       enhanceFn,
       status: 'queued',
       queuedAt: new Date(),
-      totalProducts: products.length,
+      totalProducts: products.length + preFailed.count,
       processedProducts: 0,
       successfulProducts: 0,
-      failedProducts: 0,
+      failedProducts: preFailed.count, // Start with pre-failed count
       skippedProducts: 0,
       skipReasons: [],
-      failReasons: []
+      failReasons: [...(preFailed.reasons || [])] // Start with pre-failed reasons
     };
 
     this.queue.push(job);
-    dbLogger.info(`[AI-ENHANCE-QUEUE] ✅ Job added for shop: ${shop}, ${products.length} products`);
+    dbLogger.info(`[AI-ENHANCE-QUEUE] ✅ Job added for shop: ${shop}, ${products.length} products` + 
+      (preFailed.count > 0 ? ` (+${preFailed.count} pre-failed)` : ''));
 
     // Update shop status in DB
     await this.updateShopStatus(shop, {
       inProgress: true,
       status: 'queued',
-      message: `Queued (${products.length} products)`,
+      message: `Queued (${job.totalProducts} products)`,
       queuedAt: new Date(),
-      totalProducts: products.length,
+      totalProducts: job.totalProducts,
       processedProducts: 0,
       successfulProducts: 0,
-      failedProducts: 0,
-      skippedProducts: 0
+      failedProducts: preFailed.count,
+      skippedProducts: 0,
+      failReasons: preFailed.reasons || []
     });
 
     // Start processing if not already running

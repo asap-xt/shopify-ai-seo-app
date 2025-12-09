@@ -806,7 +806,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         method: 'POST',
         shop,
         body: {
-          products: productsForBatch
+          products: productsForBatch,
+          // Include pre-failed products info for email reporting
+          preFailed: {
+            count: productsWithoutSEOCount,
+            reasons: productsWithoutSEOReasons
+          }
         }
       });
 

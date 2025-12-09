@@ -1851,7 +1851,7 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
 router.post('/batch', validateRequest(), async (req, res) => {
   try {
     const shop = req.shopDomain;
-    const { products = [] } = req.body;
+    const { products = [], preFailed = { count: 0, reasons: [] } } = req.body;
     
     if (!products || products.length === 0) {
       return res.status(400).json({ error: 'No products provided' });
@@ -1974,8 +1974,8 @@ router.post('/batch', validateRequest(), async (req, res) => {
       }
     };
     
-    // Add job to queue
-    const jobInfo = await aiEnhanceQueue.addJob(shop, products, enhanceProduct);
+    // Add job to queue (include preFailed for email reporting)
+    const jobInfo = await aiEnhanceQueue.addJob(shop, products, enhanceProduct, preFailed);
     
     return res.json({
       success: true,
