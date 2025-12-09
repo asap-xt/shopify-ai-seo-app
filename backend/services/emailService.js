@@ -1305,8 +1305,8 @@ class EmailService {
                         </tr>
                         ${data.skipped > 0 ? `
                         <tr>
-                          <td style="padding: 10px 0; color: #64748b; font-size: 14px;">○ Skipped</td>
-                          <td style="padding: 10px 0; text-align: right; font-size: 14px; color: #64748b;">${data.skipped} ${data.itemType}</td>
+                          <td style="padding: 10px 0; color: #3b82f6; font-size: 14px;">↷ Skipped</td>
+                          <td style="padding: 10px 0; text-align: right; font-size: 14px; color: #3b82f6;">${data.skipped} ${data.itemType}</td>
                         </tr>
                         ` : ''}
                         ${data.failed > 0 ? `
@@ -1321,6 +1321,15 @@ class EmailService {
                         </tr>
                       </table>
                     </div>
+                    
+                    ${data.skipped > 0 ? `
+                    <!-- Skipped Info -->
+                    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #2563eb;">Info:</strong> ${data.skipped} ${data.itemType} were skipped because they are already optimized for the selected languages.
+                      </p>
+                    </div>
+                    ` : ''}
                     
                     ${data.hasFailures ? `
                     <!-- Warning -->

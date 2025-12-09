@@ -207,12 +207,59 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
 
     // OPTIMIZED: Generate function - uses DIRECT function call instead of HTTP fetch
     const generateFn = async (productData) => {
-      const languagesToGenerate = productData.languages.filter(
-        lang => !productData.existingLanguages.includes(lang)
+      // Case-insensitive comparison for language codes
+      const existingLangsLower = (productData.existingLanguages || []).map(l => l.toLowerCase());
+      let languagesToGenerate = productData.languages.filter(
+        lang => !existingLangsLower.includes(lang.toLowerCase())
       );
 
+      // DOUBLE-CHECK: Query Shopify for existing SEO metafields to avoid false "failed" status
+      // This handles cases where frontend cache is stale
+      if (languagesToGenerate.length > 0) {
+        try {
+          const { shopGraphQL } = await import('../utils/shopGraphql.js');
+          const metafieldsQuery = `
+            query GetProductMetafields($id: ID!) {
+              product(id: $id) {
+                metafields(first: 20, namespace: "seo_ai") {
+                  edges {
+                    node {
+                      key
+                    }
+                  }
+                }
+              }
+            }
+          `;
+          const mockReqForCheck = { shopDomain, headers: {}, query: { shop: shopDomain } };
+          const metafieldsResult = await shopGraphQL(mockReqForCheck, shopDomain, metafieldsQuery, { id: productData.productId });
+          
+          // Extract languages that already have SEO metafields
+          const existingMetafieldLangs = [];
+          if (metafieldsResult?.product?.metafields?.edges) {
+            for (const edge of metafieldsResult.product.metafields.edges) {
+              const key = edge.node.key;
+              if (key?.startsWith('seo__')) {
+                const lang = key.replace('seo__', '').toLowerCase();
+                if (lang && !existingMetafieldLangs.includes(lang)) {
+                  existingMetafieldLangs.push(lang);
+                }
+              }
+            }
+          }
+          
+          // Re-filter: only generate for languages that don't have metafields
+          languagesToGenerate = languagesToGenerate.filter(
+            lang => !existingMetafieldLangs.includes(lang.toLowerCase())
+          );
+        } catch (checkErr) {
+          // If check fails, continue with original list (will fail properly if already exists)
+          console.error('[SEO-GENERATE] Metafield check failed:', checkErr.message);
+        }
+      }
+
       if (languagesToGenerate.length === 0) {
-        return { success: true, skipped: true, reason: 'All languages already optimized' };
+        return { success: true, skipped: true, reason: 'Already optimized for selected languages' };
       }
       
       // CHECK LANGUAGE LIMIT: existing + new languages must not exceed plan limit
