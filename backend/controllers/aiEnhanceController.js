@@ -1581,6 +1581,24 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
   const planKey = subscription?.plan || '';
   let reservationId = null;
   
+  // Check if product has any languages to enhance (no Basic SEO = no languages)
+  if (!languages || languages.length === 0) {
+    return {
+      success: false,
+      productId,
+      results: [{ error: 'No Basic SEO found', noBasicSeo: true }],
+      summary: {
+        total: 0,
+        successful: 0,
+        failed: 1,
+        alreadyEnhanced: 0,
+        noBasicSeo: 1,
+        skippedDueToTokens: 0,
+        tokensExhausted: false
+      }
+    };
+  }
+  
   try {
     // Get token balance
     const tokenBalance = await TokenBalance.getOrCreate(shop);

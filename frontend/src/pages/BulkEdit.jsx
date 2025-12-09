@@ -728,18 +728,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       !p.optimizationSummary?.optimizedLanguages?.length
     );
 
-    // Check if there are products with SEO to enhance
-    if (selectedWithSEO.length === 0) {
-      if (selectedWithoutSEO.length > 0) {
-        setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
-      } else {
-        setToast('Please select products with Basic SEO');
-      }
+    // Check if ALL selected products have no SEO
+    if (selectedWithSEO.length === 0 && selectedWithoutSEO.length > 0) {
+      setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
+      return;
+    }
+    
+    if (selectedProducts.length === 0) {
+      setToast('Please select products');
       return;
     }
 
-    // Check product limit before processing
-    const selectedCount = selectedWithSEO.length;
+    // Check product limit before processing (count all selected)
+    const selectedCount = selectedProducts.length;
     
     if (selectedCount > productLimit) {
       // Show upgrade modal instead of processing
@@ -760,10 +761,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Prepare products for batch processing
-    const productsForBatch = selectedWithSEO.map(product => ({
+    // Prepare ALL selected products for batch processing (backend will handle those without SEO as "failed")
+    const productsForBatch = selectedProducts.map(product => ({
       productId: product.gid || toProductGID(product.id),
-      languages: product.optimizationSummary.optimizedLanguages,
+      languages: product.optimizationSummary?.optimizedLanguages || [],
       title: product.title
     }));
 
