@@ -225,6 +225,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
                   edges {
                     node {
                       key
+                      value
                     }
                   }
                 }
@@ -239,6 +240,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
           if (metafieldsResult?.product?.metafields?.edges) {
             for (const edge of metafieldsResult.product.metafields.edges) {
               const key = edge.node.key;
+              // Check for seo__ prefix (language-specific SEO data)
               if (key?.startsWith('seo__')) {
                 const lang = key.replace('seo__', '').toLowerCase();
                 if (lang && !existingMetafieldLangs.includes(lang)) {
@@ -248,10 +250,17 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
             }
           }
           
+          console.log(`[SEO-GENERATE] Product ${productData.productId}: found ${existingMetafieldLangs.length} existing langs: [${existingMetafieldLangs.join(', ')}], requested: [${languagesToGenerate.join(', ')}]`);
+          
           // Re-filter: only generate for languages that don't have metafields
+          const originalCount = languagesToGenerate.length;
           languagesToGenerate = languagesToGenerate.filter(
             lang => !existingMetafieldLangs.includes(lang.toLowerCase())
           );
+          
+          if (originalCount !== languagesToGenerate.length) {
+            console.log(`[SEO-GENERATE] Product ${productData.productId}: filtered from ${originalCount} to ${languagesToGenerate.length} languages`);
+          }
         } catch (checkErr) {
           // If check fails, continue with original list (will fail properly if already exists)
           console.error('[SEO-GENERATE] Metafield check failed:', checkErr.message);
