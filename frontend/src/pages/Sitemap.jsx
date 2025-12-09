@@ -673,16 +673,19 @@ export default function SitemapPage({ shop: shopProp }) {
             <Banner tone="info">
               <BlockStack gap="200">
                 <InlineStack gap="200" blockAlign="center" align="space-between" wrap={false}>
-                  <InlineStack gap="200" blockAlign="center">
-                    <Spinner size="small" />
-                    <Text variant="bodyMd">
-                      {aiSitemapStatus.inProgress || aiSitemapBusy
-                        ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
-                        : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
-                      {(aiSitemapStatus.position > 0) && ` (Queue: ${aiSitemapStatus.position})`}
-                      {(queueStatus?.position > 0 && !aiSitemapStatus.inProgress) && ` (Queue: ${queueStatus.position})`}
-                    </Text>
-                  </InlineStack>
+                <InlineStack gap="200" blockAlign="center">
+                  <Spinner size="small" />
+                  <Text variant="bodyMd">
+                    {aiSitemapStatus.inProgress || aiSitemapBusy
+                      ? (aiSitemapStatus.progress?.total > 0
+                          ? `AI-Optimized: Processing ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
+                          : aiSitemapStatus.status === 'queued' 
+                            ? 'AI-Optimized: Starting... (loading products)'
+                            : `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
+                        )
+                      : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
+                  </Text>
+                </InlineStack>
                   <Button 
                     size="slim" 
                     tone="critical" 
