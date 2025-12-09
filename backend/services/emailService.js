@@ -487,6 +487,73 @@ class EmailService {
   }
 
   /**
+   * Send email when background SEO job completes
+   * @param {Object} store - Store object with shop, email, etc.
+   * @param {Object} jobResult - Job result { type, successful, failed, skipped, duration, itemType }
+   */
+  async sendJobCompletedEmail(store, jobResult) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - skipping job completed email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      const { type, successful, failed, skipped, duration, itemType = 'products' } = jobResult;
+      
+      // Determine job type display name
+      const jobTypeNames = {
+        'seo': 'Basic SEO Optimization',
+        'aiEnhance': 'AI Enhancement',
+        'collectionSeo': 'Collection SEO Optimization',
+        'collectionAiEnhance': 'Collection AI Enhancement'
+      };
+      const jobTypeName = jobTypeNames[type] || type;
+      
+      // Format duration
+      const durationMin = Math.floor(duration / 60);
+      const durationSec = Math.round(duration % 60);
+      const durationStr = durationMin > 0 ? `${durationMin}m ${durationSec}s` : `${durationSec}s`;
+      
+      // Determine status emoji and tone
+      const hasFailures = failed > 0;
+      const statusEmoji = hasFailures ? '⚠️' : '✅';
+      const statusText = hasFailures ? 'completed with some issues' : 'completed successfully';
+      
+      const msg = {
+        to: store.email || `${shopName}@example.com`,
+        from: { email: this.fromEmail, name: this.fromName },
+        subject: `${statusEmoji} ${jobTypeName} ${statusText}`,
+        html: this.getJobCompletedEmailTemplate({
+          shopName,
+          shop: store.shop,
+          email: store.email,
+          jobTypeName,
+          successful,
+          failed,
+          skipped,
+          duration: durationStr,
+          itemType,
+          hasFailures,
+          dashboardUrl: this.getDashboardUrl(store.shop)
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
+      };
+
+      await sgMail.send(msg);
+      await this.logEmail(store._id || store.id, store.shop, 'job-completed', 'sent');
+      console.log(`📧 Job completed email sent to ${store.email} for ${store.shop}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Job completed email error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Helper methods
    */
   calculateTrialDays(expiresAt) {
@@ -1087,6 +1154,77 @@ class EmailService {
           </div>
           
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getJobCompletedEmailTemplate(data) {
+    const statusColor = data.hasFailures ? '#f59e0b' : '#10b981';
+    const statusIcon = data.hasFailures ? '⚠️' : '✅';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${data.jobTypeName} Complete</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc;">
+        <div style="background: ${statusColor}; padding: 25px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h2 style="color: white; margin: 0; font-size: 20px;">${statusIcon} ${data.jobTypeName} Complete</h2>
+        </div>
+        
+        <div style="padding: 30px; background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <p style="color: #334155; font-size: 16px;">Hi ${data.shopName}! 👋</p>
+          
+          <p style="color: #475569;">Your background ${data.jobTypeName.toLowerCase()} job has finished processing.</p>
+          
+          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="margin: 0 0 15px; color: #1e293b; font-size: 16px;">📊 Results Summary</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #10b981; font-weight: 600;">✓ Successful</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 600;">${data.successful} ${data.itemType}</td>
+              </tr>
+              ${data.skipped > 0 ? `
+              <tr>
+                <td style="padding: 8px 0; color: #64748b;">○ Skipped</td>
+                <td style="padding: 8px 0; text-align: right;">${data.skipped} ${data.itemType}</td>
+              </tr>
+              ` : ''}
+              ${data.failed > 0 ? `
+              <tr>
+                <td style="padding: 8px 0; color: #ef4444;">✗ Failed</td>
+                <td style="padding: 8px 0; text-align: right;">${data.failed} ${data.itemType}</td>
+              </tr>
+              ` : ''}
+              <tr style="border-top: 1px solid #e2e8f0;">
+                <td style="padding: 12px 0 0; color: #64748b;">⏱ Duration</td>
+                <td style="padding: 12px 0 0; text-align: right;">${data.duration}</td>
+              </tr>
+            </table>
+          </div>
+          
+          ${data.hasFailures ? `
+          <p style="color: #92400e; background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 14px;">
+            ⚠️ Some items failed to process. You can retry them from the dashboard.
+          </p>
+          ` : ''}
+          
+          <div style="text-align: center; margin: 25px 0;">
+            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 500;">
+              View in Dashboard
+            </a>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
             <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
               <strong style="color: #1e40af;">indexAIze Team</strong>
             </p>

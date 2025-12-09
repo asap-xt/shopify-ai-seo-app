@@ -4,6 +4,7 @@
 
 import Shop from '../db/Shop.js';
 import { dbLogger } from '../utils/logger.js';
+import emailService from './emailService.js';
 
 class SeoJobQueue {
   constructor() {
@@ -256,6 +257,25 @@ class SeoJobQueue {
           skipReasons: job.skipReasons.slice(0, 10),
           failReasons: job.failReasons.slice(0, 10)
         });
+        
+        // Send email notification if job took more than 2 minutes
+        if (duration > 120) {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).lean();
+            if (shopDoc?.email) {
+              await emailService.sendJobCompletedEmail(shopDoc, {
+                type: 'seo',
+                successful: job.successfulProducts,
+                failed: job.failedProducts,
+                skipped: job.skippedProducts,
+                duration: duration,
+                itemType: 'products'
+              });
+            }
+          } catch (emailErr) {
+            dbLogger.error(`[SEO-JOB-QUEUE] Failed to send completion email: ${emailErr.message}`);
+          }
+        }
 
       } catch (error) {
         dbLogger.error(`[SEO-JOB-QUEUE] ❌ Job failed for shop: ${job.shop}`, error.message);

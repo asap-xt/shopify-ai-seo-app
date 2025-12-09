@@ -4,6 +4,7 @@
 
 import Shop from '../db/Shop.js';
 import { dbLogger } from '../utils/logger.js';
+import emailService from './emailService.js';
 
 class CollectionJobQueue {
   constructor() {
@@ -267,6 +268,25 @@ class CollectionJobQueue {
           failedCollections: job.failedCollections,
           skippedCollections: job.skippedCollections
         });
+        
+        // Send email notification if job took more than 2 minutes
+        if (duration > 120) {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).lean();
+            if (shopDoc?.email) {
+              await emailService.sendJobCompletedEmail(shopDoc, {
+                type: job.jobType === 'aiEnhance' ? 'collectionAiEnhance' : 'collectionSeo',
+                successful: job.successfulCollections,
+                failed: job.failedCollections,
+                skipped: job.skippedCollections,
+                duration: duration,
+                itemType: 'collections'
+              });
+            }
+          } catch (emailErr) {
+            dbLogger.error(`[COLLECTION-QUEUE] Failed to send completion email: ${emailErr.message}`);
+          }
+        }
 
       } catch (error) {
         dbLogger.error(`[COLLECTION-QUEUE] ❌ ${job.jobType} job failed for shop: ${job.shop}`, error.message);
