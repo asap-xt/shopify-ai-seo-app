@@ -2968,7 +2968,9 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
             $set: { 
               'seoStatus.languages': updatedLanguages,
               'seoStatus.optimized': updatedLanguages.some(l => l.optimized),
-              'seoStatus.aiEnhanced': updatedLanguages.length > 0 ? product.seoStatus.aiEnhanced : false // Reset AI flag if all languages deleted
+              'seoStatus.aiEnhanced': updatedLanguages.length > 0 ? product.seoStatus.aiEnhanced : false, // Reset AI flag if all languages deleted
+              'seoStatus.hasAdvancedSchema': updatedLanguages.length > 0 ? product.seoStatus.hasAdvancedSchema : false, // Reset schema flag if all deleted
+              'seoStatus.advancedSchemaGeneratedAt': updatedLanguages.length > 0 ? product.seoStatus.advancedSchemaGeneratedAt : null
             },
             $unset: { 
               'lastShopifyUpdate': 1  // Delete the entire lastShopifyUpdate field
@@ -3352,6 +3354,8 @@ async function processDeleteInBackground(req, shop, items, totalProducts) {
                   $set: { 
                     'seoStatus.optimized': false,
                     'seoStatus.aiEnhanced': false, // Reset AI enhanced flag too!
+                    'seoStatus.hasAdvancedSchema': false, // Reset schema flag - needs regeneration
+                    'seoStatus.advancedSchemaGeneratedAt': null,
                     'optimizationSummary.optimized': false,
                     'optimizationSummary.aiEnhanced': false
                   }

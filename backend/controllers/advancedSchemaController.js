@@ -1752,7 +1752,7 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // Get ALL optimized products (basic + AI-enhanced together)
-    const allProducts = await Product.find({
+    const allOptimizedProducts = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
@@ -1763,21 +1763,33 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       'seoStatus.aiEnhanced': true
     });
     
+    // OPTIMIZATION: Filter out products that already have advanced schema
+    // Only process products that need schema generation
+    const productsWithoutSchema = allOptimizedProducts.filter(p => !p.seoStatus?.hasAdvancedSchema);
+    const productsWithSchema = allOptimizedProducts.length - productsWithoutSchema.length;
+    
     console.log(`[SCHEMA] 📊 Product counts for ${shop}:`);
-    console.log(`[SCHEMA]   - Total optimized products: ${allProducts.length}`);
+    console.log(`[SCHEMA]   - Total optimized products: ${allOptimizedProducts.length}`);
+    console.log(`[SCHEMA]   - Already have schema: ${productsWithSchema} (skipping)`);
+    console.log(`[SCHEMA]   - Need schema generation: ${productsWithoutSchema.length}`);
     console.log(`[SCHEMA]   - AI-enhanced products: ${aiEnhancedCount}`);
-    console.log(`[SCHEMA]   - Basic-only products: ${allProducts.length - aiEnhancedCount}`);
     console.log(`[SCHEMA]   - forceBasicSeo: ${forceBasicSeo}`);
     
-    // Case 1: No products at all
-    if (allProducts.length === 0) {
+    // Case 1: No optimized products at all
+    if (allOptimizedProducts.length === 0) {
       console.log('[SCHEMA] ❌ NO_OPTIMIZED_PRODUCTS - throwing error');
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
-    // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
+    // Case 2: All products already have schema - nothing to do
+    if (productsWithoutSchema.length === 0) {
+      console.log('[SCHEMA] ✅ All products already have advanced schema - nothing to generate');
+      return { success: true, schemaCount: 0, message: 'All products already have schema' };
+    }
+    
+    // Case 3: Only basic products, no AI-enhanced (and user didn't force basic)
     // Show recommendation modal, but don't block generation
-    if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
+    if (allOptimizedProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
       console.log('[SCHEMA] ⚠️ ONLY_BASIC_SEO - throwing error (no AI-enhanced products)');
       throw new Error('ONLY_BASIC_SEO');
     }
@@ -1788,8 +1800,8 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       console.log('[SCHEMA] ⚠️ No AI-enhanced products, but forceBasicSeo=true, proceeding...');
     }
     
-    // Use ALL optimized products (mix of basic + AI-enhanced)
-    const products = allProducts;
+    // Use only products WITHOUT existing schema
+    const products = productsWithoutSchema;
     
     // Collect all generated schemas and product IDs for later summary update
     const allProductSchemas = [];
@@ -1823,6 +1835,17 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
             // Collect product ID for optimization summary update later
             if (result.productId) {
               processedProductIds.push(result.productId);
+              
+              // Mark product as having advanced schema
+              await Product.updateOne(
+                { shop, productId: result.productId },
+                { 
+                  $set: { 
+                    'seoStatus.hasAdvancedSchema': true,
+                    'seoStatus.advancedSchemaGeneratedAt': new Date()
+                  }
+                }
+              );
             }
           }
           

@@ -4,7 +4,7 @@
 // - Detects title/description changes and invalidates SEO metafields
 // - Invalidates Redis cache to reflect changes immediately
 
-import { deleteAllSeoMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
+import { deleteAllSeoMetafieldsForProduct, deleteAdvancedSchemaMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
 import cacheService from '../services/cacheService.js';
 import ProductChangeLog from '../db/ProductChangeLog.js';
 
@@ -62,11 +62,18 @@ export default async function productsWebhook(req, res) {
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
           
+          // 3b. Delete Advanced Schema metafields too (schemas become outdated)
+          const schemaDeleteResult = await deleteAdvancedSchemaMetafieldsForProduct(req, shop, productGid);
+          
           if (deleteResult.success) {
-            // 4. Clear SEO status in MongoDB
+            // 4. Clear SEO status in MongoDB (includes hasAdvancedSchema flag)
             await clearSeoStatusInMongoDB(shop, numericProductId);
           } else {
-            console.error('[Webhook-Products] ❌ Failed to delete metafields:', deleteResult.errors);
+            console.error('[Webhook-Products] ❌ Failed to delete SEO metafields:', deleteResult.errors);
+          }
+          
+          if (!schemaDeleteResult.success) {
+            console.error('[Webhook-Products] ❌ Failed to delete schema metafields:', schemaDeleteResult.errors);
           }
         }
       }
