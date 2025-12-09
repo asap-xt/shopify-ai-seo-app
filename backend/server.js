@@ -1627,8 +1627,9 @@ if (!IS_PROD) {
     });
 
     app.get('/apps/:app_identifier/*', (req, res, next) => {
-      // Skip our App Proxy routes
-      if (req.params.app_identifier === APP_PROXY_SUBPATH) {
+      // Skip our App Proxy routes - both 'indexaize' and 'ai' paths
+      // Shopify App Proxy strips the subpath, so /apps/indexaize/ai/... becomes /apps/ai/...
+      if (req.params.app_identifier === APP_PROXY_SUBPATH || req.params.app_identifier === 'ai') {
         return next();
       }
       
