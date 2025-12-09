@@ -208,6 +208,12 @@ async function generateSitemapCore(shop, options = {}) {
       throw new Error('Invalid shop parameter');
     }
     
+    // Reset cancelled flag at start of new generation
+    await Shop.findOneAndUpdate(
+      { shop: normalizedShop },
+      { $set: { 'sitemapStatus.cancelled': false } }
+    );
+    
     const { limit, plan } = await getPlanLimits(normalizedShop);
     
     // AI Enhancement state (only used if enableAIEnhancement is true)
@@ -449,6 +455,16 @@ async function generateSitemapCore(shop, options = {}) {
     let processedProducts = 0;
     const startTime = Date.now();
     
+    // Helper to check if job was cancelled
+    const checkCancelled = async () => {
+      try {
+        const shopDoc = await Shop.findOne({ shop: normalizedShop }).select('sitemapStatus.cancelled').lean();
+        return shopDoc?.sitemapStatus?.cancelled === true;
+      } catch (err) {
+        return false;
+      }
+    };
+    
     // Helper to update progress in MongoDB
     const updateProgress = async (current, total) => {
       try {
@@ -655,6 +671,12 @@ async function generateSitemapCore(shop, options = {}) {
           processedProducts++;
           if (processedProducts % 5 === 0 || processedProducts === totalProducts) {
             await updateProgress(processedProducts, totalProducts);
+            
+            // Check if job was cancelled
+            if (await checkCancelled()) {
+              console.log(`[SITEMAP] Job cancelled for shop: ${normalizedShop} after ${processedProducts} products`);
+              throw new Error('CANCELLED_BY_USER');
+            }
           }
         }
         // ===== END: AI-ENHANCED METADATA =====
@@ -1263,7 +1285,7 @@ App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(sho
   }
 }
 
-// Reset stuck sitemap generation (for when server restarts and job is lost)
+// Reset/Cancel sitemap generation
 async function handleReset(req, res) {
   try {
     const shop = normalizeShop(req.query.shop);
@@ -1271,16 +1293,17 @@ async function handleReset(req, res) {
       return res.status(400).json({ error: 'Missing shop parameter' });
     }
     
-    console.log(`[SITEMAP] Resetting stuck job for shop: ${shop}`);
+    console.log(`[SITEMAP] Cancelling job for shop: ${shop}`);
     
-    // Reset the sitemapStatus in MongoDB
+    // Set cancelled flag - the processing loop will check this
     await Shop.findOneAndUpdate(
       { shop },
       {
         $set: {
+          'sitemapStatus.cancelled': true,
           'sitemapStatus.inProgress': false,
-          'sitemapStatus.status': 'idle',
-          'sitemapStatus.message': 'Reset by user',
+          'sitemapStatus.status': 'cancelled',
+          'sitemapStatus.message': 'Cancelled by user',
           'sitemapStatus.updatedAt': new Date()
         }
       }
@@ -1289,17 +1312,19 @@ async function handleReset(req, res) {
     // Clear from in-memory queue if present
     sitemapQueue.queue = sitemapQueue.queue.filter(job => job.shop !== shop);
     if (sitemapQueue.currentJob?.shop === shop) {
+      // Mark the current job as cancelled so it stops processing
+      sitemapQueue.currentJob.cancelled = true;
       sitemapQueue.currentJob = null;
     }
     
     res.json({
       success: true,
-      message: 'Sitemap generation status reset. You can now start a new generation.'
+      message: 'Sitemap generation cancelled. You can start a new generation.'
     });
     
   } catch (err) {
-    console.error('[SITEMAP] Reset error:', err);
-    res.status(500).json({ error: 'Failed to reset status' });
+    console.error('[SITEMAP] Cancel error:', err);
+    res.status(500).json({ error: 'Failed to cancel' });
   }
 }
 
