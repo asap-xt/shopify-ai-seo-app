@@ -1951,13 +1951,14 @@ router.post('/batch', validateRequest(), async (req, res) => {
           subscription
         });
         
-        // Check if all languages were skipped
+        // Check if all languages were skipped (already enhanced = skip)
         if (result.summary?.successful === 0 && result.summary?.alreadyEnhanced > 0) {
           return { skipped: true, reason: 'Already enhanced', data: result };
         }
         
+        // No Basic SEO = fail (can't enhance without basic SEO)
         if (result.summary?.successful === 0 && result.summary?.noBasicSeo > 0) {
-          return { skipped: true, reason: 'No Basic SEO', data: result };
+          return { success: false, error: 'No Basic SEO found', data: result };
         }
         
         return { success: result.success, data: result };
