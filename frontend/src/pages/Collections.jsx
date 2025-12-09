@@ -179,7 +179,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     successfulCollections: 0,
     failedCollections: 0,
     skippedCollections: 0,
-    completedAt: null
+    completedAt: null,
+    progress: null // { current, total, percent, elapsedSeconds, remainingSeconds }
   });
   const collectionSeoPollingRef = useRef(null);
   
@@ -193,7 +194,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
     successfulCollections: 0,
     failedCollections: 0,
     skippedCollections: 0,
-    completedAt: null
+    completedAt: null,
+    progress: null // { current, total, percent, elapsedSeconds, remainingSeconds }
   });
   const collectionAiEnhancePollingRef = useRef(null);
   const loadCollectionsRef = useRef(null); // Ref to always have latest loadCollections
@@ -2109,20 +2111,50 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               <Card>
                 <Box padding="400">
                   {collectionAiEnhanceJobStatus.inProgress ? (
-                    <InlineStack gap="300" align="start" blockAlign="center">
-                      <Spinner size="small" />
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Collections...</Text>
-                        <Text variant="bodySm" tone="subdued">
-                          {collectionAiEnhanceJobStatus.message || `Processing ${collectionAiEnhanceJobStatus.processedCollections}/${collectionAiEnhanceJobStatus.totalCollections} collections`}
-                        </Text>
-                        {collectionAiEnhanceJobStatus.totalCollections > 0 && (
-                          <Box paddingBlockStart="100">
-                            <ProgressBar progress={(collectionAiEnhanceJobStatus.processedCollections / collectionAiEnhanceJobStatus.totalCollections) * 100} size="small" />
-                          </Box>
-                        )}
-                      </BlockStack>
-                    </InlineStack>
+                    <BlockStack gap="200">
+                      <InlineStack align="space-between" blockAlign="center">
+                        <InlineStack gap="300" blockAlign="center">
+                          <Spinner size="small" />
+                          <BlockStack gap="100">
+                            <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Collections...</Text>
+                            <Text variant="bodySm" tone="subdued">
+                              {(() => {
+                                const p = collectionAiEnhanceJobStatus.progress;
+                                if (p?.current && p?.total) {
+                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
+                                  let msg = `Enhancing ${p.current}/${p.total} collections`;
+                                  if (remainingMin > 0) {
+                                    msg += ` • ~${remainingMin} min remaining`;
+                                  }
+                                  return msg;
+                                }
+                                return collectionAiEnhanceJobStatus.message || `Processing ${collectionAiEnhanceJobStatus.processedCollections}/${collectionAiEnhanceJobStatus.totalCollections} collections`;
+                              })()}
+                            </Text>
+                          </BlockStack>
+                        </InlineStack>
+                        <Button 
+                          onClick={async () => {
+                            try {
+                              await api(`/seo/collection-job-cancel?shop=${shop}&type=aiEnhance`, { method: 'POST' });
+                              setToast('Cancellation requested...');
+                            } catch (e) {
+                              setToast('Failed to cancel');
+                            }
+                          }} 
+                          size="slim" 
+                          variant="tertiary"
+                        >
+                          Cancel
+                        </Button>
+                      </InlineStack>
+                      {(collectionAiEnhanceJobStatus.progress?.percent != null || collectionAiEnhanceJobStatus.totalCollections > 0) && (
+                        <ProgressBar 
+                          progress={collectionAiEnhanceJobStatus.progress?.percent || (collectionAiEnhanceJobStatus.processedCollections / collectionAiEnhanceJobStatus.totalCollections) * 100} 
+                          size="small" 
+                        />
+                      )}
+                    </BlockStack>
                   ) : collectionAiEnhanceJobStatus.status === 'completed' ? (
                     <InlineStack gap="200" align="start" blockAlign="center">
                       <Badge tone="success">AI Enhanced</Badge>
@@ -2151,20 +2183,50 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
               <Card>
                 <Box padding="400">
                   {collectionSeoJobStatus.inProgress ? (
-                    <InlineStack gap="300" align="start" blockAlign="center">
-                      <Spinner size="small" />
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">Optimizing Collections...</Text>
-                        <Text variant="bodySm" tone="subdued">
-                          {collectionSeoJobStatus.message || `Processing ${collectionSeoJobStatus.processedCollections}/${collectionSeoJobStatus.totalCollections} collections`}
-                        </Text>
-                        {collectionSeoJobStatus.totalCollections > 0 && (
-                          <Box paddingBlockStart="100">
-                            <ProgressBar progress={(collectionSeoJobStatus.processedCollections / collectionSeoJobStatus.totalCollections) * 100} size="small" />
-                          </Box>
-                        )}
-                      </BlockStack>
-                    </InlineStack>
+                    <BlockStack gap="200">
+                      <InlineStack align="space-between" blockAlign="center">
+                        <InlineStack gap="300" blockAlign="center">
+                          <Spinner size="small" />
+                          <BlockStack gap="100">
+                            <Text variant="bodyMd" fontWeight="semibold">Optimizing Collections...</Text>
+                            <Text variant="bodySm" tone="subdued">
+                              {(() => {
+                                const p = collectionSeoJobStatus.progress;
+                                if (p?.current && p?.total) {
+                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
+                                  let msg = `Processing ${p.current}/${p.total} collections`;
+                                  if (remainingMin > 0) {
+                                    msg += ` • ~${remainingMin} min remaining`;
+                                  }
+                                  return msg;
+                                }
+                                return collectionSeoJobStatus.message || `Processing ${collectionSeoJobStatus.processedCollections}/${collectionSeoJobStatus.totalCollections} collections`;
+                              })()}
+                            </Text>
+                          </BlockStack>
+                        </InlineStack>
+                        <Button 
+                          onClick={async () => {
+                            try {
+                              await api(`/seo/collection-job-cancel?shop=${shop}&type=seo`, { method: 'POST' });
+                              setToast('Cancellation requested...');
+                            } catch (e) {
+                              setToast('Failed to cancel');
+                            }
+                          }} 
+                          size="slim" 
+                          variant="tertiary"
+                        >
+                          Cancel
+                        </Button>
+                      </InlineStack>
+                      {(collectionSeoJobStatus.progress?.percent != null || collectionSeoJobStatus.totalCollections > 0) && (
+                        <ProgressBar 
+                          progress={collectionSeoJobStatus.progress?.percent || (collectionSeoJobStatus.processedCollections / collectionSeoJobStatus.totalCollections) * 100} 
+                          size="small" 
+                        />
+                      )}
+                    </BlockStack>
                   ) : collectionSeoJobStatus.status === 'completed' ? (
                     <InlineStack gap="200" align="start" blockAlign="center">
                       <Badge tone="success">Completed</Badge>

@@ -108,6 +108,49 @@ class AIEnhanceQueue {
         
         job.status = 'processing';
         job.startedAt = new Date();
+        const startTime = Date.now();
+        
+        // Reset cancelled flag at start
+        await Shop.findOneAndUpdate(
+          { shop: job.shop },
+          { $set: { 'aiEnhanceJobStatus.cancelled': false } }
+        );
+        
+        // Helper to check if job was cancelled
+        const checkCancelled = async () => {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).select('aiEnhanceJobStatus.cancelled').lean();
+            return shopDoc?.aiEnhanceJobStatus?.cancelled === true;
+          } catch (err) {
+            return false;
+          }
+        };
+        
+        // Helper to calculate and update progress
+        const updateProgress = async (current, total) => {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          const avgTimePerProduct = current > 0 ? elapsed / current : 2.8; // Default estimate: 2.8s for AI
+          const remaining = Math.ceil((total - current) * avgTimePerProduct);
+          
+          await this.updateShopStatus(job.shop, {
+            inProgress: true,
+            status: 'processing',
+            message: `Enhancing ${current}/${total} products`,
+            totalProducts: total,
+            processedProducts: current,
+            successfulProducts: job.successfulProducts,
+            failedProducts: job.failedProducts,
+            skippedProducts: job.skippedProducts,
+            progress: {
+              current,
+              total,
+              percent: Math.round((current / total) * 100),
+              elapsedSeconds: elapsed,
+              remainingSeconds: remaining,
+              startedAt: new Date(startTime)
+            }
+          });
+        };
 
         // OPTIMIZATION: Process products in batches of 2 for parallel execution
         const BATCH_SIZE = 2;
@@ -115,19 +158,16 @@ class AIEnhanceQueue {
         let shouldStop = false;
 
         for (let batchStart = 0; batchStart < job.products.length && !shouldStop; batchStart += BATCH_SIZE) {
+          // Check for cancellation at start of each batch
+          if (await checkCancelled()) {
+            dbLogger.info(`[AI-ENHANCE-QUEUE] Job cancelled for shop: ${job.shop} after ${job.processedProducts} products`);
+            throw new Error('CANCELLED_BY_USER');
+          }
+          
           const batch = job.products.slice(batchStart, batchStart + BATCH_SIZE);
           
-          // Update status before batch
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-              status: 'processing',
-            message: `Enhancing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+          // Update progress before batch
+          await updateProgress(job.processedProducts, job.totalProducts);
 
           // Process batch in parallel with error isolation and timeout
           const PRODUCT_TIMEOUT = 90000; // 90s timeout per product
@@ -293,6 +333,16 @@ class AIEnhanceQueue {
       if (statusUpdate.skippedProducts !== undefined) updateFields['aiEnhanceJobStatus.skippedProducts'] = statusUpdate.skippedProducts;
       if (statusUpdate.skipReasons !== undefined) updateFields['aiEnhanceJobStatus.skipReasons'] = statusUpdate.skipReasons;
       if (statusUpdate.failReasons !== undefined) updateFields['aiEnhanceJobStatus.failReasons'] = statusUpdate.failReasons;
+      
+      // Enhanced progress tracking
+      if (statusUpdate.progress) {
+        updateFields['aiEnhanceJobStatus.progress.current'] = statusUpdate.progress.current;
+        updateFields['aiEnhanceJobStatus.progress.total'] = statusUpdate.progress.total;
+        updateFields['aiEnhanceJobStatus.progress.percent'] = statusUpdate.progress.percent;
+        updateFields['aiEnhanceJobStatus.progress.elapsedSeconds'] = statusUpdate.progress.elapsedSeconds;
+        updateFields['aiEnhanceJobStatus.progress.remainingSeconds'] = statusUpdate.progress.remainingSeconds;
+        updateFields['aiEnhanceJobStatus.progress.startedAt'] = statusUpdate.progress.startedAt;
+      }
 
       await Shop.findOneAndUpdate(
         { shop },

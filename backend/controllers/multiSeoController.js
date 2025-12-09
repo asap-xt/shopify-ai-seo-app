@@ -15,6 +15,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import seoJobQueue from '../services/seoJobQueue.js';
+import Shop from '../db/Shop.js';
 
 const router = Router();
 
@@ -314,10 +315,59 @@ router.get('/job-status', validateRequest(), async (req, res) => {
 
   try {
     const status = await seoJobQueue.getJobStatus(shop);
+    
+    // Also get progress from DB for accurate time estimates
+    const shopDoc = await Shop.findOne({ shop }).select('seoJobStatus.progress').lean();
+    if (shopDoc?.seoJobStatus?.progress) {
+      status.progress = shopDoc.seoJobStatus.progress;
+      
+      // Enhanced message with progress
+      if (status.inProgress && status.progress?.current && status.progress?.total) {
+        const remainingMin = Math.ceil((status.progress.remainingSeconds || 0) / 60);
+        status.message = `Processing ${status.progress.current}/${status.progress.total} products`;
+        if (remainingMin > 0) {
+          status.message += ` • ~${remainingMin} min remaining`;
+        }
+      }
+    }
+    
     return res.json(status);
   } catch (err) {
     console.error('GET /api/seo/job-status error:', err);
     return res.status(500).json({ error: 'Failed to get job status' });
+  }
+});
+
+// POST /api/seo/job-cancel
+// Cancel a running SEO job
+router.post('/job-cancel', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    // Set cancelled flag in DB
+    await Shop.findOneAndUpdate(
+      { shop },
+      { 
+        $set: { 
+          'seoJobStatus.cancelled': true,
+          'seoJobStatus.status': 'cancelled',
+          'seoJobStatus.message': 'Cancelled by user',
+          'seoJobStatus.updatedAt': new Date()
+        } 
+      }
+    );
+    
+    return res.json({ success: true, message: 'Cancellation requested' });
+  } catch (err) {
+    console.error('POST /api/seo/job-cancel error:', err);
+    return res.status(500).json({ error: 'Failed to cancel job' });
   }
 });
 

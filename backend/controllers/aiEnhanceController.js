@@ -1999,10 +1999,59 @@ router.get('/job-status', validateRequest(), async (req, res) => {
     }
     
     const status = await aiEnhanceQueue.getJobStatus(shop);
+    
+    // Also get progress from DB for accurate time estimates
+    const shopDoc = await Shop.findOne({ shop }).select('aiEnhanceJobStatus.progress').lean();
+    if (shopDoc?.aiEnhanceJobStatus?.progress) {
+      status.progress = shopDoc.aiEnhanceJobStatus.progress;
+      
+      // Enhanced message with progress
+      if (status.inProgress && status.progress?.current && status.progress?.total) {
+        const remainingMin = Math.ceil((status.progress.remainingSeconds || 0) / 60);
+        status.message = `Enhancing ${status.progress.current}/${status.progress.total} products`;
+        if (remainingMin > 0) {
+          status.message += ` • ~${remainingMin} min remaining`;
+        }
+      }
+    }
+    
     return res.json(status);
     
   } catch (error) {
     console.error('[AI-ENHANCE/JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /ai-enhance/job-cancel
+ * Cancel a running AI Enhancement job
+ */
+router.post('/job-cancel', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain || req.body?.shop;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    // Set cancelled flag in DB
+    await Shop.findOneAndUpdate(
+      { shop },
+      { 
+        $set: { 
+          'aiEnhanceJobStatus.cancelled': true,
+          'aiEnhanceJobStatus.status': 'cancelled',
+          'aiEnhanceJobStatus.message': 'Cancelled by user',
+          'aiEnhanceJobStatus.updatedAt': new Date()
+        } 
+      }
+    );
+    
+    return res.json({ success: true, message: 'Cancellation requested' });
+    
+  } catch (error) {
+    console.error('[AI-ENHANCE/JOB-CANCEL] Error:', error);
     return res.status(500).json({ error: error.message });
   }
 });

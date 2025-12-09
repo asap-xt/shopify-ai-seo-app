@@ -3715,10 +3715,63 @@ router.get('/seo/collection-job-status', validateRequest(), async (req, res) => 
     }
     
     const status = await collectionJobQueue.getJobStatus(shop, jobType);
+    
+    // Also get progress from DB for accurate time estimates
+    const statusField = jobType === 'aiEnhance' ? 'collectionAiEnhanceJobStatus' : 'collectionSeoJobStatus';
+    const shopDoc = await Shop.findOne({ shop }).select(`${statusField}.progress`).lean();
+    if (shopDoc?.[statusField]?.progress) {
+      status.progress = shopDoc[statusField].progress;
+      
+      // Enhanced message with progress
+      if (status.inProgress && status.progress?.current && status.progress?.total) {
+        const remainingMin = Math.ceil((status.progress.remainingSeconds || 0) / 60);
+        status.message = `Processing ${status.progress.current}/${status.progress.total} collections`;
+        if (remainingMin > 0) {
+          status.message += ` • ~${remainingMin} min remaining`;
+        }
+      }
+    }
+    
     return res.json(status);
     
   } catch (error) {
     console.error('[COLLECTION-SEO/JOB-STATUS] Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/seo/collection-job-cancel
+ * Cancel a running Collection SEO job
+ */
+router.post('/seo/collection-job-cancel', validateRequest(), async (req, res) => {
+  try {
+    const shop = req.shopDomain || req.body?.shop;
+    const jobType = req.query.type || req.body?.type || 'seo'; // 'seo' or 'aiEnhance'
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop not provided' });
+    }
+    
+    const statusField = jobType === 'aiEnhance' ? 'collectionAiEnhanceJobStatus' : 'collectionSeoJobStatus';
+    
+    // Set cancelled flag in DB
+    await Shop.findOneAndUpdate(
+      { shop },
+      { 
+        $set: { 
+          [`${statusField}.cancelled`]: true,
+          [`${statusField}.status`]: 'cancelled',
+          [`${statusField}.message`]: 'Cancelled by user',
+          [`${statusField}.updatedAt`]: new Date()
+        } 
+      }
+    );
+    
+    return res.json({ success: true, message: 'Cancellation requested' });
+    
+  } catch (error) {
+    console.error('[COLLECTION-SEO/JOB-CANCEL] Error:', error);
     return res.status(500).json({ error: error.message });
   }
 });

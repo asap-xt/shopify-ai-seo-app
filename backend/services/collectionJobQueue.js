@@ -111,6 +111,50 @@ class CollectionJobQueue {
         
         job.status = 'processing';
         job.startedAt = new Date();
+        const startTime = Date.now();
+        
+        // Reset cancelled flag at start
+        await Shop.findOneAndUpdate(
+          { shop: job.shop },
+          { $set: { [`${job.statusField}.cancelled`]: false } }
+        );
+        
+        // Helper to check if job was cancelled
+        const checkCancelled = async () => {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).select(`${job.statusField}.cancelled`).lean();
+            return shopDoc?.[job.statusField]?.cancelled === true;
+          } catch (err) {
+            return false;
+          }
+        };
+        
+        // Helper to calculate and update progress
+        const updateProgress = async (current, total) => {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          // Default estimate: 1.5s for basic, 3s for AI enhancement
+          const avgTimePerCollection = current > 0 ? elapsed / current : (job.jobType === 'aiEnhance' ? 3 : 1.5);
+          const remaining = Math.ceil((total - current) * avgTimePerCollection);
+          
+          await this.updateShopStatus(job.shop, job.statusField, {
+            inProgress: true,
+            status: 'processing',
+            message: `Processing ${current}/${total} collections`,
+            totalCollections: total,
+            processedCollections: current,
+            successfulCollections: job.successfulCollections,
+            failedCollections: job.failedCollections,
+            skippedCollections: job.skippedCollections,
+            progress: {
+              current,
+              total,
+              percent: Math.round((current / total) * 100),
+              elapsedSeconds: elapsed,
+              remainingSeconds: remaining,
+              startedAt: new Date(startTime)
+            }
+          });
+        };
 
         // OPTIMIZATION: Process collections in batches of 2 for parallel execution
         const BATCH_SIZE = 2;
@@ -118,19 +162,16 @@ class CollectionJobQueue {
         let shouldStop = false;
 
         for (let batchStart = 0; batchStart < job.collections.length && !shouldStop; batchStart += BATCH_SIZE) {
+          // Check for cancellation at start of each batch
+          if (await checkCancelled()) {
+            dbLogger.info(`[COLLECTION-QUEUE] Job cancelled for shop: ${job.shop} after ${job.processedCollections} collections`);
+            throw new Error('CANCELLED_BY_USER');
+          }
+          
           const batch = job.collections.slice(batchStart, batchStart + BATCH_SIZE);
           
-          // Update status before batch
-            await this.updateShopStatus(job.shop, job.statusField, {
-              inProgress: true,
-              status: 'processing',
-            message: `Processing ${job.processedCollections + 1}-${Math.min(job.processedCollections + batch.length, job.totalCollections)}/${job.totalCollections}...`,
-              totalCollections: job.totalCollections,
-              processedCollections: job.processedCollections,
-              successfulCollections: job.successfulCollections,
-              failedCollections: job.failedCollections,
-              skippedCollections: job.skippedCollections
-            });
+          // Update progress before batch
+          await updateProgress(job.processedCollections, job.totalCollections);
 
           // Process batch in parallel
           const batchPromises = batch.map(async (collectionData) => {
@@ -276,6 +317,16 @@ class CollectionJobQueue {
       if (statusUpdate.successfulCollections !== undefined) updateFields[`${statusField}.successfulCollections`] = statusUpdate.successfulCollections;
       if (statusUpdate.failedCollections !== undefined) updateFields[`${statusField}.failedCollections`] = statusUpdate.failedCollections;
       if (statusUpdate.skippedCollections !== undefined) updateFields[`${statusField}.skippedCollections`] = statusUpdate.skippedCollections;
+      
+      // Enhanced progress tracking
+      if (statusUpdate.progress) {
+        updateFields[`${statusField}.progress.current`] = statusUpdate.progress.current;
+        updateFields[`${statusField}.progress.total`] = statusUpdate.progress.total;
+        updateFields[`${statusField}.progress.percent`] = statusUpdate.progress.percent;
+        updateFields[`${statusField}.progress.elapsedSeconds`] = statusUpdate.progress.elapsedSeconds;
+        updateFields[`${statusField}.progress.remainingSeconds`] = statusUpdate.progress.remainingSeconds;
+        updateFields[`${statusField}.progress.startedAt`] = statusUpdate.progress.startedAt;
+      }
 
       await Shop.findOneAndUpdate(
         { shop },

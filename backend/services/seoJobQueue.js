@@ -112,27 +112,67 @@ class SeoJobQueue {
         
         job.status = 'processing';
         job.startedAt = new Date();
+        const startTime = Date.now();
+        
+        // Reset cancelled flag at start
+        await Shop.findOneAndUpdate(
+          { shop: job.shop },
+          { $set: { 'seoJobStatus.cancelled': false } }
+        );
+        
+        // Helper to check if job was cancelled
+        const checkCancelled = async () => {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).select('seoJobStatus.cancelled').lean();
+            return shopDoc?.seoJobStatus?.cancelled === true;
+          } catch (err) {
+            return false;
+          }
+        };
+        
+        // Helper to calculate and update progress
+        const updateProgress = async (current, total) => {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          const avgTimePerProduct = current > 0 ? elapsed / current : 1.3; // Default estimate: 1.3s
+          const remaining = Math.ceil((total - current) * avgTimePerProduct);
+          
+          await this.updateShopStatus(job.shop, {
+            inProgress: true,
+            status: 'processing',
+            phase: 'processing',
+            message: `Processing ${current}/${total} products`,
+            totalProducts: total,
+            processedProducts: current,
+            successfulProducts: job.successfulProducts,
+            failedProducts: job.failedProducts,
+            skippedProducts: job.skippedProducts,
+            progress: {
+              current,
+              total,
+              percent: Math.round((current / total) * 100),
+              elapsedSeconds: elapsed,
+              remainingSeconds: remaining,
+              startedAt: new Date(startTime)
+            }
+          });
+        };
 
         // OPTIMIZATION: Process products in batches of 2 for parallel execution
         const BATCH_SIZE = 2;
         const BATCH_DELAY = 300; // ms between batches
 
         for (let batchStart = 0; batchStart < job.products.length; batchStart += BATCH_SIZE) {
+          // Check for cancellation at start of each batch
+          if (await checkCancelled()) {
+            dbLogger.info(`[SEO-JOB-QUEUE] Job cancelled for shop: ${job.shop} after ${job.processedProducts} products`);
+            throw new Error('CANCELLED_BY_USER');
+          }
+          
           const batch = job.products.slice(batchStart, batchStart + BATCH_SIZE);
           
-          // Update status before batch
+          // Update progress before batch
           job.phase = 'processing';
-            await this.updateShopStatus(job.shop, {
-              inProgress: true,
-            status: 'processing',
-            phase: 'processing',
-            message: `Processing ${job.processedProducts + 1}-${Math.min(job.processedProducts + batch.length, job.totalProducts)}/${job.totalProducts}...`,
-              totalProducts: job.totalProducts,
-              processedProducts: job.processedProducts,
-              successfulProducts: job.successfulProducts,
-              failedProducts: job.failedProducts,
-              skippedProducts: job.skippedProducts
-            });
+          await updateProgress(job.processedProducts, job.totalProducts);
 
           // Process batch in parallel - each product goes through Generate then Apply
           const batchPromises = batch.map(async (productData) => {
@@ -271,6 +311,16 @@ class SeoJobQueue {
       if (statusUpdate.skippedProducts !== undefined) updateFields['seoJobStatus.skippedProducts'] = statusUpdate.skippedProducts;
       if (statusUpdate.skipReasons !== undefined) updateFields['seoJobStatus.skipReasons'] = statusUpdate.skipReasons;
       if (statusUpdate.failReasons !== undefined) updateFields['seoJobStatus.failReasons'] = statusUpdate.failReasons;
+      
+      // Enhanced progress tracking
+      if (statusUpdate.progress) {
+        updateFields['seoJobStatus.progress.current'] = statusUpdate.progress.current;
+        updateFields['seoJobStatus.progress.total'] = statusUpdate.progress.total;
+        updateFields['seoJobStatus.progress.percent'] = statusUpdate.progress.percent;
+        updateFields['seoJobStatus.progress.elapsedSeconds'] = statusUpdate.progress.elapsedSeconds;
+        updateFields['seoJobStatus.progress.remainingSeconds'] = statusUpdate.progress.remainingSeconds;
+        updateFields['seoJobStatus.progress.startedAt'] = statusUpdate.progress.startedAt;
+      }
 
       await Shop.findOneAndUpdate(
         { shop },

@@ -122,7 +122,7 @@ const shopSchema = new mongoose.Schema({
   // SEO Job queue status (Generate + Apply combined)
   seoJobStatus: {
     inProgress: { type: Boolean, default: false },
-    status: { type: String, default: 'idle' }, // idle, queued, generating, applying, completed, failed
+    status: { type: String, default: 'idle' }, // idle, queued, generating, applying, completed, failed, cancelled
     phase: { type: String, default: null }, // 'generate' or 'apply'
     message: { type: String, default: null },
     queuedAt: { type: Date, default: null },
@@ -131,19 +131,29 @@ const shopSchema = new mongoose.Schema({
     failedAt: { type: Date, default: null },
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null },
-    // Progress tracking
+    cancelled: { type: Boolean, default: false },
+    // Progress tracking (legacy fields for compatibility)
     totalProducts: { type: Number, default: 0 },
     processedProducts: { type: Number, default: 0 },
     successfulProducts: { type: Number, default: 0 },
     failedProducts: { type: Number, default: 0 },
     skippedProducts: { type: Number, default: 0 },
     skipReasons: [{ type: String }],
-    failReasons: [{ type: String }]
+    failReasons: [{ type: String }],
+    // Enhanced progress tracking (like sitemap)
+    progress: {
+      current: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      percent: { type: Number, default: 0 },
+      elapsedSeconds: { type: Number, default: 0 },
+      remainingSeconds: { type: Number, default: 0 },
+      startedAt: { type: Date, default: null }
+    }
   },
   // AI Enhancement Job queue status (Products)
   aiEnhanceJobStatus: {
     inProgress: { type: Boolean, default: false },
-    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed, cancelled
     message: { type: String, default: null },
     queuedAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
@@ -151,19 +161,29 @@ const shopSchema = new mongoose.Schema({
     failedAt: { type: Date, default: null },
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null },
-    // Progress tracking
+    cancelled: { type: Boolean, default: false },
+    // Progress tracking (legacy fields for compatibility)
     totalProducts: { type: Number, default: 0 },
     processedProducts: { type: Number, default: 0 },
     successfulProducts: { type: Number, default: 0 },
     failedProducts: { type: Number, default: 0 },
     skippedProducts: { type: Number, default: 0 },
     skipReasons: [{ type: String }],
-    failReasons: [{ type: String }]
+    failReasons: [{ type: String }],
+    // Enhanced progress tracking (like sitemap)
+    progress: {
+      current: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      percent: { type: Number, default: 0 },
+      elapsedSeconds: { type: Number, default: 0 },
+      remainingSeconds: { type: Number, default: 0 },
+      startedAt: { type: Date, default: null }
+    }
   },
   // Collection SEO Job queue status (Generate + Apply)
   collectionSeoJobStatus: {
     inProgress: { type: Boolean, default: false },
-    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed, cancelled
     message: { type: String, default: null },
     queuedAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
@@ -171,17 +191,27 @@ const shopSchema = new mongoose.Schema({
     failedAt: { type: Date, default: null },
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null },
-    // Progress tracking
+    cancelled: { type: Boolean, default: false },
+    // Progress tracking (legacy)
     totalCollections: { type: Number, default: 0 },
     processedCollections: { type: Number, default: 0 },
     successfulCollections: { type: Number, default: 0 },
     failedCollections: { type: Number, default: 0 },
-    skippedCollections: { type: Number, default: 0 }
+    skippedCollections: { type: Number, default: 0 },
+    // Enhanced progress tracking
+    progress: {
+      current: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      percent: { type: Number, default: 0 },
+      elapsedSeconds: { type: Number, default: 0 },
+      remainingSeconds: { type: Number, default: 0 },
+      startedAt: { type: Date, default: null }
+    }
   },
   // Collection AI Enhancement Job queue status
   collectionAiEnhanceJobStatus: {
     inProgress: { type: Boolean, default: false },
-    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed
+    status: { type: String, default: 'idle' }, // idle, queued, processing, completed, failed, cancelled
     message: { type: String, default: null },
     queuedAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
@@ -189,12 +219,22 @@ const shopSchema = new mongoose.Schema({
     failedAt: { type: Date, default: null },
     lastError: { type: String, default: null },
     updatedAt: { type: Date, default: null },
-    // Progress tracking
+    cancelled: { type: Boolean, default: false },
+    // Progress tracking (legacy)
     totalCollections: { type: Number, default: 0 },
     processedCollections: { type: Number, default: 0 },
     successfulCollections: { type: Number, default: 0 },
     failedCollections: { type: Number, default: 0 },
-    skippedCollections: { type: Number, default: 0 }
+    skippedCollections: { type: Number, default: 0 },
+    // Enhanced progress tracking
+    progress: {
+      current: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      percent: { type: Number, default: 0 },
+      elapsedSeconds: { type: Number, default: 0 },
+      remainingSeconds: { type: Number, default: 0 },
+      startedAt: { type: Date, default: null }
+    }
   },
   // Delete Job queue status (for background SEO deletion)
   deleteJobStatus: {

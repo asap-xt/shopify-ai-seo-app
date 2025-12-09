@@ -133,7 +133,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     successfulProducts: 0,
     failedProducts: 0,
     skippedProducts: 0,
-    completedAt: null
+    completedAt: null,
+    progress: null // { current, total, percent, elapsedSeconds, remainingSeconds }
   });
   const aiEnhancePollingRef = useRef(null);
   
@@ -147,7 +148,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     processedProducts: 0,
     successfulProducts: 0,
     failedProducts: 0,
-    skippedProducts: 0
+    skippedProducts: 0,
+    progress: null // { current, total, percent, elapsedSeconds, remainingSeconds }
   });
   const seoJobPollingRef = useRef(null); // Use ref to avoid stale closure issues
   const loadProductsRef = useRef(null); // Ref to always have latest loadProducts
@@ -1710,20 +1712,50 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               <Card>
                 <Box padding="400">
                   {aiEnhanceJobStatus.inProgress ? (
-                    <InlineStack gap="300" align="start" blockAlign="center">
-                      <Spinner size="small" />
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
-                        <Text variant="bodySm" tone="subdued">
-                          {aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`}
-                        </Text>
-                        {aiEnhanceJobStatus.totalProducts > 0 && (
-                          <Box paddingBlockStart="100">
-                            <ProgressBar progress={(aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} size="small" />
-                          </Box>
-                        )}
-                      </BlockStack>
-                    </InlineStack>
+                    <BlockStack gap="200">
+                      <InlineStack align="space-between" blockAlign="center">
+                        <InlineStack gap="300" blockAlign="center">
+                          <Spinner size="small" />
+                          <BlockStack gap="100">
+                            <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
+                            <Text variant="bodySm" tone="subdued">
+                              {(() => {
+                                const p = aiEnhanceJobStatus.progress;
+                                if (p?.current && p?.total) {
+                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
+                                  let msg = `Enhancing ${p.current}/${p.total} products`;
+                                  if (remainingMin > 0) {
+                                    msg += ` • ~${remainingMin} min remaining`;
+                                  }
+                                  return msg;
+                                }
+                                return aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`;
+                              })()}
+                            </Text>
+                          </BlockStack>
+                        </InlineStack>
+                        <Button 
+                          onClick={async () => {
+                            try {
+                              await api(`/ai-enhance/job-cancel?shop=${shop}`, { method: 'POST' });
+                              setToast('Cancellation requested...');
+                            } catch (e) {
+                              setToast('Failed to cancel');
+                            }
+                          }} 
+                          size="slim" 
+                          variant="tertiary"
+                        >
+                          Cancel
+                        </Button>
+                      </InlineStack>
+                      {(aiEnhanceJobStatus.progress?.percent != null || aiEnhanceJobStatus.totalProducts > 0) && (
+                        <ProgressBar 
+                          progress={aiEnhanceJobStatus.progress?.percent || (aiEnhanceJobStatus.processedProducts / aiEnhanceJobStatus.totalProducts) * 100} 
+                          size="small" 
+                        />
+                      )}
+                    </BlockStack>
                   ) : aiEnhanceJobStatus.status === 'completed' ? (
                     <BlockStack gap="100">
                       <InlineStack gap="200" align="start" blockAlign="center">
@@ -1800,22 +1832,52 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               <Card>
                 <Box padding="400">
                   {seoJobStatus.inProgress ? (
-                    <InlineStack gap="300" align="start" blockAlign="center">
-                      <Spinner size="small" />
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="semibold">
-                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
-                        </Text>
-                        <Text variant="bodySm" tone="subdued">
-                          {seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`}
-                        </Text>
-                        {seoJobStatus.totalProducts > 0 && (
-                          <Box paddingBlockStart="100">
-                            <ProgressBar progress={(seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} size="small" />
-                          </Box>
-                        )}
-                      </BlockStack>
-                    </InlineStack>
+                    <BlockStack gap="200">
+                      <InlineStack align="space-between" blockAlign="center">
+                        <InlineStack gap="300" blockAlign="center">
+                          <Spinner size="small" />
+                          <BlockStack gap="100">
+                            <Text variant="bodyMd" fontWeight="semibold">
+                              {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                            </Text>
+                            <Text variant="bodySm" tone="subdued">
+                              {(() => {
+                                const p = seoJobStatus.progress;
+                                if (p?.current && p?.total) {
+                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
+                                  let msg = `Processing ${p.current}/${p.total} products`;
+                                  if (remainingMin > 0) {
+                                    msg += ` • ~${remainingMin} min remaining`;
+                                  }
+                                  return msg;
+                                }
+                                return seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`;
+                              })()}
+                            </Text>
+                          </BlockStack>
+                        </InlineStack>
+                        <Button 
+                          onClick={async () => {
+                            try {
+                              await api(`/api/seo/job-cancel?shop=${shop}`, { method: 'POST' });
+                              setToast('Cancellation requested...');
+                            } catch (e) {
+                              setToast('Failed to cancel');
+                            }
+                          }} 
+                          size="slim" 
+                          variant="tertiary"
+                        >
+                          Cancel
+                        </Button>
+                      </InlineStack>
+                      {(seoJobStatus.progress?.percent != null || seoJobStatus.totalProducts > 0) && (
+                        <ProgressBar 
+                          progress={seoJobStatus.progress?.percent || (seoJobStatus.processedProducts / seoJobStatus.totalProducts) * 100} 
+                          size="small" 
+                        />
+                      )}
+                    </BlockStack>
                   ) : seoJobStatus.status === 'completed' ? (
                     <BlockStack gap="100">
                       <InlineStack gap="200" align="start" blockAlign="center">
