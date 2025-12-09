@@ -704,11 +704,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         // Calculate estimated time: collections × avg languages × 2.8 seconds for AI Enhanced
         const totalLanguages = collectionsForBatch.reduce((sum, c) => sum + (c.languages?.length || 1), 0);
         const estimatedSeconds = totalLanguages * 2.8;
-        const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Enhancing ${collectionsForBatch.length} collections (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+          setToast(`Enhancing ${collectionsForBatch.length} collections. Processing in background - you'll receive an email when complete.`);
         } else {
           setToast(`Enhancing ${collectionsForBatch.length} collections in background...`);
         }
@@ -992,11 +991,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       if (response.queued) {
         // Calculate estimated time: ~1.3 seconds per collection (languages processed together)
         const estimatedSeconds = collectionsForBatch.length * 1.3;
-        const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Optimizing ${collectionsForBatch.length} collections (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+          setToast(`Optimizing ${collectionsForBatch.length} collections. Processing in background - you'll receive an email when complete.`);
         } else {
           setToast(`Optimizing ${collectionsForBatch.length} collections in background...`);
         }

@@ -351,20 +351,22 @@ router.post('/job-cancel', validateRequest(), async (req, res) => {
   }
 
   try {
-    // Set cancelled flag in DB
+    // Set cancelled flag and stop the job
     await Shop.findOneAndUpdate(
       { shop },
       { 
         $set: { 
           'seoJobStatus.cancelled': true,
+          'seoJobStatus.inProgress': false,
           'seoJobStatus.status': 'cancelled',
           'seoJobStatus.message': 'Cancelled by user',
+          'seoJobStatus.cancelledAt': new Date(),
           'seoJobStatus.updatedAt': new Date()
         } 
       }
     );
     
-    return res.json({ success: true, message: 'Cancellation requested' });
+    return res.json({ success: true, message: 'Job cancelled' });
   } catch (err) {
     console.error('POST /api/seo/job-cancel error:', err);
     return res.status(500).json({ error: 'Failed to cancel job' });

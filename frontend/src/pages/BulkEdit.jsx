@@ -784,11 +784,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         // Calculate estimated time: products × avg languages × 2.8 seconds for AI Enhanced
         const totalLanguages = productsForBatch.reduce((sum, p) => sum + (p.languages?.length || 1), 0);
         const estimatedSeconds = totalLanguages * 2.8;
-        const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Enhancing ${productsForBatch.length} products (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+          setToast(`Enhancing ${productsForBatch.length} products. Processing in background - you'll receive an email when complete.`);
         } else {
           setToast(`Enhancing ${productsForBatch.length} products in background...`);
         }
@@ -943,11 +942,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         
         // Calculate estimated time: ~1.3 seconds per product (languages processed together)
         const estimatedSeconds = productsForBatch.length * 1.3;
-        const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Optimizing ${productsForBatch.length} products (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+          setToast(`Optimizing ${productsForBatch.length} products. Processing in background - you'll receive an email when complete.`);
         } else {
           setToast(`Optimizing ${productsForBatch.length} products in background...`);
         }

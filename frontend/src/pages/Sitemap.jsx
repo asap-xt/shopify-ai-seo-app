@@ -473,10 +473,9 @@ export default function SitemapPage({ shop: shopProp }) {
       if (result?.success) {
         // Show toast - include email notification if estimated time > 2 minutes
         const estimatedSeconds = result.estimatedTime || 0;
-        const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         if (estimatedSeconds > 120) {
-          setToast(`AI-Optimized Sitemap generation started (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+          setToast(`AI-Optimized Sitemap generation started. Processing in background - you'll receive an email when complete.`);
         } else {
           setToast(result.message || 'AI-Optimized Sitemap generation started!');
         }

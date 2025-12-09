@@ -3755,20 +3755,22 @@ router.post('/seo/collection-job-cancel', validateRequest(), async (req, res) =>
     
     const statusField = jobType === 'aiEnhance' ? 'collectionAiEnhanceJobStatus' : 'collectionSeoJobStatus';
     
-    // Set cancelled flag in DB
+    // Set cancelled flag and stop the job
     await Shop.findOneAndUpdate(
       { shop },
       { 
         $set: { 
           [`${statusField}.cancelled`]: true,
+          [`${statusField}.inProgress`]: false,
           [`${statusField}.status`]: 'cancelled',
           [`${statusField}.message`]: 'Cancelled by user',
+          [`${statusField}.cancelledAt`]: new Date(),
           [`${statusField}.updatedAt`]: new Date()
         } 
       }
     );
     
-    return res.json({ success: true, message: 'Cancellation requested' });
+    return res.json({ success: true, message: 'Job cancelled' });
     
   } catch (error) {
     console.error('[COLLECTION-SEO/JOB-CANCEL] Error:', error);

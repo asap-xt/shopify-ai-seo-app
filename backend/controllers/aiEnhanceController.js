@@ -2035,20 +2035,22 @@ router.post('/job-cancel', validateRequest(), async (req, res) => {
       return res.status(400).json({ error: 'Shop not provided' });
     }
     
-    // Set cancelled flag in DB
+    // Set cancelled flag and stop the job
     await Shop.findOneAndUpdate(
       { shop },
       { 
         $set: { 
           'aiEnhanceJobStatus.cancelled': true,
+          'aiEnhanceJobStatus.inProgress': false,
           'aiEnhanceJobStatus.status': 'cancelled',
           'aiEnhanceJobStatus.message': 'Cancelled by user',
+          'aiEnhanceJobStatus.cancelledAt': new Date(),
           'aiEnhanceJobStatus.updatedAt': new Date()
         } 
       }
     );
     
-    return res.json({ success: true, message: 'Cancellation requested' });
+    return res.json({ success: true, message: 'Job cancelled' });
     
   } catch (error) {
     console.error('[AI-ENHANCE/JOB-CANCEL] Error:', error);
