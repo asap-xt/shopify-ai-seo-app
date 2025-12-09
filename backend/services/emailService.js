@@ -499,7 +499,7 @@ class EmailService {
 
     try {
       const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
-      const { type, successful, failed, skipped, duration, itemType = 'products' } = jobResult;
+      const { type, successful, failed, skipped, duration, itemType = 'products', failReasons = [], skipReasons = [] } = jobResult;
       
       // Determine job type display name
       const jobTypeNames = {
@@ -549,6 +549,8 @@ class EmailService {
           duration: durationStr,
           itemType,
           hasFailures,
+          failReasons,
+          skipReasons,
           dashboardUrl: this.getDashboardUrl(store.shop)
         }),
         attachments,
@@ -1325,18 +1327,32 @@ class EmailService {
                     ${data.skipped > 0 ? `
                     <!-- Skipped Info -->
                     <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 30px 0;">
-                      <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;">
-                        <strong style="color: #2563eb;">Info:</strong> ${data.skipped} ${data.itemType} were skipped because they are already optimized for the selected languages.
+                      <p style="margin: 0 0 10px; color: #1e40af; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #2563eb;">↷ Skipped:</strong> ${data.skipped} ${data.itemType} were skipped.
                       </p>
+                      ${data.skipReasons?.length > 0 ? `
+                      <ul style="margin: 10px 0 0; padding-left: 20px; color: #475569; font-size: 13px; line-height: 1.8;">
+                        ${data.skipReasons.map(r => `<li>${r}</li>`).join('')}
+                        ${data.skipped > data.skipReasons.length ? `<li style="color: #94a3b8;">...and ${data.skipped - data.skipReasons.length} more</li>` : ''}
+                      </ul>
+                      ` : ''}
                     </div>
                     ` : ''}
                     
                     ${data.hasFailures ? `
                     <!-- Warning -->
-                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
-                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-                        <strong style="color: #b45309;">Note:</strong> Some items failed to process. You can retry them from the dashboard.
+                    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0 0 10px; color: #991b1b; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #dc2626;">✗ Failed:</strong> ${data.failed} ${data.itemType} failed to process.
                       </p>
+                      ${data.failReasons?.length > 0 ? `
+                      <ul style="margin: 10px 0 0; padding-left: 20px; color: #7f1d1d; font-size: 13px; line-height: 1.8;">
+                        ${data.failReasons.map(r => `<li>${r}</li>`).join('')}
+                        ${data.failed > data.failReasons.length ? `<li style="color: #94a3b8;">...and ${data.failed - data.failReasons.length} more</li>` : ''}
+                      </ul>
+                      ` : `
+                      <p style="margin: 10px 0 0; color: #7f1d1d; font-size: 13px;">You can retry them from the dashboard.</p>
+                      `}
                     </div>
                     ` : ''}
                     

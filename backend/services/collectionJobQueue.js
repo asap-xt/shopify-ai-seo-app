@@ -280,7 +280,9 @@ class CollectionJobQueue {
                 failed: job.failedCollections,
                 skipped: job.skippedCollections,
                 duration: duration,
-                itemType: 'collections'
+                itemType: 'collections',
+                failReasons: job.failReasons?.slice(0, 5) || [],
+                skipReasons: job.skipReasons?.slice(0, 5) || []
               });
             }
           } catch (emailErr) {

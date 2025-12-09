@@ -293,7 +293,9 @@ class AIEnhanceQueue {
                 failed: job.failedProducts,
                 skipped: job.skippedProducts,
                 duration: duration,
-                itemType: 'products'
+                itemType: 'products',
+                failReasons: job.failReasons?.slice(0, 5) || [],
+                skipReasons: job.skipReasons?.slice(0, 5) || []
               });
             }
           } catch (emailErr) {
