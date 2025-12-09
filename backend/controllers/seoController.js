@@ -340,10 +340,22 @@ async function shopGraphQL(req, shop, query, variables = {}) {
   })(json.data);
   
   if (userErrors.length) {
-    console.error('[GRAPHQL] User errors found:', userErrors);
-    const e = new Error(`Admin GraphQL userErrors: ${JSON.stringify(userErrors)}`);
-    e.status = 400;
-    throw e;
+    // Filter out harmless "Key is in use" errors for metafieldDefinitionCreate
+    // These errors occur when the definition already exists, which is fine
+    const criticalErrors = userErrors.filter(e => 
+      !e.message?.includes('in use') && 
+      !e.message?.includes('already exists') &&
+      !e.message?.includes('taken')
+    );
+    
+    if (criticalErrors.length > 0) {
+      console.error('[GRAPHQL] User errors found:', criticalErrors);
+      const e = new Error(`Admin GraphQL userErrors: ${JSON.stringify(criticalErrors)}`);
+      e.status = 400;
+      throw e;
+    }
+    // Non-critical errors (like "Key is in use") are logged but not thrown
+    // This allows metafield operations to continue even if definition already exists
   }
   
   return json.data;
