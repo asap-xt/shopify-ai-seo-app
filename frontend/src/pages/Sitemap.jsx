@@ -52,7 +52,8 @@ export default function SitemapPage({ shop: shopProp }) {
     position: null,
     estimatedTime: null,
     generatedAt: null,
-    productCount: 0
+    productCount: 0,
+    progress: null // { current, total, percent, remainingSeconds }
   });
   const aiSitemapPollingRef = useRef(null);
   const [aiSitemapBusy, setAiSitemapBusy] = useState(false);
@@ -295,7 +296,8 @@ export default function SitemapPage({ shop: shopProp }) {
           position: status.queue?.position || null,
           estimatedTime: status.queue?.estimatedTime || null,
           generatedAt: status.sitemap?.generatedAt || null,
-          productCount: status.sitemap?.productCount || 0
+          productCount: status.sitemap?.productCount || 0,
+          progress: status.progress || null
         };
       });
       
@@ -315,6 +317,53 @@ export default function SitemapPage({ shop: shopProp }) {
       fetchAiSitemapStatus();
     }, 5000);
   }, [fetchAiSitemapStatus]);
+  
+  // Reset stuck sitemap generation
+  const resetSitemapGeneration = useCallback(async () => {
+    if (!shop) return;
+    
+    try {
+      const response = await fetch(`/api/sitemap/reset?shop=${encodeURIComponent(shop)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        // Stop polling
+        if (aiSitemapPollingRef.current) {
+          clearInterval(aiSitemapPollingRef.current);
+          aiSitemapPollingRef.current = null;
+        }
+        
+        // Reset status
+        setAiSitemapStatus({
+          inProgress: false,
+          status: 'idle',
+          message: null,
+          position: null,
+          estimatedTime: null,
+          generatedAt: null,
+          productCount: 0
+        });
+        setAiSitemapBusy(false);
+        setPolling(false);
+        setBusy(false);
+        
+        setToast('Generation cancelled. You can now start a new generation.');
+      } else {
+        setToast(data.error || 'Failed to reset');
+      }
+    } catch (error) {
+      console.error('[SITEMAP] Reset error:', error);
+      setToast('Failed to reset sitemap generation');
+    }
+  }, [shop]);
   
   // Helper function to normalize plan names
   const normalizePlan = (planName) => {
@@ -622,16 +671,46 @@ export default function SitemapPage({ shop: shopProp }) {
           {/* Queue Status Banner - only when ACTIVELY processing */}
           {(busy || polling || aiSitemapBusy || aiSitemapStatus.inProgress) && (
             <Banner tone="info">
-              <InlineStack gap="200" blockAlign="center">
-                <Spinner size="small" />
-                <Text variant="bodyMd">
-                  {aiSitemapStatus.inProgress || aiSitemapBusy
-                    ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
-                    : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
-                  {(aiSitemapStatus.position > 0) && ` (Queue: ${aiSitemapStatus.position})`}
-                  {(queueStatus?.position > 0 && !aiSitemapStatus.inProgress) && ` (Queue: ${queueStatus.position})`}
-                </Text>
-              </InlineStack>
+              <BlockStack gap="200">
+                <InlineStack gap="200" blockAlign="center" align="space-between" wrap={false}>
+                  <InlineStack gap="200" blockAlign="center">
+                    <Spinner size="small" />
+                    <Text variant="bodyMd">
+                      {aiSitemapStatus.inProgress || aiSitemapBusy
+                        ? `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
+                        : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
+                      {(aiSitemapStatus.position > 0) && ` (Queue: ${aiSitemapStatus.position})`}
+                      {(queueStatus?.position > 0 && !aiSitemapStatus.inProgress) && ` (Queue: ${queueStatus.position})`}
+                    </Text>
+                  </InlineStack>
+                  <Button 
+                    size="slim" 
+                    tone="critical" 
+                    onClick={resetSitemapGeneration}
+                  >
+                    Cancel
+                  </Button>
+                </InlineStack>
+                {/* Progress bar for AI sitemap */}
+                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
+                  <Box>
+                    <div style={{ 
+                      width: '100%', 
+                      height: '8px', 
+                      backgroundColor: '#e4e5e7', 
+                      borderRadius: '4px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{ 
+                        width: `${aiSitemapStatus.progress.percent || 0}%`, 
+                        height: '100%', 
+                        backgroundColor: '#2c6ecb',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </Box>
+                )}
+              </BlockStack>
             </Banner>
           )}
 

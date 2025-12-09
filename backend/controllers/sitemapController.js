@@ -444,6 +444,42 @@ async function generateSitemapCore(shop, options = {}) {
     // Build product/collection entries first (we'll add XML header after checking for AI products)
     let xml = '';
     
+    // Progress tracking for AI sitemap
+    const totalProducts = allProducts.length;
+    let processedProducts = 0;
+    const startTime = Date.now();
+    
+    // Helper to update progress in MongoDB
+    const updateProgress = async (current, total) => {
+      try {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const avgTimePerProduct = current > 0 ? elapsed / current : 5;
+        const remaining = Math.ceil((total - current) * avgTimePerProduct);
+        
+        await Shop.findOneAndUpdate(
+          { shop: normalizedShop },
+          {
+            $set: {
+              'sitemapStatus.inProgress': true,
+              'sitemapStatus.status': 'processing',
+              'sitemapStatus.message': `Processing product ${current}/${total}`,
+              'sitemapStatus.progress': {
+                current,
+                total,
+                percent: Math.round((current / total) * 100),
+                elapsedSeconds: elapsed,
+                remainingSeconds: remaining,
+                startedAt: new Date(startTime)
+              },
+              'sitemapStatus.updatedAt': new Date()
+            }
+          }
+        );
+      } catch (err) {
+        // Non-critical, continue processing
+      }
+    };
+    
     // Add products
     for (const edge of allProducts) {
       const product = edge.node;
@@ -614,10 +650,21 @@ async function generateSitemapCore(shop, options = {}) {
             console.error('[SITEMAP-CORE] Error in AI enhancement for', product.handle, ':', aiError.message);
             // Continue without AI enhancements
           }
+          
+          // Update progress after each AI-enhanced product
+          processedProducts++;
+          if (processedProducts % 5 === 0 || processedProducts === totalProducts) {
+            await updateProgress(processedProducts, totalProducts);
+          }
         }
         // ===== END: AI-ENHANCED METADATA =====
         
         xml += '    </ai:product>\n';
+      }
+      
+      // Update progress for non-AI products too
+      if (!isAISitemapEnabled) {
+        processedProducts++;
       }
       
       xml += '  </url>\n';
@@ -1005,16 +1052,37 @@ async function handleStatus(req, res) {
     const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
     const inProgress = shopDoc?.sitemapStatus?.inProgress || false;
     
+    // Get progress info from shop status
+    const progress = shopDoc?.sitemapStatus?.progress || null;
+    
+    // Build progress message with time estimate
+    let progressMessage = jobStatus.message;
+    if (progress && progress.current && progress.total) {
+      const remainingMin = Math.ceil((progress.remainingSeconds || 0) / 60);
+      progressMessage = `Processing ${progress.current}/${progress.total} products`;
+      if (remainingMin > 0) {
+        progressMessage += ` • ~${remainingMin} min remaining`;
+      }
+    }
+    
     res.json({
       shop,
       // Overall status for frontend
       inProgress: isGenerating || inProgress,
       status: jobStatus.status,
-      message: jobStatus.message,
+      message: progressMessage,
+      // Progress details (for AI sitemap)
+      progress: progress ? {
+        current: progress.current,
+        total: progress.total,
+        percent: progress.percent,
+        elapsedSeconds: progress.elapsedSeconds,
+        remainingSeconds: progress.remainingSeconds
+      } : null,
       // Queue details
       queue: {
         status: jobStatus.status,
-        message: jobStatus.message,
+        message: progressMessage,
         position: jobStatus.position || null,
         queueLength: jobStatus.queueLength,
         estimatedTime: jobStatus.estimatedTime || null
@@ -1195,11 +1263,52 @@ App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(sho
   }
 }
 
+// Reset stuck sitemap generation (for when server restarts and job is lost)
+async function handleReset(req, res) {
+  try {
+    const shop = normalizeShop(req.query.shop);
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    console.log(`[SITEMAP] Resetting stuck job for shop: ${shop}`);
+    
+    // Reset the sitemapStatus in MongoDB
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'sitemapStatus.inProgress': false,
+          'sitemapStatus.status': 'idle',
+          'sitemapStatus.message': 'Reset by user',
+          'sitemapStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    // Clear from in-memory queue if present
+    sitemapQueue.queue = sitemapQueue.queue.filter(job => job.shop !== shop);
+    if (sitemapQueue.currentJob?.shop === shop) {
+      sitemapQueue.currentJob = null;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Sitemap generation status reset. You can now start a new generation.'
+    });
+    
+  } catch (err) {
+    console.error('[SITEMAP] Reset error:', err);
+    res.status(500).json({ error: 'Failed to reset status' });
+  }
+}
+
 // Mount routes on router
 router.get('/info', handleInfo);
 router.get('/progress', handleProgress);
 router.get('/status', handleStatus); // PHASE 4: Queue status
 router.post('/generate', handleGenerate); // POST generates new sitemap
+router.post('/reset', handleReset); // Reset stuck generation
 router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 router.get('/public', servePublicSitemap); // Public endpoint (no auth required)
