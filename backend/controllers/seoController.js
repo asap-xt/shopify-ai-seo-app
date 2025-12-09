@@ -1278,6 +1278,28 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     seoDescription = loc.seoDescription || '';
   }
 
+  // VALIDATION: Check for minimum content requirements
+  // Strip HTML tags and check if there's actual text content
+  const stripHtml = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
+  const titleText = stripHtml(localizedTitle);
+  const bodyText = stripHtml(localizedBody);
+  
+  // Require both title AND description with minimum length
+  const MIN_TITLE_LENGTH = 3;
+  const MIN_BODY_LENGTH = 10;
+  
+  if (!titleText || titleText.length < MIN_TITLE_LENGTH) {
+    const e = new Error('Product title is missing or too short for meaningful SEO optimization');
+    e.status = 400;
+    throw e;
+  }
+  
+  if (!bodyText || bodyText.length < MIN_BODY_LENGTH) {
+    const e = new Error('Product description is missing or too short for meaningful SEO optimization');
+    e.status = 400;
+    throw e;
+  }
+
   /* COMMENTED AI CODE - can be enabled in the future for enhanced SEO
   const ctx = {
     id: p.id,

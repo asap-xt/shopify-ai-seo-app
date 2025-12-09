@@ -215,6 +215,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
 
       // DOUBLE-CHECK: Query Shopify for existing SEO metafields to avoid false "failed" status
       // This handles cases where frontend cache is stale
+      let existingMetafieldLangs = [];
       if (languagesToGenerate.length > 0) {
         try {
           const { shopGraphQL } = await import('./seoController.js');
@@ -236,12 +237,9 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
           const metafieldsResult = await shopGraphQL(mockReqForCheck, shopDomain, metafieldsQuery, { id: productData.productId });
           
           // Extract languages that already have SEO metafields
-          const existingMetafieldLangs = [];
-          const allKeys = [];
           if (metafieldsResult?.product?.metafields?.edges) {
             for (const edge of metafieldsResult.product.metafields.edges) {
               const key = edge.node.key;
-              allKeys.push(key);
               // Check for seo__ prefix (language-specific SEO data)
               if (key?.startsWith('seo__')) {
                 const lang = key.replace('seo__', '').toLowerCase();
@@ -252,22 +250,10 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
             }
           }
           
-          // Debug: log all metafield keys found
-          if (allKeys.length > 0) {
-            console.log(`[SEO-GENERATE] Product ${productData.productId}: all metafield keys: [${allKeys.join(', ')}]`);
-          }
-          
-          console.log(`[SEO-GENERATE] Product ${productData.productId}: found ${existingMetafieldLangs.length} existing langs: [${existingMetafieldLangs.join(', ')}], requested: [${languagesToGenerate.join(', ')}]`);
-          
           // Re-filter: only generate for languages that don't have metafields
-          const originalCount = languagesToGenerate.length;
           languagesToGenerate = languagesToGenerate.filter(
             lang => !existingMetafieldLangs.includes(lang.toLowerCase())
           );
-          
-          if (originalCount !== languagesToGenerate.length) {
-            console.log(`[SEO-GENERATE] Product ${productData.productId}: filtered from ${originalCount} to ${languagesToGenerate.length} languages`);
-          }
         } catch (checkErr) {
           // If check fails, continue with original list (will fail properly if already exists)
           console.error('[SEO-GENERATE] Metafield check failed:', checkErr.message);
@@ -321,7 +307,18 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
 
       const successfulResults = results.filter(r => r.seo);
       if (successfulResults.length === 0) {
-        return { success: false, error: 'All languages failed to generate' };
+        // Get the first unique error message as the reason
+        const firstError = results.find(r => r.error)?.error || 'Unknown error';
+        // Simplify common error messages
+        let errorReason = firstError;
+        if (firstError.includes('description is missing')) {
+          errorReason = 'Missing product description';
+        } else if (firstError.includes('title is missing')) {
+          errorReason = 'Missing product title';
+        } else if (firstError.includes('No translated content')) {
+          errorReason = 'No translation available';
+        }
+        return { success: false, error: errorReason };
       }
 
       return { success: true, data: { results: successfulResults } };
