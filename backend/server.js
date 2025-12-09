@@ -1101,7 +1101,7 @@ import debugRouter from './controllers/debugRouter.js';
           // - Updates status in Shop.sitemapStatus
           const jobInfo = await sitemapQueue.addJob(shop, async () => {
             return await generateSitemapCore(shop, { enableAIEnhancement: true });
-          });
+          }, { type: 'ai-enhanced' });
           
           // Return immediately with job info
           return {

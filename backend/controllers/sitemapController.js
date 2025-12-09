@@ -965,7 +965,7 @@ async function handleGenerate(req, res) {
     // PHASE 4: Add to queue for async generation
     const jobInfo = await sitemapQueue.addJob(shop, async () => {
       return await generateSitemapCore(shop);
-    });
+    }, { type: 'basic' });
     
     // Return immediate response
     return res.json({

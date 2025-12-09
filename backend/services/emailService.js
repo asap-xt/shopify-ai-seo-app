@@ -554,6 +554,59 @@ class EmailService {
   }
 
   /**
+   * Send email when sitemap generation completes
+   * @param {Object} store - Store object with shop, email, etc.
+   * @param {Object} result - { productCount, duration, type }
+   */
+  async sendSitemapCompletedEmail(store, result) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - skipping sitemap completed email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      const { productCount, duration, type } = result;
+      
+      // Format duration
+      const durationMin = Math.floor(duration / 60);
+      const durationSec = Math.round(duration % 60);
+      const durationStr = durationMin > 0 ? `${durationMin}m ${durationSec}s` : `${durationSec}s`;
+      
+      const isAiEnhanced = type === 'ai-enhanced';
+      const sitemapTypeName = isAiEnhanced ? 'AI-Enhanced Sitemap' : 'Basic Sitemap';
+      
+      const msg = {
+        to: store.email || `${shopName}@example.com`,
+        from: { email: this.fromEmail, name: this.fromName },
+        subject: `✅ ${sitemapTypeName} generated successfully`,
+        html: this.getSitemapCompletedEmailTemplate({
+          shopName,
+          shop: store.shop,
+          email: store.email,
+          productCount,
+          duration: durationStr,
+          isAiEnhanced,
+          sitemapTypeName,
+          dashboardUrl: this.getDashboardUrl(store.shop)
+        }),
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
+      };
+
+      await sgMail.send(msg);
+      await this.logEmail(store._id || store.id, store.shop, 'sitemap-completed', 'sent');
+      console.log(`📧 Sitemap completed email sent to ${store.email} for ${store.shop}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Sitemap completed email error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Helper methods
    */
   calculateTrialDays(expiresAt) {
@@ -1221,6 +1274,72 @@ class EmailService {
           <div style="text-align: center; margin: 25px 0;">
             <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 500;">
               View in Dashboard
+            </a>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
+            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
+              <strong style="color: #1e40af;">indexAIze Team</strong>
+            </p>
+            ${this.getUnsubscribeFooter(data.shop, data.email)}
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  getSitemapCompletedEmailTemplate(data) {
+    const accentColor = data.isAiEnhanced ? '#8b5cf6' : '#10b981';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>${data.sitemapTypeName} Generated</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc;">
+        <div style="background: ${accentColor}; padding: 25px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h2 style="color: white; margin: 0; font-size: 20px;">🗺️ ${data.sitemapTypeName} Generated</h2>
+        </div>
+        
+        <div style="padding: 30px; background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <p style="color: #334155; font-size: 16px;">Hi ${data.shopName}! 👋</p>
+          
+          <p style="color: #475569;">Your ${data.sitemapTypeName.toLowerCase()} has been generated successfully!</p>
+          
+          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="margin: 0 0 15px; color: #1e293b; font-size: 16px;">📊 Generation Summary</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #475569;">Products included</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #10b981;">${data.productCount}</td>
+              </tr>
+              <tr style="border-top: 1px solid #e2e8f0;">
+                <td style="padding: 8px 0; color: #475569;">Duration</td>
+                <td style="padding: 8px 0; text-align: right;">${data.duration}</td>
+              </tr>
+              <tr style="border-top: 1px solid #e2e8f0;">
+                <td style="padding: 8px 0; color: #475569;">Type</td>
+                <td style="padding: 8px 0; text-align: right;">
+                  <span style="background: ${data.isAiEnhanced ? '#ede9fe' : '#d1fae5'}; color: ${data.isAiEnhanced ? '#7c3aed' : '#059669'}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
+                    ${data.isAiEnhanced ? '✨ AI-Enhanced' : '📄 Basic'}
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </div>
+          
+          ${data.isAiEnhanced ? `
+          <p style="color: #6d28d9; background: #f5f3ff; padding: 12px; border-radius: 6px; font-size: 14px;">
+            ✨ Your AI-enhanced sitemap includes optimized descriptions and keywords for better AI search engine visibility.
+          </p>
+          ` : ''}
+          
+          <div style="text-align: center; margin: 25px 0;">
+            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 500;">
+              View Sitemap
             </a>
           </div>
           

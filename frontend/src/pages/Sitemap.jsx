@@ -471,7 +471,15 @@ export default function SitemapPage({ shop: shopProp }) {
       const result = response?.data?.regenerateSitemap;
       
       if (result?.success) {
-        setToast(result.message || 'AI-Optimized Sitemap generation started!');
+        // Show toast - include email notification if estimated time > 2 minutes
+        const estimatedSeconds = result.estimatedTime || 0;
+        const estimatedMinutes = Math.round(estimatedSeconds / 60);
+        
+        if (estimatedSeconds > 120) {
+          setToast(`AI-Optimized Sitemap generation started (~${estimatedMinutes} min). Processing in background - you'll receive an email when complete.`);
+        } else {
+          setToast(result.message || 'AI-Optimized Sitemap generation started!');
+        }
         
         // Start polling if queued
         if (result.queued) {
