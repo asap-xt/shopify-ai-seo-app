@@ -13,7 +13,6 @@ export function verifyAppProxySignature(req, secret) {
     const signature = query.signature;
     
     if (!signature) {
-      console.log('[APP_PROXY] No signature in query params');
       return false;
     }
     
@@ -26,21 +25,15 @@ export function verifyAppProxySignature(req, secret) {
       .map(key => `${key}=${query[key]}`)
       .join('');
     
-    console.log('[APP_PROXY] HMAC message:', message);
-    console.log('[APP_PROXY] Expected signature:', signature);
-    
     const digest = crypto
       .createHmac('sha256', secret)
       .update(message, 'utf8')
       .digest('hex');
-    
-    console.log('[APP_PROXY] Calculated digest:', digest);
 
     // constant-time compare
     const isValid = digest.length === signature.length &&
            crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
 
-    console.log('[APP_PROXY] Signature valid:', isValid);
     return isValid;
   } catch (error) {
     console.error('[APP_PROXY] HMAC verification error:', error);
@@ -52,19 +45,14 @@ export function verifyAppProxySignature(req, secret) {
  * Middleware to verify App Proxy requests
  */
 export function appProxyAuth(req, res, next) {
-  console.log('[APP_PROXY_AUTH] Checking request:', req.path);
-  console.log('[APP_PROXY_AUTH] Query params:', JSON.stringify(req.query));
-  
-  // TEMPORARY: Allow requests without signature for debugging
+  // Allow requests without signature (direct access for testing)
   if (!req.query.signature && !req.query.hmac) {
-    console.log('[APP_PROXY_AUTH] No signature, allowing through');
     return next();
   }
 
   // Try both 'signature' and 'hmac' parameters (Shopify uses different names)
   const signature = req.query.signature || req.query.hmac;
   if (!signature) {
-    console.log('[APP_PROXY_AUTH] Missing signature');
     return res.status(401).send('Unauthorized');
   }
 
@@ -75,10 +63,8 @@ export function appProxyAuth(req, res, next) {
   }
 
   if (verifyAppProxySignature(req, secret)) {
-    console.log('[APP_PROXY_AUTH] Signature verified, proceeding');
     next();
   } else {
-    console.log('[APP_PROXY_AUTH] Signature verification FAILED');
     res.status(401).send('Unauthorized');
   }
 }
