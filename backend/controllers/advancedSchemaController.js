@@ -300,6 +300,7 @@ const FAQ_FALLBACKS = {
 // Helper за OpenRouter API calls
 async function generateWithAI(prompt, systemPrompt) {
   try {
+    console.log('[SCHEMA] 🤖 Calling AI (OpenRouter/Gemini)...');
     const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -328,6 +329,8 @@ async function generateWithAI(prompt, systemPrompt) {
     const content = JSON.parse(data.choices[0].message.content);
     const usage = data.usage || {};
     
+    console.log(`[SCHEMA] ✅ AI response received: ${usage.total_tokens || 0} tokens`);
+    
     return {
       content,
       usage: {
@@ -338,7 +341,7 @@ async function generateWithAI(prompt, systemPrompt) {
       }
     };
   } catch (error) {
-    console.error('[SCHEMA] AI generation error:', error);
+    console.error('[SCHEMA] ❌ AI generation error:', error);
     throw error;
   }
 }
@@ -1111,10 +1114,20 @@ async function generateLangSchemas(product, seoData, shop, language) {
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
-  // console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
   
   // Extract factual attributes if any are enabled
   const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
+  
+  // Log AI features status (only once per shop, on first product)
+  if (!generateLangSchemas._loggedForShop || generateLangSchemas._loggedForShop !== shop) {
+    console.log(`[SCHEMA] 🎛️ AI Features for ${shop}:`, {
+      enhancedDescription: richAttributesSettings.enhancedDescription || false,
+      reviews: richAttributesSettings.reviews || false,
+      ratings: richAttributesSettings.ratings || false,
+      enabledAttributes: enabledAttributes.length > 0 ? enabledAttributes : 'none'
+    });
+    generateLangSchemas._loggedForShop = shop;
+  }
   let richAttributes = {};
   
   if (enabledAttributes.length > 0) {
@@ -1704,15 +1717,29 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       'seoStatus.aiEnhanced': true
     });
     
+    console.log(`[SCHEMA] 📊 Product counts for ${shop}:`);
+    console.log(`[SCHEMA]   - Total optimized products: ${allProducts.length}`);
+    console.log(`[SCHEMA]   - AI-enhanced products: ${aiEnhancedCount}`);
+    console.log(`[SCHEMA]   - Basic-only products: ${allProducts.length - aiEnhancedCount}`);
+    console.log(`[SCHEMA]   - forceBasicSeo: ${forceBasicSeo}`);
+    
     // Case 1: No products at all
     if (allProducts.length === 0) {
+      console.log('[SCHEMA] ❌ NO_OPTIMIZED_PRODUCTS - throwing error');
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
     // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
     // Show recommendation modal, but don't block generation
     if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
+      console.log('[SCHEMA] ⚠️ ONLY_BASIC_SEO - throwing error (no AI-enhanced products)');
       throw new Error('ONLY_BASIC_SEO');
+    }
+    
+    if (aiEnhancedCount > 0) {
+      console.log(`[SCHEMA] ✅ Found ${aiEnhancedCount} AI-enhanced products, proceeding...`);
+    } else {
+      console.log('[SCHEMA] ⚠️ No AI-enhanced products, but forceBasicSeo=true, proceeding...');
     }
     
     // Use ALL optimized products (mix of basic + AI-enhanced)
