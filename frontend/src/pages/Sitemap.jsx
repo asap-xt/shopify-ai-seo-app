@@ -179,7 +179,12 @@ export default function SitemapPage({ shop: shopProp }) {
       // Stop polling if generation is completed or failed
       if (status.queue.status === 'completed' || status.queue.status === 'failed' || status.queue.status === 'idle') {
         setPolling(false);
-        setToast(status.queue.message || 'Sitemap generation completed!');
+        // Clean up message for toast - show only success/failure message
+        if (status.queue.status === 'completed') {
+          setToast('Basic Sitemap generated successfully!');
+        } else if (status.queue.status === 'failed') {
+          setToast(status.queue.message || 'Sitemap generation failed');
+        }
         await loadInfo(); // Reload sitemap info
       }
     } catch (e) {
@@ -720,19 +725,13 @@ export default function SitemapPage({ shop: shopProp }) {
                     Cancel
                   </Button>
                 </InlineStack>
-                {/* Progress bar - using Polaris ProgressBar for consistency */}
-                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 ? (
+                {/* Progress bar for AI sitemap only - Basic sitemap is fast and doesn't need progress tracking */}
+                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
                   <ProgressBar 
                     progress={aiSitemapStatus.progress.percent || 0} 
                     size="small" 
                   />
-                ) : (busy || polling) && !aiSitemapStatus.inProgress && !aiSitemapBusy ? (
-                  /* Basic sitemap: indeterminate-style progress (fast process) */
-                  <ProgressBar 
-                    progress={75} 
-                    size="small" 
-                  />
-                ) : null}
+                )}
               </BlockStack>
             </Box>
           )}
