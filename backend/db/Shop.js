@@ -117,7 +117,20 @@ const shopSchema = new mongoose.Schema({
     completedAt: { type: Date, default: null },
     failedAt: { type: Date, default: null },
     lastError: { type: String, default: null },
-    updatedAt: { type: Date, default: null }
+    updatedAt: { type: Date, default: null },
+    // Progress tracking
+    totalProducts: { type: Number, default: 0 },
+    processedProducts: { type: Number, default: 0 },
+    successfulProducts: { type: Number, default: 0 },
+    failedProducts: { type: Number, default: 0 },
+    progress: {
+      current: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      percent: { type: Number, default: 0 },
+      elapsedSeconds: { type: Number, default: 0 },
+      remainingSeconds: { type: Number, default: 0 },
+      startedAt: { type: Date, default: null }
+    }
   },
   // SEO Job queue status (Generate + Apply combined)
   seoJobStatus: {

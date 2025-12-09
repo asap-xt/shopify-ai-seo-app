@@ -193,7 +193,12 @@ export default function SchemaData({ shop: shopProp }) {
         position: status.queue?.position || null,
         estimatedTime: status.queue?.estimatedTime || null,
         generatedAt: status.schema?.generatedAt || null,
-        schemaCount: status.schema?.schemaCount || 0
+        schemaCount: status.schema?.schemaCount || 0,
+        progress: status.shopStatus?.progress || null,
+        totalProducts: status.shopStatus?.totalProducts || 0,
+        processedProducts: status.shopStatus?.processedProducts || 0,
+        successfulProducts: status.shopStatus?.successfulProducts || 0,
+        failedProducts: status.shopStatus?.failedProducts || 0
       });
       
       // If completed, stop polling
@@ -1025,25 +1030,59 @@ ${JSON.stringify(allSchemas, null, 2)}
               
               {/* Progress indicator while generating */}
               {advancedSchemaStatus.inProgress && (
-                <Box paddingBlockStart="200">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Spinner size="small" />
-                    <BlockStack gap="100">
-                      <Text variant="bodyMd" tone="subdued">
-                        {advancedSchemaStatus.message || 'Generating Advanced Schema Data...'}
+                <Box paddingBlockStart="400">
+                  <BlockStack gap="300">
+                    {/* Progress bar */}
+                    {advancedSchemaStatus.progress?.total > 0 && (
+                      <div style={{ 
+                        width: '100%', 
+                        backgroundColor: '#e5e7eb', 
+                        borderRadius: '4px', 
+                        height: '8px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ 
+                          width: `${advancedSchemaStatus.progress?.percent || 0}%`, 
+                          backgroundColor: '#3b82f6', 
+                          height: '100%',
+                          borderRadius: '4px',
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                    )}
+                    
+                    <InlineStack gap="200" blockAlign="center" align="space-between">
+                      <InlineStack gap="200" blockAlign="center">
+                        <Spinner size="small" />
+                        <Text variant="bodyMd" tone="subdued">
+                          {advancedSchemaStatus.message || 'Generating Advanced Schema Data...'}
+                        </Text>
+                      </InlineStack>
+                      
+                      {/* Time remaining */}
+                      {advancedSchemaStatus.progress?.remainingSeconds > 0 && (
+                        <Text variant="bodySm" tone="subdued">
+                          {advancedSchemaStatus.progress.remainingSeconds >= 60 
+                            ? `~${Math.ceil(advancedSchemaStatus.progress.remainingSeconds / 60)} min remaining`
+                            : `~${advancedSchemaStatus.progress.remainingSeconds} sec remaining`
+                          }
+                        </Text>
+                      )}
+                    </InlineStack>
+                    
+                    {/* Progress details */}
+                    {advancedSchemaStatus.progress?.total > 0 && (
+                      <Text variant="bodySm" tone="subdued">
+                        {advancedSchemaStatus.progress.current || 0} / {advancedSchemaStatus.progress.total} products ({advancedSchemaStatus.progress.percent || 0}%)
                       </Text>
-                      {advancedSchemaStatus.position > 0 && (
-                        <Text variant="bodySm" tone="subdued">
-                          Queue position: {advancedSchemaStatus.position} · Est. {Math.ceil(advancedSchemaStatus.estimatedTime / 60)} min
-                        </Text>
-                      )}
-                      {advancedSchemaStatus.status === 'processing' && advancedSchemaStatus.schemaCount > 0 && (
-                        <Text variant="bodySm" tone="subdued">
-                          Processing {advancedSchemaStatus.schemaCount} schemas...
-                        </Text>
-                      )}
-                    </BlockStack>
-                  </InlineStack>
+                    )}
+                    
+                    {advancedSchemaStatus.position > 0 && (
+                      <Text variant="bodySm" tone="subdued">
+                        Queue position: {advancedSchemaStatus.position}
+                      </Text>
+                    )}
+                  </BlockStack>
                 </Box>
               )}
               

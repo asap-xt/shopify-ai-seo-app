@@ -1814,6 +1814,34 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     
     console.log(`[SCHEMA] 🚀 Starting batch processing: ${products.length} products, batch size ${batchSize}`);
     
+    // Track progress
+    const progressStartedAt = new Date();
+    let processedCount = 0;
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Initial progress update to MongoDB
+    await Shop.updateOne(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.inProgress': true,
+          'schemaStatus.status': 'processing',
+          'schemaStatus.totalProducts': products.length,
+          'schemaStatus.processedProducts': 0,
+          'schemaStatus.successfulProducts': 0,
+          'schemaStatus.failedProducts': 0,
+          'schemaStatus.progress.current': 0,
+          'schemaStatus.progress.total': products.length,
+          'schemaStatus.progress.percent': 0,
+          'schemaStatus.progress.startedAt': progressStartedAt,
+          'schemaStatus.progress.remainingSeconds': Math.round(products.length * 2.5), // ~2.5s per product estimate
+          'schemaStatus.startedAt': progressStartedAt,
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
     for (let i = 0; i < products.length; i += batchSize) {
       const batch = products.slice(i, Math.min(i + batchSize, products.length));
       const batchNum = Math.floor(i / batchSize) + 1;
@@ -1821,17 +1849,41 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       
       // Update progress
       const progressPercent = Math.round((i / products.length) * 100);
+      const elapsedSeconds = Math.round((Date.now() - progressStartedAt.getTime()) / 1000);
+      const avgTimePerProduct = processedCount > 0 ? elapsedSeconds / processedCount : 2.5;
+      const remainingProducts = products.length - processedCount;
+      const remainingSeconds = Math.round(remainingProducts * avgTimePerProduct);
+      
       generationStatus.set(shop, {
         generating: true,
         progress: `${progressPercent}%`,
         currentProduct: `Batch ${batchNum}/${totalBatches} (${batch.length} products)...`
       });
       
+      // Update progress in MongoDB
+      await Shop.updateOne(
+        { shop },
+        {
+          $set: {
+            'schemaStatus.processedProducts': processedCount,
+            'schemaStatus.successfulProducts': successCount,
+            'schemaStatus.failedProducts': failCount,
+            'schemaStatus.progress.current': processedCount,
+            'schemaStatus.progress.percent': progressPercent,
+            'schemaStatus.progress.elapsedSeconds': elapsedSeconds,
+            'schemaStatus.progress.remainingSeconds': remainingSeconds,
+            'schemaStatus.message': `Processing ${processedCount}/${products.length} products`,
+            'schemaStatus.updatedAt': new Date()
+          }
+        }
+      );
+      
       await Promise.all(batch.map(async (product) => {
         try {
           const result = await generateProductSchemas(shop, product);
           if (result?.schemas && result.schemas.length > 0) {
             allProductSchemas.push(...result.schemas);
+            successCount++;
             // Collect product ID for optimization summary update later
             if (result.productId) {
               processedProductIds.push(result.productId);
@@ -1847,6 +1899,8 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
                 }
               );
             }
+          } else {
+            failCount++;
           }
           
           // Track tokens from this product
@@ -1855,7 +1909,9 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
           }
         } catch (err) {
           console.error(`[SCHEMA] Failed for product ${product.productId}:`, err.message);
+          failCount++;
         }
+        processedCount++;
       }));
       
       // OPTIMIZATION 3b: Add delay between batches to respect rate limits
@@ -1955,6 +2011,47 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       progress: '100%', 
       currentProduct: 'Generation complete!' 
     });
+    
+    // Calculate duration
+    const duration = Math.round((Date.now() - progressStartedAt.getTime()) / 1000);
+    
+    // Update final status in MongoDB
+    await Shop.updateOne(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.inProgress': false,
+          'schemaStatus.status': 'completed',
+          'schemaStatus.message': `Generated ${successCount} schemas`,
+          'schemaStatus.processedProducts': processedCount,
+          'schemaStatus.successfulProducts': successCount,
+          'schemaStatus.failedProducts': failCount,
+          'schemaStatus.progress.current': processedCount,
+          'schemaStatus.progress.percent': 100,
+          'schemaStatus.progress.elapsedSeconds': duration,
+          'schemaStatus.progress.remainingSeconds': 0,
+          'schemaStatus.completedAt': new Date(),
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    // Send email notification if process took more than 2 minutes
+    if (duration > 120) {
+      try {
+        const shopDoc = await Shop.findOne({ shop }).lean();
+        if (shopDoc?.email) {
+          const emailService = (await import('../services/emailService.js')).default;
+          await emailService.sendSchemaCompletedEmail(shopDoc, {
+            successful: successCount,
+            failed: failCount,
+            duration: duration
+          });
+        }
+      } catch (emailErr) {
+        console.error('[SCHEMA] Failed to send completion email:', emailErr.message);
+      }
+    }
     
     // CRITICAL: Return schema count for background queue
     return {

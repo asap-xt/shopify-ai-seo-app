@@ -639,6 +639,75 @@ class EmailService {
   }
 
   /**
+   * Send email when schema data generation completes
+   * @param {Object} store - Store object with shop, email, etc.
+   * @param {Object} result - { successful, failed, duration }
+   */
+  async sendSchemaCompletedEmail(store, result) {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn('⚠️ SendGrid not configured - skipping schema completed email');
+      return { success: false, error: 'SendGrid not configured' };
+    }
+
+    try {
+      const shopName = store.shop?.replace('.myshopify.com', '') || store.shop || 'there';
+      const { successful, failed, duration } = result;
+      
+      // Format duration
+      const durationMin = Math.floor(duration / 60);
+      const durationSec = Math.round(duration % 60);
+      const durationStr = durationMin > 0 ? `${durationMin}m ${durationSec}s` : `${durationSec}s`;
+      
+      const hasFailures = failed > 0;
+      const statusEmoji = hasFailures ? '⚠️' : '✅';
+      const statusText = hasFailures ? 'completed with some issues' : 'completed successfully';
+      
+      // Prepare logo attachment
+      const logoPath = path.join(__dirname, '..', 'assets', 'logo', 'Logo_120x120.png');
+      const attachments = [];
+      if (fs.existsSync(logoPath)) {
+        const logoContent = fs.readFileSync(logoPath);
+        attachments.push({
+          content: logoContent.toString('base64'),
+          filename: 'logo.png',
+          type: 'image/png',
+          disposition: 'inline',
+          content_id: 'logo'
+        });
+      }
+      
+      const msg = {
+        to: store.email || `${shopName}@example.com`,
+        from: { email: this.fromEmail, name: this.fromName },
+        subject: `${statusEmoji} Schema Data generation ${statusText}`,
+        html: this.getSchemaCompletedEmailTemplate({
+          shopName,
+          shop: store.shop,
+          email: store.email,
+          successful,
+          failed,
+          duration: durationStr,
+          hasFailures,
+          dashboardUrl: this.getDashboardUrl(store.shop)
+        }),
+        attachments,
+        trackingSettings: {
+          clickTracking: { enable: false },
+          openTracking: { enable: true }
+        }
+      };
+
+      await sgMail.send(msg);
+      await this.logEmail(store._id || store.id, store.shop, 'schema-completed', 'sent');
+      console.log(`📧 Schema completed email sent to ${store.email} for ${store.shop}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Schema completed email error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Helper methods
    */
   calculateTrialDays(expiresAt) {
@@ -1468,6 +1537,114 @@ class EmailService {
                     <div style="text-align: center; margin: 35px 0;">
                       <a href="${data.dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
                         View Sitemap
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                    ${data.shop && data.email ? this.getUnsubscribeFooter(data.shop, data.email) : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+  }
+
+  getSchemaCompletedEmailTemplate(data) {
+    const statusIcon = data.hasFailures ? '⚠️' : '✅';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Schema Data Generation Complete</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <!-- Logo (Left) -->
+                        <td style="width: auto; vertical-align: middle; padding-right: 25px;">
+                          <img src="cid:logo" alt="indexAIze Logo" style="width: 80px; height: 80px; display: block; border: none; outline: none; background: transparent; border-radius: 12px;" />
+                        </td>
+                        <!-- Text (Center) -->
+                        <td style="text-align: left; vertical-align: middle; padding-left: 0;">
+                          <p style="margin: 0 0 5px; color: rgba(255,255,255,0.8); font-size: 14px; letter-spacing: 0.5px;">indexAIze</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">${statusIcon} Schema Data Generated</p>
+                        </td>
+                        <!-- Spacer (Right) -->
+                        <td style="width: auto;"></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Your Advanced Schema Data generation has completed. Here are the results:
+                    </p>
+                    
+                    <!-- Results Summary -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Results Summary</h3>
+                      
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          <td style="padding: 10px 0; color: #059669; font-weight: 600; font-size: 14px;">✓ Successful</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #059669;">${data.successful} products</td>
+                        </tr>
+                        ${data.failed > 0 ? `
+                        <tr>
+                          <td style="padding: 10px 0; color: #dc2626; font-weight: 600; font-size: 14px;">✗ Failed</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #dc2626;">${data.failed} products</td>
+                        </tr>
+                        ` : ''}
+                        <tr style="border-top: 1px solid #dbeafe;">
+                          <td style="padding: 15px 0 0; color: #64748b; font-size: 14px;">⏱ Duration</td>
+                          <td style="padding: 15px 0 0; text-align: right; font-size: 14px; color: #1e293b;">${data.duration}</td>
+                        </tr>
+                      </table>
+                    </div>
+                    
+                    ${data.hasFailures ? `
+                    <!-- Warning -->
+                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #b45309;">Note:</strong> Some products failed to process. You can regenerate schema for them from the dashboard.
+                      </p>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${data.dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        View Schema Data
                       </a>
                     </div>
                     
