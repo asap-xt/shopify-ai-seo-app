@@ -217,7 +217,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
       // This handles cases where frontend cache is stale
       if (languagesToGenerate.length > 0) {
         try {
-          const { shopGraphQL } = await import('../utils/shopGraphql.js');
+          const { shopGraphQL } = await import('./seoController.js');
           const metafieldsQuery = `
             query GetProductMetafields($id: ID!) {
               product(id: $id) {
