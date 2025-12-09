@@ -670,28 +670,38 @@ export default function SitemapPage({ shop: shopProp }) {
 
           {/* Queue Status Banner - only when ACTIVELY processing */}
           {(busy || polling || aiSitemapBusy || aiSitemapStatus.inProgress) && (
-            <Banner tone="info">
+            <Box 
+              background="bg-surface-secondary" 
+              padding="300" 
+              borderRadius="200"
+              borderWidth="025"
+              borderColor="border-info"
+            >
               <BlockStack gap="200">
-              <InlineStack gap="200" blockAlign="center" wrap={false}>
-                <InlineStack gap="200" blockAlign="center" wrap={false} style={{flex: 1}}>
-                  <Spinner size="small" />
-                  <Text variant="bodyMd">
-                    {aiSitemapStatus.inProgress || aiSitemapBusy
-                      ? (aiSitemapStatus.progress?.total > 0
-                          ? `AI-Optimized: Processing ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
-                          : aiSitemapStatus.status === 'queued' 
-                            ? 'AI-Optimized: Starting... (loading products)'
-                            : `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
-                        )
-                      : (queueStatus?.status === 'queued'
-                          ? 'Basic Sitemap: Starting... (loading products)'
-                          : queueStatus?.status === 'processing'
-                            ? 'Basic Sitemap: Generating XML... (usually takes 10-30 seconds)'
-                            : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`
-                        )}
-                  </Text>
-                </InlineStack>
-                <div style={{marginLeft: 'auto'}}>
+                <InlineStack align="space-between" blockAlign="center" gap="400">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Spinner size="small" />
+                    <Text variant="bodyMd">
+                      {aiSitemapStatus.inProgress || aiSitemapBusy
+                        ? (aiSitemapStatus.progress?.total > 0
+                            ? `Processing ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
+                            : (() => {
+                                // Estimate based on product count (~5 sec per product for AI)
+                                const productCount = info?.productCount || info?.lastProductCount || 0;
+                                const estimatedMinutes = productCount > 0 ? Math.ceil((productCount * 5) / 60) : 0;
+                                return productCount > 0 
+                                  ? `Starting AI optimization for ${productCount} products • ~${estimatedMinutes} min estimated`
+                                  : 'Starting... (loading products)';
+                              })()
+                          )
+                        : (queueStatus?.status === 'queued'
+                            ? 'Starting...'
+                            : queueStatus?.status === 'processing'
+                              ? 'Generating XML...'
+                              : queueStatus?.message || 'Generating...'
+                          )}
+                    </Text>
+                  </InlineStack>
                   <Button 
                     size="slim" 
                     tone="critical" 
@@ -699,8 +709,7 @@ export default function SitemapPage({ shop: shopProp }) {
                   >
                     Cancel
                   </Button>
-                </div>
-              </InlineStack>
+                </InlineStack>
                 {/* Progress bar for AI sitemap */}
                 {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
                   <Box>
@@ -721,7 +730,7 @@ export default function SitemapPage({ shop: shopProp }) {
                   </Box>
                 )}
               </BlockStack>
-            </Banner>
+            </Box>
           )}
 
           {/* ===== BASIC SITEMAP ROW ===== */}
