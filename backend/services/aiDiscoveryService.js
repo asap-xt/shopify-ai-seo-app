@@ -549,17 +549,42 @@ class AIDiscoveryService {
       }
       
       // Sitemap references (XML sitemaps only - NOT for JSON endpoints)
+      // Get primary domain for public URLs
+      let primaryDomain = `https://${shop}`;
+      try {
+        const shopInfoResponse = await fetch(
+          `https://${shop}/admin/api/2024-07/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              query: `{ shop { primaryDomain { url } } }`
+            })
+          }
+        );
+        const shopInfoData = await shopInfoResponse.json();
+        if (shopInfoData?.data?.shop?.primaryDomain?.url) {
+          primaryDomain = shopInfoData.data.shop.primaryDomain.url.replace(/\/$/, '');
+        }
+      } catch (e) {
+        console.error('[ROBOTS] Failed to fetch primaryDomain:', e.message);
+      }
+      
       robotsTxt += '\n# AI Discovery Sitemaps (XML only)\n';
       
       // Only XML sitemaps should be listed here - check if generated
+      // Use primaryDomain (public URL) for sitemap references
       if (hasAiSitemap && availableFeatures.includes('aiSitemap')) {
-        robotsTxt += `Sitemap: https://${shop}/apps/${appProxySubpath}/ai/sitemap-feed.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml?shop=${shop}\n`;
       }
       
       // Advanced Schema Data Sitemap - Plus plans and Enterprise - check if generated
       const schemaPlans = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
       if (hasAdvancedSchema && schemaPlans.includes(normalizedPlan)) {
-        robotsTxt += `Sitemap: https://${shop}/apps/${appProxySubpath}/ai/schema-sitemap.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/schema-sitemap.xml?shop=${shop}\n`;
       }
       
       // Note: JSON endpoints (products.json, collections-feed.json, etc.) are NOT sitemaps

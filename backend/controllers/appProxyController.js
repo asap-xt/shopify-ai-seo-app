@@ -787,7 +787,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
   }
 });
 
-// AI Products JSON Feed
+// AI Products JSON Feed - Direct implementation (no redirect!)
 router.get('/ai/products.json', appProxyAuth, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
@@ -808,15 +808,127 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
       return res.status(403).json({ error: 'Products JSON feature is not enabled' });
     }
 
-    // Redirect to the main AI endpoints controller
-    res.redirect(`/ai/products.json?shop=${shop}`);
+    // Fetch products directly (same logic as aiEndpointsController)
+    const query = `
+      query {
+        products(first: 250) {
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              productType
+              vendor
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+              featuredImage {
+                url
+                altText
+              }
+              metafields(namespace: "seo_ai", first: 100) {
+                edges {
+                  node {
+                    key
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!data?.data?.products?.edges) {
+      return res.status(500).json({ error: 'Failed to fetch products' });
+    }
+    
+    const optimizedProducts = [];
+    const totalProducts = data.data.products.edges.length;
+    
+    data.data.products.edges.forEach(({ node: product }) => {
+      if (product.metafields.edges.length > 0) {
+        const parsedMetafields = {};
+        product.metafields.edges.forEach(({ node: metafield }) => {
+          try {
+            parsedMetafields[metafield.key] = JSON.parse(metafield.value);
+          } catch {
+            parsedMetafields[metafield.key] = metafield.value;
+          }
+        });
+        
+        // Get AI-generated imageAlt if exists
+        let aiImageAlt = null;
+        for (const key of Object.keys(parsedMetafields)) {
+          const seoData = parsedMetafields[key];
+          if (seoData && typeof seoData === 'object' && seoData.imageAlt) {
+            aiImageAlt = seoData.imageAlt;
+            break;
+          }
+        }
+        
+        optimizedProducts.push({
+          id: product.id,
+          title: product.title,
+          handle: product.handle,
+          description: product.description || null,
+          productType: product.productType || null,
+          vendor: product.vendor || null,
+          price: product.priceRangeV2?.minVariantPrice?.amount || null,
+          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          url: `https://${shop}/products/${product.handle}`,
+          image: product.featuredImage ? {
+            url: product.featuredImage.url,
+            alt: aiImageAlt || product.featuredImage.altText || product.title
+          } : null,
+          metafields: parsedMetafields
+        });
+      }
+    });
+
+    if (optimizedProducts.length === 0) {
+      return res.json({
+        shop,
+        products: [],
+        products_count: 0,
+        products_total: totalProducts,
+        warning: 'No optimized products found'
+      });
+    }
+
+    res.json({
+      shop,
+      generated_at: new Date().toISOString(),
+      products_count: optimizedProducts.length,
+      products_total: totalProducts,
+      products: optimizedProducts
+    });
   } catch (error) {
     console.error('[APP_PROXY] AI Products JSON error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// AI Collections JSON Feed
+// AI Collections JSON Feed - Direct implementation (no redirect!)
 router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
@@ -837,16 +949,136 @@ router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
       return res.status(403).json({ error: 'Collections JSON feature is not enabled' });
     }
 
-    // Redirect to the main AI endpoints controller
-    res.redirect(`/ai/collections-feed.json?shop=${shop}`);
+    // Fetch collections directly (same logic as aiEndpointsController)
+    const query = `
+      query {
+        collections(first: 250) {
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              image {
+                url
+                altText
+              }
+              metafields(namespace: "seo_ai", first: 100) {
+                edges {
+                  node {
+                    key
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
+      }
+    );
+
+    const data = await response.json();
+    
+    if (!data?.data?.collections?.edges) {
+      return res.status(500).json({ error: 'Failed to fetch collections' });
+    }
+    
+    const optimizedCollections = [];
+    const totalCollections = data.data.collections.edges.length;
+    
+    data.data.collections.edges.forEach(({ node: collection }) => {
+      if (collection.metafields.edges.length > 0) {
+        const collectionData = {
+          id: collection.id,
+          title: collection.title,
+          handle: collection.handle,
+          description: collection.description || null,
+          image: collection.image ? {
+            url: collection.image.url,
+            alt: collection.image.altText || collection.title
+          } : null,
+          url: `https://${shop}/collections/${collection.handle}`,
+          metafields: {}
+        };
+        
+        collection.metafields.edges.forEach(({ node: metafield }) => {
+          try {
+            collectionData.metafields[metafield.key] = JSON.parse(metafield.value);
+          } catch {
+            collectionData.metafields[metafield.key] = metafield.value;
+          }
+        });
+        
+        optimizedCollections.push(collectionData);
+      }
+    });
+
+    if (optimizedCollections.length === 0) {
+      return res.json({
+        shop,
+        collections: [],
+        collections_total: totalCollections,
+        warning: 'No optimized collections found'
+      });
+    }
+
+    res.json({
+      shop,
+      generated_at: new Date().toISOString(),
+      collections_count: optimizedCollections.length,
+      collections_total: totalCollections,
+      collections: optimizedCollections
+    });
   } catch (error) {
     console.error('[APP_PROXY] AI Collections JSON error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// AI Sitemap Feed
+// AI Sitemap Feed - Uses the existing sitemap handler
 router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
+  const shop = normalizeShop(req.query.shop);
+  
+  if (!shop) {
+    return res.status(400).send('Missing shop parameter');
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).send('Shop not found');
+    }
+
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    
+    if (!settings?.features?.aiSitemap) {
+      return res.status(403).send('AI Sitemap feature is not enabled');
+    }
+
+    // Call the sitemap handler directly by modifying request
+    req.headers['x-shopify-shop-domain'] = shop;
+    return handleSitemapProxy(req, res);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Sitemap error:', error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+// AI Store Metadata - Direct implementation (no redirect!)
+router.get('/ai/store-metadata.json', appProxyAuth, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -862,14 +1094,119 @@ router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
     
-    if (!settings?.features?.aiSitemap) {
-      return res.status(403).json({ error: 'AI Sitemap feature is not enabled' });
+    if (!settings?.features?.storeMetadata) {
+      return res.status(403).json({ error: 'Store Metadata feature is not enabled' });
     }
 
-    // Redirect to the main AI endpoints controller
-    res.redirect(`/ai/sitemap-feed.xml?shop=${shop}`);
+    // Fetch store metadata
+    const shopQuery = `
+      query {
+        shop {
+          name
+          description
+          email
+          url
+          primaryDomain { url }
+          seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") {
+            value
+          }
+          organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") {
+            value
+          }
+          aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
+            value
+          }
+        }
+      }
+    `;
+
+    const response = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: shopQuery })
+      }
+    );
+
+    const data = await response.json();
+    const shopData = data?.data?.shop;
+    
+    if (!shopData) {
+      return res.status(500).json({ error: 'Failed to fetch shop data' });
+    }
+    
+    // Parse metafields
+    let seoMetadata = null;
+    let aiMetadata = null;
+    let organizationSchema = null;
+    
+    if (shopData.seoMetafield?.value) {
+      try { seoMetadata = JSON.parse(shopData.seoMetafield.value); } catch (e) {}
+    }
+    if (shopData.aiMetafield?.value) {
+      try { aiMetadata = JSON.parse(shopData.aiMetafield.value); } catch (e) {}
+    }
+    if (shopData.organizationMetafield?.value) {
+      try { organizationSchema = JSON.parse(shopData.organizationMetafield.value); } catch (e) {}
+    }
+    
+    // Build response
+    const storeMetadata = {
+      shop: shop,
+      generated_at: new Date().toISOString(),
+      store: {
+        name: shopData.name,
+        url: shopData.primaryDomain?.url || shopData.url,
+        email: shopData.email
+      }
+    };
+    
+    if (seoMetadata || shopData) {
+      storeMetadata.seo = {
+        title: seoMetadata?.storeName || shopData.name,
+        shortDescription: seoMetadata?.shortDescription || null,
+        fullDescription: seoMetadata?.fullDescription || shopData.description || null,
+        keywords: seoMetadata?.keywords
+      };
+    }
+    
+    if (aiMetadata) {
+      storeMetadata.ai_context = {
+        business_type: aiMetadata.businessType,
+        target_audience: aiMetadata.targetAudience,
+        unique_selling_points: aiMetadata.uniqueSellingPoints,
+        brand_voice: aiMetadata.brandVoice,
+        categories: aiMetadata.primaryCategories,
+        shipping: aiMetadata.shippingInfo,
+        returns: aiMetadata.returnPolicy,
+        languages: aiMetadata.languages,
+        supported_currencies: aiMetadata.supportedCurrencies,
+        shipping_regions: aiMetadata.shippingRegions,
+        cultural_considerations: aiMetadata.culturalConsiderations
+      };
+    }
+    
+    if (organizationSchema?.enabled) {
+      storeMetadata.organization_schema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: organizationSchema.name || shopData.name,
+        url: shopData.primaryDomain?.url || shopData.url,
+        email: organizationSchema.email,
+        telephone: organizationSchema.phone,
+        logo: organizationSchema.logo,
+        sameAs: organizationSchema.sameAs ? 
+          organizationSchema.sameAs.split(',').map(s => s.trim()) : []
+      };
+    }
+    
+    res.json(storeMetadata);
   } catch (error) {
-    console.error('[APP_PROXY] AI Sitemap error:', error);
+    console.error('[APP_PROXY] AI Store Metadata error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
