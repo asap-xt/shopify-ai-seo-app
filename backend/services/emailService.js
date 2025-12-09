@@ -1388,7 +1388,7 @@ class EmailService {
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
                           <p style="margin: 0 0 5px; color: rgba(255,255,255,0.8); font-size: 14px; letter-spacing: 0.5px;">indexAIze</p>
-                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">🗺️ ${data.sitemapTypeName} Generated</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; line-height: 1.3;">✅ ${data.sitemapTypeName} Generated</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>
