@@ -237,9 +237,11 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
           
           // Extract languages that already have SEO metafields
           const existingMetafieldLangs = [];
+          const allKeys = [];
           if (metafieldsResult?.product?.metafields?.edges) {
             for (const edge of metafieldsResult.product.metafields.edges) {
               const key = edge.node.key;
+              allKeys.push(key);
               // Check for seo__ prefix (language-specific SEO data)
               if (key?.startsWith('seo__')) {
                 const lang = key.replace('seo__', '').toLowerCase();
@@ -248,6 +250,11 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
                 }
               }
             }
+          }
+          
+          // Debug: log all metafield keys found
+          if (allKeys.length > 0) {
+            console.log(`[SEO-GENERATE] Product ${productData.productId}: all metafield keys: [${allKeys.join(', ')}]`);
           }
           
           console.log(`[SEO-GENERATE] Product ${productData.productId}: found ${existingMetafieldLangs.length} existing langs: [${existingMetafieldLangs.join(', ')}], requested: [${languagesToGenerate.join(', ')}]`);
