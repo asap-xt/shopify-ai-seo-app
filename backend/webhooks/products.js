@@ -99,53 +99,67 @@ export default async function productsWebhook(req, res) {
       
       // 5. Update MongoDB with new product data for future comparisons
       // This ensures we have the latest title/description stored
-      // IMPORTANT: Update lastShopifyUpdate AFTER we've checked for changes
+      // IMPORTANT: Update lastShopifyUpdate ONLY when content changed (SEO was cleared)
+      // This prevents race conditions when Shopify sends duplicate webhooks
       
-      // Store whether content changed for proper lastShopifyUpdate update
       const contentChanged = titleChanged || descriptionChanged;
+      
+      // Build update object - only include lastShopifyUpdate if content changed
+      const updateData = {
+        shopifyProductId: numericProductId,
+        productId: numericProductId,
+        title: payload.title,
+        description: payload.body_html,
+        handle: payload.handle,
+        vendor: payload.vendor,
+        productType: payload.product_type,
+        status: payload.status,
+        publishedAt: payload.published_at,
+        createdAt: payload.created_at,
+        updatedAt: payload.updated_at,
+        tags: payload.tags || '',
+        images: payload.images?.map(img => ({
+          id: img.id,
+          alt: img.alt || '',
+          url: img.src
+        })) || [],
+        featuredImage: payload.image ? {
+          url: payload.image.src,
+          altText: payload.image.alt || ''
+        } : null,
+        price: payload.variants?.[0]?.price || '0.00',
+        currency: 'EUR', // Default currency
+        totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
+        gid: productGid,
+        syncedAt: new Date()
+      };
+      
+      // CRITICAL FIX: Only update lastShopifyUpdate when:
+      // 1. Content actually changed (SEO was cleared) - prevents duplicate webhook race conditions
+      // 2. Product is NEW (not in MongoDB yet) - ensures first change can be detected
+      // Without this, webhook race conditions cause missed change detection
+      const isNewProduct = !existingProduct;
+      if (contentChanged || isNewProduct) {
+        updateData.lastShopifyUpdate = {
+          title: payload.title,
+          description: payload.body_html,
+          updatedAt: new Date()
+        };
+        if (contentChanged) {
+          console.log(`[Webhook-Products] 📝 Updated lastShopifyUpdate for product ${numericProductId} (content changed)`);
+        } else {
+          console.log(`[Webhook-Products] 📝 Set initial lastShopifyUpdate for NEW product ${numericProductId}`);
+        }
+      }
       
       const updatedProduct = await Product.findOneAndUpdate(
         { shop, productId: numericProductId },
-        {
-          shopifyProductId: numericProductId,
-          productId: numericProductId,
-          title: payload.title,
-          description: payload.body_html,
-          handle: payload.handle,
-          vendor: payload.vendor,
-          productType: payload.product_type,
-          status: payload.status,
-          publishedAt: payload.published_at,
-          createdAt: payload.created_at,
-          updatedAt: payload.updated_at,
-          tags: payload.tags || '',
-          images: payload.images?.map(img => ({
-            id: img.id,
-            alt: img.alt || '',
-            url: img.src
-          })) || [],
-          featuredImage: payload.image ? {
-            url: payload.image.src,
-            altText: payload.image.alt || ''
-          } : null,
-          price: payload.variants?.[0]?.price || '0.00',
-          currency: 'EUR', // Default currency
-          totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
-          gid: productGid,
-          syncedAt: new Date(),
-          // CRITICAL: ALWAYS update lastShopifyUpdate with current webhook data
-          // This is our reference point for detecting future changes
-          lastShopifyUpdate: {
-            title: payload.title,
-            description: payload.body_html,
-            updatedAt: new Date()
-          }
-        },
+        updateData,
         { upsert: true, new: true }
       );
       
       // Log change for weekly digest (if significant change or new product)
-      const isNewProduct = !existingProduct;
+      // Note: isNewProduct is already defined above
       const changedFields = [];
       
       if (titleChanged) changedFields.push('title');
