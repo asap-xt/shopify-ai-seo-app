@@ -153,10 +153,16 @@ class SitemapQueue {
 
       } catch (error) {
         // Check if this was a user cancellation - DO NOT retry
-        const isCancelled = error.message === 'CANCELLED_BY_USER' || error.message?.includes('CANCELLED');
+        // error.message could be "CANCELLED_BY_USER" or "Error: CANCELLED_BY_USER" or contain "CANCELLED"
+        const errorMsg = error.message || '';
+        const isCancelled = errorMsg === 'CANCELLED_BY_USER' || 
+                           errorMsg.includes('CANCELLED_BY_USER') || 
+                           errorMsg.includes('CANCELLED');
+        
+        dbLogger.info(`[QUEUE] Caught error for ${job.shop}: "${errorMsg}" (isCancelled: ${isCancelled})`);
         
         if (isCancelled) {
-          dbLogger.info(`[QUEUE] 🛑 Job cancelled by user for shop: ${job.shop}`);
+          dbLogger.info(`[QUEUE] 🛑 Job cancelled by user for shop: ${job.shop} - NOT retrying`);
           job.status = 'cancelled';
           job.error = 'Cancelled by user';
           job.cancelledAt = new Date();
@@ -168,12 +174,12 @@ class SitemapQueue {
             lastError: null,
             cancelledAt: new Date()
           });
-          // Do NOT retry - continue to next job
+          // Do NOT retry - skip to next job in queue
           this.currentJob = null;
           continue;
         }
         
-        dbLogger.error(`[QUEUE] ❌ Job failed for shop: ${job.shop}`, error.message);
+        dbLogger.error(`[QUEUE] ❌ Job failed for shop: ${job.shop}: ${errorMsg}`);
 
         job.status = 'failed';
         job.error = error.message;
