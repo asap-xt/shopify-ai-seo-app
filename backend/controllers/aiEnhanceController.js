@@ -1663,9 +1663,9 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
         const metafield = data?.product?.metafield;
         const existingSeo = metafield?.value ? JSON.parse(metafield.value) : null;
         
-        // Skip if no basic SEO
+        // Fail if no basic SEO (can't enhance without basic SEO)
         if (!existingSeo || !existingSeo.title) {
-          results.push({ language, error: 'No basic SEO found', skipped: true });
+          results.push({ language, error: 'No Basic SEO found', noBasicSeo: true });
           continue;
         }
         
@@ -1811,8 +1811,9 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
     }
     
     // Prepare summary
-    const failedLanguages = results.filter(r => r.error && !r.skipped).length;
+    const failedLanguages = results.filter(r => r.error && !r.skipped && !r.noBasicSeo).length;
     const alreadyEnhanced = results.filter(r => r.skipped && r.reason === 'Already enhanced').length;
+    const noBasicSeo = results.filter(r => r.noBasicSeo).length;
     
     return {
       success: successfulLanguages > 0 || alreadyEnhanced > 0,
@@ -1821,8 +1822,9 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
       summary: {
         total: languages.length,
         successful: successfulLanguages,
-        failed: failedLanguages,
+        failed: failedLanguages + noBasicSeo, // Include noBasicSeo as failed
         alreadyEnhanced,
+        noBasicSeo,
         skippedDueToTokens: skippedDueToTokens.length,
         tokensExhausted
       }
