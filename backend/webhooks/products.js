@@ -58,20 +58,7 @@ export default async function productsWebhook(req, res) {
         titleChanged = referenceTitle !== payload.title;
         descriptionChanged = referenceDescription !== payload.body_html;
         
-        // DEBUG: Log comparison details
-        console.log(`[Webhook-Products] 📋 Product ${numericProductId} "${payload.title?.substring(0, 30)}...":`, {
-          titleChanged,
-          descriptionChanged,
-          isOptimized: existingProduct.seoStatus?.optimized,
-          hasLastShopifyUpdate: !!existingProduct.lastShopifyUpdate,
-          refTitle: referenceTitle?.substring(0, 50),
-          newTitle: payload.title?.substring(0, 50),
-          refDescLength: referenceDescription?.length || 0,
-          newDescLength: payload.body_html?.length || 0
-        });
-        
         if (titleChanged || descriptionChanged) {
-          console.log(`[Webhook-Products] 🔄 CHANGE DETECTED for product ${numericProductId}: title=${titleChanged}, desc=${descriptionChanged}`);
           
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
@@ -82,7 +69,6 @@ export default async function productsWebhook(req, res) {
           if (deleteResult.success) {
             // 4. Clear SEO status in MongoDB (includes hasAdvancedSchema flag)
             await clearSeoStatusInMongoDB(shop, numericProductId);
-            console.log(`[Webhook-Products] ✅ SEO cleared for product ${numericProductId}`);
           } else {
             console.error('[Webhook-Products] ❌ Failed to delete SEO metafields:', deleteResult.errors);
           }
@@ -90,11 +76,7 @@ export default async function productsWebhook(req, res) {
           if (!schemaDeleteResult.success) {
             console.error('[Webhook-Products] ❌ Failed to delete schema metafields:', schemaDeleteResult.errors);
           }
-        } else {
-          console.log(`[Webhook-Products] ⏭️ No content change for product ${numericProductId}`);
         }
-      } else {
-        console.log(`[Webhook-Products] 🆕 New product ${numericProductId} (not in MongoDB yet)`);
       }
       
       // 5. Update MongoDB with new product data for future comparisons
@@ -145,11 +127,6 @@ export default async function productsWebhook(req, res) {
           description: payload.body_html,
           updatedAt: new Date()
         };
-        if (contentChanged) {
-          console.log(`[Webhook-Products] 📝 Updated lastShopifyUpdate for product ${numericProductId} (content changed)`);
-        } else {
-          console.log(`[Webhook-Products] 📝 Set initial lastShopifyUpdate for NEW product ${numericProductId}`);
-        }
       }
       
       const updatedProduct = await Product.findOneAndUpdate(
