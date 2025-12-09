@@ -672,8 +672,8 @@ export default function SitemapPage({ shop: shopProp }) {
           {(busy || polling || aiSitemapBusy || aiSitemapStatus.inProgress) && (
             <Banner tone="info">
               <BlockStack gap="200">
-                <InlineStack gap="200" blockAlign="center" align="space-between" wrap={false}>
-                <InlineStack gap="200" blockAlign="center">
+              <InlineStack gap="200" blockAlign="center" wrap={false}>
+                <InlineStack gap="200" blockAlign="center" wrap={false} style={{flex: 1}}>
                   <Spinner size="small" />
                   <Text variant="bodyMd">
                     {aiSitemapStatus.inProgress || aiSitemapBusy
@@ -683,9 +683,15 @@ export default function SitemapPage({ shop: shopProp }) {
                             ? 'AI-Optimized: Starting... (loading products)'
                             : `AI-Optimized: ${aiSitemapStatus.message || 'Processing...'}`
                         )
-                      : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`}
+                      : (queueStatus?.status === 'queued'
+                          ? 'Basic Sitemap: Starting... (loading products)'
+                          : queueStatus?.status === 'processing'
+                            ? 'Basic Sitemap: Generating XML... (usually takes 10-30 seconds)'
+                            : `Basic Sitemap: ${queueStatus?.message || 'Generating...'}`
+                        )}
                   </Text>
                 </InlineStack>
+                <div style={{marginLeft: 'auto'}}>
                   <Button 
                     size="slim" 
                     tone="critical" 
@@ -693,7 +699,8 @@ export default function SitemapPage({ shop: shopProp }) {
                   >
                     Cancel
                   </Button>
-                </InlineStack>
+                </div>
+              </InlineStack>
                 {/* Progress bar for AI sitemap */}
                 {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
                   <Box>
