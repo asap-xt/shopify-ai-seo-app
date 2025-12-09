@@ -1221,135 +1221,204 @@ class EmailService {
   getJobCompletedEmailTemplate(data) {
     const statusColor = data.hasFailures ? '#f59e0b' : '#10b981';
     const statusIcon = data.hasFailures ? '⚠️' : '✅';
+    const headerGradient = data.hasFailures 
+      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
     
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${data.jobTypeName} Complete</title>
       </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc;">
-        <div style="background: ${statusColor}; padding: 25px; text-align: center; border-radius: 12px 12px 0 0;">
-          <h2 style="color: white; margin: 0; font-size: 20px;">${statusIcon} ${data.jobTypeName} Complete</h2>
-        </div>
-        
-        <div style="padding: 30px; background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-          <p style="color: #334155; font-size: 16px;">Hi ${data.shopName}! 👋</p>
-          
-          <p style="color: #475569;">Your background ${data.jobTypeName.toLowerCase()} job has finished processing.</p>
-          
-          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <h3 style="margin: 0 0 15px; color: #1e293b; font-size: 16px;">📊 Results Summary</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; color: #10b981; font-weight: 600;">✓ Successful</td>
-                <td style="padding: 8px 0; text-align: right; font-weight: 600;">${data.successful} ${data.itemType}</td>
-              </tr>
-              ${data.skipped > 0 ? `
-              <tr>
-                <td style="padding: 8px 0; color: #64748b;">○ Skipped</td>
-                <td style="padding: 8px 0; text-align: right;">${data.skipped} ${data.itemType}</td>
-              </tr>
-              ` : ''}
-              ${data.failed > 0 ? `
-              <tr>
-                <td style="padding: 8px 0; color: #ef4444;">✗ Failed</td>
-                <td style="padding: 8px 0; text-align: right;">${data.failed} ${data.itemType}</td>
-              </tr>
-              ` : ''}
-              <tr style="border-top: 1px solid #e2e8f0;">
-                <td style="padding: 12px 0 0; color: #64748b;">⏱ Duration</td>
-                <td style="padding: 12px 0 0; text-align: right;">${data.duration}</td>
-              </tr>
-            </table>
-          </div>
-          
-          ${data.hasFailures ? `
-          <p style="color: #92400e; background: #fef3c7; padding: 12px; border-radius: 6px; font-size: 14px;">
-            ⚠️ Some items failed to process. You can retry them from the dashboard.
-          </p>
-          ` : ''}
-          
-          <div style="text-align: center; margin: 25px 0;">
-            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 500;">
-              View in Dashboard
-            </a>
-          </div>
-          
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
-              <strong style="color: #1e40af;">indexAIze Team</strong>
-            </p>
-            ${this.getUnsubscribeFooter(data.shop, data.email)}
-          </div>
-        </div>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px; background: ${headerGradient}; text-align: center;">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
+                      ${statusIcon} ${data.jobTypeName} Complete
+                    </h1>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Your background ${data.jobTypeName.toLowerCase()} job has finished processing. Here are the results:
+                    </p>
+                    
+                    <!-- Results Summary -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Results Summary</h3>
+                      
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          <td style="padding: 10px 0; color: #059669; font-weight: 600; font-size: 14px;">✓ Successful</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #059669;">${data.successful} ${data.itemType}</td>
+                        </tr>
+                        ${data.skipped > 0 ? `
+                        <tr>
+                          <td style="padding: 10px 0; color: #64748b; font-size: 14px;">○ Skipped</td>
+                          <td style="padding: 10px 0; text-align: right; font-size: 14px; color: #64748b;">${data.skipped} ${data.itemType}</td>
+                        </tr>
+                        ` : ''}
+                        ${data.failed > 0 ? `
+                        <tr>
+                          <td style="padding: 10px 0; color: #dc2626; font-weight: 600; font-size: 14px;">✗ Failed</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #dc2626;">${data.failed} ${data.itemType}</td>
+                        </tr>
+                        ` : ''}
+                        <tr style="border-top: 1px solid #dbeafe;">
+                          <td style="padding: 15px 0 0; color: #64748b; font-size: 14px;">⏱ Duration</td>
+                          <td style="padding: 15px 0 0; text-align: right; font-size: 14px; color: #1e293b;">${data.duration}</td>
+                        </tr>
+                      </table>
+                    </div>
+                    
+                    ${data.hasFailures ? `
+                    <!-- Warning -->
+                    <div style="background-color: #fff7ed; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #b45309;">Note:</strong> Some items failed to process. You can retry them from the dashboard.
+                      </p>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${data.dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        View in Dashboard
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                    ${data.shop && data.email ? this.getUnsubscribeFooter(data.shop, data.email) : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;
   }
 
   getSitemapCompletedEmailTemplate(data) {
-    const accentColor = data.isAiEnhanced ? '#8b5cf6' : '#10b981';
+    const headerGradient = data.isAiEnhanced 
+      ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
     
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${data.sitemapTypeName} Generated</title>
       </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8fafc;">
-        <div style="background: ${accentColor}; padding: 25px; text-align: center; border-radius: 12px 12px 0 0;">
-          <h2 style="color: white; margin: 0; font-size: 20px;">🗺️ ${data.sitemapTypeName} Generated</h2>
-        </div>
-        
-        <div style="padding: 30px; background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-          <p style="color: #334155; font-size: 16px;">Hi ${data.shopName}! 👋</p>
-          
-          <p style="color: #475569;">Your ${data.sitemapTypeName.toLowerCase()} has been generated successfully!</p>
-          
-          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <h3 style="margin: 0 0 15px; color: #1e293b; font-size: 16px;">📊 Generation Summary</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; color: #475569;">Products included</td>
-                <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #10b981;">${data.productCount}</td>
-              </tr>
-              <tr style="border-top: 1px solid #e2e8f0;">
-                <td style="padding: 8px 0; color: #475569;">Duration</td>
-                <td style="padding: 8px 0; text-align: right;">${data.duration}</td>
-              </tr>
-              <tr style="border-top: 1px solid #e2e8f0;">
-                <td style="padding: 8px 0; color: #475569;">Type</td>
-                <td style="padding: 8px 0; text-align: right;">
-                  <span style="background: ${data.isAiEnhanced ? '#ede9fe' : '#d1fae5'}; color: ${data.isAiEnhanced ? '#7c3aed' : '#059669'}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
-                    ${data.isAiEnhanced ? '✨ AI-Enhanced' : '📄 Basic'}
-                  </span>
-                </td>
-              </tr>
-            </table>
-          </div>
-          
-          ${data.isAiEnhanced ? `
-          <p style="color: #6d28d9; background: #f5f3ff; padding: 12px; border-radius: 6px; font-size: 14px;">
-            ✨ Your AI-enhanced sitemap includes optimized descriptions and keywords for better AI search engine visibility.
-          </p>
-          ` : ''}
-          
-          <div style="text-align: center; margin: 25px 0;">
-            <a href="${data.dashboardUrl}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 500;">
-              View Sitemap
-            </a>
-          </div>
-          
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px;">
-              <strong style="color: #1e40af;">indexAIze Team</strong>
-            </p>
-            ${this.getUnsubscribeFooter(data.shop, data.email)}
-          </div>
-        </div>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background-color: #ffffff; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px; background: ${headerGradient}; text-align: center;">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
+                      🗺️ ${data.sitemapTypeName} Generated
+                    </h1>
+                  </td>
+                </tr>
+                
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding: 40px 40px 30px;">
+                    <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${data.shopName},</p>
+                    
+                    <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
+                      Great news! Your ${data.sitemapTypeName.toLowerCase()} has been generated successfully and is now ready for AI search engines.
+                    </p>
+                    
+                    <!-- Generation Summary -->
+                    <div style="background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 20px; margin: 30px 0;">
+                      <h3 style="margin: 0 0 15px; color: #1e40af; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Generation Summary</h3>
+                      
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          <td style="padding: 10px 0; color: #4a4a4a; font-size: 14px;">Products Included</td>
+                          <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #059669;">${data.productCount}</td>
+                        </tr>
+                        <tr style="border-top: 1px solid #dbeafe;">
+                          <td style="padding: 10px 0; color: #4a4a4a; font-size: 14px;">Duration</td>
+                          <td style="padding: 10px 0; text-align: right; font-size: 14px; color: #1e293b;">${data.duration}</td>
+                        </tr>
+                        <tr style="border-top: 1px solid #dbeafe;">
+                          <td style="padding: 10px 0; color: #4a4a4a; font-size: 14px;">Type</td>
+                          <td style="padding: 10px 0; text-align: right;">
+                            <span style="background: ${data.isAiEnhanced ? '#ede9fe' : '#d1fae5'}; color: ${data.isAiEnhanced ? '#7c3aed' : '#059669'}; padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                              ${data.isAiEnhanced ? '✨ AI-Enhanced' : '📄 Basic'}
+                            </span>
+                          </td>
+                        </tr>
+                      </table>
+                    </div>
+                    
+                    ${data.isAiEnhanced ? `
+                    <!-- AI Enhanced Info -->
+                    <div style="background-color: #faf5ff; border-left: 4px solid #8b5cf6; padding: 20px; margin: 30px 0;">
+                      <p style="margin: 0; color: #6b21a8; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #7c3aed;">✨ AI-Enhanced:</strong> Your sitemap includes optimized descriptions and keywords for better AI search engine visibility.
+                      </p>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 35px 0;">
+                      <a href="${data.dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 600; border-radius: 4px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">
+                        View Sitemap
+                      </a>
+                    </div>
+                    
+                    <p style="margin: 30px 0 0; color: #8a8a8a; font-size: 13px; line-height: 1.6;">
+                      Need assistance? Reply to this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f0f7ff; border-top: 1px solid #dbeafe; text-align: center;">
+                    <p style="margin: 0 0 15px; color: #64748b; font-size: 12px; line-height: 1.6;">
+                      <strong style="color: #1e40af;">indexAIze Team</strong>
+                    </p>
+                    ${data.shop && data.email ? this.getUnsubscribeFooter(data.shop, data.email) : ''}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </body>
       </html>
     `;
