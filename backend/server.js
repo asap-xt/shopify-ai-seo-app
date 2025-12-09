@@ -2247,7 +2247,10 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
       });
 
       // APP PROXY ROUTES (MUST be first, before all other middleware)
+      // Mount at both paths to handle Shopify App Proxy requests correctly
+      // Shopify strips the subpath prefix, so /apps/indexaize/ai/... becomes /apps/ai/...
       app.use(`/apps/${APP_PROXY_SUBPATH}`, appProxyRouter);
+      app.use('/apps', appProxyRouter);  // Also mount at /apps for App Proxy compatibility
 
         // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
         // Direct public sitemap endpoint - no authentication required
