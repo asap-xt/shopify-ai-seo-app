@@ -941,8 +941,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         setSelectedItems([]);
         setSelectAllPages(false);
         
-        // Calculate estimated time: products × languages × 1.3 seconds for Basic SEO
-        const estimatedSeconds = productsForBatch.length * selectedLanguages.length * 1.3;
+        // Calculate estimated time: ~1.3 seconds per product (languages processed together)
+        const estimatedSeconds = productsForBatch.length * 1.3;
         const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes

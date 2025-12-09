@@ -990,8 +990,8 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
       });
       
       if (response.queued) {
-        // Calculate estimated time: collections × languages × 1.3 seconds for Basic SEO
-        const estimatedSeconds = collectionsForBatch.length * selectedLanguages.length * 1.3;
+        // Calculate estimated time: ~1.3 seconds per collection (languages processed together)
+        const estimatedSeconds = collectionsForBatch.length * 1.3;
         const estimatedMinutes = Math.round(estimatedSeconds / 60);
         
         // Show toast - include email notification if > 2 minutes
