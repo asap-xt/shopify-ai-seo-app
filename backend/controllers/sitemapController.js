@@ -212,10 +212,22 @@ async function generateSitemapCore(shop, options = {}) {
       throw new Error('Invalid shop parameter');
     }
     
-    // Reset cancelled flag at start of new generation
+    // Reset cancelled flag AND progress at start of new generation
     await Shop.findOneAndUpdate(
       { shop: normalizedShop },
-      { $set: { 'sitemapStatus.cancelled': false } }
+      { 
+        $set: { 
+          'sitemapStatus.cancelled': false,
+          'sitemapStatus.progress': {
+            current: 0,
+            total: 0,
+            percent: 0,
+            elapsedSeconds: 0,
+            remainingSeconds: 0,
+            startedAt: new Date()
+          }
+        } 
+      }
     );
     
     const { limit, plan } = await getPlanLimits(normalizedShop);
