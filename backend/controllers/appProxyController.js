@@ -789,22 +789,33 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
 
 // AI Products JSON Feed - Direct implementation (no redirect!)
 router.get('/ai/products.json', appProxyAuth, async (req, res) => {
-  const shop = normalizeShop(req.query.shop);
+  // DEBUG: Log full request details
+  console.log('[APP_PROXY] /ai/products.json HIT!');
+  console.log('[APP_PROXY] Query params:', req.query);
+  console.log('[APP_PROXY] Headers shop:', req.headers['x-shopify-shop-domain']);
+  
+  // Try to get shop from multiple sources
+  const shop = normalizeShop(req.query.shop || req.headers['x-shopify-shop-domain']);
+  console.log('[APP_PROXY] Normalized shop:', shop);
   
   if (!shop) {
+    console.log('[APP_PROXY] Missing shop parameter!');
     return res.status(400).json({ error: 'Missing shop parameter' });
   }
 
   try {
     const shopRecord = await Shop.findOne({ shop });
+    console.log('[APP_PROXY] Shop record found:', !!shopRecord);
     if (!shopRecord) {
       return res.status(404).json({ error: 'Shop not found' });
     }
 
     const session = { accessToken: shopRecord.accessToken };
     const settings = await aiDiscoveryService.getSettings(shop, session);
+    console.log('[APP_PROXY] Settings features:', settings?.features);
     
     if (!settings?.features?.productsJson) {
+      console.log('[APP_PROXY] Products JSON feature NOT enabled!');
       return res.status(403).json({ error: 'Products JSON feature is not enabled' });
     }
 
@@ -905,7 +916,11 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
       }
     });
 
+    console.log('[APP_PROXY] Optimized products count:', optimizedProducts.length);
+    console.log('[APP_PROXY] Total products:', totalProducts);
+
     if (optimizedProducts.length === 0) {
+      console.log('[APP_PROXY] Returning empty products response');
       return res.json({
         shop,
         products: [],
@@ -915,6 +930,7 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
       });
     }
 
+    console.log('[APP_PROXY] Returning', optimizedProducts.length, 'products');
     res.json({
       shop,
       generated_at: new Date().toISOString(),
@@ -924,6 +940,7 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('[APP_PROXY] AI Products JSON error:', error);
+    console.error('[APP_PROXY] Error stack:', error.stack);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
