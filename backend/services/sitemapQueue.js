@@ -152,6 +152,27 @@ class SitemapQueue {
         }
 
       } catch (error) {
+        // Check if this was a user cancellation - DO NOT retry
+        const isCancelled = error.message === 'CANCELLED_BY_USER' || error.message?.includes('CANCELLED');
+        
+        if (isCancelled) {
+          dbLogger.info(`[QUEUE] 🛑 Job cancelled by user for shop: ${job.shop}`);
+          job.status = 'cancelled';
+          job.error = 'Cancelled by user';
+          job.cancelledAt = new Date();
+          
+          await this.updateShopStatus(job.shop, {
+            inProgress: false,
+            status: 'cancelled',
+            message: 'Generation cancelled by user',
+            lastError: null,
+            cancelledAt: new Date()
+          });
+          // Do NOT retry - continue to next job
+          this.currentJob = null;
+          continue;
+        }
+        
         dbLogger.error(`[QUEUE] ❌ Job failed for shop: ${job.shop}`, error.message);
 
         job.status = 'failed';
