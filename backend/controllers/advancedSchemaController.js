@@ -368,18 +368,32 @@ function sanitizeAIResponse(response, knownFacts) {
   return validated;
 }
 
-  // Load rich attributes settings - fetches user preferences for AI-generated schema features
-  async function loadRichAttributesSettings(shop) {
+// Cache for rich attributes settings (per shop, expires after 5 minutes)
+const richAttributesCache = new Map();
+const RICH_ATTRIBUTES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Load rich attributes settings - fetches user preferences for AI-generated schema features
+// OPTIMIZED: Results are cached per shop to avoid repeated HTTP requests
+async function loadRichAttributesSettings(shop) {
+  // Check cache first
+  const cached = richAttributesCache.get(shop);
+  if (cached && (Date.now() - cached.timestamp) < RICH_ATTRIBUTES_CACHE_TTL) {
+    return cached.settings;
+  }
+  
   try {
     // Try to get settings from AI Discovery settings
-  if (!process.env.SHOPIFY_APP_URL) {
-    throw new Error('SHOPIFY_APP_URL environment variable is required');
-  }
-  const response = await fetch(`${process.env.SHOPIFY_APP_URL}/api/ai-discovery/settings?shop=${shop}`);
+    if (!process.env.SHOPIFY_APP_URL) {
+      throw new Error('SHOPIFY_APP_URL environment variable is required');
+    }
+    const response = await fetch(`${process.env.SHOPIFY_APP_URL}/api/ai-discovery/settings?shop=${shop}`);
     
     if (response.ok) {
       const data = await response.json();
-      return data.richAttributes || {};
+      const settings = data.richAttributes || {};
+      // Cache the result
+      richAttributesCache.set(shop, { settings, timestamp: Date.now() });
+      return settings;
     }
   } catch (error) {
     // Could not load rich attributes settings
@@ -399,6 +413,9 @@ function sanitizeAIResponse(response, knownFacts) {
     enhancedDescription: false,
     organization: false
   };
+  
+  // Cache the defaults too
+  richAttributesCache.set(shop, { settings: defaultSettings, timestamp: Date.now() });
   return defaultSettings;
 }
 
@@ -969,13 +986,41 @@ For OTHER questions:
   }
 }
 
-// Generate product schemas
+// Helper: Execute GraphQL with exponential backoff retry for throttling
+async function executeWithRetry(shop, query, variables, maxRetries = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await executeShopifyGraphQL(shop, query, variables);
+    } catch (error) {
+      lastError = error;
+      // Check if it's a throttle error
+      if (error.message?.includes('Throttled') || error.message?.includes('429')) {
+        // Longer delays: 2s, 4s, 8s, 16s (exponential backoff with base 2s)
+        const delay = Math.pow(2, attempt + 1) * 1000;
+        console.log(`[SCHEMA] ⏳ Throttled, waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Non-throttle error, don't retry
+      }
+    }
+  }
+  throw lastError;
+}
+
+// Generate product schemas - OPTIMIZED: 1 query + 1 mutation instead of 8+ calls
 async function generateProductSchemas(shop, productDoc) {
   const productGid = `gid://shopify/Product/${productDoc.productId}`;
+  const languages = productDoc.seoStatus?.languages || [];
+  const optimizedLanguages = languages.filter(lang => lang.optimized);
   
-  // Get full product data
+  if (optimizedLanguages.length === 0) {
+    return { schemas: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+  }
+  
+  // OPTIMIZATION 1: Get product + ALL SEO metafields in ONE query
   const query = `
-    query GetProduct($id: ID!) {
+    query GetProductWithMetafields($id: ID!) {
       product(id: $id) {
         id
         title
@@ -1009,46 +1054,49 @@ async function generateProductSchemas(shop, productDoc) {
             currencyCode
           }
         }
+        metafields(first: 20, namespace: "seo_ai") {
+          edges {
+            node {
+              key
+              value
+            }
+          }
+        }
       }
     }
   `;
   
-  const productData = await executeShopifyGraphQL(shop, query, { id: productGid });
+  const productData = await executeWithRetry(shop, query, { id: productGid });
   const product = productData.product;
   
   if (!product) {
     console.error(`[SCHEMA] Product not found: ${productGid}`);
-    // console.log(`[SCHEMA] generateProductSchemas returning undefined for product ${productDoc.productId}`);
     return;
   }
   
-  // Get SEO data for all languages
-  const languages = productDoc.seoStatus?.languages || [];
+  // Extract SEO metafields into a map for quick lookup
+  const seoMetafields = {};
+  if (product.metafields?.edges) {
+    for (const edge of product.metafields.edges) {
+      const key = edge.node.key; // e.g., "seo__en", "seo__bg"
+      if (key.startsWith('seo__')) {
+        const langCode = key.replace('seo__', '');
+        try {
+          seoMetafields[langCode] = JSON.parse(edge.node.value);
+        } catch (e) {
+          console.error(`[SCHEMA] Failed to parse SEO metafield for ${langCode}:`, e);
+        }
+      }
+    }
+  }
+  
+  // Generate schemas for all languages
   const schemas = [];
   let totalProductUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
-  for (const lang of languages) {
-    if (!lang.optimized) continue;
-    
-    // Get SEO metafield
-    const metafieldQuery = `
-      query GetMetafield($productId: ID!, $key: String!) {
-        product(id: $productId) {
-          metafield(namespace: "seo_ai", key: $key) {
-            value
-          }
-        }
-      }
-    `;
-    
-    const mfData = await executeShopifyGraphQL(shop, metafieldQuery, { 
-      productId: productGid, 
-      key: `seo__${lang.code}` 
-    });
-    
-    if (!mfData.product?.metafield?.value) continue;
-    
-    const seoData = JSON.parse(mfData.product.metafield.value);
+  for (const lang of optimizedLanguages) {
+    const seoData = seoMetafields[lang.code];
+    if (!seoData) continue;
     
     // Generate schemas for this language
     const result = await generateLangSchemas(product, seoData, shop, lang.code);
@@ -1062,48 +1110,46 @@ async function generateProductSchemas(shop, productDoc) {
     }
   }
   
-  // Collect all schemas from all languages
-  const allSchemas = [];
+  if (schemas.length === 0) {
+    return { schemas: [], usage: totalProductUsage };
+  }
   
-  // Save all schemas
+  // OPTIMIZATION 2: Save ALL language schemas in ONE mutation
+  const allSchemas = [];
+  const metafieldsToSave = [];
+  
   for (const { language, schemas: langSchemas } of schemas) {
-    const saveMutation = `
-      mutation SetSchema($metafields: [MetafieldsSetInput!]!) {
-        metafieldsSet(metafields: $metafields) {
-          metafields {
-            id
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-    
-    const variables = {
-      metafields: [{
-        ownerId: productGid,
-        namespace: "advanced_schema",
-        key: `schemas_${language}`,
-        type: "json",
-        value: JSON.stringify(langSchemas)
-      }]
-    };
-    
-    // Save to Shopify metafields
-    await executeShopifyGraphQL(shop, saveMutation, variables);
-    
-    // Also collect for MongoDB
+    metafieldsToSave.push({
+      ownerId: productGid,
+      namespace: "advanced_schema",
+      key: `schemas_${language}`,
+      type: "json",
+      value: JSON.stringify(langSchemas)
+    });
     allSchemas.push(...langSchemas);
   }
   
-  // Update optimization summary metafield
-  await updateOptimizationSummary(shop, productDoc.productId);
+  // Single mutation to save all schemas
+  const saveMutation = `
+    mutation SetSchemas($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
   
-  // Return schemas and usage for MongoDB storage and token tracking
-  // console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
-  return { schemas: allSchemas, usage: totalProductUsage };
+  await executeWithRetry(shop, saveMutation, { metafields: metafieldsToSave });
+  
+  // NOTE: updateOptimizationSummary is now called in batch at the end of generateAllSchemas
+  // to avoid excessive GraphQL calls (it makes 1+N calls where N is number of languages)
+  
+  return { schemas: allSchemas, usage: totalProductUsage, productId: productDoc.productId };
 }
 
 // Generate schemas for specific language
@@ -1745,29 +1791,39 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     // Use ALL optimized products (mix of basic + AI-enhanced)
     const products = allProducts;
     
-    // Collect all generated schemas
+    // Collect all generated schemas and product IDs for later summary update
     const allProductSchemas = [];
+    const processedProductIds = [];
     
-    // Process in batches
-    const batchSize = 10;
+    // OPTIMIZATION 3: Reduced batch size (10 → 3) to avoid Shopify throttling
+    // With optimized queries (2 calls/product), 3 products = 6 concurrent requests = safe
+    const batchSize = 3;
+    const delayBetweenBatches = 1000; // 1 second delay between batches (safer for rate limits)
+    
+    console.log(`[SCHEMA] 🚀 Starting batch processing: ${products.length} products, batch size ${batchSize}`);
+    
     for (let i = 0; i < products.length; i += batchSize) {
       const batch = products.slice(i, Math.min(i + batchSize, products.length));
+      const batchNum = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(products.length / batchSize);
+      
+      // Update progress
+      const progressPercent = Math.round((i / products.length) * 100);
+      generationStatus.set(shop, {
+        generating: true,
+        progress: `${progressPercent}%`,
+        currentProduct: `Batch ${batchNum}/${totalBatches} (${batch.length} products)...`
+      });
       
       await Promise.all(batch.map(async (product) => {
         try {
-          // console.log(`[SCHEMA] Processing product ${product.productId}...`);
-          
-          // Update progress
-          const progressPercent = Math.round(((i + 1) / products.length) * 100);
-          generationStatus.set(shop, {
-            generating: true,
-            progress: `${progressPercent}%`,
-            currentProduct: `Processing ${product.title || product.productId}...`
-          });
-          
           const result = await generateProductSchemas(shop, product);
           if (result?.schemas && result.schemas.length > 0) {
             allProductSchemas.push(...result.schemas);
+            // Collect product ID for optimization summary update later
+            if (result.productId) {
+              processedProductIds.push(result.productId);
+            }
           }
           
           // Track tokens from this product
@@ -1775,11 +1831,14 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
             totalAITokens += result.usage.total_tokens || 0;
           }
         } catch (err) {
-          console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
+          console.error(`[SCHEMA] Failed for product ${product.productId}:`, err.message);
         }
       }));
       
-      // console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
+      // OPTIMIZATION 3b: Add delay between batches to respect rate limits
+      if (i + batchSize < products.length) {
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+      }
     }
     
     // Save to MongoDB
@@ -1801,6 +1860,43 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     } catch (err) {
       console.error('[SCHEMA] Failed to save to MongoDB:', err);
       throw err;
+    }
+    
+    // OPTIMIZATION 4: Batch update optimization summaries AFTER all schemas are generated
+    // This is done in the background to avoid blocking the main process
+    // and with proper throttling to avoid Shopify rate limits
+    if (processedProductIds.length > 0) {
+      console.log(`[SCHEMA] 📝 Starting batch optimization summary update for ${processedProductIds.length} products...`);
+      
+      // Fire-and-forget: update summaries in background with heavy throttling
+      (async () => {
+        const summaryBatchSize = 5; // Process 5 products at a time
+        const summaryDelay = 2000; // 2 seconds between batches (to stay well under rate limits)
+        
+        for (let i = 0; i < processedProductIds.length; i += summaryBatchSize) {
+          const batch = processedProductIds.slice(i, i + summaryBatchSize);
+          
+          // Process this batch sequentially (one at a time) with small delay
+          for (const productId of batch) {
+            try {
+              await updateOptimizationSummary(shop, productId);
+              await new Promise(resolve => setTimeout(resolve, 300)); // 300ms between each
+            } catch (err) {
+              // Silent fail - summaries are not critical
+              console.error(`[SCHEMA] Summary update failed for ${productId}:`, err.message);
+            }
+          }
+          
+          // Delay between batches
+          if (i + summaryBatchSize < processedProductIds.length) {
+            await new Promise(resolve => setTimeout(resolve, summaryDelay));
+          }
+        }
+        
+        console.log(`[SCHEMA] ✅ Completed optimization summary updates for ${processedProductIds.length} products`);
+      })().catch(err => {
+        console.error('[SCHEMA] Background summary update failed:', err.message);
+      });
     }
     
     // === FINALIZE TOKEN USAGE ===

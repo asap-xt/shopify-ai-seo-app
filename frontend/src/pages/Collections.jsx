@@ -707,9 +707,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Enhancing ${collectionsForBatch.length} collections. Processing in background - you'll receive an email when complete.`);
+          setToast(`Enhancing ${collectionsForBatch.length} collections in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(`Enhancing ${collectionsForBatch.length} collections in background...`);
+          setToast(`Enhancing ${collectionsForBatch.length} collections in background. You can navigate away safely & explore other features.`);
         }
         
         setSelectedItems([]);
@@ -994,9 +994,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Optimizing ${collectionsForBatch.length} collections. Processing in background - you'll receive an email when complete.`);
+          setToast(`Optimizing ${collectionsForBatch.length} collections in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(`Optimizing ${collectionsForBatch.length} collections in background...`);
+          setToast(`Optimizing ${collectionsForBatch.length} collections in background. You can navigate away safely & explore other features.`);
         }
         
         setSelectedItems([]);

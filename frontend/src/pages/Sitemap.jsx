@@ -127,6 +127,8 @@ export default function SitemapPage({ shop: shopProp }) {
     if (!shop) return;
     setBusy(true);
     setQueueStatus(null);
+    // Reset AI sitemap progress so old progress bar doesn't show
+    setAiSitemapStatus(prev => ({ ...prev, progress: null }));
     
     try {
       // PHASE 4: POST generates async, returns queue status
@@ -475,9 +477,9 @@ export default function SitemapPage({ shop: shopProp }) {
         const estimatedSeconds = result.estimatedTime || 0;
         
         if (estimatedSeconds > 120) {
-          setToast(`AI-Optimized Sitemap generation started. Processing in background - you'll receive an email when complete.`);
+          setToast(`AI-Optimized Sitemap generation started. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(result.message || 'AI-Optimized Sitemap generation started!');
+          setToast(`AI-Optimized Sitemap generation started. You can navigate away safely & explore other features.`);
         }
         
         // Start polling if queued
@@ -489,7 +491,8 @@ export default function SitemapPage({ shop: shopProp }) {
             position: result.position,
             estimatedTime: result.estimatedTime,
             generatedAt: null,
-            productCount: 0
+            productCount: 0,
+            progress: null // Reset progress bar to start from 0
           });
           startAiSitemapPolling();
         }

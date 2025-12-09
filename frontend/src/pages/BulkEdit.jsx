@@ -787,9 +787,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Enhancing ${productsForBatch.length} products. Processing in background - you'll receive an email when complete.`);
+          setToast(`Enhancing ${productsForBatch.length} products in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(`Enhancing ${productsForBatch.length} products in background...`);
+          setToast(`Enhancing ${productsForBatch.length} products in background. You can navigate away safely & explore other features.`);
         }
         
         setSelectedItems([]);
@@ -945,9 +945,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         
         // Show toast - include email notification if > 2 minutes
         if (estimatedSeconds > 120) {
-          setToast(`Optimizing ${productsForBatch.length} products. Processing in background - you'll receive an email when complete.`);
+          setToast(`Optimizing ${productsForBatch.length} products in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(`Optimizing ${productsForBatch.length} products in background...`);
+          setToast(`Optimizing ${productsForBatch.length} products in background. You can navigate away safely & explore other features.`);
         }
         
         // Start polling for status

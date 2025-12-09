@@ -938,7 +938,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                       });
                       
                       // Show success toast
-                      setToastContent('Generating Advanced Schema Data... This runs in the background.');
+                      setToastContent('Generating Advanced Schema Data in background. You can navigate away safely & explore other features.');
                       
                       // Start polling for status updates
                       startAdvancedSchemaPolling();
