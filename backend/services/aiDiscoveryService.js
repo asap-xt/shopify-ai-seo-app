@@ -480,8 +480,9 @@ class AIDiscoveryService {
       
       // Check if Sitemap and Advanced Schema are generated (these are now managed in Store Optimization pages)
       // Sitemap can be standard OR AI-enhanced - both should be accessible
-      const sitemapDoc = await Sitemap.findOne({ shop });
-      const hasSitemap = sitemapDoc?.content ? true : false;  // Any sitemap with content
+      // Note: We check for existence + generatedAt since 'content' field has select:false
+      const sitemapDoc = await Sitemap.findOne({ shop }).select('generatedAt isAiEnhanced status').lean();
+      const hasSitemap = sitemapDoc && sitemapDoc.generatedAt && sitemapDoc.status !== 'failed';  // Any valid sitemap
       const hasAiSitemap = sitemapDoc?.isAiEnhanced === true;  // Specifically AI-enhanced
       
       const schemaDoc = await AdvancedSchema.findOne({ shop });

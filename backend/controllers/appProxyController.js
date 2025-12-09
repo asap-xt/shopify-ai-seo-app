@@ -1065,9 +1065,10 @@ router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
 
     // Check if ANY sitemap has been generated (standard or AI-enhanced)
     // Both standard and AI-enhanced sitemaps are served from the same endpoint
-    const existingSitemap = await Sitemap.findOne({ shop }).select('generatedAt content').lean();
+    // Note: 'content' field has select:false, so we check generatedAt + status instead
+    const existingSitemap = await Sitemap.findOne({ shop }).select('generatedAt status').lean();
     
-    if (!existingSitemap || !existingSitemap.content) {
+    if (!existingSitemap || !existingSitemap.generatedAt || existingSitemap.status === 'failed') {
       return res.status(403).send('Sitemap has not been generated yet. Please generate it from Store Optimization → Sitemap.');
     }
 
