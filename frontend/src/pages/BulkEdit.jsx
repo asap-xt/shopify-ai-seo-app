@@ -134,7 +134,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     failedProducts: 0,
     skippedProducts: 0,
     completedAt: null,
-    progress: null // { current, total, percent, elapsedSeconds, remainingSeconds }
+    progress: null, // { current, total, percent, elapsedSeconds, remainingSeconds }
+    // Pre-failed products (no Basic SEO) - added locally without sending to backend
+    pendingNoSeoFailed: 0,
+    pendingNoSeoReasons: []
   });
   const aiEnhancePollingRef = useRef(null);
   
@@ -655,6 +658,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const justCompleted = prevStatus.inProgress && !status.inProgress && 
           (status.status === 'completed' || status.status === 'failed');
         
+        // Add pending "no SEO" failures to the final count
+        const pendingNoSeoFailed = prevStatus.pendingNoSeoFailed || 0;
+        const pendingNoSeoReasons = prevStatus.pendingNoSeoReasons || [];
+        
         if (justCompleted) {
           // Stop polling
           if (aiEnhancePollingRef.current) {
@@ -662,11 +669,15 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             aiEnhancePollingRef.current = null;
           }
           
-          // Show toast
+          // Calculate totals including pre-failed products
+          const totalFailed = (status.failedProducts || 0) + pendingNoSeoFailed;
+          const totalFailReasons = [...(status.failReasons || []), ...pendingNoSeoReasons];
+          
+          // Show toast with combined totals
           if (status.status === 'completed') {
             const msg = `AI Enhanced ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
               (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
-              (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
+              (totalFailed > 0 ? ` (${totalFailed} failed)` : '');
             setToast(msg);
           } else if (status.status === 'failed') {
             setToast(`AI Enhancement failed: ${status.message || 'Unknown error'}`);
@@ -676,9 +687,23 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           if (loadProductsRef.current) {
             loadProductsRef.current(currentPageRef.current, false, Date.now());
           }
+          
+          // Return status with combined failures
+          return {
+            ...status,
+            failedProducts: totalFailed,
+            failReasons: totalFailReasons,
+            pendingNoSeoFailed: 0,
+            pendingNoSeoReasons: []
+          };
         }
         
-        return status;
+        // Keep pending values during processing
+        return {
+          ...status,
+          pendingNoSeoFailed,
+          pendingNoSeoReasons
+        };
       });
       
       return status;
@@ -739,8 +764,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Check product limit before processing (count all selected)
-    const selectedCount = selectedProducts.length;
+    // Check product limit before processing (count only those with SEO)
+    const selectedCount = selectedWithSEO.length;
     
     if (selectedCount > productLimit) {
       // Show upgrade modal instead of processing
@@ -761,12 +786,16 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       return;
     }
 
-    // Prepare ALL selected products for batch processing (backend will handle those without SEO as "failed")
-    const productsForBatch = selectedProducts.map(product => ({
+    // Prepare only products WITH Basic SEO for batch processing
+    const productsForBatch = selectedWithSEO.map(product => ({
       productId: product.gid || toProductGID(product.id),
-      languages: product.optimizationSummary?.optimizedLanguages || [],
+      languages: product.optimizationSummary.optimizedLanguages,
       title: product.title
     }));
+    
+    // Track products without SEO to add to report as "failed"
+    const productsWithoutSEOCount = selectedWithoutSEO.length;
+    const productsWithoutSEOReasons = selectedWithoutSEO.map(p => `${p.title}: Basic SEO missing`);
 
     // Clear any previous badges when starting AI Enhancement
     setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
@@ -786,11 +815,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const totalLanguages = productsForBatch.reduce((sum, p) => sum + (p.languages?.length || 1), 0);
         const estimatedSeconds = totalLanguages * 2.8;
         
+        // Store pending "no SEO" failures to add to final report
+        setAiEnhanceJobStatus(prev => ({
+          ...prev,
+          pendingNoSeoFailed: productsWithoutSEOCount,
+          pendingNoSeoReasons: productsWithoutSEOReasons
+        }));
+        
         // Show toast - include email notification if > 2 minutes
+        const totalToProcess = productsForBatch.length + productsWithoutSEOCount;
         if (estimatedSeconds > 120) {
-          setToast(`Enhancing ${productsForBatch.length} products in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
+          setToast(`Enhancing ${totalToProcess} products in background. You'll receive an email when complete. Feel free to navigate away & explore other features.`);
         } else {
-          setToast(`Enhancing ${productsForBatch.length} products in background. You can navigate away safely & explore other features.`);
+          setToast(`Enhancing ${totalToProcess} products in background. You can navigate away safely & explore other features.`);
         }
         
         setSelectedItems([]);
