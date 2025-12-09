@@ -202,8 +202,12 @@ function cleanHtmlForXml(html) {
 async function generateSitemapCore(shop, options = {}) {
   const { enableAIEnhancement = false } = options;
   
+  // IMPORTANT: Define reservationId OUTSIDE try block so it's accessible in catch
+  let reservationId = null;
+  let normalizedShop = null;
+  
   try {
-    const normalizedShop = normalizeShop(shop);
+    normalizedShop = normalizeShop(shop);
     if (!normalizedShop) {
       throw new Error('Invalid shop parameter');
     }
@@ -218,7 +222,6 @@ async function generateSitemapCore(shop, options = {}) {
     
     // AI Enhancement state (only used if enableAIEnhancement is true)
     let isAISitemapEnabled = false;
-    let reservationId = null;
     let totalAITokens = 0;
     
     // Check plan eligibility ONLY if enableAIEnhancement is requested
