@@ -155,6 +155,40 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const loadProductsRef = useRef(null); // Ref to always have latest loadProducts
   const currentPageRef = useRef(1); // Ref to track current page for refresh after operations
   
+  // Live countdown for remaining time (decreases every second)
+  const [seoRemainingSeconds, setSeoRemainingSeconds] = useState(0);
+  const [aiEnhanceRemainingSeconds, setAiEnhanceRemainingSeconds] = useState(0);
+  
+  // Update local countdown when server sends new remaining time
+  useEffect(() => {
+    if (seoJobStatus.progress?.remainingSeconds != null) {
+      setSeoRemainingSeconds(seoJobStatus.progress.remainingSeconds);
+    }
+  }, [seoJobStatus.progress?.remainingSeconds]);
+  
+  useEffect(() => {
+    if (aiEnhanceJobStatus.progress?.remainingSeconds != null) {
+      setAiEnhanceRemainingSeconds(aiEnhanceJobStatus.progress.remainingSeconds);
+    }
+  }, [aiEnhanceJobStatus.progress?.remainingSeconds]);
+  
+  // Countdown timer - decreases every second when job is in progress
+  useEffect(() => {
+    if (!seoJobStatus.inProgress) return;
+    const interval = setInterval(() => {
+      setSeoRemainingSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [seoJobStatus.inProgress]);
+  
+  useEffect(() => {
+    if (!aiEnhanceJobStatus.inProgress) return;
+    const interval = setInterval(() => {
+      setAiEnhanceRemainingSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [aiEnhanceJobStatus.inProgress]);
+  
   // Background Delete Job status
   const [deleteJobStatus, setDeleteJobStatus] = useState({
     inProgress: false,
@@ -1722,10 +1756,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                               {(() => {
                                 const p = aiEnhanceJobStatus.progress;
                                 if (p?.current && p?.total) {
-                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
                                   let msg = `Enhancing ${p.current}/${p.total} products`;
-                                  if (remainingMin > 0) {
-                                    msg += ` • ~${remainingMin} min remaining`;
+                                  // Use live countdown
+                                  if (aiEnhanceRemainingSeconds >= 60) {
+                                    msg += ` • ~${Math.ceil(aiEnhanceRemainingSeconds / 60)} min remaining`;
+                                  } else if (aiEnhanceRemainingSeconds > 0) {
+                                    msg += ` • ~${aiEnhanceRemainingSeconds}s remaining`;
                                   }
                                   return msg;
                                 }
@@ -1844,10 +1880,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                               {(() => {
                                 const p = seoJobStatus.progress;
                                 if (p?.current && p?.total) {
-                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
                                   let msg = `Processing ${p.current}/${p.total} products`;
-                                  if (remainingMin > 0) {
-                                    msg += ` • ~${remainingMin} min remaining`;
+                                  // Use live countdown
+                                  if (seoRemainingSeconds >= 60) {
+                                    msg += ` • ~${Math.ceil(seoRemainingSeconds / 60)} min remaining`;
+                                  } else if (seoRemainingSeconds > 0) {
+                                    msg += ` • ~${seoRemainingSeconds}s remaining`;
                                   }
                                   return msg;
                                 }

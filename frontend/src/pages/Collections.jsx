@@ -200,6 +200,40 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
   const collectionAiEnhancePollingRef = useRef(null);
   const loadCollectionsRef = useRef(null); // Ref to always have latest loadCollections
   
+  // Live countdown for remaining time (decreases every second)
+  const [collectionSeoRemainingSeconds, setCollectionSeoRemainingSeconds] = useState(0);
+  const [collectionAiEnhanceRemainingSeconds, setCollectionAiEnhanceRemainingSeconds] = useState(0);
+  
+  // Update local countdown when server sends new remaining time
+  useEffect(() => {
+    if (collectionSeoJobStatus.progress?.remainingSeconds != null) {
+      setCollectionSeoRemainingSeconds(collectionSeoJobStatus.progress.remainingSeconds);
+    }
+  }, [collectionSeoJobStatus.progress?.remainingSeconds]);
+  
+  useEffect(() => {
+    if (collectionAiEnhanceJobStatus.progress?.remainingSeconds != null) {
+      setCollectionAiEnhanceRemainingSeconds(collectionAiEnhanceJobStatus.progress.remainingSeconds);
+    }
+  }, [collectionAiEnhanceJobStatus.progress?.remainingSeconds]);
+  
+  // Countdown timer - decreases every second when job is in progress
+  useEffect(() => {
+    if (!collectionSeoJobStatus.inProgress) return;
+    const interval = setInterval(() => {
+      setCollectionSeoRemainingSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [collectionSeoJobStatus.inProgress]);
+  
+  useEffect(() => {
+    if (!collectionAiEnhanceJobStatus.inProgress) return;
+    const interval = setInterval(() => {
+      setCollectionAiEnhanceRemainingSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [collectionAiEnhanceJobStatus.inProgress]);
+  
   // Load models and plan on mount
   useEffect(() => {
     if (!shop) return;
@@ -2121,10 +2155,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                               {(() => {
                                 const p = collectionAiEnhanceJobStatus.progress;
                                 if (p?.current && p?.total) {
-                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
                                   let msg = `Enhancing ${p.current}/${p.total} collections`;
-                                  if (remainingMin > 0) {
-                                    msg += ` • ~${remainingMin} min remaining`;
+                                  // Use live countdown
+                                  if (collectionAiEnhanceRemainingSeconds >= 60) {
+                                    msg += ` • ~${Math.ceil(collectionAiEnhanceRemainingSeconds / 60)} min remaining`;
+                                  } else if (collectionAiEnhanceRemainingSeconds > 0) {
+                                    msg += ` • ~${collectionAiEnhanceRemainingSeconds}s remaining`;
                                   }
                                   return msg;
                                 }
@@ -2193,10 +2229,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                               {(() => {
                                 const p = collectionSeoJobStatus.progress;
                                 if (p?.current && p?.total) {
-                                  const remainingMin = Math.ceil((p.remainingSeconds || 0) / 60);
                                   let msg = `Processing ${p.current}/${p.total} collections`;
-                                  if (remainingMin > 0) {
-                                    msg += ` • ~${remainingMin} min remaining`;
+                                  // Use live countdown
+                                  if (collectionSeoRemainingSeconds >= 60) {
+                                    msg += ` • ~${Math.ceil(collectionSeoRemainingSeconds / 60)} min remaining`;
+                                  } else if (collectionSeoRemainingSeconds > 0) {
+                                    msg += ` • ~${collectionSeoRemainingSeconds}s remaining`;
                                   }
                                   return msg;
                                 }
