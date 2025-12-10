@@ -744,8 +744,7 @@ export default function SitemapPage({ shop: shopProp }) {
                 {(aiSitemapStatus.progress?.total > 0 || basicSitemapProgress?.total > 0) && (
                   <ProgressBar 
                     progress={aiSitemapStatus.progress?.percent || basicSitemapProgress?.percent || 0} 
-                    size="small" 
-                    tone="primary"
+                    size="small"
                   />
                 )}
               </BlockStack>
