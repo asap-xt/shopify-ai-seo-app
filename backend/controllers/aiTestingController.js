@@ -616,7 +616,7 @@ IMPORTANT RULES:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: questionToAsk }
         ],
-        max_tokens: 800,
+        max_tokens: 2000, // Increased for "thinking" models like Gemini Pro
         temperature: 0.5
       })
     });
