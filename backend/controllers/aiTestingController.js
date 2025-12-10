@@ -524,8 +524,22 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
       console.log('[AI-TESTING] Fetching public store data for AI Data Quality prompt...');
       const publicData = await fetchPublicStoreData(publicDomain, shop);
       
+      // Get actual product counts from our database
+      const Product = (await import('../db/Product.js')).default;
+      const activeProductCount = await Product.countDocuments({ 
+        shop, 
+        $or: [{ status: 'ACTIVE' }, { status: { $exists: false } }, { status: null }]
+      });
+      const optimizedProductCount = await Product.countDocuments({ 
+        shop, 
+        $or: [{ status: 'ACTIVE' }, { status: { $exists: false } }, { status: null }],
+        'seoStatus.optimized': true 
+      });
+      
       publicDataContext = `\n\n=== ACTUAL STORE DATA (fetched in real-time) ===\n`;
       publicDataContext += `\nSTORE DOMAIN: ${publicDomain}\n`;
+      publicDataContext += `\nIMPORTANT: This store has ${activeProductCount} ACTIVE products (${optimizedProductCount} are AI-optimized).\n`;
+      publicDataContext += `Note: Shopify's public products.json may show more products including drafts and archived items.\n`;
       
       // robots.txt from store
       if (publicData.robotsTxt) {
