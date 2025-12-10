@@ -360,25 +360,25 @@ function generateDynamicPrompts(data) {
   });
 
   // ============================================
-  // 4. SEO VALUE DEMONSTRATION
+  // 4. AIEO VALUE DEMONSTRATION
   // ============================================
   prompts.push({
-    id: 'seo-meta',
-    category: 'SEO Value',
+    id: 'aieo-meta',
+    category: 'AIEO Value',
     question: `Read the AI-optimized meta descriptions for products at ${publicDomain}. Are they well-written?`,
     description: 'Evaluate meta description quality'
   });
   
   prompts.push({
-    id: 'seo-keywords',
-    category: 'SEO Value',
+    id: 'aieo-keywords',
+    category: 'AIEO Value',
     question: `What keywords are products at ${publicDomain} optimized for? Is the SEO strategy effective?`,
     description: 'Analyze keyword optimization'
   });
   
   prompts.push({
-    id: 'seo-voice',
-    category: 'SEO Value',
+    id: 'aieo-voice',
+    category: 'AIEO Value',
     question: `How well is ${publicDomain} optimized for voice search queries like "Hey, where can I buy ${productTypes?.[0]?.toLowerCase() || 'products'}?"`,
     description: 'Test voice search readiness'
   });
@@ -387,10 +387,10 @@ function generateDynamicPrompts(data) {
   if (collections && collections.length > 0) {
     const randomCollection = collections[Math.floor(Math.random() * Math.min(collections.length, 3))];
     prompts.push({
-      id: 'seo-collection',
-      category: 'SEO Value',
-      question: `Analyze the SEO optimization of the "${randomCollection}" collection at ${publicDomain}`,
-      description: `Analyze ${randomCollection} collection SEO`
+      id: 'aieo-collection',
+      category: 'AIEO Value',
+      question: `Analyze the AIEO optimization of the "${randomCollection}" collection at ${publicDomain}`,
+      description: `Analyze ${randomCollection} collection AIEO`
     });
   }
 

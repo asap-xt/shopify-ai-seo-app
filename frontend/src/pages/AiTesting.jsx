@@ -1433,19 +1433,19 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
           </Box>
         </Card>
 
-        {/* SEO Value Card */}
+        {/* AIEO Value Card */}
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
               <BlockStack gap="100">
-                <Text as="h3" variant="headingMd">SEO Value</Text>
+                <Text as="h3" variant="headingMd">AIEO Value</Text>
                 <Text variant="bodySm" tone="subdued">
-                  Demonstrate the value of your SEO optimization
+                  Demonstrate the value of your AIEO optimization
                 </Text>
               </BlockStack>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'SEO Value').map(prompt => (
+                {dynamicPrompts.filter(p => p.category === 'AIEO Value').map(prompt => (
                   <Box 
                     key={prompt.id} 
                     padding="300" 
@@ -1456,7 +1456,7 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                       <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => runBotTest(prompt.question, prompt.id, 'SEO Value')}
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'AIEO Value')}
                         loading={loadingPromptIds.has(prompt.id)}
                         disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
@@ -1468,7 +1468,7 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
               </div>
 
               {/* Response area - under the card */}
-              {categoryResponse['SEO Value'] && (
+              {categoryResponse['AIEO Value'] && (
                 <Box 
                   padding="400" 
                   background="bg-surface-secondary" 
@@ -1477,10 +1477,10 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                   <BlockStack gap="300">
                     <InlineStack align="space-between" blockAlign="center">
                       <Text variant="bodyMd" fontWeight="semibold">
-                        {categoryResponse['SEO Value'].bot?.name} Response
+                        {categoryResponse['AIEO Value'].bot?.name} Response
                       </Text>
                       <Text variant="bodySm" tone="subdued">
-                        {categoryResponse['SEO Value'].usage?.tokensUsed?.toLocaleString()} tokens
+                        {categoryResponse['AIEO Value'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
                     <div 
@@ -1495,13 +1495,13 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                         fontSize: '14px'
                       }}
                     >
-                      {categoryResponse['SEO Value'].response}
+                      {categoryResponse['AIEO Value'].response}
                     </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
                         onClick={() => {
-                          navigator.clipboard.writeText(categoryResponse['SEO Value'].response);
+                          navigator.clipboard.writeText(categoryResponse['AIEO Value'].response);
                           setToastContent('Response copied to clipboard');
                         }}
                       >
@@ -1511,7 +1511,7 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                         size="slim"
                         onClick={() => setCategoryResponse(prev => {
                           const updated = { ...prev };
-                          delete updated['SEO Value'];
+                          delete updated['AIEO Value'];
                           return updated;
                         })}
                       >
