@@ -1175,14 +1175,20 @@ export default function AiTesting({ shop: shopProp }) {
                         {categoryResponse['AI Data Quality'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Box 
-                      padding="300" 
-                      background="bg-surface" 
-                      borderRadius="100"
-                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
                     >
-                      <Text variant="bodyMd">{categoryResponse['AI Data Quality'].response}</Text>
-                    </Box>
+                      {categoryResponse['AI Data Quality'].response}
+                    </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
@@ -1261,14 +1267,20 @@ export default function AiTesting({ shop: shopProp }) {
                         {categoryResponse['Product Discovery'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Box 
-                      padding="300" 
-                      background="bg-surface" 
-                      borderRadius="100"
-                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
                     >
-                      <Text variant="bodyMd">{categoryResponse['Product Discovery'].response}</Text>
-                    </Box>
+                      {categoryResponse['Product Discovery'].response}
+                    </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
@@ -1347,14 +1359,20 @@ export default function AiTesting({ shop: shopProp }) {
                         {categoryResponse['Business Intelligence'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Box 
-                      padding="300" 
-                      background="bg-surface" 
-                      borderRadius="100"
-                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
                     >
-                      <Text variant="bodyMd">{categoryResponse['Business Intelligence'].response}</Text>
-                    </Box>
+                      {categoryResponse['Business Intelligence'].response}
+                    </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
@@ -1433,14 +1451,20 @@ export default function AiTesting({ shop: shopProp }) {
                         {categoryResponse['SEO Value'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Box 
-                      padding="300" 
-                      background="bg-surface" 
-                      borderRadius="100"
-                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
                     >
-                      <Text variant="bodyMd">{categoryResponse['SEO Value'].response}</Text>
-                    </Box>
+                      {categoryResponse['SEO Value'].response}
+                    </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
@@ -1513,14 +1537,20 @@ export default function AiTesting({ shop: shopProp }) {
                         {categoryResponse['Custom'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Box 
-                      padding="300" 
-                      background="bg-surface" 
-                      borderRadius="100"
-                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
                     >
-                      <Text variant="bodyMd">{categoryResponse['Custom'].response}</Text>
-                    </Box>
+                      {categoryResponse['Custom'].response}
+                    </div>
                     <InlineStack align="end" gap="200">
                       <Button
                         size="slim"
