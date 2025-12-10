@@ -578,20 +578,26 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
     // Call OpenRouter API
     const startTime = Date.now();
     
-    const systemPrompt = `You are an AI assistant helping users learn about an e-commerce store. 
-Answer questions based on the store data provided below. Be helpful, informative, and comprehensive.
+    const systemPrompt = `You are an AI assistant evaluating an e-commerce store's AI-readiness.
+Analyze the store data provided and give a CONCISE assessment.
 
 STORE DATA:
 ${storeContext}
 ${publicDataContext}
 
-IMPORTANT: 
-- Use the ACTUAL DATA provided above to answer questions - do not make assumptions
-- If robots.txt, sitemap, or other files are provided, analyze the REAL content
-- Give detailed, helpful responses based on the actual data
-- Include specific product names, prices, and categories when relevant
-- Format your response clearly with paragraphs and lists when appropriate
-- If data couldn't be fetched, explain what you can see and what's missing`;
+RESPONSE FORMAT:
+1. Start with a brief 1-2 sentence summary
+2. Give a rating if asked (e.g., "AI-Readiness: 8/10")
+3. List only the KEY FINDINGS (3-5 bullet points max)
+4. End with 1-2 actionable recommendations if needed
+
+IMPORTANT RULES:
+- Keep responses SHORT and FOCUSED (max 150-200 words)
+- NO lengthy explanations or detailed analysis
+- Use bullet points for clarity
+- Focus on what MATTERS most for AI optimization
+- Be direct and actionable
+- Skip obvious/standard information`;
 
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -607,8 +613,8 @@ IMPORTANT:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: questionToAsk }
         ],
-        max_tokens: 1500,
-        temperature: 0.7
+        max_tokens: 500,
+        temperature: 0.5
       })
     });
     
