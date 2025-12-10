@@ -768,6 +768,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     const selectedWithoutSEO = selectedProducts.filter(p =>
       !p.optimizationSummary?.optimizedLanguages?.length
     );
+    
+    // Filter out already AI Enhanced products (skip them to save tokens)
+    const alreadyEnhanced = selectedWithSEO.filter(p =>
+      p.optimizationSummary?.aiEnhanced === true
+    );
+    const needsEnhancement = selectedWithSEO.filter(p =>
+      p.optimizationSummary?.aiEnhanced !== true
+    );
 
     // Check if ALL selected products have no SEO
     if (selectedWithSEO.length === 0 && selectedWithoutSEO.length > 0) {
@@ -779,16 +787,22 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       setToast('Please select products');
       return;
     }
+    
+    // Check if ALL products with SEO are already enhanced
+    if (needsEnhancement.length === 0 && alreadyEnhanced.length > 0) {
+      setToast(`All ${alreadyEnhanced.length} selected product(s) are already AI Enhanced. No action needed.`);
+      return;
+    }
 
-    // Check product limit before processing (count only those with SEO)
-    const selectedCount = selectedWithSEO.length;
+    // Check product limit before processing (count only those that need enhancement)
+    const selectedCount = needsEnhancement.length;
     
     if (selectedCount > productLimit) {
       // Show upgrade modal instead of processing
       const nextPlan = getNextPlanForLimit(selectedCount);
       setTokenError({
         error: `Product limit exceeded`,
-        message: `Your ${plan} plan supports up to ${productLimit} products for AI Enhancement. You have selected ${selectedCount} products with Basic SEO.`,
+        message: `Your ${plan} plan supports up to ${productLimit} products for AI Enhancement. You have selected ${selectedCount} products that need enhancement.`,
         minimumPlanRequired: nextPlan,
         currentPlan: plan,
         features: [
@@ -801,13 +815,24 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       setShowPlanUpgradeModal(true);
       return;
     }
+    
+    // Show info toast if some products are being skipped
+    if (alreadyEnhanced.length > 0) {
+      setToast(`Skipping ${alreadyEnhanced.length} already enhanced product(s). Processing ${needsEnhancement.length} product(s).`);
+    }
 
-    // Prepare only products WITH Basic SEO for batch processing
-    const productsForBatch = selectedWithSEO.map(product => ({
+    // Prepare only products that NEED enhancement for batch processing
+    const productsForBatch = needsEnhancement.map(product => ({
       productId: product.gid || toProductGID(product.id),
       languages: product.optimizationSummary.optimizedLanguages,
       title: product.title
     }));
+    
+    // If no products need enhancement (all skipped), exit early
+    if (productsForBatch.length === 0) {
+      setToast('No products to enhance. All selected products are either already enhanced or missing Basic SEO.');
+      return;
+    }
     
     // Track products without SEO to add to report as "failed"
     const productsWithoutSEOCount = selectedWithoutSEO.length;
