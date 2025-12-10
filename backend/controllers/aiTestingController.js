@@ -18,6 +18,8 @@ const normalizePlan = (plan) => {
 
 // ============================================
 // AI BOT CONFIGURATION (OpenRouter models)
+// Price multipliers relative to base token price (Gemini Flash Lite = 1.0)
+// This ensures we charge appropriately for more expensive models
 // ============================================
 const AI_BOTS = {
   'meta': {
@@ -26,7 +28,8 @@ const AI_BOTS = {
     model: 'meta-llama/llama-4-maverick',
     description: 'Meta Llama 4 Maverick',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000
+    tokensPerTest: 2000,
+    priceMultiplier: 1.0 // Llama is cost-effective
   },
   'claude': {
     id: 'claude',
@@ -34,7 +37,8 @@ const AI_BOTS = {
     model: 'anthropic/claude-haiku-4.5',
     description: 'Anthropic Claude Haiku',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000
+    tokensPerTest: 2000,
+    priceMultiplier: 1.5 // Claude Haiku is ~1.5x more expensive
   },
   'gemini': {
     id: 'gemini',
@@ -42,7 +46,8 @@ const AI_BOTS = {
     model: 'google/gemini-2.5-pro',
     description: 'Google Gemini Pro',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000
+    tokensPerTest: 2000,
+    priceMultiplier: 3.0 // Gemini Pro is ~3x more expensive than Flash
   },
   'chatgpt': {
     id: 'chatgpt',
@@ -50,7 +55,8 @@ const AI_BOTS = {
     model: 'openai/gpt-5-mini',
     description: 'OpenAI GPT-5 Mini',
     minPlanIndex: 2, // Growth Plus+
-    tokensPerTest: 2500
+    tokensPerTest: 2500,
+    priceMultiplier: 1.2 // GPT Mini is relatively affordable
   },
   'perplexity': {
     id: 'perplexity',
@@ -58,7 +64,8 @@ const AI_BOTS = {
     model: 'perplexity/sonar',
     description: 'Perplexity Sonar',
     minPlanIndex: 3, // Growth Extra+
-    tokensPerTest: 3000
+    tokensPerTest: 3000,
+    priceMultiplier: 2.0 // Perplexity has per-request + token costs
   }
 };
 
@@ -435,8 +442,10 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
       });
     }
     
-    // Check and deduct tokens
-    const estimatedTokens = bot.tokensPerTest;
+    // Check and deduct tokens (apply price multiplier for expensive models)
+    const baseTokens = bot.tokensPerTest;
+    const priceMultiplier = bot.priceMultiplier || 1.0;
+    const estimatedTokens = Math.ceil(baseTokens * priceMultiplier);
     const tokenBalance = await TokenBalance.getOrCreate(shop);
     
     // Check trial restrictions
@@ -627,20 +636,26 @@ IMPORTANT RULES:
     const aiResult = await openRouterResponse.json();
     const responseTime = Date.now() - startTime;
     
+    // Calculate actual tokens used (raw from API)
+    const rawTokensUsed = aiResult.usage?.total_tokens || baseTokens;
+    
+    // Apply price multiplier - more expensive models cost more tokens
+    // priceMultiplier already defined above when calculating estimatedTokens
+    const adjustedTokensUsed = Math.ceil(rawTokensUsed * priceMultiplier);
+    
     // Debug logging for response analysis
     console.log('[AI-TESTING] Response from', bot.model, ':', {
       finishReason: aiResult.choices?.[0]?.finish_reason,
       contentLength: aiResult.choices?.[0]?.message?.content?.length,
-      tokensUsed: aiResult.usage?.total_tokens,
+      rawTokens: rawTokensUsed,
+      priceMultiplier,
+      adjustedTokens: adjustedTokensUsed,
       promptTokens: aiResult.usage?.prompt_tokens,
       completionTokens: aiResult.usage?.completion_tokens
     });
     
-    // Calculate actual tokens used
-    const tokensUsed = aiResult.usage?.total_tokens || estimatedTokens;
-    
-    // Finalize token usage
-    await tokenBalance.finalizeReservation(reservationId, tokensUsed);
+    // Finalize token usage with adjusted amount
+    await tokenBalance.finalizeReservation(reservationId, adjustedTokensUsed);
     
     // Invalidate cache
     try {
@@ -659,12 +674,14 @@ IMPORTANT RULES:
         id: bot.id,
         name: bot.name,
         icon: bot.icon,
-        model: bot.model
+        model: bot.model,
+        priceMultiplier
       },
       prompt: questionToAsk,
       response: aiResult.choices?.[0]?.message?.content || 'No response generated',
       usage: {
-        tokensUsed,
+        tokensUsed: adjustedTokensUsed, // Adjusted for model pricing
+        rawTokens: rawTokensUsed,       // Actual API tokens
         tokensRemaining: updatedBalance?.balance || 0,
         responseTimeMs: responseTime
       },
