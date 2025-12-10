@@ -1094,43 +1094,76 @@ export default function AiTesting({ shop: shopProp }) {
               <BlockStack gap="300">
                 <Text variant="headingSm">2. Select a Question</Text>
                 
-                {/* Dynamic Prompts */}
+                {/* Dynamic Prompts - Grouped by Category */}
                 {dynamicPrompts.length > 0 ? (
-                  <BlockStack gap="200">
-                    {dynamicPrompts.map(prompt => (
-                      <div
-                        key={prompt.id}
-                        onClick={() => {
-                          setSelectedPrompt(prompt);
-                          setCustomBotQuestion('');
-                        }}
-                        style={{
-                          padding: '12px 16px',
-                          borderRadius: '8px',
-                          border: selectedPrompt?.id === prompt.id 
-                            ? '2px solid var(--p-color-border-interactive)' 
-                            : '1px solid var(--p-color-border-subdued)',
-                          background: selectedPrompt?.id === prompt.id 
-                            ? 'var(--p-color-bg-surface-selected)' 
-                            : 'var(--p-color-bg-surface)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <InlineStack align="space-between" blockAlign="center">
+                  <BlockStack gap="400">
+                    {/* Group prompts by category */}
+                    {['AI Data Quality', 'Product Discovery', 'Business Intelligence', 'SEO Value'].map(category => {
+                      const categoryPrompts = dynamicPrompts.filter(p => p.category === category);
+                      if (categoryPrompts.length === 0) return null;
+                      
+                      const categoryColors = {
+                        'AI Data Quality': { bg: '#EEF2FF', border: '#6366F1', icon: '📊' },
+                        'Product Discovery': { bg: '#F0FDF4', border: '#22C55E', icon: '🔍' },
+                        'Business Intelligence': { bg: '#FEF3C7', border: '#F59E0B', icon: '💼' },
+                        'SEO Value': { bg: '#FCE7F3', border: '#EC4899', icon: '✨' }
+                      };
+                      const colors = categoryColors[category] || { bg: '#F3F4F6', border: '#9CA3AF', icon: '📋' };
+                      
+                      return (
+                        <BlockStack key={category} gap="200">
                           <InlineStack gap="200" blockAlign="center">
-                            <Text variant="bodyMd">{prompt.icon}</Text>
-                            <BlockStack gap="0">
-                              <Text variant="bodyMd">{prompt.question}</Text>
-                              <Text variant="bodySm" tone="subdued">{prompt.description}</Text>
-                            </BlockStack>
+                            <div style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              background: colors.bg,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '12px'
+                            }}>
+                              {colors.icon}
+                            </div>
+                            <Text variant="headingSm">{category}</Text>
                           </InlineStack>
-                          {selectedPrompt?.id === prompt.id && (
-                            <Badge tone="info">Selected</Badge>
-                          )}
-                        </InlineStack>
-                      </div>
-                    ))}
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px' }}>
+                            {categoryPrompts.map(prompt => (
+                              <div
+                                key={prompt.id}
+                                onClick={() => {
+                                  setSelectedPrompt(prompt);
+                                  setCustomBotQuestion('');
+                                }}
+                                style={{
+                                  padding: '12px 14px',
+                                  borderRadius: '8px',
+                                  border: selectedPrompt?.id === prompt.id 
+                                    ? `2px solid ${colors.border}` 
+                                    : '1px solid var(--p-color-border-subdued)',
+                                  background: selectedPrompt?.id === prompt.id 
+                                    ? colors.bg 
+                                    : 'var(--p-color-bg-surface)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <BlockStack gap="100">
+                                  <InlineStack gap="150" blockAlign="start">
+                                    <Text variant="bodyMd">{prompt.icon}</Text>
+                                    <Text variant="bodySm" fontWeight="medium" style={{ lineHeight: '1.4' }}>
+                                      {prompt.question}
+                                    </Text>
+                                  </InlineStack>
+                                  <Text variant="bodySm" tone="subdued">{prompt.description}</Text>
+                                </BlockStack>
+                              </div>
+                            ))}
+                          </div>
+                        </BlockStack>
+                      );
+                    })}
                   </BlockStack>
                 ) : (
                   <Banner tone="info">
