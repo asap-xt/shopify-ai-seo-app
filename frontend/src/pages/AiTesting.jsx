@@ -1031,15 +1031,15 @@ export default function AiTesting({ shop: shopProp }) {
           </Layout.Section>
         </Layout>
 
-        {/* Card 3: AI Bot Testing - NEW IMPLEMENTATION */}
+        {/* AI Bot Testing - Select Model Card */}
         <Card>
           <Box padding="400">
-            <BlockStack gap="500">
+            <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="center">
                 <BlockStack gap="100">
-                  <Text as="h3" variant="headingMd">🤖 AI Bot Testing</Text>
+                  <Text as="h3" variant="headingMd">Select AI Model</Text>
                   <Text variant="bodySm" tone="subdued">
-                    Test how real AI models respond to questions about your store
+                    Choose which AI model to use for testing
                   </Text>
                 </BlockStack>
                 {tokenBalance !== null && (
@@ -1049,262 +1049,318 @@ export default function AiTesting({ shop: shopProp }) {
                 )}
               </InlineStack>
 
-              {/* Step 1: Select AI Bot */}
-              <BlockStack gap="300">
-                <Text variant="headingSm">1. Select AI Model</Text>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                  {availableBots.map(bot => (
-                    <div
-                      key={bot.id}
-                      onClick={() => bot.available && setSelectedBotId(bot.id)}
-                      style={{
-                        padding: '16px',
-                        borderRadius: '12px',
-                        border: selectedBotId === bot.id 
-                          ? `2px solid ${bot.color}` 
-                          : '2px solid var(--p-color-border-subdued)',
-                        background: selectedBotId === bot.id 
-                          ? `${bot.color}10` 
-                          : 'var(--p-color-bg-surface)',
-                        cursor: bot.available ? 'pointer' : 'not-allowed',
-                        opacity: bot.available ? 1 : 0.5,
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <BlockStack gap="200">
-                        <InlineStack gap="200" blockAlign="center">
-                          <Text variant="headingMd">{bot.icon}</Text>
-                          <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
-                        </InlineStack>
-                        <Text variant="bodySm" tone="subdued">
-                          {bot.available ? `~${bot.tokensPerTest} tokens/test` : `Requires ${bot.requiredPlan}`}
-                        </Text>
-                        {!bot.available && (
-                          <Badge size="small">🔒 {bot.requiredPlan}</Badge>
-                        )}
-                      </BlockStack>
-                    </div>
-                  ))}
-                </div>
-              </BlockStack>
-
-              <Divider />
-
-              {/* Step 2: Select Prompt */}
-              <BlockStack gap="300">
-                <Text variant="headingSm">2. Select a Question</Text>
-                
-                {/* Dynamic Prompts - Grouped by Category */}
-                {dynamicPrompts.length > 0 ? (
-                  <BlockStack gap="400">
-                    {/* Group prompts by category */}
-                    {['AI Data Quality', 'Product Discovery', 'Business Intelligence', 'SEO Value'].map(category => {
-                      const categoryPrompts = dynamicPrompts.filter(p => p.category === category);
-                      if (categoryPrompts.length === 0) return null;
-                      
-                      const categoryColors = {
-                        'AI Data Quality': { bg: '#EEF2FF', border: '#6366F1', icon: '📊' },
-                        'Product Discovery': { bg: '#F0FDF4', border: '#22C55E', icon: '🔍' },
-                        'Business Intelligence': { bg: '#FEF3C7', border: '#F59E0B', icon: '💼' },
-                        'SEO Value': { bg: '#FCE7F3', border: '#EC4899', icon: '✨' }
-                      };
-                      const colors = categoryColors[category] || { bg: '#F3F4F6', border: '#9CA3AF', icon: '📋' };
-                      
-                      return (
-                        <BlockStack key={category} gap="200">
-                          <InlineStack gap="200" blockAlign="center">
-                            <div style={{
-                              width: '24px',
-                              height: '24px',
-                              borderRadius: '6px',
-                              background: colors.bg,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '12px'
-                            }}>
-                              {colors.icon}
-                            </div>
-                            <Text variant="headingSm">{category}</Text>
-                          </InlineStack>
-                          
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px' }}>
-                            {categoryPrompts.map(prompt => (
-                              <div
-                                key={prompt.id}
-                                onClick={() => {
-                                  setSelectedPrompt(prompt);
-                                  setCustomBotQuestion('');
-                                }}
-                                style={{
-                                  padding: '12px 14px',
-                                  borderRadius: '8px',
-                                  border: selectedPrompt?.id === prompt.id 
-                                    ? `2px solid ${colors.border}` 
-                                    : '1px solid var(--p-color-border-subdued)',
-                                  background: selectedPrompt?.id === prompt.id 
-                                    ? colors.bg 
-                                    : 'var(--p-color-bg-surface)',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease'
-                                }}
-                              >
-                                <BlockStack gap="100">
-                                  <InlineStack gap="150" blockAlign="start">
-                                    <Text variant="bodyMd">{prompt.icon}</Text>
-                                    <Text variant="bodySm" fontWeight="medium" style={{ lineHeight: '1.4' }}>
-                                      {prompt.question}
-                                    </Text>
-                                  </InlineStack>
-                                  <Text variant="bodySm" tone="subdued">{prompt.description}</Text>
-                                </BlockStack>
-                              </div>
-                            ))}
-                          </div>
-                        </BlockStack>
-                      );
-                    })}
-                  </BlockStack>
-                ) : (
-                  <Banner tone="info">
-                    <Text variant="bodySm">Loading store-specific questions...</Text>
-                  </Banner>
-                )}
-
-                {/* Custom Question */}
-                <Box paddingBlockStart="200">
-                  <Text variant="bodySm" fontWeight="semibold">Or ask your own question:</Text>
-                  <Box paddingBlockStart="100">
-                    <TextField
-                      label=""
-                      value={customBotQuestion}
-                      onChange={(value) => {
-                        setCustomBotQuestion(value);
-                        if (value) setSelectedPrompt(null);
-                      }}
-                      placeholder={`e.g., What ${storeInsights?.categories?.productTypes?.[0]?.toLowerCase() || 'products'} do you recommend?`}
-                      autoComplete="off"
-                    />
-                  </Box>
-                </Box>
-              </BlockStack>
-
-              <Divider />
-
-              {/* Step 3: Run Test */}
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="headingSm">3. Run Test</Text>
-                  <Button
-                    variant="primary"
-                    onClick={() => runBotTest()}
-                    loading={botTesting}
-                    disabled={
-                      botTesting || 
-                      !selectedBotId || 
-                      (!selectedPrompt && !customBotQuestion.trim())
-                    }
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                {availableBots.map(bot => (
+                  <div
+                    key={bot.id}
+                    onClick={() => bot.available && setSelectedBotId(bot.id)}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '8px',
+                      border: selectedBotId === bot.id 
+                        ? '2px solid var(--p-color-border-interactive)' 
+                        : '1px solid var(--p-color-border-subdued)',
+                      background: selectedBotId === bot.id 
+                        ? 'var(--p-color-bg-surface-selected)' 
+                        : 'var(--p-color-bg-surface)',
+                      cursor: bot.available ? 'pointer' : 'not-allowed',
+                      opacity: bot.available ? 1 : 0.5,
+                      transition: 'all 0.15s ease'
+                    }}
                   >
-                    {botTesting ? 'Testing...' : `Test with ${availableBots.find(b => b.id === selectedBotId)?.name || 'AI Bot'}`}
-                  </Button>
-                </InlineStack>
-
-                {/* Token Cost Preview */}
-                {selectedBotId && (
-                  <Banner tone="info">
-                    <InlineStack gap="100">
-                      <Text variant="bodySm">
-                        Estimated cost: ~{availableBots.find(b => b.id === selectedBotId)?.tokensPerTest?.toLocaleString() || '2,000'} tokens
+                    <BlockStack gap="100">
+                      <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {bot.available ? `~${bot.tokensPerTest.toLocaleString()} tokens per test` : `Requires ${bot.requiredPlan}`}
                       </Text>
-                      {tokenBalance !== null && tokenBalance < (availableBots.find(b => b.id === selectedBotId)?.tokensPerTest || 2000) && (
-                        <Button size="slim" onClick={() => setShowTokenPurchaseModal(true)}>
-                          Buy Tokens
-                        </Button>
+                      {!bot.available && (
+                        <Badge size="small">{bot.requiredPlan}</Badge>
                       )}
-                    </InlineStack>
-                  </Banner>
-                )}
+                    </BlockStack>
+                  </div>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* AI Data Quality Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">AI Data Quality</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Analyze how AI bots see your store's structured data
+                </Text>
               </BlockStack>
 
-              {/* Test Result */}
-              {botTestResponse && (
-                <>
-                  <Divider />
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <InlineStack gap="200" blockAlign="center">
-                        <Text variant="headingSm">
-                          {botTestResponse.bot?.icon} {botTestResponse.bot?.name} Response
-                        </Text>
-                        <Badge tone="success">✓ Complete</Badge>
-                      </InlineStack>
-                      {botTestUsage && (
-                        <Text variant="bodySm" tone="subdued">
-                          {botTestUsage.tokensUsed?.toLocaleString()} tokens • {(botTestUsage.responseTimeMs / 1000).toFixed(1)}s
-                        </Text>
-                      )}
-                    </InlineStack>
-
-                    <Box 
-                      background="bg-surface-secondary" 
-                      padding="400" 
-                      borderRadius="200"
-                      style={{ 
-                        maxHeight: '400px', 
-                        overflow: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'var(--p-font-family-sans)',
-                        lineHeight: '1.6'
-                      }}
-                    >
-                      <Text variant="bodyMd">{botTestResponse.response}</Text>
-                    </Box>
-
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" tone="subdued">
-                        Question: "{botTestResponse.prompt}"
-                      </Text>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'AI Data Quality').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => {
-                          navigator.clipboard.writeText(botTestResponse.response);
-                          setToastContent('Response copied to clipboard!');
-                        }}
+                        onClick={() => runBotTest(prompt.question)}
+                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        disabled={!selectedBotId || botTesting}
                       >
-                        Copy Response
+                        Check
                       </Button>
+                      {botTestResponse && botTestResponse.prompt === prompt.question && (
+                        <Box paddingBlockStart="200">
+                          <Box 
+                            padding="300" 
+                            background="bg-surface" 
+                            borderRadius="100"
+                            style={{ maxHeight: '200px', overflow: 'auto' }}
+                          >
+                            <BlockStack gap="200">
+                              <InlineStack align="space-between">
+                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                                <Text variant="bodySm" tone="subdued">
+                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                                </Text>
+                              </InlineStack>
+                              <Text variant="bodySm">{botTestResponse.response}</Text>
+                            </BlockStack>
+                          </Box>
+                        </Box>
+                      )}
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Product Discovery Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Product Discovery</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Test how AI finds and recommends your products
+                </Text>
+              </BlockStack>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'Product Discovery').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
+                      <Button
+                        size="slim"
+                        onClick={() => runBotTest(prompt.question)}
+                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        disabled={!selectedBotId || botTesting}
+                      >
+                        Check
+                      </Button>
+                      {botTestResponse && botTestResponse.prompt === prompt.question && (
+                        <Box paddingBlockStart="200">
+                          <Box 
+                            padding="300" 
+                            background="bg-surface" 
+                            borderRadius="100"
+                            style={{ maxHeight: '200px', overflow: 'auto' }}
+                          >
+                            <BlockStack gap="200">
+                              <InlineStack align="space-between">
+                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                                <Text variant="bodySm" tone="subdued">
+                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                                </Text>
+                              </InlineStack>
+                              <Text variant="bodySm">{botTestResponse.response}</Text>
+                            </BlockStack>
+                          </Box>
+                        </Box>
+                      )}
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Business Intelligence Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Business Intelligence</Text>
+                <Text variant="bodySm" tone="subdued">
+                  See how AI extracts business information from your store
+                </Text>
+              </BlockStack>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'Business Intelligence').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
+                      <Button
+                        size="slim"
+                        onClick={() => runBotTest(prompt.question)}
+                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        disabled={!selectedBotId || botTesting}
+                      >
+                        Check
+                      </Button>
+                      {botTestResponse && botTestResponse.prompt === prompt.question && (
+                        <Box paddingBlockStart="200">
+                          <Box 
+                            padding="300" 
+                            background="bg-surface" 
+                            borderRadius="100"
+                            style={{ maxHeight: '200px', overflow: 'auto' }}
+                          >
+                            <BlockStack gap="200">
+                              <InlineStack align="space-between">
+                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                                <Text variant="bodySm" tone="subdued">
+                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                                </Text>
+                              </InlineStack>
+                              <Text variant="bodySm">{botTestResponse.response}</Text>
+                            </BlockStack>
+                          </Box>
+                        </Box>
+                      )}
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* SEO Value Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">SEO Value</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Demonstrate the value of your SEO optimization
+                </Text>
+              </BlockStack>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'SEO Value').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
+                      <Button
+                        size="slim"
+                        onClick={() => runBotTest(prompt.question)}
+                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        disabled={!selectedBotId || botTesting}
+                      >
+                        Check
+                      </Button>
+                      {botTestResponse && botTestResponse.prompt === prompt.question && (
+                        <Box paddingBlockStart="200">
+                          <Box 
+                            padding="300" 
+                            background="bg-surface" 
+                            borderRadius="100"
+                            style={{ maxHeight: '200px', overflow: 'auto' }}
+                          >
+                            <BlockStack gap="200">
+                              <InlineStack align="space-between">
+                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                                <Text variant="bodySm" tone="subdued">
+                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                                </Text>
+                              </InlineStack>
+                              <Text variant="bodySm">{botTestResponse.response}</Text>
+                            </BlockStack>
+                          </Box>
+                        </Box>
+                      )}
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Custom Question Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Custom Question</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Ask your own question to the AI model
+                </Text>
+              </BlockStack>
+
+              <TextField
+                label=""
+                value={customBotQuestion}
+                onChange={setCustomBotQuestion}
+                placeholder="Enter your question..."
+                autoComplete="off"
+                connectedRight={
+                  <Button
+                    onClick={() => runBotTest(customBotQuestion)}
+                    loading={botTesting}
+                    disabled={!selectedBotId || !customBotQuestion.trim() || botTesting}
+                  >
+                    Ask
+                  </Button>
+                }
+              />
+
+              {botTestResponse && botTestResponse.prompt === customBotQuestion && (
+                <Box 
+                  padding="300" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                  style={{ maxHeight: '300px', overflow: 'auto' }}
+                >
+                  <BlockStack gap="200">
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
                     </InlineStack>
+                    <Text variant="bodyMd">{botTestResponse.response}</Text>
                   </BlockStack>
-                </>
+                </Box>
               )}
             </BlockStack>
           </Box>
         </Card>
-
-        {/* OLD: Test with Real AI Bots - COMMENTED OUT 
-        <Card>
-          <Box padding="300">
-            <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">Test with Real AI Bots</Text>
-              <Text variant="bodyMd" tone="subdued">
-                Manually test your store with real AI search engines
-              </Text>
-              ... (old implementation)
-            </BlockStack>
-          </Box>
-        </Card>
-        */}
-
-        {/* OLD: AI Search Simulation - COMMENTED OUT
-        <Card>
-          <Box padding="300">
-            <BlockStack gap="300">
-              <Text as="h4" variant="headingSm">AI Search Simulation</Text>
-              ... (old implementation)
-            </BlockStack>
-          </Box>
-        </Card>
-        */}
       </BlockStack>
 
       {toastContent && (

@@ -24,51 +24,41 @@ const AI_BOTS = {
     id: 'meta',
     name: 'Meta AI (Llama 4)',
     model: 'meta-llama/llama-4-maverick',
-    icon: '🦙',
-    description: 'Meta\'s latest Llama 4 Maverick model',
+    description: 'Meta Llama 4 Maverick',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000, // Estimated tokens per test
-    color: '#0668E1'
+    tokensPerTest: 2000
   },
   'claude': {
     id: 'claude',
     name: 'Claude Haiku 4.5',
     model: 'anthropic/claude-haiku-4.5',
-    icon: '🎭',
-    description: 'Anthropic\'s fast and efficient Claude model',
+    description: 'Anthropic Claude Haiku',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000,
-    color: '#D97706'
+    tokensPerTest: 2000
   },
   'gemini': {
     id: 'gemini',
     name: 'Gemini 2.5 Pro',
     model: 'google/gemini-2.5-pro',
-    icon: '✨',
-    description: 'Google\'s advanced Gemini model',
+    description: 'Google Gemini Pro',
     minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000,
-    color: '#4285F4'
+    tokensPerTest: 2000
   },
   'chatgpt': {
     id: 'chatgpt',
     name: 'ChatGPT 5 Mini',
     model: 'openai/gpt-5-mini',
-    icon: '🤖',
-    description: 'OpenAI\'s latest GPT-5 Mini model',
+    description: 'OpenAI GPT-5 Mini',
     minPlanIndex: 2, // Growth Plus+
-    tokensPerTest: 2500,
-    color: '#10A37F'
+    tokensPerTest: 2500
   },
   'perplexity': {
     id: 'perplexity',
     name: 'Perplexity Sonar',
     model: 'perplexity/sonar',
-    icon: '🔍',
-    description: 'Perplexity\'s search-optimized Sonar model',
+    description: 'Perplexity Sonar',
     minPlanIndex: 3, // Growth Extra+
-    tokensPerTest: 3000,
-    color: '#6366F1'
+    tokensPerTest: 3000
   }
 };
 
@@ -265,12 +255,10 @@ function generateDynamicPrompts(data) {
   
   // ============================================
   // 1. AI DATA QUALITY ANALYSIS
-  // Shows how AI bots see the structured data
   // ============================================
   prompts.push({
     id: 'data-quality-robots',
     category: 'AI Data Quality',
-    icon: '📊',
     question: `Analyze the robots.txt and data structure of ${publicDomain}. What AI-accessible endpoints do you find?`,
     description: 'Check AI crawler access configuration'
   });
@@ -278,7 +266,6 @@ function generateDynamicPrompts(data) {
   prompts.push({
     id: 'data-quality-structured',
     category: 'AI Data Quality',
-    icon: '📊',
     question: `What structured data (JSON feeds, sitemaps, schema.org) does ${publicDomain} provide for AI crawlers?`,
     description: 'Evaluate structured data availability'
   });
@@ -286,45 +273,40 @@ function generateDynamicPrompts(data) {
   prompts.push({
     id: 'data-quality-rating',
     category: 'AI Data Quality',
-    icon: '📊',
     question: `Rate the AI-readiness of ${publicDomain}'s product catalog from 1-10 and explain why.`,
-    description: 'Get AI-readiness score assessment'
+    description: 'Get AI-readiness score'
   });
 
   // ============================================
   // 2. PRODUCT DISCOVERY
-  // Demonstrates how AI can find specific products
   // ============================================
   
-  // Price-based search (use actual price range)
+  // Price-based search
   if (priceRange && priceRange.max > 0) {
     const midPrice = Math.round((priceRange.min + priceRange.max) / 2);
     prompts.push({
       id: 'discovery-price',
       category: 'Product Discovery',
-      icon: '🔍',
       question: `Find products under ${midPrice} ${currencySymbol} at ${publicDomain}`,
-      description: `Budget-friendly options (under ${midPrice} ${currencySymbol})`
+      description: `Find budget-friendly options under ${midPrice} ${currencySymbol}`
     });
   }
   
-  // Product type search (use actual product types)
+  // Product type search
   if (productTypes && productTypes.length > 0) {
     const randomType = productTypes[Math.floor(Math.random() * productTypes.length)];
     prompts.push({
       id: 'discovery-type',
       category: 'Product Discovery',
-      icon: '🔍',
       question: `What ${randomType.toLowerCase()} products does ${publicDomain} sell? Show me the best options.`,
-      description: `Explore ${randomType} category`
+      description: `Browse ${randomType} products`
     });
   }
   
-  // Tag-based search (use actual tags for specific attributes)
+  // Tag-based search
   if (tags && tags.length > 0) {
-    // Find interesting tags (material, style, etc.)
     const interestingTags = tags.filter(t => 
-      !t.match(/^\d+$/) && // not just numbers
+      !t.match(/^\d+$/) && 
       t.length > 2 && 
       t.length < 30
     );
@@ -333,9 +315,8 @@ function generateDynamicPrompts(data) {
       prompts.push({
         id: 'discovery-attribute',
         category: 'Product Discovery',
-        icon: '🔍',
         question: `Find ${randomTag.toLowerCase()} products at ${publicDomain}`,
-        description: `Search by: ${randomTag}`
+        description: `Search by attribute: ${randomTag}`
       });
     }
   }
@@ -345,9 +326,8 @@ function generateDynamicPrompts(data) {
     prompts.push({
       id: 'discovery-gift',
       category: 'Product Discovery',
-      icon: '🎁',
       question: `Recommend a gift from ${publicDomain} for someone who likes ${collections[0]?.toLowerCase() || 'quality products'}`,
-      description: 'Gift recommendations'
+      description: 'Get gift recommendations'
     });
   }
   
@@ -357,7 +337,6 @@ function generateDynamicPrompts(data) {
     prompts.push({
       id: 'discovery-compare',
       category: 'Product Discovery',
-      icon: '⚖️',
       question: `Compare the top 3 ${type.toLowerCase()} at ${publicDomain} by price and features`,
       description: `Compare ${type} products`
     });
@@ -365,40 +344,34 @@ function generateDynamicPrompts(data) {
 
   // ============================================
   // 3. BUSINESS INTELLIGENCE
-  // Shows how AI extracts business information
   // ============================================
   prompts.push({
     id: 'business-positioning',
     category: 'Business Intelligence',
-    icon: '💼',
     question: `What is ${publicDomain}'s brand positioning based on their product descriptions and store data?`,
-    description: 'Brand analysis and positioning'
+    description: 'Analyze brand positioning'
   });
   
   prompts.push({
     id: 'business-markets',
     category: 'Business Intelligence',
-    icon: '🌍',
     question: `What languages and markets does ${publicDomain} target? Who is their ideal customer?`,
-    description: 'Target markets and audience'
+    description: 'Identify target markets and audience'
   });
   
   prompts.push({
     id: 'business-policies',
     category: 'Business Intelligence',
-    icon: '📋',
     question: `Summarize ${publicDomain}'s return policy, shipping options, and customer service contact.`,
-    description: 'Policies and contact summary'
+    description: 'Review policies and contact info'
   });
 
   // ============================================
   // 4. SEO VALUE DEMONSTRATION
-  // Directly shows the value of optimization
   // ============================================
   prompts.push({
     id: 'seo-meta',
     category: 'SEO Value',
-    icon: '✨',
     question: `Read the AI-optimized meta descriptions for products at ${publicDomain}. Are they well-written?`,
     description: 'Evaluate meta description quality'
   });
@@ -406,28 +379,25 @@ function generateDynamicPrompts(data) {
   prompts.push({
     id: 'seo-keywords',
     category: 'SEO Value',
-    icon: '🔑',
     question: `What keywords are products at ${publicDomain} optimized for? Is the SEO strategy effective?`,
-    description: 'Keyword optimization analysis'
+    description: 'Analyze keyword optimization'
   });
   
   prompts.push({
     id: 'seo-voice',
     category: 'SEO Value',
-    icon: '🎙️',
     question: `How well is ${publicDomain} optimized for voice search queries like "Hey, where can I buy ${productTypes?.[0]?.toLowerCase() || 'products'}?"`,
-    description: 'Voice search readiness'
+    description: 'Test voice search readiness'
   });
   
-  // Collection-specific SEO (if collections exist)
+  // Collection-specific SEO
   if (collections && collections.length > 0) {
     const randomCollection = collections[Math.floor(Math.random() * Math.min(collections.length, 3))];
     prompts.push({
       id: 'seo-collection',
       category: 'SEO Value',
-      icon: '📁',
       question: `Analyze the SEO optimization of the "${randomCollection}" collection at ${publicDomain}`,
-      description: `Collection SEO: ${randomCollection}`
+      description: `Analyze ${randomCollection} collection SEO`
     });
   }
 
