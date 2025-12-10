@@ -281,12 +281,12 @@ function generateDynamicPrompts(data) {
   // 2. PRODUCT DISCOVERY
   // ============================================
   
-  // Always show "Browse all products" option
+  // Browse catalog
   prompts.push({
     id: 'discovery-browse',
     category: 'Product Discovery',
-    question: `What products does ${publicDomain} offer? Give me a quick overview of their catalog.`,
-    description: 'Browse product catalog'
+    question: `What are the best products at ${publicDomain}? Give me your top recommendations.`,
+    description: 'Top product recommendations'
   });
   
   // Price-based search (if price data available)
@@ -295,8 +295,8 @@ function generateDynamicPrompts(data) {
     prompts.push({
       id: 'discovery-price',
       category: 'Product Discovery',
-      question: `Find products under ${midPrice} ${currencySymbol} at ${publicDomain}`,
-      description: `Find options under ${midPrice} ${currencySymbol}`
+      question: `What great products can I find under ${midPrice} ${currencySymbol} at ${publicDomain}? Show me the best value options.`,
+      description: `Best value under ${midPrice} ${currencySymbol}`
     });
   }
   
@@ -306,8 +306,8 @@ function generateDynamicPrompts(data) {
     prompts.push({
       id: 'discovery-type',
       category: 'Product Discovery',
-      question: `What ${randomType.toLowerCase()} products does ${publicDomain} sell? Show me the best options.`,
-      description: `Browse ${randomType} products`
+      question: `I'm looking for ${randomType.toLowerCase()} at ${publicDomain}. What are the standout options and why?`,
+      description: `Best ${randomType} products`
     });
   }
   
@@ -315,17 +315,24 @@ function generateDynamicPrompts(data) {
   prompts.push({
     id: 'discovery-gift',
     category: 'Product Discovery',
-    question: `Recommend a gift from ${publicDomain}. What makes their products special?`,
-    description: 'Get gift recommendations'
+    question: `I need a gift idea from ${publicDomain}. What unique products would make a memorable present?`,
+    description: 'Gift ideas'
   });
   
-  // Custom product search placeholder (handled in frontend)
+  // New arrivals / Popular
   prompts.push({
-    id: 'discovery-custom',
+    id: 'discovery-popular',
     category: 'Product Discovery',
-    question: '', // Will be filled by user
-    description: 'Ask about specific products',
-    isCustom: true
+    question: `What are the most popular or best-selling products at ${publicDomain}?`,
+    description: 'Popular products'
+  });
+  
+  // Quality / Premium
+  prompts.push({
+    id: 'discovery-premium',
+    category: 'Product Discovery',
+    question: `What premium or high-quality products does ${publicDomain} offer? What makes them special?`,
+    description: 'Premium products'
   });
 
   // ============================================

@@ -1230,7 +1230,7 @@ export default function AiTesting({ shop: shopProp }) {
               </BlockStack>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'Product Discovery' && !p.isCustom).map(prompt => (
+                {dynamicPrompts.filter(p => p.category === 'Product Discovery').map(prompt => (
                   <Box 
                     key={prompt.id} 
                     padding="300" 
@@ -1264,14 +1264,19 @@ export default function AiTesting({ shop: shopProp }) {
                     connectedRight={
                       <Button
                         onClick={() => {
-                          // "Secret formatting" - wrap user question in positive framing
-                          const formattedQuestion = `A customer is looking for: "${customProductQuestion}". What great options does ${storeInsights?.publicDomain || 'this store'} have? Highlight the best matches and what makes them special.`;
+                          // "Secret formatting" - wrap user question in positive framing for best results
+                          const formattedQuestion = `A customer is interested in: "${customProductQuestion}". 
+Based on ${storeInsights?.publicDomain || 'this store'}'s product catalog:
+1. What are the BEST matching products available?
+2. What makes each one a great choice?
+3. Highlight any special features, quality, or value.
+Be enthusiastic and helpful - this customer is ready to buy!`;
                           runBotTest(formattedQuestion, 'discovery-custom', 'Product Discovery');
                         }}
                         loading={loadingPromptIds.has('discovery-custom')}
                         disabled={!selectedBotId || !customProductQuestion.trim() || loadingPromptIds.has('discovery-custom')}
                       >
-                        {loadingPromptIds.has('discovery-custom') ? 'Searching...' : 'Search'}
+                        {loadingPromptIds.has('discovery-custom') ? 'Searching...' : 'Find Products'}
                       </Button>
                     }
                   />
