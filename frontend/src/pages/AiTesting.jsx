@@ -73,6 +73,17 @@ export default function AiTesting({ shop: shopProp }) {
   const [storeName, setStoreName] = useState('');
   const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
   const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
+  
+  // NEW: AI Bot Testing state
+  const [availableBots, setAvailableBots] = useState([]);
+  const [selectedBotId, setSelectedBotId] = useState(null);
+  const [storeInsights, setStoreInsights] = useState(null);
+  const [dynamicPrompts, setDynamicPrompts] = useState([]);
+  const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [customBotQuestion, setCustomBotQuestion] = useState('');
+  const [botTestResponse, setBotTestResponse] = useState(null);
+  const [botTesting, setBotTesting] = useState(false);
+  const [botTestUsage, setBotTestUsage] = useState(null);
 
   // Review banner state (same as Dashboard)
   const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
@@ -97,8 +108,98 @@ export default function AiTesting({ shop: shopProp }) {
       loadTokenBalance();
       loadStats();
       loadSavedTestResults();
+      loadAvailableBots();
+      loadStoreInsights();
     }
   }, [shop, api]);
+  
+  // Load available AI bots based on plan
+  const loadAvailableBots = async () => {
+    try {
+      const data = await api(`/api/ai-testing/available-bots?shop=${shop}`);
+      setAvailableBots(data.bots || []);
+      // Auto-select first available bot
+      const firstAvailable = data.bots?.find(b => b.available);
+      if (firstAvailable && !selectedBotId) {
+        setSelectedBotId(firstAvailable.id);
+      }
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading available bots:', err);
+    }
+  };
+  
+  // Load store insights for dynamic prompts
+  const loadStoreInsights = async () => {
+    try {
+      const data = await api(`/api/ai-testing/store-insights?shop=${shop}`);
+      setStoreInsights(data);
+      setDynamicPrompts(data.prompts || []);
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading store insights:', err);
+    }
+  };
+  
+  // Run AI bot test
+  const runBotTest = async (promptOverride = null) => {
+    if (!selectedBotId) {
+      setToastContent('Please select an AI bot first');
+      return;
+    }
+    
+    const promptToUse = promptOverride || selectedPrompt?.question || customBotQuestion;
+    if (!promptToUse) {
+      setToastContent('Please select or enter a question');
+      return;
+    }
+    
+    setBotTesting(true);
+    setBotTestResponse(null);
+    setBotTestUsage(null);
+    
+    try {
+      const response = await api('/api/ai-testing/run-bot-test', {
+        method: 'POST',
+        body: {
+          shop,
+          botId: selectedBotId,
+          prompt: promptToUse,
+          customPrompt: promptOverride ? null : customBotQuestion || null
+        }
+      });
+      
+      if (response.success) {
+        setBotTestResponse(response);
+        setBotTestUsage(response.usage);
+        loadTokenBalance(); // Refresh token balance
+      } else {
+        setToastContent(response.error || 'Test failed');
+      }
+    } catch (error) {
+      console.error('[AI-TESTING] Bot test error:', error);
+      
+      // Handle token/plan errors
+      if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          setTokenError(error);
+          setShowTrialActivationModal(true);
+        } else if (error.requiresPurchase) {
+          setTokenError(error);
+          setShowTokenModal(true);
+        }
+        setBotTestResponse(null);
+        return;
+      }
+      
+      if (error.status === 403) {
+        setToastContent(`${error.requiredPlan || 'Higher'} plan required for this bot`);
+        return;
+      }
+      
+      setToastContent('Failed to run AI bot test');
+    } finally {
+      setBotTesting(false);
+    }
+  };
 
   // Load saved test results from localStorage
   const loadSavedTestResults = () => {
@@ -930,234 +1031,247 @@ export default function AiTesting({ shop: shopProp }) {
           </Layout.Section>
         </Layout>
 
-        {/* Card 3: Test with Real AI Bots */}
+        {/* Card 3: AI Bot Testing - NEW IMPLEMENTATION */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="500">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <Text as="h3" variant="headingMd">🤖 AI Bot Testing</Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Test how real AI models respond to questions about your store
+                  </Text>
+                </BlockStack>
+                {tokenBalance !== null && (
+                  <Badge tone={tokenBalance > 100 ? 'success' : tokenBalance > 0 ? 'warning' : 'critical'}>
+                    {tokenBalance.toLocaleString()} tokens
+                  </Badge>
+                )}
+              </InlineStack>
+
+              {/* Step 1: Select AI Bot */}
+              <BlockStack gap="300">
+                <Text variant="headingSm">1. Select AI Model</Text>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                  {availableBots.map(bot => (
+                    <div
+                      key={bot.id}
+                      onClick={() => bot.available && setSelectedBotId(bot.id)}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: selectedBotId === bot.id 
+                          ? `2px solid ${bot.color}` 
+                          : '2px solid var(--p-color-border-subdued)',
+                        background: selectedBotId === bot.id 
+                          ? `${bot.color}10` 
+                          : 'var(--p-color-bg-surface)',
+                        cursor: bot.available ? 'pointer' : 'not-allowed',
+                        opacity: bot.available ? 1 : 0.5,
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <BlockStack gap="200">
+                        <InlineStack gap="200" blockAlign="center">
+                          <Text variant="headingMd">{bot.icon}</Text>
+                          <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
+                        </InlineStack>
+                        <Text variant="bodySm" tone="subdued">
+                          {bot.available ? `~${bot.tokensPerTest} tokens/test` : `Requires ${bot.requiredPlan}`}
+                        </Text>
+                        {!bot.available && (
+                          <Badge size="small">🔒 {bot.requiredPlan}</Badge>
+                        )}
+                      </BlockStack>
+                    </div>
+                  ))}
+                </div>
+              </BlockStack>
+
+              <Divider />
+
+              {/* Step 2: Select Prompt */}
+              <BlockStack gap="300">
+                <Text variant="headingSm">2. Select a Question</Text>
+                
+                {/* Dynamic Prompts */}
+                {dynamicPrompts.length > 0 ? (
+                  <BlockStack gap="200">
+                    {dynamicPrompts.map(prompt => (
+                      <div
+                        key={prompt.id}
+                        onClick={() => {
+                          setSelectedPrompt(prompt);
+                          setCustomBotQuestion('');
+                        }}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '8px',
+                          border: selectedPrompt?.id === prompt.id 
+                            ? '2px solid var(--p-color-border-interactive)' 
+                            : '1px solid var(--p-color-border-subdued)',
+                          background: selectedPrompt?.id === prompt.id 
+                            ? 'var(--p-color-bg-surface-selected)' 
+                            : 'var(--p-color-bg-surface)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <InlineStack align="space-between" blockAlign="center">
+                          <InlineStack gap="200" blockAlign="center">
+                            <Text variant="bodyMd">{prompt.icon}</Text>
+                            <BlockStack gap="0">
+                              <Text variant="bodyMd">{prompt.question}</Text>
+                              <Text variant="bodySm" tone="subdued">{prompt.description}</Text>
+                            </BlockStack>
+                          </InlineStack>
+                          {selectedPrompt?.id === prompt.id && (
+                            <Badge tone="info">Selected</Badge>
+                          )}
+                        </InlineStack>
+                      </div>
+                    ))}
+                  </BlockStack>
+                ) : (
+                  <Banner tone="info">
+                    <Text variant="bodySm">Loading store-specific questions...</Text>
+                  </Banner>
+                )}
+
+                {/* Custom Question */}
+                <Box paddingBlockStart="200">
+                  <Text variant="bodySm" fontWeight="semibold">Or ask your own question:</Text>
+                  <Box paddingBlockStart="100">
+                    <TextField
+                      label=""
+                      value={customBotQuestion}
+                      onChange={(value) => {
+                        setCustomBotQuestion(value);
+                        if (value) setSelectedPrompt(null);
+                      }}
+                      placeholder={`e.g., What ${storeInsights?.categories?.productTypes?.[0]?.toLowerCase() || 'products'} do you recommend?`}
+                      autoComplete="off"
+                    />
+                  </Box>
+                </Box>
+              </BlockStack>
+
+              <Divider />
+
+              {/* Step 3: Run Test */}
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text variant="headingSm">3. Run Test</Text>
+                  <Button
+                    variant="primary"
+                    onClick={() => runBotTest()}
+                    loading={botTesting}
+                    disabled={
+                      botTesting || 
+                      !selectedBotId || 
+                      (!selectedPrompt && !customBotQuestion.trim())
+                    }
+                  >
+                    {botTesting ? 'Testing...' : `Test with ${availableBots.find(b => b.id === selectedBotId)?.name || 'AI Bot'}`}
+                  </Button>
+                </InlineStack>
+
+                {/* Token Cost Preview */}
+                {selectedBotId && (
+                  <Banner tone="info">
+                    <InlineStack gap="100">
+                      <Text variant="bodySm">
+                        Estimated cost: ~{availableBots.find(b => b.id === selectedBotId)?.tokensPerTest?.toLocaleString() || '2,000'} tokens
+                      </Text>
+                      {tokenBalance !== null && tokenBalance < (availableBots.find(b => b.id === selectedBotId)?.tokensPerTest || 2000) && (
+                        <Button size="slim" onClick={() => setShowTokenPurchaseModal(true)}>
+                          Buy Tokens
+                        </Button>
+                      )}
+                    </InlineStack>
+                  </Banner>
+                )}
+              </BlockStack>
+
+              {/* Test Result */}
+              {botTestResponse && (
+                <>
+                  <Divider />
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <InlineStack gap="200" blockAlign="center">
+                        <Text variant="headingSm">
+                          {botTestResponse.bot?.icon} {botTestResponse.bot?.name} Response
+                        </Text>
+                        <Badge tone="success">✓ Complete</Badge>
+                      </InlineStack>
+                      {botTestUsage && (
+                        <Text variant="bodySm" tone="subdued">
+                          {botTestUsage.tokensUsed?.toLocaleString()} tokens • {(botTestUsage.responseTimeMs / 1000).toFixed(1)}s
+                        </Text>
+                      )}
+                    </InlineStack>
+
+                    <Box 
+                      background="bg-surface-secondary" 
+                      padding="400" 
+                      borderRadius="200"
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflow: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'var(--p-font-family-sans)',
+                        lineHeight: '1.6'
+                      }}
+                    >
+                      <Text variant="bodyMd">{botTestResponse.response}</Text>
+                    </Box>
+
+                    <InlineStack align="space-between">
+                      <Text variant="bodySm" tone="subdued">
+                        Question: "{botTestResponse.prompt}"
+                      </Text>
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(botTestResponse.response);
+                          setToastContent('Response copied to clipboard!');
+                        }}
+                      >
+                        Copy Response
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </>
+              )}
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* OLD: Test with Real AI Bots - COMMENTED OUT 
         <Card>
           <Box padding="300">
             <BlockStack gap="400">
               <Text as="h3" variant="headingMd">Test with Real AI Bots</Text>
-              
               <Text variant="bodyMd" tone="subdued">
                 Manually test your store with real AI search engines
               </Text>
+              ... (old implementation)
+            </BlockStack>
+          </Box>
+        </Card>
+        */}
 
-              <BlockStack gap="200">
-                {/* Meta AI - Starter+ (Always available) */}
-                    <InlineStack align="space-between">
-                      <Text>Meta AI Search</Text>
-                      {isFeatureAvailable('meta') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Anthropic Claude - Starter+ (Always available) */}
-                    <InlineStack align="space-between">
-                      <Text>Claude AI Search</Text>
-                      {isFeatureAvailable('claude') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Claude AI', 'https://claude.ai/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Google Gemini - Professional+ */}
-                    <InlineStack align="space-between">
-                      <Text>Gemini AI Search</Text>
-                      {isFeatureAvailable('gemini') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Gemini AI', 'https://gemini.google.com/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* ChatGPT - Growth+ */}
-                    <InlineStack align="space-between">
-                      <Text>ChatGPT Web Search</Text>
-                      {isFeatureAvailable('chatgpt') ? (
-                        <Button
-                          url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                          external
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Perplexity - Growth Extra+ */}
-                    <InlineStack align="space-between">
-                      <Text>Perplexity AI Search</Text>
-                      {isFeatureAvailable('perplexity') ? (
-                        <Button
-                          url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                          external
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* DeepSeek - Enterprise only */}
-                    <InlineStack align="space-between">
-                      <Text>DeepSeek AI Search</Text>
-                      {isFeatureAvailable('deepseek') ? (
-                        <Button
-                          onClick={() => openAiBotModal('DeepSeek AI', 'https://chat.deepseek.com/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-                  </BlockStack>
-                  
-                  <Banner tone="info">
-                    <Text>
-                      <strong>How to test with AI bots:</strong><br/>
-                      • <strong>Perplexity & ChatGPT:</strong> Click "Test" - they support URL parameters<br/>
-                      • <strong>Meta AI, Claude, Gemini, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
-                    </Text>
-                  </Banner>
-                </BlockStack>
-              </Box>
-            </Card>
-
-            {/* AI Search Simulation */}
-            <Card>
-              <Box padding="300">
-                <BlockStack gap="300">
-                  <Text as="h4" variant="headingSm">AI Search Simulation</Text>
-                  
-                  <Text variant="bodyMd" tone="subdued">
-                    Test how AI bots would respond to questions about your store based on your structured data.
-                  </Text>
-
-                  <Banner tone="info">
-                    <BlockStack gap="100">
-                      <Text variant="bodySm" fontWeight="semibold">Simulation Details:</Text>
-                      <Text variant="bodySm">• <strong>Data Source:</strong> Your store's products, collections, and metadata</Text>
-                      <Text variant="bodySm">• <strong>Response Style:</strong> Concise (2-3 sentences), natural language</Text>
-                      <Text variant="bodySm">• <strong>Best For:</strong> General store info, products, categories, contact details</Text>
-                      <Text variant="bodySm">• <strong>Limitations:</strong> May not have real-time data (current stock, active promotions, exact shipping times)</Text>
-                    </BlockStack>
-                  </Banner>
-
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text>What products do they offer according to their website?</Text>
-                      <Button
-                        onClick={() => simulateAIResponse('products')}
-                        size="slim"
-                      >
-                        Simulate Response
-                      </Button>
-                    </InlineStack>
-
-                    <InlineStack align="space-between">
-                      <Text>What kind of business is this based on their store?</Text>
-                      <Button
-                        onClick={() => simulateAIResponse('business')}
-                        size="slim"
-                      >
-                        Simulate Response
-                      </Button>
-                    </InlineStack>
-
-                    <InlineStack align="space-between">
-                      <Text>What product categories can I browse?</Text>
-                      <Button
-                        onClick={() => simulateAIResponse('categories')}
-                        size="slim"
-                      >
-                        Simulate Response
-                      </Button>
-                    </InlineStack>
-
-                    <InlineStack align="space-between">
-                      <Text>How can I contact them according to their website?</Text>
-                      <Button
-                        onClick={() => simulateAIResponse('contact')}
-                        size="slim"
-                      >
-                        Simulate Response
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
-
-                  <Divider />
-
-                  {/* Custom Question */}
-                  <BlockStack gap="200">
-                    <Text variant="headingSm">Ask Your Own Question</Text>
-                    <TextField
-                      label=""
-                      value={customQuestion}
-                      onChange={setCustomQuestion}
-                      placeholder="e.g., What are your return policies? Do you ship internationally?"
-                      autoComplete="off"
-                      connectedRight={
-                        <Button
-                          onClick={() => {
-                            if (customQuestion.trim()) {
-                              simulateAIResponse('custom', customQuestion);
-                            } else {
-                              setToastContent('Please enter a question');
-                            }
-                          }}
-                          disabled={!customQuestion.trim()}
-                        >
-                          Ask AI
-                        </Button>
-                      }
-                    />
-                  </BlockStack>
-
-                  {aiSimulationResponse && (
-                    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                      <Text variant="bodyMd" fontWeight="semibold">AI Bot Response:</Text>
-                      <Box paddingBlockStart="200">
-                        <Text variant="bodyMd">{aiSimulationResponse}</Text>
-                      </Box>
-                    </Box>
-                  )}
-                </BlockStack>
-              </Box>
-            </Card>
+        {/* OLD: AI Search Simulation - COMMENTED OUT
+        <Card>
+          <Box padding="300">
+            <BlockStack gap="300">
+              <Text as="h4" variant="headingSm">AI Search Simulation</Text>
+              ... (old implementation)
+            </BlockStack>
+          </Box>
+        </Card>
+        */}
       </BlockStack>
 
       {toastContent && (

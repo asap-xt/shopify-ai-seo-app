@@ -16,6 +16,569 @@ const normalizePlan = (plan) => {
   return (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
 };
 
+// ============================================
+// AI BOT CONFIGURATION (OpenRouter models)
+// ============================================
+const AI_BOTS = {
+  'meta': {
+    id: 'meta',
+    name: 'Meta AI (Llama 4)',
+    model: 'meta-llama/llama-4-maverick',
+    icon: '🦙',
+    description: 'Meta\'s latest Llama 4 Maverick model',
+    minPlanIndex: 1, // Professional+
+    tokensPerTest: 2000, // Estimated tokens per test
+    color: '#0668E1'
+  },
+  'claude': {
+    id: 'claude',
+    name: 'Claude Haiku 4.5',
+    model: 'anthropic/claude-haiku-4.5',
+    icon: '🎭',
+    description: 'Anthropic\'s fast and efficient Claude model',
+    minPlanIndex: 1, // Professional+
+    tokensPerTest: 2000,
+    color: '#D97706'
+  },
+  'gemini': {
+    id: 'gemini',
+    name: 'Gemini 2.5 Pro',
+    model: 'google/gemini-2.5-pro',
+    icon: '✨',
+    description: 'Google\'s advanced Gemini model',
+    minPlanIndex: 1, // Professional+
+    tokensPerTest: 2000,
+    color: '#4285F4'
+  },
+  'chatgpt': {
+    id: 'chatgpt',
+    name: 'ChatGPT 5 Mini',
+    model: 'openai/gpt-5-mini',
+    icon: '🤖',
+    description: 'OpenAI\'s latest GPT-5 Mini model',
+    minPlanIndex: 2, // Growth Plus+
+    tokensPerTest: 2500,
+    color: '#10A37F'
+  },
+  'perplexity': {
+    id: 'perplexity',
+    name: 'Perplexity Sonar',
+    model: 'perplexity/sonar',
+    icon: '🔍',
+    description: 'Perplexity\'s search-optimized Sonar model',
+    minPlanIndex: 3, // Growth Extra+
+    tokensPerTest: 3000,
+    color: '#6366F1'
+  }
+};
+
+// Plan index mapping (matches frontend PLAN_HIERARCHY)
+const PLAN_INDEX = {
+  'starter': 0,
+  'professional': 1,
+  'professional_plus': 1,
+  'growth': 2,
+  'growth_plus': 2,
+  'growth_extra': 3,
+  'enterprise': 4
+};
+
+const getPlanIndex = (plan) => {
+  const normalized = normalizePlan(plan);
+  return PLAN_INDEX[normalized] ?? 0;
+};
+
+// ============================================
+// GET /api/ai-testing/available-bots
+// Returns available AI bots based on user's plan
+// ============================================
+router.get('/ai-testing/available-bots', validateRequest(), async (req, res) => {
+  const shop = req.shopDomain || req.query.shop;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop parameter required' });
+  }
+  
+  try {
+    const subscription = await Subscription.findOne({ shop });
+    const userPlanIndex = getPlanIndex(subscription?.plan);
+    
+    // Filter bots based on user's plan
+    const availableBots = Object.values(AI_BOTS).map(bot => ({
+      ...bot,
+      available: userPlanIndex >= bot.minPlanIndex,
+      requiredPlan: bot.minPlanIndex === 1 ? 'Professional' :
+                    bot.minPlanIndex === 2 ? 'Growth Plus' :
+                    bot.minPlanIndex === 3 ? 'Growth Extra' : 'Enterprise'
+    }));
+    
+    res.json({
+      bots: availableBots,
+      currentPlan: subscription?.plan || 'Starter',
+      currentPlanIndex: userPlanIndex
+    });
+  } catch (error) {
+    console.error('[AI-TESTING] Error getting available bots:', error);
+    res.status(500).json({ error: 'Failed to get available bots' });
+  }
+});
+
+// ============================================
+// GET /api/ai-testing/store-insights
+// Returns store data for dynamic prompt generation
+// ============================================
+router.get('/ai-testing/store-insights', validateRequest(), async (req, res) => {
+  const shop = req.shopDomain || req.query.shop;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop parameter required' });
+  }
+  
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    // Get active products filter
+    const activeStatusFilter = {
+      $or: [
+        { status: 'ACTIVE' },
+        { status: { $exists: false } },
+        { status: null }
+      ]
+    };
+    
+    // Get product stats
+    const totalProducts = await Product.countDocuments({ shop, ...activeStatusFilter });
+    const optimizedProducts = await Product.countDocuments({ 
+      shop, 
+      ...activeStatusFilter,
+      'seoStatus.optimized': true 
+    });
+    
+    // Get sample products (for price range and categories)
+    const sampleProducts = await Product.find({ shop, ...activeStatusFilter })
+      .select('title productType vendor priceRange tags')
+      .limit(100)
+      .lean();
+    
+    // Calculate price range
+    let minPrice = Infinity;
+    let maxPrice = 0;
+    const productTypes = new Set();
+    const vendors = new Set();
+    const allTags = new Set();
+    
+    sampleProducts.forEach(p => {
+      if (p.priceRange?.minVariantPrice?.amount) {
+        const price = parseFloat(p.priceRange.minVariantPrice.amount);
+        if (price < minPrice) minPrice = price;
+        if (price > maxPrice) maxPrice = price;
+      }
+      if (p.productType) productTypes.add(p.productType);
+      if (p.vendor) vendors.add(p.vendor);
+      if (p.tags && Array.isArray(p.tags)) {
+        p.tags.forEach(tag => allTags.add(tag));
+      }
+    });
+    
+    // Get collections
+    const collections = await Collection.find({ shop })
+      .select('title handle productsCount')
+      .limit(20)
+      .lean();
+    
+    // Get store metadata (if set)
+    const storeMetadata = shopRecord.storeMetadata || {};
+    
+    // Get public domain
+    let publicDomain = shop;
+    try {
+      const domainQuery = `{ shop { primaryDomain { url host } name } }`;
+      const domainResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: domainQuery })
+      });
+      
+      if (domainResponse.ok) {
+        const domainData = await domainResponse.json();
+        publicDomain = domainData?.data?.shop?.primaryDomain?.host || 
+                       domainData?.data?.shop?.primaryDomain?.url?.replace(/^https?:\/\//, '') || 
+                       shop;
+      }
+    } catch (domainErr) {
+      console.error('[AI-TESTING] Error fetching public domain:', domainErr);
+    }
+    
+    // Build dynamic prompts based on store data
+    const prompts = generateDynamicPrompts({
+      storeName: storeMetadata.storeName || shopRecord.name || shop.split('.')[0],
+      publicDomain,
+      collections: collections.map(c => c.title),
+      productTypes: Array.from(productTypes).slice(0, 10),
+      priceRange: { min: minPrice === Infinity ? 0 : minPrice, max: maxPrice },
+      tags: Array.from(allTags).slice(0, 20),
+      totalProducts,
+      optimizedProducts,
+      storeMetadata
+    });
+    
+    res.json({
+      shop,
+      publicDomain,
+      storeName: storeMetadata.storeName || shopRecord.name || shop.split('.')[0],
+      stats: {
+        totalProducts,
+        optimizedProducts,
+        totalCollections: collections.length
+      },
+      categories: {
+        productTypes: Array.from(productTypes).slice(0, 10),
+        collections: collections.map(c => ({ title: c.title, productsCount: c.productsCount })),
+        tags: Array.from(allTags).slice(0, 20)
+      },
+      priceRange: {
+        min: minPrice === Infinity ? 0 : minPrice,
+        max: maxPrice,
+        currency: sampleProducts[0]?.priceRange?.minVariantPrice?.currencyCode || 'USD'
+      },
+      prompts
+    });
+  } catch (error) {
+    console.error('[AI-TESTING] Error getting store insights:', error);
+    res.status(500).json({ error: 'Failed to get store insights' });
+  }
+});
+
+// Generate dynamic prompts based on store data
+function generateDynamicPrompts(data) {
+  const { storeName, publicDomain, collections, productTypes, priceRange, tags, storeMetadata } = data;
+  
+  const prompts = [];
+  
+  // 1. Store Discovery prompt (always available)
+  prompts.push({
+    id: 'store-discovery',
+    category: 'Discovery',
+    icon: '🏪',
+    question: `What products does ${publicDomain} sell? Tell me about this business.`,
+    description: 'General store information and product overview'
+  });
+  
+  // 2. Collection-based prompts
+  if (collections && collections.length > 0) {
+    const randomCollection = collections[Math.floor(Math.random() * collections.length)];
+    prompts.push({
+      id: 'collection-browse',
+      category: 'Collections',
+      icon: '📦',
+      question: `Show me the ${randomCollection} collection from ${publicDomain}`,
+      description: `Browse ${randomCollection} products`
+    });
+  }
+  
+  // 3. Product type prompts
+  if (productTypes && productTypes.length > 0) {
+    const randomType = productTypes[Math.floor(Math.random() * productTypes.length)];
+    prompts.push({
+      id: 'product-type',
+      category: 'Products',
+      icon: '🛍️',
+      question: `What ${randomType.toLowerCase()} products does ${publicDomain} offer?`,
+      description: `Explore ${randomType} category`
+    });
+  }
+  
+  // 4. Price-based prompt
+  if (priceRange.max > 0) {
+    const midPrice = Math.round((priceRange.min + priceRange.max) / 2);
+    prompts.push({
+      id: 'price-search',
+      category: 'Shopping',
+      icon: '💰',
+      question: `What products can I find under ${midPrice} at ${publicDomain}?`,
+      description: `Budget-friendly options`
+    });
+  }
+  
+  // 5. Contact/Business info prompt
+  prompts.push({
+    id: 'contact-info',
+    category: 'Contact',
+    icon: '📞',
+    question: `How can I contact ${storeName || publicDomain}? What are their business hours and location?`,
+    description: 'Contact and business information'
+  });
+  
+  // 6. Shipping/Returns prompt
+  prompts.push({
+    id: 'shipping-returns',
+    category: 'Policies',
+    icon: '🚚',
+    question: `What are the shipping options and return policy for ${publicDomain}?`,
+    description: 'Shipping and return policies'
+  });
+  
+  // 7. Recommendations prompt
+  if (tags && tags.length > 0) {
+    const randomTag = tags[Math.floor(Math.random() * tags.length)];
+    prompts.push({
+      id: 'recommendations',
+      category: 'Recommendations',
+      icon: '⭐',
+      question: `Recommend me some ${randomTag.toLowerCase()} products from ${publicDomain}`,
+      description: `Personalized recommendations`
+    });
+  }
+  
+  return prompts;
+}
+
+// ============================================
+// POST /api/ai-testing/run-bot-test
+// Execute a test with selected AI bot via OpenRouter
+// ============================================
+router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
+  const shop = req.shopDomain || req.query.shop || req.body.shop;
+  const { botId, prompt, customPrompt } = req.body;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop parameter required' });
+  }
+  
+  if (!botId || !AI_BOTS[botId]) {
+    return res.status(400).json({ error: 'Valid bot ID required' });
+  }
+  
+  const bot = AI_BOTS[botId];
+  const questionToAsk = customPrompt || prompt;
+  
+  if (!questionToAsk) {
+    return res.status(400).json({ error: 'Prompt or customPrompt required' });
+  }
+  
+  try {
+    // Check plan access
+    const subscription = await Subscription.findOne({ shop });
+    const userPlanIndex = getPlanIndex(subscription?.plan);
+    
+    if (userPlanIndex < bot.minPlanIndex) {
+      return res.status(403).json({
+        error: 'Plan upgrade required',
+        requiredPlan: bot.minPlanIndex === 1 ? 'Professional' :
+                      bot.minPlanIndex === 2 ? 'Growth Plus' :
+                      bot.minPlanIndex === 3 ? 'Growth Extra' : 'Enterprise',
+        currentPlan: subscription?.plan || 'Starter'
+      });
+    }
+    
+    // Check and deduct tokens
+    const estimatedTokens = bot.tokensPerTest;
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Check trial restrictions
+    const now = new Date();
+    const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+    const isActivated = !!subscription?.activatedAt;
+    const includedTokensPlans = ['growth_extra', 'enterprise'];
+    const hasIncludedTokens = includedTokensPlans.includes(normalizePlan(subscription?.plan));
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    
+    // Trial restriction check
+    if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens) {
+      return res.status(402).json({
+        error: 'AI Bot Testing is locked during trial period',
+        trialRestriction: true,
+        requiresActivation: true,
+        trialEndsAt: subscription.trialEndsAt,
+        currentPlan: subscription.plan,
+        tokensRequired: estimatedTokens,
+        tokensAvailable: tokenBalance.balance
+      });
+    }
+    
+    // Check sufficient tokens
+    if (!tokenBalance.hasBalance(estimatedTokens)) {
+      return res.status(402).json({
+        error: 'Insufficient tokens',
+        requiresPurchase: true,
+        tokensRequired: estimatedTokens,
+        tokensAvailable: tokenBalance.balance,
+        tokensNeeded: estimatedTokens - tokenBalance.balance
+      });
+    }
+    
+    // Reserve tokens
+    const reservation = await tokenBalance.reserveTokens(estimatedTokens, `ai-bot-test-${botId}`);
+    const reservationId = reservation.reservationId;
+    await reservation.save();
+    
+    // Get store context for the AI
+    const shopRecord = await Shop.findOne({ shop });
+    const storeContext = await buildStoreContext(shop, shopRecord);
+    
+    // Call OpenRouter API
+    const startTime = Date.now();
+    
+    const systemPrompt = `You are an AI assistant helping users learn about an e-commerce store. 
+Answer questions based on the store data provided below. Be helpful, informative, and comprehensive.
+If you don't have specific information, say so honestly but try to provide relevant context from what you know.
+
+STORE DATA:
+${storeContext}
+
+IMPORTANT: 
+- Give detailed, helpful responses (not just 2-3 sentences)
+- Include specific product names, prices, and categories when relevant
+- Format your response clearly with paragraphs and lists when appropriate
+- Be conversational and helpful`;
+
+    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://indexaize.com',
+        'X-Title': 'indexAIze - AI Bot Testing'
+      },
+      body: JSON.stringify({
+        model: bot.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: questionToAsk }
+        ],
+        max_tokens: 1500,
+        temperature: 0.7
+      })
+    });
+    
+    if (!openRouterResponse.ok) {
+      const errorText = await openRouterResponse.text();
+      console.error('[AI-TESTING] OpenRouter error:', errorText);
+      
+      // Refund tokens on error
+      await tokenBalance.refundReservation(reservationId);
+      
+      return res.status(500).json({
+        error: 'AI service temporarily unavailable',
+        details: 'Please try again in a moment'
+      });
+    }
+    
+    const aiResult = await openRouterResponse.json();
+    const responseTime = Date.now() - startTime;
+    
+    // Calculate actual tokens used
+    const tokensUsed = aiResult.usage?.total_tokens || estimatedTokens;
+    
+    // Finalize token usage
+    await tokenBalance.finalizeReservation(reservationId, tokensUsed);
+    
+    // Invalidate cache
+    try {
+      const cacheService = await import('../services/cacheService.js');
+      await cacheService.default.invalidateShop(shop);
+    } catch (cacheErr) {
+      console.error('[AI-TESTING] Cache invalidation error:', cacheErr);
+    }
+    
+    // Get updated balance
+    const updatedBalance = await TokenBalance.findOne({ shop });
+    
+    res.json({
+      success: true,
+      bot: {
+        id: bot.id,
+        name: bot.name,
+        icon: bot.icon,
+        model: bot.model
+      },
+      prompt: questionToAsk,
+      response: aiResult.choices?.[0]?.message?.content || 'No response generated',
+      usage: {
+        tokensUsed,
+        tokensRemaining: updatedBalance?.balance || 0,
+        responseTimeMs: responseTime
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[AI-TESTING] Bot test error:', error);
+    res.status(500).json({ error: 'Failed to run AI bot test' });
+  }
+});
+
+// Build store context for AI
+async function buildStoreContext(shop, shopRecord) {
+  const activeStatusFilter = {
+    $or: [
+      { status: 'ACTIVE' },
+      { status: { $exists: false } },
+      { status: null }
+    ]
+  };
+  
+  // Get products (sample)
+  const products = await Product.find({ shop, ...activeStatusFilter })
+    .select('title descriptionHtml productType vendor priceRange tags handle')
+    .limit(50)
+    .lean();
+  
+  // Get collections
+  const collections = await Collection.find({ shop })
+    .select('title description handle productsCount')
+    .limit(20)
+    .lean();
+  
+  // Get store metadata
+  const storeMetadata = shopRecord?.storeMetadata || {};
+  
+  let context = '';
+  
+  // Store info
+  context += `STORE NAME: ${storeMetadata.storeName || shopRecord?.name || shop}\n`;
+  if (storeMetadata.tagline) context += `TAGLINE: ${storeMetadata.tagline}\n`;
+  if (storeMetadata.description) context += `DESCRIPTION: ${storeMetadata.description}\n`;
+  if (storeMetadata.targetAudience) context += `TARGET AUDIENCE: ${storeMetadata.targetAudience}\n`;
+  if (storeMetadata.uniqueSellingPoints) context += `UNIQUE SELLING POINTS: ${storeMetadata.uniqueSellingPoints}\n`;
+  
+  // Contact info
+  if (storeMetadata.organizationSchema) {
+    const org = storeMetadata.organizationSchema;
+    if (org.email) context += `EMAIL: ${org.email}\n`;
+    if (org.phone) context += `PHONE: ${org.phone}\n`;
+    if (org.address) context += `ADDRESS: ${org.address}\n`;
+  }
+  
+  // Collections
+  if (collections.length > 0) {
+    context += `\nCOLLECTIONS:\n`;
+    collections.forEach(c => {
+      context += `- ${c.title}${c.productsCount ? ` (${c.productsCount} products)` : ''}\n`;
+      if (c.description) context += `  Description: ${c.description.substring(0, 100)}...\n`;
+    });
+  }
+  
+  // Products
+  if (products.length > 0) {
+    context += `\nPRODUCTS (${products.length} shown):\n`;
+    products.forEach(p => {
+      const price = p.priceRange?.minVariantPrice?.amount 
+        ? `${p.priceRange.minVariantPrice.currencyCode || ''} ${p.priceRange.minVariantPrice.amount}`
+        : '';
+      context += `- ${p.title}${price ? ` - ${price}` : ''}${p.productType ? ` [${p.productType}]` : ''}\n`;
+    });
+  }
+  
+  return context;
+}
+
 /**
  * POST /api/ai-testing/run-tests
  * Run automated tests for AI Discovery endpoints
