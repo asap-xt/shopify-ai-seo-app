@@ -24,7 +24,7 @@ export function verifyAppProxySignature(req, secret) {
     const message = sortedKeys
       .map(key => `${key}=${query[key]}`)
       .join('');
-    
+
     const digest = crypto
       .createHmac('sha256', secret)
       .update(message, 'utf8')

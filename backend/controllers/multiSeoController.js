@@ -253,7 +253,7 @@ router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
           // Re-filter: only generate for languages that don't have metafields
           languagesToGenerate = languagesToGenerate.filter(
             lang => !existingMetafieldLangs.includes(lang.toLowerCase())
-          );
+      );
         } catch (checkErr) {
           // If check fails, continue with original list (will fail properly if already exists)
           console.error('[SEO-GENERATE] Metafield check failed:', checkErr.message);

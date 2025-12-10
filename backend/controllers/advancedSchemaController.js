@@ -372,9 +372,9 @@ function sanitizeAIResponse(response, knownFacts) {
 const richAttributesCache = new Map();
 const RICH_ATTRIBUTES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// Load rich attributes settings - fetches user preferences for AI-generated schema features
+  // Load rich attributes settings - fetches user preferences for AI-generated schema features
 // OPTIMIZED: Results are cached per shop to avoid repeated HTTP requests
-async function loadRichAttributesSettings(shop) {
+  async function loadRichAttributesSettings(shop) {
   // Check cache first
   const cached = richAttributesCache.get(shop);
   if (cached && (Date.now() - cached.timestamp) < RICH_ATTRIBUTES_CACHE_TTL) {
@@ -383,10 +383,10 @@ async function loadRichAttributesSettings(shop) {
   
   try {
     // Try to get settings from AI Discovery settings
-    if (!process.env.SHOPIFY_APP_URL) {
-      throw new Error('SHOPIFY_APP_URL environment variable is required');
-    }
-    const response = await fetch(`${process.env.SHOPIFY_APP_URL}/api/ai-discovery/settings?shop=${shop}`);
+  if (!process.env.SHOPIFY_APP_URL) {
+    throw new Error('SHOPIFY_APP_URL environment variable is required');
+  }
+  const response = await fetch(`${process.env.SHOPIFY_APP_URL}/api/ai-discovery/settings?shop=${shop}`);
     
     if (response.ok) {
       const data = await response.json();
@@ -1086,9 +1086,9 @@ async function generateProductSchemas(shop, productDoc) {
         } catch (e) {
           console.error(`[SCHEMA] Failed to parse SEO metafield for ${langCode}:`, e);
         }
+          }
+        }
       }
-    }
-  }
   
   // Generate schemas for all languages
   const schemas = [];
@@ -1130,20 +1130,20 @@ async function generateProductSchemas(shop, productDoc) {
   }
   
   // Single mutation to save all schemas
-  const saveMutation = `
+    const saveMutation = `
     mutation SetSchemas($metafields: [MetafieldsSetInput!]!) {
-      metafieldsSet(metafields: $metafields) {
-        metafields {
-          id
-        }
-        userErrors {
-          field
-          message
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
         }
       }
-    }
-  `;
-  
+    `;
+    
   await executeWithRetry(shop, saveMutation, { metafields: metafieldsToSave });
   
   // NOTE: updateOptimizationSummary is now called in batch at the end of generateAllSchemas
@@ -1846,17 +1846,17 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       const batch = products.slice(i, Math.min(i + batchSize, products.length));
       const batchNum = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(products.length / batchSize);
-      
-      // Update progress
+          
+          // Update progress
       const progressPercent = Math.round((i / products.length) * 100);
       const elapsedSeconds = Math.round((Date.now() - progressStartedAt.getTime()) / 1000);
       const avgTimePerProduct = processedCount > 0 ? elapsedSeconds / processedCount : 2.5;
       const remainingProducts = products.length - processedCount;
       const remainingSeconds = Math.round(remainingProducts * avgTimePerProduct);
       
-      generationStatus.set(shop, {
-        generating: true,
-        progress: `${progressPercent}%`,
+          generationStatus.set(shop, {
+            generating: true,
+            progress: `${progressPercent}%`,
         currentProduct: `Batch ${batchNum}/${totalBatches} (${batch.length} products)...`
       });
       

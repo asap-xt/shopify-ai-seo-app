@@ -28,7 +28,7 @@ router.get('/stats', verifyRequest, async (req, res) => {
       // Get subscription to check plan features
       const subscription = await Subscription.findOne({ shop });
       const plan = subscription?.plan || 'starter';
-      
+    
       // Get primaryDomain from Shopify (public URL for AI prompts)
       let primaryDomain = `https://${shop}`;
       let storeName = shop.split('.')[0];

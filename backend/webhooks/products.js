@@ -88,31 +88,31 @@ export default async function productsWebhook(req, res) {
       
       // Build update object - only include lastShopifyUpdate if content changed
       const updateData = {
-        shopifyProductId: numericProductId,
-        productId: numericProductId,
-        title: payload.title,
-        description: payload.body_html,
-        handle: payload.handle,
-        vendor: payload.vendor,
-        productType: payload.product_type,
-        status: payload.status,
-        publishedAt: payload.published_at,
-        createdAt: payload.created_at,
-        updatedAt: payload.updated_at,
-        tags: payload.tags || '',
-        images: payload.images?.map(img => ({
-          id: img.id,
-          alt: img.alt || '',
-          url: img.src
-        })) || [],
-        featuredImage: payload.image ? {
-          url: payload.image.src,
-          altText: payload.image.alt || ''
-        } : null,
-        price: payload.variants?.[0]?.price || '0.00',
-        currency: 'EUR', // Default currency
-        totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
-        gid: productGid,
+          shopifyProductId: numericProductId,
+          productId: numericProductId,
+          title: payload.title,
+          description: payload.body_html,
+          handle: payload.handle,
+          vendor: payload.vendor,
+          productType: payload.product_type,
+          status: payload.status,
+          publishedAt: payload.published_at,
+          createdAt: payload.created_at,
+          updatedAt: payload.updated_at,
+          tags: payload.tags || '',
+          images: payload.images?.map(img => ({
+            id: img.id,
+            alt: img.alt || '',
+            url: img.src
+          })) || [],
+          featuredImage: payload.image ? {
+            url: payload.image.src,
+            altText: payload.image.alt || ''
+          } : null,
+          price: payload.variants?.[0]?.price || '0.00',
+          currency: 'EUR', // Default currency
+          totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
+          gid: productGid,
         syncedAt: new Date()
       };
       
@@ -123,11 +123,11 @@ export default async function productsWebhook(req, res) {
       const isNewProduct = !existingProduct;
       if (contentChanged || isNewProduct) {
         updateData.lastShopifyUpdate = {
-          title: payload.title,
-          description: payload.body_html,
-          updatedAt: new Date()
+            title: payload.title,
+            description: payload.body_html,
+            updatedAt: new Date()
         };
-      }
+          }
       
       const updatedProduct = await Product.findOneAndUpdate(
         { shop, productId: numericProductId },

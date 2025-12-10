@@ -137,15 +137,15 @@ class SeoJobQueue {
           const avgTimePerProduct = current > 0 ? elapsed / current : 1.3; // Default estimate: 1.3s
           const remaining = Math.ceil((total - current) * avgTimePerProduct);
           
-          await this.updateShopStatus(job.shop, {
-            inProgress: true,
+            await this.updateShopStatus(job.shop, {
+              inProgress: true,
             status: 'processing',
             phase: 'processing',
             message: `Processing ${current}/${total} products`,
             totalProducts: total,
             processedProducts: current,
-            successfulProducts: job.successfulProducts,
-            failedProducts: job.failedProducts,
+              successfulProducts: job.successfulProducts,
+              failedProducts: job.failedProducts,
             skippedProducts: job.skippedProducts,
             progress: {
               current,
@@ -189,9 +189,9 @@ class SeoJobQueue {
             // Check if generate failed
             if (!generateResult.success) {
                 return { productData, failed: true, error: generateResult.error || generateResult.reason };
-              }
+            }
 
-              // Phase 2: Apply
+            // Phase 2: Apply
               await job.applyFn(productData, generateResult.data);
               return { productData, success: true };
 
@@ -211,9 +211,9 @@ class SeoJobQueue {
                 job.skipReasons.push(`${result.productData.title || result.productData.productId}: ${result.reason}`);
               }
             } else if (result.success) {
-              job.successfulProducts++;
+            job.successfulProducts++;
             } else if (result.failed) {
-              job.failedProducts++;
+            job.failedProducts++;
               if (result.error) {
                 job.failReasons.push(`${result.productData.title || result.productData.productId}: ${result.error}`);
               }

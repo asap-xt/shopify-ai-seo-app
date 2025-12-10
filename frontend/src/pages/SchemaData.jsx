@@ -1042,11 +1042,11 @@ ${JSON.stringify(allSchemas, null, 2)}
                     )}
                     
                     <InlineStack gap="200" blockAlign="center" align="space-between">
-                      <InlineStack gap="200" blockAlign="center">
-                        <Spinner size="small" />
-                        <Text variant="bodyMd" tone="subdued">
-                          {advancedSchemaStatus.message || 'Generating Advanced Schema Data...'}
-                        </Text>
+                  <InlineStack gap="200" blockAlign="center">
+                    <Spinner size="small" />
+                      <Text variant="bodyMd" tone="subdued">
+                        {advancedSchemaStatus.message || 'Generating Advanced Schema Data...'}
+                      </Text>
                       </InlineStack>
                       
                       {/* Time remaining */}
@@ -1062,7 +1062,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                     
                     {/* Progress details */}
                     {advancedSchemaStatus.progress?.total > 0 && (
-                      <Text variant="bodySm" tone="subdued">
+                        <Text variant="bodySm" tone="subdued">
                         {advancedSchemaStatus.progress.current || 0} / {advancedSchemaStatus.progress.total} products ({advancedSchemaStatus.progress.percent || 0}%)
                       </Text>
                     )}
@@ -1070,9 +1070,9 @@ ${JSON.stringify(allSchemas, null, 2)}
                     {advancedSchemaStatus.position > 0 && (
                       <Text variant="bodySm" tone="subdued">
                         Queue position: {advancedSchemaStatus.position}
-                      </Text>
-                    )}
-                  </BlockStack>
+                        </Text>
+                      )}
+                    </BlockStack>
                 </Box>
               )}
               

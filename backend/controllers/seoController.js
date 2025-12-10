@@ -351,8 +351,8 @@ async function shopGraphQL(req, shop, query, variables = {}) {
     if (criticalErrors.length > 0) {
       console.error('[GRAPHQL] User errors found:', criticalErrors);
       const e = new Error(`Admin GraphQL userErrors: ${JSON.stringify(criticalErrors)}`);
-      e.status = 400;
-      throw e;
+    e.status = 400;
+    throw e;
     }
     // Non-critical errors (like "Key is in use") are logged but not thrown
     // This allows metafield operations to continue even if definition already exists
@@ -1751,39 +1751,39 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
       const paginatedQuery = `
         query GetCollectionsWithMetafields($first: Int!, $after: String, $sortKey: CollectionSortKeys, $reverse: Boolean) {
           collections(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse) {
-            edges {
-              node {
-                id
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              descriptionHtml
+              seo {
                 title
-                handle
                 description
-                descriptionHtml
-                seo {
-                  title
-                  description
-                }
-                productsCount {
-                  count
-                }
-                updatedAt
-                metafields(namespace: "seo_ai", first: 20) {
-                  edges {
-                    node {
-                      key
-                      value
-                    }
+              }
+              productsCount {
+                count
+              }
+              updatedAt
+              metafields(namespace: "seo_ai", first: 20) {
+                edges {
+                  node {
+                    key
+                    value
                   }
                 }
               }
             }
+          }
             pageInfo {
               hasNextPage
               endCursor
             }
-          }
         }
-      `;
-      
+      }
+    `;
+    
       const variables = { 
         first: 250, 
         sortKey,
@@ -1791,25 +1791,25 @@ router.get('/collections/list-graphql', validateRequest(), async (req, res) => {
         ...(cursor && { after: cursor })
       };
       
-      const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': token,
-        },
+    const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token,
+      },
         body: JSON.stringify({ query: paginatedQuery, variables }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
-      }
-      
-      const result = await response.json();
-      if (result.errors) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
-      }
-      
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`GraphQL request failed: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+    
       const edges = result.data?.collections?.edges || [];
       allCollections.push(...edges);
       

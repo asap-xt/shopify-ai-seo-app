@@ -210,7 +210,7 @@ router.get('/list', async (req, res) => {
     const allProductsResult = await withShopCache(shop, cacheKeyAll, CACHE_TTL.SHORT, async () => {
       const sortKey = convertSortKey(sortBy);
       const reverse = sortOrder === 'desc';
-      
+
       let allProducts = [];
       let hasNextPage = true;
       let cursor = null;
@@ -218,16 +218,16 @@ router.get('/list', async (req, res) => {
       
       // Fetch all products (cursor-based pagination)
       while (hasNextPage && allProducts.length < 1000) { // Safety limit
-        const variables = {
+      const variables = {
           first: maxFetch,
-          sortKey: sortKey,
+        sortKey: sortKey,
           reverse: reverse,
           ...(cursor && { after: cursor })
-        };
+      };
 
-        const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
+      const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
         const products = data?.products?.edges?.map(edge => edge.node) || [];
-        
+      
         // Filter only ACTIVE products
         const activeProducts = products.filter(p => p.status === 'ACTIVE');
         allProducts = allProducts.concat(activeProducts);
@@ -254,15 +254,15 @@ router.get('/list', async (req, res) => {
         ...product,
         metafields: undefined
       })),
-      pagination: {
-        page: page,
-        limit: limit,
+        pagination: {
+          page: page,
+          limit: limit,
         total: totalProducts,
         hasNextPage: endIndex < allProductsResult.length,
         hasNext: endIndex < allProductsResult.length
-      },
-      shop: shop
-    };
+        },
+        shop: shop
+      };
     
     // Step 2: Fetch FRESH optimization status for all products (NOT cached!)
     // This ensures badges update immediately after optimize/delete operations
@@ -444,7 +444,7 @@ router.post('/sync', async (req, res) => {
 
     // Count only ACTIVE products (exclude DRAFT and ARCHIVED)
     const activeProducts = allProducts.filter(p => p.status === 'ACTIVE');
-    
+
     return res.json({
       success: true,
       productsCount: activeProducts.length,

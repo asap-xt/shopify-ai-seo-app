@@ -120,7 +120,7 @@ class SitemapQueue {
         job.result = result;
 
         const duration = (new Date() - job.startedAt) / 1000;
-        
+
         dbLogger.info(`[QUEUE] ✅ Job completed for shop: ${job.shop}`, {
           duration,
           productCount: result.productCount

@@ -478,7 +478,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   useEffect(() => {
     loadProductsRef.current = loadProducts;
   }, [loadProducts]);
-  
+
   // Keep page ref updated (for use in polling callbacks to stay on current page)
   useEffect(() => {
     currentPageRef.current = page;
@@ -686,8 +686,8 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           // Refresh products to update badges - stay on current page
           if (loadProductsRef.current) {
             loadProductsRef.current(currentPageRef.current, false, Date.now());
-          }
-          
+        }
+        
           // Return status with combined failures
           return {
             ...status,
@@ -755,9 +755,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
     // Check if ALL selected products have no SEO
     if (selectedWithSEO.length === 0 && selectedWithoutSEO.length > 0) {
-      setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
+        setToast(`${selectedWithoutSEO.length} product(s) have no Basic SEO. Generate Basic SEO first.`);
       return;
-    }
+      }
     
     if (selectedProducts.length === 0) {
       setToast('Please select products');
@@ -1809,10 +1809,10 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     <BlockStack gap="200">
                       <InlineStack align="space-between" blockAlign="center">
                         <InlineStack gap="300" blockAlign="center">
-                          <Spinner size="small" />
-                          <BlockStack gap="100">
-                            <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
-                            <Text variant="bodySm" tone="subdued">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Products...</Text>
+                        <Text variant="bodySm" tone="subdued">
                               {(() => {
                                 const p = aiEnhanceJobStatus.progress;
                                 if (p?.current && p?.total) {
@@ -1827,9 +1827,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                                 }
                                 return aiEnhanceJobStatus.message || `Processing ${aiEnhanceJobStatus.processedProducts}/${aiEnhanceJobStatus.totalProducts} products`;
                               })()}
-                            </Text>
-                          </BlockStack>
-                        </InlineStack>
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
                         <Button 
                           onClick={async () => {
                             try {
@@ -1931,12 +1931,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     <BlockStack gap="200">
                       <InlineStack align="space-between" blockAlign="center">
                         <InlineStack gap="300" blockAlign="center">
-                          <Spinner size="small" />
-                          <BlockStack gap="100">
-                            <Text variant="bodyMd" fontWeight="semibold">
-                              {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
-                            </Text>
-                            <Text variant="bodySm" tone="subdued">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">
+                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                        </Text>
+                        <Text variant="bodySm" tone="subdued">
                               {(() => {
                                 const p = seoJobStatus.progress;
                                 if (p?.current && p?.total) {
@@ -1951,9 +1951,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                                 }
                                 return seoJobStatus.message || `Processing ${seoJobStatus.processedProducts}/${seoJobStatus.totalProducts} products`;
                               })()}
-                            </Text>
-                          </BlockStack>
-                        </InlineStack>
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
                         <Button 
                           onClick={async () => {
                             try {
@@ -2310,19 +2310,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                   active={showSelectionPopover}
                   activator={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowSelectionPopover(!showSelectionPopover)}>
-                      <Checkbox
+                <Checkbox
                         checked={selectedItems.length > 0 && (selectedItems.length === products.length || selectAllInStore)}
                         indeterminate={selectedItems.length > 0 && selectedItems.length < products.length && !selectAllInStore}
-                        onChange={handleSelectAllPages}
-                        label=""
-                      />
-                      <Text variant="bodyMd" fontWeight="semibold">
+                  onChange={handleSelectAllPages}
+                  label=""
+                />
+                <Text variant="bodyMd" fontWeight="semibold">
                         {selectedItems.length > 0 
                           ? selectAllInStore 
                             ? `All ${totalCount} selected`
                             : `${selectedItems.length} selected`
                           : 'Select'}
-                      </Text>
+                </Text>
                       <span style={{ fontSize: '10px', color: '#637381' }}>▼</span>
                     </div>
                   }
@@ -2414,7 +2414,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 </InlineStack>
               </InlineStack>
             </InlineStack>
-          </Box>
+            </Box>
         </Card>
       </Box>
 

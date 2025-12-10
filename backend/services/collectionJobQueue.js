@@ -137,14 +137,14 @@ class CollectionJobQueue {
           const avgTimePerCollection = current > 0 ? elapsed / current : (job.jobType === 'aiEnhance' ? 3 : 1.5);
           const remaining = Math.ceil((total - current) * avgTimePerCollection);
           
-          await this.updateShopStatus(job.shop, job.statusField, {
-            inProgress: true,
-            status: 'processing',
+            await this.updateShopStatus(job.shop, job.statusField, {
+              inProgress: true,
+              status: 'processing',
             message: `Processing ${current}/${total} collections`,
             totalCollections: total,
             processedCollections: current,
-            successfulCollections: job.successfulCollections,
-            failedCollections: job.failedCollections,
+              successfulCollections: job.successfulCollections,
+              failedCollections: job.failedCollections,
             skippedCollections: job.skippedCollections,
             progress: {
               current,
@@ -154,7 +154,7 @@ class CollectionJobQueue {
               remainingSeconds: remaining,
               startedAt: new Date(startTime)
             }
-          });
+            });
         };
 
         // OPTIMIZATION: Process collections in batches of 2 for parallel execution
@@ -221,10 +221,10 @@ class CollectionJobQueue {
             } else if (result?.success) {
               job.successfulCollections++;
             } else {
-              job.failedCollections++;
-            }
-            
-            job.processedCollections++;
+            job.failedCollections++;
+          }
+
+          job.processedCollections++;
           }
 
           // Small delay between batches

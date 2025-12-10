@@ -694,10 +694,10 @@ export default function SitemapPage({ shop: shopProp }) {
             >
               <BlockStack gap="200">
                 <InlineStack align="space-between" blockAlign="center" gap="400">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Spinner size="small" />
-                    <Text variant="bodyMd">
-                      {aiSitemapStatus.inProgress || aiSitemapBusy
+              <InlineStack gap="200" blockAlign="center">
+                <Spinner size="small" />
+                <Text variant="bodyMd">
+                  {aiSitemapStatus.inProgress || aiSitemapBusy
                         ? (aiSitemapStatus.progress?.total > 0
                             ? `Processing ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
                             : (() => {
@@ -715,8 +715,8 @@ export default function SitemapPage({ shop: shopProp }) {
                               ? 'Generating XML...'
                               : queueStatus?.message || 'Generating...'
                           )}
-                    </Text>
-                  </InlineStack>
+                </Text>
+              </InlineStack>
                   <Button 
                     size="slim" 
                     tone="critical" 

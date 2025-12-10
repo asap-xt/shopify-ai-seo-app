@@ -136,14 +136,14 @@ class AIEnhanceQueue {
           const avgTimePerProduct = current > 0 ? elapsed / current : 2.8; // Default estimate: 2.8s for AI
           const remaining = Math.ceil((total - current) * avgTimePerProduct);
           
-          await this.updateShopStatus(job.shop, {
-            inProgress: true,
-            status: 'processing',
+            await this.updateShopStatus(job.shop, {
+              inProgress: true,
+              status: 'processing',
             message: `Enhancing ${current}/${total} products`,
             totalProducts: total,
             processedProducts: current,
-            successfulProducts: job.successfulProducts,
-            failedProducts: job.failedProducts,
+              successfulProducts: job.successfulProducts,
+              failedProducts: job.failedProducts,
             skippedProducts: job.skippedProducts,
             progress: {
               current,
@@ -188,7 +188,7 @@ class AIEnhanceQueue {
               ]);
               
               return { productData, result, success: true, error: null };
-            } catch (error) {
+          } catch (error) {
               dbLogger.error(`[AI-ENHANCE-QUEUE] Product ${productData.productId} error: ${error.message}`);
               return { productData, result: null, success: false, error };
               }
@@ -239,9 +239,9 @@ class AIEnhanceQueue {
               if (result?.error || result?.reason) {
                 job.failReasons.push(`${productData.title}: ${result.error || result.reason}`);
               }
-            }
-            
-            job.processedProducts++;
+          }
+
+          job.processedProducts++;
           }
 
           // Small delay between batches to prevent server overload

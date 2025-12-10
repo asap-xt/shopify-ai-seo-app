@@ -2104,12 +2104,12 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                   active={showSelectionPopover}
                   activator={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setShowSelectionPopover(!showSelectionPopover)}>
-                      <Checkbox
+              <Checkbox
                         checked={selectedItems.length > 0 && (selectedItems.length === collections.length || selectAllInStore)}
                         indeterminate={selectedItems.length > 0 && selectedItems.length < collections.length && !selectAllInStore}
-                        onChange={handleSelectAllPages}
+                onChange={handleSelectAllPages}
                         label=""
-                      />
+              />
                       <Text variant="bodyMd" fontWeight="semibold">
                         {selectedItems.length > 0 
                           ? selectAllInStore 
@@ -2167,10 +2167,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     <BlockStack gap="200">
                       <InlineStack align="space-between" blockAlign="center">
                         <InlineStack gap="300" blockAlign="center">
-                          <Spinner size="small" />
-                          <BlockStack gap="100">
-                            <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Collections...</Text>
-                            <Text variant="bodySm" tone="subdued">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">AI Enhancing Collections...</Text>
+                        <Text variant="bodySm" tone="subdued">
                               {(() => {
                                 const p = collectionAiEnhanceJobStatus.progress;
                                 if (p?.current && p?.total) {
@@ -2185,9 +2185,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                                 }
                                 return collectionAiEnhanceJobStatus.message || `Processing ${collectionAiEnhanceJobStatus.processedCollections}/${collectionAiEnhanceJobStatus.totalCollections} collections`;
                               })()}
-                            </Text>
-                          </BlockStack>
-                        </InlineStack>
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
                         <Button 
                           onClick={async () => {
                             try {
@@ -2241,10 +2241,10 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                     <BlockStack gap="200">
                       <InlineStack align="space-between" blockAlign="center">
                         <InlineStack gap="300" blockAlign="center">
-                          <Spinner size="small" />
-                          <BlockStack gap="100">
-                            <Text variant="bodyMd" fontWeight="semibold">Optimizing Collections...</Text>
-                            <Text variant="bodySm" tone="subdued">
+                      <Spinner size="small" />
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="semibold">Optimizing Collections...</Text>
+                        <Text variant="bodySm" tone="subdued">
                               {(() => {
                                 const p = collectionSeoJobStatus.progress;
                                 if (p?.current && p?.total) {
@@ -2259,9 +2259,9 @@ export default function CollectionsPage({ shop: shopProp, globalPlan }) {
                                 }
                                 return collectionSeoJobStatus.message || `Processing ${collectionSeoJobStatus.processedCollections}/${collectionSeoJobStatus.totalCollections} collections`;
                               })()}
-                            </Text>
-                          </BlockStack>
-                        </InlineStack>
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
                         <Button 
                           onClick={async () => {
                             try {

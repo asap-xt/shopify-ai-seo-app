@@ -522,34 +522,55 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
       const publicData = await fetchPublicStoreData(publicDomain, shop);
       
       publicDataContext = `\n\n=== ACTUAL STORE DATA (fetched in real-time) ===\n`;
+      publicDataContext += `\nSTORE DOMAIN: ${publicDomain}\n`;
       
+      // robots.txt from store
       if (publicData.robotsTxt) {
-        publicDataContext += `\nROBOTS.TXT CONTENT:\n\`\`\`\n${publicData.robotsTxt}\n\`\`\`\n`;
+        publicDataContext += `\n--- ROBOTS.TXT (from ${publicData.endpoints.robotsTxt}) ---\n`;
+        publicDataContext += `\`\`\`\n${publicData.robotsTxt}\n\`\`\`\n`;
       } else {
-        publicDataContext += `\nROBOTS.TXT: Could not fetch (${publicData.errors.find(e => e.includes('robots')) || 'unknown error'})\n`;
+        publicDataContext += `\nROBOTS.TXT: Not available\n`;
       }
       
+      // Shopify's sitemap
       if (publicData.sitemap) {
-        publicDataContext += `\nSITEMAP.XML CONTENT (truncated):\n\`\`\`xml\n${publicData.sitemap}\n\`\`\`\n`;
+        publicDataContext += `\n--- SHOPIFY SITEMAP (${publicData.endpoints.shopifySitemap}) ---\n`;
+        publicDataContext += `\`\`\`xml\n${publicData.sitemap}\n\`\`\`\n`;
       } else {
-        publicDataContext += `\nSITEMAP.XML: Could not fetch (${publicData.errors.find(e => e.includes('sitemap')) || 'unknown error'})\n`;
+        publicDataContext += `\nSHOPIFY SITEMAP: ${publicData.shopifySitemapStatus || 'Not available'}\n`;
       }
       
-      if (publicData.productsJson && publicData.productsJson.length > 0) {
-        publicDataContext += `\nPUBLIC PRODUCTS.JSON (sample of ${publicData.productsJson.length} products):\n`;
-        publicData.productsJson.forEach(p => {
-          publicDataContext += `- ${p.title} [${p.product_type || 'no type'}] - ${p.price || 'no price'} - ${p.url}\n`;
-        });
-      }
-      
-      if (publicData.hasAISitemap) {
-        publicDataContext += `\nAI-ENHANCED SITEMAP: Yes, detected with <ai:product> tags\n`;
-        if (publicData.aiSitemapSample) {
-          publicDataContext += `Sample:\n\`\`\`xml\n${publicData.aiSitemapSample.substring(0, 1000)}\n\`\`\`\n`;
+      // IndexAIze AI Products Feed
+      if (publicData.aiProductsJson?.available) {
+        publicDataContext += `\n--- INDEXAIZE AI PRODUCTS FEED ---\n`;
+        publicDataContext += `URL: ${publicData.endpoints.aiProductsFeed}\n`;
+        publicDataContext += `Status: Available with ${publicData.aiProductsJson.productCount} products\n`;
+        if (publicData.aiProductsJson.sampleProduct) {
+          publicDataContext += `Sample: "${publicData.aiProductsJson.sampleProduct.title}" (has metafields: ${publicData.aiProductsJson.sampleProduct.hasMetafields})\n`;
         }
       } else {
-        publicDataContext += `\nAI-ENHANCED SITEMAP: Not detected or not enabled\n`;
+        publicDataContext += `\nINDEXAIZE AI PRODUCTS FEED: Not available (${publicData.aiProductsJson?.status || publicData.aiProductsJson?.error || 'unknown'})\n`;
       }
+      
+      // IndexAIze AI Sitemap
+      if (publicData.aiSitemap?.available) {
+        publicDataContext += `\n--- INDEXAIZE AI-ENHANCED SITEMAP ---\n`;
+        publicDataContext += `URL: ${publicData.aiSitemap.url}\n`;
+        publicDataContext += `App Proxy URL: ${publicData.aiSitemap.appProxyUrl}\n`;
+        publicDataContext += `Has AI Metadata (<ai:product> tags): ${publicData.aiSitemap.hasAIMetadata ? 'YES' : 'NO'}\n`;
+        if (publicData.aiSitemap.sample) {
+          publicDataContext += `Sample:\n\`\`\`xml\n${publicData.aiSitemap.sample}\n\`\`\`\n`;
+        }
+      } else {
+        publicDataContext += `\nINDEXAIZE AI SITEMAP: Not generated yet\n`;
+      }
+      
+      // Available endpoints summary
+      publicDataContext += `\n--- AVAILABLE AI ENDPOINTS ---\n`;
+      publicDataContext += `- AI Products Feed: ${publicData.endpoints.aiProductsFeed}\n`;
+      publicDataContext += `- AI Sitemap: ${publicData.endpoints.aiSitemap}\n`;
+      publicDataContext += `- AI Welcome Page: ${publicData.endpoints.aiWelcomePage}\n`;
+      publicDataContext += `- App Proxy Base: ${publicData.endpoints.appProxyBase}\n`;
       
       publicDataContext += `\n=== END OF ACTUAL STORE DATA ===\n`;
     }
@@ -656,15 +677,19 @@ async function fetchPublicStoreData(publicDomain, shop) {
     robotsTxt: null,
     sitemap: null,
     productsJson: null,
+    aiProductsJson: null,
+    aiSitemap: null,
     errors: []
   };
   
   const cleanDomain = publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const baseUrl = `https://${cleanDomain}`;
+  const storeUrl = `https://${cleanDomain}`;
+  const appUrl = process.env.APP_URL || 'https://indexaize.com';
+  const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
   
-  // Fetch robots.txt
+  // Fetch robots.txt from store (Shopify's or custom)
   try {
-    const robotsResponse = await fetch(`${baseUrl}/robots.txt`, {
+    const robotsResponse = await fetch(`${storeUrl}/robots.txt`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 5000
     });
@@ -677,67 +702,104 @@ async function fetchPublicStoreData(publicDomain, shop) {
     data.errors.push(`robots.txt: ${err.message}`);
   }
   
-  // Fetch sitemap.xml
+  // Fetch Shopify's default sitemap.xml
   try {
-    const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`, {
+    const sitemapResponse = await fetch(`${storeUrl}/sitemap.xml`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 5000
     });
     if (sitemapResponse.ok) {
       const sitemapContent = await sitemapResponse.text();
-      // Truncate if too large
-      data.sitemap = sitemapContent.length > 3000 
-        ? sitemapContent.substring(0, 3000) + '\n... (truncated)'
+      data.sitemap = sitemapContent.length > 2000 
+        ? sitemapContent.substring(0, 2000) + '\n... (truncated)'
         : sitemapContent;
     } else {
-      data.errors.push(`sitemap.xml: HTTP ${sitemapResponse.status}`);
+      data.shopifySitemapStatus = `HTTP ${sitemapResponse.status}`;
     }
   } catch (err) {
-    data.errors.push(`sitemap.xml: ${err.message}`);
+    data.shopifySitemapStatus = err.message;
   }
   
   // Fetch products.json (public Shopify endpoint)
   try {
-    const productsResponse = await fetch(`${baseUrl}/products.json?limit=10`, {
+    const productsResponse = await fetch(`${storeUrl}/products.json?limit=5`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 5000
     });
     if (productsResponse.ok) {
       const productsData = await productsResponse.json();
-      // Extract just the essentials
-      data.productsJson = productsData.products?.slice(0, 5).map(p => ({
+      data.productsJson = productsData.products?.slice(0, 3).map(p => ({
         title: p.title,
         handle: p.handle,
         product_type: p.product_type,
-        vendor: p.vendor,
         price: p.variants?.[0]?.price,
-        url: `${baseUrl}/products/${p.handle}`
+        url: `${storeUrl}/products/${p.handle}`
       }));
-    } else {
-      data.errors.push(`products.json: HTTP ${productsResponse.status}`);
     }
   } catch (err) {
-    data.errors.push(`products.json: ${err.message}`);
+    // Ignore - not critical
   }
   
-  // Check for AI sitemap
+  // ============================================
+  // FETCH OUR AI ENDPOINTS (indexAIze data)
+  // ============================================
+  
+  // AI Products JSON Feed (from our app)
   try {
-    const aiSitemapResponse = await fetch(`${process.env.APP_URL || 'https://indexaize.com'}/sitemap_products.xml?shop=${shop}`, {
+    const aiProductsResponse = await fetch(`${appUrl}/ai/products.json?shop=${shop}`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 5000
+    });
+    if (aiProductsResponse.ok) {
+      const aiProductsData = await aiProductsResponse.json();
+      data.aiProductsJson = {
+        available: true,
+        productCount: aiProductsData.products?.length || 0,
+        sampleProduct: aiProductsData.products?.[0] ? {
+          title: aiProductsData.products[0].title,
+          hasMetafields: !!aiProductsData.products[0].metafields
+        } : null
+      };
+    } else {
+      data.aiProductsJson = { available: false, status: aiProductsResponse.status };
+    }
+  } catch (err) {
+    data.aiProductsJson = { available: false, error: err.message };
+  }
+  
+  // AI-Enhanced Sitemap (from our app)
+  try {
+    const aiSitemapResponse = await fetch(`${appUrl}/sitemap_products.xml?shop=${shop}`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 5000
     });
     if (aiSitemapResponse.ok) {
       const aiSitemapContent = await aiSitemapResponse.text();
       const hasAIMetadata = aiSitemapContent.includes('xmlns:ai=') || aiSitemapContent.includes('<ai:product>');
-      data.hasAISitemap = hasAIMetadata;
-      if (hasAIMetadata) {
-        // Extract a sample of AI sitemap content
-        data.aiSitemapSample = aiSitemapContent.substring(0, 2000);
-      }
+      data.aiSitemap = {
+        available: true,
+        hasAIMetadata,
+        url: `${appUrl}/sitemap_products.xml?shop=${shop}`,
+        appProxyUrl: `${storeUrl}/apps/${appProxySubpath}/ai/sitemap-feed.xml?shop=${shop}`,
+        sample: hasAIMetadata ? aiSitemapContent.substring(0, 1500) : null
+      };
+    } else {
+      data.aiSitemap = { available: false, status: aiSitemapResponse.status };
     }
   } catch (err) {
-    data.hasAISitemap = false;
+    data.aiSitemap = { available: false, error: err.message };
   }
+  
+  // Store the correct URLs for AI context
+  data.endpoints = {
+    robotsTxt: `${storeUrl}/robots.txt`,
+    shopifySitemap: `${storeUrl}/sitemap.xml`,
+    shopifyProducts: `${storeUrl}/products.json`,
+    aiProductsFeed: `${appUrl}/ai/products.json?shop=${shop}`,
+    aiSitemap: `${appUrl}/sitemap_products.xml?shop=${shop}`,
+    aiWelcomePage: `${appUrl}/ai/welcome?shop=${shop}`,
+    appProxyBase: `${storeUrl}/apps/${appProxySubpath}`
+  };
   
   return data;
 }
