@@ -606,7 +606,7 @@ IMPORTANT RULES:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: questionToAsk }
         ],
-        max_tokens: 500,
+        max_tokens: 800,
         temperature: 0.5
       })
     });
