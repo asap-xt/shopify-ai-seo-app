@@ -627,6 +627,15 @@ IMPORTANT RULES:
     const aiResult = await openRouterResponse.json();
     const responseTime = Date.now() - startTime;
     
+    // Debug logging for response analysis
+    console.log('[AI-TESTING] Response from', bot.model, ':', {
+      finishReason: aiResult.choices?.[0]?.finish_reason,
+      contentLength: aiResult.choices?.[0]?.message?.content?.length,
+      tokensUsed: aiResult.usage?.total_tokens,
+      promptTokens: aiResult.usage?.prompt_tokens,
+      completionTokens: aiResult.usage?.completion_tokens
+    });
+    
     // Calculate actual tokens used
     const tokensUsed = aiResult.usage?.total_tokens || estimatedTokens;
     
