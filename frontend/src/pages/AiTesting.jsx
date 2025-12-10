@@ -1178,6 +1178,27 @@ export default function AiTesting({ shop: shopProp }) {
                     >
                       <Text variant="bodyMd">{categoryResponse['AI Data Quality'].response}</Text>
                     </Box>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['AI Data Quality'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['AI Data Quality'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
                 </Box>
               )}
@@ -1243,6 +1264,27 @@ export default function AiTesting({ shop: shopProp }) {
                     >
                       <Text variant="bodyMd">{categoryResponse['Product Discovery'].response}</Text>
                     </Box>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Product Discovery'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Product Discovery'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
                 </Box>
               )}
@@ -1308,6 +1350,27 @@ export default function AiTesting({ shop: shopProp }) {
                     >
                       <Text variant="bodyMd">{categoryResponse['Business Intelligence'].response}</Text>
                     </Box>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Business Intelligence'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Business Intelligence'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
                 </Box>
               )}
@@ -1373,6 +1436,27 @@ export default function AiTesting({ shop: shopProp }) {
                     >
                       <Text variant="bodyMd">{categoryResponse['SEO Value'].response}</Text>
                     </Box>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['SEO Value'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['SEO Value'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
                 </Box>
               )}
@@ -1432,6 +1516,27 @@ export default function AiTesting({ shop: shopProp }) {
                     >
                       <Text variant="bodyMd">{categoryResponse['Custom'].response}</Text>
                     </Box>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Custom'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Custom'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
                   </BlockStack>
                 </Box>
               )}
