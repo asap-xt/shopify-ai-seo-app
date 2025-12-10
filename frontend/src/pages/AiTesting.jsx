@@ -84,6 +84,8 @@ export default function AiTesting({ shop: shopProp }) {
   const [botTestResponse, setBotTestResponse] = useState(null);
   const [botTesting, setBotTesting] = useState(false);
   const [botTestUsage, setBotTestUsage] = useState(null);
+  const [activeTestPromptId, setActiveTestPromptId] = useState(null); // Track which prompt is being tested
+  const [categoryResponse, setCategoryResponse] = useState({}); // Store response per category
 
   // Review banner state (same as Dashboard)
   const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
@@ -140,9 +142,9 @@ export default function AiTesting({ shop: shopProp }) {
   };
   
   // Run AI bot test
-  const runBotTest = async (promptOverride = null) => {
+  const runBotTest = async (promptOverride = null, promptId = null, category = null) => {
     if (!selectedBotId) {
-      setToastContent('Please select an AI bot first');
+      setToastContent('Please select an AI model first');
       return;
     }
     
@@ -153,6 +155,7 @@ export default function AiTesting({ shop: shopProp }) {
     }
     
     setBotTesting(true);
+    setActiveTestPromptId(promptId); // Track which prompt is loading
     setBotTestResponse(null);
     setBotTestUsage(null);
     
@@ -170,6 +173,20 @@ export default function AiTesting({ shop: shopProp }) {
       if (response.success) {
         setBotTestResponse(response);
         setBotTestUsage(response.usage);
+        
+        // Store response per category for display under the card
+        if (category) {
+          setCategoryResponse(prev => ({
+            ...prev,
+            [category]: {
+              promptId,
+              response: response.response,
+              bot: response.bot,
+              usage: response.usage
+            }
+          }));
+        }
+        
         loadTokenBalance(); // Refresh token balance
       } else {
         setToastContent(response.error || 'Test failed');
@@ -198,6 +215,7 @@ export default function AiTesting({ shop: shopProp }) {
       setToastContent('Failed to run AI bot test');
     } finally {
       setBotTesting(false);
+      setActiveTestPromptId(null);
     }
   };
 
@@ -1065,11 +1083,29 @@ export default function AiTesting({ shop: shopProp }) {
                         : 'var(--p-color-bg-surface)',
                       cursor: bot.available ? 'pointer' : 'not-allowed',
                       opacity: bot.available ? 1 : 0.5,
-                      transition: 'all 0.15s ease'
+                      transition: 'all 0.15s ease',
+                      position: 'relative'
                     }}
                   >
                     <BlockStack gap="100">
-                      <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
+                      <InlineStack align="space-between" blockAlign="center">
+                        <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
+                        {selectedBotId === bot.id && bot.available && (
+                          <div style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            borderRadius: '50%', 
+                            background: 'var(--p-color-bg-fill-success)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '12px'
+                          }}>
+                            ✓
+                          </div>
+                        )}
+                      </InlineStack>
                       <Text variant="bodySm" tone="subdued">
                         {bot.available ? `~${bot.tokensPerTest.toLocaleString()} tokens per test` : `Requires ${bot.requiredPlan}`}
                       </Text>
@@ -1107,36 +1143,44 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => runBotTest(prompt.question)}
-                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'AI Data Quality')}
+                        loading={activeTestPromptId === prompt.id}
                         disabled={!selectedBotId || botTesting}
                       >
-                        Check
+                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
                       </Button>
-                      {botTestResponse && botTestResponse.prompt === prompt.question && (
-                        <Box paddingBlockStart="200">
-                          <Box 
-                            padding="300" 
-                            background="bg-surface" 
-                            borderRadius="100"
-                            style={{ maxHeight: '200px', overflow: 'auto' }}
-                          >
-                            <BlockStack gap="200">
-                              <InlineStack align="space-between">
-                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
-                                <Text variant="bodySm" tone="subdued">
-                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
-                                </Text>
-                              </InlineStack>
-                              <Text variant="bodySm">{botTestResponse.response}</Text>
-                            </BlockStack>
-                          </Box>
-                        </Box>
-                      )}
                     </BlockStack>
                   </Box>
                 ))}
               </div>
+
+              {/* Response area - under the card, not under individual buttons */}
+              {categoryResponse['AI Data Quality'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['AI Data Quality'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['AI Data Quality'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <Box 
+                      padding="300" 
+                      background="bg-surface" 
+                      borderRadius="100"
+                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    >
+                      <Text variant="bodyMd">{categoryResponse['AI Data Quality'].response}</Text>
+                    </Box>
+                  </BlockStack>
+                </Box>
+              )}
             </BlockStack>
           </Box>
         </Card>
@@ -1164,36 +1208,44 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => runBotTest(prompt.question)}
-                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'Product Discovery')}
+                        loading={activeTestPromptId === prompt.id}
                         disabled={!selectedBotId || botTesting}
                       >
-                        Check
+                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
                       </Button>
-                      {botTestResponse && botTestResponse.prompt === prompt.question && (
-                        <Box paddingBlockStart="200">
-                          <Box 
-                            padding="300" 
-                            background="bg-surface" 
-                            borderRadius="100"
-                            style={{ maxHeight: '200px', overflow: 'auto' }}
-                          >
-                            <BlockStack gap="200">
-                              <InlineStack align="space-between">
-                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
-                                <Text variant="bodySm" tone="subdued">
-                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
-                                </Text>
-                              </InlineStack>
-                              <Text variant="bodySm">{botTestResponse.response}</Text>
-                            </BlockStack>
-                          </Box>
-                        </Box>
-                      )}
                     </BlockStack>
                   </Box>
                 ))}
               </div>
+
+              {/* Response area - under the card */}
+              {categoryResponse['Product Discovery'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Product Discovery'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['Product Discovery'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <Box 
+                      padding="300" 
+                      background="bg-surface" 
+                      borderRadius="100"
+                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    >
+                      <Text variant="bodyMd">{categoryResponse['Product Discovery'].response}</Text>
+                    </Box>
+                  </BlockStack>
+                </Box>
+              )}
             </BlockStack>
           </Box>
         </Card>
@@ -1221,36 +1273,44 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => runBotTest(prompt.question)}
-                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'Business Intelligence')}
+                        loading={activeTestPromptId === prompt.id}
                         disabled={!selectedBotId || botTesting}
                       >
-                        Check
+                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
                       </Button>
-                      {botTestResponse && botTestResponse.prompt === prompt.question && (
-                        <Box paddingBlockStart="200">
-                          <Box 
-                            padding="300" 
-                            background="bg-surface" 
-                            borderRadius="100"
-                            style={{ maxHeight: '200px', overflow: 'auto' }}
-                          >
-                            <BlockStack gap="200">
-                              <InlineStack align="space-between">
-                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
-                                <Text variant="bodySm" tone="subdued">
-                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
-                                </Text>
-                              </InlineStack>
-                              <Text variant="bodySm">{botTestResponse.response}</Text>
-                            </BlockStack>
-                          </Box>
-                        </Box>
-                      )}
                     </BlockStack>
                   </Box>
                 ))}
               </div>
+
+              {/* Response area - under the card */}
+              {categoryResponse['Business Intelligence'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Business Intelligence'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['Business Intelligence'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <Box 
+                      padding="300" 
+                      background="bg-surface" 
+                      borderRadius="100"
+                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    >
+                      <Text variant="bodyMd">{categoryResponse['Business Intelligence'].response}</Text>
+                    </Box>
+                  </BlockStack>
+                </Box>
+              )}
             </BlockStack>
           </Box>
         </Card>
@@ -1278,36 +1338,44 @@ export default function AiTesting({ shop: shopProp }) {
                       <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
                         size="slim"
-                        onClick={() => runBotTest(prompt.question)}
-                        loading={botTesting && selectedPrompt?.id === prompt.id}
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'SEO Value')}
+                        loading={activeTestPromptId === prompt.id}
                         disabled={!selectedBotId || botTesting}
                       >
-                        Check
+                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
                       </Button>
-                      {botTestResponse && botTestResponse.prompt === prompt.question && (
-                        <Box paddingBlockStart="200">
-                          <Box 
-                            padding="300" 
-                            background="bg-surface" 
-                            borderRadius="100"
-                            style={{ maxHeight: '200px', overflow: 'auto' }}
-                          >
-                            <BlockStack gap="200">
-                              <InlineStack align="space-between">
-                                <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
-                                <Text variant="bodySm" tone="subdued">
-                                  {botTestUsage?.tokensUsed?.toLocaleString()} tokens
-                                </Text>
-                              </InlineStack>
-                              <Text variant="bodySm">{botTestResponse.response}</Text>
-                            </BlockStack>
-                          </Box>
-                        </Box>
-                      )}
                     </BlockStack>
                   </Box>
                 ))}
               </div>
+
+              {/* Response area - under the card */}
+              {categoryResponse['SEO Value'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['SEO Value'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['SEO Value'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <Box 
+                      padding="300" 
+                      background="bg-surface" 
+                      borderRadius="100"
+                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    >
+                      <Text variant="bodyMd">{categoryResponse['SEO Value'].response}</Text>
+                    </Box>
+                  </BlockStack>
+                </Box>
+              )}
             </BlockStack>
           </Box>
         </Card>
@@ -1331,30 +1399,39 @@ export default function AiTesting({ shop: shopProp }) {
                 autoComplete="off"
                 connectedRight={
                   <Button
-                    onClick={() => runBotTest(customBotQuestion)}
-                    loading={botTesting}
+                    onClick={() => runBotTest(customBotQuestion, 'custom', 'Custom')}
+                    loading={activeTestPromptId === 'custom'}
                     disabled={!selectedBotId || !customBotQuestion.trim() || botTesting}
                   >
-                    Ask
+                    {activeTestPromptId === 'custom' ? 'Asking...' : 'Ask'}
                   </Button>
                 }
               />
 
-              {botTestResponse && botTestResponse.prompt === customBotQuestion && (
+              {/* Response area - under the card */}
+              {categoryResponse['Custom'] && (
                 <Box 
-                  padding="300" 
+                  padding="400" 
                   background="bg-surface-secondary" 
                   borderRadius="200"
-                  style={{ maxHeight: '300px', overflow: 'auto' }}
                 >
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text variant="bodySm" fontWeight="semibold">{botTestResponse.bot?.name}</Text>
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Custom'].bot?.name} Response
+                      </Text>
                       <Text variant="bodySm" tone="subdued">
-                        {botTestUsage?.tokensUsed?.toLocaleString()} tokens
+                        {categoryResponse['Custom'].usage?.tokensUsed?.toLocaleString()} tokens
                       </Text>
                     </InlineStack>
-                    <Text variant="bodyMd">{botTestResponse.response}</Text>
+                    <Box 
+                      padding="300" 
+                      background="bg-surface" 
+                      borderRadius="100"
+                      style={{ maxHeight: '300px', overflow: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}
+                    >
+                      <Text variant="bodyMd">{categoryResponse['Custom'].response}</Text>
+                    </Box>
                   </BlockStack>
                 </Box>
               )}
