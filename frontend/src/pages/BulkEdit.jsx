@@ -745,7 +745,23 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
 
   // AI Enhancement handler - now uses background queue
   const handleStartEnhancement = async () => {
-    const selectedProducts = products.filter(p => selectedItems.includes(p.id));
+    let selectedProducts = [];
+    
+    // Handle "Select all in store" - fetch all products
+    if (selectAllInStore) {
+      try {
+        setToast('Loading all products...');
+        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
+        selectedProducts = data.products || [];
+      } catch (error) {
+        console.error('[BULK-EDIT] Failed to fetch all products:', error);
+        setToast('Failed to load all products');
+        return;
+      }
+    } else {
+      selectedProducts = products.filter(p => selectedItems.includes(p.id));
+    }
+    
     const selectedWithSEO = selectedProducts.filter(p =>
       p.optimizationSummary?.optimizedLanguages?.length > 0
     );
