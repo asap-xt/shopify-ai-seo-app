@@ -777,7 +777,7 @@ async function fetchPublicStoreData(publicDomain, shop) {
   try {
     const aiProductsResponse = await fetch(`${appUrl}/ai/products.json?shop=${shop}`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-      timeout: 5000
+      timeout: 30000 // 30 seconds for pagination of large catalogs
     });
     if (aiProductsResponse.ok) {
       const aiProductsData = await aiProductsResponse.json();
