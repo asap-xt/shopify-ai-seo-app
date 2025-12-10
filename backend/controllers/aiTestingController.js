@@ -18,7 +18,8 @@ const normalizePlan = (plan) => {
 
 // ============================================
 // AI BOT CONFIGURATION (OpenRouter models)
-// Price multipliers relative to base token price (Gemini Flash Lite = 1.0)
+// Price multipliers relative to base token price (Gemini 2.5 Flash Lite = 1.0)
+// Base: $0.10/M input, $0.40/M output
 // This ensures we charge appropriately for more expensive models
 // ============================================
 const AI_BOTS = {
@@ -29,7 +30,7 @@ const AI_BOTS = {
     description: 'Meta Llama 4 Maverick',
     minPlanIndex: 1, // Professional+
     tokensPerTest: 2000,
-    priceMultiplier: 1.0 // Llama is cost-effective
+    priceMultiplier: 1.5 // $0.15/$0.60 vs base $0.10/$0.40
   },
   'claude': {
     id: 'claude',
@@ -38,7 +39,7 @@ const AI_BOTS = {
     description: 'Anthropic Claude Haiku',
     minPlanIndex: 1, // Professional+
     tokensPerTest: 2000,
-    priceMultiplier: 1.5 // Claude Haiku is ~1.5x more expensive
+    priceMultiplier: 12.0 // $1/$5 vs base $0.10/$0.40
   },
   'gemini': {
     id: 'gemini',
@@ -47,7 +48,7 @@ const AI_BOTS = {
     description: 'Google Gemini Pro',
     minPlanIndex: 1, // Professional+
     tokensPerTest: 2000,
-    priceMultiplier: 3.0 // Gemini Pro is ~3x more expensive than Flash
+    priceMultiplier: 22.0 // $1.25/$10 vs base $0.10/$0.40
   },
   'chatgpt': {
     id: 'chatgpt',
@@ -56,7 +57,7 @@ const AI_BOTS = {
     description: 'OpenAI GPT-5 Mini',
     minPlanIndex: 2, // Growth Plus+
     tokensPerTest: 2500,
-    priceMultiplier: 1.2 // GPT Mini is relatively affordable
+    priceMultiplier: 4.5 // $0.25/$2 vs base $0.10/$0.40
   },
   'perplexity': {
     id: 'perplexity',
@@ -65,7 +66,7 @@ const AI_BOTS = {
     description: 'Perplexity Sonar',
     minPlanIndex: 3, // Growth Extra+
     tokensPerTest: 3000,
-    priceMultiplier: 2.0 // Perplexity has per-request + token costs
+    priceMultiplier: 4.0 // $1/$1 + per-request costs vs base $0.10/$0.40
   }
 };
 
