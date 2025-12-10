@@ -81,6 +81,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [dynamicPrompts, setDynamicPrompts] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [customBotQuestion, setCustomBotQuestion] = useState('');
+  const [customProductQuestion, setCustomProductQuestion] = useState(''); // Custom product discovery question
   const [botTestResponse, setBotTestResponse] = useState(null);
   const [botTestUsage, setBotTestUsage] = useState(null);
   const [loadingPromptIds, setLoadingPromptIds] = useState(new Set()); // Track which prompts are loading (allows parallel)
@@ -1229,7 +1230,7 @@ export default function AiTesting({ shop: shopProp }) {
               </BlockStack>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'Product Discovery').map(prompt => (
+                {dynamicPrompts.filter(p => p.category === 'Product Discovery' && !p.isCustom).map(prompt => (
                   <Box 
                     key={prompt.id} 
                     padding="300" 
@@ -1250,6 +1251,32 @@ export default function AiTesting({ shop: shopProp }) {
                   </Box>
                 ))}
               </div>
+              
+              {/* Custom product search */}
+              <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                <BlockStack gap="200">
+                  <Text variant="bodyMd" fontWeight="medium">Ask about specific products</Text>
+                  <TextField
+                    value={customProductQuestion}
+                    onChange={setCustomProductQuestion}
+                    placeholder="e.g., leather bags, summer dresses, gifts under $50..."
+                    autoComplete="off"
+                    connectedRight={
+                      <Button
+                        onClick={() => {
+                          // "Secret formatting" - wrap user question in positive framing
+                          const formattedQuestion = `A customer is looking for: "${customProductQuestion}". What great options does ${storeInsights?.publicDomain || 'this store'} have? Highlight the best matches and what makes them special.`;
+                          runBotTest(formattedQuestion, 'discovery-custom', 'Product Discovery');
+                        }}
+                        loading={loadingPromptIds.has('discovery-custom')}
+                        disabled={!selectedBotId || !customProductQuestion.trim() || loadingPromptIds.has('discovery-custom')}
+                      >
+                        {loadingPromptIds.has('discovery-custom') ? 'Searching...' : 'Search'}
+                      </Button>
+                    }
+                  />
+                </BlockStack>
+              </Box>
 
               {/* Response area - under the card */}
               {categoryResponse['Product Discovery'] && (

@@ -281,18 +281,26 @@ function generateDynamicPrompts(data) {
   // 2. PRODUCT DISCOVERY
   // ============================================
   
-  // Price-based search
+  // Always show "Browse all products" option
+  prompts.push({
+    id: 'discovery-browse',
+    category: 'Product Discovery',
+    question: `What products does ${publicDomain} offer? Give me a quick overview of their catalog.`,
+    description: 'Browse product catalog'
+  });
+  
+  // Price-based search (if price data available)
   if (priceRange && priceRange.max > 0) {
     const midPrice = Math.round((priceRange.min + priceRange.max) / 2);
     prompts.push({
       id: 'discovery-price',
       category: 'Product Discovery',
       question: `Find products under ${midPrice} ${currencySymbol} at ${publicDomain}`,
-      description: `Find budget-friendly options under ${midPrice} ${currencySymbol}`
+      description: `Find options under ${midPrice} ${currencySymbol}`
     });
   }
   
-  // Product type search
+  // Product type search (if types available)
   if (productTypes && productTypes.length > 0) {
     const randomType = productTypes[Math.floor(Math.random() * productTypes.length)];
     prompts.push({
@@ -303,44 +311,22 @@ function generateDynamicPrompts(data) {
     });
   }
   
-  // Tag-based search
-  if (tags && tags.length > 0) {
-    const interestingTags = tags.filter(t => 
-      !t.match(/^\d+$/) && 
-      t.length > 2 && 
-      t.length < 30
-    );
-    if (interestingTags.length > 0) {
-      const randomTag = interestingTags[Math.floor(Math.random() * interestingTags.length)];
-      prompts.push({
-        id: 'discovery-attribute',
-        category: 'Product Discovery',
-        question: `Find ${randomTag.toLowerCase()} products at ${publicDomain}`,
-        description: `Search by attribute: ${randomTag}`
-      });
-    }
-  }
-  
   // Gift recommendation
-  if (collections && collections.length > 0) {
-    prompts.push({
-      id: 'discovery-gift',
-      category: 'Product Discovery',
-      question: `Recommend a gift from ${publicDomain} for someone who likes ${collections[0]?.toLowerCase() || 'quality products'}`,
-      description: 'Get gift recommendations'
-    });
-  }
+  prompts.push({
+    id: 'discovery-gift',
+    category: 'Product Discovery',
+    question: `Recommend a gift from ${publicDomain}. What makes their products special?`,
+    description: 'Get gift recommendations'
+  });
   
-  // Comparison prompt
-  if (productTypes && productTypes.length > 0) {
-    const type = productTypes[0];
-    prompts.push({
-      id: 'discovery-compare',
-      category: 'Product Discovery',
-      question: `Compare the top 3 ${type.toLowerCase()} at ${publicDomain} by price and features`,
-      description: `Compare ${type} products`
-    });
-  }
+  // Custom product search placeholder (handled in frontend)
+  prompts.push({
+    id: 'discovery-custom',
+    category: 'Product Discovery',
+    question: '', // Will be filled by user
+    description: 'Ask about specific products',
+    isCustom: true
+  });
 
   // ============================================
   // 3. BUSINESS INTELLIGENCE
