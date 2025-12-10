@@ -36,6 +36,8 @@ export default function SitemapPage({ shop: shopProp }) {
   // PHASE 4: Queue status
   const [queueStatus, setQueueStatus] = useState(null);
   const [polling, setPolling] = useState(false);
+  // Basic Sitemap progress tracking
+  const [basicSitemapProgress, setBasicSitemapProgress] = useState(null); // { current, total, percent }
   const api = useMemo(() => makeSessionFetch(), []);
   
   // Modal states (copied from Settings.jsx)
@@ -176,9 +178,20 @@ export default function SitemapPage({ shop: shopProp }) {
       
       setQueueStatus(status.queue);
       
+      // Update Basic Sitemap progress
+      if (status.progress && status.progress.total > 0) {
+        setBasicSitemapProgress({
+          current: status.progress.current,
+          total: status.progress.total,
+          percent: status.progress.percent,
+          remainingSeconds: status.progress.remainingSeconds
+        });
+      }
+      
       // Stop polling if generation is completed or failed
       if (status.queue.status === 'completed' || status.queue.status === 'failed' || status.queue.status === 'idle') {
         setPolling(false);
+        setBasicSitemapProgress(null); // Reset progress
         // Clean up message for toast - show only success/failure message
         if (status.queue.status === 'completed') {
           setToast('Basic Sitemap generated successfully!');
@@ -699,7 +712,7 @@ export default function SitemapPage({ shop: shopProp }) {
                 <Text variant="bodyMd">
                   {aiSitemapStatus.inProgress || aiSitemapBusy
                         ? (aiSitemapStatus.progress?.total > 0
-                            ? `Processing ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
+                            ? `AI Sitemap: ${aiSitemapStatus.progress.current}/${aiSitemapStatus.progress.total} products${aiSitemapStatus.progress.remainingSeconds > 0 ? ` • ~${Math.ceil(aiSitemapStatus.progress.remainingSeconds / 60)} min remaining` : ''}`
                             : (() => {
                                 // Estimate based on product count (~5 sec per product for AI)
                                 const productCount = info?.productCount || info?.lastProductCount || 0;
@@ -709,12 +722,14 @@ export default function SitemapPage({ shop: shopProp }) {
                                   : 'Starting... (loading products)';
                               })()
                           )
-                        : (queueStatus?.status === 'queued'
-                            ? 'Starting...'
-                            : queueStatus?.status === 'processing'
-                              ? 'Generating XML...'
-                              : queueStatus?.message || 'Generating...'
-                          )}
+                        : basicSitemapProgress?.total > 0
+                          ? `Basic Sitemap: ${basicSitemapProgress.current}/${basicSitemapProgress.total} products${basicSitemapProgress.remainingSeconds > 0 ? ` • ~${Math.ceil(basicSitemapProgress.remainingSeconds / 60)} min remaining` : ''}`
+                          : (queueStatus?.status === 'queued'
+                              ? 'Starting...'
+                              : queueStatus?.status === 'processing'
+                                ? 'Generating Basic Sitemap...'
+                                : queueStatus?.message || 'Generating...'
+                            )}
                 </Text>
               </InlineStack>
                   <Button 
@@ -725,11 +740,12 @@ export default function SitemapPage({ shop: shopProp }) {
                     Cancel
                   </Button>
                 </InlineStack>
-                {/* Progress bar for AI sitemap only - Basic sitemap is fast and doesn't need progress tracking */}
-                {aiSitemapStatus.progress && aiSitemapStatus.progress.total > 0 && (
+                {/* Progress bar for both AI and Basic sitemap */}
+                {(aiSitemapStatus.progress?.total > 0 || basicSitemapProgress?.total > 0) && (
                   <ProgressBar 
-                    progress={aiSitemapStatus.progress.percent || 0} 
+                    progress={aiSitemapStatus.progress?.percent || basicSitemapProgress?.percent || 0} 
                     size="small" 
+                    tone="primary"
                   />
                 )}
               </BlockStack>

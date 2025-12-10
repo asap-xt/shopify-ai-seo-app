@@ -699,9 +699,13 @@ async function generateSitemapCore(shop, options = {}) {
         xml += '    </ai:product>\n';
       }
       
-      // Update progress for non-AI products too
+      // Update progress for non-AI products too (Basic Sitemap)
       if (!isAISitemapEnabled) {
         processedProducts++;
+        // Update progress every 10 products or at end (to avoid too many DB writes)
+        if (processedProducts % 10 === 0 || processedProducts === totalProducts) {
+          await updateProgress(processedProducts, totalProducts);
+        }
       }
       
       xml += '  </url>\n';
