@@ -24,7 +24,7 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   
   // STAGING MODE: Test payments enabled
   // Set to true for testing, false for real payments
-  const isTest = true;
+  const isTest = false;
   
   const mutation = `
     mutation CreateSubscription(
@@ -149,7 +149,7 @@ export async function purchaseTokens(shop, usdAmount, accessToken, options = {})
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
   
   // ALWAYS use test mode until we go live with real payments
-  const isTest = true;
+  const isTest = false;
   
   const mutation = `
     mutation PurchaseTokens(

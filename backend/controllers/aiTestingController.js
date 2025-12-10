@@ -644,17 +644,6 @@ IMPORTANT RULES:
     // priceMultiplier already defined above when calculating estimatedTokens
     const adjustedTokensUsed = Math.ceil(rawTokensUsed * priceMultiplier);
     
-    // Debug logging for response analysis
-    console.log('[AI-TESTING] Response from', bot.model, ':', {
-      finishReason: aiResult.choices?.[0]?.finish_reason,
-      contentLength: aiResult.choices?.[0]?.message?.content?.length,
-      rawTokens: rawTokensUsed,
-      priceMultiplier,
-      adjustedTokens: adjustedTokensUsed,
-      promptTokens: aiResult.usage?.prompt_tokens,
-      completionTokens: aiResult.usage?.completion_tokens
-    });
-    
     // Finalize token usage with adjusted amount
     await tokenBalance.finalizeReservation(reservationId, adjustedTokensUsed);
     
