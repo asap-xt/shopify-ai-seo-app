@@ -487,21 +487,90 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
     const shopRecord = await Shop.findOne({ shop });
     const storeContext = await buildStoreContext(shop, shopRecord);
     
+    // Get public domain for fetching public data
+    let publicDomain = shop;
+    try {
+      const domainQuery = `{ shop { primaryDomain { url host } } }`;
+      const domainResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: domainQuery })
+      });
+      
+      if (domainResponse.ok) {
+        const domainData = await domainResponse.json();
+        publicDomain = domainData?.data?.shop?.primaryDomain?.host || shop;
+      }
+    } catch (domainErr) {
+      console.error('[AI-TESTING] Error fetching domain:', domainErr);
+    }
+    
+    // Fetch public store data for AI Data Quality prompts
+    let publicDataContext = '';
+    const isDataQualityPrompt = questionToAsk.toLowerCase().includes('robots.txt') || 
+                                 questionToAsk.toLowerCase().includes('sitemap') ||
+                                 questionToAsk.toLowerCase().includes('structured data') ||
+                                 questionToAsk.toLowerCase().includes('ai-readiness') ||
+                                 questionToAsk.toLowerCase().includes('ai crawler') ||
+                                 questionToAsk.toLowerCase().includes('json feed');
+    
+    if (isDataQualityPrompt) {
+      console.log('[AI-TESTING] Fetching public store data for AI Data Quality prompt...');
+      const publicData = await fetchPublicStoreData(publicDomain, shop);
+      
+      publicDataContext = `\n\n=== ACTUAL STORE DATA (fetched in real-time) ===\n`;
+      
+      if (publicData.robotsTxt) {
+        publicDataContext += `\nROBOTS.TXT CONTENT:\n\`\`\`\n${publicData.robotsTxt}\n\`\`\`\n`;
+      } else {
+        publicDataContext += `\nROBOTS.TXT: Could not fetch (${publicData.errors.find(e => e.includes('robots')) || 'unknown error'})\n`;
+      }
+      
+      if (publicData.sitemap) {
+        publicDataContext += `\nSITEMAP.XML CONTENT (truncated):\n\`\`\`xml\n${publicData.sitemap}\n\`\`\`\n`;
+      } else {
+        publicDataContext += `\nSITEMAP.XML: Could not fetch (${publicData.errors.find(e => e.includes('sitemap')) || 'unknown error'})\n`;
+      }
+      
+      if (publicData.productsJson && publicData.productsJson.length > 0) {
+        publicDataContext += `\nPUBLIC PRODUCTS.JSON (sample of ${publicData.productsJson.length} products):\n`;
+        publicData.productsJson.forEach(p => {
+          publicDataContext += `- ${p.title} [${p.product_type || 'no type'}] - ${p.price || 'no price'} - ${p.url}\n`;
+        });
+      }
+      
+      if (publicData.hasAISitemap) {
+        publicDataContext += `\nAI-ENHANCED SITEMAP: Yes, detected with <ai:product> tags\n`;
+        if (publicData.aiSitemapSample) {
+          publicDataContext += `Sample:\n\`\`\`xml\n${publicData.aiSitemapSample.substring(0, 1000)}\n\`\`\`\n`;
+        }
+      } else {
+        publicDataContext += `\nAI-ENHANCED SITEMAP: Not detected or not enabled\n`;
+      }
+      
+      publicDataContext += `\n=== END OF ACTUAL STORE DATA ===\n`;
+    }
+    
     // Call OpenRouter API
     const startTime = Date.now();
     
     const systemPrompt = `You are an AI assistant helping users learn about an e-commerce store. 
 Answer questions based on the store data provided below. Be helpful, informative, and comprehensive.
-If you don't have specific information, say so honestly but try to provide relevant context from what you know.
 
 STORE DATA:
 ${storeContext}
+${publicDataContext}
 
 IMPORTANT: 
-- Give detailed, helpful responses (not just 2-3 sentences)
+- Use the ACTUAL DATA provided above to answer questions - do not make assumptions
+- If robots.txt, sitemap, or other files are provided, analyze the REAL content
+- Give detailed, helpful responses based on the actual data
 - Include specific product names, prices, and categories when relevant
 - Format your response clearly with paragraphs and lists when appropriate
-- Be conversational and helpful`;
+- If data couldn't be fetched, explain what you can see and what's missing`;
 
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -578,6 +647,100 @@ IMPORTANT:
     res.status(500).json({ error: 'Failed to run AI bot test' });
   }
 });
+
+// ============================================
+// FETCH PUBLIC STORE DATA (robots.txt, sitemap, etc.)
+// ============================================
+async function fetchPublicStoreData(publicDomain, shop) {
+  const data = {
+    robotsTxt: null,
+    sitemap: null,
+    productsJson: null,
+    errors: []
+  };
+  
+  const cleanDomain = publicDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const baseUrl = `https://${cleanDomain}`;
+  
+  // Fetch robots.txt
+  try {
+    const robotsResponse = await fetch(`${baseUrl}/robots.txt`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 5000
+    });
+    if (robotsResponse.ok) {
+      data.robotsTxt = await robotsResponse.text();
+    } else {
+      data.errors.push(`robots.txt: HTTP ${robotsResponse.status}`);
+    }
+  } catch (err) {
+    data.errors.push(`robots.txt: ${err.message}`);
+  }
+  
+  // Fetch sitemap.xml
+  try {
+    const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 5000
+    });
+    if (sitemapResponse.ok) {
+      const sitemapContent = await sitemapResponse.text();
+      // Truncate if too large
+      data.sitemap = sitemapContent.length > 3000 
+        ? sitemapContent.substring(0, 3000) + '\n... (truncated)'
+        : sitemapContent;
+    } else {
+      data.errors.push(`sitemap.xml: HTTP ${sitemapResponse.status}`);
+    }
+  } catch (err) {
+    data.errors.push(`sitemap.xml: ${err.message}`);
+  }
+  
+  // Fetch products.json (public Shopify endpoint)
+  try {
+    const productsResponse = await fetch(`${baseUrl}/products.json?limit=10`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 5000
+    });
+    if (productsResponse.ok) {
+      const productsData = await productsResponse.json();
+      // Extract just the essentials
+      data.productsJson = productsData.products?.slice(0, 5).map(p => ({
+        title: p.title,
+        handle: p.handle,
+        product_type: p.product_type,
+        vendor: p.vendor,
+        price: p.variants?.[0]?.price,
+        url: `${baseUrl}/products/${p.handle}`
+      }));
+    } else {
+      data.errors.push(`products.json: HTTP ${productsResponse.status}`);
+    }
+  } catch (err) {
+    data.errors.push(`products.json: ${err.message}`);
+  }
+  
+  // Check for AI sitemap
+  try {
+    const aiSitemapResponse = await fetch(`${process.env.APP_URL || 'https://indexaize.com'}/sitemap_products.xml?shop=${shop}`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 5000
+    });
+    if (aiSitemapResponse.ok) {
+      const aiSitemapContent = await aiSitemapResponse.text();
+      const hasAIMetadata = aiSitemapContent.includes('xmlns:ai=') || aiSitemapContent.includes('<ai:product>');
+      data.hasAISitemap = hasAIMetadata;
+      if (hasAIMetadata) {
+        // Extract a sample of AI sitemap content
+        data.aiSitemapSample = aiSitemapContent.substring(0, 2000);
+      }
+    }
+  } catch (err) {
+    data.hasAISitemap = false;
+  }
+  
+  return data;
+}
 
 // Build store context for AI
 async function buildStoreContext(shop, shopRecord) {

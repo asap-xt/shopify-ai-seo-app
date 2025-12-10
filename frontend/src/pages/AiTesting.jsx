@@ -1109,9 +1109,11 @@ export default function AiTesting({ shop: shopProp }) {
                           </div>
                         )}
                       </InlineStack>
-                      <Text variant="bodySm" tone="subdued">
-                        {bot.available ? `~${bot.tokensPerTest.toLocaleString()} tokens per test` : `Requires ${bot.requiredPlan}`}
-                      </Text>
+                      {!bot.available && (
+                        <Text variant="bodySm" tone="subdued">
+                          Requires {bot.requiredPlan}
+                        </Text>
+                      )}
                       {!bot.available && (
                         <Badge size="small">{bot.requiredPlan}</Badge>
                       )}
