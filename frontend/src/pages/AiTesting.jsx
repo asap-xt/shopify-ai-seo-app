@@ -82,9 +82,8 @@ export default function AiTesting({ shop: shopProp }) {
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [customBotQuestion, setCustomBotQuestion] = useState('');
   const [botTestResponse, setBotTestResponse] = useState(null);
-  const [botTesting, setBotTesting] = useState(false);
   const [botTestUsage, setBotTestUsage] = useState(null);
-  const [activeTestPromptId, setActiveTestPromptId] = useState(null); // Track which prompt is being tested
+  const [loadingPromptIds, setLoadingPromptIds] = useState(new Set()); // Track which prompts are loading (allows parallel)
   const [categoryResponse, setCategoryResponse] = useState({}); // Store response per category
 
   // Review banner state (same as Dashboard)
@@ -154,8 +153,8 @@ export default function AiTesting({ shop: shopProp }) {
       return;
     }
     
-    setBotTesting(true);
-    setActiveTestPromptId(promptId); // Track which prompt is loading
+    // Add this prompt to loading set (allows parallel requests)
+    setLoadingPromptIds(prev => new Set([...prev, promptId]));
     setBotTestResponse(null);
     setBotTestUsage(null);
     
@@ -214,8 +213,12 @@ export default function AiTesting({ shop: shopProp }) {
       
       setToastContent('Failed to run AI bot test');
     } finally {
-      setBotTesting(false);
-      setActiveTestPromptId(null);
+      // Remove this prompt from loading set
+      setLoadingPromptIds(prev => {
+        const updated = new Set(prev);
+        updated.delete(promptId);
+        return updated;
+      });
     }
   };
 
@@ -1144,10 +1147,10 @@ export default function AiTesting({ shop: shopProp }) {
                       <Button
                         size="slim"
                         onClick={() => runBotTest(prompt.question, prompt.id, 'AI Data Quality')}
-                        loading={activeTestPromptId === prompt.id}
-                        disabled={!selectedBotId || botTesting}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
-                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
                       </Button>
                     </BlockStack>
                   </Box>
@@ -1230,10 +1233,10 @@ export default function AiTesting({ shop: shopProp }) {
                       <Button
                         size="slim"
                         onClick={() => runBotTest(prompt.question, prompt.id, 'Product Discovery')}
-                        loading={activeTestPromptId === prompt.id}
-                        disabled={!selectedBotId || botTesting}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
-                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
                       </Button>
                     </BlockStack>
                   </Box>
@@ -1316,10 +1319,10 @@ export default function AiTesting({ shop: shopProp }) {
                       <Button
                         size="slim"
                         onClick={() => runBotTest(prompt.question, prompt.id, 'Business Intelligence')}
-                        loading={activeTestPromptId === prompt.id}
-                        disabled={!selectedBotId || botTesting}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
-                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
                       </Button>
                     </BlockStack>
                   </Box>
@@ -1402,10 +1405,10 @@ export default function AiTesting({ shop: shopProp }) {
                       <Button
                         size="slim"
                         onClick={() => runBotTest(prompt.question, prompt.id, 'SEO Value')}
-                        loading={activeTestPromptId === prompt.id}
-                        disabled={!selectedBotId || botTesting}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
-                        {activeTestPromptId === prompt.id ? 'Checking...' : 'Check'}
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
                       </Button>
                     </BlockStack>
                   </Box>
@@ -1484,10 +1487,10 @@ export default function AiTesting({ shop: shopProp }) {
                 connectedRight={
                   <Button
                     onClick={() => runBotTest(customBotQuestion, 'custom', 'Custom')}
-                    loading={activeTestPromptId === 'custom'}
-                    disabled={!selectedBotId || !customBotQuestion.trim() || botTesting}
+                    loading={loadingPromptIds.has('custom')}
+                    disabled={!selectedBotId || !customBotQuestion.trim() || loadingPromptIds.has('custom')}
                   >
-                    {activeTestPromptId === 'custom' ? 'Asking...' : 'Ask'}
+                    {loadingPromptIds.has('custom') ? 'Asking...' : 'Ask'}
                   </Button>
                 }
               />
