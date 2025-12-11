@@ -2428,39 +2428,50 @@ router.get('/test-installation', async (req, res) => {
       const productsData = await productsResponse.json();
       const products = productsData?.data?.products?.edges || [];
       
-      // Find first product that has SEO optimization (any language)
-      const firstProduct = products.find(p => 
+      // Find SEO-optimized products (exclude gift cards by handle as they return 404)
+      const seoProducts = products.filter(p => 
         p.node?.handle && 
         p.node.status === 'ACTIVE' &&
-        (p.node.seoEn?.value || p.node.seoBg?.value)
-      )?.node;
+        (p.node.seoEn?.value || p.node.seoBg?.value) &&
+        !p.node.handle.toLowerCase().includes('gift')
+      ).map(p => p.node);
       
-      if (!firstProduct) {
-        results.errors.push('No SEO-optimized products found to test');
-      }
-      
-      if (firstProduct) {
-        // primaryDomain is already defined above
-        const productUrl = `${primaryDomain}/products/${firstProduct.handle}`;
-        results.testedProductUrl = productUrl;
-        console.log('[SCHEMA TEST] Checking product page:', productUrl);
-        
-        const productResponse = await fetch(productUrl, {
-          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-          timeout: 10000
-        });
-        if (productResponse.ok) {
-          const html = await productResponse.text();
-          const hasJsonLd = html.includes('application/ld+json');
-          const hasProductType = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
-          results.productPageHasSchema = hasJsonLd && hasProductType;
-          results.productPageHasOurSchema = html.includes('advanced_schema') || html.includes('seo_ai') || html.includes('indexAIze');
-          console.log('[SCHEMA TEST] Product JSON-LD:', hasJsonLd, 'Product type:', hasProductType, 'Our schema:', results.productPageHasOurSchema);
-        } else {
-          results.errors.push(`Product page returned status ${productResponse.status}`);
-        }
+      if (seoProducts.length === 0) {
+        results.errors.push('No SEO-optimized products found to test (excluding gift cards)');
       } else {
-        results.errors.push('No products found to test');
+        // Try each product until we find one that's accessible
+        let productTested = false;
+        for (const product of seoProducts) {
+          const productUrl = `${primaryDomain}/products/${product.handle}`;
+          console.log('[SCHEMA TEST] Trying product page:', productUrl);
+          
+          try {
+            const productResponse = await fetch(productUrl, {
+              headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+              timeout: 10000
+            });
+            
+            if (productResponse.ok) {
+              results.testedProductUrl = productUrl;
+              const html = await productResponse.text();
+              const hasJsonLd = html.includes('application/ld+json');
+              const hasProductType = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+              results.productPageHasSchema = hasJsonLd && hasProductType;
+              results.productPageHasOurSchema = html.includes('advanced_schema') || html.includes('seo_ai') || html.includes('indexAIze');
+              console.log('[SCHEMA TEST] Product JSON-LD:', hasJsonLd, 'Product type:', hasProductType);
+              productTested = true;
+              break; // Found a working product, stop trying
+            } else {
+              console.log('[SCHEMA TEST] Product returned', productResponse.status, '- trying next');
+            }
+          } catch (err) {
+            console.log('[SCHEMA TEST] Product fetch failed:', err.message, '- trying next');
+          }
+        }
+        
+        if (!productTested) {
+          results.errors.push('All SEO-optimized products returned errors (404/timeout)');
+        }
       }
     } catch (err) {
       results.errors.push(`Product page check failed: ${err.message}`);
