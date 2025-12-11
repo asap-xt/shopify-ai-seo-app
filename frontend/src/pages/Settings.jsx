@@ -957,25 +957,27 @@ export default function Settings() {
     setToast('Copied to clipboard!');
   };
 
+  // State for auto-apply robots.txt
+  const [applyingRobots, setApplyingRobots] = useState(false);
+  
   /**
-   * ⚠️ NOT IN USE - Requires Shopify Protected Scope Approval
-   * 
-   * This function is preserved for future use but is currently NOT called from the UI.
-   * The backend endpoint returns 501 Not Implemented until Shopify approves write_themes_assets scope.
-   * 
-   * See: backend/controllers/aiDiscoveryController.js (line ~248) for backend status
+   * Auto-install robots.txt.liquid to Shopify theme
+   * Now enabled after Shopify approved write_themes scope
    */
   const applyRobotsTxt = async () => {
+    setApplyingRobots(true);
     try {
       const data = await api(`/api/ai-discovery/apply-robots?shop=${shop}`, {
         method: 'POST',
         body: { shop }
       });
       
-      setToast('robots.txt applied successfully!');
+      setToast('robots.txt.liquid installed successfully! AI bots can now discover your store.');
     } catch (error) {
       console.error('Failed to apply robots.txt:', error);
-      setToast(error.message);
+      setToast('Failed to install: ' + (error.message || 'Unknown error. You may need to re-authorize the app.'));
+    } finally {
+      setApplyingRobots(false);
     }
   };
 
@@ -1707,35 +1709,45 @@ export default function Settings() {
                 <Badge tone="critical">REQUIRED</Badge>
               </InlineStack>
               
-              <Banner status="critical" title="⚠️ IMPORTANT: AI Discovery will NOT work without this step!">
-                <BlockStack gap="300">
-                  <p><strong>Your AI bot settings are saved, but they can't access your store yet.</strong></p>
-                  <p>You must manually add robots.txt to your theme for AI bots to discover your products.</p>
-                  <p>Click the button below to see your custom robots.txt code and installation instructions.</p>
-                </BlockStack>
+              <Banner status="info" title="AI Discovery requires robots.txt configuration">
+                <p>Your AI bot settings are saved. Choose how to install robots.txt to enable AI bot access:</p>
               </Banner>
               
-              <Button 
-                primary
-                size="large"
-                onClick={async () => {
-                  try {
-                    const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
-                    
-                    if (!hasSelectedBots) {
-                      setShowNoBotsModal(true);
-                    } else {
-                      await generateRobotsTxt();
-                      setShowRobotsModal(true);
+              <InlineStack gap="300" wrap={false}>
+                <Button 
+                  variant="primary"
+                  size="large"
+                  loading={applyingRobots}
+                  onClick={applyRobotsTxt}
+                >
+                  Auto-Install to Theme
+                </Button>
+                
+                <Button 
+                  size="large"
+                  onClick={async () => {
+                    try {
+                      const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                      
+                      if (!hasSelectedBots) {
+                        setShowNoBotsModal(true);
+                      } else {
+                        await generateRobotsTxt();
+                        setShowRobotsModal(true);
+                      }
+                    } catch (error) {
+                      console.error('[GENERATE ROBOTS] Error:', error);
+                      setToast('Error generating robots.txt: ' + error.message);
                     }
-                  } catch (error) {
-                    console.error('[GENERATE ROBOTS] Error:', error);
-                    setToast('Error generating robots.txt: ' + error.message);
-                  }
-                }}
-              >
-                📋 View & Copy robots.txt Code
-              </Button>
+                  }}
+                >
+                  Manual Install (Copy Code)
+                </Button>
+              </InlineStack>
+              
+              <Text variant="bodySm" tone="subdued">
+                Auto-Install automatically adds robots.txt.liquid to your theme. Manual Install shows the code for you to copy/paste.
+              </Text>
               
               <Divider />
               
