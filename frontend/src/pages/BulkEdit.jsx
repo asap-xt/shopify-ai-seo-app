@@ -1859,6 +1859,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             </InlineStack>
           </BlockStack>
           
+          {/* HIDDEN: No longer needed - skip logic handles already optimized products automatically
           {totalCount > 0 && (
             <Box paddingBlockStart="300">
               <Checkbox
@@ -1868,6 +1869,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               />
             </Box>
           )}
+          */}
         </Box>
       </Card>
 
