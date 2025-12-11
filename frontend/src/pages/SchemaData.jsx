@@ -96,6 +96,10 @@ export default function SchemaData({ shop: shopProp }) {
   const [showInstallConfirmModal, setShowInstallConfirmModal] = useState(false);
   const [showInstallUpgradeModal, setShowInstallUpgradeModal] = useState(false);
   
+  // Installation test states
+  const [testingInstallation, setTestingInstallation] = useState(false);
+  const [installationTestResults, setInstallationTestResults] = useState(null);
+  
   // Rich Attributes state (same as Settings.jsx)
   const [richAttributes, setRichAttributes] = useState({
     material: false,
@@ -972,22 +976,77 @@ ${JSON.stringify(allSchemas, null, 2)}
                     <Card>
                       <Box padding="300">
                         <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">Testing Your Installation</Text>
+                          <InlineStack align="space-between" blockAlign="center">
+                            <Text as="h4" variant="headingSm">Test Your Installation</Text>
+                            <Button 
+                              size="slim"
+                              loading={testingInstallation}
+                              onClick={async () => {
+                                setTestingInstallation(true);
+                                setInstallationTestResults(null);
+                                try {
+                                  const results = await api(`/api/schema/test-installation?shop=${shop}`);
+                                  setInstallationTestResults(results);
+                                } catch (err) {
+                                  setToastContent('Test failed: ' + err.message);
+                                } finally {
+                                  setTestingInstallation(false);
+                                }
+                              }}
+                            >
+                              Run Tests
+                            </Button>
+                          </InlineStack>
                           
-                          <List>
-                            <List.Item>
-                              After installation, visit your store's homepage and product pages
-                            </List.Item>
-                            <List.Item>
-                              View the page source (right-click → View Source)
-                            </List.Item>
-                            <List.Item>
-                              Search for <code>application/ld+json</code> to find your schemas
-                            </List.Item>
-                            <List.Item>
-                              Use the Validation tab to test with Google's tools
-                            </List.Item>
-                          </List>
+                          {installationTestResults ? (
+                            <BlockStack gap="200">
+                              <Banner tone={installationTestResults.allPassed ? 'success' : 'warning'}>
+                                <p>{installationTestResults.summary}</p>
+                              </Banner>
+                              
+                              <Box paddingBlockStart="200">
+                                <BlockStack gap="100">
+                                  <InlineStack gap="200" blockAlign="center">
+                                    <Badge tone={installationTestResults.snippetExists ? 'success' : 'critical'}>
+                                      {installationTestResults.snippetExists ? 'Pass' : 'Fail'}
+                                    </Badge>
+                                    <Text>Snippet file exists (snippets/ai-schema.liquid)</Text>
+                                  </InlineStack>
+                                  
+                                  <InlineStack gap="200" blockAlign="center">
+                                    <Badge tone={installationTestResults.themeHasRenderTag ? 'success' : 'critical'}>
+                                      {installationTestResults.themeHasRenderTag ? 'Pass' : 'Fail'}
+                                    </Badge>
+                                    <Text>Theme.liquid has render tag</Text>
+                                  </InlineStack>
+                                  
+                                  <InlineStack gap="200" blockAlign="center">
+                                    <Badge tone={installationTestResults.homepageHasJsonLd ? 'success' : 'warning'}>
+                                      {installationTestResults.homepageHasJsonLd ? 'Pass' : 'Check'}
+                                    </Badge>
+                                    <Text>Homepage has JSON-LD</Text>
+                                  </InlineStack>
+                                  
+                                  <InlineStack gap="200" blockAlign="center">
+                                    <Badge tone={installationTestResults.productPageHasSchema ? 'success' : 'warning'}>
+                                      {installationTestResults.productPageHasSchema ? 'Pass' : 'Check'}
+                                    </Badge>
+                                    <Text>Product page has schema</Text>
+                                  </InlineStack>
+                                </BlockStack>
+                              </Box>
+                              
+                              {installationTestResults.errors?.length > 0 && (
+                                <Text variant="bodySm" tone="critical">
+                                  Errors: {installationTestResults.errors.join(', ')}
+                                </Text>
+                              )}
+                            </BlockStack>
+                          ) : (
+                            <Text variant="bodySm" tone="subdued">
+                              Click "Run Tests" to verify your schema installation is working correctly.
+                            </Text>
+                          )}
                         </BlockStack>
                       </Box>
                     </Card>

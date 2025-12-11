@@ -2292,6 +2292,121 @@ router.post('/install-theme', async (req, res) => {
   }
 });
 
+// GET /api/schema/test-installation - Test if schema snippet is installed correctly
+router.get('/test-installation', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    const results = {
+      snippetExists: false,
+      themeHasRenderTag: false,
+      homepageHasJsonLd: false,
+      productPageHasSchema: false,
+      errors: []
+    };
+    
+    // Get access token
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord?.accessToken) {
+      throw new Error('No access token found');
+    }
+    
+    // 1. Check if snippet file exists
+    try {
+      const themesResponse = await fetch(
+        `https://${shop}/admin/api/2025-01/themes.json`,
+        { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+      );
+      const themesData = await themesResponse.json();
+      const activeTheme = themesData.themes?.find(t => t.role === 'main');
+      
+      if (activeTheme) {
+        // Check for snippet
+        const snippetResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/themes/${activeTheme.id}/assets.json?asset[key]=snippets/ai-schema.liquid`,
+          { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+        );
+        results.snippetExists = snippetResponse.ok;
+        
+        // Check theme.liquid for render tag
+        const themeLiquidResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/themes/${activeTheme.id}/assets.json?asset[key]=layout/theme.liquid`,
+          { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+        );
+        if (themeLiquidResponse.ok) {
+          const themeLiquidData = await themeLiquidResponse.json();
+          const content = themeLiquidData.asset?.value || '';
+          results.themeHasRenderTag = content.includes("render 'ai-schema'") || content.includes('render "ai-schema"');
+        }
+      }
+    } catch (err) {
+      results.errors.push(`Theme check failed: ${err.message}`);
+    }
+    
+    // 2. Check homepage for JSON-LD
+    try {
+      const primaryDomain = shopRecord.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
+      const homepageResponse = await fetch(primaryDomain, {
+        headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+        timeout: 10000
+      });
+      if (homepageResponse.ok) {
+        const html = await homepageResponse.text();
+        results.homepageHasJsonLd = html.includes('application/ld+json');
+      }
+    } catch (err) {
+      results.errors.push(`Homepage check failed: ${err.message}`);
+    }
+    
+    // 3. Check a product page for schema (get first product)
+    try {
+      const productsQuery = `{ products(first: 1) { edges { node { handle } } } }`;
+      const productsResponse = await fetch(
+        `https://${shop}/admin/api/2025-01/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query: productsQuery })
+        }
+      );
+      const productsData = await productsResponse.json();
+      const firstProduct = productsData?.data?.products?.edges?.[0]?.node;
+      
+      if (firstProduct) {
+        const primaryDomain = shopRecord.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
+        const productUrl = `${primaryDomain}/products/${firstProduct.handle}`;
+        const productResponse = await fetch(productUrl, {
+          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+          timeout: 10000
+        });
+        if (productResponse.ok) {
+          const html = await productResponse.text();
+          results.productPageHasSchema = html.includes('application/ld+json') && 
+            (html.includes('"@type":"Product"') || html.includes('"@type": "Product"'));
+          results.testedProductUrl = productUrl;
+        }
+      }
+    } catch (err) {
+      results.errors.push(`Product page check failed: ${err.message}`);
+    }
+    
+    // Calculate overall status
+    results.allPassed = results.snippetExists && results.themeHasRenderTag && results.homepageHasJsonLd;
+    results.summary = results.allPassed 
+      ? 'All tests passed! Schema installation is working correctly.'
+      : 'Some tests failed. Please check the details below.';
+    
+    res.json(results);
+    
+  } catch (error) {
+    console.error('[SCHEMA TEST] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/schema/status - Check generation status
 router.get('/status', async (req, res) => {
   try {
