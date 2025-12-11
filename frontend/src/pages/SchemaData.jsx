@@ -829,30 +829,31 @@ ${JSON.stringify(allSchemas, null, 2)}
                     
                     {/* Manual Installation Instructions - shown only when toggled */}
                     {showManualInstructions && (
-                      <div id="manual-install-section">
-                        <Banner tone="info">
-                          <BlockStack gap="300">
-                            <Text as="h4" variant="headingSm">Manual Installation Steps</Text>
-                            
-                            <List type="number">
-                              <List.Item>
-                                Go to your Shopify Admin → Online Store → Themes
-                              </List.Item>
-                              <List.Item>
-                                Click "Actions" → "Edit code" on your current theme
-                              </List.Item>
-                              <List.Item>
-                                Open the file: <code>layout/theme.liquid</code>
-                              </List.Item>
-                              <List.Item>
-                                Add this code before the closing <code>&lt;/head&gt;</code> tag:
-                              </List.Item>
-                            </List>
-                          </BlockStack>
-                        </Banner>
-                      </div>
+                      <>
+                        <div id="manual-install-section">
+                          <Banner tone="info">
+                            <BlockStack gap="300">
+                              <Text as="h4" variant="headingSm">Manual Installation Steps</Text>
+                              
+                              <List type="number">
+                                <List.Item>
+                                  Go to your Shopify Admin → Online Store → Themes
+                                </List.Item>
+                                <List.Item>
+                                  Click "Actions" → "Edit code" on your current theme
+                                </List.Item>
+                                <List.Item>
+                                  Open the file: <code>layout/theme.liquid</code>
+                                </List.Item>
+                                <List.Item>
+                                  Add this code before the closing <code>&lt;/head&gt;</code> tag:
+                                </List.Item>
+                              </List>
+                            </BlockStack>
+                          </Banner>
+                        </div>
 
-                      <Card>
+                        <Card>
                         <Box padding="300">
                           <BlockStack gap="300">
                             <Text as="h4" variant="headingSm">Code to Install</Text>
@@ -979,6 +980,7 @@ ${JSON.stringify(allSchemas, null, 2)}
                           </BlockStack>
                         </Box>
                       </Card>
+                      </>
                     )}
 
                     <Card>
