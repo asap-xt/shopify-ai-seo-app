@@ -1714,60 +1714,68 @@ export default function Settings() {
                 <p>Your AI bot settings are saved. Install robots.txt to enable AI bot access to your store.</p>
               </Banner>
               
-              <InlineStack gap="300" wrap={false}>
-                <Button 
-                  variant="primary"
-                  size="large"
-                  loading={applyingRobots}
-                  onClick={() => {
-                    // Auto-Install requires Growth Plus or higher (index >= 4)
-                    // Check for test mode: ?testPlan=starter (or professional, growth, etc.)
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const testPlan = urlParams.get('testPlan');
-                    const effectivePlan = testPlan || settings?.plan;
-                    const planIndex = getPlanIndex(effectivePlan);
-                    
-                    if (planIndex >= 4) {
-                      applyRobotsTxt();
-                    } else {
-                      setShowAutoInstallUpgradeModal(true);
-                    }
-                  }}
-                >
-                  Auto-Install to Theme
-                </Button>
+              {(() => {
+                // Check for test mode: ?testPlan=starter (or professional, growth, etc.)
+                const urlParams = new URLSearchParams(window.location.search);
+                const testPlan = urlParams.get('testPlan');
+                const effectivePlan = testPlan || settings?.plan;
+                const planIndex = getPlanIndex(effectivePlan);
+                const hasAutoInstall = planIndex >= 4;
                 
-                <Button 
-                  size="large"
-                  onClick={async () => {
-                    try {
-                      const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                return (
+                  <BlockStack gap="300">
+                    <InlineStack gap="300" wrap={false}>
+                      {hasAutoInstall ? (
+                        // Growth Plus+: Auto-Install available
+                        <Button 
+                          variant="primary"
+                          size="large"
+                          loading={applyingRobots}
+                          onClick={applyRobotsTxt}
+                        >
+                          Auto-Install to Theme
+                        </Button>
+                      ) : (
+                        // Lower plans: Show upgrade button
+                        <Button 
+                          size="large"
+                          onClick={() => setShowAutoInstallUpgradeModal(true)}
+                        >
+                          Auto-Install (Growth Plus+)
+                        </Button>
+                      )}
                       
-                      if (!hasSelectedBots) {
-                        setShowNoBotsModal(true);
-                      } else {
-                        await generateRobotsTxt();
-                        setShowRobotsModal(true);
+                      <Button 
+                        size="large"
+                        variant={hasAutoInstall ? "secondary" : "primary"}
+                        onClick={async () => {
+                          try {
+                            const hasSelectedBots = Object.values(settings?.bots || {}).some(bot => bot.enabled);
+                            if (!hasSelectedBots) {
+                              setShowNoBotsModal(true);
+                            } else {
+                              await generateRobotsTxt();
+                              setShowRobotsModal(true);
+                            }
+                          } catch (error) {
+                            console.error('[GENERATE ROBOTS] Error:', error);
+                            setToast('Error generating robots.txt: ' + error.message);
+                          }
+                        }}
+                      >
+                        View & Copy Code
+                      </Button>
+                    </InlineStack>
+                    
+                    <Text variant="bodySm" tone="subdued">
+                      {hasAutoInstall 
+                        ? "Auto-Install replaces existing robots.txt.liquid. Use 'View & Copy Code' if you have custom rules to preserve."
+                        : "Upgrade to Growth Plus for automatic installation, or copy the code manually."
                       }
-                    } catch (error) {
-                      console.error('[GENERATE ROBOTS] Error:', error);
-                      setToast('Error generating robots.txt: ' + error.message);
-                    }
-                  }}
-                >
-                  Manual Install (Copy Code)
-                </Button>
-              </InlineStack>
-              
-              {getPlanIndex(settings?.plan) >= 4 ? (
-                <Text variant="bodySm" tone="subdued">
-                  Auto-Install automatically adds robots.txt.liquid to your theme.
-                </Text>
-              ) : (
-                <Text variant="bodySm" tone="subdued">
-                  Auto-Install requires Growth Plus or higher. Use Manual Install to copy the code.
-                </Text>
-              )}
+                    </Text>
+                  </BlockStack>
+                );
+              })()}
               
               <Divider />
               
