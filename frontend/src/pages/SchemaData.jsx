@@ -648,8 +648,8 @@ ${JSON.stringify(allSchemas, null, 2)}
   };
 
   const tabs = [
-    { id: 'overview', content: 'Overview', accessibilityLabel: 'Overview' },
-    { id: 'installation', content: 'Installation', accessibilityLabel: 'Installation' }
+    { id: 'generate', content: 'Generate Schemas', accessibilityLabel: 'Generate Schemas' },
+    { id: 'installation', content: 'Theme Installation', accessibilityLabel: 'Theme Installation' }
   ];
 
   if (loading) {
@@ -1000,7 +1000,8 @@ ${JSON.stringify(allSchemas, null, 2)}
         </Box>
       </Card>
 
-      {/* Card 2: Advanced Schema Data */}
+      {/* Card 2: Advanced Schema Data - Only show in Generate Schemas tab */}
+      {selectedTab === 0 && (
       <Box paddingBlockStart="400">
         <Card>
           <Box padding="400">
@@ -1251,6 +1252,7 @@ ${JSON.stringify(allSchemas, null, 2)}
           </Box>
         </Card>
       </Box>
+      )}
 
       {toastContent && (
         <Toast content={toastContent} onDismiss={() => setToastContent('')} />
