@@ -1869,8 +1869,16 @@ Format:
 // Available for Growth Plus and higher plans
 // ============================================
 router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, res) => {
-  const shop = req.shopDomain || req.query.shop || req.body.shop;
-  const { competitors = [] } = req.body;
+  const shop = req.shopDomain || req.query.shop || req.body?.shop;
+  const { competitors = [] } = req.body || {};
+  
+  console.log('[COMPETITIVE] Request received:', { 
+    shopDomain: req.shopDomain, 
+    queryShop: req.query.shop, 
+    bodyShop: req.body?.shop,
+    competitors: competitors?.length,
+    body: req.body
+  });
   
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });

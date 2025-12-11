@@ -1572,7 +1572,7 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                         try {
                           const response = await api('/api/ai-testing/competitive-analysis', {
                             method: 'POST',
-                            body: { competitors: validUrls }
+                            body: { shop, competitors: validUrls }
                           });
                           
                           if (response.error) {
