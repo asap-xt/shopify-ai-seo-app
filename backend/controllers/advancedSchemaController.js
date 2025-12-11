@@ -2399,9 +2399,9 @@ router.get('/test-installation', async (req, res) => {
       results.errors.push(`Homepage check failed: ${err.message}`);
     }
     
-    // 3. Check a product page for schema (get first product)
+    // 4. Check a product page for schema (get first ACTIVE, non-gift-card product)
     try {
-      const productsQuery = `{ products(first: 1) { edges { node { handle } } } }`;
+      const productsQuery = `{ products(first: 5, query: "status:active AND NOT product_type:gift_card") { edges { node { handle status } } } }`;
       const productsResponse = await fetch(
         `https://${shop}/admin/api/2025-01/graphql.json`,
         {
@@ -2414,7 +2414,13 @@ router.get('/test-installation', async (req, res) => {
         }
       );
       const productsData = await productsResponse.json();
-      const firstProduct = productsData?.data?.products?.edges?.[0]?.node;
+      const products = productsData?.data?.products?.edges || [];
+      // Find first product that's not a gift card
+      const firstProduct = products.find(p => 
+        p.node?.handle && 
+        !p.node.handle.includes('gift') && 
+        p.node.status === 'ACTIVE'
+      )?.node || products[0]?.node;
       
       if (firstProduct) {
         // primaryDomain is already defined above
