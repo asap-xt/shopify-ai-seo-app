@@ -2019,9 +2019,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
                               robotsTxt.includes('Google-Extended');
       const hasSitemap = robotsTxt.toLowerCase().includes('sitemap:');
       
+      // robots.txt: max 15 points (controls AI bot access)
       result.criteria.robotsTxt = {
         status: hasAIDirectives ? 'excellent' : hasSitemap ? 'good' : 'basic',
-        score: hasAIDirectives ? 25 : hasSitemap ? 15 : 10,
+        score: hasAIDirectives ? 15 : hasSitemap ? 10 : 5,
         details: hasAIDirectives ? 'AI bot directives configured' : hasSitemap ? 'Standard with sitemap' : 'Basic robots.txt'
       };
     } else {
@@ -2066,9 +2067,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
       }
     }
     
+    // Sitemap: max 20 points (helps AI discover content)
     result.criteria.sitemap = {
       status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
-      score: hasAINamespace ? 25 : urlCount > 50 ? 15 : 10,
+      score: hasAINamespace ? 20 : urlCount > 50 ? 12 : 6,
       details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
     };
   } catch (err) {
@@ -2085,9 +2087,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
       const productsData = await productsResponse.json();
       const hasProducts = productsData.products?.length > 0;
       
+      // Products JSON: max 10 points (standard Shopify endpoint, not AI-specific)
       result.criteria.productsJson = {
         status: hasProducts ? 'good' : 'empty',
-        score: hasProducts ? 15 : 5,
+        score: hasProducts ? 10 : 3,
         details: hasProducts ? 'Products JSON accessible' : 'Empty products feed'
       };
     } else {
@@ -2159,8 +2162,9 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     let schemaStatus = 'none';
     let schemaDetails = 'No structured data found';
     
+    // Structured Data: max 30 points (most important for AI understanding)
     if (hasAdvancedSchema) {
-      schemaScore = 25;
+      schemaScore = 30;
       schemaStatus = 'excellent';
       schemaDetails = 'Advanced Schema API enabled';
     } else if (hasJsonLd) {
@@ -2199,9 +2203,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
         const aiData = await aiProductsResponse.json();
         const productCount = aiData.products?.length || 0;
         
+        // AI Endpoints: max 25 points (direct AI crawler feeds)
         result.criteria.aiEndpoints = {
           status: productCount > 0 ? 'excellent' : 'configured',
-          score: productCount > 0 ? 15 : 5,
+          score: productCount > 0 ? 25 : 10,
           details: productCount > 0 ? `AI Products Feed: ${productCount} products` : 'AI endpoints configured'
         };
       } else {
