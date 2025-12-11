@@ -2031,25 +2031,46 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     result.criteria.robotsTxt = { status: 'error', score: 0, details: 'Could not access' };
   }
   
-  // 2. Check sitemap
+  // 2. Check sitemap (both Shopify default AND our AI-Enhanced sitemap)
   try {
+    let hasAINamespace = false;
+    let urlCount = 0;
+    
+    // First check Shopify's default sitemap
     const sitemapResponse = await fetch(`${storeUrl}/sitemap.xml`, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 10000
     });
     if (sitemapResponse.ok) {
       const sitemapContent = await sitemapResponse.text();
-      const hasAINamespace = sitemapContent.includes('xmlns:ai=') || sitemapContent.includes('<ai:');
-      const urlCount = (sitemapContent.match(/<url>/g) || []).length;
-      
-      result.criteria.sitemap = {
-        status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
-        score: hasAINamespace ? 25 : urlCount > 50 ? 15 : 10,
-        details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
-      };
-    } else {
-      result.criteria.sitemap = { status: 'missing', score: 0, details: 'No sitemap.xml found' };
+      hasAINamespace = sitemapContent.includes('xmlns:ai=') || sitemapContent.includes('<ai:');
+      urlCount = (sitemapContent.match(/<url>/g) || []).length;
     }
+    
+    // For our store, also check our AI-Enhanced sitemap endpoint
+    if (isMyStore && shop && !hasAINamespace) {
+      try {
+        const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
+        const aiSitemapResponse = await fetch(`${appUrl}/sitemap_products.xml?shop=${shop}`, {
+          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+          timeout: 10000
+        });
+        if (aiSitemapResponse.ok) {
+          const aiSitemapContent = await aiSitemapResponse.text();
+          if (aiSitemapContent.includes('xmlns:ai=') || aiSitemapContent.includes('<ai:')) {
+            hasAINamespace = true;
+          }
+        }
+      } catch (e) {
+        // Ignore - will use default sitemap check
+      }
+    }
+    
+    result.criteria.sitemap = {
+      status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
+      score: hasAINamespace ? 25 : urlCount > 50 ? 15 : 10,
+      details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
+    };
   } catch (err) {
     result.criteria.sitemap = { status: 'error', score: 0, details: 'Could not access' };
   }
@@ -2076,42 +2097,72 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not accessible' };
   }
   
-  // 4. Check for structured data on homepage
+  // 4. Check for structured data (homepage + our Advanced Schema API)
   try {
+    let hasJsonLd = false;
+    let hasOrgSchema = false;
+    let hasProductSchema = false;
+    let hasAdvancedSchema = false;
+    
+    // Check homepage for basic schema
     const homepageResponse = await fetch(storeUrl, {
       headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
       timeout: 10000
     });
     if (homepageResponse.ok) {
       const html = await homepageResponse.text();
-      const hasJsonLd = html.includes('application/ld+json');
-      const hasOrgSchema = html.includes('"@type":"Organization"') || html.includes('"@type": "Organization"');
-      const hasProductSchema = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
-      
-      let schemaScore = 0;
-      let schemaStatus = 'none';
-      let schemaDetails = 'No structured data found';
-      
-      if (hasJsonLd) {
-        schemaScore = 10;
-        schemaStatus = 'basic';
-        schemaDetails = 'Basic JSON-LD present';
-        
-        if (hasOrgSchema) {
-          schemaScore = 15;
-          schemaStatus = 'good';
-          schemaDetails = 'Organization schema present';
+      hasJsonLd = html.includes('application/ld+json');
+      hasOrgSchema = html.includes('"@type":"Organization"') || html.includes('"@type": "Organization"');
+      hasProductSchema = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+    }
+    
+    // For our store, also check our Advanced Schema API endpoint
+    if (isMyStore && shop) {
+      try {
+        const appProxySubpath = process.env.APP_PROXY_SUBPATH || '/apps/indexaize';
+        const schemaApiUrl = `${storeUrl}${appProxySubpath}/ai/schema-data.json`;
+        const schemaResponse = await fetch(schemaApiUrl, {
+          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+          timeout: 10000
+        });
+        if (schemaResponse.ok) {
+          const schemaData = await schemaResponse.json();
+          if (schemaData.schemas?.length > 0 || schemaData.totalSchemas > 0) {
+            hasAdvancedSchema = true;
+          }
         }
-        
-        if (hasProductSchema) {
-          schemaScore = 20;
-          schemaStatus = 'excellent';
-          schemaDetails = 'Product schema detected';
-        }
+      } catch (e) {
+        // Ignore - will use homepage check
+      }
+    }
+    
+    let schemaScore = 0;
+    let schemaStatus = 'none';
+    let schemaDetails = 'No structured data found';
+    
+    if (hasAdvancedSchema) {
+      schemaScore = 25;
+      schemaStatus = 'excellent';
+      schemaDetails = 'Advanced Schema API enabled';
+    } else if (hasJsonLd) {
+      schemaScore = 10;
+      schemaStatus = 'basic';
+      schemaDetails = 'Basic JSON-LD present';
+      
+      if (hasOrgSchema) {
+        schemaScore = 15;
+        schemaStatus = 'good';
+        schemaDetails = 'Organization schema present';
       }
       
-      result.criteria.structuredData = { status: schemaStatus, score: schemaScore, details: schemaDetails };
+      if (hasProductSchema) {
+        schemaScore = 20;
+        schemaStatus = 'good';
+        schemaDetails = 'Product schema detected';
+      }
     }
+    
+    result.criteria.structuredData = { status: schemaStatus, score: schemaScore, details: schemaDetails };
   } catch (err) {
     result.criteria.structuredData = { status: 'error', score: 0, details: 'Could not analyze' };
   }
