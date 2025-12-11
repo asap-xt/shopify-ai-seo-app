@@ -803,23 +803,7 @@ export default function AiTesting({ shop: shopProp }) {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <InlineStack gap="200" blockAlign="center">
-                        <Text as="h3" variant="headingMd">AI-Powered Validation</Text>
-                        {/* Token balance hidden - kept for potential future use
-                        {tokenBalance !== null && (
-                          <Badge tone={tokenBalance > 50 ? 'success' : 'warning'}>
-                            {tokenBalance} tokens
-                          </Badge>
-                        )}
-                        <Button 
-                          size="micro" 
-                          onClick={() => loadTokenBalance()}
-                          accessibilityLabel="Refresh token balance"
-                        >
-                          🔄
-                        </Button>
-                        */}
-                      </InlineStack>
+                      <Text as="h3" variant="headingMd">AI-Powered Validation</Text>
                       <Text variant="bodySm" tone="subdued">
                         Deep analysis with AI bot
                       </Text>
@@ -1420,98 +1404,6 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                         onClick={() => setCategoryResponse(prev => {
                           const updated = { ...prev };
                           delete updated['Business Intelligence'];
-                          return updated;
-                        })}
-                      >
-                        Close
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
-                </Box>
-              )}
-            </BlockStack>
-          </Box>
-        </Card>
-
-        {/* AIEO Value Card */}
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingMd">AIEO Value</Text>
-                <Text variant="bodySm" tone="subdued">
-                  Demonstrate the value of your AIEO optimization
-                </Text>
-              </BlockStack>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'AIEO Value').map(prompt => (
-                  <Box 
-                    key={prompt.id} 
-                    padding="300" 
-                    background="bg-surface-secondary" 
-                    borderRadius="200"
-                  >
-                    <BlockStack gap="200">
-                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
-                      <Button
-                        size="slim"
-                        onClick={() => runBotTest(prompt.question, prompt.id, 'AIEO Value')}
-                        loading={loadingPromptIds.has(prompt.id)}
-                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
-                      >
-                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
-                      </Button>
-                    </BlockStack>
-                  </Box>
-                ))}
-              </div>
-
-              {/* Response area - under the card */}
-              {categoryResponse['AIEO Value'] && (
-                <Box 
-                  padding="400" 
-                  background="bg-surface-secondary" 
-                  borderRadius="200"
-                >
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        {categoryResponse['AIEO Value'].bot?.name} Response
-                      </Text>
-                      <Text variant="bodySm" tone="subdued">
-                        {categoryResponse['AIEO Value'].usage?.tokensUsed?.toLocaleString()} tokens
-                      </Text>
-                    </InlineStack>
-                    <div 
-                      style={{ 
-                        maxHeight: '400px', 
-                        overflowY: 'auto', 
-                        whiteSpace: 'pre-wrap', 
-                        lineHeight: '1.6',
-                        padding: '12px',
-                        backgroundColor: 'var(--p-color-bg-surface)',
-                        borderRadius: '8px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      {categoryResponse['AIEO Value'].response}
-                    </div>
-                    <InlineStack align="end" gap="200">
-                      <Button
-                        size="slim"
-                        onClick={() => {
-                          navigator.clipboard.writeText(categoryResponse['AIEO Value'].response);
-                          setToastContent('Response copied to clipboard');
-                        }}
-                      >
-                        Copy
-                      </Button>
-                      <Button
-                        size="slim"
-                        onClick={() => setCategoryResponse(prev => {
-                          const updated = { ...prev };
-                          delete updated['AIEO Value'];
                           return updated;
                         })}
                       >

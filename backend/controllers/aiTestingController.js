@@ -367,41 +367,6 @@ function generateDynamicPrompts(data) {
     description: 'Review policies and contact info'
   });
 
-  // ============================================
-  // 4. AIEO VALUE DEMONSTRATION
-  // ============================================
-  prompts.push({
-    id: 'aieo-meta',
-    category: 'AIEO Value',
-    question: `Read the AI-optimized meta descriptions for products at ${publicDomain}. Are they well-written?`,
-    description: 'Evaluate meta description quality'
-  });
-  
-  prompts.push({
-    id: 'aieo-keywords',
-    category: 'AIEO Value',
-    question: `What keywords are products at ${publicDomain} optimized for? Is the SEO strategy effective?`,
-    description: 'Analyze keyword optimization'
-  });
-  
-  prompts.push({
-    id: 'aieo-voice',
-    category: 'AIEO Value',
-    question: `How well is ${publicDomain} optimized for voice search queries like "Hey, where can I buy ${productTypes?.[0]?.toLowerCase() || 'products'}?"`,
-    description: 'Test voice search readiness'
-  });
-  
-  // Collection-specific SEO
-  if (collections && collections.length > 0) {
-    const randomCollection = collections[Math.floor(Math.random() * Math.min(collections.length, 3))];
-    prompts.push({
-      id: 'aieo-collection',
-      category: 'AIEO Value',
-      question: `Analyze the AIEO optimization of the "${randomCollection}" collection at ${publicDomain}`,
-      description: `Analyze ${randomCollection} collection AIEO`
-    });
-  }
-
   return prompts;
 }
 
