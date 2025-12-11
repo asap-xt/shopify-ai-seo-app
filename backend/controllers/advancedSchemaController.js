@@ -2401,7 +2401,19 @@ router.get('/test-installation', async (req, res) => {
     
     // 4. Check a product page for schema (get first ACTIVE, non-gift-card product)
     try {
-      const productsQuery = `{ products(first: 5, query: "status:active AND NOT product_type:gift_card") { edges { node { handle status } } } }`;
+      // Find products that have SEO optimization (our metafields)
+      const productsQuery = `{ 
+        products(first: 20, query: "status:active") { 
+          edges { 
+            node { 
+              handle 
+              status
+              seoEn: metafield(namespace: "seo_ai", key: "seo__en") { value }
+              seoBg: metafield(namespace: "seo_ai", key: "seo__bg") { value }
+            } 
+          } 
+        } 
+      }`;
       const productsResponse = await fetch(
         `https://${shop}/admin/api/2025-01/graphql.json`,
         {
@@ -2415,12 +2427,17 @@ router.get('/test-installation', async (req, res) => {
       );
       const productsData = await productsResponse.json();
       const products = productsData?.data?.products?.edges || [];
-      // Find first product that's not a gift card
+      
+      // Find first product that has SEO optimization (any language)
       const firstProduct = products.find(p => 
         p.node?.handle && 
-        !p.node.handle.includes('gift') && 
-        p.node.status === 'ACTIVE'
-      )?.node || products[0]?.node;
+        p.node.status === 'ACTIVE' &&
+        (p.node.seoEn?.value || p.node.seoBg?.value)
+      )?.node;
+      
+      if (!firstProduct) {
+        results.errors.push('No SEO-optimized products found to test');
+      }
       
       if (firstProduct) {
         // primaryDomain is already defined above
