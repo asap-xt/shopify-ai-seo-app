@@ -1800,10 +1800,10 @@ Format:
       console.error('[AI-TESTING] Failed to invalidate cache:', cacheErr);
     }
     
-    // Calculate AIEO Score
-    let aiEOScore = null;
+    // Calculate GEO Score (Generative Engine Optimization)
+    let geoScore = null;
     try {
-      const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
+      const { calculateGEOScore } = await import('../utils/geoScoreCalculator.js');
       
       // Get stats for score calculation - only count ACTIVE products
       // Include products with status: ACTIVE OR status not set (for backwards compatibility)
@@ -1830,7 +1830,7 @@ Format:
         'seoStatus.optimized': true 
       });
       
-      aiEOScore = calculateAIEOScore(
+      geoScore = calculateGEOScore(
         endpointResults, // Basic test results
         results,         // AI validation results
         {
@@ -1841,7 +1841,7 @@ Format:
         }
       );
     } catch (scoreError) {
-      console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
+      console.error('[AI-TESTING] Failed to calculate GEO score:', scoreError);
       console.error('[AI-TESTING] Score error stack:', scoreError.stack);
       // Don't fail the request if score calculation fails
     }
@@ -1852,7 +1852,7 @@ Format:
       results,
       tokensUsed: totalTokensUsed,
       tokenBalance: tokenBalance.balance,
-      aiEOScore // Add score to response
+      geoScore // Add score to response
     };
     
     res.json(responseData);
@@ -1952,8 +1952,56 @@ router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, r
     
     console.log(`[COMPETITIVE] Analyzing store: ${myDomain}`);
     
-    // Analyze my store
+    // Analyze my store (technical analysis)
     const myAnalysis = await analyzeStoreAIReadiness(myDomain, shop, true);
+    
+    // For "Your Store", use GEO Score instead of technical score
+    // GEO Score is more comprehensive (includes optimization coverage, AI validation, etc.)
+    try {
+      const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
+      
+      // Get stats for GEO score calculation
+      const totalProducts = await Product.countDocuments({ 
+        shop, 
+        $or: [{ status: 'ACTIVE' }, { status: { $exists: false } }, { status: null }]
+      });
+      const optimizedProducts = await Product.countDocuments({ 
+        shop, 
+        $or: [{ status: 'ACTIVE' }, { status: { $exists: false } }, { status: null }],
+        'seoStatus.optimized': true 
+      });
+      const totalCollections = await Collection.countDocuments({ shop });
+      const optimizedCollections = await Collection.countDocuments({ 
+        shop, 
+        'seoStatus.optimized': true 
+      });
+      
+      // Build endpoint results from criteria for GEO calculation
+      const endpointResults = {
+        productsJson: { status: myAnalysis.criteria.productsJson.status === 'good' ? 'success' : 'warning' },
+        basicSitemap: { status: myAnalysis.criteria.sitemap.status === 'basic' ? 'success' : myAnalysis.criteria.sitemap.status === 'excellent' ? 'success' : 'warning' },
+        robotsTxt: { status: myAnalysis.criteria.robotsTxt.status === 'excellent' ? 'success' : 'warning' },
+        aiSitemap: { status: myAnalysis.criteria.sitemap.status === 'excellent' ? 'success' : 'locked' },
+        advancedSchemaApi: { status: myAnalysis.criteria.structuredData.status === 'excellent' ? 'success' : 'locked' },
+        storeMetadata: { status: myAnalysis.criteria.structuredData.status !== 'none' ? 'success' : 'warning' }
+      };
+      
+      const geoScore = calculateAIEOScore(
+        endpointResults,
+        {}, // No AI validation results available here
+        { totalProducts, optimizedProducts, totalCollections, optimizedCollections }
+      );
+      
+      // Use GEO Score for myStore (capped at 96 max for realism)
+      myAnalysis.score = Math.min(geoScore.score, 96);
+      myAnalysis.geoScore = geoScore.score;
+      myAnalysis.geoGrade = geoScore.grade;
+      
+      console.log(`[COMPETITIVE] Using GEO Score for myStore: ${myAnalysis.score} (raw: ${geoScore.score})`);
+    } catch (geoErr) {
+      console.error('[COMPETITIVE] Could not calculate GEO Score, using technical score:', geoErr.message);
+      // Keep technical score if GEO calculation fails
+    }
     
     // Analyze competitors
     const competitorResults = await Promise.all(
@@ -2087,17 +2135,17 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
       const productsData = await productsResponse.json();
       const hasProducts = productsData.products?.length > 0;
       
-      // Products JSON: max 10 points (standard Shopify endpoint, not AI-specific)
+      // Products JSON: max 6 points (standard Shopify endpoint, not AI-specific)
       result.criteria.productsJson = {
-        status: hasProducts ? 'good' : 'empty',
-        score: hasProducts ? 10 : 3,
-        details: hasProducts ? 'Products JSON accessible' : 'Empty products feed'
+        status: hasProducts ? 'good' : 'none',
+        score: hasProducts ? 6 : 0,
+        details: hasProducts ? 'Products JSON accessible' : 'Not accessible or empty'
       };
     } else {
-      result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not a Shopify store or disabled' };
+      result.criteria.productsJson = { status: 'none', score: 0, details: 'Not a Shopify store or disabled' };
     }
   } catch (err) {
-    result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not accessible' };
+    result.criteria.productsJson = { status: 'none', score: 0, details: 'Not accessible' };
   }
   
   // 4. Check for structured data (homepage + our Advanced Schema API)
