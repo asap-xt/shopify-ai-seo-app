@@ -103,6 +103,11 @@ export default function AiTesting({ shop: shopProp }) {
       return false;
     }
   });
+  
+  // Competitive Analysis state (Growth Plus+ only)
+  const [competitorUrls, setCompetitorUrls] = useState(['', '', '']);
+  const [competitiveResults, setCompetitiveResults] = useState(null);
+  const [analyzingCompetitors, setAnalyzingCompetitors] = useState(false);
 
   useEffect(() => {
     if (shop) {
@@ -1499,6 +1504,192 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
                   </BlockStack>
                 </Box>
               )}
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Competitive Analysis Card - Growth Plus+ only */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text as="h3" variant="headingMd">Competitive Analysis</Text>
+                    <Badge tone="info">Growth Plus+</Badge>
+                  </InlineStack>
+                  <Text variant="bodySm" tone="subdued">
+                    Compare your AI-readiness with competitors
+                  </Text>
+                </BlockStack>
+              </InlineStack>
+              
+              {/* Check if user has Growth Plus+ plan */}
+              {(() => {
+                const planIndex = getPlanIndex(currentPlan);
+                const hasAccess = planIndex >= getPlanIndex('growth_plus');
+                
+                if (!hasAccess) {
+                  return (
+                    <Banner tone="warning">
+                      <Text>Competitive Analysis requires Growth Plus plan or higher. <Button variant="plain" onClick={() => navigate('/billing')}>Upgrade now</Button></Text>
+                    </Banner>
+                  );
+                }
+                
+                return (
+                  <BlockStack gap="300">
+                    <Text variant="bodyMd">Enter up to 3 competitor store URLs:</Text>
+                    
+                    {competitorUrls.map((url, index) => (
+                      <TextField
+                        key={index}
+                        label={`Competitor ${index + 1}`}
+                        labelHidden
+                        placeholder={`e.g., competitor${index + 1}.com`}
+                        value={url}
+                        onChange={(value) => {
+                          const newUrls = [...competitorUrls];
+                          newUrls[index] = value;
+                          setCompetitorUrls(newUrls);
+                        }}
+                        autoComplete="off"
+                      />
+                    ))}
+                    
+                    <Button
+                      primary
+                      onClick={async () => {
+                        const validUrls = competitorUrls.filter(u => u.trim());
+                        if (validUrls.length === 0) {
+                          setToastContent('Please enter at least one competitor URL');
+                          return;
+                        }
+                        
+                        setAnalyzingCompetitors(true);
+                        setCompetitiveResults(null);
+                        
+                        try {
+                          const response = await api('/api/ai-testing/competitive-analysis', {
+                            method: 'POST',
+                            body: { competitors: validUrls }
+                          });
+                          
+                          if (response.error) {
+                            if (response.requiredPlan) {
+                              setToastContent(`This feature requires ${response.requiredPlan} plan`);
+                            } else {
+                              setToastContent(response.error);
+                            }
+                          } else {
+                            setCompetitiveResults(response);
+                          }
+                        } catch (err) {
+                          setToastContent('Failed to analyze competitors');
+                        } finally {
+                          setAnalyzingCompetitors(false);
+                        }
+                      }}
+                      loading={analyzingCompetitors}
+                      disabled={analyzingCompetitors || competitorUrls.every(u => !u.trim())}
+                    >
+                      {analyzingCompetitors ? 'Analyzing...' : 'Compare Stores'}
+                    </Button>
+                    
+                    {/* Results Table */}
+                    {competitiveResults && (
+                      <Box paddingBlockStart="400">
+                        <BlockStack gap="400">
+                          {/* Summary Banner */}
+                          <Banner 
+                            tone={competitiveResults.summary?.position === 'ahead' ? 'success' : 
+                                  competitiveResults.summary?.position === 'behind' ? 'warning' : 'info'}
+                          >
+                            <BlockStack gap="200">
+                              <Text fontWeight="semibold">
+                                Your Score: {competitiveResults.myStore?.score}/100 vs Competitors Avg: {competitiveResults.summary?.avgCompetitorScore}/100
+                              </Text>
+                              <Text>{competitiveResults.summary?.recommendation}</Text>
+                            </BlockStack>
+                          </Banner>
+                          
+                          {/* Comparison Table */}
+                          <Box 
+                            background="bg-surface-secondary" 
+                            padding="300" 
+                            borderRadius="200"
+                            style={{ overflowX: 'auto' }}
+                          >
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '2px solid var(--p-color-border)' }}>
+                                  <th style={{ textAlign: 'left', padding: '8px', fontWeight: '600' }}>Criterion</th>
+                                  <th style={{ textAlign: 'center', padding: '8px', fontWeight: '600', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                    Your Store
+                                  </th>
+                                  {competitiveResults.competitors?.map((c, i) => (
+                                    <th key={i} style={{ textAlign: 'center', padding: '8px', fontWeight: '600' }}>
+                                      {c.domain?.replace(/^https?:\/\//, '').substring(0, 20)}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {['robotsTxt', 'sitemap', 'productsJson', 'structuredData', 'aiEndpoints'].map(criterion => (
+                                  <tr key={criterion} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                                    <td style={{ padding: '8px' }}>
+                                      {criterion === 'robotsTxt' && 'robots.txt'}
+                                      {criterion === 'sitemap' && 'Sitemap'}
+                                      {criterion === 'productsJson' && 'Products JSON'}
+                                      {criterion === 'structuredData' && 'Structured Data'}
+                                      {criterion === 'aiEndpoints' && 'AI Endpoints'}
+                                    </td>
+                                    <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'n/a' && <Badge>N/A</Badge>}
+                                    </td>
+                                    {competitiveResults.competitors?.map((comp, i) => (
+                                      <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
+                                        {comp.criteria?.[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'unavailable' && <Badge>N/A</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'error' && <Badge tone="warning">Error</Badge>}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                                <tr style={{ fontWeight: '600', backgroundColor: 'var(--p-color-bg-surface-secondary)' }}>
+                                  <td style={{ padding: '8px' }}>Total Score</td>
+                                  <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                    <Badge tone="success">{competitiveResults.myStore?.score}/100</Badge>
+                                  </td>
+                                  {competitiveResults.competitors?.map((comp, i) => (
+                                    <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
+                                      <Badge tone={comp.score > 50 ? 'info' : 'warning'}>{comp.score}/100</Badge>
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </Box>
+                          
+                          <Button 
+                            variant="plain" 
+                            onClick={() => setCompetitiveResults(null)}
+                          >
+                            Clear Results
+                          </Button>
+                        </BlockStack>
+                      </Box>
+                    )}
+                  </BlockStack>
+                );
+              })()}
             </BlockStack>
           </Box>
         </Card>

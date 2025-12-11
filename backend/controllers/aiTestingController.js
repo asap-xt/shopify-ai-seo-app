@@ -1863,5 +1863,286 @@ Format:
   }
 });
 
+// ============================================
+// POST /api/ai-testing/competitive-analysis
+// Compare store AI-readiness with competitors
+// Available for Growth Plus and higher plans
+// ============================================
+router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, res) => {
+  const shop = req.shopDomain || req.query.shop || req.body.shop;
+  const { competitors = [] } = req.body;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  
+  // Validate competitors array
+  if (!Array.isArray(competitors) || competitors.length === 0) {
+    return res.status(400).json({ error: 'Please provide at least one competitor URL' });
+  }
+  
+  if (competitors.length > 3) {
+    return res.status(400).json({ error: 'Maximum 3 competitors allowed' });
+  }
+  
+  try {
+    // Check plan - Growth Plus and higher only
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = normalizePlan(subscription?.plan);
+    const allowedPlans = ['growth_plus', 'growth_extra', 'enterprise'];
+    
+    if (!allowedPlans.includes(planKey) && subscription?.plan !== 'growth plus') {
+      return res.status(403).json({
+        error: 'Competitive Analysis requires Growth Plus plan or higher',
+        currentPlan: subscription?.plan || 'starter',
+        requiredPlan: 'Growth Plus',
+        feature: 'competitive-analysis'
+      });
+    }
+    
+    // Get shop record for public domain
+    const shopRecord = await Shop.findOne({ shop });
+    const myDomain = shopRecord?.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
+    
+    // Analyze my store
+    const myAnalysis = await analyzeStoreAIReadiness(myDomain, shop, true);
+    
+    // Analyze competitors
+    const competitorResults = await Promise.all(
+      competitors.map(async (url) => {
+        try {
+          const cleanUrl = url.trim().replace(/\/$/, '');
+          const domain = cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`;
+          return await analyzeStoreAIReadiness(domain, null, false);
+        } catch (err) {
+          return {
+            domain: url,
+            error: err.message,
+            score: 0,
+            criteria: {}
+          };
+        }
+      })
+    );
+    
+    res.json({
+      success: true,
+      myStore: myAnalysis,
+      competitors: competitorResults,
+      summary: generateCompetitiveSummary(myAnalysis, competitorResults)
+    });
+    
+  } catch (error) {
+    console.error('[COMPETITIVE-ANALYSIS] Error:', error);
+    res.status(500).json({ error: 'Failed to complete competitive analysis' });
+  }
+});
+
+// Helper function to analyze store AI-readiness
+async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
+  const result = {
+    domain,
+    isMyStore,
+    score: 0,
+    criteria: {
+      robotsTxt: { status: 'unknown', score: 0, details: '' },
+      sitemap: { status: 'unknown', score: 0, details: '' },
+      productsJson: { status: 'unknown', score: 0, details: '' },
+      structuredData: { status: 'unknown', score: 0, details: '' },
+      aiEndpoints: { status: 'unknown', score: 0, details: '' }
+    }
+  };
+  
+  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const storeUrl = `https://${cleanDomain}`;
+  
+  // 1. Check robots.txt
+  try {
+    const robotsResponse = await fetch(`${storeUrl}/robots.txt`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 10000
+    });
+    if (robotsResponse.ok) {
+      const robotsTxt = await robotsResponse.text();
+      const hasAIDirectives = robotsTxt.includes('GPTBot') || 
+                              robotsTxt.includes('ChatGPT') || 
+                              robotsTxt.includes('anthropic') ||
+                              robotsTxt.includes('ClaudeBot') ||
+                              robotsTxt.includes('Google-Extended');
+      const hasSitemap = robotsTxt.toLowerCase().includes('sitemap:');
+      
+      result.criteria.robotsTxt = {
+        status: hasAIDirectives ? 'excellent' : hasSitemap ? 'good' : 'basic',
+        score: hasAIDirectives ? 25 : hasSitemap ? 15 : 10,
+        details: hasAIDirectives ? 'AI bot directives configured' : hasSitemap ? 'Standard with sitemap' : 'Basic robots.txt'
+      };
+    } else {
+      result.criteria.robotsTxt = { status: 'missing', score: 0, details: 'No robots.txt found' };
+    }
+  } catch (err) {
+    result.criteria.robotsTxt = { status: 'error', score: 0, details: 'Could not access' };
+  }
+  
+  // 2. Check sitemap
+  try {
+    const sitemapResponse = await fetch(`${storeUrl}/sitemap.xml`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 10000
+    });
+    if (sitemapResponse.ok) {
+      const sitemapContent = await sitemapResponse.text();
+      const hasAINamespace = sitemapContent.includes('xmlns:ai=') || sitemapContent.includes('<ai:');
+      const urlCount = (sitemapContent.match(/<url>/g) || []).length;
+      
+      result.criteria.sitemap = {
+        status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
+        score: hasAINamespace ? 25 : urlCount > 50 ? 15 : 10,
+        details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
+      };
+    } else {
+      result.criteria.sitemap = { status: 'missing', score: 0, details: 'No sitemap.xml found' };
+    }
+  } catch (err) {
+    result.criteria.sitemap = { status: 'error', score: 0, details: 'Could not access' };
+  }
+  
+  // 3. Check products.json (Shopify stores)
+  try {
+    const productsResponse = await fetch(`${storeUrl}/products.json?limit=1`, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 10000
+    });
+    if (productsResponse.ok) {
+      const productsData = await productsResponse.json();
+      const hasProducts = productsData.products?.length > 0;
+      
+      result.criteria.productsJson = {
+        status: hasProducts ? 'good' : 'empty',
+        score: hasProducts ? 15 : 5,
+        details: hasProducts ? 'Products JSON accessible' : 'Empty products feed'
+      };
+    } else {
+      result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not a Shopify store or disabled' };
+    }
+  } catch (err) {
+    result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not accessible' };
+  }
+  
+  // 4. Check for structured data on homepage
+  try {
+    const homepageResponse = await fetch(storeUrl, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      timeout: 10000
+    });
+    if (homepageResponse.ok) {
+      const html = await homepageResponse.text();
+      const hasJsonLd = html.includes('application/ld+json');
+      const hasOrgSchema = html.includes('"@type":"Organization"') || html.includes('"@type": "Organization"');
+      const hasProductSchema = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+      
+      let schemaScore = 0;
+      let schemaStatus = 'none';
+      let schemaDetails = 'No structured data found';
+      
+      if (hasJsonLd) {
+        schemaScore = 10;
+        schemaStatus = 'basic';
+        schemaDetails = 'Basic JSON-LD present';
+        
+        if (hasOrgSchema) {
+          schemaScore = 15;
+          schemaStatus = 'good';
+          schemaDetails = 'Organization schema present';
+        }
+        
+        if (hasProductSchema) {
+          schemaScore = 20;
+          schemaStatus = 'excellent';
+          schemaDetails = 'Product schema detected';
+        }
+      }
+      
+      result.criteria.structuredData = { status: schemaStatus, score: schemaScore, details: schemaDetails };
+    }
+  } catch (err) {
+    result.criteria.structuredData = { status: 'error', score: 0, details: 'Could not analyze' };
+  }
+  
+  // 5. Check AI-specific endpoints (only for stores with our app)
+  if (isMyStore && shop) {
+    try {
+      const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
+      const aiProductsResponse = await fetch(`${appUrl}/ai/products.json?shop=${shop}`, {
+        headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+        timeout: 10000
+      });
+      
+      if (aiProductsResponse.ok) {
+        const aiData = await aiProductsResponse.json();
+        const productCount = aiData.products?.length || 0;
+        
+        result.criteria.aiEndpoints = {
+          status: productCount > 0 ? 'excellent' : 'configured',
+          score: productCount > 0 ? 15 : 5,
+          details: productCount > 0 ? `AI Products Feed: ${productCount} products` : 'AI endpoints configured'
+        };
+      } else {
+        result.criteria.aiEndpoints = { status: 'unavailable', score: 0, details: 'AI endpoints not configured' };
+      }
+    } catch (err) {
+      result.criteria.aiEndpoints = { status: 'error', score: 0, details: 'Could not check' };
+    }
+  } else {
+    // For competitors, we can't check their AI endpoints (they likely don't have our app)
+    result.criteria.aiEndpoints = { status: 'n/a', score: 0, details: 'Not applicable (competitor)' };
+  }
+  
+  // Calculate total score
+  result.score = Object.values(result.criteria).reduce((sum, c) => sum + c.score, 0);
+  
+  return result;
+}
+
+// Generate competitive summary
+function generateCompetitiveSummary(myStore, competitors) {
+  const validCompetitors = competitors.filter(c => !c.error);
+  const avgCompetitorScore = validCompetitors.length > 0 
+    ? Math.round(validCompetitors.reduce((sum, c) => sum + c.score, 0) / validCompetitors.length)
+    : 0;
+  
+  const myAdvantages = [];
+  const myWeaknesses = [];
+  
+  // Compare each criterion
+  const criteriaNames = ['robotsTxt', 'sitemap', 'productsJson', 'structuredData', 'aiEndpoints'];
+  
+  for (const criterion of criteriaNames) {
+    const myScore = myStore.criteria[criterion]?.score || 0;
+    const avgCompScore = validCompetitors.length > 0
+      ? validCompetitors.reduce((sum, c) => sum + (c.criteria[criterion]?.score || 0), 0) / validCompetitors.length
+      : 0;
+    
+    if (myScore > avgCompScore + 5) {
+      myAdvantages.push(criterion);
+    } else if (myScore < avgCompScore - 5) {
+      myWeaknesses.push(criterion);
+    }
+  }
+  
+  return {
+    myScore: myStore.score,
+    avgCompetitorScore,
+    scoreDifference: myStore.score - avgCompetitorScore,
+    position: myStore.score > avgCompetitorScore ? 'ahead' : myStore.score < avgCompetitorScore ? 'behind' : 'equal',
+    advantages: myAdvantages,
+    weaknesses: myWeaknesses,
+    recommendation: myStore.score > avgCompetitorScore 
+      ? 'Great job! Your store is better optimized for AI than your competitors.'
+      : myStore.score < avgCompetitorScore
+        ? 'There\'s room for improvement. Enable more AI Discovery features to get ahead.'
+        : 'You\'re on par with competitors. Enable advanced features to stand out.'
+  };
+}
+
 export default router;
 
