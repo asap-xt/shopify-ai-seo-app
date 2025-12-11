@@ -1721,7 +1721,12 @@ export default function Settings() {
                   loading={applyingRobots}
                   onClick={() => {
                     // Auto-Install requires Growth Plus or higher (index >= 4)
-                    const planIndex = getPlanIndex(settings?.plan);
+                    // Check for test mode: ?testPlan=starter (or professional, growth, etc.)
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const testPlan = urlParams.get('testPlan');
+                    const effectivePlan = testPlan || settings?.plan;
+                    const planIndex = getPlanIndex(effectivePlan);
+                    
                     if (planIndex >= 4) {
                       applyRobotsTxt();
                     } else {
