@@ -2119,20 +2119,39 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     // For our store, also check our Advanced Schema API endpoint
     if (isMyStore && shop) {
       try {
-        const appProxySubpath = process.env.APP_PROXY_SUBPATH || '/apps/indexaize';
-        const schemaApiUrl = `${storeUrl}${appProxySubpath}/ai/schema-data.json`;
+        // Use direct API URL instead of app proxy (more reliable)
+        const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
+        const schemaApiUrl = `${appUrl}/ai/schema-data.json?shop=${shop}`;
         const schemaResponse = await fetch(schemaApiUrl, {
           headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
           timeout: 10000
         });
         if (schemaResponse.ok) {
           const schemaData = await schemaResponse.json();
-          if (schemaData.schemas?.length > 0 || schemaData.totalSchemas > 0) {
+          // Check both snake_case and camelCase for compatibility
+          if (schemaData.schemas?.length > 0 || schemaData.total_schemas > 0 || schemaData.totalSchemas > 0) {
             hasAdvancedSchema = true;
           }
         }
       } catch (e) {
+        console.log('[COMPETITIVE] Schema API check failed:', e.message);
         // Ignore - will use homepage check
+      }
+      
+      // Also check MongoDB directly for hasAdvancedSchema flag
+      if (!hasAdvancedSchema) {
+        try {
+          const Product = (await import('../db/Product.js')).default;
+          const productsWithSchema = await Product.countDocuments({
+            shop,
+            'seoStatus.hasAdvancedSchema': true
+          });
+          if (productsWithSchema > 0) {
+            hasAdvancedSchema = true;
+          }
+        } catch (e) {
+          // Ignore
+        }
       }
     }
     
