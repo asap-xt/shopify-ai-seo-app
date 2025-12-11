@@ -54,11 +54,28 @@ export default async function productsWebhook(req, res) {
         const referenceTitle = existingProduct.lastShopifyUpdate?.title || existingProduct.title;
         const referenceDescription = existingProduct.lastShopifyUpdate?.description || existingProduct.description;
         
+        // Normalize values for comparison (treat null/undefined/'' as equivalent empty string)
+        const normalizeText = (text) => (text ?? '').trim();
+        
+        const oldTitle = normalizeText(referenceTitle);
+        const newTitle = normalizeText(payload.title);
+        const oldDesc = normalizeText(referenceDescription);
+        const newDesc = normalizeText(payload.body_html);
+        
         // Detect if title or description changed from last known Shopify state
-        titleChanged = referenceTitle !== payload.title;
-        descriptionChanged = referenceDescription !== payload.body_html;
+        // Only count as "changed" if there's actual text difference
+        titleChanged = oldTitle !== newTitle;
+        descriptionChanged = oldDesc !== newDesc;
         
         if (titleChanged || descriptionChanged) {
+          // Debug logging to track what changed
+          console.log(`[Webhook-Products] 📝 Content change detected for product ${numericProductId}:`);
+          if (titleChanged) {
+            console.log(`  Title: "${oldTitle?.substring(0, 50)}..." → "${newTitle?.substring(0, 50)}..."`);
+          }
+          if (descriptionChanged) {
+            console.log(`  Description changed (${oldDesc?.length || 0} → ${newDesc?.length || 0} chars)`);
+          }
           
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
