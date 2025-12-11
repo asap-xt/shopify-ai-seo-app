@@ -91,6 +91,11 @@ export default function SchemaData({ shop: shopProp }) {
   const [showSchemaErrorModal, setShowSchemaErrorModal] = useState(false);
   const [schemaErrorType, setSchemaErrorType] = useState(null);
   
+  // Auto-install theme states
+  const [installingTheme, setInstallingTheme] = useState(false);
+  const [showInstallConfirmModal, setShowInstallConfirmModal] = useState(false);
+  const [showInstallUpgradeModal, setShowInstallUpgradeModal] = useState(false);
+  
   // Rich Attributes state (same as Settings.jsx)
   const [richAttributes, setRichAttributes] = useState({
     material: false,
@@ -179,6 +184,29 @@ export default function SchemaData({ shop: shopProp }) {
       setToastContent('Failed to save attributes: ' + (err.message || 'Unknown error'));
     } finally {
       setSavingAttributes(false);
+    }
+  };
+  
+  // Auto-install schema snippet to theme
+  const installSchemaToTheme = async () => {
+    setInstallingTheme(true);
+    try {
+      const result = await api(`/api/schema/install-theme?shop=${shop}`, {
+        method: 'POST',
+        body: { shop }
+      });
+      
+      if (result.success) {
+        setToastContent('Schema snippet installed successfully! Check your theme.');
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (err) {
+      console.error('[SCHEMA-DATA] Error installing to theme:', err);
+      setToastContent('Failed to install: ' + (err.message || 'You may need to re-authorize the app.'));
+    } finally {
+      setInstallingTheme(false);
+      setShowInstallConfirmModal(false);
     }
   };
   
@@ -725,23 +753,93 @@ ${JSON.stringify(allSchemas, null, 2)}
                     <Banner tone="info">
                       <BlockStack gap="300">
                         <Text as="h4" variant="headingSm">Theme Installation</Text>
-                        
-                        <List type="number">
-                          <List.Item>
-                            Go to your Shopify Admin → Online Store → Themes
-                          </List.Item>
-                          <List.Item>
-                            Click "Actions" → "Edit code" on your current theme
-                          </List.Item>
-                          <List.Item>
-                            Open the file: <code>layout/theme.liquid</code>
-                          </List.Item>
-                          <List.Item>
-                            Add this code before the closing <code>&lt;/head&gt;</code> tag:
-                          </List.Item>
-                        </List>
+                        <Text>Install the schema code to display structured data on your store pages.</Text>
                       </BlockStack>
                     </Banner>
+                    
+                    {/* Auto-Install / Manual Install Buttons */}
+                    <Card>
+                      <Box padding="400">
+                        <BlockStack gap="400">
+                          <Text as="h4" variant="headingSm">Installation Options</Text>
+                          
+                          {(() => {
+                            // Check for test mode: ?testPlan=starter
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const testPlan = urlParams.get('testPlan');
+                            const effectivePlan = testPlan || planKey;
+                            const planIdx = getPlanIndex(effectivePlan);
+                            const hasAutoInstall = planIdx >= 4; // Growth Plus+
+                            
+                            return (
+                              <BlockStack gap="300">
+                                <InlineStack gap="300" wrap={false}>
+                                  {hasAutoInstall ? (
+                                    <Button 
+                                      variant="primary"
+                                      size="large"
+                                      loading={installingTheme}
+                                      onClick={() => setShowInstallConfirmModal(true)}
+                                    >
+                                      Auto-Install to Theme
+                                    </Button>
+                                  ) : (
+                                    <Button 
+                                      size="large"
+                                      onClick={() => setShowInstallUpgradeModal(true)}
+                                    >
+                                      Auto-Install (Growth Plus+)
+                                    </Button>
+                                  )}
+                                  
+                                  <Button 
+                                    size="large"
+                                    variant={hasAutoInstall ? "secondary" : "primary"}
+                                    onClick={() => {
+                                      // Scroll to manual instructions
+                                      document.getElementById('manual-install-section')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                  >
+                                    View Manual Instructions
+                                  </Button>
+                                </InlineStack>
+                                
+                                <Text variant="bodySm" tone="subdued">
+                                  {hasAutoInstall 
+                                    ? "Auto-Install creates snippets/ai-schema.liquid and adds one line to theme.liquid."
+                                    : "Upgrade to Growth Plus for automatic installation, or follow manual instructions below."
+                                  }
+                                </Text>
+                              </BlockStack>
+                            );
+                          })()}
+                        </BlockStack>
+                      </Box>
+                    </Card>
+                    
+                    {/* Manual Installation Instructions */}
+                    <div id="manual-install-section">
+                      <Banner tone="info">
+                        <BlockStack gap="300">
+                          <Text as="h4" variant="headingSm">Manual Installation Steps</Text>
+                          
+                          <List type="number">
+                            <List.Item>
+                              Go to your Shopify Admin → Online Store → Themes
+                            </List.Item>
+                            <List.Item>
+                              Click "Actions" → "Edit code" on your current theme
+                            </List.Item>
+                            <List.Item>
+                              Open the file: <code>layout/theme.liquid</code>
+                            </List.Item>
+                            <List.Item>
+                              Add this code before the closing <code>&lt;/head&gt;</code> tag:
+                            </List.Item>
+                          </List>
+                        </BlockStack>
+                      </Banner>
+                    </div>
 
                     <Card>
                       <Box padding="300">
@@ -1263,6 +1361,93 @@ ${JSON.stringify(allSchemas, null, 2)}
               <BlockStack gap="200">
                 <Text>• <strong>Basic AISEO</strong> - Free AISEO optimization</Text>
                 <Text>• <strong>AI-Enhanced AISEO</strong> - Advanced optimization (requires tokens)</Text>
+              </BlockStack>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Theme Install Confirmation Modal */}
+      {showInstallConfirmModal && (
+        <Modal
+          open={showInstallConfirmModal}
+          onClose={() => setShowInstallConfirmModal(false)}
+          title="Install Schema Snippet to Theme"
+          primaryAction={{
+            content: 'Install',
+            onAction: async () => {
+              setShowInstallConfirmModal(false);
+              await installSchemaToTheme();
+            }
+          }}
+          secondaryActions={[
+            {
+              content: 'Cancel',
+              onAction: () => setShowInstallConfirmModal(false)
+            }
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="info">
+                <p>This will create <code>snippets/ai-schema.liquid</code> and add one line to <code>layout/theme.liquid</code>.</p>
+              </Banner>
+              
+              <Text>
+                The installation adds <code>{'{% render \'ai-schema\' %}'}</code> before the closing <code>&lt;/head&gt;</code> tag.
+                Your existing theme code will not be modified or replaced.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                Do you want to proceed with automatic installation?
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
+
+      {/* Theme Install Upgrade Modal */}
+      {showInstallUpgradeModal && (
+        <Modal
+          open={showInstallUpgradeModal}
+          onClose={() => setShowInstallUpgradeModal(false)}
+          title="Upgrade for Auto-Install"
+          primaryAction={{
+            content: 'Upgrade to Growth Plus',
+            onAction: () => {
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }
+          }}
+          secondaryActions={[
+            {
+              content: 'Use Manual Install',
+              onAction: () => {
+                setShowInstallUpgradeModal(false);
+                document.getElementById('manual-install-section')?.scrollIntoView({ behavior: 'smooth' });
+              }
+            }
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="info">
+                <p>Auto-Install to Theme is available on <strong>Growth Plus</strong> plan and higher.</p>
+              </Banner>
+              
+              <Text>
+                This feature automatically installs the schema snippet to your Shopify theme,
+                saving you time and ensuring correct configuration.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                Your options:
+              </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Upgrade to Growth Plus</strong> - Get Auto-Install and many more features</Text>
+                <Text>• <strong>Use Manual Install</strong> - Copy the code and paste it in your theme editor</Text>
               </BlockStack>
             </BlockStack>
           </Modal.Section>

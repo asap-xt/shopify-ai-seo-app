@@ -2262,6 +2262,36 @@ router.post('/generate-all', async (req, res) => {
   }
 });
 
+// POST /api/schema/install-theme - Auto-install schema snippet to theme
+router.post('/install-theme', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    console.log('[SCHEMA INSTALL] Starting for shop:', shop);
+    
+    // Call the installThemeSnippet function
+    await installThemeSnippet(shop);
+    
+    console.log('[SCHEMA INSTALL] Success for shop:', shop);
+    
+    res.json({
+      success: true,
+      message: 'Schema snippet installed successfully',
+      files: {
+        snippet: 'snippets/ai-schema.liquid',
+        modified: 'layout/theme.liquid'
+      }
+    });
+    
+  } catch (error) {
+    console.error('[SCHEMA INSTALL] Error:', error);
+    res.status(500).json({
+      error: error.message,
+      details: 'Failed to install schema snippet. You may need to re-authorize the app with theme permissions.'
+    });
+  }
+});
+
 // GET /api/schema/status - Check generation status
 router.get('/status', async (req, res) => {
   try {
