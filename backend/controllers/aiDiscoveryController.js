@@ -538,42 +538,31 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
  * See: https://partners.shopify.com/ (search for protected scope exemption)
  */
 router.post('/ai-discovery/apply-robots', validateRequest(), async (req, res) => {
-  // Return 501 Not Implemented with clear explanation
-  return res.status(501).json({ 
-    error: 'Automatic robots.txt installation is temporarily disabled',
-    reason: 'Requires Shopify approval for write_themes_assets protected scope',
-    alternative: 'Please use manual copy/paste method from Settings page',
-    documentation: 'Contact support for manual installation instructions'
-  });
-  
-  /* ORIGINAL CODE - Keep for future use after Shopify approval
-  console.log('[APPLY ENDPOINT] Called with body:', req.body);
+  // NOW ENABLED - Shopify has approved write_themes scope
+  console.log('[APPLY ROBOTS] Called with body:', req.body);
   
   try {
     const shop = req.shopDomain;
     
-    console.log('[APPLY ENDPOINT] Shop:', shop);
+    console.log('[APPLY ROBOTS] Shop:', shop);
     
-    // Generate fresh robots.txt
-    const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
-    console.log('[APPLY ENDPOINT] Generated robots.txt length:', robotsTxt.length);
-    console.log('[APPLY ENDPOINT] First 200 chars:', robotsTxt.substring(0, 200));
+    // Generate robots.txt.liquid content (includes {{ content_for_robots }} for Shopify defaults)
+    const robotsTxtLiquid = await aiDiscoveryService.generateRobotsTxtLiquid(shop);
+    console.log('[APPLY ROBOTS] Generated robots.txt.liquid length:', robotsTxtLiquid.length);
     
     // Apply to theme
-    console.log('[APPLY ENDPOINT] Calling applyRobotsTxt...');
-    const result = await applyRobotsTxt(shop, robotsTxt);
-    console.log('[APPLY ENDPOINT] Result:', result);
+    console.log('[APPLY ROBOTS] Calling applyRobotsTxt...');
+    const result = await applyRobotsTxt(shop, robotsTxtLiquid);
+    console.log('[APPLY ROBOTS] Result:', result);
     
     res.json(result);
   } catch (error) {
-    console.error('[APPLY ENDPOINT] Error:', error.message);
-    console.error('[APPLY ENDPOINT] Stack:', error.stack);
+    console.error('[APPLY ROBOTS] Error:', error.message);
     res.status(500).json({ 
       error: error.message,
-      stack: error.stack 
+      details: 'Failed to apply robots.txt to theme. You may need to re-authorize the app.'
     });
   }
-  */
 });
 
 /**

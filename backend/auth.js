@@ -26,7 +26,9 @@ const REQUIRED_SCOPES = [
   'read_products',
   'write_products', 
   'read_locales',
-  'read_translations'
+  'read_translations',
+  'read_themes',
+  'write_themes'
 ];
 
 // Validate required environment variables
