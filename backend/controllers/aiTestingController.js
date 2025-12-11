@@ -1910,7 +1910,47 @@ router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, r
     
     // Get shop record for public domain
     const shopRecord = await Shop.findOne({ shop });
-    const myDomain = shopRecord?.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
+    let myDomain = shopRecord?.primaryDomain;
+    
+    // If no primaryDomain in DB, fetch from Shopify API
+    if (!myDomain && shopRecord?.accessToken) {
+      try {
+        const domainQuery = `
+          query {
+            shop {
+              primaryDomain {
+                url
+              }
+            }
+          }
+        `;
+        const response = await fetch(`https://${shop}/admin/api/2025-01/graphql.json`, {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query: domainQuery })
+        });
+        const data = await response.json();
+        myDomain = data?.data?.shop?.primaryDomain?.url;
+        
+        // Save to DB for future use
+        if (myDomain) {
+          await Shop.findOneAndUpdate({ shop }, { primaryDomain: myDomain });
+          console.log(`[COMPETITIVE] Saved primaryDomain for ${shop}: ${myDomain}`);
+        }
+      } catch (err) {
+        console.error('[COMPETITIVE] Error fetching primaryDomain:', err.message);
+      }
+    }
+    
+    // Fallback if still no domain
+    if (!myDomain) {
+      myDomain = `https://${shop.replace('.myshopify.com', '.com')}`;
+    }
+    
+    console.log(`[COMPETITIVE] Analyzing store: ${myDomain}`);
     
     // Analyze my store
     const myAnalysis = await analyzeStoreAIReadiness(myDomain, shop, true);
