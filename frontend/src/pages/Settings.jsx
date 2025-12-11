@@ -960,6 +960,7 @@ export default function Settings() {
   // State for auto-apply robots.txt
   const [applyingRobots, setApplyingRobots] = useState(false);
   const [showAutoInstallUpgradeModal, setShowAutoInstallUpgradeModal] = useState(false);
+  const [showAutoInstallConfirmModal, setShowAutoInstallConfirmModal] = useState(false);
   
   /**
    * Auto-install robots.txt.liquid to Shopify theme
@@ -1731,7 +1732,7 @@ export default function Settings() {
                           variant="primary"
                           size="large"
                           loading={applyingRobots}
-                          onClick={applyRobotsTxt}
+                          onClick={() => setShowAutoInstallConfirmModal(true)}
                         >
                           Auto-Install to Theme
                         </Button>
@@ -2251,6 +2252,45 @@ export default function Settings() {
         returnTo="/settings"
         inTrial={true}
       />
+
+      {/* Auto-Install Confirmation Modal */}
+      {showAutoInstallConfirmModal && (
+        <Modal
+          open={showAutoInstallConfirmModal}
+          onClose={() => setShowAutoInstallConfirmModal(false)}
+          title="Install robots.txt to Theme"
+          primaryAction={{
+            content: 'Install',
+            onAction: () => {
+              setShowAutoInstallConfirmModal(false);
+              applyRobotsTxt();
+            }
+          }}
+          secondaryActions={[
+            {
+              content: 'Cancel',
+              onAction: () => setShowAutoInstallConfirmModal(false)
+            }
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="warning">
+                <p><strong>Warning:</strong> This will replace any existing <code>robots.txt.liquid</code> file in your theme.</p>
+              </Banner>
+              
+              <Text>
+                If you have custom robots.txt rules that you want to keep, use <strong>"View & Copy Code"</strong> instead 
+                and manually add our AI bot rules to your existing file.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                Do you want to proceed with automatic installation?
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
 
       {/* Auto-Install Upgrade Modal */}
       {showAutoInstallUpgradeModal && (
