@@ -240,12 +240,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           
           // Show toast
           if (status.status === 'completed') {
-            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+            const msg = `Applied GEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
               (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
               (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
             setToast(msg);
           } else {
-            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
+            setToast(`GEO optimization failed: ${status.message || 'Unknown error'}`);
           }
           
           // Refresh products list to update badges - stay on current page
@@ -2015,7 +2015,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       <Spinner size="small" />
                       <BlockStack gap="100">
                         <Text variant="bodyMd" fontWeight="semibold">
-                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                          {seoJobStatus.phase === 'generate' ? 'Generating GEO...' : 'Applying GEO...'}
                         </Text>
                         <Text variant="bodySm" tone="subdued">
                               {(() => {
@@ -2062,7 +2062,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       <InlineStack gap="200" align="start" blockAlign="center">
                         <Badge tone="success">Completed</Badge>
                         <Text variant="bodyMd">
-                          Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                          Applied GEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
                         </Text>
                         {seoJobStatus.skippedProducts > 0 && seoJobStatus.skipReasons?.length > 0 && (
                           <Button

@@ -709,13 +709,13 @@ export default function AiTesting({ shop: shopProp }) {
         {/* Two-column layout for Basic and AI tests */}
         <Layout>
           <Layout.Section variant="oneHalf">
-            {/* Card 1: Basic AIEO Tests */}
+            {/* Card 1: Basic GEO Tests */}
             <Card>
               <Box padding="300">
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <Text as="h3" variant="headingMd">Basic AIEO Tests</Text>
+                      <Text as="h3" variant="headingMd">Basic GEO Tests</Text>
                       <Text variant="bodySm" tone="subdued">
                         Quick check if endpoints are accessible and returning data
                       </Text>
