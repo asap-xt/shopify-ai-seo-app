@@ -28,6 +28,78 @@ const router = express.Router();
 // App proxy subpath from environment (default: 'indexaize')
 const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
+// ============================================
+// EXEMPT STORES - Free Enterprise access
+// These stores get full Enterprise access without billing
+// Add store domains to EXEMPT_SHOPS env var (comma-separated)
+// Example: EXEMPT_SHOPS=my-store.myshopify.com,another-store.myshopify.com
+// ============================================
+const EXEMPT_SHOPS = (process.env.EXEMPT_SHOPS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+/**
+ * Check if a shop is exempt from billing
+ * @param {string} shop - Shop domain
+ * @returns {boolean} True if shop is exempt
+ */
+export function isExemptShop(shop) {
+  if (!shop) return false;
+  const normalizedShop = shop.toLowerCase().trim();
+  return EXEMPT_SHOPS.includes(normalizedShop);
+}
+
+/**
+ * Ensure exempt shop has active Enterprise subscription
+ * Call this on shop load/auth to auto-grant access
+ * @param {string} shop - Shop domain
+ */
+export async function ensureExemptShopAccess(shop) {
+  if (!isExemptShop(shop)) return null;
+  
+  try {
+    // Check if subscription exists
+    let subscription = await Subscription.findOne({ shop });
+    
+    if (!subscription) {
+      // Create new Enterprise subscription for exempt shop
+      subscription = await Subscription.create({
+        shop,
+        plan: 'enterprise',
+        status: 'active',
+        startedAt: new Date(),
+        activatedAt: new Date(),
+        // No trial, no expiry for exempt shops
+        trialEndsAt: null,
+        expiredAt: null
+      });
+      console.log(`[EXEMPT] Created Enterprise subscription for exempt shop: ${shop}`);
+    } else if (subscription.status !== 'active' || subscription.plan !== 'enterprise') {
+      // Update existing subscription to Enterprise and active
+      subscription.plan = 'enterprise';
+      subscription.status = 'active';
+      subscription.activatedAt = subscription.activatedAt || new Date();
+      subscription.expiredAt = null;
+      subscription.cancelledAt = null;
+      await subscription.save();
+      console.log(`[EXEMPT] Updated subscription to Enterprise for exempt shop: ${shop}`);
+    }
+    
+    // Also grant tokens if balance is low
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    if (tokenBalance.balance < 100000) {
+      // Grant 500k tokens for exempt shops
+      tokenBalance.balance = 500000;
+      tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + 500000;
+      await tokenBalance.save();
+      console.log(`[EXEMPT] Granted 500k tokens to exempt shop: ${shop}`);
+    }
+    
+    return subscription;
+  } catch (error) {
+    console.error(`[EXEMPT] Error ensuring access for ${shop}:`, error);
+    return null;
+  }
+}
+
 // Helper: Get badge text for a plan
 function getPlanBadge(planKey) {
   const badges = {
@@ -187,6 +259,12 @@ router.get('/debug/reset-tokens', async (req, res) => {
 router.get('/info', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
+    
+    // EXEMPT SHOPS: Auto-grant Enterprise access for exempt stores
+    if (isExemptShop(shop)) {
+      await ensureExemptShopAccess(shop);
+      await cacheService.invalidateShop(shop); // Force fresh data
+    }
     
     // FIX: Validate activatedAt and pendingActivation BEFORE checking cache
     // If user has activatedAt or pendingActivation but subscription wasn't approved in Shopify,
