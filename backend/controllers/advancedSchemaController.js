@@ -2343,9 +2343,41 @@ router.get('/test-installation', async (req, res) => {
       results.errors.push(`Theme check failed: ${err.message}`);
     }
     
-    // 2. Check homepage for JSON-LD
+    // 2. Get primary domain (fetch from Shopify API if not in DB)
+    let primaryDomain = shopRecord.primaryDomain;
+    if (!primaryDomain) {
+      try {
+        const domainQuery = `{ shop { primaryDomain { url } } }`;
+        const domainResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query: domainQuery })
+          }
+        );
+        const domainData = await domainResponse.json();
+        primaryDomain = domainData?.data?.shop?.primaryDomain?.url;
+        
+        // Save to DB for future use
+        if (primaryDomain) {
+          await Shop.findOneAndUpdate({ shop }, { primaryDomain });
+        }
+      } catch (err) {
+        console.error('[SCHEMA TEST] Failed to fetch primaryDomain:', err.message);
+      }
+    }
+    
+    // Fallback to myshopify.com if still no domain
+    if (!primaryDomain) {
+      primaryDomain = `https://${shop}`;
+    }
+    
+    // 3. Check homepage for JSON-LD
     try {
-      const primaryDomain = shopRecord.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
       const homepageResponse = await fetch(primaryDomain, {
         headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
         timeout: 10000
@@ -2376,7 +2408,7 @@ router.get('/test-installation', async (req, res) => {
       const firstProduct = productsData?.data?.products?.edges?.[0]?.node;
       
       if (firstProduct) {
-        const primaryDomain = shopRecord.primaryDomain || `https://${shop.replace('.myshopify.com', '.com')}`;
+        // primaryDomain is already defined above
         const productUrl = `${primaryDomain}/products/${firstProduct.handle}`;
         const productResponse = await fetch(productUrl, {
           headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
