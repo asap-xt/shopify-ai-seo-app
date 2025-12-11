@@ -1068,6 +1068,18 @@ ${JSON.stringify(allSchemas, null, 2)}
                                 </BlockStack>
                               </Box>
                               
+                              {/* Debug info */}
+                              {installationTestResults.testedDomain && (
+                                <Text variant="bodySm" tone="subdued">
+                                  Tested domain: {installationTestResults.testedDomain}
+                                </Text>
+                              )}
+                              {installationTestResults.testedProductUrl && (
+                                <Text variant="bodySm" tone="subdued">
+                                  Tested product: {installationTestResults.testedProductUrl}
+                                </Text>
+                              )}
+                              
                               {installationTestResults.errors?.length > 0 && (
                                 <Text variant="bodySm" tone="critical">
                                   Errors: {installationTestResults.errors.join(', ')}

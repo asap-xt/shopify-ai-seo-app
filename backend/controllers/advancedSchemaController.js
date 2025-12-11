@@ -2376,8 +2376,12 @@ router.get('/test-installation', async (req, res) => {
       primaryDomain = `https://${shop}`;
     }
     
+    // Add domain info to results for debugging
+    results.testedDomain = primaryDomain;
+    
     // 3. Check homepage for JSON-LD
     try {
+      console.log('[SCHEMA TEST] Checking homepage:', primaryDomain);
       const homepageResponse = await fetch(primaryDomain, {
         headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
         timeout: 10000
@@ -2385,6 +2389,11 @@ router.get('/test-installation', async (req, res) => {
       if (homepageResponse.ok) {
         const html = await homepageResponse.text();
         results.homepageHasJsonLd = html.includes('application/ld+json');
+        // Check specifically for our schema
+        results.homepageHasOurSchema = html.includes('advanced_schema') || html.includes('indexAIze');
+        console.log('[SCHEMA TEST] Homepage JSON-LD found:', results.homepageHasJsonLd);
+      } else {
+        results.errors.push(`Homepage returned status ${homepageResponse.status}`);
       }
     } catch (err) {
       results.errors.push(`Homepage check failed: ${err.message}`);
@@ -2410,16 +2419,25 @@ router.get('/test-installation', async (req, res) => {
       if (firstProduct) {
         // primaryDomain is already defined above
         const productUrl = `${primaryDomain}/products/${firstProduct.handle}`;
+        results.testedProductUrl = productUrl;
+        console.log('[SCHEMA TEST] Checking product page:', productUrl);
+        
         const productResponse = await fetch(productUrl, {
           headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
           timeout: 10000
         });
         if (productResponse.ok) {
           const html = await productResponse.text();
-          results.productPageHasSchema = html.includes('application/ld+json') && 
-            (html.includes('"@type":"Product"') || html.includes('"@type": "Product"'));
-          results.testedProductUrl = productUrl;
+          const hasJsonLd = html.includes('application/ld+json');
+          const hasProductType = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+          results.productPageHasSchema = hasJsonLd && hasProductType;
+          results.productPageHasOurSchema = html.includes('advanced_schema') || html.includes('seo_ai') || html.includes('indexAIze');
+          console.log('[SCHEMA TEST] Product JSON-LD:', hasJsonLd, 'Product type:', hasProductType, 'Our schema:', results.productPageHasOurSchema);
+        } else {
+          results.errors.push(`Product page returned status ${productResponse.status}`);
         }
+      } else {
+        results.errors.push('No products found to test');
       }
     } catch (err) {
       results.errors.push(`Product page check failed: ${err.message}`);

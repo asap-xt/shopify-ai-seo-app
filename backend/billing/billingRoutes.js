@@ -85,12 +85,14 @@ export async function ensureExemptShopAccess(shop) {
     
     // Also grant tokens if balance is low
     const tokenBalance = await TokenBalance.getOrCreate(shop);
-    if (tokenBalance.balance < 100000) {
-      // Grant 500k tokens for exempt shops
-      tokenBalance.balance = 500000;
-      tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + 500000;
+    // Grant 2M tokens for exempt shops (enough for ~500 products with AI schemas)
+    const EXEMPT_TOKEN_AMOUNT = 2000000;
+    if (tokenBalance.balance < EXEMPT_TOKEN_AMOUNT) {
+      const tokensToAdd = EXEMPT_TOKEN_AMOUNT - tokenBalance.balance;
+      tokenBalance.balance = EXEMPT_TOKEN_AMOUNT;
+      tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + tokensToAdd;
       await tokenBalance.save();
-      console.log(`[EXEMPT] Granted 500k tokens to exempt shop: ${shop}`);
+      console.log(`[EXEMPT] Granted ${tokensToAdd.toLocaleString()} tokens to exempt shop: ${shop} (total: ${EXEMPT_TOKEN_AMOUNT.toLocaleString()})`);
     }
     
     return subscription;
