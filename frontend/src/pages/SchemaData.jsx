@@ -99,6 +99,7 @@ export default function SchemaData({ shop: shopProp }) {
   // Installation test states
   const [testingInstallation, setTestingInstallation] = useState(false);
   const [installationTestResults, setInstallationTestResults] = useState(null);
+  const [showManualInstructions, setShowManualInstructions] = useState(false);
   
   // Rich Attributes state (same as Settings.jsx)
   const [richAttributes, setRichAttributes] = useState({
@@ -800,11 +801,16 @@ ${JSON.stringify(allSchemas, null, 2)}
                                     size="large"
                                     variant={hasAutoInstall ? "secondary" : "primary"}
                                     onClick={() => {
-                                      // Scroll to manual instructions
-                                      document.getElementById('manual-install-section')?.scrollIntoView({ behavior: 'smooth' });
+                                      setShowManualInstructions(!showManualInstructions);
+                                      // Scroll to instructions after opening
+                                      if (!showManualInstructions) {
+                                        setTimeout(() => {
+                                          document.getElementById('manual-install-section')?.scrollIntoView({ behavior: 'smooth' });
+                                        }, 100);
+                                      }
                                     }}
                                   >
-                                    View Manual Instructions
+                                    {showManualInstructions ? 'Hide Manual Instructions' : 'View Manual Instructions'}
                                   </Button>
                                 </InlineStack>
                                 
@@ -821,34 +827,35 @@ ${JSON.stringify(allSchemas, null, 2)}
                       </Box>
                     </Card>
                     
-                    {/* Manual Installation Instructions */}
-                    <div id="manual-install-section">
-                      <Banner tone="info">
-                        <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">Manual Installation Steps</Text>
-                          
-                          <List type="number">
-                            <List.Item>
-                              Go to your Shopify Admin → Online Store → Themes
-                            </List.Item>
-                            <List.Item>
-                              Click "Actions" → "Edit code" on your current theme
-                            </List.Item>
-                            <List.Item>
-                              Open the file: <code>layout/theme.liquid</code>
-                            </List.Item>
-                            <List.Item>
-                              Add this code before the closing <code>&lt;/head&gt;</code> tag:
-                            </List.Item>
-                          </List>
-                        </BlockStack>
-                      </Banner>
-                    </div>
+                    {/* Manual Installation Instructions - shown only when toggled */}
+                    {showManualInstructions && (
+                      <div id="manual-install-section">
+                        <Banner tone="info">
+                          <BlockStack gap="300">
+                            <Text as="h4" variant="headingSm">Manual Installation Steps</Text>
+                            
+                            <List type="number">
+                              <List.Item>
+                                Go to your Shopify Admin → Online Store → Themes
+                              </List.Item>
+                              <List.Item>
+                                Click "Actions" → "Edit code" on your current theme
+                              </List.Item>
+                              <List.Item>
+                                Open the file: <code>layout/theme.liquid</code>
+                              </List.Item>
+                              <List.Item>
+                                Add this code before the closing <code>&lt;/head&gt;</code> tag:
+                              </List.Item>
+                            </List>
+                          </BlockStack>
+                        </Banner>
+                      </div>
 
-                    <Card>
-                      <Box padding="300">
-                        <BlockStack gap="300">
-                          <Text as="h4" variant="headingSm">Code to Install</Text>
+                      <Card>
+                        <Box padding="300">
+                          <BlockStack gap="300">
+                            <Text as="h4" variant="headingSm">Code to Install</Text>
 
                           <Box background="bg-surface-secondary" padding="200" borderRadius="200">
                             <pre style={{ fontSize: '12px', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
@@ -967,11 +974,12 @@ ${JSON.stringify(allSchemas, null, 2)}
                           </InlineStack>
 
                           <Banner tone="warning">
-                            <Text>Always backup your theme before making changes!</Text>
-                          </Banner>
-                        </BlockStack>
-                      </Box>
-                    </Card>
+                              <Text>Always backup your theme before making changes!</Text>
+                            </Banner>
+                          </BlockStack>
+                        </Box>
+                      </Card>
+                    )}
 
                     <Card>
                       <Box padding="300">
