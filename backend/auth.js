@@ -28,7 +28,8 @@ const REQUIRED_SCOPES = [
   'read_locales',
   'read_translations',
   'read_themes',
-  'write_themes'
+  'write_themes',
+  'write_theme_code'  // Required for writing robots.txt.liquid (approved by Shopify)
 ];
 
 // Validate required environment variables
