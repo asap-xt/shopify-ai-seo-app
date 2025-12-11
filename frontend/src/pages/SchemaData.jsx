@@ -1005,34 +1005,66 @@ ${JSON.stringify(allSchemas, null, 2)}
                               </Banner>
                               
                               <Box paddingBlockStart="200">
-                                <BlockStack gap="100">
-                                  <InlineStack gap="200" blockAlign="center">
-                                    <Badge tone={installationTestResults.snippetExists ? 'success' : 'critical'}>
-                                      {installationTestResults.snippetExists ? 'Pass' : 'Fail'}
-                                    </Badge>
-                                    <Text>Snippet file exists (snippets/ai-schema.liquid)</Text>
-                                  </InlineStack>
+                                <BlockStack gap="200">
+                                  {/* Snippet file test */}
+                                  <BlockStack gap="100">
+                                    <InlineStack gap="200" blockAlign="center">
+                                      <Badge tone={installationTestResults.snippetExists ? 'success' : 'critical'}>
+                                        {installationTestResults.snippetExists ? 'Pass' : 'Fail'}
+                                      </Badge>
+                                      <Text fontWeight="medium">Snippet file (snippets/ai-schema.liquid)</Text>
+                                    </InlineStack>
+                                    {!installationTestResults.snippetExists && (
+                                      <Text variant="bodySm" tone="subdued">
+                                        → Click "Auto-Install to Theme" above to create the snippet file.
+                                      </Text>
+                                    )}
+                                  </BlockStack>
                                   
-                                  <InlineStack gap="200" blockAlign="center">
-                                    <Badge tone={installationTestResults.themeHasRenderTag ? 'success' : 'critical'}>
-                                      {installationTestResults.themeHasRenderTag ? 'Pass' : 'Fail'}
-                                    </Badge>
-                                    <Text>Theme.liquid has render tag</Text>
-                                  </InlineStack>
+                                  {/* Theme.liquid render tag test */}
+                                  <BlockStack gap="100">
+                                    <InlineStack gap="200" blockAlign="center">
+                                      <Badge tone={installationTestResults.themeHasRenderTag ? 'success' : 'critical'}>
+                                        {installationTestResults.themeHasRenderTag ? 'Pass' : 'Fail'}
+                                      </Badge>
+                                      <Text fontWeight="medium">Theme.liquid render tag</Text>
+                                    </InlineStack>
+                                    {!installationTestResults.themeHasRenderTag && (
+                                      <Text variant="bodySm" tone="subdued">
+                                        → Click "Auto-Install to Theme" or manually add {`{% render 'ai-schema' %}`} before &lt;/head&gt; in theme.liquid.
+                                      </Text>
+                                    )}
+                                  </BlockStack>
                                   
-                                  <InlineStack gap="200" blockAlign="center">
-                                    <Badge tone={installationTestResults.homepageHasJsonLd ? 'success' : 'warning'}>
-                                      {installationTestResults.homepageHasJsonLd ? 'Pass' : 'Check'}
-                                    </Badge>
-                                    <Text>Homepage has JSON-LD</Text>
-                                  </InlineStack>
+                                  {/* Homepage JSON-LD test */}
+                                  <BlockStack gap="100">
+                                    <InlineStack gap="200" blockAlign="center">
+                                      <Badge tone={installationTestResults.homepageHasJsonLd ? 'success' : 'warning'}>
+                                        {installationTestResults.homepageHasJsonLd ? 'Pass' : 'N/A'}
+                                      </Badge>
+                                      <Text fontWeight="medium">Homepage JSON-LD</Text>
+                                    </InlineStack>
+                                    {!installationTestResults.homepageHasJsonLd && (
+                                      <Text variant="bodySm" tone="subdued">
+                                        → Go to "Generate Schemas" tab and click "Generate/Update Schema Data" to create Organization & WebSite schemas.
+                                      </Text>
+                                    )}
+                                  </BlockStack>
                                   
-                                  <InlineStack gap="200" blockAlign="center">
-                                    <Badge tone={installationTestResults.productPageHasSchema ? 'success' : 'warning'}>
-                                      {installationTestResults.productPageHasSchema ? 'Pass' : 'Check'}
-                                    </Badge>
-                                    <Text>Product page has schema</Text>
-                                  </InlineStack>
+                                  {/* Product page schema test */}
+                                  <BlockStack gap="100">
+                                    <InlineStack gap="200" blockAlign="center">
+                                      <Badge tone={installationTestResults.productPageHasSchema ? 'success' : 'warning'}>
+                                        {installationTestResults.productPageHasSchema ? 'Pass' : 'N/A'}
+                                      </Badge>
+                                      <Text fontWeight="medium">Product page schema</Text>
+                                    </InlineStack>
+                                    {!installationTestResults.productPageHasSchema && (
+                                      <Text variant="bodySm" tone="subdued">
+                                        → Go to Search Optimization and run Basic SEO or AI-Enhanced optimization on your products first.
+                                      </Text>
+                                    )}
+                                  </BlockStack>
                                 </BlockStack>
                               </Box>
                               
