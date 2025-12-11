@@ -959,6 +959,7 @@ export default function Settings() {
 
   // State for auto-apply robots.txt
   const [applyingRobots, setApplyingRobots] = useState(false);
+  const [showAutoInstallUpgradeModal, setShowAutoInstallUpgradeModal] = useState(false);
   
   /**
    * Auto-install robots.txt.liquid to Shopify theme
@@ -1710,7 +1711,7 @@ export default function Settings() {
               </InlineStack>
               
               <Banner status="info" title="AI Discovery requires robots.txt configuration">
-                <p>Your AI bot settings are saved. Choose how to install robots.txt to enable AI bot access:</p>
+                <p>Your AI bot settings are saved. Install robots.txt to enable AI bot access to your store.</p>
               </Banner>
               
               <InlineStack gap="300" wrap={false}>
@@ -1718,7 +1719,15 @@ export default function Settings() {
                   variant="primary"
                   size="large"
                   loading={applyingRobots}
-                  onClick={applyRobotsTxt}
+                  onClick={() => {
+                    // Auto-Install requires Growth Plus or higher (index >= 4)
+                    const planIndex = getPlanIndex(settings?.plan);
+                    if (planIndex >= 4) {
+                      applyRobotsTxt();
+                    } else {
+                      setShowAutoInstallUpgradeModal(true);
+                    }
+                  }}
                 >
                   Auto-Install to Theme
                 </Button>
@@ -1745,9 +1754,15 @@ export default function Settings() {
                 </Button>
               </InlineStack>
               
-              <Text variant="bodySm" tone="subdued">
-                Auto-Install automatically adds robots.txt.liquid to your theme. Manual Install shows the code for you to copy/paste.
-              </Text>
+              {getPlanIndex(settings?.plan) >= 4 ? (
+                <Text variant="bodySm" tone="subdued">
+                  Auto-Install automatically adds robots.txt.liquid to your theme.
+                </Text>
+              ) : (
+                <Text variant="bodySm" tone="subdued">
+                  Auto-Install requires Growth Plus or higher. Use Manual Install to copy the code.
+                </Text>
+              )}
               
               <Divider />
               
@@ -2223,6 +2238,55 @@ export default function Settings() {
         returnTo="/settings"
         inTrial={true}
       />
+
+      {/* Auto-Install Upgrade Modal */}
+      {showAutoInstallUpgradeModal && (
+        <Modal
+          open={showAutoInstallUpgradeModal}
+          onClose={() => setShowAutoInstallUpgradeModal(false)}
+          title="Upgrade for Auto-Install"
+          primaryAction={{
+            content: 'Upgrade to Growth Plus',
+            onAction: () => {
+              const params = new URLSearchParams(window.location.search);
+              const host = params.get('host');
+              const embedded = params.get('embedded');
+              window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}`;
+            }
+          }}
+          secondaryActions={[
+            {
+              content: 'Use Manual Install',
+              onAction: async () => {
+                setShowAutoInstallUpgradeModal(false);
+                await generateRobotsTxt();
+                setShowRobotsModal(true);
+              }
+            }
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Banner status="info">
+                <p>Auto-Install to Theme is available on <strong>Growth Plus</strong> plan and higher.</p>
+              </Banner>
+              
+              <Text>
+                This feature automatically installs the robots.txt.liquid file to your Shopify theme, 
+                saving you time and ensuring correct configuration.
+              </Text>
+              
+              <Text variant="bodyMd" fontWeight="semibold">
+                Your options:
+              </Text>
+              <BlockStack gap="200">
+                <Text>• <strong>Upgrade to Growth Plus</strong> - Get Auto-Install and many more features</Text>
+                <Text>• <strong>Use Manual Install</strong> - Copy the code and paste it in your theme editor</Text>
+              </BlockStack>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+      )}
       
     </BlockStack>
     );
