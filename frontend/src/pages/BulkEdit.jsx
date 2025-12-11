@@ -963,14 +963,41 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       
       if (selectAllInStore) {
         // Fetch all products in store for "Select all in store"
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
+        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
       }
       
-      // Check if selection exceeds plan limit BEFORE processing
-      const selectedCount = productsToProcess.length;
+      // Filter out products that are ALREADY optimized for ALL selected languages
+      // A product needs optimization only if it's missing at least one of the selected languages
+      const alreadyOptimized = productsToProcess.filter(p => {
+        const existingLangs = p.optimizationSummary?.optimizedLanguages || [];
+        // Check if ALL selected languages are already optimized
+        return selectedLanguages.every(lang => existingLangs.includes(lang));
+      });
+      
+      const needsOptimization = productsToProcess.filter(p => {
+        const existingLangs = p.optimizationSummary?.optimizedLanguages || [];
+        // Needs optimization if at least one selected language is missing
+        return selectedLanguages.some(lang => !existingLangs.includes(lang));
+      });
+      
+      // Check if ALL products are already optimized
+      if (needsOptimization.length === 0 && alreadyOptimized.length > 0) {
+        setShowLanguageModal(false);
+        setToast(`All ${alreadyOptimized.length} selected product(s) are already optimized for ${selectedLanguages.join(', ')}. No action needed.`);
+        return;
+      }
+      
+      if (productsToProcess.length === 0) {
+        setShowLanguageModal(false);
+        setToast('Please select products');
+        return;
+      }
+      
+      // Check if selection exceeds plan limit BEFORE processing (count only those that need optimization)
+      const selectedCount = needsOptimization.length;
       
       if (selectedCount > productLimit) {
         setShowLanguageModal(false);
@@ -979,7 +1006,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         const nextPlan = getNextPlanForLimit(selectedCount);
         setTokenError({
           error: `Product limit exceeded`,
-          message: `Your ${currentPlan} plan supports up to ${productLimit} products for SEO optimization. You have selected ${selectedCount} products.`,
+          message: `Your ${currentPlan} plan supports up to ${productLimit} products for SEO optimization. You have selected ${selectedCount} products that need optimization.`,
           minimumPlanRequired: nextPlan,
           currentPlan: currentPlan,
           features: [
@@ -996,17 +1023,28 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       // Close language modal
       setShowLanguageModal(false);
       
+      // Show info toast if some products are being skipped
+      if (alreadyOptimized.length > 0) {
+        setToast(`Skipping ${alreadyOptimized.length} already optimized product(s). Processing ${needsOptimization.length} product(s).`);
+      }
+      
       // Clear any previous badges when starting optimize
       setDeleteJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
       setAiEnhanceJobStatus({ inProgress: false, status: 'idle', message: null, completedAt: null });
       
-      // Prepare batch data for background processing
-      const productsForBatch = productsToProcess.map(product => ({
+      // Prepare batch data for background processing - only products that NEED optimization
+      const productsForBatch = needsOptimization.map(product => ({
         productId: product.gid || toProductGID(product.productId || product.id),
         title: product.title || 'Unknown product',
         languages: selectedLanguages,
         existingLanguages: product.optimizationSummary?.optimizedLanguages || []
       }));
+      
+      // If no products need optimization (all skipped), exit early
+      if (productsForBatch.length === 0) {
+        setToast('No products to optimize. All selected products are already optimized.');
+        return;
+      }
       
       // Send batch request for background Generate + Apply
       const response = await api('/api/seo/generate-apply-batch', {
