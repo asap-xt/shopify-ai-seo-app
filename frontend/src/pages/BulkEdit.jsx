@@ -2400,7 +2400,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 <Text variant="bodyMd" fontWeight="semibold">
                         {selectedItems.length > 0 
                           ? selectAllInStore 
-                            ? `All ${totalCount} selected`
+                            ? (optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0)
+                              ? `All ${totalCount} matching filter`
+                              : `All ${totalCount} selected`
                             : `${selectedItems.length} selected`
                           : 'Select'}
                 </Text>
@@ -2420,11 +2422,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         },
                         disabled: selectedItems.length === products.length && !selectAllInStore
                       },
-                      {
+                      // Show "Select all matching filter" when a filter is active
+                      ...(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0 ? [{
+                        content: `Select all ${totalCount} matching filter`,
+                        onAction: () => {
+                          handleSelectAllInStore();
+                          setShowSelectionPopover(false);
+                        },
+                        disabled: selectAllInStore
+                      }] : [{
                         content: `Select all ${totalCount} in this store`,
                         onAction: handleSelectAllInStore,
                         disabled: selectAllInStore
-                      },
+                      }]),
                       {
                         content: 'Deselect all',
                         onAction: handleUnselectAll,
