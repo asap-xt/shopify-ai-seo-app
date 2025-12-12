@@ -2225,7 +2225,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Box padding="400" borderBlockEndWidth="025" borderColor="border">
             <InlineStack gap="200" wrap align="space-between">
               <InlineStack gap="200" wrap>
-                {/* AI Search Status filter */}
+                {/* Optimization Status filter */}
               <Popover
                 active={showOptimizedPopover}
                 activator={
@@ -2235,7 +2235,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     removeUnderline
                   >
                     <InlineStack gap="100" blockAlign="center">
-                      <span>AI Search Status</span>
+                      <span>Optimization Status</span>
                       {optimizedFilter !== 'all' && (
                         <Box onClick={(e) => {
                           e.stopPropagation();
@@ -2251,7 +2251,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               >
                 <Box padding="300" minWidth="200px">
                   <ChoiceList
-                    title="AI Search Status"
+                    title="Optimization Status"
                     titleHidden
                     choices={[
                       { label: 'All products', value: 'all' },
