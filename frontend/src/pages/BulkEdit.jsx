@@ -747,11 +747,22 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const handleStartEnhancement = async () => {
     let selectedProducts = [];
     
-    // Handle "Select all in store" - fetch all products
+    // Handle "Select all in store" - fetch all products with current filters
     if (selectAllInStore) {
       try {
-        setToast('Loading all products...');
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
+        setToast('Loading all matching products...');
+        // Build query with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,title,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         selectedProducts = data.products || [];
       } catch (error) {
         console.error('[BULK-EDIT] Failed to fetch all products:', error);
@@ -962,8 +973,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let productsToProcess = [];
       
       if (selectAllInStore) {
-        // Fetch all products in store for "Select all in store"
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
+        // Fetch all products with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,title,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
@@ -1097,8 +1118,18 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let productsToProcess = [];
       
       if (selectAllInStore) {
-        // Fetch all products in store for "Select all in store"
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
+        // Fetch all products with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
