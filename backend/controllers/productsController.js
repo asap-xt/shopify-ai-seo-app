@@ -183,12 +183,13 @@ router.get('/list', async (req, res) => {
     
     // Filter parameters
     const optimizedFilter = req.query.optimized; // 'true', 'false', or undefined (all)
+    const aiEnhancedFilter = req.query.aiEnhanced; // 'true', 'false', or undefined (all)
     const languageFilter = req.query.languageFilter; // e.g., 'en', 'de'
     const tagsFilter = req.query.tags ? req.query.tags.split(',') : []; // e.g., 'tag1,tag2'
     const searchFilter = req.query.search; // search term
     
     // Check if any client-side filters are active (requires fetching all products)
-    const hasClientFilters = optimizedFilter || languageFilter || tagsFilter.length > 0 || searchFilter;
+    const hasClientFilters = optimizedFilter || aiEnhancedFilter || languageFilter || tagsFilter.length > 0 || searchFilter;
     
     const shop = req.auth.shop;
 
@@ -286,13 +287,34 @@ router.get('/list', async (req, res) => {
         });
       }
       
-      // Process all products with metafields
+      // Get AI-enhanced status from MongoDB for ALL products (needed for aiEnhanced filter)
+      const allProductNumericIds = allProductsResult.map(p => {
+        const id = p.id || '';
+        return id.includes('gid://') ? id.split('/').pop() : id;
+      }).filter(Boolean);
+      
+      const mongoProducts = await Product.find({
+        shop,
+        productId: { $in: allProductNumericIds }
+      }).select('productId seoStatus.aiEnhanced').lean();
+      
+      const aiEnhancedMap = {};
+      mongoProducts.forEach(mp => {
+        aiEnhancedMap[mp.productId] = mp.seoStatus?.aiEnhanced || false;
+      });
+      
+      // Process all products with metafields and aiEnhanced status
       let allProcessedProducts = allProductsResult.map(product => {
         const metafields = allFreshMetafields[product.id] || { edges: [] };
         const optimizationSummary = processProductMetafields(metafields);
+        const numericId = product.id.includes('gid://') ? product.id.split('/').pop() : product.id;
+        const aiEnhanced = aiEnhancedMap[numericId] || false;
         return {
           ...product,
-          optimizationSummary,
+          optimizationSummary: {
+            ...optimizationSummary,
+            aiEnhanced
+          },
           metafields: undefined
         };
       });
@@ -302,6 +324,13 @@ router.get('/list', async (req, res) => {
         allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === true);
       } else if (optimizedFilter === 'false') {
         allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === false);
+      }
+      
+      // Filter by AI-enhanced status
+      if (aiEnhancedFilter === 'true') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced === true);
+      } else if (aiEnhancedFilter === 'false') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced !== true);
       }
       
       if (languageFilter) {
@@ -330,36 +359,7 @@ router.get('/list', async (req, res) => {
       filteredTotal = allProcessedProducts.length;
       const startIdx = (page - 1) * limit;
       const endIdx = startIdx + limit;
-      productsToProcess = allProcessedProducts.slice(startIdx, endIdx);
-      
-      // Return early with filtered results
-      // Get AI-enhanced status from MongoDB for the page products
-      const pageProductNumericIds = productsToProcess.map(p => {
-        const id = p.id || '';
-        return id.includes('gid://') ? id.split('/').pop() : id;
-      }).filter(Boolean);
-      
-      const mongoProducts = await Product.find({
-        shop,
-        productId: { $in: pageProductNumericIds }
-      }).select('productId seoStatus.aiEnhanced').lean();
-      
-      const aiEnhancedMap = {};
-      mongoProducts.forEach(mp => {
-        aiEnhancedMap[mp.productId] = mp.seoStatus?.aiEnhanced || false;
-      });
-      
-      const finalProducts = productsToProcess.map(product => {
-        const numericId = product.id.includes('gid://') ? product.id.split('/').pop() : product.id;
-        const aiEnhanced = aiEnhancedMap[numericId] || false;
-        return {
-          ...product,
-          optimizationSummary: {
-            ...product.optimizationSummary,
-            aiEnhanced
-          }
-        };
-      });
+      const finalProducts = allProcessedProducts.slice(startIdx, endIdx);
       
       return res.json({
         success: true,
