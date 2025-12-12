@@ -75,6 +75,14 @@ export default async function productsWebhook(req, res) {
           }
           if (descriptionChanged) {
             console.log(`  Description changed (${oldDesc?.length || 0} → ${newDesc?.length || 0} chars)`);
+            // Show what was added/removed (first 200 chars of difference)
+            if (newDesc?.length > oldDesc?.length) {
+              const addedText = newDesc.replace(oldDesc, '').substring(0, 200);
+              console.log(`  Added text preview: "${addedText}..."`);
+            } else if (oldDesc?.length > newDesc?.length) {
+              const removedText = oldDesc.replace(newDesc, '').substring(0, 200);
+              console.log(`  Removed text preview: "${removedText}..."`);
+            }
           }
           
           // 3. Delete ALL SEO metafields (all languages)
