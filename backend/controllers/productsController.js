@@ -603,4 +603,144 @@ router.delete('/reset-shop', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/products/repair-optimization-status
+ * Repair MongoDB optimization status to match actual Shopify metafields
+ * This fixes discrepancies where MongoDB shows "optimized" but Shopify has no metafields
+ */
+router.post('/repair-optimization-status', async (req, res) => {
+  const shop = req.auth?.shop;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not found in session' });
+  }
+  
+  console.log(`[REPAIR] Starting optimization status repair for ${shop}`);
+  
+  try {
+    // Step 1: Get all products marked as optimized in MongoDB
+    const mongoOptimized = await Product.find({
+      shop,
+      'seoStatus.optimized': true
+    }).select('productId shopifyProductId title seoStatus').lean();
+    
+    console.log(`[REPAIR] Found ${mongoOptimized.length} products marked as optimized in MongoDB`);
+    
+    if (mongoOptimized.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No optimized products in MongoDB to check',
+        stats: { mongoOptimized: 0, shopifyHasMetafields: 0, repaired: 0 }
+      });
+    }
+    
+    // Step 2: Fetch metafields from Shopify for these products (in batches)
+    const BATCH_SIZE = 50;
+    const productsWithMetafields = new Set();
+    const productsWithoutMetafields = [];
+    
+    for (let i = 0; i < mongoOptimized.length; i += BATCH_SIZE) {
+      const batch = mongoOptimized.slice(i, i + BATCH_SIZE);
+      const productIds = batch.map(p => `gid://shopify/Product/${p.productId || p.shopifyProductId}`);
+      
+      const METAFIELDS_QUERY = `
+        query GetProductMetafields($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Product {
+              id
+              metafields(first: 20, namespace: "seo_ai") {
+                edges {
+                  node {
+                    key
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      try {
+        const data = await executeGraphQL(req, METAFIELDS_QUERY, { ids: productIds });
+        
+        (data?.nodes || []).forEach(node => {
+          if (node?.id) {
+            const numericId = node.id.split('/').pop();
+            const hasMetafields = (node.metafields?.edges?.length || 0) > 0;
+            
+            if (hasMetafields) {
+              productsWithMetafields.add(numericId);
+            }
+          }
+        });
+      } catch (batchError) {
+        console.error(`[REPAIR] Error fetching batch ${i}-${i + BATCH_SIZE}:`, batchError.message);
+      }
+    }
+    
+    // Step 3: Find products that need repair (in MongoDB but no Shopify metafields)
+    const repairedProducts = [];
+    
+    for (const product of mongoOptimized) {
+      const productId = String(product.productId || product.shopifyProductId);
+      
+      if (!productsWithMetafields.has(productId)) {
+        productsWithoutMetafields.push({
+          productId,
+          title: product.title
+        });
+        
+        // Update MongoDB - mark as NOT optimized
+        await Product.findOneAndUpdate(
+          { shop, productId: parseInt(productId) },
+          { 
+            $set: { 
+              'seoStatus.optimized': false,
+              'seoStatus.languages': [],
+              'seoStatus.repairedAt': new Date()
+            } 
+          }
+        );
+        
+        repairedProducts.push({
+          productId,
+          title: product.title
+        });
+      }
+    }
+    
+    console.log(`[REPAIR] Repair complete for ${shop}:`);
+    console.log(`[REPAIR]   - MongoDB optimized: ${mongoOptimized.length}`);
+    console.log(`[REPAIR]   - Actually have Shopify metafields: ${productsWithMetafields.size}`);
+    console.log(`[REPAIR]   - Repaired (marked as not optimized): ${repairedProducts.length}`);
+    
+    // Invalidate cache
+    try {
+      const { cacheService } = await import('../utils/cacheService.js');
+      await cacheService.invalidateShop(shop);
+    } catch (cacheError) {
+      console.error('[REPAIR] Cache invalidation error:', cacheError.message);
+    }
+    
+    return res.json({
+      success: true,
+      message: `Repair complete. ${repairedProducts.length} products updated.`,
+      stats: {
+        mongoOptimized: mongoOptimized.length,
+        shopifyHasMetafields: productsWithMetafields.size,
+        repaired: repairedProducts.length,
+        discrepancy: mongoOptimized.length - productsWithMetafields.size
+      },
+      repairedProducts: repairedProducts.slice(0, 50) // Limit response size
+    });
+    
+  } catch (error) {
+    console.error('[REPAIR] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Repair failed'
+    });
+  }
+});
+
 export default router;
