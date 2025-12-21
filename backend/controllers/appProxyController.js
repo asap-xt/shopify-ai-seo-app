@@ -934,12 +934,17 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
       });
     }
 
+    // Apply plan limit - only include up to the plan's product limit
+    const { limit: planLimit, plan } = await getPlanLimits(shop);
+    const limitedProducts = optimizedProducts.slice(0, planLimit);
+
     res.json({
       shop,
       generated_at: new Date().toISOString(),
-      products_count: optimizedProducts.length,
+      products_count: limitedProducts.length,
       products_total: totalProducts,
-      products: optimizedProducts
+      plan_limit: planLimit,
+      products: limitedProducts
     });
   } catch (error) {
     console.error('[APP_PROXY] AI Products JSON error:', error);

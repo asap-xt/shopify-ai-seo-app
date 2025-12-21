@@ -5,8 +5,24 @@ import Subscription from '../db/Subscription.js';
 import Product from '../db/Product.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
+import { getPlanConfig, resolvePlanKey } from '../plans.js';
 
 const router = express.Router();
+
+/**
+ * Helper to get plan product limit for a shop
+ */
+async function getPlanProductLimit(shop) {
+  try {
+    const subscription = await Subscription.findOne({ shop });
+    const planKey = resolvePlanKey(subscription?.plan) || 'starter';
+    const planConfig = getPlanConfig(planKey);
+    return planConfig?.productLimit || 70; // Default to starter limit
+  } catch (error) {
+    console.error('[AI-FEED] Error getting plan limit:', error);
+    return 70; // Default to starter limit
+  }
+}
 
 
 /**
@@ -199,12 +215,17 @@ router.get('/ai/products.json', async (req, res) => {
       });
     }
 
+    // Apply plan limit - only include up to the plan's product limit
+    const planLimit = await getPlanProductLimit(shop);
+    const limitedProducts = optimizedProducts.slice(0, planLimit);
+    
     res.json({
       shop,
       generated_at: new Date().toISOString(),
-      products_count: optimizedProducts.length,
+      products_count: limitedProducts.length,
       products_total: totalProducts,
-      products: optimizedProducts
+      plan_limit: planLimit,
+      products: limitedProducts
     });
 
   } catch (error) {
