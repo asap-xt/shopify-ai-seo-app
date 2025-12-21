@@ -824,17 +824,47 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
                 title
                 handle
                 description
+                descriptionHtml
                 productType
                 vendor
+                tags
+                totalInventory
+                publishedAt
+                updatedAt
                 priceRangeV2 {
                   minVariantPrice {
                     amount
                     currencyCode
                   }
+                  maxVariantPrice {
+                    amount
+                    currencyCode
+                  }
+                }
+                compareAtPriceRange {
+                  minVariantPrice {
+                    amount
+                  }
+                  maxVariantPrice {
+                    amount
+                  }
                 }
                 featuredImage {
                   url
                   altText
+                }
+                variants(first: 10) {
+                  edges {
+                    node {
+                      sku
+                      availableForSale
+                      inventoryQuantity
+                    }
+                  }
+                }
+                seo {
+                  title
+                  description
                 }
                 metafields(namespace: "seo_ai", first: 100) {
                   edges {
@@ -895,31 +925,80 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
           }
         });
         
-        // Get AI-generated imageAlt if exists
+        // Get AI-optimized data from metafields (try different language keys)
+        let aiTitle = null;
+        let aiDescription = null;
         let aiImageAlt = null;
+        let aiBullets = null;
+        let aiFaq = null;
+        
         for (const key of Object.keys(parsedMetafields)) {
           const seoData = parsedMetafields[key];
-          if (seoData && typeof seoData === 'object' && seoData.imageAlt) {
-            aiImageAlt = seoData.imageAlt;
-            break;
+          if (seoData && typeof seoData === 'object') {
+            if (!aiTitle && seoData.title) aiTitle = seoData.title;
+            if (!aiDescription && seoData.metaDescription) aiDescription = seoData.metaDescription;
+            if (!aiImageAlt && seoData.imageAlt) aiImageAlt = seoData.imageAlt;
+            if (!aiBullets && seoData.bullets) aiBullets = seoData.bullets;
+            if (!aiFaq && seoData.faq) aiFaq = seoData.faq;
           }
         }
         
+        // Calculate availability status
+        const totalInventory = product.totalInventory || 0;
+        const hasAvailableVariants = product.variants?.edges?.some(v => v.node.availableForSale);
+        let availability = 'out_of_stock';
+        if (hasAvailableVariants && totalInventory > 10) {
+          availability = 'in_stock';
+        } else if (hasAvailableVariants && totalInventory > 0) {
+          availability = 'limited_stock';
+        } else if (hasAvailableVariants) {
+          availability = 'available'; // Available but no inventory tracking
+        }
+        
+        // Get SKU from first variant
+        const primarySku = product.variants?.edges?.[0]?.node?.sku || null;
+        
+        // Check for sale price
+        const minPrice = parseFloat(product.priceRangeV2?.minVariantPrice?.amount || 0);
+        const maxPrice = parseFloat(product.priceRangeV2?.maxVariantPrice?.amount || 0);
+        const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantPrice?.amount || 0);
+        const isOnSale = compareAtMin > 0 && compareAtMin > minPrice;
+        
         optimizedProducts.push({
           id: product.id,
-          title: product.title,
+          sku: primarySku,
+          title: aiTitle || product.seo?.title || product.title,
+          originalTitle: product.title,
           handle: product.handle,
-          description: product.description || null,
+          description: aiDescription || product.seo?.description || product.description || null,
+          fullDescription: product.description || null,
           productType: product.productType || null,
           vendor: product.vendor || null,
-          price: product.priceRangeV2?.minVariantPrice?.amount || null,
-          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          tags: product.tags || [],
+          availability: availability,
+          inventoryStatus: {
+            totalInventory: totalInventory,
+            availableForSale: hasAvailableVariants || false
+          },
+          pricing: {
+            price: minPrice.toFixed(2),
+            priceMax: maxPrice > minPrice ? maxPrice.toFixed(2) : null,
+            compareAtPrice: isOnSale ? compareAtMin.toFixed(2) : null,
+            currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+            isOnSale: isOnSale
+          },
           url: `https://${shop}/products/${product.handle}`,
           image: product.featuredImage ? {
             url: product.featuredImage.url,
             alt: aiImageAlt || product.featuredImage.altText || product.title
           } : null,
-          metafields: parsedMetafields
+          highlights: aiBullets || null,
+          faq: aiFaq || null,
+          dates: {
+            published: product.publishedAt,
+            updated: product.updatedAt
+          },
+          seoMetafields: parsedMetafields
         });
       }
     });
