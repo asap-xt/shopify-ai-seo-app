@@ -1176,7 +1176,11 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               const assetData = await assetResponse.json();
               const themeContent = assetData?.asset?.value || '';
               
-              // Look for schema.org structured data
+              // Check for ai-schema snippet render tag (recommended installation method)
+              const hasAiSchemaRenderTag = themeContent.includes("render 'ai-schema'") || 
+                                            themeContent.includes('render "ai-schema"');
+              
+              // Look for schema.org structured data (inline method)
               const hasLdJson = themeContent.includes('application/ld+json') || themeContent.includes('application\\/ld+json');
               const hasSchemaOrg = themeContent.includes('schema.org') || themeContent.includes('schema\\.org');
               const hasOrganization = /@type["\s:]*"?\s*Organization/i.test(themeContent) || 
@@ -1186,7 +1190,10 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               const hasAiSeoComment = themeContent.includes('AI SEO App') || 
                                        themeContent.includes('Organization & WebSite Schema');
               
-              if (!hasLdJson && !hasSchemaOrg) {
+              if (hasAiSchemaRenderTag) {
+                // Best case - using the snippet render method
+                validationMessage = 'Schema snippet installed correctly ({% render \'ai-schema\' %} found)';
+              } else if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
                 validationMessage = 'Schema data not found in theme.liquid file';
               } else if (hasLdJson && (hasOrganization || hasWebSite || hasAiSeoComment)) {
