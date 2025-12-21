@@ -89,20 +89,15 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
 
   }
 
-  // STEP 1: Clean up orphaned products (from reinstall or deleted in Shopify)
-  // Get all Shopify product IDs we just fetched (both GID and numeric formats)
+  // STEP 1: Clean up orphaned products (not in Shopify anymore)
   const currentShopifyGids = allProducts.map(({ node }) => node.id);
   const currentShopifyNumericIds = allProducts.map(({ node }) => node.id.split('/').pop());
   
-  // Delete MongoDB records that don't exist in Shopify anymore
-  // Handle both GID and numeric ID formats for backward compatibility
+  // Delete products that don't exist in Shopify (handles both ID formats)
   const cleanupResult = await Product.deleteMany({
     shop,
-    $and: [
-      { shopifyProductId: { $nin: currentShopifyGids } },
-      { shopifyProductId: { $nin: currentShopifyNumericIds } },
-      { productId: { $nin: currentShopifyNumericIds } }
-    ]
+    shopifyProductId: { $nin: [...currentShopifyGids, ...currentShopifyNumericIds] },
+    productId: { $nin: currentShopifyNumericIds }
   });
   
   if (cleanupResult.deletedCount > 0) {

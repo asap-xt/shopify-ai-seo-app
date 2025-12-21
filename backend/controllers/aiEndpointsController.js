@@ -64,62 +64,81 @@ router.get('/ai/products.json', async (req, res) => {
       });
     }
 
-    // Просто вземаме ВСИЧКИ metafields от namespace seo_ai
-    const query = `
-      query {
-        products(first: 250) {
-          edges {
-            node {
-              id
-              title
-              handle
-              description
-              productType
-              vendor
-              priceRangeV2 {
-                minVariantPrice {
-                  amount
-                  currencyCode
+    // Fetch ALL products with pagination
+    const allProducts = [];
+    let cursor = null;
+    let hasMore = true;
+    
+    while (hasMore && allProducts.length < 1000) { // Safety limit
+      const query = `
+        query($cursor: String) {
+          products(first: 250, after: $cursor, query: "status:active") {
+            edges {
+              node {
+                id
+                title
+                handle
+                description
+                productType
+                vendor
+                priceRangeV2 {
+                  minVariantPrice {
+                    amount
+                    currencyCode
+                  }
                 }
-              }
-              featuredImage {
-                url
-                altText
-              }
-              metafields(namespace: "seo_ai", first: 100) {
-                edges {
-                  node {
-                    key
-                    value
+                featuredImage {
+                  url
+                  altText
+                }
+                metafields(namespace: "seo_ai", first: 100) {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
                   }
                 }
               }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
             }
           }
         }
-      }
-    `;
+      `;
 
-    const response = await fetch(
-      `https://${shop}/admin/api/2024-07/graphql.json`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': shopRecord.accessToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query })
-      }
-    );
+      const response = await fetch(
+        `https://${shop}/admin/api/2025-07/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query, variables: { cursor } })
+        }
+      );
 
-    const data = await response.json();
+      const data = await response.json();
+      
+      if (!data?.data?.products?.edges) {
+        break;
+      }
+      
+      allProducts.push(...data.data.products.edges);
+      hasMore = data.data.products.pageInfo?.hasNextPage || false;
+      cursor = data.data.products.edges[data.data.products.edges.length - 1]?.cursor;
+    }
+
     const optimizedProducts = [];
-    const totalProducts = data.data.products.edges.length;
+    const totalProducts = allProducts.length;
     
     let productsWithMetafields = 0;
     
     // Извличаме само продуктите с metafields
-    data.data.products.edges.forEach(({ node: product }) => {
+    allProducts.forEach(({ node: product }) => {
       if (product.metafields.edges.length > 0) {
         productsWithMetafields++;
         
