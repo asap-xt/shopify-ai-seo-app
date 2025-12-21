@@ -90,13 +90,19 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
   }
 
   // STEP 1: Clean up orphaned products (from reinstall or deleted in Shopify)
-  // Get all Shopify product IDs we just fetched
-  const currentShopifyIds = allProducts.map(({ node }) => node.id);
+  // Get all Shopify product IDs we just fetched (both GID and numeric formats)
+  const currentShopifyGids = allProducts.map(({ node }) => node.id);
+  const currentShopifyNumericIds = allProducts.map(({ node }) => node.id.split('/').pop());
   
   // Delete MongoDB records that don't exist in Shopify anymore
+  // Handle both GID and numeric ID formats for backward compatibility
   const cleanupResult = await Product.deleteMany({
     shop,
-    shopifyProductId: { $nin: currentShopifyIds }
+    $and: [
+      { shopifyProductId: { $nin: currentShopifyGids } },
+      { shopifyProductId: { $nin: currentShopifyNumericIds } },
+      { productId: { $nin: currentShopifyNumericIds } }
+    ]
   });
   
   if (cleanupResult.deletedCount > 0) {
@@ -115,7 +121,17 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
       const numericId = typeof product.id === 'string' ? product.id.split('/').pop() : null;
       
       // Check if we're repairing a discrepancy
-      const existingProduct = await Product.findOne({ shop, shopifyProductId: product.id }).lean();
+      // IMPORTANT: Search by BOTH GID and numeric ID formats for backward compatibility
+      const existingProduct = await Product.findOne({ 
+        shop, 
+        $or: [
+          { shopifyProductId: product.id },      // GID format
+          { shopifyProductId: numericId },       // Numeric format
+          { productId: numericId },              // Legacy field
+          { productId: parseInt(numericId) }     // Legacy field as number
+        ]
+      }).lean();
+      
       if (existingProduct?.seoStatus?.optimized && !seoStatus.optimized) {
         repairedCount++;
         console.log(`[SYNC] Repairing product ${product.title} (${numericId}): was marked optimized but has no metafields`);
@@ -124,14 +140,20 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
         correctlyOptimized++;
       }
       
+      // Update using the same $or query to find existing records regardless of ID format
       await Product.findOneAndUpdate(
         { 
           shop, 
-          shopifyProductId: product.id 
+          $or: [
+            { shopifyProductId: product.id },
+            { shopifyProductId: numericId },
+            { productId: numericId },
+            { productId: parseInt(numericId) }
+          ]
         },
         {
           shop,
-          shopifyProductId: product.id,
+          shopifyProductId: product.id,  // Normalize to GID format going forward
           gid: product.id,
           productId: numericId,
           title: product.title,
