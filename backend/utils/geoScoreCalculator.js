@@ -1,6 +1,6 @@
 /**
- * GEO Score Calculator (Generative Engine Optimization)
- * Calculates overall AI search optimization score (0-100) based on:
+ * AIEO Score Calculator
+ * Calculates overall AI Engine Optimization score (0-100) based on:
  * - Endpoint availability and functionality
  * - AI validation ratings
  * - Data optimization coverage
@@ -8,7 +8,7 @@
  */
 
 /**
- * Calculate overall GEO score from test results
+ * Calculate overall AIEO score from test results
  * @param {Object} endpointResults - Results from /api/ai-testing/run-tests
  * @param {Object} aiValidationResults - Results from /api/ai-testing/ai-validate
  * @param {Object} stats - Store statistics (products, collections, etc.)

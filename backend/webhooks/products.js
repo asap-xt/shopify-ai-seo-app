@@ -55,12 +55,15 @@ export default async function productsWebhook(req, res) {
         const referenceDescription = existingProduct.lastShopifyUpdate?.description || existingProduct.description;
         
         // Normalize values for comparison (treat null/undefined/'' as equivalent empty string)
+        // Also strip HTML tags to compare actual content, not formatting
+        const stripHtml = (html) => (html ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
         const normalizeText = (text) => (text ?? '').trim();
         
         const oldTitle = normalizeText(referenceTitle);
         const newTitle = normalizeText(payload.title);
-        const oldDesc = normalizeText(referenceDescription);
-        const newDesc = normalizeText(payload.body_html);
+        // Use stripHtml for descriptions since sync stores plain text but webhook sends HTML
+        const oldDesc = stripHtml(referenceDescription);
+        const newDesc = stripHtml(payload.body_html);
         
         // Detect if title or description changed from last known Shopify state
         // Only count as "changed" if there's actual text difference
@@ -74,7 +77,10 @@ export default async function productsWebhook(req, res) {
             console.log(`  Title: "${oldTitle?.substring(0, 50)}..." → "${newTitle?.substring(0, 50)}..."`);
           }
           if (descriptionChanged) {
-            console.log(`  Description changed (${oldDesc?.length || 0} → ${newDesc?.length || 0} chars)`);
+            console.log(`  Description changed (${oldDesc?.length || 0} → ${newDesc?.length || 0} chars, stripped text)`);
+            // Show first 100 chars of old vs new for debugging
+            console.log(`  Old: "${oldDesc?.substring(0, 100)}..."`);
+            console.log(`  New: "${newDesc?.substring(0, 100)}..."`);
           }
           
           // 3. Delete ALL SEO metafields (all languages)

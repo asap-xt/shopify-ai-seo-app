@@ -87,12 +87,14 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   // Filter state
   const [searchValue, setSearchValue] = useState('');
   const [optimizedFilter, setOptimizedFilter] = useState('all');
+  const [aiEnhancedFilter, setAiEnhancedFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedTags, setSelectedTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   const [showOptimizedPopover, setShowOptimizedPopover] = useState(false);
+  const [showAiEnhancedPopover, setShowAiEnhancedPopover] = useState(false);
   const [showLanguagePopover, setShowLanguagePopover] = useState(false);
   const [showTagsPopover, setShowTagsPopover] = useState(false);
   const [showSortPopover, setShowSortPopover] = useState(false);
@@ -240,12 +242,12 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           
           // Show toast
           if (status.status === 'completed') {
-            const msg = `Applied AIEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
+            const msg = `Applied GEO to ${status.successfulProducts} product${status.successfulProducts !== 1 ? 's' : ''}` +
               (status.skippedProducts > 0 ? ` (${status.skippedProducts} skipped)` : '') +
               (status.failedProducts > 0 ? ` (${status.failedProducts} failed)` : '');
             setToast(msg);
           } else {
-            setToast(`AIEO optimization failed: ${status.message || 'Unknown error'}`);
+            setToast(`GEO optimization failed: ${status.message || 'Unknown error'}`);
           }
           
           // Refresh products list to update badges - stay on current page
@@ -261,7 +263,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } catch (error) {
       console.error('[BULK-EDIT] Failed to fetch SEO job status:', error);
     }
-  }, [shop, api, optimizedFilter, searchValue, sortBy, sortOrder]);
+  }, [shop, api, optimizedFilter, aiEnhancedFilter, searchValue, sortBy, sortOrder]);
   
   // Start polling for SEO job status
   const startSeoJobPolling = useCallback(() => {
@@ -438,6 +440,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
         page: pageNum,
         limit: itemsPerPage,
         ...(optimizedFilter !== 'all' && { optimized: optimizedFilter }),
+        ...(aiEnhancedFilter !== 'all' && { aiEnhanced: aiEnhancedFilter }),
         ...(searchValue && { search: searchValue }),
         ...(languageFilter && { languageFilter }),
         ...(selectedTags.length > 0 && { tags: selectedTags.join(',') }),
@@ -472,7 +475,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
     } finally {
       setLoading(false);
     }
-  }, [shop, optimizedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
+  }, [shop, optimizedFilter, aiEnhancedFilter, searchValue, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
   
   // Keep ref updated with latest loadProducts (for use in polling callbacks)
   useEffect(() => {
@@ -490,7 +493,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       loadProducts(1, false, null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shop, optimizedFilter, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
+  }, [shop, optimizedFilter, aiEnhancedFilter, languageFilter, selectedTags, sortBy, sortOrder, itemsPerPage]);
   
   // Mark as visited on first load
   useEffect(() => {
@@ -747,11 +750,23 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
   const handleStartEnhancement = async () => {
     let selectedProducts = [];
     
-    // Handle "Select all in store" - fetch all products
+    // Handle "Select all in store" - fetch all products with current filters
     if (selectAllInStore) {
       try {
-        setToast('Loading all products...');
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
+        setToast('Loading all matching products...');
+        // Build query with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,title,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (aiEnhancedFilter !== 'all') params.append('aiEnhanced', aiEnhancedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         selectedProducts = data.products || [];
       } catch (error) {
         console.error('[BULK-EDIT] Failed to fetch all products:', error);
@@ -962,8 +977,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let productsToProcess = [];
       
       if (selectAllInStore) {
-        // Fetch all products in store for "Select all in store"
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id,title,gid,optimizationSummary`);
+        // Fetch all products with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,title,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (aiEnhancedFilter !== 'all') params.append('aiEnhanced', aiEnhancedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
@@ -1097,8 +1123,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
       let productsToProcess = [];
       
       if (selectAllInStore) {
-        // Fetch all products in store for "Select all in store"
-        const data = await api(`/api/products/list?shop=${encodeURIComponent(shop)}&limit=1000&fields=id`);
+        // Fetch all products with current filters
+        const params = new URLSearchParams({
+          shop,
+          limit: '1000',
+          fields: 'id,gid,optimizationSummary'
+        });
+        if (optimizedFilter !== 'all') params.append('optimized', optimizedFilter);
+        if (aiEnhancedFilter !== 'all') params.append('aiEnhanced', aiEnhancedFilter);
+        if (searchValue) params.append('search', searchValue);
+        if (languageFilter) params.append('languageFilter', languageFilter);
+        if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
+        
+        const data = await api(`/api/products/list?${params.toString()}`);
         productsToProcess = data.products || [];
       } else {
         productsToProcess = products.filter(p => selectedItems.includes(p.id));
@@ -2015,7 +2052,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       <Spinner size="small" />
                       <BlockStack gap="100">
                         <Text variant="bodyMd" fontWeight="semibold">
-                          {seoJobStatus.phase === 'generate' ? 'Generating AIEO...' : 'Applying AIEO...'}
+                          {seoJobStatus.phase === 'generate' ? 'Generating GEO...' : 'Applying GEO...'}
                         </Text>
                         <Text variant="bodySm" tone="subdued">
                               {(() => {
@@ -2062,7 +2099,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                       <InlineStack gap="200" align="start" blockAlign="center">
                         <Badge tone="success">Completed</Badge>
                         <Text variant="bodyMd">
-                          Applied AIEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
+                          Applied GEO to {seoJobStatus.successfulProducts} product{seoJobStatus.successfulProducts !== 1 ? 's' : ''}
                         </Text>
                         {seoJobStatus.skippedProducts > 0 && seoJobStatus.skipReasons?.length > 0 && (
                           <Button
@@ -2188,7 +2225,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
           <Box padding="400" borderBlockEndWidth="025" borderColor="border">
             <InlineStack gap="200" wrap align="space-between">
               <InlineStack gap="200" wrap>
-                {/* AI Search Status filter */}
+                {/* Optimization Status filter */}
               <Popover
                 active={showOptimizedPopover}
                 activator={
@@ -2198,7 +2235,7 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                     removeUnderline
                   >
                     <InlineStack gap="100" blockAlign="center">
-                      <span>AI Search Status</span>
+                      <span>Optimization Status</span>
                       {optimizedFilter !== 'all' && (
                         <Box onClick={(e) => {
                           e.stopPropagation();
@@ -2214,18 +2251,60 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
               >
                 <Box padding="300" minWidth="200px">
                   <ChoiceList
-                    title="AI Search Status"
+                    title="Optimization Status"
                     titleHidden
                     choices={[
                       { label: 'All products', value: 'all' },
-                      { label: 'Has AI Search Optimisation', value: 'true' },
-                      { label: 'No AI Search Optimisation', value: 'false' },
+                      { label: 'Optimized', value: 'true' },
+                      { label: 'Not Optimized', value: 'false' },
                     ]}
                     selected={[optimizedFilter]}
                     onChange={(value) => {
                       setOptimizedFilter(value[0]);
                       setLanguageFilter('');
                       setShowOptimizedPopover(false);
+                    }}
+                  />
+                </Box>
+              </Popover>
+              
+              {/* AI Add-ons filter */}
+              <Popover
+                active={showAiEnhancedPopover}
+                activator={
+                  <Button 
+                    disclosure="down"
+                    onClick={() => setShowAiEnhancedPopover(!showAiEnhancedPopover)}
+                    removeUnderline
+                  >
+                    <InlineStack gap="100" blockAlign="center">
+                      <span>AI Add-ons</span>
+                      {aiEnhancedFilter !== 'all' && (
+                        <Box onClick={(e) => {
+                          e.stopPropagation();
+                          setAiEnhancedFilter('all');
+                        }}>
+                          <Text as="span" tone="subdued">✕</Text>
+                        </Box>
+                      )}
+                    </InlineStack>
+                  </Button>
+                }
+                onClose={() => setShowAiEnhancedPopover(false)}
+              >
+                <Box padding="300" minWidth="200px">
+                  <ChoiceList
+                    title="AI Add-ons"
+                    titleHidden
+                    choices={[
+                      { label: 'All products', value: 'all' },
+                      { label: 'Has AI Add-ons', value: 'true' },
+                      { label: 'No AI Add-ons', value: 'false' },
+                    ]}
+                    selected={[aiEnhancedFilter]}
+                    onChange={(value) => {
+                      setAiEnhancedFilter(value[0]);
+                      setShowAiEnhancedPopover(false);
                     }}
                   />
                 </Box>
@@ -2361,12 +2440,17 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
             </InlineStack>
             
             {/* Applied filters */}
-            {(optimizedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
+            {(optimizedFilter !== 'all' || aiEnhancedFilter !== 'all' || languageFilter || selectedTags.length > 0) && (
               <Box paddingBlockStart="200">
                 <InlineStack gap="100" wrap>
                   {optimizedFilter !== 'all' && (
                     <Badge onRemove={() => setOptimizedFilter('all')}>
-                      {optimizedFilter === 'true' ? 'Has AI Search Optimisation' : 'No AI Search Optimisation'}
+                      {optimizedFilter === 'true' ? 'Optimized' : 'Not Optimized'}
+                    </Badge>
+                  )}
+                  {aiEnhancedFilter !== 'all' && (
+                    <Badge onRemove={() => setAiEnhancedFilter('all')}>
+                      {aiEnhancedFilter === 'true' ? 'AI Add-ons' : 'No AI Add-ons'}
                     </Badge>
                   )}
                   {languageFilter && (
@@ -2400,7 +2484,9 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                 <Text variant="bodyMd" fontWeight="semibold">
                         {selectedItems.length > 0 
                           ? selectAllInStore 
-                            ? `All ${totalCount} selected`
+                            ? (optimizedFilter !== 'all' || aiEnhancedFilter !== 'all' || languageFilter || selectedTags.length > 0)
+                              ? `All ${totalCount} matching filter`
+                              : `All ${totalCount} selected`
                             : `${selectedItems.length} selected`
                           : 'Select'}
                 </Text>
@@ -2420,11 +2506,19 @@ export default function BulkEdit({ shop: shopProp, globalPlan }) {
                         },
                         disabled: selectedItems.length === products.length && !selectAllInStore
                       },
-                      {
+                      // Show "Select all matching filter" when a filter is active
+                      ...(optimizedFilter !== 'all' || aiEnhancedFilter !== 'all' || languageFilter || selectedTags.length > 0 ? [{
+                        content: `Select all ${totalCount} matching filter`,
+                        onAction: () => {
+                          handleSelectAllInStore();
+                          setShowSelectionPopover(false);
+                        },
+                        disabled: selectAllInStore
+                      }] : [{
                         content: `Select all ${totalCount} in this store`,
                         onAction: handleSelectAllInStore,
                         disabled: selectAllInStore
-                      },
+                      }]),
                       {
                         content: 'Deselect all',
                         onAction: handleUnselectAll,

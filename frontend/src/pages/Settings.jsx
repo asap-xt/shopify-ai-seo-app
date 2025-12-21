@@ -1781,23 +1781,41 @@ export default function Settings() {
               <Divider />
               
               <BlockStack gap="300">
-                <Text variant="headingMd">Installation Instructions:</Text>
-                <ol style={{ marginLeft: '20px', marginTop: '10px', lineHeight: '1.8' }}>
-                  <li><strong>Generate & Copy:</strong> Click the button above to see your custom robots.txt code, then copy it</li>
-                  <li><strong>Open Theme Editor:</strong> Go to <strong>Online Store → Themes</strong> in Shopify admin</li>
-                  <li><strong>Edit Code:</strong> Click <strong>Actions → Edit code</strong> on your active theme</li>
-                  <li><strong>Check Existing File:</strong> In the file browser, look for <code>templates/robots.txt.liquid</code></li>
-                  <li><strong>If File Exists:</strong> Click on it to edit. <strong>Add</strong> the copied code to the end of the existing content (don't replace it)</li>
-                  <li><strong>If File Doesn't Exist:</strong> Click <strong>Add a new file</strong>, type <code>templates/robots.txt.liquid</code>, and paste the copied code</li>
-                  <li><strong>Save:</strong> Click the green <strong>Save</strong> button (top right)</li>
-                </ol>
+                <Text variant="headingMd">Installation Options:</Text>
+                
+                <Banner status="success" title="Option 1: Automatic Installation (Recommended)">
+                  <BlockStack gap="200">
+                    <p><strong>Growth Plus+ plans:</strong> Click "Auto-Install to Theme" for one-click installation.</p>
+                    <p>This creates <code>templates/robots.txt.liquid</code> with AI bot access rules automatically.</p>
+                  </BlockStack>
+                </Banner>
+                
+                <Banner status="info" title="Option 2: Manual Installation">
+                  <BlockStack gap="200">
+                    <p><strong>Use this option if:</strong></p>
+                    <ul style={{ marginLeft: '20px', marginTop: '5px' }}>
+                      <li>Your plan does not include Auto-Install</li>
+                      <li>You have an existing robots.txt.liquid with custom rules you want to preserve</li>
+                      <li>You prefer manual control over theme files</li>
+                    </ul>
+                    <p style={{ marginTop: '10px' }}><strong>Steps:</strong></p>
+                    <ol style={{ marginLeft: '20px', marginTop: '5px', lineHeight: '1.6' }}>
+                      <li>Click "View & Copy Code" to see your custom robots.txt</li>
+                      <li>Go to <strong>Online Store → Themes → Edit code</strong></li>
+                      <li>Find <code>templates/robots.txt.liquid</code></li>
+                      <li>If file exists: <strong>Add</strong> the code to the end (do not replace)</li>
+                      <li>If no file: Create new file and paste the code</li>
+                      <li>Save the file</li>
+                    </ol>
+                  </BlockStack>
+                </Banner>
                 
                 <Banner status="warning">
-                  <p><strong>⚠️ Important:</strong> If you already have a <code>robots.txt.liquid</code> file with custom rules, <strong>add</strong> our code to the end instead of replacing it. This ensures both your existing rules and AI bot access work correctly.</p>
+                  <p><strong>Have custom robots.txt rules?</strong> Use "View & Copy Code" and manually add our AI bot rules to your existing file. Auto-Install will replace existing content.</p>
                 </Banner>
                 
                 <Banner tone="info">
-                  <p><strong>💡 Note:</strong> Our generated robots.txt does NOT block standard search engines (Google, Bing, etc.). It only configures access for AI bots. The default Shopify robots.txt rules will still apply for standard crawlers.</p>
+                  <p><strong>Note:</strong> Our configuration does NOT block standard search engines (Google, Bing). It only adds access rules for AI bots. Shopify default rules remain active.</p>
                 </Banner>
               </BlockStack>
               

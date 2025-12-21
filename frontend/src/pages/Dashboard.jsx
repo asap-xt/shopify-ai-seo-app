@@ -738,12 +738,12 @@ export default function Dashboard({ shop: shopProp }) {
                         • Run AI-Powered Validation for detailed analysis (requires tokens)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • Check your AIEO Score breakdown
+                        • Check your GEO Score breakdown
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">10. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Return to Dashboard regularly to track optimization progress and AIEO Score. Re-optimize when adding new products or editing existing ones to keep AI-structured data current.
+                        Return to Dashboard regularly to track optimization progress and GEO Score. Re-optimize when adding new products or editing existing ones to keep AI-structured data current.
                       </Text>
                     </BlockStack>
                   </BlockStack>

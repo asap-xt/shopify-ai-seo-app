@@ -183,9 +183,13 @@ router.get('/list', async (req, res) => {
     
     // Filter parameters
     const optimizedFilter = req.query.optimized; // 'true', 'false', or undefined (all)
+    const aiEnhancedFilter = req.query.aiEnhanced; // 'true', 'false', or undefined (all)
     const languageFilter = req.query.languageFilter; // e.g., 'en', 'de'
     const tagsFilter = req.query.tags ? req.query.tags.split(',') : []; // e.g., 'tag1,tag2'
     const searchFilter = req.query.search; // search term
+    
+    // Check if any client-side filters are active (requires fetching all products)
+    const hasClientFilters = optimizedFilter || aiEnhancedFilter || languageFilter || tagsFilter.length > 0 || searchFilter;
     
     const shop = req.auth.shop;
 
@@ -242,7 +246,140 @@ router.get('/list', async (req, res) => {
       return allProducts;
     });
     
-    // Slice products for the requested page
+    // When we have client-side filters (optimized, language), we need to:
+    // 1. Fetch metafields for ALL products first
+    // 2. Apply filters
+    // 3. Then paginate the filtered results
+    
+    let productsToProcess = allProductsResult;
+    let filteredTotal = allProductsResult.length;
+    
+    // If we have optimization or language filters, we need metafields for all products
+    if (hasClientFilters) {
+      // Fetch metafields for ALL products (in batches of 250)
+      const allProductIds = allProductsResult.map(p => p.id);
+      const allFreshMetafields = {};
+      
+      for (let i = 0; i < allProductIds.length; i += 250) {
+        const batchIds = allProductIds.slice(i, i + 250);
+        const BATCH_METAFIELDS_QUERY = `
+          query GetProductMetafields($ids: [ID!]!) {
+            nodes(ids: $ids) {
+              ... on Product {
+                id
+                metafields(first: 50, namespace: "seo_ai") {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `;
+        const batchData = await executeGraphQL(req, BATCH_METAFIELDS_QUERY, { ids: batchIds });
+        (batchData?.nodes || []).forEach(node => {
+          if (node?.id) {
+            allFreshMetafields[node.id] = node.metafields;
+          }
+        });
+      }
+      
+      // Get AI-enhanced status from MongoDB for ALL products (needed for aiEnhanced filter)
+      const allProductNumericIds = allProductsResult.map(p => {
+        const id = p.id || '';
+        return id.includes('gid://') ? id.split('/').pop() : id;
+      }).filter(Boolean);
+      
+      const mongoProducts = await Product.find({
+        shop,
+        productId: { $in: allProductNumericIds }
+      }).select('productId seoStatus.aiEnhanced').lean();
+      
+      const aiEnhancedMap = {};
+      mongoProducts.forEach(mp => {
+        aiEnhancedMap[mp.productId] = mp.seoStatus?.aiEnhanced || false;
+      });
+      
+      // Process all products with metafields and aiEnhanced status
+      let allProcessedProducts = allProductsResult.map(product => {
+        const metafields = allFreshMetafields[product.id] || { edges: [] };
+        const optimizationSummary = processProductMetafields(metafields);
+        const numericId = product.id.includes('gid://') ? product.id.split('/').pop() : product.id;
+        const aiEnhanced = aiEnhancedMap[numericId] || false;
+        return {
+          ...product,
+          optimizationSummary: {
+            ...optimizationSummary,
+            aiEnhanced
+          },
+          metafields: undefined
+        };
+      });
+      
+      // Apply filters BEFORE pagination
+      if (optimizedFilter === 'true') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === true);
+      } else if (optimizedFilter === 'false') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === false);
+      }
+      
+      // Filter by AI-enhanced status
+      if (aiEnhancedFilter === 'true') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced === true);
+      } else if (aiEnhancedFilter === 'false') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced !== true);
+      }
+      
+      if (languageFilter) {
+        allProcessedProducts = allProcessedProducts.filter(p => 
+          p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
+        );
+      }
+      
+      if (tagsFilter.length > 0) {
+        allProcessedProducts = allProcessedProducts.filter(p => {
+          const productTags = p.tags || [];
+          return tagsFilter.some(tag => productTags.includes(tag));
+        });
+      }
+      
+      if (searchFilter) {
+        const searchLower = searchFilter.toLowerCase();
+        allProcessedProducts = allProcessedProducts.filter(p => 
+          p.title?.toLowerCase().includes(searchLower) ||
+          p.handle?.toLowerCase().includes(searchLower) ||
+          p.productType?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Update filtered total and slice for pagination
+      filteredTotal = allProcessedProducts.length;
+      const startIdx = (page - 1) * limit;
+      const endIdx = startIdx + limit;
+      const finalProducts = allProcessedProducts.slice(startIdx, endIdx);
+      
+      return res.json({
+        success: true,
+        products: finalProducts,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: filteredTotal,
+          hasNextPage: (page * limit) < filteredTotal,
+          hasNext: (page * limit) < filteredTotal
+        },
+        shop: shop,
+        auth: {
+          tokenType: req.auth.tokenType,
+          source: req.auth.source
+        }
+      });
+    }
+    
+    // No client-side filters - use normal pagination
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
     const pageProducts = allProductsResult.slice(startIndex, endIndex);
@@ -264,8 +401,7 @@ router.get('/list', async (req, res) => {
         shop: shop
       };
     
-    // Step 2: Fetch FRESH optimization status for all products (NOT cached!)
-    // This ensures badges update immediately after optimize/delete operations
+    // Step 2: Fetch FRESH optimization status for page products only
     const productIds = cachedResult.products.map(p => p.id);
     
     const FRESH_METAFIELDS_QUERY = `
@@ -329,42 +465,10 @@ router.get('/list', async (req, res) => {
       };
     });
 
-    // Step 4: Apply client-side filters (using FRESH optimization data)
-    
-    // Filter by optimization status
-    if (optimizedFilter === 'true') {
-      products = products.filter(p => p.optimizationSummary.optimized === true);
-    } else if (optimizedFilter === 'false') {
-      products = products.filter(p => p.optimizationSummary.optimized === false);
-    }
-    
-    // Filter by language
-    if (languageFilter) {
-      products = products.filter(p => 
-        p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
-      );
-    }
-    
-    // Filter by tags
-    if (tagsFilter.length > 0) {
-      products = products.filter(p => {
-        const productTags = p.tags || [];
-        return tagsFilter.some(tag => productTags.includes(tag));
-      });
-    }
-    
-    // Filter by search term (title, handle, productType)
-    if (searchFilter) {
-      const searchLower = searchFilter.toLowerCase();
-      products = products.filter(p => 
-        p.title?.toLowerCase().includes(searchLower) ||
-        p.handle?.toLowerCase().includes(searchLower) ||
-        p.productType?.toLowerCase().includes(searchLower)
-      );
-    }
+    // Note: Client-side filters are applied above when hasClientFilters is true
+    // This code path only runs when NO filters are active
 
     // Return result with FRESH optimization status
-    // Override pagination with fresh total count (in case it changed)
     return res.json({
       success: true,
       products: products,

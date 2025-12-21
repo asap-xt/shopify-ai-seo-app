@@ -399,9 +399,9 @@ export default function AIEOScoreCard({
         <BlockStack gap="300">
           <InlineStack align="space-between" blockAlign="center">
             <BlockStack gap="100">
-              <Text as="h3" variant="headingMd">AIEO Score</Text>
+              <Text as="h3" variant="headingMd">GEO Score</Text>
               <Text variant="bodySm" tone="subdued">
-                Overall AI Engine Optimization rating
+                Generative Engine Optimization rating
               </Text>
             </BlockStack>
             
@@ -454,10 +454,10 @@ export default function AIEOScoreCard({
               {/* Score Text (to the right of donut chart) */}
               <BlockStack gap="100">
                 <Text variant="headingMd" fontWeight="semibold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
-                  AIEO Score = {calculatedAIEOScore.score}
+                  GEO Score = {calculatedAIEOScore.score}
                 </Text>
                 <Text variant="headingMd" fontWeight="bold" style={{ color: getScoreColor(calculatedAIEOScore.score) }}>
-                  AIEO Rating = {calculatedAIEOScore.grade}
+                  GEO Rating = {calculatedAIEOScore.grade}
                 </Text>
               </BlockStack>
             </div>

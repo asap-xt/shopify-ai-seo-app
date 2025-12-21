@@ -1766,7 +1766,7 @@ class EmailService {
       const msg = {
         to: recipientEmail,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: `${totalCount} product${totalCount > 1 ? 's' : ''} ready for AIEO optimization`,
+        subject: `${totalCount} product${totalCount > 1 ? 's' : ''} ready for GEO optimization`,
         html: this.getProductDigestTemplate({
           shopName,
           shop: store.shop,
@@ -1954,7 +1954,7 @@ ${data.message}
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
                           <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Weekly Product Update</p>
-                          <p style="margin: 5px 0 0; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 400;">AIEO opportunities for your store</p>
+                          <p style="margin: 5px 0 0; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 400;">GEO opportunities for your store</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>
@@ -1969,7 +1969,7 @@ ${data.message}
                     <p style="margin: 0 0 20px; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hello ${shopName},</p>
                     
                     <p style="margin: 0 0 30px; color: #4a4a4a; font-size: 15px; line-height: 1.6;">
-                      This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} AIEO attention to improve discoverability in AI search engines.
+                      This week, you've made <strong>${totalCount} product ${totalCount > 1 ? 'changes' : 'change'}</strong> that ${totalCount > 1 ? 'need' : 'needs'} GEO attention to improve discoverability in AI search engines.
                     </p>
                     
                     <!-- Stats Summary Box -->
@@ -1993,7 +1993,7 @@ ${data.message}
                           ${needsOptimization.length > 0 ? `
                           <td style="padding: 10px; text-align: center;">
                             <div style="font-size: 28px; font-weight: 700; color: #f59e0b; margin-bottom: 5px;">${needsOptimization.length}</div>
-                            <div style="font-size: 13px; color: #64748b;">Need AIEO</div>
+                            <div style="font-size: 13px; color: #64748b;">Need GEO</div>
                           </td>
                           ` : ''}
                         </tr>

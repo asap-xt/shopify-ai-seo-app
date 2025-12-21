@@ -1176,7 +1176,11 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               const assetData = await assetResponse.json();
               const themeContent = assetData?.asset?.value || '';
               
-              // Look for schema.org structured data
+              // Check for ai-schema snippet render tag (recommended installation method)
+              const hasAiSchemaRenderTag = themeContent.includes("render 'ai-schema'") || 
+                                            themeContent.includes('render "ai-schema"');
+              
+              // Look for schema.org structured data (inline method)
               const hasLdJson = themeContent.includes('application/ld+json') || themeContent.includes('application\\/ld+json');
               const hasSchemaOrg = themeContent.includes('schema.org') || themeContent.includes('schema\\.org');
               const hasOrganization = /@type["\s:]*"?\s*Organization/i.test(themeContent) || 
@@ -1186,7 +1190,10 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               const hasAiSeoComment = themeContent.includes('AI SEO App') || 
                                        themeContent.includes('Organization & WebSite Schema');
               
-              if (!hasLdJson && !hasSchemaOrg) {
+              if (hasAiSchemaRenderTag) {
+                // Best case - using the snippet render method
+                validationMessage = 'Schema snippet installed correctly ({% render \'ai-schema\' %} found)';
+              } else if (!hasLdJson && !hasSchemaOrg) {
                 validationStatus = 'warning';
                 validationMessage = 'Schema data not found in theme.liquid file';
               } else if (hasLdJson && (hasOrganization || hasWebSite || hasAiSeoComment)) {
@@ -1800,10 +1807,10 @@ Format:
       console.error('[AI-TESTING] Failed to invalidate cache:', cacheErr);
     }
     
-    // Calculate AIEO Score
-    let aiEOScore = null;
+    // Calculate GEO Score (Generative Engine Optimization)
+    let geoScore = null;
     try {
-      const { calculateAIEOScore } = await import('../utils/aiEOScoreCalculator.js');
+      const { calculateGEOScore } = await import('../utils/geoScoreCalculator.js');
       
       // Get stats for score calculation - only count ACTIVE products
       // Include products with status: ACTIVE OR status not set (for backwards compatibility)
@@ -1830,7 +1837,7 @@ Format:
         'seoStatus.optimized': true 
       });
       
-      aiEOScore = calculateAIEOScore(
+      geoScore = calculateGEOScore(
         endpointResults, // Basic test results
         results,         // AI validation results
         {
@@ -1841,7 +1848,7 @@ Format:
         }
       );
     } catch (scoreError) {
-      console.error('[AI-TESTING] Failed to calculate AIEO score:', scoreError);
+      console.error('[AI-TESTING] Failed to calculate GEO score:', scoreError);
       console.error('[AI-TESTING] Score error stack:', scoreError.stack);
       // Don't fail the request if score calculation fails
     }
@@ -1852,7 +1859,7 @@ Format:
       results,
       tokensUsed: totalTokensUsed,
       tokenBalance: tokenBalance.balance,
-      aiEOScore // Add score to response
+      geoScore // Add score to response
     };
     
     res.json(responseData);
@@ -1952,8 +1959,12 @@ router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, r
     
     console.log(`[COMPETITIVE] Analyzing store: ${myDomain}`);
     
-    // Analyze my store
+    // Analyze my store (technical analysis)
     const myAnalysis = await analyzeStoreAIReadiness(myDomain, shop, true);
+    
+    // Note: We use technical score for Competitive Analysis (external HTTP checks)
+    // GEO Score (from AI Testing page) is more comprehensive but requires full test results
+    // The technical score here is consistent and comparable across all stores
     
     // Analyze competitors
     const competitorResults = await Promise.all(
@@ -2019,9 +2030,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
                               robotsTxt.includes('Google-Extended');
       const hasSitemap = robotsTxt.toLowerCase().includes('sitemap:');
       
+      // robots.txt: max 15 points (controls AI bot access)
       result.criteria.robotsTxt = {
         status: hasAIDirectives ? 'excellent' : hasSitemap ? 'good' : 'basic',
-        score: hasAIDirectives ? 25 : hasSitemap ? 15 : 10,
+        score: hasAIDirectives ? 15 : hasSitemap ? 10 : 5,
         details: hasAIDirectives ? 'AI bot directives configured' : hasSitemap ? 'Standard with sitemap' : 'Basic robots.txt'
       };
     } else {
@@ -2066,9 +2078,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
       }
     }
     
+    // Sitemap: max 20 points (helps AI discover content)
     result.criteria.sitemap = {
       status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
-      score: hasAINamespace ? 25 : urlCount > 50 ? 15 : 10,
+      score: hasAINamespace ? 20 : urlCount > 50 ? 12 : 6,
       details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
     };
   } catch (err) {
@@ -2085,16 +2098,17 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
       const productsData = await productsResponse.json();
       const hasProducts = productsData.products?.length > 0;
       
+      // Products JSON: max 6 points (standard Shopify endpoint, not AI-specific)
       result.criteria.productsJson = {
-        status: hasProducts ? 'good' : 'empty',
-        score: hasProducts ? 15 : 5,
-        details: hasProducts ? 'Products JSON accessible' : 'Empty products feed'
+        status: hasProducts ? 'good' : 'none',
+        score: hasProducts ? 6 : 0,
+        details: hasProducts ? 'Products JSON accessible' : 'Not accessible or empty'
       };
     } else {
-      result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not a Shopify store or disabled' };
+      result.criteria.productsJson = { status: 'none', score: 0, details: 'Not a Shopify store or disabled' };
     }
   } catch (err) {
-    result.criteria.productsJson = { status: 'unavailable', score: 0, details: 'Not accessible' };
+    result.criteria.productsJson = { status: 'none', score: 0, details: 'Not accessible' };
   }
   
   // 4. Check for structured data (homepage + our Advanced Schema API)
@@ -2159,8 +2173,9 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     let schemaStatus = 'none';
     let schemaDetails = 'No structured data found';
     
+    // Structured Data: max 30 points (most important for AI understanding)
     if (hasAdvancedSchema) {
-      schemaScore = 25;
+      schemaScore = 30;
       schemaStatus = 'excellent';
       schemaDetails = 'Advanced Schema API enabled';
     } else if (hasJsonLd) {
@@ -2199,9 +2214,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
         const aiData = await aiProductsResponse.json();
         const productCount = aiData.products?.length || 0;
         
+        // AI Endpoints: max 25 points (direct AI crawler feeds)
         result.criteria.aiEndpoints = {
           status: productCount > 0 ? 'excellent' : 'configured',
-          score: productCount > 0 ? 15 : 5,
+          score: productCount > 0 ? 25 : 10,
           details: productCount > 0 ? `AI Products Feed: ${productCount} products` : 'AI endpoints configured'
         };
       } else {
