@@ -7,6 +7,9 @@ import express from 'express';
 import Shop from './db/Shop.js';
 import Subscription from './db/Subscription.js';
 import emailService from './services/emailService.js';
+import { isExemptShop, ensureExemptShopAccess } from './billing/billingRoutes.js';
+import PromoCode from './db/PromoCode.js';
+import PromoAllowlist from './db/PromoAllowlist.js';
 
 const router = express.Router();
 
@@ -235,6 +238,10 @@ function scheduleWelcomeEmail(shop) {
 }
 
 // GET /?shop=asapxt-teststore.myshopify.com
+// Supports marketing URL parameters:
+// - ref: Campaign source (e.g., ?ref=launch2025)
+// - promo: Promo code (e.g., ?promo=FREEMONTH)
+// - campaign: Alternative to ref
 router.get('/', async (req, res) => {
   // Check environment variables
   if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
@@ -253,6 +260,26 @@ router.get('/', async (req, res) => {
   if (!shop.endsWith('.myshopify.com')) {
     console.error('[AUTH] Invalid shop domain:', shop);
     return res.status(400).send('Invalid shop domain');
+  }
+  
+  // Capture marketing parameters for later use
+  const campaignSource = req.query.ref || req.query.campaign || null;
+  const promoCode = req.query.promo || null;
+  
+  if (campaignSource || promoCode) {
+    console.log(`[AUTH] 📣 Marketing params for ${shop}: ref=${campaignSource}, promo=${promoCode}`);
+  }
+  
+  // Store marketing params in cookie for callback
+  if (campaignSource || promoCode) {
+    const marketingData = JSON.stringify({ ref: campaignSource, promo: promoCode });
+    res.cookie('shopify_marketing', marketingData, {
+      httpOnly: true,
+      secure: APP_URL.startsWith('https://'),
+      sameSite: 'none',
+      maxAge: 10 * 60 * 1000, // 10 minutes
+      path: '/',
+    });
   }
   
   // Generate state for CSRF protection
@@ -310,7 +337,43 @@ router.get('/callback', async (req, res) => {
       return res.status(500).send('Received invalid access token');
     }
 
-    // 6) Save shop record to database
+    // 6) Parse marketing parameters from cookie
+    let marketingData = { ref: null, promo: null };
+    try {
+      const marketingCookie = req.cookies?.shopify_marketing;
+      if (marketingCookie) {
+        marketingData = JSON.parse(marketingCookie);
+        console.log(`[AUTH] 📣 Retrieved marketing data for ${shop}:`, marketingData);
+      }
+    } catch (e) {
+      console.warn('[AUTH] Failed to parse marketing cookie:', e.message);
+    }
+    
+    // Clear marketing cookie
+    res.clearCookie('shopify_marketing');
+    
+    // 7) Check promo code validity and allowlist
+    let promoDetails = null;
+    
+    // First check allowlist
+    const allowlistCheck = await PromoAllowlist.checkShop(shop);
+    if (allowlistCheck.onAllowlist) {
+      promoDetails = allowlistCheck.promo;
+      console.log(`[AUTH] ✅ Shop ${shop} is on allowlist:`, promoDetails);
+    }
+    
+    // Then check promo code (if provided and not already on allowlist)
+    if (!promoDetails && marketingData.promo) {
+      const promoCheck = await PromoCode.validateAndUse(marketingData.promo);
+      if (promoCheck.valid) {
+        promoDetails = promoCheck.promo;
+        console.log(`[AUTH] ✅ Valid promo code for ${shop}:`, promoDetails);
+      } else {
+        console.warn(`[AUTH] ⚠️ Invalid promo code ${marketingData.promo}: ${promoCheck.error}`);
+      }
+    }
+    
+    // 8) Save shop record to database with marketing info
     // Ensure accessToken is always a string
     const accessTokenString = typeof accessToken === 'object' && accessToken.accessToken 
       ? accessToken.accessToken 
@@ -327,7 +390,12 @@ router.get('/callback', async (req, res) => {
         updatedAt: new Date(),
         tokenType: accessTokenString.startsWith('shpat_') ? 'offline' : 'online',
         isActive: true,
-        needsTokenExchange: false // Token exchange вече е завършен
+        needsTokenExchange: false, // Token exchange вече е завършен
+        // Marketing tracking
+        campaignSource: marketingData.ref || null,
+        promoCode: marketingData.promo || null,
+        promoType: promoDetails?.type || null,
+        hasPromoEligibility: !!promoDetails
       }, 
       { upsert: true, new: true }
     );
@@ -407,14 +475,35 @@ router.get('/callback', async (req, res) => {
     // 9) Clear state cookie
     res.clearCookie('shopify_oauth_state');
 
-    // 10) Check for active subscription
+    // 10) CRITICAL: Check if shop is EXEMPT from billing
+    // EXEMPT shops get free Enterprise access - no billing required!
+    if (isExemptShop(shop)) {
+      console.log(`[AUTH] ✅ EXEMPT shop detected: ${shop} - granting free Enterprise access`);
+      
+      // Ensure exempt access (creates/updates subscription, cancels any Shopify billing)
+      await ensureExemptShopAccess(shop);
+      
+      // Redirect directly to dashboard - no billing page needed!
+      const finalHost = host
+        ? host.toString()
+        : base64UrlEncode(`${shop}/admin`);
+      
+      const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, '');
+      const baseUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}`;
+      const dashboardUrl = `${baseUrl}/?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}&exempt=true`;
+      
+      console.log(`[AUTH] ✅ Redirecting EXEMPT shop to dashboard: ${shop}`);
+      return res.redirect(302, dashboardUrl);
+    }
+    
+    // 11) Check for active subscription (non-exempt shops)
     const subscription = await Subscription.findOne({ shop }).lean();
     
     const hasActiveSubscription = subscription && 
       subscription.status === 'active' && 
       !subscription.cancelledAt;
     
-    // 11) Redirect to appropriate page
+    // 12) Redirect to appropriate page
     const finalHost = host
       ? host.toString()
       : base64UrlEncode(`${shop}/admin`);

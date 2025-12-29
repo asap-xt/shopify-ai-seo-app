@@ -86,58 +86,58 @@ router.get('/ai/products.json', async (req, res) => {
     let hasMore = true;
     
     while (hasMore && allProducts.length < 1000) { // Safety limit
-      const query = `
+    const query = `
         query($cursor: String) {
           products(first: 250, after: $cursor, query: "status:active") {
-            edges {
-              node {
-                id
-                title
-                handle
-                description
-                productType
-                vendor
-                priceRangeV2 {
-                  minVariantPrice {
-                    amount
-                    currencyCode
-                  }
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              productType
+              vendor
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
                 }
-                featuredImage {
-                  url
-                  altText
-                }
-                metafields(namespace: "seo_ai", first: 100) {
-                  edges {
-                    node {
-                      key
-                      value
-                    }
+              }
+              featuredImage {
+                url
+                altText
+              }
+              metafields(namespace: "seo_ai", first: 100) {
+                edges {
+                  node {
+                    key
+                    value
                   }
                 }
               }
+            }
               cursor
             }
             pageInfo {
               hasNextPage
-            }
           }
         }
-      `;
+      }
+    `;
 
-      const response = await fetch(
+    const response = await fetch(
         `https://${shop}/admin/api/2025-07/graphql.json`,
-        {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopRecord.accessToken,
-            'Content-Type': 'application/json'
-          },
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
           body: JSON.stringify({ query, variables: { cursor } })
-        }
-      );
+      }
+    );
 
-      const data = await response.json();
+    const data = await response.json();
       
       if (!data?.data?.products?.edges) {
         break;
@@ -218,7 +218,7 @@ router.get('/ai/products.json', async (req, res) => {
     // Apply plan limit - only include up to the plan's product limit
     const planLimit = await getPlanProductLimit(shop);
     const limitedProducts = optimizedProducts.slice(0, planLimit);
-    
+
     res.json({
       shop,
       generated_at: new Date().toISOString(),

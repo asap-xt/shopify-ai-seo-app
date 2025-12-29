@@ -5,6 +5,8 @@ import express from 'express';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
+import PromoCode from '../db/PromoCode.js';
+import PromoAllowlist from '../db/PromoAllowlist.js';
 import { PLANS, TRIAL_DAYS } from '../plans.js';
 import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
 import cacheService from '../services/cacheService.js';
@@ -48,8 +50,77 @@ export function isExemptShop(shop) {
 }
 
 /**
+ * Determine trial period based on shop's promo eligibility
+ * @param {string} shop - Shop domain
+ * @returns {Promise<{trialDays: number, promoType: string|null, isFreeEnterprise: boolean}>}
+ */
+async function determineTrialPeriod(shop) {
+  // Default trial days
+  let trialDays = TRIAL_DAYS;
+  let promoType = null;
+  let isFreeEnterprise = false;
+  
+  try {
+    // Check allowlist first
+    const allowlistCheck = await PromoAllowlist.checkShop(shop);
+    if (allowlistCheck.onAllowlist) {
+      promoType = allowlistCheck.promo.type;
+      
+      if (promoType === 'free_enterprise') {
+        isFreeEnterprise = true;
+        trialDays = 0; // No trial needed, gets free Enterprise
+      } else if (promoType === 'free_month' || promoType === 'free_trial_extended') {
+        trialDays = allowlistCheck.promo.trialDays || 30;
+      }
+      
+      console.log(`[BILLING] Shop ${shop} on allowlist: ${promoType}, trialDays=${trialDays}`);
+      return { trialDays, promoType, isFreeEnterprise };
+    }
+    
+    // Check shop's promo from installation
+    const shopDoc = await Shop.findOne({ shop }).lean();
+    if (shopDoc?.hasPromoEligibility && shopDoc.promoType) {
+      promoType = shopDoc.promoType;
+      
+      if (promoType === 'free_enterprise') {
+        isFreeEnterprise = true;
+        trialDays = 0;
+      } else if (promoType === 'free_month' || promoType === 'free_trial_extended') {
+        // Fetch the original promo code details
+        if (shopDoc.promoCode) {
+          const promoCheck = await PromoCode.checkValidity(shopDoc.promoCode);
+          if (promoCheck.valid) {
+            trialDays = promoCheck.promo.trialDays || 30;
+          }
+        } else {
+          trialDays = 30; // Default for free_month
+        }
+      }
+      
+      console.log(`[BILLING] Shop ${shop} has promo: ${promoType}, trialDays=${trialDays}`);
+    }
+    
+    // Also check campaign source for special treatment
+    if (shopDoc?.campaignSource) {
+      // Example: 'launch2025' campaign gives 30 day trial
+      const extendedTrialCampaigns = ['launch2025', 'beta', 'partner'];
+      if (extendedTrialCampaigns.includes(shopDoc.campaignSource)) {
+        trialDays = Math.max(trialDays, 30);
+        console.log(`[BILLING] Shop ${shop} campaign ${shopDoc.campaignSource} gives ${trialDays} day trial`);
+      }
+    }
+    
+  } catch (error) {
+    console.error(`[BILLING] Error determining trial period for ${shop}:`, error);
+  }
+  
+  return { trialDays, promoType, isFreeEnterprise };
+}
+
+/**
  * Ensure exempt shop has active Enterprise subscription
  * Call this on shop load/auth to auto-grant access
+ * CRITICAL: Also CANCELS any existing Shopify subscriptions to prevent billing!
  * @param {string} shop - Shop domain
  */
 export async function ensureExemptShopAccess(shop) {
@@ -59,8 +130,43 @@ export async function ensureExemptShopAccess(shop) {
     // Check if subscription exists
     let subscription = await Subscription.findOne({ shop });
     
+    // CRITICAL: Cancel any existing Shopify subscription to prevent billing!
+    // This is the key fix - exempt shops should NOT be charged by Shopify
+    if (subscription?.shopifySubscriptionId) {
+      try {
+        const shopDoc = await Shop.findOne({ shop });
+        if (shopDoc?.accessToken) {
+          const cancelled = await cancelSubscription(
+            shop,
+            subscription.shopifySubscriptionId,
+            shopDoc.accessToken
+          );
+          if (cancelled) {
+            console.log(`[EXEMPT] ✅ Cancelled Shopify subscription for exempt shop: ${shop}`);
+          }
+        }
+      } catch (cancelError) {
+        console.error(`[EXEMPT] Failed to cancel Shopify subscription for ${shop}:`, cancelError.message);
+      }
+    }
+    
+    // Also check for any active Shopify subscriptions that we don't know about
+    try {
+      const shopDoc = await Shop.findOne({ shop });
+      if (shopDoc?.accessToken) {
+        const activeShopifySub = await getCurrentSubscription(shop, shopDoc.accessToken);
+        if (activeShopifySub?.id) {
+          console.log(`[EXEMPT] Found active Shopify subscription, cancelling: ${activeShopifySub.id}`);
+          await cancelSubscription(shop, activeShopifySub.id, shopDoc.accessToken);
+          console.log(`[EXEMPT] ✅ Cancelled unknown Shopify subscription for exempt shop: ${shop}`);
+        }
+      }
+    } catch (checkError) {
+      console.error(`[EXEMPT] Error checking for active subscriptions:`, checkError.message);
+    }
+    
     if (!subscription) {
-      // Create new Enterprise subscription for exempt shop
+      // Create new Enterprise subscription for exempt shop (NO Shopify billing!)
       subscription = await Subscription.create({
         shop,
         plan: 'enterprise',
@@ -69,9 +175,11 @@ export async function ensureExemptShopAccess(shop) {
         activatedAt: new Date(),
         // No trial, no expiry for exempt shops
         trialEndsAt: null,
-        expiredAt: null
+        expiredAt: null,
+        // CRITICAL: No shopifySubscriptionId - exempt from billing!
+        shopifySubscriptionId: null
       });
-      console.log(`[EXEMPT] Created Enterprise subscription for exempt shop: ${shop}`);
+      console.log(`[EXEMPT] ✅ Created Enterprise subscription (NO BILLING) for exempt shop: ${shop}`);
     } else if (subscription.status !== 'active' || subscription.plan !== 'enterprise') {
       // Update existing subscription to Enterprise and active
       subscription.plan = 'enterprise';
@@ -79,8 +187,11 @@ export async function ensureExemptShopAccess(shop) {
       subscription.activatedAt = subscription.activatedAt || new Date();
       subscription.expiredAt = null;
       subscription.cancelledAt = null;
+      subscription.trialEndsAt = null;
+      // CRITICAL: Clear Shopify subscription ID - exempt from billing!
+      subscription.shopifySubscriptionId = null;
       await subscription.save();
-      console.log(`[EXEMPT] Updated subscription to Enterprise for exempt shop: ${shop}`);
+      console.log(`[EXEMPT] ✅ Updated subscription to Enterprise (NO BILLING) for exempt shop: ${shop}`);
     }
     
     // Also grant tokens if balance is low
@@ -92,7 +203,7 @@ export async function ensureExemptShopAccess(shop) {
       tokenBalance.balance = EXEMPT_TOKEN_AMOUNT;
       tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + tokensToAdd;
       await tokenBalance.save();
-      console.log(`[EXEMPT] Granted ${tokensToAdd.toLocaleString()} tokens to exempt shop: ${shop} (total: ${EXEMPT_TOKEN_AMOUNT.toLocaleString()})`);
+      console.log(`[EXEMPT] ✅ Granted ${tokensToAdd.toLocaleString()} tokens to exempt shop: ${shop} (total: ${EXEMPT_TOKEN_AMOUNT.toLocaleString()})`);
     }
     
     return subscription;
@@ -462,10 +573,81 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan' });
     }
     
+    // CRITICAL: EXEMPT shops do NOT go through Shopify billing!
+    // They get Enterprise access for free
+    if (isExemptShop(shop)) {
+      console.log(`[BILLING] ⚠️ EXEMPT shop ${shop} tried to subscribe - granting free Enterprise access`);
+      
+      // Ensure exempt access (creates/updates subscription, cancels any Shopify billing)
+      await ensureExemptShopAccess(shop);
+      
+      // Invalidate cache
+      await cacheService.invalidateShop(shop);
+      
+      // Return success without creating Shopify subscription
+      return res.json({
+        success: true,
+        exempt: true,
+        plan: 'enterprise',
+        message: 'You have been granted free Enterprise access. No billing required.'
+      });
+    }
+    
     // Get shop access token
     const shopDoc = await Shop.findOne({ shop });
     if (!shopDoc || !shopDoc.accessToken) {
       return res.status(404).json({ error: 'Shop not found' });
+    }
+    
+    // Check for promo eligibility (free_enterprise gives free access without Shopify billing)
+    const promoInfo = await determineTrialPeriod(shop);
+    
+    if (promoInfo.isFreeEnterprise) {
+      console.log(`[BILLING] 🎁 Shop ${shop} has free_enterprise promo - granting free access`);
+      
+      // Cancel any existing Shopify subscription
+      const activeSub = await getCurrentSubscription(shop, shopDoc.accessToken);
+      if (activeSub?.id) {
+        await cancelSubscription(shop, activeSub.id, shopDoc.accessToken);
+        console.log(`[BILLING] ✅ Cancelled existing subscription for promo shop: ${shop}`);
+      }
+      
+      // Create/update local subscription as Enterprise (no Shopify billing)
+      await Subscription.findOneAndUpdate(
+        { shop },
+        {
+          shop,
+          plan: 'enterprise',
+          status: 'active',
+          activatedAt: new Date(),
+          trialEndsAt: null,
+          shopifySubscriptionId: null, // No Shopify billing!
+          pendingPlan: null,
+          pendingActivation: false
+        },
+        { upsert: true, new: true }
+      );
+      
+      // Grant tokens
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      const PROMO_TOKEN_AMOUNT = 2000000; // 2M tokens
+      if (tokenBalance.balance < PROMO_TOKEN_AMOUNT) {
+        const tokensToAdd = PROMO_TOKEN_AMOUNT - tokenBalance.balance;
+        tokenBalance.balance = PROMO_TOKEN_AMOUNT;
+        tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + tokensToAdd;
+        await tokenBalance.save();
+      }
+      
+      // Invalidate cache
+      await cacheService.invalidateShop(shop);
+      
+      return res.json({
+        success: true,
+        promo: true,
+        promoType: 'free_enterprise',
+        plan: 'enterprise',
+        message: 'You have been granted free Enterprise access through your promotion!'
+      });
     }
     
     // CRITICAL: Check if this is a plan change (existing subscription)
@@ -512,13 +694,18 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
     }
     
     // TRIAL DAYS LOGIC:
-    // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days)
+    // 1. First subscription (install): trialDays = TRIAL_DAYS (5 days) OR promo trial days
     // 2. Plan change during trial: trialDays = REMAINING DAYS (preserve trial in Shopify)
     // 3. Plan change after trial: trialDays = 0 (no trial)
     // 4. Plan change after activation: trialDays = 0 (no trial, continue billing period)
     // 5. User clicks "End Trial": trialDays = 0
-    let trialDays = TRIAL_DAYS;
+    // 6. Promo codes can extend trial (e.g., 30 days instead of 5)
+    let trialDays = promoInfo.trialDays || TRIAL_DAYS; // Use promo trial days if available
     const now = new Date();
+    
+    if (promoInfo.promoType && promoInfo.trialDays > TRIAL_DAYS) {
+      console.log(`[BILLING] 🎁 Applying promo trial: ${promoInfo.trialDays} days (normal: ${TRIAL_DAYS})`);
+    }
     
     if (endTrial) {
       trialDays = 0; // User explicitly ended trial
@@ -1434,6 +1621,311 @@ router.post('/activate', verifyRequest, async (req, res) => {
       stack: error.stack
     });
     res.status(500).json({ error: error.message || 'Failed to activate plan' });
+  }
+});
+
+// ============================================
+// ADMIN ENDPOINTS - Promo & Allowlist Management
+// Protected by ADMIN_SECRET environment variable
+// ============================================
+
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin-secret-change-me';
+
+function adminAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const providedSecret = authHeader?.replace('Bearer ', '') || req.query.secret;
+  
+  if (providedSecret !== ADMIN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized - invalid admin secret' });
+  }
+  next();
+}
+
+/**
+ * Generate promo codes
+ * POST /api/billing/admin/promo/generate
+ * Body: { count, prefix, type, trialDays, maxUses, expiresInDays, campaign, notes }
+ */
+router.post('/admin/promo/generate', adminAuth, async (req, res) => {
+  try {
+    const {
+      count = 10,
+      prefix = 'PROMO',
+      type = 'free_month',
+      trialDays = 30,
+      maxUses = 1,
+      expiresInDays = 90,
+      campaign = null,
+      notes = null
+    } = req.body;
+    
+    const codes = await PromoCode.generateCodes(count, {
+      prefix,
+      type,
+      trialDays,
+      maxUses,
+      expiresInDays,
+      campaign,
+      notes,
+      createdBy: 'admin'
+    });
+    
+    console.log(`[ADMIN] Generated ${codes.length} promo codes:`, codes);
+    
+    res.json({
+      success: true,
+      count: codes.length,
+      codes,
+      config: { type, trialDays, maxUses, expiresInDays, campaign }
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error generating promo codes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * List promo codes
+ * GET /api/billing/admin/promo/list
+ */
+router.get('/admin/promo/list', adminAuth, async (req, res) => {
+  try {
+    const { campaign, valid } = req.query;
+    
+    const query = {};
+    if (campaign) query.campaign = campaign;
+    if (valid === 'true') {
+      query.expiresAt = { $gt: new Date() };
+      query.$expr = { $lt: ['$currentUses', '$maxUses'] };
+    }
+    
+    const codes = await PromoCode.find(query)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    
+    res.json({
+      success: true,
+      count: codes.length,
+      codes: codes.map(c => ({
+        ...c,
+        isValid: new Date() < c.expiresAt && c.currentUses < c.maxUses
+      }))
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error listing promo codes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Check promo code validity
+ * GET /api/billing/admin/promo/check?code=XXX
+ */
+router.get('/admin/promo/check', adminAuth, async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Code parameter required' });
+    }
+    
+    const result = await PromoCode.checkValidity(code);
+    res.json(result);
+  } catch (error) {
+    console.error('[ADMIN] Error checking promo code:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Add shop to allowlist
+ * POST /api/billing/admin/allowlist/add
+ * Body: { shop, promoType, trialDays, expiresInDays, reason, campaign, notes }
+ */
+router.post('/admin/allowlist/add', adminAuth, async (req, res) => {
+  try {
+    const {
+      shop,
+      promoType = 'free_month',
+      trialDays = 30,
+      discountPercent = 0,
+      expiresInDays = 30,
+      reason = null,
+      campaign = null,
+      notes = null
+    } = req.body;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop domain required' });
+    }
+    
+    const entry = await PromoAllowlist.addShop(shop, {
+      promoType,
+      trialDays,
+      discountPercent,
+      expiresInDays,
+      reason,
+      campaign,
+      addedBy: 'admin',
+      notes
+    });
+    
+    console.log(`[ADMIN] Added shop to allowlist:`, entry);
+    
+    res.json({
+      success: true,
+      entry
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error adding to allowlist:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Remove shop from allowlist
+ * DELETE /api/billing/admin/allowlist/remove?shop=XXX
+ */
+router.delete('/admin/allowlist/remove', adminAuth, async (req, res) => {
+  try {
+    const { shop } = req.query;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+    
+    const removed = await PromoAllowlist.removeShop(shop);
+    
+    res.json({
+      success: true,
+      removed
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error removing from allowlist:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * List allowlist entries
+ * GET /api/billing/admin/allowlist/list
+ */
+router.get('/admin/allowlist/list', adminAuth, async (req, res) => {
+  try {
+    const { valid } = req.query;
+    
+    const query = {};
+    if (valid === 'true') {
+      query.expiresAt = { $gt: new Date() };
+    }
+    
+    const entries = await PromoAllowlist.find(query)
+      .sort({ addedAt: -1 })
+      .limit(100)
+      .lean();
+    
+    res.json({
+      success: true,
+      count: entries.length,
+      entries: entries.map(e => ({
+        ...e,
+        isValid: new Date() < e.expiresAt
+      }))
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error listing allowlist:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Check shop promo status
+ * GET /api/billing/admin/shop/promo-status?shop=XXX
+ */
+router.get('/admin/shop/promo-status', adminAuth, async (req, res) => {
+  try {
+    const { shop } = req.query;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop parameter required' });
+    }
+    
+    const isExempt = isExemptShop(shop);
+    const allowlistCheck = await PromoAllowlist.checkShop(shop);
+    const shopDoc = await Shop.findOne({ shop }).lean();
+    const subscription = await Subscription.findOne({ shop }).lean();
+    
+    res.json({
+      shop,
+      isExempt,
+      onAllowlist: allowlistCheck.onAllowlist,
+      allowlistPromo: allowlistCheck.promo || null,
+      shopPromo: shopDoc ? {
+        campaignSource: shopDoc.campaignSource,
+        promoCode: shopDoc.promoCode,
+        promoType: shopDoc.promoType,
+        hasPromoEligibility: shopDoc.hasPromoEligibility
+      } : null,
+      subscription: subscription ? {
+        plan: subscription.plan,
+        status: subscription.status,
+        shopifySubscriptionId: subscription.shopifySubscriptionId,
+        activatedAt: subscription.activatedAt,
+        trialEndsAt: subscription.trialEndsAt
+      } : null
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error checking shop promo status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Force cancel Shopify subscription for a shop
+ * POST /api/billing/admin/shop/cancel-subscription
+ * Body: { shop }
+ */
+router.post('/admin/shop/cancel-subscription', adminAuth, async (req, res) => {
+  try {
+    const { shop } = req.body;
+    
+    if (!shop) {
+      return res.status(400).json({ error: 'Shop domain required' });
+    }
+    
+    const shopDoc = await Shop.findOne({ shop });
+    if (!shopDoc?.accessToken) {
+      return res.status(404).json({ error: 'Shop not found or no access token' });
+    }
+    
+    // Get current Shopify subscription
+    const activeSub = await getCurrentSubscription(shop, shopDoc.accessToken);
+    
+    if (!activeSub?.id) {
+      return res.json({ success: true, message: 'No active Shopify subscription found' });
+    }
+    
+    // Cancel it
+    const cancelled = await cancelSubscription(shop, activeSub.id, shopDoc.accessToken);
+    
+    // Update local subscription
+    await Subscription.findOneAndUpdate(
+      { shop },
+      { 
+        shopifySubscriptionId: null,
+        status: 'active' // Keep as active if they have promo/exempt status
+      }
+    );
+    
+    res.json({
+      success: true,
+      cancelled,
+      message: `Cancelled Shopify subscription ${activeSub.id} for ${shop}`
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error cancelling subscription:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

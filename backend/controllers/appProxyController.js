@@ -984,7 +984,7 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
             price: minPrice.toFixed(2),
             priceMax: maxPrice > minPrice ? maxPrice.toFixed(2) : null,
             compareAtPrice: isOnSale ? compareAtMin.toFixed(2) : null,
-            currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
             isOnSale: isOnSale
           },
           url: `https://${shop}/products/${product.handle}`,

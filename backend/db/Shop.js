@@ -284,6 +284,23 @@ const shopSchema = new mongoose.Schema({
     marketingEmails: { type: Boolean, default: true },
     unsubscribedAt: { type: Date, default: null }
   },
+  // Marketing campaign tracking
+  campaignSource: {
+    type: String,
+    default: null  // e.g., 'launch2025', 'partner_agency', 'facebook_ad'
+  },
+  promoCode: {
+    type: String,
+    default: null  // The promo code used during install
+  },
+  promoType: {
+    type: String,
+    default: null  // e.g., 'free_month', 'free_enterprise', 'discount_percent'
+  },
+  hasPromoEligibility: {
+    type: Boolean,
+    default: false
+  },
   updatedAt: {
     type: Date,
     default: () => new Date()
