@@ -11,6 +11,7 @@ import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 import { syncStore } from '../services/syncService.js';
 import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
 import cacheService from '../services/cacheService.js';
+import { isExemptShop, ensureExemptShopAccess } from '../billing/billingRoutes.js';
 
 const router = express.Router();
 
@@ -21,6 +22,13 @@ const router = express.Router();
 router.get('/stats', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
+    
+    // EXEMPT SHOPS: Ensure they have Enterprise access before checking stats
+    if (isExemptShop(shop)) {
+      await ensureExemptShopAccess(shop);
+      // Invalidate cache to ensure fresh data
+      await cacheService.invalidateShop(shop);
+    }
     
     // Cache dashboard stats for 1 minute (PHASE 3: Caching)
     // Dashboard is frequently accessed, so short TTL keeps data fresh
