@@ -928,15 +928,15 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       // First install: Create subscription with pendingPlan so webhook can find it
       // CRITICAL: Create subscription NOW with pendingPlan and shopifySubscriptionId
       // This allows webhook to find and activate it even if it arrives before callback
-      // CRITICAL: Set trialEndsAt immediately for first install (trial starts when plan is selected)
-      // If user clicks "back", trialEndsAt will be cleared by webhook if subscription is cancelled
+      // IMPORTANT: Do NOT set trialEndsAt here - only set it in callback AFTER approval!
+      // If we set it here and user clicks "back", trial would incorrectly start
       const firstInstallData = {
         shop,
         plan: plan, // Set current plan (will be updated if pendingPlan is different)
         pendingPlan: plan, // Mark plan as pending until approved
         shopifySubscriptionId: shopifySubscription.id,
         status: 'pending', // Will be activated by webhook or callback
-        trialEndsAt: new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000), // CRITICAL: Set trial end date immediately
+        // NOTE: trialEndsAt is NOT set here - will be set in callback after Shopify approval
         updatedAt: now
       };
       
