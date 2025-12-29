@@ -417,6 +417,11 @@ router.get('/info', verifyRequest, async (req, res) => {
       
       console.log(`[BILLING-INFO] EXEMPT shop ${shop} - plan: ${subForInfo?.plan}, tokens: ${tokenBalance.balance.toLocaleString()}`);
       
+      // CRITICAL: Disable HTTP caching for EXEMPT shops
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       return res.json({
         subscription: subForInfo ? {
           plan: subForInfo.plan,
@@ -1244,7 +1249,17 @@ router.get('/tokens/balance', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    // For EXEMPT shops, ensure they have Enterprise tokens
+    if (isExemptShop(shop)) {
+      await ensureExemptShopAccess(shop);
+    }
+    
     const tokenBalance = await TokenBalance.getOrCreate(shop);
+    
+    // Disable HTTP caching for token balance
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     
     res.json({
       balance: tokenBalance.balance,
