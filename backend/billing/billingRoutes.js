@@ -38,6 +38,13 @@ const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 // ============================================
 const EXEMPT_SHOPS = (process.env.EXEMPT_SHOPS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
+// Log exempt shops on startup for debugging
+if (EXEMPT_SHOPS.length > 0) {
+  console.log(`[EXEMPT] ✅ Loaded ${EXEMPT_SHOPS.length} exempt shops:`, EXEMPT_SHOPS);
+} else {
+  console.log(`[EXEMPT] ℹ️ No exempt shops configured (EXEMPT_SHOPS env var is empty)`);
+}
+
 /**
  * Check if a shop is exempt from billing
  * @param {string} shop - Shop domain
@@ -46,7 +53,12 @@ const EXEMPT_SHOPS = (process.env.EXEMPT_SHOPS || '').split(',').map(s => s.trim
 export function isExemptShop(shop) {
   if (!shop) return false;
   const normalizedShop = shop.toLowerCase().trim();
-  return EXEMPT_SHOPS.includes(normalizedShop);
+  const isExempt = EXEMPT_SHOPS.includes(normalizedShop);
+  
+  // Debug logging
+  console.log(`[EXEMPT] Checking shop: "${normalizedShop}" - exempt: ${isExempt} (list: ${EXEMPT_SHOPS.join(', ') || 'empty'})`);
+  
+  return isExempt;
 }
 
 /**
@@ -194,16 +206,20 @@ export async function ensureExemptShopAccess(shop) {
       console.log(`[EXEMPT] ✅ Updated subscription to Enterprise (NO BILLING) for exempt shop: ${shop}`);
     }
     
-    // Also grant tokens if balance is low
+    // EXEMPT shops get Enterprise plan tokens (300M) - but NEVER reduce existing balance!
     const tokenBalance = await TokenBalance.getOrCreate(shop);
-    // Grant 2M tokens for exempt shops (enough for ~500 products with AI schemas)
-    const EXEMPT_TOKEN_AMOUNT = 2000000;
-    if (tokenBalance.balance < EXEMPT_TOKEN_AMOUNT) {
-      const tokensToAdd = EXEMPT_TOKEN_AMOUNT - tokenBalance.balance;
-      tokenBalance.balance = EXEMPT_TOKEN_AMOUNT;
-      tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + tokensToAdd;
+    const ENTERPRISE_INCLUDED_TOKENS = 300_000_000; // 300M tokens for Enterprise plan
+    
+    // Only ADD tokens if balance is below Enterprise included amount
+    // NEVER reduce tokens if user already has more!
+    if (tokenBalance.balance < ENTERPRISE_INCLUDED_TOKENS) {
+      const previousBalance = tokenBalance.balance;
+      tokenBalance.balance = ENTERPRISE_INCLUDED_TOKENS;
+      tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + (ENTERPRISE_INCLUDED_TOKENS - previousBalance);
       await tokenBalance.save();
-      console.log(`[EXEMPT] ✅ Granted ${tokensToAdd.toLocaleString()} tokens to exempt shop: ${shop} (total: ${EXEMPT_TOKEN_AMOUNT.toLocaleString()})`);
+      console.log(`[EXEMPT] ✅ Granted Enterprise tokens to exempt shop: ${shop} (${previousBalance.toLocaleString()} → ${ENTERPRISE_INCLUDED_TOKENS.toLocaleString()})`);
+    } else {
+      console.log(`[EXEMPT] ℹ️ Exempt shop ${shop} already has ${tokenBalance.balance.toLocaleString()} tokens (keeping existing balance)`);
     }
     
     return subscription;
@@ -628,14 +644,15 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
         { upsert: true, new: true }
       );
       
-      // Grant tokens
+      // Grant Enterprise tokens (300M) - but NEVER reduce existing balance!
       const tokenBalance = await TokenBalance.getOrCreate(shop);
-      const PROMO_TOKEN_AMOUNT = 2000000; // 2M tokens
-      if (tokenBalance.balance < PROMO_TOKEN_AMOUNT) {
-        const tokensToAdd = PROMO_TOKEN_AMOUNT - tokenBalance.balance;
-        tokenBalance.balance = PROMO_TOKEN_AMOUNT;
-        tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + tokensToAdd;
+      const ENTERPRISE_INCLUDED_TOKENS = 300_000_000; // 300M for Enterprise
+      if (tokenBalance.balance < ENTERPRISE_INCLUDED_TOKENS) {
+        const previousBalance = tokenBalance.balance;
+        tokenBalance.balance = ENTERPRISE_INCLUDED_TOKENS;
+        tokenBalance.totalGranted = (tokenBalance.totalGranted || 0) + (ENTERPRISE_INCLUDED_TOKENS - previousBalance);
         await tokenBalance.save();
+        console.log(`[BILLING] ✅ Granted Enterprise tokens for promo shop: ${shop} (${previousBalance.toLocaleString()} → ${ENTERPRISE_INCLUDED_TOKENS.toLocaleString()})`);
       }
       
       // Invalidate cache
