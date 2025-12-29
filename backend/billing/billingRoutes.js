@@ -232,6 +232,11 @@ export async function ensureExemptShopAccess(shop) {
       console.log(`[EXEMPT] ℹ️ Exempt shop ${shop} already has ${tokenBalance.balance.toLocaleString()} tokens (keeping existing balance)`);
     }
     
+    // CRITICAL: Invalidate cache after updating subscription and tokens!
+    // This ensures the UI shows the correct values immediately
+    await cacheService.invalidateShop(shop);
+    console.log(`[EXEMPT] ✅ Cache invalidated for exempt shop: ${shop}`);
+    
     return subscription;
   } catch (error) {
     console.error(`[EXEMPT] Error ensuring access for ${shop}:`, error);
@@ -400,9 +405,53 @@ router.get('/info', verifyRequest, async (req, res) => {
     const shop = req.shopDomain;
     
     // EXEMPT SHOPS: Auto-grant Enterprise access for exempt stores
+    // For EXEMPT shops, skip cache entirely to avoid race conditions
     if (isExemptShop(shop)) {
+      console.log(`[BILLING-INFO] EXEMPT shop detected: ${shop}, calling ensureExemptShopAccess...`);
       await ensureExemptShopAccess(shop);
-      await cacheService.invalidateShop(shop); // Force fresh data
+      console.log(`[BILLING-INFO] ensureExemptShopAccess completed for: ${shop}`);
+      
+      // For EXEMPT shops, return fresh data directly (no cache)
+      const subForInfo = await Subscription.findOne({ shop });
+      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      console.log(`[BILLING-INFO] EXEMPT shop ${shop} - plan: ${subForInfo?.plan}, tokens: ${tokenBalance.balance.toLocaleString()}`);
+      
+      return res.json({
+        subscription: subForInfo ? {
+          plan: subForInfo.plan,
+          status: subForInfo.status || 'active',
+          price: subForInfo.price,
+          trialEndsAt: subForInfo.trialEndsAt,
+          inTrial: false, // EXEMPT shops don't have trial
+          shopifySubscriptionId: subForInfo.shopifySubscriptionId,
+          activatedAt: subForInfo.activatedAt,
+          pendingActivation: false,
+          pendingPlan: null,
+          isExempt: true // Flag for frontend
+        } : null,
+        tokens: {
+          balance: tokenBalance.balance,
+          totalPurchased: tokenBalance.totalPurchased,
+          totalUsed: tokenBalance.totalUsed,
+          lastPurchase: tokenBalance.lastPurchase
+        },
+        plans: Object.keys(PLANS).map(key => {
+          const included = getIncludedTokens(key);
+          return {
+            key,
+            name: PLANS[key].name,
+            price: PLANS[key].priceUsd,
+            productLimit: PLANS[key].productLimit,
+            queryLimit: PLANS[key].queryLimit,
+            providersAllowed: PLANS[key].providersAllowed?.length || 0,
+            languageLimit: PLANS[key].languageLimit || 1,
+            includedTokens: included.tokens || 0,
+            badge: getPlanBadge(key),
+            features: getPlanFeatures(key)
+          };
+        })
+      });
     }
     
     // FIX: Validate activatedAt and pendingActivation BEFORE checking cache
