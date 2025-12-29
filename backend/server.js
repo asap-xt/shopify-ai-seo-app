@@ -317,7 +317,15 @@ if (!IS_PROD) {
     // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
     app.use('/api', async (req, res, next) => {
       try {
-        // Skip authentication for public sitemap endpoints и token exchange
+        // Skip authentication for:
+        // - Public sitemap endpoints (GET)
+        // - Debug endpoints (GET)
+        // - Token exchange (GET)
+        // - Admin billing endpoints (all methods) - they have their own auth
+        if (req.originalUrl.includes('/billing/admin/')) {
+          return next(); // Admin endpoints handle their own authentication
+        }
+        
         if ((req.originalUrl.includes('/sitemap/') || 
             req.originalUrl.includes('/debug/') ||
             req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
