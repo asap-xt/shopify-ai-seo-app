@@ -481,7 +481,12 @@ router.get('/callback', async (req, res) => {
       console.log(`[AUTH] ✅ EXEMPT shop detected: ${shop} - granting free Enterprise access`);
       
       // Ensure exempt access (creates/updates subscription, cancels any Shopify billing)
-      await ensureExemptShopAccess(shop);
+      try {
+        const exemptResult = await ensureExemptShopAccess(shop);
+        console.log(`[AUTH] ✅ ensureExemptShopAccess result for ${shop}:`, exemptResult ? 'success' : 'null');
+      } catch (exemptError) {
+        console.error(`[AUTH] ❌ ensureExemptShopAccess FAILED for ${shop}:`, exemptError.message, exemptError.stack);
+      }
       
       // Redirect directly to dashboard - no billing page needed!
       const finalHost = host

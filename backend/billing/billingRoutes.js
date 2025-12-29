@@ -136,11 +136,17 @@ async function determineTrialPeriod(shop) {
  * @param {string} shop - Shop domain
  */
 export async function ensureExemptShopAccess(shop) {
-  if (!isExemptShop(shop)) return null;
+  console.log(`[EXEMPT] ensureExemptShopAccess called for: ${shop}`);
+  
+  if (!isExemptShop(shop)) {
+    console.log(`[EXEMPT] ⚠️ Shop ${shop} is NOT exempt, returning null`);
+    return null;
+  }
   
   try {
     // Check if subscription exists
     let subscription = await Subscription.findOne({ shop });
+    console.log(`[EXEMPT] Existing subscription for ${shop}:`, subscription ? { plan: subscription.plan, status: subscription.status } : 'NONE');
     
     // CRITICAL: Cancel any existing Shopify subscription to prevent billing!
     // This is the key fix - exempt shops should NOT be charged by Shopify
@@ -179,6 +185,7 @@ export async function ensureExemptShopAccess(shop) {
     
     if (!subscription) {
       // Create new Enterprise subscription for exempt shop (NO Shopify billing!)
+      console.log(`[EXEMPT] No subscription found, creating Enterprise for: ${shop}`);
       subscription = await Subscription.create({
         shop,
         plan: 'enterprise',
@@ -192,14 +199,17 @@ export async function ensureExemptShopAccess(shop) {
         shopifySubscriptionId: null
       });
       console.log(`[EXEMPT] ✅ Created Enterprise subscription (NO BILLING) for exempt shop: ${shop}`);
-    } else if (subscription.status !== 'active' || subscription.plan !== 'enterprise') {
-      // Update existing subscription to Enterprise and active
+    } else {
+      // ALWAYS update to Enterprise for exempt shops, regardless of current state
+      console.log(`[EXEMPT] Updating existing subscription to Enterprise for: ${shop} (was: ${subscription.plan}/${subscription.status})`);
       subscription.plan = 'enterprise';
       subscription.status = 'active';
       subscription.activatedAt = subscription.activatedAt || new Date();
       subscription.expiredAt = null;
       subscription.cancelledAt = null;
       subscription.trialEndsAt = null;
+      subscription.pendingPlan = null;
+      subscription.pendingActivation = false;
       // CRITICAL: Clear Shopify subscription ID - exempt from billing!
       subscription.shopifySubscriptionId = null;
       await subscription.save();
