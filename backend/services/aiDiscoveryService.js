@@ -735,11 +735,12 @@ ${customRules}
       const normalizedPlan = normalizePlan(subscription?.plan || shopRecord?.plan || 'starter');
       const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
-      // Get shop info from Shopify
+      // Get shop info + policies from Shopify
       let shopName = shop.replace('.myshopify.com', '');
       let shopDescription = '';
       let primaryDomain = `https://${shop}`;
       let shopEmail = '';
+      let policies = [];
 
       try {
         const shopInfoResponse = await fetch(
@@ -758,6 +759,11 @@ ${customRules}
                   email
                   primaryDomain { url } 
                   contactEmail
+                  privacyPolicy { title url }
+                  refundPolicy { title url }
+                  shippingPolicy { title url }
+                  termsOfService { title url }
+                  subscriptionPolicy { title url }
                 } 
               }`
             })
@@ -772,6 +778,12 @@ ${customRules}
           if (shopInfo.primaryDomain?.url) {
             primaryDomain = shopInfo.primaryDomain.url.replace(/\/$/, '');
           }
+          // Collect only policies that actually exist
+          if (shopInfo.shippingPolicy?.url) policies.push({ title: shopInfo.shippingPolicy.title || 'Shipping Policy', url: shopInfo.shippingPolicy.url });
+          if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
+          if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
+          if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
+          if (shopInfo.subscriptionPolicy?.url) policies.push({ title: shopInfo.subscriptionPolicy.title || 'Subscription Policy', url: shopInfo.subscriptionPolicy.url });
         }
       } catch (e) {
         console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
@@ -857,13 +869,14 @@ ${customRules}
         llmsTxt += '\n';
       }
 
-      // --- Store Policies section (always included - these are public Shopify pages) ---
-      llmsTxt += `## Store Policies\n\n`;
-      llmsTxt += `- [Shipping Policy](${primaryDomain}/policies/shipping-policy)\n`;
-      llmsTxt += `- [Refund Policy](${primaryDomain}/policies/refund-policy)\n`;
-      llmsTxt += `- [Privacy Policy](${primaryDomain}/policies/privacy-policy)\n`;
-      llmsTxt += `- [Terms of Service](${primaryDomain}/policies/terms-of-service)\n`;
-      llmsTxt += '\n';
+      // --- Store Policies section (only policies that actually exist in the store) ---
+      if (policies.length > 0) {
+        llmsTxt += `## Store Policies\n\n`;
+        for (const policy of policies) {
+          llmsTxt += `- [${policy.title}](${policy.url})\n`;
+        }
+        llmsTxt += '\n';
+      }
 
       // --- Metadata footer ---
       llmsTxt += `---\n`;
