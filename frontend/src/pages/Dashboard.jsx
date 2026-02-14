@@ -1173,6 +1173,13 @@ export default function Dashboard({ shop: shopProp }) {
           loadDashboardData(true); // Refresh token balance
         }}
       />
+
+      {/* App Version Footer */}
+      <Layout.Section>
+        <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+          <Text variant="bodySm" tone="subdued">indexAIze v1.2.0</Text>
+        </div>
+      </Layout.Section>
     </Layout>
   );
 }

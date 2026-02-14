@@ -1922,7 +1922,7 @@ if (!IS_PROD) {
       res.json({ 
         status: 'ok',
         app: 'indexAIze - Unlock AI Search',
-        version: '1.0.0'
+        version: '1.2.0'
       });
     });
 
