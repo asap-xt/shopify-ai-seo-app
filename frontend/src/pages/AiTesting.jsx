@@ -397,19 +397,17 @@ export default function AiTesting({ shop: shopProp }) {
       case 'schemaData':
         return currentPlanIndex >= 4; // Enterprise
       
-      // AI Bot Testing (synced with Settings.jsx)
-      case 'meta':
-        return currentPlanIndex >= 0; // Starter+ (Meta AI)
-      case 'claude':
-        return currentPlanIndex >= 0; // Starter+ (Anthropic Claude)
-      case 'gemini':
-        return currentPlanIndex >= 1; // Professional+ (Google Gemini)
+      // AI Bot Testing (synced with backend AI_BOTS config)
       case 'chatgpt':
-        return currentPlanIndex >= 2; // Growth+ (OpenAI ChatGPT)
+        return currentPlanIndex >= 0; // Starter+ (ChatGPT 5.2)
+      case 'gemini':
+        return currentPlanIndex >= 0; // Starter+ (Gemini 3 Pro)
+      case 'claude':
+        return currentPlanIndex >= 1; // Professional+ (Claude Opus 4.6)
+      case 'meta':
+        return currentPlanIndex >= 2; // Growth+ (Llama 4 Maverick)
       case 'perplexity':
-        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity)
-      case 'deepseek':
-        return currentPlanIndex >= 4; // Enterprise (DeepSeek)
+        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity Sonar Pro)
       default:
         return false;
     }
@@ -429,14 +427,12 @@ export default function AiTesting({ shop: shopProp }) {
         return 'Enterprise';
       
       // AI Bot Testing
-      case 'gemini':
+      case 'claude':
         return 'Professional';
-      case 'chatgpt':
+      case 'meta':
         return 'Growth';
       case 'perplexity':
         return 'Growth Extra';
-      case 'deepseek':
-        return 'Enterprise';
       default:
         return 'Professional';
     }
@@ -1060,13 +1056,13 @@ export default function AiTesting({ shop: shopProp }) {
                 )}
               </InlineStack>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(availableBots.length || 5, 5)}, 1fr)`, gap: '10px' }}>
                 {availableBots.map(bot => (
                   <div
                     key={bot.id}
                     onClick={() => bot.available && setSelectedBotId(bot.id)}
                     style={{
-                      padding: '16px',
+                      padding: '12px 10px',
                       borderRadius: '8px',
                       border: selectedBotId === bot.id 
                         ? '2px solid var(--p-color-border-interactive)' 
@@ -1077,33 +1073,31 @@ export default function AiTesting({ shop: shopProp }) {
                       cursor: bot.available ? 'pointer' : 'not-allowed',
                       opacity: bot.available ? 1 : 0.5,
                       transition: 'all 0.15s ease',
-                      position: 'relative'
+                      position: 'relative',
+                      textAlign: 'center',
+                      minWidth: 0
                     }}
                   >
                     <BlockStack gap="100">
-                      <InlineStack align="space-between" blockAlign="center">
-                        <Text variant="bodyMd" fontWeight="semibold">{bot.name}</Text>
+                      <InlineStack align="center" blockAlign="center" gap="200">
+                        <Text variant="bodySm" fontWeight="semibold">{bot.name}</Text>
                         {selectedBotId === bot.id && bot.available && (
                           <div style={{ 
-                            width: '20px', 
-                            height: '20px', 
+                            width: '18px', 
+                            height: '18px', 
                             borderRadius: '50%', 
                             background: 'var(--p-color-bg-fill-success)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'white',
-                            fontSize: '12px'
+                            fontSize: '11px',
+                            flexShrink: 0
                           }}>
                             ✓
                           </div>
                         )}
                       </InlineStack>
-                      {!bot.available && (
-                        <Text variant="bodySm" tone="subdued">
-                          Requires {bot.requiredPlan}
-                        </Text>
-                      )}
                       {!bot.available && (
                         <Badge size="small">{bot.requiredPlan}</Badge>
                       )}

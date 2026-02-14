@@ -21,52 +21,53 @@ const normalizePlan = (plan) => {
 // Price multipliers relative to base token price (Gemini 2.5 Flash Lite = 1.0)
 // Base: $0.10/M input, $0.40/M output
 // This ensures we charge appropriately for more expensive models
+// Order: ChatGPT → Gemini → Claude → Meta → Perplexity
 // ============================================
 const AI_BOTS = {
-  'meta': {
-    id: 'meta',
-    name: 'Meta AI (Llama 4)',
-    model: 'meta-llama/llama-4-maverick',
-    description: 'Meta Llama 4 Maverick',
-    minPlanIndex: 1, // Professional+
+  'chatgpt': {
+    id: 'chatgpt',
+    name: 'ChatGPT 5.2',
+    model: 'openai/gpt-5.2-chat',
+    description: 'OpenAI GPT-5.2',
+    minPlanIndex: 0, // Starter+
     tokensPerTest: 2000,
-    priceMultiplier: 1.5 // $0.15/$0.60 vs base $0.10/$0.40
-  },
-  'claude': {
-    id: 'claude',
-    name: 'Claude Haiku 4.5',
-    model: 'anthropic/claude-haiku-4.5',
-    description: 'Anthropic Claude Haiku',
-    minPlanIndex: 1, // Professional+
-    tokensPerTest: 2000,
-    priceMultiplier: 12.0 // $1/$5 vs base $0.10/$0.40
+    priceMultiplier: 28.0 // $1.75/$14 vs base $0.10/$0.40
   },
   'gemini': {
     id: 'gemini',
-    name: 'Gemini 2.5 Pro',
-    model: 'google/gemini-2.5-pro',
-    description: 'Google Gemini Pro',
+    name: 'Gemini 3 Pro',
+    model: 'google/gemini-3-pro-preview',
+    description: 'Google Gemini 3 Pro',
+    minPlanIndex: 0, // Starter+
+    tokensPerTest: 2000,
+    priceMultiplier: 24.0 // $2/$12 vs base $0.10/$0.40
+  },
+  'claude': {
+    id: 'claude',
+    name: 'Claude Opus 4.6',
+    model: 'anthropic/claude-opus-4.6',
+    description: 'Anthropic Claude Opus 4.6',
     minPlanIndex: 1, // Professional+
     tokensPerTest: 2000,
-    priceMultiplier: 22.0 // $1.25/$10 vs base $0.10/$0.40
+    priceMultiplier: 50.0 // $5/$25 vs base $0.10/$0.40
   },
-  'chatgpt': {
-    id: 'chatgpt',
-    name: 'ChatGPT 5 Mini',
-    model: 'openai/gpt-5-mini',
-    description: 'OpenAI GPT-5 Mini',
-    minPlanIndex: 2, // Growth Plus+
-    tokensPerTest: 2500,
-    priceMultiplier: 4.5 // $0.25/$2 vs base $0.10/$0.40
+  'meta': {
+    id: 'meta',
+    name: 'Llama 4 Maverick',
+    model: 'meta-llama/llama-4-maverick',
+    description: 'Meta Llama 4 Maverick',
+    minPlanIndex: 2, // Growth+
+    tokensPerTest: 2000,
+    priceMultiplier: 1.5 // $0.15/$0.60 vs base $0.10/$0.40
   },
   'perplexity': {
     id: 'perplexity',
-    name: 'Perplexity Sonar',
-    model: 'perplexity/sonar',
-    description: 'Perplexity Sonar',
+    name: 'Perplexity Sonar Pro',
+    model: 'perplexity/sonar-pro',
+    description: 'Perplexity Sonar Pro (with search)',
     minPlanIndex: 3, // Growth Extra+
     tokensPerTest: 3000,
-    priceMultiplier: 4.0 // $1/$1 + per-request costs vs base $0.10/$0.40
+    priceMultiplier: 30.0 // $3/$15 + per-request costs vs base $0.10/$0.40
   }
 };
 
@@ -105,8 +106,9 @@ router.get('/ai-testing/available-bots', validateRequest(), async (req, res) => 
     const availableBots = Object.values(AI_BOTS).map(bot => ({
       ...bot,
       available: userPlanIndex >= bot.minPlanIndex,
-      requiredPlan: bot.minPlanIndex === 1 ? 'Professional' :
-                    bot.minPlanIndex === 2 ? 'Growth Plus' :
+      requiredPlan: bot.minPlanIndex === 0 ? 'Starter' :
+                    bot.minPlanIndex === 1 ? 'Professional' :
+                    bot.minPlanIndex === 2 ? 'Growth' :
                     bot.minPlanIndex === 3 ? 'Growth Extra' : 'Enterprise'
     }));
     
