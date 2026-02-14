@@ -22,9 +22,11 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
   const returnTo = options.returnTo || '/billing'; // Default to billing page
   
-  // ALWAYS use test mode until we go live with real payments
-  // This allows instant activation without waiting for webhooks
-  const isTest = true;
+  // Test mode: enabled for staging/dev environments
+  // Production uses real payments, staging/dev uses test mode
+  const PRODUCTION_URL = 'https://indexaize-aiseo-app-production.up.railway.app';
+  const isProduction = process.env.APP_URL === PRODUCTION_URL;
+  const isTest = !isProduction;
   
   const mutation = `
     mutation CreateSubscription(
@@ -148,8 +150,10 @@ export async function purchaseTokens(shop, usdAmount, accessToken, options = {})
   const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
   
-  // ALWAYS use test mode until we go live with real payments
-  const isTest = true;
+  // Test mode for non-production environments (same as subscriptions)
+  const PRODUCTION_URL = 'https://indexaize-aiseo-app-production.up.railway.app';
+  const isProduction = process.env.APP_URL === PRODUCTION_URL;
+  const isTest = !isProduction;
   
   const mutation = `
     mutation PurchaseTokens(

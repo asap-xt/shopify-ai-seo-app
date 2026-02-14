@@ -35,6 +35,9 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
               title
               handle
               description
+              vendor
+              productType
+              tags
               status
               totalInventory
               createdAt
@@ -48,6 +51,9 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
                 minVariantPrice {
                   amount
                   currencyCode
+                }
+                maxVariantPrice {
+                  amount
                 }
               }
               metafields(first: 50, namespace: "seo_ai") {
@@ -87,36 +93,83 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
       });
     }
 
-    console.log(`[SYNC] Fetched page ${pageCount}, total products: ${allProducts.length}`);
   }
 
-  // Save products to database
-  console.log(`[SYNC] Saving ${allProducts.length} products to database...`);
+  // STEP 1: Clean up orphaned products (not in Shopify anymore)
+  const currentShopifyGids = allProducts.map(({ node }) => node.id);
+  const currentShopifyNumericIds = allProducts.map(({ node }) => node.id.split('/').pop());
+  
+  // Delete products that don't exist in Shopify (handles both ID formats)
+  const cleanupResult = await Product.deleteMany({
+    shop,
+    shopifyProductId: { $nin: [...currentShopifyGids, ...currentShopifyNumericIds] },
+    productId: { $nin: currentShopifyNumericIds }
+  });
+  
+  if (cleanupResult.deletedCount > 0) {
+    console.log(`[SYNC] Cleaned up ${cleanupResult.deletedCount} orphaned product records for ${shop}`);
+  }
+  
+  // STEP 2: Save products to database and REPAIR optimization status
+  let repairedCount = 0;
+  let correctlyOptimized = 0;
   
   for (const { node: product } of allProducts) {
     try {
-      // Process metafields to determine optimization status
+      // Process metafields to determine optimization status FROM SHOPIFY (source of truth)
       const seoStatus = processMetafields(product.metafields);
       // Normalize IDs (Shopify returns GID like gid://shopify/Product/12345)
       const numericId = typeof product.id === 'string' ? product.id.split('/').pop() : null;
       
+      // Check if we're repairing a discrepancy
+      // IMPORTANT: Search by BOTH GID and numeric ID formats for backward compatibility
+      const existingProduct = await Product.findOne({ 
+        shop, 
+        $or: [
+          { shopifyProductId: product.id },      // GID format
+          { shopifyProductId: numericId },       // Numeric format
+          { productId: numericId },              // Legacy field
+          { productId: parseInt(numericId) }     // Legacy field as number
+        ]
+      }).lean();
+      
+      if (existingProduct?.seoStatus?.optimized && !seoStatus.optimized) {
+        repairedCount++;
+        console.log(`[SYNC] Repairing product ${product.title} (${numericId}): was marked optimized but has no metafields`);
+      }
+      if (seoStatus.optimized) {
+        correctlyOptimized++;
+      }
+      
+      // Update using the same $or query to find existing records regardless of ID format
       await Product.findOneAndUpdate(
         { 
           shop, 
-          shopifyProductId: product.id 
+          $or: [
+            { shopifyProductId: product.id },
+            { shopifyProductId: numericId },
+            { productId: numericId },
+            { productId: parseInt(numericId) }
+          ]
         },
         {
           shop,
-          shopifyProductId: product.id,
+          shopifyProductId: product.id,  // Normalize to GID format going forward
           gid: product.id,
           productId: numericId,
           title: product.title,
           handle: product.handle,
           description: product.description,
+          vendor: product.vendor || '',
+          productType: product.productType || '',
+          tags: product.tags || [],
+          price: product.priceRangeV2?.minVariantPrice?.amount || null,
+          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || '',
+          available: product.status === 'ACTIVE' && (product.totalInventory > 0 || product.totalInventory === null),
           status: product.status,
           totalInventory: product.totalInventory,
           featuredImage: product.featuredImage,
-          seoStatus,
+          seoStatus,  // ALWAYS use fresh status from Shopify metafields
           createdAt: product.createdAt,
           publishedAt: product.publishedAt,
           updatedAt: product.updatedAt,
@@ -128,9 +181,16 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
       console.error(`[SYNC] Error saving product ${product.id}:`, error);
     }
   }
+  
+  if (repairedCount > 0) {
+    console.log(`[SYNC] ⚠️ REPAIRED ${repairedCount} products that were incorrectly marked as optimized`);
+  }
+  console.log(`[SYNC] ✅ ${correctlyOptimized} products have actual SEO metafields in Shopify`);
 
-  console.log(`[SYNC] Products sync complete: ${allProducts.length} products`);
-  return allProducts.length;
+  // Count only ACTIVE products for the return value (user-facing count)
+  const activeCount = allProducts.filter(({ node }) => node.status === 'ACTIVE').length;
+  console.log(`[SYNC] Products sync complete: ${activeCount} active, ${correctlyOptimized} optimized, ${repairedCount} repaired`);
+  return { count: activeCount, optimized: correctlyOptimized, repaired: repairedCount };
 }
 
 /**
@@ -200,12 +260,21 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
       });
     }
 
-    console.log(`[SYNC] Fetched page ${pageCount}, total collections: ${allCollections.length}`);
   }
 
-  // Save collections to database
-  console.log(`[SYNC] Saving ${allCollections.length} collections to database...`);
+  // STEP 1: Clean up orphaned collections (from reinstall or deleted in Shopify)
+  const currentCollectionIds = allCollections.map(({ node }) => node.id);
   
+  const cleanupResult = await Collection.deleteMany({
+    shop,
+    collectionId: { $nin: currentCollectionIds }
+  });
+  
+  if (cleanupResult.deletedCount > 0) {
+    console.log(`[SYNC] Cleaned up ${cleanupResult.deletedCount} orphaned collection records for ${shop}`);
+  }
+  
+  // STEP 2: Save collections to database
   for (const { node: collection } of allCollections) {
     try {
       const seoStatus = processMetafields(collection.metafields);
@@ -244,7 +313,6 @@ export async function syncCollections(adminGraphql, shop, progressCallback = nul
  * Get store languages from Shopify
  */
 export async function syncLanguages(adminGraphql, shop, progressCallback = null) {
-  console.log(`[SYNC] Fetching store languages for ${shop}`);
 
   const query = `
     query {
@@ -284,7 +352,6 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
       }
     );
 
-    console.log(`[SYNC] Languages sync complete:`, languages);
     return languages;
   } catch (error) {
     console.error('[SYNC] Error fetching languages:', error);
@@ -296,7 +363,6 @@ export async function syncLanguages(adminGraphql, shop, progressCallback = null)
  * Get store markets from Shopify
  */
 export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
-  console.log(`[SYNC] Fetching store markets for ${shop}`);
 
   const query = `
     query {
@@ -334,7 +400,6 @@ export async function syncMarkets(adminGraphql, shop, progressCallback = null) {
       }
     );
 
-    console.log(`[SYNC] Markets sync complete:`, markets.length);
     return markets;
   } catch (error) {
     console.error('[SYNC] Error fetching markets:', error);
@@ -400,6 +465,8 @@ export async function syncStore(adminGraphql, shop, progressCallback = null) {
   const startTime = Date.now();
   const results = {
     products: 0,
+    productsOptimized: 0,
+    productsRepaired: 0,
     collections: 0,
     languages: 0,
     markets: 0,
@@ -418,7 +485,10 @@ export async function syncStore(adminGraphql, shop, progressCallback = null) {
     );
 
     // Sync in sequence (can be parallel if needed)
-    results.products = await syncProducts(adminGraphql, shop, progressCallback);
+    const productsResult = await syncProducts(adminGraphql, shop, progressCallback);
+    results.products = productsResult.count || productsResult; // Handle both new and legacy format
+    results.productsOptimized = productsResult.optimized || 0;
+    results.productsRepaired = productsResult.repaired || 0;
     results.collections = await syncCollections(adminGraphql, shop, progressCallback);
     
     const languages = await syncLanguages(adminGraphql, shop, progressCallback);
@@ -440,8 +510,6 @@ export async function syncStore(adminGraphql, shop, progressCallback = null) {
     results.success = true;
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[SYNC] ===== FULL STORE SYNC COMPLETE in ${duration}s =====`);
-    console.log(`[SYNC] Results:`, results);
 
     if (progressCallback) {
       progressCallback({

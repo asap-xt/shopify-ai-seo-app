@@ -202,32 +202,57 @@ function cleanHtmlForXml(html) {
 async function generateSitemapCore(shop, options = {}) {
   const { enableAIEnhancement = false } = options;
   
+  // IMPORTANT: Define reservationId OUTSIDE try block so it's accessible in catch
+  let reservationId = null;
+  let normalizedShop = null;
+  
   try {
-    const normalizedShop = normalizeShop(shop);
+    normalizedShop = normalizeShop(shop);
     if (!normalizedShop) {
       throw new Error('Invalid shop parameter');
     }
+    
+    // Reset cancelled flag AND progress at start of new generation
+    await Shop.findOneAndUpdate(
+      { shop: normalizedShop },
+      { 
+        $set: { 
+          'sitemapStatus.cancelled': false,
+          'sitemapStatus.progress': {
+            current: 0,
+            total: 0,
+            percent: 0,
+            elapsedSeconds: 0,
+            remainingSeconds: 0,
+            startedAt: new Date()
+          }
+        } 
+      }
+    );
     
     const { limit, plan } = await getPlanLimits(normalizedShop);
     
     // AI Enhancement state (only used if enableAIEnhancement is true)
     let isAISitemapEnabled = false;
-    let reservationId = null;
     let totalAITokens = 0;
     
-    // Check AI Discovery settings ONLY if enableAIEnhancement is requested
+    // Check plan eligibility ONLY if enableAIEnhancement is requested
+    // NOTE: We no longer check AI Discovery settings - the button is now on Sitemap page
     if (enableAIEnhancement) {
       try {
-        const { default: aiDiscoveryService } = await import('../services/aiDiscoveryService.js');
         const { default: Shop } = await import('../db/Shop.js');
         
         const shopRecord = await Shop.findOne({ shop: normalizedShop });
-        if (shopRecord?.accessToken) {
-          const session = { accessToken: shopRecord.accessToken };
-          const settings = await aiDiscoveryService.getSettings(normalizedShop, session);
-          
-          // Check eligibility for AI-enhanced sitemap
-          const planKey = (settings?.planKey || plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+        
+        if (!shopRecord?.accessToken) {
+          console.error('[AI-SITEMAP] No access token for shop, cannot enable AI enhancement');
+          throw new Error('Shop access token not found. Please reinstall the app.');
+        }
+        
+        // Continue with eligibility checks (removed if block since we throw above)
+        {
+          // Check eligibility for AI-enhanced sitemap based on plan
+          const planKey = (plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const plansWithAccess = ['growth_extra', 'enterprise'];
           const plusPlansRequireTokens = ['professional_plus', 'growth_plus'];
           
@@ -245,7 +270,20 @@ async function generateSitemapCore(shop, options = {}) {
             }
           }
           
-          isAISitemapEnabled = (settings?.features?.aiSitemap || false) && isEligiblePlan;
+          // enableAIEnhancement means user clicked "Generate AI-Optimized" button
+          // We only need to check plan eligibility, not AI Discovery settings
+          isAISitemapEnabled = isEligiblePlan;
+          
+          // CRITICAL: If AI enhancement was requested but plan is not eligible, throw error
+          // This prevents generating basic sitemap when user clicked "AI-Optimized" button
+          if (enableAIEnhancement && !isEligiblePlan) {
+            const planError = new Error('PLAN_NOT_ELIGIBLE');
+            planError.code = 'PLAN_NOT_ELIGIBLE';
+            planError.message = `Your plan (${planKey}) does not have access to AI-Optimized Sitemap. Please upgrade or purchase tokens.`;
+            planError.needsUpgrade = true;
+            planError.needsTokens = plusPlansRequireTokens.includes(planKey);
+            throw planError;
+          }
           
           // === TRIAL PERIOD CHECK ===
           const { default: Subscription } = await import('../db/Subscription.js');
@@ -261,42 +299,78 @@ async function generateSitemapCore(shop, options = {}) {
             const feature = 'ai-sitemap-optimized';
             
             if (requiresTokens(feature)) {
-              const tokenEstimate = estimateTokensWithMargin(feature, { productCount: limit });
+              // CRITICAL: Get ACTUAL product count (only ACTIVE), not plan limit!
+              const countQuery = `
+                query {
+                  productsCount(query: "status:active") {
+                    count
+                  }
+                }
+              `;
+              const countData = await shopGraphQL(normalizedShop, countQuery);
+              const actualProductCount = Math.min(countData.productsCount?.count || 0, limit);
+              
+              const tokenEstimate = estimateTokensWithMargin(feature, { productCount: actualProductCount });
+              
               const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
               
               // Determine plan type
               const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
               const includedTokensPlans = ['growth_extra', 'enterprise'];
               const hasIncludedTokens = includedTokensPlans.includes(planKey);
+              const isActivated = !!subscription?.activatedAt;
+              
+              // Check if user has purchased tokens (not just included tokens)
+              const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
               
               // CRITICAL: Trial restriction ONLY for plans with included tokens
               // Plus plans can use purchased tokens during trial without activating plan
               // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-              if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
-                // Return error response instead of generating basic sitemap
-                return res.status(402).json({
-                  error: 'AI-Optimized Sitemap is locked during trial period',
-                  trialRestriction: true,
-                  requiresActivation: true,
-                  trialEndsAt: subscription.trialEndsAt,
-                  currentPlan: subscription.plan,
-                  message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens'
-                });
+              // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+              if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
+                // Throw error instead of generating basic sitemap
+                const trialError = new Error('TRIAL_RESTRICTION');
+                trialError.code = 'TRIAL_RESTRICTION';
+                trialError.trialRestriction = true;
+                trialError.requiresActivation = true;
+                trialError.trialEndsAt = subscription.trialEndsAt;
+                trialError.currentPlan = subscription.plan;
+                throw trialError;
               } else if (tokenBalance.hasBalance(tokenEstimate.withMargin)) {
                 // Has tokens AND (plan active OR trial ended OR purchased tokens) → Reserve tokens
                 const reservation = tokenBalance.reserveTokens(tokenEstimate.withMargin, feature, { shop: normalizedShop });
                 reservationId = reservation.reservationId;
                 await reservation.save();
               } else {
-                // Insufficient tokens
-                isAISitemapEnabled = false;
+                // Insufficient tokens → Throw error for purchase
+                const currentPlanKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+                const needsUpgrade = !['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'].includes(currentPlanKey);
+                
+                const tokenError = new Error('INSUFFICIENT_TOKENS');
+                tokenError.code = 'INSUFFICIENT_TOKENS';
+                tokenError.requiresPurchase = true;
+                tokenError.needsUpgrade = needsUpgrade;
+                tokenError.minimumPlanForFeature = needsUpgrade ? 'Growth Extra' : null;
+                tokenError.currentPlan = subscription?.plan;
+                tokenError.tokensRequired = tokenEstimate.estimated;
+                tokenError.tokensWithMargin = tokenEstimate.withMargin;
+                tokenError.tokensAvailable = tokenBalance.balance;
+                tokenError.tokensNeeded = tokenEstimate.withMargin - tokenBalance.balance;
+                throw tokenError;
               }
             }
           }
           // === END TOKEN RESERVATION ===
         }
       } catch (error) {
-        // Could not fetch AI Discovery settings, continue with basic sitemap
+        // Re-throw specific error codes that should stop generation
+        if (error.code === 'TRIAL_RESTRICTION' || 
+            error.code === 'INSUFFICIENT_TOKENS' || 
+            error.code === 'PLAN_NOT_ELIGIBLE') {
+          throw error;
+        }
+        // For other errors (e.g., could not fetch shop record), log and continue with basic sitemap
+        console.error('[AI-SITEMAP] Error during eligibility check, continuing with basic sitemap:', error.message);
       }
     }
     
@@ -391,6 +465,52 @@ async function generateSitemapCore(shop, options = {}) {
     // Build product/collection entries first (we'll add XML header after checking for AI products)
     let xml = '';
     
+    // Progress tracking for AI sitemap
+    const totalProducts = allProducts.length;
+    let processedProducts = 0;
+    const startTime = Date.now();
+    
+    // Helper to check if job was cancelled
+    const checkCancelled = async () => {
+      try {
+        const shopDoc = await Shop.findOne({ shop: normalizedShop }).select('sitemapStatus.cancelled').lean();
+        return shopDoc?.sitemapStatus?.cancelled === true;
+      } catch (err) {
+        return false;
+      }
+    };
+    
+    // Helper to update progress in MongoDB
+    const updateProgress = async (current, total) => {
+      try {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const avgTimePerProduct = current > 0 ? elapsed / current : 5;
+        const remaining = Math.ceil((total - current) * avgTimePerProduct);
+        
+        await Shop.findOneAndUpdate(
+          { shop: normalizedShop },
+          {
+            $set: {
+              'sitemapStatus.inProgress': true,
+              'sitemapStatus.status': 'processing',
+              'sitemapStatus.message': `Processing product ${current}/${total}`,
+              'sitemapStatus.progress': {
+                current,
+                total,
+                percent: Math.round((current / total) * 100),
+                elapsedSeconds: elapsed,
+                remainingSeconds: remaining,
+                startedAt: new Date(startTime)
+              },
+              'sitemapStatus.updatedAt': new Date()
+            }
+          }
+        );
+      } catch (err) {
+        // Non-critical, continue processing
+      }
+    };
+    
     // Add products
     for (const edge of allProducts) {
       const product = edge.node;
@@ -419,8 +539,9 @@ async function generateSitemapCore(shop, options = {}) {
         }
       }
       
-      // Add AI metadata structure if we have SEO data OR if AI sitemap is enabled
-      if (hasSeoAI || isAISitemapEnabled) {
+      // Add AI metadata structure ONLY if AI sitemap is explicitly enabled
+      // Basic sitemap should NOT include ai: namespace elements
+      if (isAISitemapEnabled) {
         hasAnyAIProducts = true; // Track that we have at least one AI product
         xml += '    <ai:product>\n';
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
@@ -486,9 +607,11 @@ async function generateSitemapCore(shop, options = {}) {
               price: product.priceRangeV2?.minVariantPrice?.amount
             };
             
-            // Generate AI enhancements (with timeout)
+            // Generate AI enhancements (sequential processing via aiQueue)
             // Uses Gemini 2.5 Flash (Lite) for fast, cost-effective generation
-            const enhancementPromise = enhanceProductForSitemap(productForAI, allProducts, {
+            // NO TIMEOUT: We need to complete all AI calls to track token usage accurately
+            // The aiQueue already has built-in timeout protection (30-60s per request)
+            const aiEnhancements = await enhanceProductForSitemap(productForAI, allProducts, {
               enableSummary: true,
               enableSemanticTags: true,
               enableContextHints: true,
@@ -496,10 +619,6 @@ async function generateSitemapCore(shop, options = {}) {
               enableSentiment: true,
               enableRelated: true
             });
-            
-            // Set timeout to avoid blocking (15s for 6 parallel AI calls)
-            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 15000));
-            const aiEnhancements = await Promise.race([enhancementPromise, timeoutPromise]);
             
             // Track AI token usage
             if (aiEnhancements?.usage) {
@@ -562,10 +681,31 @@ async function generateSitemapCore(shop, options = {}) {
             console.error('[SITEMAP-CORE] Error in AI enhancement for', product.handle, ':', aiError.message);
             // Continue without AI enhancements
           }
+          
+          // Update progress after each AI-enhanced product
+          processedProducts++;
+          if (processedProducts % 5 === 0 || processedProducts === totalProducts) {
+            await updateProgress(processedProducts, totalProducts);
+            
+            // Check if job was cancelled
+            if (await checkCancelled()) {
+              console.log(`[SITEMAP] Job cancelled for shop: ${normalizedShop} after ${processedProducts} products`);
+              throw new Error('CANCELLED_BY_USER');
+            }
+          }
         }
         // ===== END: AI-ENHANCED METADATA =====
         
         xml += '    </ai:product>\n';
+      }
+      
+      // Update progress for non-AI products too (Basic Sitemap)
+      if (!isAISitemapEnabled) {
+        processedProducts++;
+        // Update progress every 10 products or at end (to avoid too many DB writes)
+        if (processedProducts % 10 === 0 || processedProducts === totalProducts) {
+          await updateProgress(processedProducts, totalProducts);
+        }
       }
       
       xml += '  </url>\n';
@@ -597,47 +737,50 @@ async function generateSitemapCore(shop, options = {}) {
           xml += '    <changefreq>weekly</changefreq>\n';
           xml += '    <priority>0.8</priority>\n';
           
-          // Always add AI metadata for multilingual URLs (to be consistent with main product URL)
-          hasAnyAIProducts = true; // Track that we have at least one AI product
-          xml += '    <ai:product>\n';
-          xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
-          xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
-          xml += '      <ai:language>' + lang + '</ai:language>\n';
-          
-          // Add localized AI bullets and FAQ from seo_ai metafields (if available)
-          try {
-            const hasLocalizedSeo = await getProductLocalizedContent(normalizedShop, product.id, lang);
-            if (hasLocalizedSeo) {
-              // Add localized bullets
-              if (hasLocalizedSeo.bullets && Array.isArray(hasLocalizedSeo.bullets) && hasLocalizedSeo.bullets.length > 0) {
-                xml += '      <ai:features>\n';
-                hasLocalizedSeo.bullets.forEach(bullet => {
-                  if (bullet && bullet.trim()) {
-                    xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
-                  }
-                });
-                xml += '      </ai:features>\n';
+          // Add AI metadata for multilingual URLs ONLY if AI sitemap is enabled
+          if (isAISitemapEnabled) {
+            hasAnyAIProducts = true;
+            xml += '    <ai:product>\n';
+            xml += '      <ai:title>' + escapeXml(langTitle) + '</ai:title>\n';
+            xml += '      <ai:description><![CDATA[' + langDescription + ']]></ai:description>\n';
+            xml += '      <ai:language>' + lang + '</ai:language>\n';
+            
+            // Add localized AI bullets and FAQ from seo_ai metafields (if available)
+            try {
+              const hasLocalizedSeo = await getProductLocalizedContent(normalizedShop, product.id, lang);
+              if (hasLocalizedSeo) {
+                // Add localized bullets
+                if (hasLocalizedSeo.bullets && Array.isArray(hasLocalizedSeo.bullets) && hasLocalizedSeo.bullets.length > 0) {
+                  xml += '      <ai:features>\n';
+                  hasLocalizedSeo.bullets.forEach(bullet => {
+                    if (bullet && bullet.trim()) {
+                      xml += '        <ai:feature>' + escapeXml(bullet) + '</ai:feature>\n';
+                    }
+                  });
+                  xml += '      </ai:features>\n';
+                }
+                
+                // Add localized FAQ
+                if (hasLocalizedSeo.faq && Array.isArray(hasLocalizedSeo.faq) && hasLocalizedSeo.faq.length > 0) {
+                  xml += '      <ai:faq>\n';
+                  hasLocalizedSeo.faq.forEach(item => {
+                    if (item && item.q && item.a) {
+                      xml += '        <ai:qa>\n';
+                      xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
+                      xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
+                      xml += '        </ai:qa>\n';
+                    }
+                  });
+                  xml += '      </ai:faq>\n';
+                }
               }
-              
-              // Add localized FAQ
-              if (hasLocalizedSeo.faq && Array.isArray(hasLocalizedSeo.faq) && hasLocalizedSeo.faq.length > 0) {
-                xml += '      <ai:faq>\n';
-                hasLocalizedSeo.faq.forEach(item => {
-                  if (item && item.q && item.a) {
-                    xml += '        <ai:qa>\n';
-                    xml += '          <ai:question>' + escapeXml(item.q) + '</ai:question>\n';
-                    xml += '          <ai:answer>' + escapeXml(item.a) + '</ai:answer>\n';
-                    xml += '        </ai:qa>\n';
-                  }
-                });
-                xml += '      </ai:faq>\n';
-              }
+            } catch (err) {
+              // Could not get localized AI content, continue with basic metadata
             }
-          } catch (err) {
-            // Could not get localized AI content, continue with basic metadata
+            
+            xml += '    </ai:product>\n';
           }
           
-          xml += '    </ai:product>\n';
           xml += '  </url>\n';
         }
       }
@@ -781,6 +924,30 @@ async function generateSitemapCore(shop, options = {}) {
     
   } catch (error) {
     console.error('[SITEMAP-CORE] Error:', error);
+    
+    // CRITICAL: If we reserved tokens but generation failed, refund them!
+    if (reservationId) {
+      try {
+        const { default: TokenBalance } = await import('../db/TokenBalance.js');
+        const tokenBalance = await TokenBalance.getOrCreate(normalizedShop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        console.log(`[SITEMAP-CORE] Refunded reserved tokens due to error (reservation: ${reservationId})`);
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(normalizedShop);
+        } catch (cacheErr) {
+          console.error('[SITEMAP-CORE] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[SITEMAP-CORE] Error refunding tokens after failure:', tokenErr);
+      }
+    }
+    
     throw error;
   }
 }
@@ -817,7 +984,7 @@ async function handleGenerate(req, res) {
     // PHASE 4: Add to queue for async generation
     const jobInfo = await sitemapQueue.addJob(shop, async () => {
       return await generateSitemapCore(shop);
-    });
+    }, { type: 'basic' });
     
     // Return immediate response
     return res.json({
@@ -853,10 +1020,10 @@ async function handleInfo(req, res) {
     // Check if sitemap exists
     const existingSitemap = await Sitemap.findOne({ shop }).select('-content').lean();
     
-    // Get actual product count
+    // Get actual product count (only ACTIVE)
     const countData = await shopGraphQL(shop, `
       query {
-        productsCount {
+        productsCount(query: "status:active") {
           count
         }
       }
@@ -922,21 +1089,56 @@ async function handleStatus(req, res) {
     // Get last generated sitemap info
     const sitemapDoc = await Sitemap.findOne({ shop }).select('-content').lean();
     
+    // Determine overall status for frontend
+    const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
+    const inProgress = shopDoc?.sitemapStatus?.inProgress || false;
+    
+    // Get progress info from shop status
+    const progress = shopDoc?.sitemapStatus?.progress || null;
+    
+    // Build progress message with time estimate
+    let progressMessage = jobStatus.message;
+    if (progress && progress.current && progress.total) {
+      const remainingMin = Math.ceil((progress.remainingSeconds || 0) / 60);
+      progressMessage = `Processing ${progress.current}/${progress.total} products`;
+      if (remainingMin > 0) {
+        progressMessage += ` • ~${remainingMin} min remaining`;
+      }
+    }
+    
     res.json({
       shop,
+      // Overall status for frontend
+      inProgress: isGenerating || inProgress,
+      status: jobStatus.status,
+      message: progressMessage,
+      // Progress details (for AI sitemap)
+      progress: progress ? {
+        current: progress.current,
+        total: progress.total,
+        percent: progress.percent,
+        elapsedSeconds: progress.elapsedSeconds,
+        remainingSeconds: progress.remainingSeconds
+      } : null,
+      // Queue details
       queue: {
         status: jobStatus.status,
-        message: jobStatus.message,
+        message: progressMessage,
         position: jobStatus.position || null,
         queueLength: jobStatus.queueLength,
         estimatedTime: jobStatus.estimatedTime || null
       },
+      // Last generated sitemap info
       sitemap: {
         exists: !!sitemapDoc,
         generatedAt: sitemapDoc?.generatedAt || null,
         productCount: sitemapDoc?.productCount || 0,
-        size: sitemapDoc?.size || 0
+        size: sitemapDoc?.size || 0,
+        isAiEnhanced: sitemapDoc?.isAiEnhanced || false
       },
+      // DEBUG: Log isAiEnhanced value
+      _debug_isAiEnhanced: sitemapDoc?.isAiEnhanced,
+      // Detailed shop status from DB
       shopStatus: shopDoc?.sitemapStatus || null
     });
     
@@ -956,11 +1158,13 @@ async function serveSitemap(req, res) {
     }
     
     const forceRegenerate = req.query.force === 'true';
+    const enableAIEnhancement = req.query.ai === 'true';
     
     // Check if we should force regenerate
     if (forceRegenerate) {
       try {
-        const result = await generateSitemapCore(shop);
+        // Pass AI enhancement flag if specified
+        const result = await generateSitemapCore(shop, { enableAIEnhancement });
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
@@ -984,7 +1188,7 @@ async function serveSitemap(req, res) {
     if (!sitemapDoc || !sitemapDoc.content) {
       // Try to generate new one if none exists
       try {
-        const result = await generateSitemapCore(shop);
+        const result = await generateSitemapCore(shop, { enableAIEnhancement });
         
         // Get the newly generated sitemap
         const newSitemapDoc = await Sitemap.findOne({ shop }).select('+content').lean().exec();
@@ -1100,11 +1304,55 @@ App URL: ${process.env.APP_URL || 'YOUR_APP_URL'}/?shop=${encodeURIComponent(sho
   }
 }
 
+// Reset/Cancel sitemap generation
+async function handleReset(req, res) {
+  try {
+    const shop = normalizeShop(req.query.shop);
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    
+    console.log(`[SITEMAP] Cancelling job for shop: ${shop}`);
+    
+    // Set cancelled flag - the processing loop will check this
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'sitemapStatus.cancelled': true,
+          'sitemapStatus.inProgress': false,
+          'sitemapStatus.status': 'cancelled',
+          'sitemapStatus.message': 'Cancelled by user',
+          'sitemapStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    // Clear from in-memory queue if present
+    sitemapQueue.queue = sitemapQueue.queue.filter(job => job.shop !== shop);
+    if (sitemapQueue.currentJob?.shop === shop) {
+      // Mark the current job as cancelled so it stops processing
+      sitemapQueue.currentJob.cancelled = true;
+      sitemapQueue.currentJob = null;
+    }
+    
+    res.json({
+      success: true,
+      message: 'Sitemap generation cancelled. You can start a new generation.'
+    });
+    
+  } catch (err) {
+    console.error('[SITEMAP] Cancel error:', err);
+    res.status(500).json({ error: 'Failed to cancel' });
+  }
+}
+
 // Mount routes on router
 router.get('/info', handleInfo);
 router.get('/progress', handleProgress);
 router.get('/status', handleStatus); // PHASE 4: Queue status
 router.post('/generate', handleGenerate); // POST generates new sitemap
+router.post('/reset', handleReset); // Reset stuck generation
 router.get('/generate', serveSitemap); // GET returns saved sitemap
 router.get('/view', serveSitemap); // Alternative endpoint to view sitemap
 router.get('/public', servePublicSitemap); // Public endpoint (no auth required)

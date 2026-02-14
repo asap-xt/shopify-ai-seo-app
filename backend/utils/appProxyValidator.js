@@ -2,23 +2,28 @@
 import crypto from 'crypto';
 
 /**
- * Verify App Proxy request signature (correct implementation per Shopify AI)
+ * Verify App Proxy request signature (correct Shopify implementation)
  * @param {Object} req - Express request object
  * @param {string} secret - App secret from environment
  * @returns {boolean} - Whether the request is valid
  */
 export function verifyAppProxySignature(req, secret) {
   try {
-    const url = new URL(req.originalUrl, `https://${req.headers.host}`);
-    const sig = url.searchParams.get('signature') || '';
+    const query = { ...req.query };
+    const signature = query.signature;
     
-    if (!sig) {
+    if (!signature) {
       return false;
     }
     
-    // Build the message from all query params EXCEPT 'signature', as Shopify sends it
-    url.searchParams.delete('signature');
-    const message = url.searchParams.toString(); // raw query string order is OK from Node/Express
+    // Remove signature from query params
+    delete query.signature;
+    
+    // Sort parameters lexicographically by key (Shopify requirement!)
+    const sortedKeys = Object.keys(query).sort();
+    const message = sortedKeys
+      .map(key => `${key}=${query[key]}`)
+      .join('');
 
     const digest = crypto
       .createHmac('sha256', secret)
@@ -26,8 +31,8 @@ export function verifyAppProxySignature(req, secret) {
       .digest('hex');
 
     // constant-time compare
-    const isValid = digest.length === sig.length &&
-           crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sig));
+    const isValid = digest.length === signature.length &&
+           crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
 
     return isValid;
   } catch (error) {
@@ -40,7 +45,7 @@ export function verifyAppProxySignature(req, secret) {
  * Middleware to verify App Proxy requests
  */
 export function appProxyAuth(req, res, next) {
-  // TEMPORARY: Allow requests without signature for debugging
+  // Allow requests without signature (direct access for testing)
   if (!req.query.signature && !req.query.hmac) {
     return next();
   }

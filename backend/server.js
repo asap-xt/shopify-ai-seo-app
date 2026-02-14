@@ -54,6 +54,7 @@
     // ---------------------------------------------------------------------------
     const PORT = process.env.PORT || 8080;
     const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+    const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // ---------------------------------------------------------------------------
 const app = express();
@@ -108,7 +109,30 @@ const IS_PROD = process.env.NODE_ENV === 'production';
     // ---------------------------------------------------------------------------
     // Core middleware
     // ---------------------------------------------------------------------------
-    app.use(cors({ origin: true, credentials: true }));
+    
+    // Enhanced CORS configuration for Shopify iframe embedding
+    const corsOptions = {
+      origin: true, // Allow all origins (required for Shopify iframe)
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'X-Shopify-Access-Token',
+        'X-Shop-Domain'
+      ],
+      exposedHeaders: ['Content-Length', 'X-Request-Id'],
+      maxAge: 86400 // Cache preflight for 24 hours
+    };
+    
+    app.use(cors(corsOptions));
+    
+    // Handle preflight OPTIONS requests explicitly
+    app.options('*', cors(corsOptions));
+    
     app.use(compression()); // Enable gzip compression
     app.use(cookieParser());
 
@@ -280,25 +304,7 @@ if (!IS_PROD) {
     // DEBUG: Log all incoming requests
     // Normalize shop domain for all requests
     app.use((req, res, next) => {
-      // Log ALL POST requests to help debug
-      if (req.method === 'POST') {
-        console.log('[MIDDLEWARE] POST request detected:', {
-          path: req.path,
-          method: req.method,
-          contentType: req.headers['content-type'],
-          hasBody: !!req.body,
-          bodyKeys: req.body ? Object.keys(req.body) : []
-        });
-      }
-      // Log GraphQL requests specifically
-      if (req.path === '/graphql' && req.method === 'POST') {
-        console.log('[MIDDLEWARE] GraphQL request detected:', {
-          path: req.path,
-          method: req.method,
-          hasBody: !!req.body,
-          shop: req.query.shop || req.body?.variables?.shop || 'unknown'
-        });
-      }
+      // Verbose middleware logging disabled for production
       next();
     });
     app.use(attachShop);
@@ -311,7 +317,15 @@ if (!IS_PROD) {
     // ---- PER-SHOP TOKEN RESOLVER (за всички /api/**)
     app.use('/api', async (req, res, next) => {
       try {
-        // Skip authentication for public sitemap endpoints и token exchange
+        // Skip authentication for:
+        // - Public sitemap endpoints (GET)
+        // - Debug endpoints (GET)
+        // - Token exchange (GET)
+        // - Admin billing endpoints (all methods) - they have their own auth
+        if (req.originalUrl.includes('/billing/admin/')) {
+          return next(); // Admin endpoints handle their own authentication
+        }
+        
         if ((req.originalUrl.includes('/sitemap/') || 
             req.originalUrl.includes('/debug/') ||
             req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
@@ -537,6 +551,21 @@ if (!IS_PROD) {
     });
   });
 
+  // Test token purchase email check endpoint (manual trigger)
+  app.get('/api/test/token-email-check', async (req, res) => {
+    try {
+      const emailScheduler = (await import('./services/emailScheduler.js')).default;
+      console.log('[TEST] Manually triggering token purchase email check...');
+      await emailScheduler.checkTokenPurchaseEmail();
+      res.json({ success: true, message: 'Token purchase email check completed. Check logs for details.' });
+    } catch (error) {
+      console.error('[TEST] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+
+
   // Test email endpoint
   app.get('/api/test/email/:type', async (req, res) => {
     const { type } = req.params;
@@ -565,29 +594,24 @@ if (!IS_PROD) {
         case 'welcome':
           result = await emailService.sendWelcomeEmail(storeWithSubscription);
           break;
-        case 'onboarding':
-          result = await emailService.sendOnboardingEmail(storeWithSubscription, 1);
+        case 'token-purchase':
+          result = await emailService.sendTokenPurchaseEmail(storeWithSubscription);
           break;
-        case 'trial':
-          result = await emailService.sendTrialExpiringEmail(storeWithSubscription, 3);
-          break;
-        case 'weekly':
-          const weeklyStats = {
-            productsOptimized: 10,
-            aiQueries: 25,
-            topProducts: ['Product 1', 'Product 2'],
-            seoImprovement: '15%'
-          };
-          result = await emailService.sendWeeklyDigest(storeWithSubscription, weeklyStats);
+        case 'appstore-rating':
+          result = await emailService.sendAppStoreRatingEmail(storeWithSubscription);
           break;
         case 'upgrade':
           result = await emailService.sendUpgradeSuccessEmail(storeWithSubscription, 'professional');
           break;
+        // DEPRECATED: These emails are no longer sent automatically
+        case 'trial':
+          return res.status(410).json({ error: 'Trial expiring email has been deprecated (use in-app banner instead)' });
+        case 'weekly':
+          return res.status(410).json({ error: 'Weekly digest has been deprecated (use /api/test/product-digest instead)' });
         case 'reengagement':
-          result = await emailService.sendReengagementEmail(storeWithSubscription, 14);
-          break;
+          return res.status(410).json({ error: 'Re-engagement email has been deprecated' });
         default:
-          return res.status(400).json({ error: 'Invalid email type. Use: welcome, onboarding, trial, weekly, upgrade, reengagement' });
+          return res.status(400).json({ error: 'Invalid email type. Use: welcome, token-purchase, appstore-rating, upgrade' });
       }
       
       res.json({
@@ -605,7 +629,234 @@ if (!IS_PROD) {
       });
     }
   });
+
+  // Manual trigger for product digest
+  app.get('/api/test/product-digest', async (req, res) => {
+    const { shop } = req.query;
+    
+    try {
+      const productDigestScheduler = (await import('./services/productDigestScheduler.js')).default;
+      
+      if (shop) {
+        // Trigger for specific shop
+        const result = await productDigestScheduler.triggerNow(shop);
+        return res.json({
+          success: result.success,
+          message: `Digest ${result.success ? 'sent' : 'failed'}`,
+          shop,
+          error: result.error || null
+        });
+      } else {
+        // Trigger for all shops
+        await productDigestScheduler.triggerNow();
+        return res.json({
+          success: true,
+          message: 'Digest job triggered for all shops'
+        });
+      }
+    } catch (error) {
+      console.error('[TEST DIGEST] Error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+  });
+
+  // Check shop email (debug endpoint)
+  app.get('/api/test/check-shop-email', async (req, res) => {
+    const { shop } = req.query;
+    if (!shop) {
+      return res.status(400).json({ error: 'Missing shop parameter' });
+    }
+    try {
+      const Shop = (await import('./db/Shop.js')).default;
+      const shopRecord = await Shop.findOne({ shop }).lean();
+      
+      if (!shopRecord) {
+        return res.status(404).json({ 
+          error: 'Shop not found in database',
+          shop 
+        });
+      }
+
+      res.json({
+        shop: shopRecord.shop,
+        email: shopRecord.email || 'NOT SET',
+        shopOwner: shopRecord.shopOwner || 'NOT SET',
+        shopOwnerEmail: shopRecord.shopOwnerEmail || 'NOT SET',
+        contactEmail: shopRecord.contactEmail || 'NOT SET',
+        name: shopRecord.name || 'NOT SET',
+        isActive: shopRecord.isActive,
+        createdAt: shopRecord.createdAt,
+        updatedAt: shopRecord.updatedAt
+      });
+    } catch (error) {
+      console.error('[CHECK SHOP EMAIL] Error:', error);
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  });
 }
+
+// Send Contact Support email via SendGrid (available in all environments)
+app.post('/api/support/send', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  
+  try {
+    const { name, email, subject, message, file } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Missing required fields: name, email, message' });
+    }
+    
+    // Import email service
+    const emailService = (await import('./services/emailService.js')).default;
+    
+    const result = await emailService.sendContactSupportEmail({
+      name,
+      email,
+      subject: subject || 'General Question',
+      message,
+      shop,
+      file: file ? {
+        content: file.content, // base64 string
+        filename: file.filename,
+        type: file.type,
+        size: file.size
+      } : null
+    });
+    
+    if (result.success) {
+      res.json({ success: true, message: 'Message sent successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error || 'Failed to send message' });
+    }
+  } catch (error) {
+    console.error('[SUPPORT] Error sending message:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to send message' });
+  }
+});
+
+// Get shop info for Contact Support page (available in all environments)
+app.get('/api/shop/info', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  try {
+    const Shop = (await import('./db/Shop.js')).default;
+    const shopRecord = await Shop.findOne({ shop }).lean();
+    
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    res.json({
+      name: shopRecord.name || shopRecord.shopOwner || shop.replace('.myshopify.com', ''),
+      email: shopRecord.contactEmail || shopRecord.shopOwnerEmail || shopRecord.email || ''
+    });
+  } catch (error) {
+    console.error('[SHOP INFO] Error:', error.message);
+    res.status(500).json({ error: 'Failed to load shop info' });
+  }
+});
+
+// Fetch and update shop email from Shopify (works in production for fixing missing emails)
+app.post('/api/test/fetch-shop-email', async (req, res) => {
+  const { shop } = req.query;
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  try {
+    const Shop = (await import('./db/Shop.js')).default;
+    const { SHOPIFY_API_VERSION } = await import('./utils/env.js');
+    
+    const shopRecord = await Shop.findOne({ shop });
+    
+    if (!shopRecord) {
+      return res.status(404).json({ error: 'Shop not found in database' });
+    }
+
+    if (!shopRecord.accessToken) {
+      return res.status(400).json({ error: 'Shop has no access token' });
+    }
+
+    // Fetch from Shopify GraphQL API (using correct headers for 2025-01+)
+    const shopQuery = `
+      query {
+        shop {
+          email
+          contactEmail
+          name
+        }
+      }
+    `;
+    
+    const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': shopRecord.accessToken,
+        'Content-Type': 'application/json',
+        'Accept': 'application/graphql-response+json, application/json',
+      },
+      body: JSON.stringify({ query: shopQuery }),
+    });
+
+    if (!shopResponse.ok) {
+      return res.status(500).json({ 
+        error: 'Shopify API error',
+        status: shopResponse.status 
+      });
+    }
+
+    const shopData = await shopResponse.json();
+    const shopEmail = shopData.data?.shop?.email || shopData.data?.shop?.contactEmail || null;
+    const shopName = shopData.data?.shop?.name || null;
+    
+    if (!shopEmail) {
+      return res.status(404).json({ 
+        error: 'No email found in Shopify API response',
+        shopData: shopData.data?.shop 
+      });
+    }
+
+    // Update shop in DB
+    const updateFields = {
+      email: shopEmail,
+      shopOwnerEmail: shopEmail,
+      contactEmail: shopEmail,
+      updatedAt: new Date()
+    };
+    
+    if (shopName) {
+      updateFields.name = shopName;
+    }
+
+    await Shop.updateOne(
+      { shop },
+      { $set: updateFields }
+    );
+
+    res.json({
+      success: true,
+      shop,
+      email: shopEmail,
+      name: shopName,
+      message: 'Shop email updated successfully'
+    });
+  } catch (error) {
+    console.error('[FETCH SHOP EMAIL] Error:', error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
 
     // ---------------------------------------------------------------------------
     // Shopify OAuth Routes for Public App (moved to start function)
@@ -663,6 +914,39 @@ import debugRouter from './controllers/debugRouter.js';
     app.use('/api/languages', languageRouter); // -> /api/languages/product/:shop/:productId
     app.use('/api/seo', multiSeoRouter); // -> /api/seo/generate-multi, /api/seo/apply-multi
 
+    // Manual trigger for product digest (TEST MODE)
+    app.get('/api/test/product-digest', async (req, res) => {
+      const { shop } = req.query;
+      
+      try {
+        const productDigestScheduler = (await import('./services/productDigestScheduler.js')).default;
+        
+        if (shop) {
+          // Trigger for specific shop
+          const result = await productDigestScheduler.triggerNow(shop);
+          return res.json({
+            success: result.success,
+            message: `Digest ${result.success ? 'sent' : 'failed'}`,
+            shop,
+            error: result.error || null
+          });
+        } else {
+          // Trigger for all shops
+          await productDigestScheduler.triggerNow();
+          return res.json({
+            success: true,
+            message: 'Digest job triggered for all shops'
+          });
+        }
+      } catch (error) {
+        console.error('[TEST DIGEST] Error:', error);
+        res.status(500).json({ 
+          success: false,
+          error: error.message 
+        });
+      }
+    });
+
     // --- Minimal GraphQL endpoint for test plan overrides ---
     const schema = buildSchema(`
       enum PlanEnum { starter professional growth growth_extra enterprise }
@@ -689,6 +973,9 @@ import debugRouter from './controllers/debugRouter.js';
         success: Boolean!
         message: String!
         shop: String!
+        queued: Boolean
+        position: Int
+        estimatedTime: Int
       }
       
       type ProductEdge {
@@ -774,60 +1061,97 @@ import debugRouter from './controllers/debugRouter.js';
 
       async regenerateSitemap({ shop }, ctx) {
         try {
-          console.log('[GRAPHQL] ===== REGENERATE SITEMAP MUTATION CALLED =====');
-          console.log('[GRAPHQL] Shop:', shop);
-          console.log('[GRAPHQL] enableAIEnhancement: true');
-          
           // === TRIAL RESTRICTION CHECK ===
           const { default: Subscription } = await import('./db/Subscription.js');
           const subscription = await Subscription.findOne({ shop });
           
           const now = new Date();
           const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+          const isActivated = subscription?.isActivated || false;
           
           const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
           const includedTokensPlans = ['growth_extra', 'enterprise'];
           const hasIncludedTokens = includedTokensPlans.includes(planKey);
           
+          // Check if user has purchased tokens
+          const { default: TokenBalance } = await import('./db/TokenBalance.js');
+          const tokenBalance = await TokenBalance.findOne({ shop });
+          const hasPurchasedTokens = tokenBalance?.totalPurchased > 0;
+          const hasTokenBalance = tokenBalance?.balance > 0;
+          
           // Import isBlockedInTrial
           const { isBlockedInTrial } = await import('./billing/tokenConfig.js');
           const feature = 'ai-sitemap-optimized';
           
-          // CRITICAL: Block during trial ONLY for plans with included tokens
-          if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+          // CRITICAL: Block during trial ONLY if:
+          // 1. Has included tokens plan (Growth Extra/Enterprise)
+          // 2. In trial period
+          // 3. Plan not activated
+          // 4. Never purchased tokens AND has no remaining balance
+          // 5. Feature is blocked for this plan
+          if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
             throw new Error('TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.');
           }
           
-          // Import the core sitemap generation logic
+          // Import the core sitemap generation logic and queue
           const { generateSitemapCore } = await import('./controllers/sitemapController.js');
-          console.log('[GRAPHQL] ✅ generateSitemapCore imported successfully');
+          const { default: sitemapQueue } = await import('./services/sitemapQueue.js');
           
-          // ===== CRITICAL: AI Enhancement enabled from Settings =====
+          // ===== BACKGROUND QUEUE: AI Enhancement enabled from Settings =====
           // When called from Settings, we enable AI enhancement (real-time AI calls)
           // This is the ONLY place where AI enhancement happens
           // The Sitemap page (Search Optimization for AI) generates BASIC sitemap only
-          console.log('[GRAPHQL] 🚀 Starting background sitemap generation...');
-          generateSitemapCore(shop, { enableAIEnhancement: true })
-            .then((result) => {
-              console.log('[GRAPHQL] ✅ Background sitemap generation completed successfully!');
-              console.log('[GRAPHQL] Result:', result);
-            })
-            .catch((error) => {
-              console.error('[GRAPHQL] ❌ Background sitemap generation failed:', error);
-              console.error('[GRAPHQL] Error stack:', error.stack);
-            });
+          // 
+          // Use queue system for reliable background processing:
+          // - Works independently of frontend connection
+          // - Prevents duplicate jobs
+          // - Handles retries on failure
+          // - Updates status in Shop.sitemapStatus
+          const jobInfo = await sitemapQueue.addJob(shop, async () => {
+            return await generateSitemapCore(shop, { enableAIEnhancement: true });
+          }, { type: 'ai-enhanced' });
           
-          // Return immediately
-          console.log('[GRAPHQL] 📤 Returning immediate success response');
+          // Return immediately with job info
           return {
             success: true,
-            message: 'AI-Optimized Sitemap regeneration started in background',
-            shop: shop
+            message: jobInfo.queued 
+              ? 'AI-Optimized Sitemap regeneration started in background. You can navigate away - the process will continue.'
+              : jobInfo.message,
+            shop: shop,
+            queued: jobInfo.queued,
+            position: jobInfo.position,
+            estimatedTime: jobInfo.estimatedTime
           };
           
         } catch (error) {
           console.error('[GRAPHQL] ❌ Error starting sitemap regeneration:', error);
           console.error('[GRAPHQL] Error stack:', error.stack);
+          
+          // Handle specific error codes
+          if (error.code === 'TRIAL_RESTRICTION' || error.message?.includes('TRIAL_RESTRICTION')) {
+            return {
+              success: false,
+              message: 'TRIAL_RESTRICTION: AI-Optimized Sitemap is locked during trial period. Activate your plan to unlock.',
+              shop: shop
+            };
+          }
+          
+          if (error.code === 'INSUFFICIENT_TOKENS') {
+            return {
+              success: false,
+              message: 'INSUFFICIENT_TOKENS: Not enough tokens for AI-Optimized Sitemap.',
+              shop: shop
+            };
+          }
+          
+          if (error.code === 'PLAN_NOT_ELIGIBLE') {
+            return {
+              success: false,
+              message: `PLAN_NOT_ELIGIBLE: ${error.message}`,
+              shop: shop
+            };
+          }
+          
           return {
             success: false,
             message: error.message,
@@ -1026,13 +1350,6 @@ import debugRouter from './controllers/debugRouter.js';
       try {
         const { query, variables } = req.body || {};
         
-        // Log incoming GraphQL requests for debugging
-        console.log(`[GRAPHQL] Request received:`, {
-          query: query?.substring(0, 100),
-          variables: variables,
-          shop: variables?.shop || req.shopDomain || 'unknown'
-        });
-        
         if (!query) {
           console.error(`[GRAPHQL] Error: No query provided`);
           return res.status(400).json({ errors: [{ message: 'No query provided' }] });
@@ -1050,7 +1367,6 @@ import debugRouter from './controllers/debugRouter.js';
           console.error(`[GRAPHQL] Errors:`, result.errors);
           res.status(400).json(result);
         } else {
-          console.log(`[GRAPHQL] Success for shop:`, variables?.shop || 'unknown');
           res.json(result);
         }
       } catch (e) {
@@ -1319,8 +1635,9 @@ if (!IS_PROD) {
     });
 
     app.get('/apps/:app_identifier/*', (req, res, next) => {
-      // Skip our App Proxy routes
-      if (req.params.app_identifier === 'new-ai-seo') {
+      // Skip our App Proxy routes - both 'indexaize' and 'ai' paths
+      // Shopify App Proxy strips the subpath, so /apps/indexaize/ai/... becomes /apps/ai/...
+      if (req.params.app_identifier === APP_PROXY_SUBPATH || req.params.app_identifier === 'ai') {
         return next();
       }
       
@@ -1341,29 +1658,13 @@ if (!IS_PROD) {
       console.error('[SERVER] Expected path:', distPath);
       console.error('[SERVER] Please run: npm run build (or npm install which runs postinstall)');
     } else {
-      console.log('[SERVER] ✅ frontend/dist directory exists:', distPath);
       const indexPath = path.join(distPath, 'index.html');
       if (!fs.existsSync(indexPath)) {
         console.error('[SERVER] ❌ ERROR: frontend/dist/index.html does not exist!');
       } else {
-        console.log('[SERVER] ✅ frontend/dist/index.html exists');
         // Check if assets directory exists
         const assetsPath = path.join(distPath, 'assets');
-        if (fs.existsSync(assetsPath)) {
-          const assets = fs.readdirSync(assetsPath);
-          console.log('[SERVER] ✅ Assets directory exists with', assets.length, 'files');
-          const jsFiles = assets.filter(f => f.endsWith('.js'));
-          console.log('[SERVER] Found', jsFiles.length, 'JavaScript files in assets');
-          // Log the actual index.js file that exists
-          const indexFiles = jsFiles.filter(f => f.startsWith('index-'));
-          console.log('[SERVER] 🔍 Index files found:', indexFiles);
-          if (indexFiles.length > 0) {
-            console.log('[SERVER] 🔍 First index file:', indexFiles[0]);
-            const indexFilePath = path.join(assetsPath, indexFiles[0]);
-            const stats = fs.statSync(indexFilePath);
-            console.log('[SERVER] 🔍 Index file size:', stats.size, 'bytes, modified:', stats.mtime);
-          }
-        } else {
+        if (!fs.existsSync(assetsPath)) {
           console.error('[SERVER] ❌ ERROR: frontend/dist/assets directory does not exist!');
         }
       }
@@ -1381,14 +1682,6 @@ if (!IS_PROD) {
     // Handle root request - this is the App URL endpoint
     app.get('/', async (req, res) => {
       const { shop, hmac, timestamp, host, embedded, id_token } = req.query;
-      
-      // ALWAYS log - critical for debugging
-      console.log('[ROOT] GET / request:', {
-        shop: shop ? shop.substring(0, 20) + '...' : 'MISSING',
-        embedded: embedded,
-        hasIdToken: !!id_token,
-        host: host ? host.substring(0, 20) + '...' : 'MISSING'
-      });
       
       // If no shop parameter, show install form
       if (!shop) {
@@ -1530,101 +1823,12 @@ if (!IS_PROD) {
           // For embedded apps, we use Token Exchange to get Admin API access tokens
           // The tokenResolver will handle JWT -> Admin token exchange automatically
           if (id_token || embedded === '1') {
-              console.log('[ROOT] Serving HTML for embedded app, shop:', shop);
-              
               const indexPath = path.join(distPath, 'index.html');
               let html = fs.readFileSync(indexPath, 'utf8');
               
-              // Log initial HTML content to debug
-              const initialIndexMatch = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-              console.log('[SERVER] 📄 Initial HTML contains index references:', initialIndexMatch);
-          
-              // Find the newest asset files and update all references
-              const assetsPath = path.join(distPath, 'assets');
-              if (fs.existsSync(assetsPath)) {
-                const assets = fs.readdirSync(assetsPath);
-                
-                // Find newest index file
-                const indexFiles = assets.filter(f => f.startsWith('index-') && f.endsWith('.js'));
-                if (indexFiles.length > 0) {
-                  const indexFilesWithStats = indexFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime, size: stats.size };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestIndexFile = indexFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', indexFiles.length, 'index files, using newest:', newestIndexFile);
-                  
-                  // Replace old index file reference with newest one (in both script tags and modulepreload links)
-                  // Use a more flexible regex that matches the full path
-                  const beforeReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                  console.log('[SERVER] 🔍 Found index references before replace:', beforeReplace);
-                  
-                  if (beforeReplace && beforeReplace.length > 0) {
-                    // Replace all occurrences
-                    html = html.replace(/index-[a-zA-Z0-9_-]+\.js/g, newestIndexFile);
-                    const afterReplace = html.match(/index-[a-zA-Z0-9_-]+\.js/g);
-                    // After replace, we should only have references to the newest file
-                    const allMatchNewest = afterReplace && afterReplace.every(ref => ref === newestIndexFile);
-                    if (allMatchNewest) {
-                      console.log('[SERVER] ✅ All index references replaced successfully with:', newestIndexFile);
-                    } else if (afterReplace && afterReplace.length > 0) {
-                      console.log('[SERVER] ⚠️ Still found old index references after replace:', afterReplace.filter(ref => ref !== newestIndexFile));
-                    } else {
-                      console.log('[SERVER] ⚠️ No index references found after replace (unexpected)');
-                    }
-                  } else {
-                    console.log('[SERVER] ⚠️ No index references found in HTML to replace!');
-                  }
-                }
-                
-                // Find newest react-vendor file
-                const reactVendorFiles = assets.filter(f => f.startsWith('react-vendor-') && f.endsWith('.js'));
-                if (reactVendorFiles.length > 0) {
-                  const reactVendorFilesWithStats = reactVendorFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestReactVendorFile = reactVendorFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', reactVendorFiles.length, 'react-vendor files, using newest:', newestReactVendorFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/react-vendor-[a-zA-Z0-9_-]+\.js/g, newestReactVendorFile);
-                }
-                
-                // Find newest app-bridge file
-                const appBridgeFiles = assets.filter(f => f.startsWith('app-bridge-') && f.endsWith('.js'));
-                if (appBridgeFiles.length > 0) {
-                  const appBridgeFilesWithStats = appBridgeFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestAppBridgeFile = appBridgeFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', appBridgeFiles.length, 'app-bridge files, using newest:', newestAppBridgeFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/app-bridge-[a-zA-Z0-9_-]+\.js/g, newestAppBridgeFile);
-                }
-                
-                // Find newest polaris file
-                const polarisFiles = assets.filter(f => f.startsWith('polaris-') && f.endsWith('.js'));
-                if (polarisFiles.length > 0) {
-                  const polarisFilesWithStats = polarisFiles.map(f => {
-                    const filePath = path.join(assetsPath, f);
-                    const stats = fs.statSync(filePath);
-                    return { name: f, mtime: stats.mtime };
-                  }).sort((a, b) => b.mtime - a.mtime);
-                  
-                  const newestPolarisFile = polarisFilesWithStats[0].name;
-                  console.log('[SERVER] 🔄 Found', polarisFiles.length, 'polaris files, using newest:', newestPolarisFile);
-                  // Replace in both script tags and modulepreload links
-                  html = html.replace(/polaris-[a-zA-Z0-9_-]+\.js/g, newestPolarisFile);
-                }
-              }
-          
+              // With .dockerignore in place, we always get fresh build artifacts
+              // No need for dynamic asset replacement anymore
+              
               // Generate cache busting values
               const buildTime = Date.now().toString();
               const cacheBust = Math.random().toString(36).substring(7);
@@ -1635,22 +1839,12 @@ if (!IS_PROD) {
               html = html.replace(/%BUILD_TIME%/g, buildTime);
               html = html.replace(/%CACHE_BUST%/g, cacheBust);
               
-              console.log('[SERVER] Injecting API key into HTML:', {
-                apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING',
-                shop: shop,
-                hasIdToken: !!id_token,
-                cacheBust: cacheBust
-              });
-              
               // Find the closing </head> tag and inject our script before it
               const headEndIndex = html.indexOf('</head>');
               
               if (headEndIndex !== -1) {
                 const injection = `
                   <script>
-                    console.log('[SERVER-INJECTED] API Key:', '${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}');
-                    console.log('[SERVER-INJECTED] Shop:', '${shop}');
-                    console.log('[SERVER-INJECTED] Host:', '${host || ''}');
                     window.__SHOPIFY_API_KEY = '${apiKey}';
                     window.__SHOPIFY_SHOP = '${shop}';
                     window.__SHOPIFY_HOST = '${host || ''}';
@@ -1658,53 +1852,12 @@ if (!IS_PROD) {
                     // Add error handler to catch JavaScript errors
                     window.addEventListener('error', function(e) {
                       console.error('[GLOBAL ERROR]', e.error);
-                      console.error('[GLOBAL ERROR] Message:', e.message);
-                      console.error('[GLOBAL ERROR] Filename:', e.filename);
-                      console.error('[GLOBAL ERROR] Line:', e.lineno);
-                      console.error('[GLOBAL ERROR] Column:', e.colno);
-                      console.error('[GLOBAL ERROR] Stack:', e.error?.stack);
                     });
                     
                     // Add unhandled promise rejection handler
                     window.addEventListener('unhandledrejection', function(e) {
                       console.error('[UNHANDLED REJECTION]', e.reason);
-                      console.error('[UNHANDLED REJECTION] Stack:', e.reason?.stack);
                     });
-                    
-                    // Log when DOM is ready
-                    if (document.readyState === 'loading') {
-                      document.addEventListener('DOMContentLoaded', function() {
-                        console.log('[SERVER-INJECTED] DOM Content Loaded');
-                        console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
-                        
-                        // Check if main.jsx script is loaded
-                        const scripts = document.querySelectorAll('script[type="module"]');
-                        console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
-                        scripts.forEach((script, i) => {
-                          console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                        });
-                      });
-                    } else {
-                      console.log('[SERVER-INJECTED] DOM already ready');
-                      console.log('[SERVER-INJECTED] Root element exists:', !!document.getElementById('root'));
-                      
-                      // Check if main.jsx script is loaded
-                      const scripts = document.querySelectorAll('script[type="module"]');
-                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts');
-                      scripts.forEach((script, i) => {
-                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                      });
-                    }
-                    
-                    // Also check after a short delay to see if scripts load
-                    setTimeout(function() {
-                      console.log('[SERVER-INJECTED] After 2s delay - checking scripts again');
-                      const scripts = document.querySelectorAll('script[type="module"]');
-                      console.log('[SERVER-INJECTED] Found', scripts.length, 'module scripts after delay');
-                      scripts.forEach((script, i) => {
-                        console.log('[SERVER-INJECTED] Script', i, ':', script.src || script.textContent.substring(0, 50));
-                      });
-                    }, 2000);
                   </script>
                   <meta name="shopify-api-key" content="${apiKey}">
                 `;
@@ -1769,7 +1922,7 @@ if (!IS_PROD) {
       res.json({ 
         status: 'ok',
         app: 'indexAIze - Unlock AI Search',
-        version: '1.0.0'
+        version: '1.2.0'
       });
     });
 
@@ -1829,7 +1982,6 @@ if (!IS_PROD) {
             const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
             </script>
             <meta name="shopify-api-key" content="${apiKey}">
           `;
@@ -1864,7 +2016,6 @@ if (!IS_PROD) {
         const injection = `
           <script>
             window.__SHOPIFY_API_KEY = '${apiKey}';
-            console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
           </script>
           <meta name="shopify-api-key" content="${apiKey}">
         `;
@@ -1895,6 +2046,17 @@ if (!IS_PROD) {
   });
 }
 
+// PHASE 1 OPTIMIZATION: AI Queue monitoring endpoint (available on all environments for monitoring)
+app.get('/debug/ai-queue-stats', async (req, res) => {
+  try {
+    const aiQueue = (await import('./services/aiQueue.js')).default;
+    const stats = aiQueue.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
     // Старият /test/set-plan endpoint е премахнат - използваме GraphQL версията
 
     // ---------------------------------------------------------------------------
@@ -1911,6 +2073,7 @@ if (!IS_PROD) {
     // ---------------------------------------------------------------------------
     import { startScheduler } from './scheduler.js';
     import emailScheduler from './services/emailScheduler.js';
+    import productDigestScheduler from './services/productDigestScheduler.js';
 
     async function start() {
       try {
@@ -1930,6 +2093,69 @@ if (!IS_PROD) {
         }
 
       // DEBUG ENDPOINTS (MUST be first, before all other middleware)
+      // Staging diagnostics endpoint (available in staging and non-prod)
+      const IS_STAGING = process.env.NODE_ENV === 'staging';
+      
+      // Staging installation diagnostics endpoint (available in staging)
+      if (IS_STAGING) {
+        app.get('/debug/staging-install', (req, res) => {
+          const expectedStagingKey = 'cbb6c395806364fba75996525ffce483';
+          const expectedStagingUrl = 'https://indexaize-aiseo-app-staging.up.railway.app';
+          
+          const diagnostics = {
+            timestamp: new Date().toISOString(),
+            environment: {
+              NODE_ENV: process.env.NODE_ENV || 'not set',
+              APP_URL: process.env.APP_URL || 'not set',
+              SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY || 'not set',
+              SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? '***SET***' : 'NOT SET',
+              VITE_SHOPIFY_API_KEY: process.env.VITE_SHOPIFY_API_KEY || 'not set',
+              MONGODB_URI: process.env.MONGODB_URI ? '***SET***' : 'NOT SET',
+            },
+            validation: {
+              isStaging: IS_STAGING,
+              apiKeyMatches: process.env.SHOPIFY_API_KEY === expectedStagingKey,
+              appUrlMatches: process.env.APP_URL === expectedStagingUrl,
+              apiKeysMatch: process.env.SHOPIFY_API_KEY === process.env.VITE_SHOPIFY_API_KEY,
+              appUrlIsHttps: process.env.APP_URL?.startsWith('https://'),
+              appUrlHasTrailingSlash: process.env.APP_URL?.endsWith('/'),
+            },
+            redirectUrls: process.env.APP_URL ? [
+              `${process.env.APP_URL.replace(/\/+$/, '')}/auth/callback`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/api/auth/callback`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/api/auth`,
+              `${process.env.APP_URL.replace(/\/+$/, '')}/`,
+            ] : [],
+            issues: [],
+          };
+
+          // Check for issues
+          if (!process.env.SHOPIFY_API_KEY) diagnostics.issues.push('SHOPIFY_API_KEY is not set');
+          if (!process.env.SHOPIFY_API_SECRET) diagnostics.issues.push('SHOPIFY_API_SECRET is not set');
+          if (!process.env.APP_URL) diagnostics.issues.push('APP_URL is not set');
+          if (!process.env.VITE_SHOPIFY_API_KEY) diagnostics.issues.push('VITE_SHOPIFY_API_KEY is not set');
+          if (IS_STAGING && !diagnostics.validation.apiKeyMatches) {
+            diagnostics.issues.push(`SHOPIFY_API_KEY should be ${expectedStagingKey} for staging`);
+          }
+          if (IS_STAGING && !diagnostics.validation.appUrlMatches) {
+            diagnostics.issues.push(`APP_URL should be ${expectedStagingUrl} for staging`);
+          }
+          if (!diagnostics.validation.apiKeysMatch && process.env.SHOPIFY_API_KEY && process.env.VITE_SHOPIFY_API_KEY) {
+            diagnostics.issues.push('SHOPIFY_API_KEY and VITE_SHOPIFY_API_KEY do not match');
+          }
+          if (diagnostics.validation.appUrlHasTrailingSlash) {
+            diagnostics.issues.push('APP_URL has trailing slash - this can cause OAuth issues');
+          }
+          if (!diagnostics.validation.appUrlIsHttps && process.env.APP_URL) {
+            diagnostics.issues.push('APP_URL should use HTTPS');
+          }
+
+          diagnostics.status = diagnostics.issues.length === 0 ? 'ok' : 'issues_found';
+          
+          res.json(diagnostics);
+        });
+      }
+      
       if (!IS_PROD) {
         app.get('/debug/env', (req, res) => {
           const key = process.env.SHOPIFY_API_KEY || '';
@@ -2030,7 +2256,10 @@ if (!IS_PROD) {
       });
 
       // APP PROXY ROUTES (MUST be first, before all other middleware)
-      app.use('/apps/new-ai-seo', appProxyRouter);
+      // Mount at both paths to handle Shopify App Proxy requests correctly
+      // Shopify strips the subpath prefix, so /apps/indexaize/ai/... becomes /apps/ai/...
+      app.use(`/apps/${APP_PROXY_SUBPATH}`, appProxyRouter);
+      app.use('/apps', appProxyRouter);  // Also mount at /apps for App Proxy compatibility
 
         // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
         // Direct public sitemap endpoint - no authentication required
@@ -2100,18 +2329,36 @@ if (!IS_PROD) {
 
 
         // Serve assets with aggressive caching for production (MUST be before catch-all)
-        // Add logging middleware for assets
-        app.use((req, res, next) => {
-          // Log asset requests (JS, CSS, images, etc.)
-          if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/)) {
-            console.log('[ASSETS] Request:', req.method, req.path, {
-              exists: fs.existsSync(path.join(distPath, req.path)),
-              distPath: distPath
-            });
-          }
-          next();
-        });
         
+        // Serve logo for emails (public endpoint)
+        app.get('/assets/logo/:size', (req, res) => {
+          const { size } = req.params;
+          const allowedSizes = ['Logo_60x60.png', 'Logo_80x80.png', 'Logo_120x120.png'];
+          
+          if (!allowedSizes.includes(size)) {
+            return res.status(404).send('Logo size not found');
+          }
+          
+          const logoPath = path.join(__dirname, 'assets', 'logo', size);
+          const logoPathAlt = path.join(__dirname, '..', 'backend', 'assets', 'logo', size);
+          
+          let finalPath = null;
+          if (fs.existsSync(logoPath)) {
+            finalPath = logoPath;
+          } else if (fs.existsSync(logoPathAlt)) {
+            finalPath = logoPathAlt;
+          }
+          
+          if (finalPath) {
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            res.sendFile(path.resolve(finalPath));
+          } else {
+            console.error('[LOGO] Logo not found. Tried:', logoPath, 'and', logoPathAlt);
+            res.status(404).send('Logo not found');
+          }
+        });
+
         app.use(
           express.static(distPath, {
             index: false,
@@ -2313,6 +2560,121 @@ if (!IS_PROD) {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
     });
 
+    // Reset unsubscribe status endpoint (for testing)
+    app.post('/api/test/reset-unsubscribe', async (req, res) => {
+      try {
+        const { shop } = req.body;
+        if (!shop) {
+          return res.status(400).json({ success: false, error: 'shop parameter is required' });
+        }
+
+        const Shop = (await import('./db/Shop.js')).default;
+        const shopRecord = await Shop.findOne({ shop });
+        
+        if (!shopRecord) {
+          return res.status(404).json({ success: false, error: 'Shop not found' });
+        }
+
+        // Reset to subscribed
+        shopRecord.emailPreferences = shopRecord.emailPreferences || {};
+        shopRecord.emailPreferences.marketingEmails = true;
+        shopRecord.emailPreferences.unsubscribedAt = null;
+        await shopRecord.save();
+
+        // Remove from SendGrid suppression list (non-blocking)
+        const sendgridListsService = (await import('./services/sendgridListsService.js')).default;
+        const emailToResubscribe = shopRecord.email || shopRecord.shopOwner;
+        if (emailToResubscribe) {
+          sendgridListsService.removeFromSuppressionList(emailToResubscribe).catch(error => {
+            console.error('[TEST] Failed to remove from SendGrid suppression list:', error.message);
+          });
+        }
+
+        console.log(`[TEST] ✅ Reset unsubscribe status for ${shop} - now subscribed`);
+
+        res.json({ 
+          success: true, 
+          message: `Shop ${shop} reset to subscribed status`,
+          emailPreferences: shopRecord.emailPreferences
+        });
+      } catch (error) {
+        console.error('[TEST] Error resetting unsubscribe:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Unsubscribe endpoint (must be before catch-all, public endpoint - no auth required)
+    app.get('/api/email/unsubscribe', async (req, res) => {
+      try {
+        const { shop, email } = req.query;
+        
+        if (!shop) {
+          return res.status(400).send('Missing shop parameter');
+        }
+
+        const Shop = (await import('./db/Shop.js')).default;
+        const shopRecord = await Shop.findOne({ shop });
+        
+        if (!shopRecord) {
+          return res.status(404).send('Shop not found');
+        }
+
+        // Set email preferences to unsubscribe from marketing emails
+        shopRecord.emailPreferences = shopRecord.emailPreferences || {};
+        shopRecord.emailPreferences.marketingEmails = false;
+        shopRecord.emailPreferences.unsubscribedAt = new Date();
+        await shopRecord.save();
+
+        // Add to SendGrid suppression list (non-blocking)
+        const sendgridListsService = (await import('./services/sendgridListsService.js')).default;
+        const emailToUnsubscribe = email || shopRecord.email || shopRecord.shopOwner;
+        if (emailToUnsubscribe) {
+          sendgridListsService.addToSuppressionList(emailToUnsubscribe, shop).catch(error => {
+            console.error('[UNSUBSCRIBE] Failed to add to SendGrid suppression list:', error.message);
+          });
+        }
+
+        // Return a simple HTML confirmation page
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Unsubscribed</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                max-width: 600px;
+                margin: 50px auto;
+                padding: 20px;
+                text-align: center;
+              }
+              .success {
+                background: #d1fae5;
+                border: 1px solid #10b981;
+                border-radius: 8px;
+                padding: 30px;
+                color: #065f46;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="success">
+              <h2>✓ Successfully Unsubscribed</h2>
+              <p>You have been unsubscribed from marketing emails.</p>
+              <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+                You will still receive important transactional emails related to your account.
+              </p>
+            </div>
+          </body>
+          </html>
+        `);
+      } catch (error) {
+        console.error('[UNSUBSCRIBE] ❌ Error:', error);
+        res.status(500).send('Failed to process unsubscribe request');
+      }
+    });
+
     // Catch-all for any unmatched routes - MUST be last
     app.get('*', (req, res) => {
       // Check if it's an app request
@@ -2338,15 +2700,10 @@ if (!IS_PROD) {
           const injection = `
             <script>
               window.__SHOPIFY_API_KEY = '${apiKey}';
-              console.log('[SERVER] Injected API key:', '${apiKey}'.substring(0, 8) + '...');
-              console.log('[SERVER] Cache bust:', '${cacheBust}');
             </script>
           `;
           html = html.slice(0, headEndIndex) + injection + html.slice(headEndIndex);
         }
-        
-        // Log for debugging
-        console.log('[SERVER] Serving index.html with cache bust:', cacheBust);
         
         res.send(html);
       } else {
@@ -2370,6 +2727,13 @@ if (!IS_PROD) {
             emailScheduler.startAll();
           } catch (e) {
             console.error('Email scheduler start error:', e);
+          }
+          
+          // Start product digest scheduler
+          try {
+            productDigestScheduler.start();
+          } catch (e) {
+            console.error('Product digest scheduler start error:', e);
           }
         });
       } catch (e) {

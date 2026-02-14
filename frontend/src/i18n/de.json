@@ -1,5 +1,13 @@
 {
-  "nav": { "dashboard": "Übersicht", "seo": "KI-SEO", "billing": "Abrechnung", "settings": "Einstellungen" },
+  "nav": { 
+    "dashboard": "Übersicht", 
+    "storeOptimization": "Shop-Optimierung für KI",
+    "aiDiscovery": "KI-Entdeckungsfunktionen",
+    "billing": "Pläne & Abrechnung",
+    "aiTesting": "KI-Tests",
+    "cleanUninstall": "Bereinigen & Deinstallieren",
+    "contactSupport": "Support kontaktieren"
+  },
   "dashboard": {
     "plan": "Aktueller Plan",
     "shop": "Shop",
@@ -10,5 +18,5 @@
   },
   "seo": { "title": "SEO generieren", "productId": "Produkt-ID", "provider": "KI-Anbieter", "generate": "Generieren", "result": "Ergebnis" },
   "billing": { "title": "Pläne & Abrechnung", "choose": "Wähle deinen Plan:", "activate": "Aktivieren" },
-  "settings": { "title": "Einstellungen", "languageInfo": "Über das Menü oben rechts kannst du die Sprache wechseln.", "notes": "Weitere Optionen folgen." }
+  "settings": { "title": "KI-Entdeckungsfunktionen", "languageInfo": "Über das Menü oben rechts kannst du die Sprache wechseln.", "notes": "Weitere Optionen folgen." }
 }

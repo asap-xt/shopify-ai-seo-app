@@ -2,6 +2,11 @@
 // Environment detection and configuration helpers
 
 /**
+ * Shopify API version
+ */
+export const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
+
+/**
  * Get current environment
  * @returns {string} 'production' | 'staging' | 'development'
  */

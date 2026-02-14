@@ -20,6 +20,8 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
 import TrialActivationModal from '../components/TrialActivationModal.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
+import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
 import { PLAN_HIERARCHY, PLAN_HIERARCHY_LOWERCASE, getPlanIndex, isPlanAtLeast } from '../hooks/usePlanHierarchy.js';
 
 const qs = (k, d = '') => { try { return new URLSearchParams(window.location.search).get(k) || d; } catch { return d; } };
@@ -44,6 +46,7 @@ export default function AiTesting({ shop: shopProp }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [showTrialActivationModal, setShowTrialActivationModal] = useState(false);
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   const [tokenError, setTokenError] = useState(null);
   const [showEndpointUpgrade, setShowEndpointUpgrade] = useState(false);
   const [endpointUpgradeInfo, setEndpointUpgradeInfo] = useState(null);
@@ -59,13 +62,213 @@ export default function AiTesting({ shop: shopProp }) {
   const [aiTestProgress, setAiTestProgress] = useState(0);
   const [tokenBalance, setTokenBalance] = useState(null);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
+  const [aiEOScore, setAiEOScore] = useState(null);
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    optimizedProducts: 0,
+    totalCollections: 0,
+    optimizedCollections: 0
+  });
+  const [storeUrl, setStoreUrl] = useState(''); // Public domain for AI prompts
+  const [storeName, setStoreName] = useState('');
+  const [lastTestTimestamp, setLastTestTimestamp] = useState(null);
+  const [lastAiTestTimestamp, setLastAiTestTimestamp] = useState(null);
+  
+  // NEW: AI Bot Testing state
+  const [availableBots, setAvailableBots] = useState([]);
+  const [selectedBotId, setSelectedBotId] = useState(null);
+  const [storeInsights, setStoreInsights] = useState(null);
+  const [dynamicPrompts, setDynamicPrompts] = useState([]);
+  const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [customBotQuestion, setCustomBotQuestion] = useState('');
+  const [customProductQuestion, setCustomProductQuestion] = useState(''); // Custom product discovery question
+  const [botTestResponse, setBotTestResponse] = useState(null);
+  const [botTestUsage, setBotTestUsage] = useState(null);
+  const [loadingPromptIds, setLoadingPromptIds] = useState(new Set()); // Track which prompts are loading (allows parallel)
+  const [categoryResponse, setCategoryResponse] = useState({}); // Store response per category
+
+  // Review banner state (same as Dashboard)
+  const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedReviewBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  const [clickedReviewRate, setClickedReviewRate] = useState(() => {
+    try {
+      return localStorage.getItem(`clickedReviewRate_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // Competitive Analysis state (Growth Plus+ only)
+  const [competitorUrls, setCompetitorUrls] = useState(['', '', '']);
+  const [competitiveResults, setCompetitiveResults] = useState(null);
+  const [analyzingCompetitors, setAnalyzingCompetitors] = useState(false);
 
   useEffect(() => {
     if (shop) {
       loadPlan();
       loadTokenBalance();
+      loadStats();
+      loadSavedTestResults();
+      loadAvailableBots();
+      loadStoreInsights();
     }
   }, [shop, api]);
+  
+  // Load available AI bots based on plan
+  const loadAvailableBots = async () => {
+    try {
+      const data = await api(`/api/ai-testing/available-bots?shop=${shop}`);
+      setAvailableBots(data.bots || []);
+      // Auto-select first available bot
+      const firstAvailable = data.bots?.find(b => b.available);
+      if (firstAvailable && !selectedBotId) {
+        setSelectedBotId(firstAvailable.id);
+      }
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading available bots:', err);
+    }
+  };
+  
+  // Load store insights for dynamic prompts
+  const loadStoreInsights = async () => {
+    try {
+      const data = await api(`/api/ai-testing/store-insights?shop=${shop}`);
+      setStoreInsights(data);
+      setDynamicPrompts(data.prompts || []);
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading store insights:', err);
+    }
+  };
+  
+  // Run AI bot test
+  const runBotTest = async (promptOverride = null, promptId = null, category = null) => {
+    if (!selectedBotId) {
+      setToastContent('Please select an AI model first');
+      return;
+    }
+    
+    const promptToUse = promptOverride || selectedPrompt?.question || customBotQuestion;
+    if (!promptToUse) {
+      setToastContent('Please select or enter a question');
+      return;
+    }
+    
+    // Add this prompt to loading set (allows parallel requests)
+    setLoadingPromptIds(prev => new Set([...prev, promptId]));
+    setBotTestResponse(null);
+    setBotTestUsage(null);
+    
+    try {
+      const response = await api('/api/ai-testing/run-bot-test', {
+        method: 'POST',
+        body: {
+          shop,
+          botId: selectedBotId,
+          prompt: promptToUse,
+          customPrompt: promptOverride ? null : customBotQuestion || null
+        }
+      });
+      
+      if (response.success) {
+        setBotTestResponse(response);
+        setBotTestUsage(response.usage);
+        
+        // Store response per category for display under the card
+        if (category) {
+          setCategoryResponse(prev => ({
+            ...prev,
+            [category]: {
+              promptId,
+              response: response.response,
+              bot: response.bot,
+              usage: response.usage
+            }
+          }));
+        }
+        
+        loadTokenBalance(); // Refresh token balance
+      } else {
+        setToastContent(response.error || 'Test failed');
+      }
+    } catch (error) {
+      console.error('[AI-TESTING] Bot test error:', error);
+      
+      // Handle token/plan errors
+      if (error.status === 402) {
+        if (error.trialRestriction && error.requiresActivation) {
+          setTokenError(error);
+          setShowTrialActivationModal(true);
+        } else if (error.requiresPurchase) {
+          setTokenError(error);
+          setShowTokenModal(true);
+        }
+        setBotTestResponse(null);
+        return;
+      }
+      
+      if (error.status === 403) {
+        setToastContent(`${error.requiredPlan || 'Higher'} plan required for this bot`);
+        return;
+      }
+      
+      setToastContent('Failed to run AI bot test');
+    } finally {
+      // Remove this prompt from loading set
+      setLoadingPromptIds(prev => {
+        const updated = new Set(prev);
+        updated.delete(promptId);
+        return updated;
+      });
+    }
+  };
+
+  // Load saved test results from localStorage
+  const loadSavedTestResults = () => {
+    try {
+      const savedData = localStorage.getItem(`ai-test-results-${shop}`);
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.results && parsed.timestamp) {
+          setTestResults(parsed.results);
+          setLastTestTimestamp(new Date(parsed.timestamp));
+        }
+      }
+      
+      // Load AI validation results if available
+      const savedAiData = localStorage.getItem(`ai-validation-results-${shop}`);
+      if (savedAiData) {
+        const parsed = JSON.parse(savedAiData);
+        if (parsed.results) {
+          setAiTestResults(parsed.results);
+        }
+        if (parsed.timestamp) {
+          setLastAiTestTimestamp(new Date(parsed.timestamp));
+        }
+      }
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading saved test results:', err);
+    }
+  };
+
+  // Save test results to localStorage
+  const saveTestResults = (results) => {
+    try {
+      const dataToSave = {
+        results,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(`ai-test-results-${shop}`, JSON.stringify(dataToSave));
+      setLastTestTimestamp(new Date());
+    } catch (err) {
+      console.error('[AI-TESTING] Error saving test results:', err);
+    }
+  };
   
   // Refresh token balance when component becomes visible (after returning from billing page)
   useEffect(() => {
@@ -110,6 +313,70 @@ export default function AiTesting({ shop: shopProp }) {
     }
   };
 
+  const loadStats = async () => {
+    try {
+      // First, try to load from localStorage (synced from Dashboard Sync)
+      let statsData = null;
+      let needsFreshData = false;
+      
+      try {
+        const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+        if (savedStats) {
+          const parsed = JSON.parse(savedStats);
+          // Check if stats are recent (less than 5 minutes old)
+          const statsAge = parsed.timestamp ? (Date.now() - new Date(parsed.timestamp).getTime()) : Infinity;
+          if (statsAge < 5 * 60 * 1000) { // 5 minutes
+            statsData = parsed;
+            // If cache doesn't have storeUrl, we need to fetch fresh data
+            if (!parsed.storeUrl) {
+              needsFreshData = true;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[AI-TESTING] Error loading stats from localStorage:', err);
+      }
+      
+      // If no recent stats in localStorage OR cache is missing storeUrl, fetch from API
+      if (!statsData || needsFreshData) {
+        const data = await api(`/api/dashboard/stats?shop=${shop}`);
+        statsData = {
+          totalProducts: data?.products?.total || 0,
+          optimizedProducts: data?.products?.optimized || 0,
+          totalCollections: data?.collections?.total || 0,
+          optimizedCollections: data?.collections?.optimized || 0,
+          storeName: data?.store?.name || '',
+          storeUrl: data?.store?.primaryDomain || '',
+          timestamp: new Date().toISOString()
+        };
+        
+        // Save to localStorage for consistency
+        try {
+          localStorage.setItem(`dashboard-stats-${shop}`, JSON.stringify(statsData));
+        } catch (err) {
+          console.error('[AI-TESTING] Error saving stats to localStorage:', err);
+        }
+      }
+      
+      setStats({
+        totalProducts: statsData.totalProducts || 0,
+        optimizedProducts: statsData.optimizedProducts || 0,
+        totalCollections: statsData.totalCollections || 0,
+        optimizedCollections: statsData.optimizedCollections || 0
+      });
+      
+      // Set store info for AI prompts (use public domain, not myshopify.com)
+      if (statsData.storeUrl) {
+        setStoreUrl(statsData.storeUrl);
+      }
+      if (statsData.storeName) {
+        setStoreName(statsData.storeName);
+      }
+    } catch (err) {
+      console.error('[AI-TESTING] Error loading stats:', err);
+    }
+  };
+
   // Plan-based feature availability (synced with Settings.jsx)
   const isFeatureAvailable = (feature) => {
     if (!currentPlan) return false;
@@ -130,19 +397,17 @@ export default function AiTesting({ shop: shopProp }) {
       case 'schemaData':
         return currentPlanIndex >= 4; // Enterprise
       
-      // AI Bot Testing (synced with Settings.jsx)
-      case 'meta':
-        return currentPlanIndex >= 0; // Starter+ (Meta AI)
-      case 'claude':
-        return currentPlanIndex >= 0; // Starter+ (Anthropic Claude)
-      case 'gemini':
-        return currentPlanIndex >= 1; // Professional+ (Google Gemini)
+      // AI Bot Testing (synced with backend AI_BOTS config)
       case 'chatgpt':
-        return currentPlanIndex >= 2; // Growth+ (OpenAI ChatGPT)
+        return currentPlanIndex >= 0; // Starter+ (ChatGPT 5.2)
+      case 'gemini':
+        return currentPlanIndex >= 0; // Starter+ (Gemini 3 Pro)
+      case 'claude':
+        return currentPlanIndex >= 1; // Professional+ (Claude Opus 4.6)
+      case 'meta':
+        return currentPlanIndex >= 2; // Growth+ (Llama 4 Maverick)
       case 'perplexity':
-        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity)
-      case 'deepseek':
-        return currentPlanIndex >= 4; // Enterprise (DeepSeek)
+        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity Sonar Pro)
       default:
         return false;
     }
@@ -162,14 +427,12 @@ export default function AiTesting({ shop: shopProp }) {
         return 'Enterprise';
       
       // AI Bot Testing
-      case 'gemini':
+      case 'claude':
         return 'Professional';
-      case 'chatgpt':
+      case 'meta':
         return 'Growth';
       case 'perplexity':
         return 'Growth Extra';
-      case 'deepseek':
-        return 'Enterprise';
       default:
         return 'Professional';
     }
@@ -224,6 +487,7 @@ export default function AiTesting({ shop: shopProp }) {
       if (response.results) {
         setTestResults(response.results);
         setTestProgress(100);
+        saveTestResults(response.results); // Save to localStorage
         setToastContent('Basic tests completed!');
       } else {
         setToastContent('Testing failed. Please try again.');
@@ -268,18 +532,41 @@ export default function AiTesting({ shop: shopProp }) {
         }
       });
       
-      if (response.results) {
+      if (response && response.results) {
         setAiTestResults(response.results);
         setAiTestProgress(100);
-        setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
+        
+        // Save AI test results to localStorage (for Dashboard to use)
+        try {
+          const dataToSave = {
+            results: response.results,
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem(`ai-validation-results-${shop}`, JSON.stringify(dataToSave));
+          setLastAiTestTimestamp(new Date());
+        } catch (err) {
+          console.error('[AI-TESTING] Error saving AI test results:', err);
+        }
+        
+        // Store AIEO score if available
+        if (response.aiEOScore) {
+          const scoreData = response.aiEOScore;
+          // Always set if present, regardless of structure
+          setAiEOScore(scoreData);
+          setToastContent(`AI validation completed! Score: ${scoreData.score || 'N/A'}/100 (${response.tokensUsed || 0} tokens used)`);
+        } else {
+          // Reset score if not present
+          setAiEOScore(null);
+          setToastContent(`AI validation completed! (${response.tokensUsed || 0} tokens used)`);
+        }
+        
         // Reload token balance
         loadTokenBalance();
       } else {
+        setAiEOScore(null);
         setToastContent('AI validation failed. Please try again.');
       }
     } catch (error) {
-      console.error('[AI-TESTING] Error running AI validation:', error);
-      
       // Check for 402 status (payment required)
       if (error.status === 402) {
         if (error.trialRestriction && error.requiresActivation) {
@@ -356,6 +643,32 @@ export default function AiTesting({ shop: shopProp }) {
       setToastContent('Failed to simulate AI response');
     }
   };
+  
+  // Review banner handlers (same as Dashboard)
+  const handleDismissReviewBanner = () => {
+    try {
+      localStorage.setItem(`dismissedReviewBanner_${shop}`, 'true');
+      setDismissedReviewBanner(true);
+    } catch (error) {
+      console.error('[AiTesting] Error saving dismissed review banner state:', error);
+    }
+  };
+  
+  const handleClickReviewRate = () => {
+    try {
+      localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
+      setClickedReviewRate(true);
+      window.open('https://apps.shopify.com/indexaize-unlock-ai-search#modal-show=WriteReviewModal', '_blank');
+    } catch (error) {
+      console.error('[AiTesting] Error saving clicked review rate state:', error);
+    }
+  };
+  
+  // Show review banner when AIEO Score > 50
+  const shouldShowReviewBanner = useMemo(() => {
+    if (dismissedReviewBanner || clickedReviewRate) return false;
+    return (aiEOScore || 0) > 50;
+  }, [dismissedReviewBanner, clickedReviewRate, aiEOScore]);
 
   return (
     <>
@@ -364,16 +677,41 @@ export default function AiTesting({ shop: shopProp }) {
           <Text>Test how AI models discover and understand your store content. Check if your structured data and AI Discovery features are working correctly.</Text>
         </Banner>
 
+        {/* AIEO Score Card - Always shown at the top */}
+        <AIEOScoreCard 
+          testResults={testResults}
+          aiTestResults={aiTestResults}
+          stats={stats}
+          onScoreCalculated={(score) => setAiEOScore(score)}
+        />
+        
+        {/* App Store Review Request - shows when AIEO Score > 50 */}
+        {shouldShowReviewBanner && (
+          <Banner
+            title="Help shape the future of AI Search"
+            tone="success"
+            action={{
+              content: 'Rate indexAIze',
+              onAction: handleClickReviewRate
+            }}
+            onDismiss={handleDismissReviewBanner}
+          >
+            <Text>
+              You've successfully optimized your store for AI engines. Your feedback helps us build better tools for the Shopify community.
+            </Text>
+          </Banner>
+        )}
+
         {/* Two-column layout for Basic and AI tests */}
         <Layout>
           <Layout.Section variant="oneHalf">
-            {/* Card 1: Basic AIEO Tests */}
+            {/* Card 1: Basic GEO Tests */}
             <Card>
               <Box padding="300">
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <Text as="h3" variant="headingMd">🔧 Basic AIEO Tests</Text>
+                      <Text as="h3" variant="headingMd">Basic GEO Tests</Text>
                       <Text variant="bodySm" tone="subdued">
                         Quick check if endpoints are accessible and returning data
                       </Text>
@@ -386,6 +724,20 @@ export default function AiTesting({ shop: shopProp }) {
                       {testing ? 'Testing...' : 'Run Basic Tests'}
                     </Button>
                   </InlineStack>
+
+                  {/* Show banner if there are saved test results */}
+                  {lastTestTimestamp && Object.keys(testResults).length > 0 && !testing && (
+                    <Banner tone="info">
+                      <Text variant="bodySm">
+                        These results are from {lastTestTimestamp.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}. Run Basic Tests again to refresh.
+                      </Text>
+                    </Banner>
+                  )}
 
                   {testing && (
                     <Box>
@@ -407,10 +759,12 @@ export default function AiTesting({ shop: shopProp }) {
                               <BlockStack gap="100">
                                 <InlineStack gap="200" blockAlign="center">
                                   <Text variant="bodyMd" fontWeight="semibold">{result.name}</Text>
-                                  {result.status === 'success' && <Badge tone="success">✓ OK</Badge>}
-                                  {result.status === 'warning' && <Badge tone="warning">⚠️ Warning</Badge>}
-                                  {result.status === 'error' && <Badge tone="critical">✗ Failed</Badge>}
-                                  {result.status === 'locked' && <Badge>🔒 Locked</Badge>}
+                                  {result.status === 'success' && <Badge tone="success">OK</Badge>}
+                                  {result.status === 'fair' && <Badge tone="info">Fair</Badge>}
+                                  {result.status === 'poor' && <Badge tone="warning">Poor</Badge>}
+                                  {result.status === 'warning' && <Badge tone="critical">Warning</Badge>}
+                                  {result.status === 'error' && <Badge tone="critical">Failed</Badge>}
+                                  {result.status === 'locked' && <Badge>Locked</Badge>}
                                 </InlineStack>
                                 <Text variant="bodySm" tone="subdued">
                                   {result.message}
@@ -450,21 +804,7 @@ export default function AiTesting({ shop: shopProp }) {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <BlockStack gap="100">
-                      <InlineStack gap="200" blockAlign="center">
-                        <Text as="h3" variant="headingMd">🤖 AI-Powered Validation</Text>
-                        {tokenBalance !== null && (
-                          <Badge tone={tokenBalance > 50 ? 'success' : 'warning'}>
-                            {tokenBalance} tokens
-                          </Badge>
-                        )}
-                        <Button 
-                          size="micro" 
-                          onClick={() => loadTokenBalance()}
-                          accessibilityLabel="Refresh token balance"
-                        >
-                          🔄
-                        </Button>
-                      </InlineStack>
+                      <Text as="h3" variant="headingMd">AI-Powered Validation</Text>
                       <Text variant="bodySm" tone="subdued">
                         Deep analysis with AI bot
                       </Text>
@@ -484,6 +824,20 @@ export default function AiTesting({ shop: shopProp }) {
                     </Button>
                   </InlineStack>
 
+                  {/* Show banner if there are saved AI test results */}
+                  {lastAiTestTimestamp && Object.keys(aiTestResults).length > 0 && !aiTesting && (
+                    <Banner tone="info">
+                      <Text variant="bodySm">
+                        These results are from {lastAiTestTimestamp.toLocaleString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}. Test with AI Bot again to refresh.
+                      </Text>
+                    </Banner>
+                  )}
+
                   {aiTesting && (
                     <Box>
                       <BlockStack gap="200">
@@ -502,10 +856,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Products JSON Feed</Text>
-                                {aiTestResults.productsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.productsJson.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.productsJson.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.productsJson.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.productsJson.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.productsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.productsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -530,10 +884,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Store Metadata</Text>
-                                {aiTestResults.storeMetadata.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.storeMetadata.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.storeMetadata.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -558,10 +912,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI Welcome Page</Text>
-                                {aiTestResults.welcomePage.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.welcomePage.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.welcomePage.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.welcomePage.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.welcomePage.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.welcomePage.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.welcomePage.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -586,10 +940,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">Collections JSON Feed</Text>
-                                {aiTestResults.collectionsJson.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.collectionsJson.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.collectionsJson.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -614,10 +968,10 @@ export default function AiTesting({ shop: shopProp }) {
                             <BlockStack gap="100">
                               <InlineStack gap="200" blockAlign="center">
                                 <Text variant="bodyMd" fontWeight="semibold">AI-Enhanced Sitemap</Text>
-                                {aiTestResults.aiSitemap.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                                {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'good' && <Badge tone="success">Good</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                                {aiTestResults.aiSitemap.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                                 {aiTestResults.aiSitemap.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                               </InlineStack>
@@ -641,10 +995,10 @@ export default function AiTesting({ shop: shopProp }) {
                           <BlockStack gap="100">
                             <InlineStack gap="200" blockAlign="center">
                               <Text variant="bodyMd" fontWeight="semibold">Advanced Schema Data</Text>
-                              {aiTestResults.schemaData.rating === 'excellent' && <Badge tone="success">🤖 Excellent</Badge>}
-                              {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">🤖 Good</Badge>}
-                              {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">🤖 Fair</Badge>}
-                              {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">🤖 Poor</Badge>}
+                              {aiTestResults.schemaData.rating === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                              {aiTestResults.schemaData.rating === 'good' && <Badge tone="success">Good</Badge>}
+                              {aiTestResults.schemaData.rating === 'fair' && <Badge tone="warning">Fair</Badge>}
+                              {aiTestResults.schemaData.rating === 'poor' && <Badge tone="critical">Poor</Badge>}
                               {aiTestResults.schemaData.rating === 'locked' && <Badge>🔒 Locked</Badge>}
                               {aiTestResults.schemaData.rating === 'unavailable' && <Badge tone="critical">❌ Unavailable</Badge>}
                             </InlineStack>
@@ -684,234 +1038,655 @@ export default function AiTesting({ shop: shopProp }) {
           </Layout.Section>
         </Layout>
 
-        {/* Card 3: Test with Real AI Bots */}
+        {/* AI Bot Testing - Select Model Card */}
         <Card>
-          <Box padding="300">
+          <Box padding="400">
             <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">Test with Real AI Bots</Text>
-              
-              <Text variant="bodyMd" tone="subdued">
-                Manually test your store with real AI search engines
-              </Text>
-
-              <BlockStack gap="200">
-                {/* Meta AI - Starter+ (Always available) */}
-                    <InlineStack align="space-between">
-                      <Text>Meta AI Search</Text>
-                      {isFeatureAvailable('meta') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Meta AI', 'https://www.meta.ai/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Anthropic Claude - Starter+ (Always available) */}
-                    <InlineStack align="space-between">
-                      <Text>Claude AI Search</Text>
-                      {isFeatureAvailable('claude') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Claude AI', 'https://claude.ai/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Google Gemini - Professional+ */}
-                    <InlineStack align="space-between">
-                      <Text>Gemini AI Search</Text>
-                      {isFeatureAvailable('gemini') ? (
-                        <Button
-                          onClick={() => openAiBotModal('Gemini AI', 'https://gemini.google.com/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* ChatGPT - Growth+ */}
-                    <InlineStack align="space-between">
-                      <Text>ChatGPT Web Search</Text>
-                      {isFeatureAvailable('chatgpt') ? (
-                        <Button
-                          url={`https://chat.openai.com/?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                          external
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* Perplexity - Growth Extra+ */}
-                    <InlineStack align="space-between">
-                      <Text>Perplexity AI Search</Text>
-                      {isFeatureAvailable('perplexity') ? (
-                        <Button
-                          url={`https://www.perplexity.ai/search?q=What+products+does+${shop}+sell%3F+Tell+me+about+this+business+and+what+they+offer`}
-                          external
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-
-                    {/* DeepSeek - Enterprise only */}
-                    <InlineStack align="space-between">
-                      <Text>DeepSeek AI Search</Text>
-                      {isFeatureAvailable('deepseek') ? (
-                        <Button
-                          onClick={() => openAiBotModal('DeepSeek AI', 'https://chat.deepseek.com/')}
-                          size="slim"
-                        >
-                          Test
-                        </Button>
-                      ) : (
-                        <Button disabled size="slim">
-                          Plan upgrade required
-                        </Button>
-                      )}
-                    </InlineStack>
-                  </BlockStack>
-                  
-                  <Banner tone="info">
-                    <Text>
-                      <strong>How to test with AI bots:</strong><br/>
-                      • <strong>Perplexity & ChatGPT:</strong> Click "Test" - they support URL parameters<br/>
-                      • <strong>Meta AI, Claude, Gemini, DeepSeek:</strong> Click "Test" to open a modal with the prompt to copy
-                    </Text>
-                  </Banner>
-                </BlockStack>
-              </Box>
-            </Card>
-
-            {/* AI Search Simulation */}
-            <Card>
-              <Box padding="300">
-                <BlockStack gap="300">
-                  <Text as="h4" variant="headingSm">AI Search Simulation</Text>
-                  
-                  <Text variant="bodyMd" tone="subdued">
-                    Test how AI bots would respond to questions about your store based on your structured data.
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <Text as="h3" variant="headingMd">Select AI Model</Text>
+                  <Text variant="bodySm" tone="subdued">
+                    Choose which AI model to use for testing
                   </Text>
+                </BlockStack>
+                {tokenBalance !== null && (
+                  <Badge tone={tokenBalance > 100 ? 'success' : tokenBalance > 0 ? 'warning' : 'critical'}>
+                    {tokenBalance.toLocaleString()} tokens
+                  </Badge>
+                )}
+              </InlineStack>
 
-                  <Banner tone="info">
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(availableBots.length || 5, 5)}, 1fr)`, gap: '10px' }}>
+                {availableBots.map(bot => (
+                  <div
+                    key={bot.id}
+                    onClick={() => bot.available && setSelectedBotId(bot.id)}
+                    style={{
+                      padding: '12px 10px',
+                      borderRadius: '8px',
+                      border: selectedBotId === bot.id 
+                        ? '2px solid var(--p-color-border-interactive)' 
+                        : '1px solid var(--p-color-border-subdued)',
+                      background: selectedBotId === bot.id 
+                        ? 'var(--p-color-bg-surface-selected)' 
+                        : 'var(--p-color-bg-surface)',
+                      cursor: bot.available ? 'pointer' : 'not-allowed',
+                      opacity: bot.available ? 1 : 0.5,
+                      transition: 'all 0.15s ease',
+                      position: 'relative',
+                      textAlign: 'center',
+                      minWidth: 0
+                    }}
+                  >
                     <BlockStack gap="100">
-                      <Text variant="bodySm" fontWeight="semibold">Simulation Details:</Text>
-                      <Text variant="bodySm">• <strong>Data Source:</strong> Your store's products, collections, and metadata</Text>
-                      <Text variant="bodySm">• <strong>Response Style:</strong> Concise (2-3 sentences), natural language</Text>
-                      <Text variant="bodySm">• <strong>Best For:</strong> General store info, products, categories, contact details</Text>
-                      <Text variant="bodySm">• <strong>Limitations:</strong> May not have real-time data (current stock, active promotions, exact shipping times)</Text>
+                      <InlineStack align="center" blockAlign="center" gap="200">
+                        <Text variant="bodySm" fontWeight="semibold">{bot.name}</Text>
+                        {selectedBotId === bot.id && bot.available && (
+                          <div style={{ 
+                            width: '18px', 
+                            height: '18px', 
+                            borderRadius: '50%', 
+                            background: 'var(--p-color-bg-fill-success)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '11px',
+                            flexShrink: 0
+                          }}>
+                            ✓
+                          </div>
+                        )}
+                      </InlineStack>
+                      {!bot.available && (
+                        <Badge size="small">{bot.requiredPlan}</Badge>
+                      )}
                     </BlockStack>
-                  </Banner>
+                  </div>
+                ))}
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
 
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text>What products does this store sell?</Text>
+        {/* AI Data Quality Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">AI Data Quality</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Analyze how AI bots see your store's structured data
+                </Text>
+              </BlockStack>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'AI Data Quality').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
                       <Button
-                        onClick={() => simulateAIResponse('products')}
                         size="slim"
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'AI Data Quality')}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
                       >
-                        Simulate Response
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
                       </Button>
-                    </InlineStack>
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
 
-                    <InlineStack align="space-between">
-                      <Text>Tell me about this business</Text>
+              {/* Response area - under the card, not under individual buttons */}
+              {categoryResponse['AI Data Quality'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['AI Data Quality'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['AI Data Quality'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {categoryResponse['AI Data Quality'].response}
+                    </div>
+                    <InlineStack align="end" gap="200">
                       <Button
-                        onClick={() => simulateAIResponse('business')}
                         size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['AI Data Quality'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
                       >
-                        Simulate Response
+                        Copy
                       </Button>
-                    </InlineStack>
-
-                    <InlineStack align="space-between">
-                      <Text>What categories does this store have?</Text>
                       <Button
-                        onClick={() => simulateAIResponse('categories')}
                         size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['AI Data Quality'];
+                          return updated;
+                        })}
                       >
-                        Simulate Response
-                      </Button>
-                    </InlineStack>
-
-                    <InlineStack align="space-between">
-                      <Text>What is this store's contact information?</Text>
-                      <Button
-                        onClick={() => simulateAIResponse('contact')}
-                        size="slim"
-                      >
-                        Simulate Response
+                        Close
                       </Button>
                     </InlineStack>
                   </BlockStack>
+                </Box>
+              )}
+            </BlockStack>
+          </Box>
+        </Card>
 
-                  <Divider />
+        {/* Product Discovery Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Product Discovery</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Test how AI finds and recommends your products
+                </Text>
+              </BlockStack>
 
-                  {/* Custom Question */}
-                  <BlockStack gap="200">
-                    <Text variant="headingSm">Ask Your Own Question</Text>
-                    <TextField
-                      label=""
-                      value={customQuestion}
-                      onChange={setCustomQuestion}
-                      placeholder="e.g., What are your return policies? Do you ship internationally?"
-                      autoComplete="off"
-                      connectedRight={
-                        <Button
-                          onClick={() => {
-                            if (customQuestion.trim()) {
-                              simulateAIResponse('custom', customQuestion);
-                            } else {
-                              setToastContent('Please enter a question');
-                            }
-                          }}
-                          disabled={!customQuestion.trim()}
-                        >
-                          Ask AI
-                        </Button>
-                      }
-                    />
-                  </BlockStack>
-
-                  {aiSimulationResponse && (
-                    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                      <Text variant="bodyMd" fontWeight="semibold">AI Bot Response:</Text>
-                      <Box paddingBlockStart="200">
-                        <Text variant="bodyMd">{aiSimulationResponse}</Text>
-                      </Box>
-                    </Box>
-                  )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'Product Discovery').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
+                      <Button
+                        size="slim"
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'Product Discovery')}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
+                      >
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
+                      </Button>
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+              
+              {/* Custom product search */}
+              <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                <BlockStack gap="200">
+                  <Text variant="bodyMd" fontWeight="medium">Ask about specific products</Text>
+                  <TextField
+                    value={customProductQuestion}
+                    onChange={setCustomProductQuestion}
+                    placeholder="e.g., leather bags, summer dresses, gifts under $50..."
+                    autoComplete="off"
+                    connectedRight={
+                      <Button
+                        onClick={() => {
+                          // "Secret formatting" - wrap user question in positive framing for best results
+                          const formattedQuestion = `A customer is interested in: "${customProductQuestion}". 
+Based on ${storeInsights?.publicDomain || 'this store'}'s product catalog:
+1. What are the BEST matching products available?
+2. What makes each one a great choice?
+3. Highlight any special features, quality, or value.
+Be enthusiastic and helpful - this customer is ready to buy!`;
+                          runBotTest(formattedQuestion, 'discovery-custom', 'Product Discovery');
+                        }}
+                        loading={loadingPromptIds.has('discovery-custom')}
+                        disabled={!selectedBotId || !customProductQuestion.trim() || loadingPromptIds.has('discovery-custom')}
+                      >
+                        {loadingPromptIds.has('discovery-custom') ? 'Searching...' : 'Find Products'}
+                      </Button>
+                    }
+                  />
                 </BlockStack>
               </Box>
-            </Card>
+
+              {/* Response area - under the card */}
+              {categoryResponse['Product Discovery'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Product Discovery'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['Product Discovery'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {categoryResponse['Product Discovery'].response}
+                    </div>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Product Discovery'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Product Discovery'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              )}
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Business Intelligence Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Business Intelligence</Text>
+                <Text variant="bodySm" tone="subdued">
+                  See how AI extracts business information from your store
+                </Text>
+              </BlockStack>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                {dynamicPrompts.filter(p => p.category === 'Business Intelligence').map(prompt => (
+                  <Box 
+                    key={prompt.id} 
+                    padding="300" 
+                    background="bg-surface-secondary" 
+                    borderRadius="200"
+                  >
+                    <BlockStack gap="200">
+                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
+                      <Button
+                        size="slim"
+                        onClick={() => runBotTest(prompt.question, prompt.id, 'Business Intelligence')}
+                        loading={loadingPromptIds.has(prompt.id)}
+                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
+                      >
+                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
+                      </Button>
+                    </BlockStack>
+                  </Box>
+                ))}
+              </div>
+
+              {/* Response area - under the card */}
+              {categoryResponse['Business Intelligence'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Business Intelligence'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['Business Intelligence'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {categoryResponse['Business Intelligence'].response}
+                    </div>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Business Intelligence'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Business Intelligence'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              )}
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Custom Question Card */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingMd">Custom Question</Text>
+                <Text variant="bodySm" tone="subdued">
+                  Ask your own question to the AI model
+                </Text>
+              </BlockStack>
+
+              <TextField
+                label=""
+                value={customBotQuestion}
+                onChange={setCustomBotQuestion}
+                placeholder="Enter your question..."
+                autoComplete="off"
+                connectedRight={
+                  <Button
+                    onClick={() => runBotTest(customBotQuestion, 'custom', 'Custom')}
+                    loading={loadingPromptIds.has('custom')}
+                    disabled={!selectedBotId || !customBotQuestion.trim() || loadingPromptIds.has('custom')}
+                  >
+                    {loadingPromptIds.has('custom') ? 'Asking...' : 'Ask'}
+                  </Button>
+                }
+              />
+
+              {/* Response area - under the card */}
+              {categoryResponse['Custom'] && (
+                <Box 
+                  padding="400" 
+                  background="bg-surface-secondary" 
+                  borderRadius="200"
+                >
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" fontWeight="semibold">
+                        {categoryResponse['Custom'].bot?.name} Response
+                      </Text>
+                      <Text variant="bodySm" tone="subdued">
+                        {categoryResponse['Custom'].usage?.tokensUsed?.toLocaleString()} tokens
+                      </Text>
+                    </InlineStack>
+                    <div 
+                      style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.6',
+                        padding: '12px',
+                        backgroundColor: 'var(--p-color-bg-surface)',
+                        borderRadius: '8px',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {categoryResponse['Custom'].response}
+                    </div>
+                    <InlineStack align="end" gap="200">
+                      <Button
+                        size="slim"
+                        onClick={() => {
+                          navigator.clipboard.writeText(categoryResponse['Custom'].response);
+                          setToastContent('Response copied to clipboard');
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button
+                        size="slim"
+                        onClick={() => setCategoryResponse(prev => {
+                          const updated = { ...prev };
+                          delete updated['Custom'];
+                          return updated;
+                        })}
+                      >
+                        Close
+                      </Button>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              )}
+            </BlockStack>
+          </Box>
+        </Card>
+
+        {/* Competitive Analysis Card - Growth Plus+ only */}
+        <Card>
+          <Box padding="400">
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text as="h3" variant="headingMd">Competitive Analysis</Text>
+                    <Badge tone="info">Growth Plus+</Badge>
+                  </InlineStack>
+                  <Text variant="bodySm" tone="subdued">
+                    Compare your AI-readiness with competitors
+                  </Text>
+                </BlockStack>
+              </InlineStack>
+              
+              {/* Check if user has Growth Plus+ plan */}
+              {(() => {
+                const planIndex = getPlanIndex(currentPlan);
+                const hasAccess = planIndex >= getPlanIndex('growth_plus');
+                
+                if (!hasAccess) {
+                  return (
+                    <Banner tone="warning">
+                      <Text>Competitive Analysis requires Growth Plus plan or higher. <Button variant="plain" onClick={() => navigate('/billing')}>Upgrade now</Button></Text>
+                    </Banner>
+                  );
+                }
+                
+                return (
+                  <BlockStack gap="300">
+                    <Text variant="bodyMd">Enter up to 3 competitor store URLs:</Text>
+                    
+                    {competitorUrls.map((url, index) => (
+                      <TextField
+                        key={index}
+                        label={`Competitor ${index + 1}`}
+                        labelHidden
+                        placeholder={`e.g., competitor${index + 1}.com`}
+                        value={url}
+                        onChange={(value) => {
+                          const newUrls = [...competitorUrls];
+                          newUrls[index] = value;
+                          setCompetitorUrls(newUrls);
+                        }}
+                        autoComplete="off"
+                      />
+                    ))}
+                    
+                    <Button
+                      primary
+                      onClick={async () => {
+                        const validUrls = competitorUrls.filter(u => u.trim());
+                        if (validUrls.length === 0) {
+                          setToastContent('Please enter at least one competitor URL');
+                          return;
+                        }
+                        
+                        setAnalyzingCompetitors(true);
+                        setCompetitiveResults(null);
+                        
+                        try {
+                          const response = await api('/api/ai-testing/competitive-analysis', {
+                            method: 'POST',
+                            body: { shop, competitors: validUrls }
+                          });
+                          
+                          if (response.error) {
+                            if (response.requiredPlan) {
+                              setToastContent(`This feature requires ${response.requiredPlan} plan`);
+                            } else {
+                              setToastContent(response.error);
+                            }
+                          } else {
+                            setCompetitiveResults(response);
+                          }
+                        } catch (err) {
+                          setToastContent('Failed to analyze competitors');
+                        } finally {
+                          setAnalyzingCompetitors(false);
+                        }
+                      }}
+                      loading={analyzingCompetitors}
+                      disabled={analyzingCompetitors || competitorUrls.every(u => !u.trim())}
+                    >
+                      {analyzingCompetitors ? 'Analyzing...' : 'Compare Stores'}
+                    </Button>
+                    
+                    {/* Results Table */}
+                    {competitiveResults && (
+                      <Box paddingBlockStart="400">
+                        <BlockStack gap="400">
+                          {/* Summary Banner */}
+                          <Banner 
+                            tone={competitiveResults.summary?.position === 'ahead' ? 'success' : 
+                                  competitiveResults.summary?.position === 'behind' ? 'warning' : 'info'}
+                          >
+                            <BlockStack gap="200">
+                              <Text fontWeight="semibold">
+                                Your Score: {competitiveResults.myStore?.score}/100 vs Competitors Avg: {competitiveResults.summary?.avgCompetitorScore}/100
+                              </Text>
+                              <Text>{competitiveResults.summary?.recommendation}</Text>
+                            </BlockStack>
+                          </Banner>
+                          
+                          {/* Comparison Table */}
+                          <Box 
+                            background="bg-surface-secondary" 
+                            padding="300" 
+                            borderRadius="200"
+                            style={{ overflowX: 'auto' }}
+                          >
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '2px solid var(--p-color-border)' }}>
+                                  <th style={{ textAlign: 'left', padding: '8px', fontWeight: '600' }}>Criterion</th>
+                                  <th style={{ textAlign: 'center', padding: '8px', fontWeight: '600', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                    Your Store
+                                  </th>
+                                  {competitiveResults.competitors?.map((c, i) => (
+                                    <th key={i} style={{ textAlign: 'center', padding: '8px', fontWeight: '600' }}>
+                                      {c.domain?.replace(/^https?:\/\//, '').substring(0, 20)}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {['robotsTxt', 'sitemap', 'productsJson', 'structuredData', 'aiEndpoints'].map(criterion => (
+                                  <tr key={criterion} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                                    <td style={{ padding: '8px' }}>
+                                      {criterion === 'robotsTxt' && 'robots.txt'}
+                                      {criterion === 'sitemap' && 'Sitemap'}
+                                      {criterion === 'productsJson' && 'Products JSON'}
+                                      {criterion === 'structuredData' && 'Structured Data'}
+                                      {criterion === 'aiEndpoints' && 'AI Endpoints'}
+                                    </td>
+                                    <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
+                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'n/a' && <Badge>N/A</Badge>}
+                                    </td>
+                                    {competitiveResults.competitors?.map((comp, i) => (
+                                      <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
+                                        {comp.criteria?.[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'unavailable' && <Badge>N/A</Badge>}
+                                        {comp.criteria?.[criterion]?.status === 'error' && <Badge tone="warning">Error</Badge>}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                                <tr style={{ fontWeight: '600', backgroundColor: 'var(--p-color-bg-surface-secondary)' }}>
+                                  <td style={{ padding: '8px' }}>Total Score</td>
+                                  <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                    <Badge tone="success">{competitiveResults.myStore?.score}/100</Badge>
+                                  </td>
+                                  {competitiveResults.competitors?.map((comp, i) => (
+                                    <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
+                                      <Badge tone={comp.score > 50 ? 'info' : 'warning'}>{comp.score}/100</Badge>
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </Box>
+                          
+                          <Button 
+                            variant="plain" 
+                            onClick={() => setCompetitiveResults(null)}
+                          >
+                            Clear Results
+                          </Button>
+                        </BlockStack>
+                      </Box>
+                    )}
+                  </BlockStack>
+                );
+              })()}
+            </BlockStack>
+          </Box>
+        </Card>
       </BlockStack>
 
       {toastContent && (
@@ -932,7 +1707,8 @@ export default function AiTesting({ shop: shopProp }) {
           {
             content: 'Copy Prompt',
             onAction: () => {
-              navigator.clipboard.writeText(`What products does ${shop} sell? Tell me about this business and what they offer.`);
+              const domain = storeUrl || storeName || shop;
+              navigator.clipboard.writeText(`I want to learn more about ${domain}. Based on their website, what do they sell and what kind of business are they?`);
               setToastContent('Prompt copied to clipboard!');
             }
           }
@@ -954,13 +1730,13 @@ export default function AiTesting({ shop: shopProp }) {
               <Text variant="bodyMd" fontWeight="semibold">Prompt to test:</Text>
               <Box paddingBlockStart="200">
                 <Text variant="bodyMd" as="p">
-                  What products does {shop} sell? Tell me about this business and what they offer.
+                  I want to learn more about {storeUrl || storeName || shop}. Based on their website, what do they sell and what kind of business are they?
                 </Text>
               </Box>
             </Box>
             
             <Banner tone="info">
-              <Text>The AI bot will search the web and use your store's structured data to answer.</Text>
+              <Text>The AI bot will search your website and use your optimized store data to answer.</Text>
             </Banner>
           </BlockStack>
         </Modal.Section>
@@ -1052,6 +1828,10 @@ export default function AiTesting({ shop: shopProp }) {
         shop={shop}
         needsUpgrade={false}
         returnTo="/ai-testing"
+        onBuyTokens={() => {
+          setShowTokenModal(false);
+          setShowTokenPurchaseModal(true);
+        }}
       />
       
       {/* Trial Activation Modal for Growth Extra/Enterprise */}
@@ -1099,14 +1879,24 @@ export default function AiTesting({ shop: shopProp }) {
             }
           }}
           onPurchaseTokens={() => {
-            // Navigate to billing page to purchase tokens (with returnTo)
-            const params = new URLSearchParams(window.location.search);
-            const host = params.get('host');
-            const embedded = params.get('embedded');
-            window.location.href = `/billing?shop=${encodeURIComponent(shop)}&embedded=${embedded}&host=${encodeURIComponent(host)}&returnTo=${encodeURIComponent('/ai-testing')}`;
+            setShowTrialActivationModal(false);
+            setShowTokenPurchaseModal(true);
           }}
         />
       )}
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => {
+          setShowTokenPurchaseModal(false);
+          setTokenError(null);
+          loadTokenBalance();
+        }}
+        shop={shop}
+        returnTo="/ai-testing"
+        inTrial={!!tokenError?.trialEndsAt}
+      />
     </>
   );
 }

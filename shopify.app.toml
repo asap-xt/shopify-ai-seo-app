@@ -33,13 +33,14 @@ redirect_urls = [
 ]
 
 [access_scopes]
-scopes = "read_products,write_products,read_themes,write_themes,read_translations,write_translations,read_locales,read_metaobjects,write_metaobjects,read_content,write_content,write_script_tags,read_markets"
+scopes = "read_products,write_products,read_themes,write_themes,write_theme_code,read_translations,write_translations,read_locales,read_metaobjects,write_metaobjects,read_content,write_content,write_script_tags,read_markets"
 
 # App Proxy Configuration for Sitemap
+# Note: subpath can be overridden via APP_PROXY_SUBPATH environment variable
 [app_proxy]
 url = "https://indexaize-aiseo-app-production.up.railway.app/apps"
 prefix = "apps"
-subpath = "new-ai-seo"
+subpath = "indexaize"
 
 [pos]
 embedded = false

@@ -18,6 +18,7 @@ import {
 import { updateOptimizationSummary } from '../utils/optimizationSummary.js';
 
 const router = express.Router();
+const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 // Constants
 const AI_MODEL = 'google/gemini-2.5-flash-lite'; // Важно: flash-lite, не flash
@@ -169,9 +170,13 @@ async function syncProductsToMongoDB(shop) {
       if (edges.length === 0) break;
     }
 
+    // FILTER: Only sync ACTIVE products (exclude DRAFT and ARCHIVED)
+    // This aligns with sitemap generation and product list display
+    const activeProducts = allProducts.filter(product => product.status === 'ACTIVE');
+    
     // Save products to MongoDB
     let syncedCount = 0;
-    for (const product of allProducts) {
+    for (const product of activeProducts) {
       const numericId = product.id.replace('gid://shopify/Product/', '');
       
       // Check if product has AI SEO metafields (indicating it's been optimized)
@@ -206,32 +211,41 @@ async function syncProductsToMongoDB(shop) {
       
       if (existingProduct) {
         // Update existing product
+        // IMPORTANT: Preserve existing seoStatus if product was optimized through the app
+        // Only update seoStatus if we detect AI metafields (which means optimization via app)
+        const updateData = {
+          $set: {
+            title: product.title,
+            description: product.descriptionHtml,
+            productType: product.productType,
+            vendor: product.vendor,
+            tags: product.tags,
+            status: product.status,
+            handle: product.handle,
+            createdAt: new Date(product.createdAt),
+            updatedAt: new Date(product.updatedAt)
+          }
+        };
+        
+        // Only update seoStatus if we detect AI metafields
+        // Otherwise, preserve existing seoStatus (product may have been optimized via app)
+        if (hasSeoMetafields) {
+          updateData.$set.seoStatus = {
+            optimized: true,
+            aiEnhanced: true,
+            languages: detectedLanguages.map(lang => ({ 
+              code: lang, 
+              optimized: true, 
+              hasSeo: true 
+            })),
+            lastCheckedAt: new Date()
+          };
+        }
+        
         await Product.findOneAndUpdate(
           { shop, shopifyProductId: numericId },
-          {
-            $set: {
-              title: product.title,
-              description: product.descriptionHtml,
-              productType: product.productType,
-              vendor: product.vendor,
-              tags: product.tags,
-              status: product.status,
-              handle: product.handle,
-              createdAt: new Date(product.createdAt),
-              updatedAt: new Date(product.updatedAt),
-              // Update seoStatus based on metafields
-              seoStatus: {
-                optimized: hasSeoMetafields,
-                languages: detectedLanguages.map(lang => ({ 
-                  code: lang, 
-                  optimized: true, 
-                  hasSeo: true 
-                })),
-                lastCheckedAt: new Date()
-              }
-            }
-          },
-          { upsert: true }
+          updateData,
+          { upsert: false }
         );
       } else {
         // Create new product
@@ -286,6 +300,7 @@ const FAQ_FALLBACKS = {
 // Helper за OpenRouter API calls
 async function generateWithAI(prompt, systemPrompt) {
   try {
+    console.log('[SCHEMA] 🤖 Calling AI (OpenRouter/Gemini)...');
     const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -314,6 +329,8 @@ async function generateWithAI(prompt, systemPrompt) {
     const content = JSON.parse(data.choices[0].message.content);
     const usage = data.usage || {};
     
+    console.log(`[SCHEMA] ✅ AI response received: ${usage.total_tokens || 0} tokens`);
+    
     return {
       content,
       usage: {
@@ -324,7 +341,7 @@ async function generateWithAI(prompt, systemPrompt) {
       }
     };
   } catch (error) {
-    console.error('[SCHEMA] AI generation error:', error);
+    console.error('[SCHEMA] ❌ AI generation error:', error);
     throw error;
   }
 }
@@ -351,8 +368,19 @@ function sanitizeAIResponse(response, knownFacts) {
   return validated;
 }
 
+// Cache for rich attributes settings (per shop, expires after 5 minutes)
+const richAttributesCache = new Map();
+const RICH_ATTRIBUTES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   // Load rich attributes settings - fetches user preferences for AI-generated schema features
+// OPTIMIZED: Results are cached per shop to avoid repeated HTTP requests
   async function loadRichAttributesSettings(shop) {
+  // Check cache first
+  const cached = richAttributesCache.get(shop);
+  if (cached && (Date.now() - cached.timestamp) < RICH_ATTRIBUTES_CACHE_TTL) {
+    return cached.settings;
+  }
+  
   try {
     // Try to get settings from AI Discovery settings
   if (!process.env.SHOPIFY_APP_URL) {
@@ -362,7 +390,10 @@ function sanitizeAIResponse(response, knownFacts) {
     
     if (response.ok) {
       const data = await response.json();
-      return data.richAttributes || {};
+      const settings = data.richAttributes || {};
+      // Cache the result
+      richAttributesCache.set(shop, { settings, timestamp: Date.now() });
+      return settings;
     }
   } catch (error) {
     // Could not load rich attributes settings
@@ -382,6 +413,9 @@ function sanitizeAIResponse(response, knownFacts) {
     enhancedDescription: false,
     organization: false
   };
+  
+  // Cache the defaults too
+  richAttributesCache.set(shop, { settings: defaultSettings, timestamp: Date.now() });
   return defaultSettings;
 }
 
@@ -797,8 +831,6 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
       
       if (saveResult.metafieldsSet?.userErrors?.length > 0) {
         console.error('[SCHEMA] Failed to save shop schemas:', saveResult.metafieldsSet.userErrors);
-      } else {
-        console.log('[SCHEMA] Successfully saved Organization and WebSite schemas');
       }
     }
     
@@ -954,13 +986,45 @@ For OTHER questions:
   }
 }
 
-// Generate product schemas
+// Helper: Execute GraphQL with exponential backoff retry for throttling
+async function executeWithRetry(shop, query, variables, maxRetries = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await executeShopifyGraphQL(shop, query, variables);
+    } catch (error) {
+      lastError = error;
+      // Check if it's a throttle error
+      if (error.message?.includes('Throttled') || error.message?.includes('429')) {
+        // Longer delays: 2s, 4s, 8s, 16s (exponential backoff with base 2s)
+        const delay = Math.pow(2, attempt + 1) * 1000;
+        console.log(`[SCHEMA] ⏳ Throttled, waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error; // Non-throttle error, don't retry
+      }
+    }
+  }
+  throw lastError;
+}
+
+// Generate product schemas - OPTIMIZED: 1 query + 1 mutation instead of 8+ calls
 async function generateProductSchemas(shop, productDoc) {
   const productGid = `gid://shopify/Product/${productDoc.productId}`;
+  const languages = productDoc.seoStatus?.languages || [];
+  const optimizedLanguages = languages.filter(lang => lang.optimized);
   
-  // Get full product data
+  if (optimizedLanguages.length === 0) {
+    return { schemas: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
+  }
+  
+  // OPTIMIZATION 1: Get product + ALL SEO metafields + shop name + brand in ONE query
   const query = `
-    query GetProduct($id: ID!) {
+    query GetProductWithMetafields($id: ID!) {
+      shop {
+        name
+        organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+      }
       product(id: $id) {
         id
         title
@@ -981,6 +1045,8 @@ async function generateProductSchemas(shop, productDoc) {
             node {
               url
               altText
+              width
+              height
             }
           }
         }
@@ -994,49 +1060,66 @@ async function generateProductSchemas(shop, productDoc) {
             currencyCode
           }
         }
+        metafields(first: 20, namespace: "seo_ai") {
+          edges {
+            node {
+              key
+              value
+            }
+          }
+        }
       }
     }
   `;
   
-  const productData = await executeShopifyGraphQL(shop, query, { id: productGid });
+  const productData = await executeWithRetry(shop, query, { id: productGid });
   const product = productData.product;
+  
+  // Extract store brand name: Organization Schema name > Shop name > domain
+  let storeBrandName = shop;
+  try {
+    const orgMeta = productData.shop?.organizationMetafield?.value;
+    if (orgMeta) {
+      const orgData = JSON.parse(orgMeta);
+      storeBrandName = orgData.name || productData.shop?.name || shop;
+    } else {
+      storeBrandName = productData.shop?.name || shop;
+    }
+  } catch (e) {
+    storeBrandName = productData.shop?.name || shop;
+  }
   
   if (!product) {
     console.error(`[SCHEMA] Product not found: ${productGid}`);
-    // console.log(`[SCHEMA] generateProductSchemas returning undefined for product ${productDoc.productId}`);
     return;
   }
   
-  // Get SEO data for all languages
-  const languages = productDoc.seoStatus?.languages || [];
-  const schemas = [];
-  let totalProductUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-  
-  for (const lang of languages) {
-    if (!lang.optimized) continue;
-    
-    // Get SEO metafield
-    const metafieldQuery = `
-      query GetMetafield($productId: ID!, $key: String!) {
-        product(id: $productId) {
-          metafield(namespace: "seo_ai", key: $key) {
-            value
+  // Extract SEO metafields into a map for quick lookup
+  const seoMetafields = {};
+  if (product.metafields?.edges) {
+    for (const edge of product.metafields.edges) {
+      const key = edge.node.key; // e.g., "seo__en", "seo__bg"
+      if (key.startsWith('seo__')) {
+        const langCode = key.replace('seo__', '');
+        try {
+          seoMetafields[langCode] = JSON.parse(edge.node.value);
+        } catch (e) {
+          console.error(`[SCHEMA] Failed to parse SEO metafield for ${langCode}:`, e);
+        }
           }
         }
       }
-    `;
-    
-    const mfData = await executeShopifyGraphQL(shop, metafieldQuery, { 
-      productId: productGid, 
-      key: `seo__${lang.code}` 
-    });
-    
-    if (!mfData.product?.metafield?.value) continue;
-    
-    const seoData = JSON.parse(mfData.product.metafield.value);
+  
+  // Generate schemas for all languages
+  const schemas = [];
+  let totalProductUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  
+  for (const lang of optimizedLanguages) {
+    const seoData = seoMetafields[lang.code];
+    if (!seoData) continue;
     
     // Generate schemas for this language
-    const result = await generateLangSchemas(product, seoData, shop, lang.code);
+    const result = await generateLangSchemas(product, seoData, shop, lang.code, storeBrandName);
     schemas.push({ language: lang.code, schemas: result.schemas });
     
     // Collect usage
@@ -1047,13 +1130,28 @@ async function generateProductSchemas(shop, productDoc) {
     }
   }
   
-  // Collect all schemas from all languages
-  const allSchemas = [];
+  if (schemas.length === 0) {
+    return { schemas: [], usage: totalProductUsage };
+  }
   
-  // Save all schemas
+  // OPTIMIZATION 2: Save ALL language schemas in ONE mutation
+  const allSchemas = [];
+  const metafieldsToSave = [];
+  
   for (const { language, schemas: langSchemas } of schemas) {
+    metafieldsToSave.push({
+      ownerId: productGid,
+      namespace: "advanced_schema",
+      key: `schemas_${language}`,
+      type: "json",
+      value: JSON.stringify(langSchemas)
+    });
+    allSchemas.push(...langSchemas);
+  }
+  
+  // Single mutation to save all schemas
     const saveMutation = `
-      mutation SetSchema($metafields: [MetafieldsSetInput!]!) {
+    mutation SetSchemas($metafields: [MetafieldsSetInput!]!) {
         metafieldsSet(metafields: $metafields) {
           metafields {
             id
@@ -1066,43 +1164,36 @@ async function generateProductSchemas(shop, productDoc) {
       }
     `;
     
-    const variables = {
-      metafields: [{
-        ownerId: productGid,
-        namespace: "advanced_schema",
-        key: `schemas_${language}`,
-        type: "json",
-        value: JSON.stringify(langSchemas)
-      }]
-    };
-    
-    // Save to Shopify metafields
-    await executeShopifyGraphQL(shop, saveMutation, variables);
-    
-    // Also collect for MongoDB
-    allSchemas.push(...langSchemas);
-  }
+  await executeWithRetry(shop, saveMutation, { metafields: metafieldsToSave });
   
-  // Update optimization summary metafield
-  await updateOptimizationSummary(shop, productDoc.productId);
+  // NOTE: updateOptimizationSummary is now called in batch at the end of generateAllSchemas
+  // to avoid excessive GraphQL calls (it makes 1+N calls where N is number of languages)
   
-  // Return schemas and usage for MongoDB storage and token tracking
-  // console.log(`[SCHEMA] generateProductSchemas returning ${allSchemas.length} schemas for product ${product.id}`);
-  return { schemas: allSchemas, usage: totalProductUsage };
+  return { schemas: allSchemas, usage: totalProductUsage, productId: productDoc.productId };
 }
 
 // Generate schemas for specific language
-async function generateLangSchemas(product, seoData, shop, language) {
+async function generateLangSchemas(product, seoData, shop, language, shopName = null) {
   const shopUrl = `https://${shop}`;
   const productUrl = `${shopUrl}/products/${product.handle}`;
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
   // Load rich attributes settings
   const richAttributesSettings = await loadRichAttributesSettings(shop);
-  // console.log(`[SCHEMA] Rich attributes settings for ${shop}:`, richAttributesSettings);
   
   // Extract factual attributes if any are enabled
   const enabledAttributes = Object.keys(richAttributesSettings).filter(key => richAttributesSettings[key]);
+  
+  // Log AI features status (only once per shop, on first product)
+  if (!generateLangSchemas._loggedForShop || generateLangSchemas._loggedForShop !== shop) {
+    console.log(`[SCHEMA] 🎛️ AI Features for ${shop}:`, {
+      enhancedDescription: richAttributesSettings.enhancedDescription || false,
+      reviews: richAttributesSettings.reviews || false,
+      ratings: richAttributesSettings.ratings || false,
+      enabledAttributes: enabledAttributes.length > 0 ? enabledAttributes : 'none'
+    });
+    generateLangSchemas._loggedForShop = shop;
+  }
   let richAttributes = {};
   
   if (enabledAttributes.length > 0) {
@@ -1212,6 +1303,65 @@ async function generateLangSchemas(product, seoData, shop, language) {
   // Count variants for offerCount
   const variantCount = product.variants?.edges?.length || 0;
   
+  // Build images array with ImageObject for better SEO
+  // Priority for alt text: AI-generated imageAlt > Shopify altText > product title
+  const images = (product.images?.edges || []).map((edge, index) => {
+    const img = edge.node;
+    // For featured image (first), prefer AI-generated alt text from seoData
+    const altText = index === 0 
+      ? (seoData.imageAlt || img.altText || seoData.title)
+      : (img.altText || seoData.title);
+    
+    const imageObj = {
+      "@type": "ImageObject",
+      "url": img.url,
+      "name": altText
+    };
+    // Add dimensions if available (improves Google validation)
+    if (img.width) imageObj.width = img.width;
+    if (img.height) imageObj.height = img.height;
+    return imageObj;
+  });
+  
+  // Brand: product vendor > store brand name from Organization Schema > shop name
+  const brandName = product.vendor || shopName || shop;
+  
+  // Offers: Use Offer for single variant, AggregateOffer for multiple
+  // priceValidUntil: 90 days (Google recommends reasonable timeframe)
+  const priceValidUntil = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const isSingleVariant = variantCount <= 1;
+  
+  let offers;
+  if (isSingleVariant && minPrice !== null && !isNaN(minPrice)) {
+    // Single variant → Offer with price
+    offers = {
+      "@type": "Offer",
+      "url": productUrl,
+      "priceCurrency": priceCurrency,
+      "price": minPrice,
+      "availability": availability,
+      "priceValidUntil": priceValidUntil
+    };
+  } else {
+    // Multiple variants → AggregateOffer with lowPrice/highPrice
+    offers = {
+      "@type": "AggregateOffer",
+      "url": productUrl,
+      "priceCurrency": priceCurrency,
+      "availability": availability,
+      "priceValidUntil": priceValidUntil
+    };
+    if (minPrice !== null && !isNaN(minPrice)) {
+      offers.lowPrice = minPrice;
+    }
+    if (maxPrice !== null && !isNaN(maxPrice)) {
+      offers.highPrice = maxPrice;
+    }
+    if (variantCount > 1) {
+      offers.offerCount = variantCount;
+    }
+  }
+  
   const productSchema = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -1219,30 +1369,16 @@ async function generateLangSchemas(product, seoData, shop, language) {
     "name": seoData.title,
     "description": seoData.metaDescription,
     "url": productUrl,
-    "image": product.images?.edges?.map(e => e.node.url) || [],
     "brand": {
       "@type": "Brand",
-      "name": product.vendor || "Unknown"
+      "name": brandName
     },
-    "offers": {
-      "@type": "AggregateOffer",
-      "priceCurrency": priceCurrency,
-      "availability": availability,
-      "priceValidUntil": new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 year from now
-    }
+    "offers": offers
   };
   
-  // Add prices only if they exist and are valid numbers
-  if (minPrice !== null && !isNaN(minPrice)) {
-    productSchema.offers.lowPrice = minPrice;
-  }
-  if (maxPrice !== null && !isNaN(maxPrice)) {
-    productSchema.offers.highPrice = maxPrice;
-  }
-  
-  // Add offerCount if multiple variants
-  if (variantCount > 1) {
-    productSchema.offers.offerCount = variantCount;
+  // Only add images if at least one exists (Google requires >= 1 image for Product)
+  if (images.length > 0) {
+    productSchema.image = images;
   }
   
   // Add SKU if available
@@ -1457,6 +1593,25 @@ async function installThemeSnippet(shop) {
     // The JSON array will be rendered as a single script tag with all schemas
     const snippetContent = `{%- comment -%} Advanced Schema Data - Auto-generated by indexAIze - Unlock AI Search {%- endcomment -%}
 
+{%- comment -%} AI Discovery Links - helps AI crawlers find structured data endpoints {%- endcomment -%}
+{%- if shop.metafields.ai_discovery.settings -%}
+  {%- assign ai_settings = shop.metafields.ai_discovery.settings.value -%}
+  {%- if ai_settings.features.discoveryLinks -%}
+    {%- if ai_settings.features.llmsTxt -%}
+      <link rel="alternate" type="text/plain" href="/apps/indexaize/llms.txt" title="LLMs.txt - AI Discovery">
+    {%- endif -%}
+    {%- if ai_settings.features.productsJson -%}
+      <link rel="alternate" type="application/json" href="/apps/indexaize/ai/products.json" title="AI Product Feed">
+    {%- endif -%}
+    {%- if ai_settings.features.storeMetadata -%}
+      <link rel="alternate" type="application/json" href="/apps/indexaize/ai/store-metadata.json" title="Store Metadata for AI">
+    {%- endif -%}
+    {%- if ai_settings.features.collectionsJson -%}
+      <link rel="alternate" type="application/json" href="/apps/indexaize/ai/collections-feed.json" title="AI Collections Feed">
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+
 {%- comment -%} Organization & WebSite Schema (site-wide) {%- endcomment -%}
 {%- if shop.metafields.advanced_schema.shop_schemas -%}
   <script type="application/ld+json">
@@ -1510,7 +1665,7 @@ async function installThemeSnippet(shop) {
 
     // Създаваме файла чрез REST API
     const themeId = mainTheme.id.split('/').pop();
-    const putUrl = `https://${shop}/admin/api/2024-01/themes/${themeId}/assets.json`;
+    const putUrl = `https://${shop}/admin/api/2025-07/themes/${themeId}/assets.json`;
     const accessToken = await getAccessToken(shop);
     
     const response = await fetch(putUrl, {
@@ -1584,13 +1739,16 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
   let totalAITokens = 0;
   
   try {
+    // CRITICAL: Get actual product count BEFORE token reservation!
+    const totalProductsInMongo = await Product.countDocuments({ shop });
+    
     // Check if this feature requires tokens and reserve
     const { estimateTokensWithMargin, requiresTokens, calculateActualTokens, isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
     if (requiresTokens(feature)) {
-      // Estimate tokens (rough estimate: 500 products * 4 AI calls * 500 tokens each = 1M tokens)
-      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 }); // Conservative estimate
+      // Estimate tokens based on ACTUAL product count
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: totalProductsInMongo });
       
       const tokenBalance = await TokenBalance.getOrCreate(shop);
       
@@ -1607,10 +1765,15 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
       const includedTokensPlans = ['growth_extra', 'enterprise'];
       const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check if user has purchased tokens (not just included tokens)
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
       
       // CRITICAL: Block during trial ONLY for plans with included tokens
       // NOTE: We check ONLY inTrial, NOT isActive! Status is 'active' during trial.
-      if (hasIncludedTokens && inTrial && isBlockedInTrial(feature)) {
+      // Only block if: has included tokens plan + in trial + not activated + no purchased tokens
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && isBlockedInTrial(feature)) {
         throw new Error('TRIAL_RESTRICTION: Advanced Schema Data is locked during trial period. Activate your plan to unlock.');
       }
       
@@ -1645,7 +1808,7 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // First, sync products from Shopify to MongoDB if needed
-    const totalProductsInMongo = await Product.countDocuments({ shop });
+    // totalProductsInMongo is already counted earlier for token estimation
     
     if (totalProductsInMongo === 0) {
       try {
@@ -1657,7 +1820,7 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // Get ALL optimized products (basic + AI-enhanced together)
-    const allProducts = await Product.find({
+    const allOptimizedProducts = await Product.find({
       shop,
       'seoStatus.optimized': true
     }).limit(500);
@@ -1668,43 +1831,144 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       'seoStatus.aiEnhanced': true
     });
     
-    // Case 1: No products at all
-    if (allProducts.length === 0) {
+    // OPTIMIZATION: Filter out products that already have advanced schema
+    // Only process products that need schema generation
+    const productsWithoutSchema = allOptimizedProducts.filter(p => !p.seoStatus?.hasAdvancedSchema);
+    const productsWithSchema = allOptimizedProducts.length - productsWithoutSchema.length;
+    
+    console.log(`[SCHEMA] 📊 Product counts for ${shop}:`);
+    console.log(`[SCHEMA]   - Total optimized products: ${allOptimizedProducts.length}`);
+    console.log(`[SCHEMA]   - Already have schema: ${productsWithSchema} (skipping)`);
+    console.log(`[SCHEMA]   - Need schema generation: ${productsWithoutSchema.length}`);
+    console.log(`[SCHEMA]   - AI-enhanced products: ${aiEnhancedCount}`);
+    console.log(`[SCHEMA]   - forceBasicSeo: ${forceBasicSeo}`);
+    
+    // Case 1: No optimized products at all
+    if (allOptimizedProducts.length === 0) {
+      console.log('[SCHEMA] ❌ NO_OPTIMIZED_PRODUCTS - throwing error');
       throw new Error('NO_OPTIMIZED_PRODUCTS');
     }
     
-    // Case 2: Only basic products, no AI-enhanced (and user didn't force basic)
+    // Case 2: All products already have schema - nothing to do
+    if (productsWithoutSchema.length === 0) {
+      console.log('[SCHEMA] ✅ All products already have advanced schema - nothing to generate');
+      return { success: true, schemaCount: 0, message: 'All products already have schema' };
+    }
+    
+    // Case 3: Only basic products, no AI-enhanced (and user didn't force basic)
     // Show recommendation modal, but don't block generation
-    if (allProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
+    if (allOptimizedProducts.length > 0 && aiEnhancedCount === 0 && !forceBasicSeo) {
+      console.log('[SCHEMA] ⚠️ ONLY_BASIC_SEO - throwing error (no AI-enhanced products)');
       throw new Error('ONLY_BASIC_SEO');
     }
     
-    // Use ALL optimized products (mix of basic + AI-enhanced)
-    const products = allProducts;
+    if (aiEnhancedCount > 0) {
+      console.log(`[SCHEMA] ✅ Found ${aiEnhancedCount} AI-enhanced products, proceeding...`);
+    } else {
+      console.log('[SCHEMA] ⚠️ No AI-enhanced products, but forceBasicSeo=true, proceeding...');
+    }
     
-    // Collect all generated schemas
+    // Use only products WITHOUT existing schema
+    const products = productsWithoutSchema;
+    
+    // Collect all generated schemas and product IDs for later summary update
     const allProductSchemas = [];
+    const processedProductIds = [];
     
-    // Process in batches
-    const batchSize = 10;
+    // OPTIMIZATION 3: Reduced batch size (10 → 3) to avoid Shopify throttling
+    // With optimized queries (2 calls/product), 3 products = 6 concurrent requests = safe
+    const batchSize = 3;
+    const delayBetweenBatches = 1000; // 1 second delay between batches (safer for rate limits)
+    
+    console.log(`[SCHEMA] 🚀 Starting batch processing: ${products.length} products, batch size ${batchSize}`);
+    
+    // Track progress
+    const progressStartedAt = new Date();
+    let processedCount = 0;
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Initial progress update to MongoDB
+    await Shop.updateOne(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.inProgress': true,
+          'schemaStatus.status': 'processing',
+          'schemaStatus.totalProducts': products.length,
+          'schemaStatus.processedProducts': 0,
+          'schemaStatus.successfulProducts': 0,
+          'schemaStatus.failedProducts': 0,
+          'schemaStatus.progress.current': 0,
+          'schemaStatus.progress.total': products.length,
+          'schemaStatus.progress.percent': 0,
+          'schemaStatus.progress.startedAt': progressStartedAt,
+          'schemaStatus.progress.remainingSeconds': Math.round(products.length * 2.5), // ~2.5s per product estimate
+          'schemaStatus.startedAt': progressStartedAt,
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
     for (let i = 0; i < products.length; i += batchSize) {
       const batch = products.slice(i, Math.min(i + batchSize, products.length));
-      
-      await Promise.all(batch.map(async (product) => {
-        try {
-          // console.log(`[SCHEMA] Processing product ${product.productId}...`);
+      const batchNum = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(products.length / batchSize);
           
           // Update progress
-          const progressPercent = Math.round(((i + 1) / products.length) * 100);
+      const progressPercent = Math.round((i / products.length) * 100);
+      const elapsedSeconds = Math.round((Date.now() - progressStartedAt.getTime()) / 1000);
+      const avgTimePerProduct = processedCount > 0 ? elapsedSeconds / processedCount : 2.5;
+      const remainingProducts = products.length - processedCount;
+      const remainingSeconds = Math.round(remainingProducts * avgTimePerProduct);
+      
           generationStatus.set(shop, {
             generating: true,
             progress: `${progressPercent}%`,
-            currentProduct: `Processing ${product.title || product.productId}...`
-          });
-          
+        currentProduct: `Batch ${batchNum}/${totalBatches} (${batch.length} products)...`
+      });
+      
+      // Update progress in MongoDB
+      await Shop.updateOne(
+        { shop },
+        {
+          $set: {
+            'schemaStatus.processedProducts': processedCount,
+            'schemaStatus.successfulProducts': successCount,
+            'schemaStatus.failedProducts': failCount,
+            'schemaStatus.progress.current': processedCount,
+            'schemaStatus.progress.percent': progressPercent,
+            'schemaStatus.progress.elapsedSeconds': elapsedSeconds,
+            'schemaStatus.progress.remainingSeconds': remainingSeconds,
+            'schemaStatus.message': `Processing ${processedCount}/${products.length} products`,
+            'schemaStatus.updatedAt': new Date()
+          }
+        }
+      );
+      
+      await Promise.all(batch.map(async (product) => {
+        try {
           const result = await generateProductSchemas(shop, product);
           if (result?.schemas && result.schemas.length > 0) {
             allProductSchemas.push(...result.schemas);
+            successCount++;
+            // Collect product ID for optimization summary update later
+            if (result.productId) {
+              processedProductIds.push(result.productId);
+              
+              // Mark product as having advanced schema
+              await Product.updateOne(
+                { shop, productId: result.productId },
+                { 
+                  $set: { 
+                    'seoStatus.hasAdvancedSchema': true,
+                    'seoStatus.advancedSchemaGeneratedAt': new Date()
+                  }
+                }
+              );
+            }
+          } else {
+            failCount++;
           }
           
           // Track tokens from this product
@@ -1712,11 +1976,16 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
             totalAITokens += result.usage.total_tokens || 0;
           }
         } catch (err) {
-          console.error(`[SCHEMA] Failed for product ${product.productId}:`, err);
+          console.error(`[SCHEMA] Failed for product ${product.productId}:`, err.message);
+          failCount++;
         }
+        processedCount++;
       }));
       
-      // console.log(`[SCHEMA] Processed ${Math.min(i + batchSize, products.length)}/${products.length} products`);
+      // OPTIMIZATION 3b: Add delay between batches to respect rate limits
+      if (i + batchSize < products.length) {
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+      }
     }
     
     // Save to MongoDB
@@ -1741,6 +2010,14 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
     }
     
     // === FINALIZE TOKEN USAGE ===
+    console.log(`[SCHEMA] 📊 Token Usage Summary for ${shop}:`, {
+      productsProcessed: allProductSchemas.length,
+      schemasGenerated: allProductSchemas.length,
+      totalAITokens,
+      tokensPerProduct: allProductSchemas.length > 0 ? Math.round(totalAITokens / allProductSchemas.length) : 0,
+      reservationId
+    });
+    
     if (reservationId && totalAITokens > 0) {
       try {
         const tokenBalance = await TokenBalance.getOrCreate(shop);
@@ -1766,10 +2043,111 @@ async function generateAllSchemas(shop, forceBasicSeo = false) {
       currentProduct: 'Generation complete!' 
     });
     
+    // Calculate duration
+    const duration = Math.round((Date.now() - progressStartedAt.getTime()) / 1000);
+    
+    // Update final status in MongoDB
+    await Shop.updateOne(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.inProgress': false,
+          'schemaStatus.status': 'completed',
+          'schemaStatus.message': `Generated ${successCount} schemas`,
+          'schemaStatus.processedProducts': processedCount,
+          'schemaStatus.successfulProducts': successCount,
+          'schemaStatus.failedProducts': failCount,
+          'schemaStatus.progress.current': processedCount,
+          'schemaStatus.progress.percent': 100,
+          'schemaStatus.progress.elapsedSeconds': duration,
+          'schemaStatus.progress.remainingSeconds': 0,
+          'schemaStatus.completedAt': new Date(),
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    // Send email notification if process took more than 2 minutes
+    if (duration > 120) {
+      try {
+        const shopDoc = await Shop.findOne({ shop }).lean();
+        if (shopDoc?.email) {
+          const emailService = (await import('../services/emailService.js')).default;
+          await emailService.sendSchemaCompletedEmail(shopDoc, {
+            successful: successCount,
+            failed: failCount,
+            duration: duration,
+            totalSchemas: allProductSchemas.length,
+            totalProducts: products.length
+          });
+        }
+      } catch (emailErr) {
+        console.error('[SCHEMA] Failed to send completion email:', emailErr.message);
+      }
+    }
+    
+    // Fire-and-forget: update optimization summaries in background (non-blocking)
+    // This runs AFTER the function returns, so it doesn't block the UI
+    if (processedProductIds.length > 0) {
+      setImmediate(async () => {
+        console.log(`[SCHEMA] 📝 Starting background optimization summary update for ${processedProductIds.length} products...`);
+        const summaryBatchSize = 5;
+        const summaryDelay = 2000;
+        
+        for (let i = 0; i < processedProductIds.length; i += summaryBatchSize) {
+          const batch = processedProductIds.slice(i, i + summaryBatchSize);
+          for (const productId of batch) {
+            try {
+              await updateOptimizationSummary(shop, productId);
+              await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (err) {
+              // Silent fail - summaries are not critical
+            }
+          }
+          if (i + summaryBatchSize < processedProductIds.length) {
+            await new Promise(resolve => setTimeout(resolve, summaryDelay));
+          }
+        }
+        console.log(`[SCHEMA] ✅ Completed background optimization summary updates`);
+      });
+    }
+    
+    // CRITICAL: Return schema count for background queue
+    return {
+      success: true,
+      schemaCount: allProductSchemas.length,
+      schemas: allProductSchemas,
+      successfulProducts: successCount,
+      failedProducts: failCount,
+      totalProducts: products.length
+    };
+    
   } catch (error) {
     console.error(`[SCHEMA] ❌ Fatal error for ${shop}:`, error);
     console.error(`[SCHEMA] ❌ Error message:`, error.message);
     console.error(`[SCHEMA] ❌ Error stack:`, error.stack);
+    
+    // CRITICAL: If we reserved tokens but generation failed, refund them!
+    if (reservationId) {
+      try {
+        const { default: TokenBalance } = await import('../db/TokenBalance.js');
+        const tokenBalance = await TokenBalance.getOrCreate(shop);
+        
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
+        
+        
+        // Invalidate cache
+        try {
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[SCHEMA] Failed to invalidate cache:', cacheErr);
+        }
+      } catch (tokenErr) {
+        console.error('[SCHEMA] Error refunding tokens after failure:', tokenErr);
+      }
+    }
     
     // Mark generation as failed
     generationStatus.set(shop, { 
@@ -1815,21 +2193,34 @@ router.post('/generate-all', async (req, res) => {
       });
     }
     
+    // Get actual product count BEFORE token checks
+    const totalProductsInMongo = await Product.countDocuments({ shop });
+    
     // === TRIAL RESTRICTION CHECK ===
     // IMPORTANT: Only for plans with INCLUDED tokens (Growth Extra, Enterprise)
     // Plus plans use PURCHASED tokens → no trial restriction
     const now = new Date();
     const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
-    const isActive = subscription?.status === 'active';
+    const isActivated = subscription?.activatedAt != null;
     const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
     const feature = 'ai-schema-advanced';
     
-    // CRITICAL: Block during trial ONLY for plans with included tokens
-    if (hasIncludedAccess && inTrial && !isActive && isBlockedInTrial(feature)) {
-      // Get token info for Trial Activation Modal
+    // Check if user has purchased tokens (bypass trial restriction)
+    const tokenBalance = await TokenBalance.getOrCreate(shop);
+    const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+    const hasTokenBalance = tokenBalance.balance > 0;
+    
+    // CRITICAL: Block during trial ONLY if:
+    // 1. Plan has included tokens (Enterprise/Growth Extra)
+    // 2. Currently in trial period
+    // 3. Plan not activated
+    // 4. User has NEVER purchased tokens (!hasPurchasedTokens)
+    // 5. User has NO remaining token balance (!hasTokenBalance)
+    // 6. Feature is blocked during trial
+    if (hasIncludedAccess && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial(feature)) {
+      // Get token info for Trial Activation Modal (use actual product count)
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
-      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: 100 });
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      const tokenEstimate = estimateTokensWithMargin(feature, { productCount: totalProductsInMongo });
       
       return res.status(402).json({
         error: 'Advanced Schema Data is locked during trial period',
@@ -1838,8 +2229,8 @@ router.post('/generate-all', async (req, res) => {
         trialEndsAt: subscription.trialEndsAt,
         currentPlan: subscription.plan,
         feature,
-        tokensRequired: tokenEstimate.estimated,
-        tokensWithMargin: tokenEstimate.withMargin,
+        tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+        tokensEstimated: tokenEstimate.estimated,
         tokensAvailable: tokenBalance.balance,
         tokensNeeded: Math.max(0, tokenEstimate.withMargin - tokenBalance.balance),
         message: 'Activate your plan to unlock Advanced Schema Data with included tokens'
@@ -1849,85 +2240,87 @@ router.post('/generate-all', async (req, res) => {
     // === TOKEN BALANCE CHECK ===
     // For Plus plans (purchased tokens) OR active included-tokens plans
     if (isPlusPlan) {
-      const tokenBalance = await TokenBalance.getOrCreate(shop);
+      // Reuse tokenBalance from trial check if already fetched
+      const tokenBalanceForCheck = tokenBalance || await TokenBalance.getOrCreate(shop);
       
-      // Estimate tokens needed for Advanced Schema
+      // Estimate tokens needed for Advanced Schema (use actual product count)
       const { estimateTokensWithMargin } = await import('../billing/tokenConfig.js');
-      const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: 100 });
+      const tokenEstimate = estimateTokensWithMargin('ai-schema-advanced', { productCount: totalProductsInMongo });
       
-      if (!tokenBalance.hasBalance(tokenEstimate.withMargin)) {
+      if (!tokenBalanceForCheck.hasBalance(tokenEstimate.withMargin)) {
         return res.status(402).json({ 
           error: 'Insufficient token balance',
           requiresPurchase: true, // ← Show Insufficient Tokens Modal
           needsUpgrade: false,
           currentPlan: subscription?.plan || 'none',
-          tokensRequired: tokenEstimate.estimated,
-          tokensWithMargin: tokenEstimate.withMargin,
-          tokensAvailable: tokenBalance.balance,
-          tokensNeeded: tokenEstimate.withMargin - tokenBalance.balance,
+          tokensRequired: tokenEstimate.withMargin, // Use withMargin for consistency
+          tokensEstimated: tokenEstimate.estimated,
+          tokensAvailable: tokenBalanceForCheck.balance,
+          tokensNeeded: tokenEstimate.withMargin - tokenBalanceForCheck.balance,
           feature: 'ai-schema-advanced',
           message: 'Purchase tokens to generate Advanced Schema Data'
         });
       }
     }
     
-    // Return immediately
-    res.json({ 
-      success: true, 
-      message: 'Advanced schema generation started in background' 
-    });
-    
     // Get forceBasicSeo parameter from request body
     const forceBasicSeo = req.body?.forceBasicSeo === true;
     
-    // Start background process
-    generateAllSchemas(shop, forceBasicSeo).catch(err => {
-      console.error('[SCHEMA] ❌ Background generation failed:', err);
-      console.error('[SCHEMA] ❌ Error message:', err.message);
+    // === QUICK PRE-CHECK FOR OPTIMIZED PRODUCTS ===
+    // Do this BEFORE adding to queue to give instant feedback
+    if (!forceBasicSeo) {
+      // Quick check: do we have ANY optimized products in MongoDB?
+      const optimizedCount = await Product.countDocuments({ 
+        shop, 
+        'seoStatus.optimized': true 
+      });
       
-      // Update status with error
-      if (err.message === 'NO_OPTIMIZED_PRODUCTS') {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
+      if (optimizedCount === 0) {
+        // No optimized products at all - return error immediately
+        return res.status(400).json({
           error: 'NO_OPTIMIZED_PRODUCTS',
-          errorMessage: 'No optimized products found. Please run AISEO optimization first.'
+          message: 'No optimized products found. Please run AISEO optimization first.',
+          requiresOptimization: true
         });
-      } else if (err.message === 'ONLY_BASIC_SEO') {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
+      }
+      
+      // Check if we have AI-enhanced products
+      const aiEnhancedCount = await Product.countDocuments({ 
+        shop, 
+        'seoStatus.optimized': true,
+        'seoStatus.aiEnhanced': true 
+      });
+      
+      if (aiEnhancedCount === 0) {
+        // Only basic SEO - return error so frontend can show modal
+        return res.status(400).json({
           error: 'ONLY_BASIC_SEO',
-          errorMessage: 'Only basic AISEO found. AI-enhanced optimization is recommended for better results.'
+          message: 'Only basic AISEO products found. AI-enhanced products recommended for best results.',
+          hasBasicSeo: true,
+          basicSeoCount: optimizedCount,
+          requiresAiEnhanced: true
         });
-      } else if (err.message.startsWith('TRIAL_RESTRICTION:')) {
-        // Trial restriction error
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'TRIAL_RESTRICTION',
-          errorMessage: err.message.replace('TRIAL_RESTRICTION: ', '')
-        });
-      } else if (err.message.startsWith('INSUFFICIENT_TOKENS:')) {
-        // Token balance error
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'INSUFFICIENT_TOKENS',
-          errorMessage: err.message.replace('INSUFFICIENT_TOKENS: ', '')
-        });
-      } else {
-        generationStatus.set(shop, { 
-          generating: false, 
-          progress: '0%', 
-          currentProduct: '',
-          error: 'GENERATION_FAILED',
-          errorMessage: err.message || 'Schema generation failed'
-        });
+      }
+    }
+    
+    // Add job to background queue
+    const schemaQueue = (await import('../services/schemaQueue.js')).default;
+    const jobInfo = await schemaQueue.addJob(shop, async () => {
+      const result = await generateAllSchemas(shop, forceBasicSeo);
+      return {
+        schemaCount: result?.schemaCount || result?.schemas?.length || 0,
+        success: true
+      };
+    });
+    
+    // Return immediately with queue info
+    res.json({ 
+      success: true, 
+      message: jobInfo.message,
+      job: {
+        queued: jobInfo.queued,
+        position: jobInfo.position,
+        estimatedTime: jobInfo.estimatedTime
       }
     });
     
@@ -1937,91 +2330,283 @@ router.post('/generate-all', async (req, res) => {
   }
 });
 
+// POST /api/schema/install-theme - Auto-install schema snippet to theme
+router.post('/install-theme', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    console.log('[SCHEMA INSTALL] Starting for shop:', shop);
+    
+    // Call the installThemeSnippet function
+    await installThemeSnippet(shop);
+    
+    console.log('[SCHEMA INSTALL] Success for shop:', shop);
+    
+    res.json({
+      success: true,
+      message: 'Schema snippet installed successfully',
+      files: {
+        snippet: 'snippets/ai-schema.liquid',
+        modified: 'layout/theme.liquid'
+      }
+    });
+    
+  } catch (error) {
+    console.error('[SCHEMA INSTALL] Error:', error);
+    res.status(500).json({
+      error: error.message,
+      details: 'Failed to install schema snippet. You may need to re-authorize the app with theme permissions.'
+    });
+  }
+});
+
+// GET /api/schema/test-installation - Test if schema snippet is installed correctly
+router.get('/test-installation', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    const results = {
+      snippetExists: false,
+      themeHasRenderTag: false,
+      homepageHasJsonLd: false,
+      productPageHasSchema: false,
+      errors: []
+    };
+    
+    // Get access token
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord?.accessToken) {
+      throw new Error('No access token found');
+    }
+    
+    // 1. Check if snippet file exists
+    try {
+      const themesResponse = await fetch(
+        `https://${shop}/admin/api/2025-01/themes.json`,
+        { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+      );
+      const themesData = await themesResponse.json();
+      const activeTheme = themesData.themes?.find(t => t.role === 'main');
+      
+      if (activeTheme) {
+        // Check for snippet
+        const snippetResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/themes/${activeTheme.id}/assets.json?asset[key]=snippets/ai-schema.liquid`,
+          { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+        );
+        results.snippetExists = snippetResponse.ok;
+        
+        // Check theme.liquid for render tag
+        const themeLiquidResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/themes/${activeTheme.id}/assets.json?asset[key]=layout/theme.liquid`,
+          { headers: { 'X-Shopify-Access-Token': shopRecord.accessToken } }
+        );
+        if (themeLiquidResponse.ok) {
+          const themeLiquidData = await themeLiquidResponse.json();
+          const content = themeLiquidData.asset?.value || '';
+          results.themeHasRenderTag = content.includes("render 'ai-schema'") || content.includes('render "ai-schema"');
+        }
+      }
+    } catch (err) {
+      results.errors.push(`Theme check failed: ${err.message}`);
+    }
+    
+    // 2. Get primary domain (fetch from Shopify API if not in DB)
+    let primaryDomain = shopRecord.primaryDomain;
+    if (!primaryDomain) {
+      try {
+        const domainQuery = `{ shop { primaryDomain { url } } }`;
+        const domainResponse = await fetch(
+          `https://${shop}/admin/api/2025-01/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query: domainQuery })
+          }
+        );
+        const domainData = await domainResponse.json();
+        primaryDomain = domainData?.data?.shop?.primaryDomain?.url;
+        
+        // Save to DB for future use
+        if (primaryDomain) {
+          await Shop.findOneAndUpdate({ shop }, { primaryDomain });
+        }
+      } catch (err) {
+        console.error('[SCHEMA TEST] Failed to fetch primaryDomain:', err.message);
+      }
+    }
+    
+    // Fallback to myshopify.com if still no domain
+    if (!primaryDomain) {
+      primaryDomain = `https://${shop}`;
+    }
+    
+    // Add domain info to results for debugging
+    results.testedDomain = primaryDomain;
+    
+    // 3. Check homepage for JSON-LD
+    try {
+      console.log('[SCHEMA TEST] Checking homepage:', primaryDomain);
+      const homepageResponse = await fetch(primaryDomain, {
+        headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+        timeout: 10000
+      });
+      if (homepageResponse.ok) {
+        const html = await homepageResponse.text();
+        results.homepageHasJsonLd = html.includes('application/ld+json');
+        // Check specifically for our schema
+        results.homepageHasOurSchema = html.includes('advanced_schema') || html.includes('indexAIze');
+        console.log('[SCHEMA TEST] Homepage JSON-LD found:', results.homepageHasJsonLd);
+      } else {
+        results.errors.push(`Homepage returned status ${homepageResponse.status}`);
+      }
+    } catch (err) {
+      results.errors.push(`Homepage check failed: ${err.message}`);
+    }
+    
+    // 4. Check a product page for schema (get first ACTIVE, non-gift-card product)
+    try {
+      // Find products that have SEO optimization (our metafields)
+      const productsQuery = `{ 
+        products(first: 20, query: "status:active") { 
+          edges { 
+            node { 
+              handle 
+              status
+              seoEn: metafield(namespace: "seo_ai", key: "seo__en") { value }
+              seoBg: metafield(namespace: "seo_ai", key: "seo__bg") { value }
+            } 
+          } 
+        } 
+      }`;
+      const productsResponse = await fetch(
+        `https://${shop}/admin/api/2025-01/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query: productsQuery })
+        }
+      );
+      const productsData = await productsResponse.json();
+      const products = productsData?.data?.products?.edges || [];
+      
+      // Find SEO-optimized products (exclude gift cards by handle as they return 404)
+      const seoProducts = products.filter(p => 
+        p.node?.handle && 
+        p.node.status === 'ACTIVE' &&
+        (p.node.seoEn?.value || p.node.seoBg?.value) &&
+        !p.node.handle.toLowerCase().includes('gift')
+      ).map(p => p.node);
+      
+      if (seoProducts.length === 0) {
+        results.errors.push('No SEO-optimized products found to test (excluding gift cards)');
+      } else {
+        // Try each product until we find one that's accessible
+        let productTested = false;
+        for (const product of seoProducts) {
+          const productUrl = `${primaryDomain}/products/${product.handle}`;
+          console.log('[SCHEMA TEST] Trying product page:', productUrl);
+          
+          try {
+            const productResponse = await fetch(productUrl, {
+              headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+              timeout: 10000
+            });
+            
+            if (productResponse.ok) {
+              results.testedProductUrl = productUrl;
+              const html = await productResponse.text();
+              const hasJsonLd = html.includes('application/ld+json');
+              const hasProductType = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+              results.productPageHasSchema = hasJsonLd && hasProductType;
+              results.productPageHasOurSchema = html.includes('advanced_schema') || html.includes('seo_ai') || html.includes('indexAIze');
+              console.log('[SCHEMA TEST] Product JSON-LD:', hasJsonLd, 'Product type:', hasProductType);
+              productTested = true;
+              break; // Found a working product, stop trying
+            } else {
+              console.log('[SCHEMA TEST] Product returned', productResponse.status, '- trying next');
+            }
+          } catch (err) {
+            console.log('[SCHEMA TEST] Product fetch failed:', err.message, '- trying next');
+          }
+        }
+        
+        if (!productTested) {
+          results.errors.push('All SEO-optimized products returned errors (404/timeout)');
+        }
+      }
+    } catch (err) {
+      results.errors.push(`Product page check failed: ${err.message}`);
+    }
+    
+    // Calculate overall status
+    results.allPassed = results.snippetExists && results.themeHasRenderTag && results.homepageHasJsonLd;
+    results.summary = results.allPassed 
+      ? 'All tests passed! Schema installation is working correctly.'
+      : 'Some tests failed. Please check the details below.';
+    
+    res.json(results);
+    
+  } catch (error) {
+    console.error('[SCHEMA TEST] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/schema/status - Check generation status
 router.get('/status', async (req, res) => {
   try {
     const shop = requireShop(req);
     
-    // Get current generation status from memory
-    const currentStatus = generationStatus.get(shop) || { 
-      generating: false, 
-      progress: '0%', 
-      currentProduct: '' 
-    };
+    // Get job status from queue
+    const schemaQueue = (await import('../services/schemaQueue.js')).default;
+    const jobStatus = await schemaQueue.getJobStatus(shop);
     
-    // IMPORTANT: Check if data actually exists in MongoDB
-    // This is the source of truth, not the in-memory status
-    let actualDataExists = false;
-    let productsWithSchema = 0;
-    let hasFAQ = false;
+    // Get shop schema status from DB
+    const shopDoc = await Shop.findOne({ shop }).select('schemaStatus').lean();
     
-    try {
-      // Check MongoDB for actual saved data
-      const savedSchema = await AdvancedSchema.findOne({ shop });
-      
-      if (savedSchema && savedSchema.schemas && savedSchema.schemas.length > 0) {
-        actualDataExists = true;
-        
-        // Count unique products by extracting product handles from schema URLs
-        const uniqueProducts = new Set();
-        savedSchema.schemas.forEach(schema => {
-          if (schema.url && schema.url.includes('/products/')) {
-            const handle = schema.url.split('/products/')[1]?.split('#')[0];
-            if (handle) {
-              uniqueProducts.add(handle);
-            }
-          }
-        });
-        productsWithSchema = uniqueProducts.size;
-        
-        hasFAQ = !!savedSchema.siteFAQ;
-      }
-      
-      // Also check FAQ in metafields as backup
-      if (!hasFAQ) {
-        const faqQuery = `
-          query {
-            shop {
-              metafield(namespace: "advanced_schema", key: "site_faq") {
-                value
-              }
-            }
-          }
-        `;
-        
-        const faqData = await executeShopifyGraphQL(shop, faqQuery);
-        hasFAQ = !!faqData.shop?.metafield?.value;
-      }
-    } catch (dbError) {
-      console.error(`[SCHEMA-STATUS] Error checking MongoDB:`, dbError);
-    }
+    // Get last generated schema info from MongoDB
+    const schemaDoc = await AdvancedSchema.findOne({ shop }).select('schemas siteFAQ generatedAt').lean();
     
-    // Determine actual generation status
-    let isActuallyGenerating = currentStatus.generating;
+    // Determine overall status for frontend
+    const isGenerating = jobStatus.status === 'processing' || jobStatus.status === 'queued';
+    const inProgress = shopDoc?.schemaStatus?.inProgress || false;
     
-    // If memory says generating but we found complete data, generation is done
-    if (isActuallyGenerating && actualDataExists) {
-      isActuallyGenerating = false;
-      
-      // Clear the in-memory status since generation is complete
-      generationStatus.set(shop, {
-        generating: false,
-        progress: '100%',
-        currentProduct: 'Complete'
-      });
+    // Count schemas
+    let schemaCount = 0;
+    if (schemaDoc?.schemas) {
+      schemaCount = schemaDoc.schemas.length;
     }
     
     res.json({
-      enabled: true,
-      generating: isActuallyGenerating,
-      progress: isActuallyGenerating ? currentStatus.progress : '100%',
-      currentProduct: currentStatus.currentProduct,
-      error: currentStatus.error || null,
-      errorMessage: currentStatus.errorMessage || null,
-      hasSiteFAQ: hasFAQ,
-      productsWithSchema: productsWithSchema,
-      // Add this flag to help frontend know data is ready
-      dataReady: actualDataExists
+      shop,
+      // Overall status for frontend
+      inProgress: isGenerating || inProgress,
+      status: jobStatus.status,
+      message: jobStatus.message,
+      // Queue details
+      queue: {
+        status: jobStatus.status,
+        message: jobStatus.message,
+        position: jobStatus.position || null,
+        queueLength: jobStatus.queueLength,
+        estimatedTime: jobStatus.estimatedTime || null
+      },
+      // Last generated schema info
+      schema: {
+        exists: !!schemaDoc,
+        generatedAt: schemaDoc?.generatedAt || null,
+        schemaCount: schemaCount,
+        hasSiteFAQ: !!schemaDoc?.siteFAQ
+      },
+      // Detailed shop status from DB
+      shopStatus: shopDoc?.schemaStatus || null
     });
     
   } catch (error) {
@@ -2036,6 +2621,32 @@ router.get('/status', async (req, res) => {
       productsWithSchema: 0,
       dataReady: false
     });
+  }
+});
+
+// POST /api/schema/dismiss-error - Dismiss schema error status
+router.post('/dismiss-error', async (req, res) => {
+  try {
+    const shop = requireShop(req);
+    
+    // Reset the schema status to idle
+    await Shop.findOneAndUpdate(
+      { shop },
+      {
+        $set: {
+          'schemaStatus.status': 'idle',
+          'schemaStatus.message': null,
+          'schemaStatus.lastError': null,
+          'schemaStatus.inProgress': false,
+          'schemaStatus.updatedAt': new Date()
+        }
+      }
+    );
+    
+    res.json({ success: true, message: 'Schema error dismissed' });
+  } catch (error) {
+    console.error('[SCHEMA-DISMISS] Error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -2210,7 +2821,7 @@ router.get('/schema-sitemap.xml', async (req, res) => {
   products.forEach(product => {
     // Use app proxy path for schema endpoint
     sitemap += `  <url>
-    <loc>https://${shopDomain}/apps/new-ai-seo/ai/product/${product.handle}/schemas.json?shop=${shop}</loc>
+    <loc>https://${shopDomain}/apps/${APP_PROXY_SUBPATH}/ai/product/${product.handle}/schemas.json?shop=${shop}</loc>
     <lastmod>${new Date().toISOString()}</lastmod>
   </url>\n`;
   });

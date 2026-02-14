@@ -40,81 +40,42 @@ export default async function uninstallWebhook(req, res) {
       console.error(`[Webhook] ❌ Error deleting subscription for ${shop}:`, e.message);
     }
 
-    // Опционално: изтрий продукти ако ги кеширате
+    // Delete all shop data silently
     try {
       const { default: Product } = await import('../db/Product.js');
       await Product.deleteMany({ shop });
-      console.log(`[Webhook] Deleted products for ${shop}`);
-    } catch (e) {
-      // Ако няма Product модел, продължаваме
-    }
+    } catch (e) { /* Product model may not exist */ }
 
-    // Изтрий колекции
     try {
       const { default: Collection } = await import('../db/Collection.js');
       await Collection.deleteMany({ shop });
-      console.log(`[Webhook] Deleted collections for ${shop}`);
-    } catch (e) {
-      console.log(`[Webhook] Could not delete collections for ${shop}:`, e.message);
-    }
+    } catch (e) { /* Collection model may not exist */ }
 
-    // Изтрий AI Discovery настройки
     try {
       const { default: AIDiscoverySettings } = await import('../db/AIDiscoverySettings.js');
       await AIDiscoverySettings.deleteOne({ shop });
-      console.log(`[Webhook] Deleted AI Discovery settings for ${shop}`);
-    } catch (e) {
-      console.log(`[Webhook] Could not delete AI Discovery settings for ${shop}:`, e.message);
-    }
+    } catch (e) { /* Settings may not exist */ }
 
-    // Изтрий Advanced Schema данни
     try {
       const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
       await AdvancedSchema.deleteMany({ shop });
-      console.log(`[Webhook] Deleted Advanced Schema data for ${shop}`);
-    } catch (e) {
-      console.log(`[Webhook] Could not delete Advanced Schema data for ${shop}:`, e.message);
-    }
+    } catch (e) { /* Schema may not exist */ }
 
-    // Изтрий Sitemap данни
     try {
       const { default: Sitemap } = await import('../db/Sitemap.js');
       await Sitemap.deleteMany({ shop });
-      console.log(`[Webhook] Deleted Sitemap data for ${shop}`);
-    } catch (e) {
-      console.log(`[Webhook] Could not delete Sitemap data for ${shop}:`, e.message);
-    }
+    } catch (e) { /* Sitemap may not exist */ }
 
-    // Изтрий Token Balances
     try {
       const { default: TokenBalance } = await import('../db/TokenBalance.js');
-      const tokenResult = await TokenBalance.deleteOne({ shop });
-      console.log(`[Webhook] Deleted Token Balance for ${shop}: ${tokenResult.deletedCount} records deleted`);
-      if (tokenResult.deletedCount === 0) {
-        console.warn(`[Webhook] ⚠️ No token balance found to delete for ${shop}`);
-      }
+      await TokenBalance.deleteOne({ shop });
     } catch (e) {
       console.error(`[Webhook] ❌ Error deleting Token Balance for ${shop}:`, e.message);
     }
 
-    console.log('[Webhook] ===== UNINSTALL CLEANUP COMPLETED =====');
-    console.log(`[Webhook] All MongoDB data for ${shop} has been removed`);
-    console.log('[Webhook] Note: Shopify metafield definitions and values will remain in the store');
+    console.log(`[Webhook] ✅ Uninstall cleanup completed for ${shop}`);
     
-    // Send follow-up email after 1 hour (if store data exists)
-    if (storeData) {
-      setTimeout(async () => {
-        try {
-          const emailService = (await import('../services/emailService.js')).default;
-          await emailService.sendUninstallFollowupEmail({
-            ...storeData,
-            subscription: subscriptionData
-          });
-        } catch (emailError) {
-          console.error('[Webhook] ❌ Error sending uninstall follow-up email:', emailError);
-        }
-      }, 60 * 60 * 1000); // 1 hour delay
-    }
+    // REMOVED: Uninstall follow-up email - users don't want marketing after uninstall
     
     res.status(200).send('ok');
   } catch (e) {

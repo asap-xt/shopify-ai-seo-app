@@ -1,8 +1,11 @@
 // backend/controllers/multiSeoController.js
 // Router: mounted at /api/seo
 // Route(s):
-//   POST /api/seo/generate-multi
-//   POST /api/seo/apply-multi
+//   POST /api/seo/generate-multi (single product, multiple languages)
+//   POST /api/seo/apply-multi (single product, multiple languages)
+//   POST /api/seo/generate-apply-batch (background Generate + Apply for multiple products)
+//   GET /api/seo/job-status (get background job status)
+//   POST /api/seo/delete-multi (delete SEO for multiple languages)
 //
 // Implements "multi-language" flow by delegating to existing single endpoints
 //   /seo/generate  and  /seo/apply
@@ -11,6 +14,8 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { validateRequest } from '../middleware/shopifyAuth.js';
+import seoJobQueue from '../services/seoJobQueue.js';
+import Shop from '../db/Shop.js';
 
 const router = Router();
 
@@ -154,6 +159,277 @@ router.post('/apply-multi', validateRequest(), async (req, res) => {
   } catch (err) {
     console.error('POST /api/seo/apply-multi error:', err);
     return res.status(500).json({ error: 'Failed to apply SEO for multiple languages' });
+  }
+});
+
+// POST /api/seo/generate-apply-batch
+// Background processing for combined Generate + Apply
+// Body: { shop, products: [{ productId, languages, existingLanguages }], model }
+router.post('/generate-apply-batch', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    const shopDomain = req.shopDomain || shop;
+    const { products, model } = req.body || {};
+    
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: 'Missing products array' });
+    }
+
+    if (!model) {
+      return res.status(400).json({ error: 'Missing model' });
+    }
+
+    // Get subscription and language limit
+    const Subscription = (await import('../db/Subscription.js')).default;
+    const { getPlanConfig } = await import('../plans.js');
+    
+    const subscription = await Subscription.findOne({ shop: shopDomain });
+    const planKey = subscription?.plan || 'starter';
+    const planConfig = getPlanConfig(planKey);
+    const languageLimit = planConfig?.languageLimit || 1;
+
+    // Prepare products for queue
+    const productsToProcess = products.map(p => ({
+      productId: toGID(String(p.productId)),
+      title: p.title || null,
+      languages: p.languages || [],
+      existingLanguages: p.existingLanguages || [],
+      model
+    }));
+
+    // OPTIMIZED: Generate function - uses DIRECT function call instead of HTTP fetch
+    const generateFn = async (productData) => {
+      // Case-insensitive comparison for language codes
+      const existingLangsLower = (productData.existingLanguages || []).map(l => l.toLowerCase());
+      let languagesToGenerate = productData.languages.filter(
+        lang => !existingLangsLower.includes(lang.toLowerCase())
+      );
+
+      // DOUBLE-CHECK: Query Shopify for existing SEO metafields to avoid false "failed" status
+      // This handles cases where frontend cache is stale
+      let existingMetafieldLangs = [];
+      if (languagesToGenerate.length > 0) {
+        try {
+          const { shopGraphQL } = await import('./seoController.js');
+          const metafieldsQuery = `
+            query GetProductMetafields($id: ID!) {
+              product(id: $id) {
+                metafields(first: 20, namespace: "seo_ai") {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          `;
+          const mockReqForCheck = { shopDomain, headers: {}, query: { shop: shopDomain } };
+          const metafieldsResult = await shopGraphQL(mockReqForCheck, shopDomain, metafieldsQuery, { id: productData.productId });
+          
+          // Extract languages that already have SEO metafields
+          if (metafieldsResult?.product?.metafields?.edges) {
+            for (const edge of metafieldsResult.product.metafields.edges) {
+              const key = edge.node.key;
+              // Check for seo__ prefix (language-specific SEO data)
+              if (key?.startsWith('seo__')) {
+                const lang = key.replace('seo__', '').toLowerCase();
+                if (lang && !existingMetafieldLangs.includes(lang)) {
+                  existingMetafieldLangs.push(lang);
+                }
+              }
+            }
+          }
+          
+          // Re-filter: only generate for languages that don't have metafields
+          languagesToGenerate = languagesToGenerate.filter(
+            lang => !existingMetafieldLangs.includes(lang.toLowerCase())
+      );
+        } catch (checkErr) {
+          // If check fails, continue with original list (will fail properly if already exists)
+          console.error('[SEO-GENERATE] Metafield check failed:', checkErr.message);
+        }
+      }
+
+      if (languagesToGenerate.length === 0) {
+        return { success: true, skipped: true, reason: 'Already optimized for selected languages' };
+      }
+      
+      // CHECK LANGUAGE LIMIT: existing + new languages must not exceed plan limit
+      const totalLanguagesAfterOptimization = productData.existingLanguages.length + languagesToGenerate.length;
+      if (totalLanguagesAfterOptimization > languageLimit) {
+        return { 
+          success: false, 
+          error: `Language limit exceeded: ${totalLanguagesAfterOptimization} languages would exceed your plan limit of ${languageLimit}. Please upgrade your plan or remove existing languages first.`
+        };
+      }
+
+      // Import generateSEOForLanguage directly
+      const { generateSEOForLanguage } = await import('./seoController.js');
+      
+      // Create a mock req object for the function
+      const mockReq = {
+        shopDomain: shopDomain,
+        headers: {},
+        query: { shop: shopDomain }
+      };
+
+      const results = [];
+      for (const lang of languagesToGenerate) {
+        try {
+          // Direct function call - no HTTP overhead!
+          const result = await generateSEOForLanguage(
+            mockReq,
+            shopDomain,
+            productData.productId,
+            productData.model,
+            lang
+          );
+          
+          if (result?.seo) {
+            results.push({ language: lang, seo: result.seo, quality: result.quality });
+          } else {
+            results.push({ language: lang, error: 'Generate returned no SEO data' });
+          }
+        } catch (e) {
+          results.push({ language: lang, error: e.message || 'Generate exception' });
+        }
+      }
+
+      const successfulResults = results.filter(r => r.seo);
+      if (successfulResults.length === 0) {
+        // Get the first unique error message as the reason
+        const firstError = results.find(r => r.error)?.error || 'Unknown error';
+        // Simplify common error messages
+        let errorReason = firstError;
+        if (firstError.includes('description is missing')) {
+          errorReason = 'Missing product description';
+        } else if (firstError.includes('title is missing')) {
+          errorReason = 'Missing product title';
+        } else if (firstError.includes('No translated content')) {
+          errorReason = 'No translation available';
+        }
+        return { success: false, error: errorReason };
+      }
+
+      return { success: true, data: { results: successfulResults } };
+    };
+
+    // Apply function - calls applySEOForLanguage for each result
+    const applyFn = async (productData, generateData) => {
+      const { applySEOForLanguage } = await import('./seoController.js');
+      
+      for (const r of generateData.results) {
+        if (!r || !r.seo) continue;
+        
+        const result = await applySEOForLanguage(
+          null,
+          shopDomain,
+          productData.productId,
+          r.seo,
+          r.language,
+          { updateTitle: true, updateBody: true, updateSeo: true, updateBullets: true, updateFaq: true }
+        );
+        
+        if (!result?.ok) {
+          throw new Error(result?.errors?.join('; ') || 'Apply failed');
+        }
+      }
+    };
+
+    // Add job to queue
+    const queueResult = await seoJobQueue.addJob(shopDomain, productsToProcess, generateFn, applyFn);
+
+    return res.json({
+      queued: queueResult.queued,
+      message: queueResult.message || 'Job added to queue',
+      jobId: queueResult.jobId,
+      totalProducts: productsToProcess.length
+    });
+
+  } catch (err) {
+    console.error('POST /api/seo/generate-apply-batch error:', err);
+    return res.status(500).json({ error: 'Failed to queue SEO job' });
+  }
+});
+
+// GET /api/seo/job-status
+// Get status of background SEO job (Generate + Apply combined)
+router.get('/job-status', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    const status = await seoJobQueue.getJobStatus(shop);
+    
+    // Also get progress from DB for accurate time estimates
+    const shopDoc = await Shop.findOne({ shop }).select('seoJobStatus.progress').lean();
+    if (shopDoc?.seoJobStatus?.progress) {
+      status.progress = shopDoc.seoJobStatus.progress;
+      
+      // Enhanced message with progress
+      if (status.inProgress && status.progress?.current && status.progress?.total) {
+        const remainingMin = Math.ceil((status.progress.remainingSeconds || 0) / 60);
+        status.message = `Processing ${status.progress.current}/${status.progress.total} products`;
+        if (remainingMin > 0) {
+          status.message += ` • ~${remainingMin} min remaining`;
+        }
+      }
+    }
+    
+    return res.json(status);
+  } catch (err) {
+    console.error('GET /api/seo/job-status error:', err);
+    return res.status(500).json({ error: 'Failed to get job status' });
+  }
+});
+
+// POST /api/seo/job-cancel
+// Cancel a running SEO job
+router.post('/job-cancel', validateRequest(), async (req, res) => {
+  const shop =
+    req.query?.shop ||
+    req.body?.shop ||
+    res.locals?.shopify?.session?.shop;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not provided' });
+  }
+
+  try {
+    // Set cancelled flag and stop the job
+    await Shop.findOneAndUpdate(
+      { shop },
+      { 
+        $set: { 
+          'seoJobStatus.cancelled': true,
+          'seoJobStatus.inProgress': false,
+          'seoJobStatus.status': 'cancelled',
+          'seoJobStatus.message': 'Cancelled by user',
+          'seoJobStatus.cancelledAt': new Date(),
+          'seoJobStatus.updatedAt': new Date()
+        } 
+      }
+    );
+    
+    return res.json({ success: true, message: 'Job cancelled' });
+  } catch (err) {
+    console.error('POST /api/seo/job-cancel error:', err);
+    return res.status(500).json({ error: 'Failed to cancel job' });
   }
 });
 

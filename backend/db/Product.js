@@ -28,6 +28,8 @@ const productSchema = new mongoose.Schema({
   seoStatus: {
     optimized: { type: Boolean, default: false },
     aiEnhanced: { type: Boolean, default: false }, // Flag for AI-enhanced products
+    hasAdvancedSchema: { type: Boolean, default: false }, // Flag for advanced schema data
+    advancedSchemaGeneratedAt: { type: Date, default: null }, // When schema was generated
     languages: [{
       code: String,
       optimized: Boolean,

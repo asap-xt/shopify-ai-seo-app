@@ -119,7 +119,9 @@ export function useTokens(shop) {
     if (!shop) return;
     
     // Redirect to billing page with token purchase flow
-    window.location.href = `/apps/new-ai-seo/billing?shop=${shop}&purchase_tokens=true&amount=${amount}`;
+    // Use environment variable for app proxy subpath (indexaize for production, new-ai-seo for staging)
+    const appProxySubpath = import.meta.env.VITE_APP_PROXY_SUBPATH || 'indexaize';
+    window.location.href = `/apps/${appProxySubpath}/billing?shop=${shop}&purchase_tokens=true&amount=${amount}`;
   }, [shop]);
 
   // Activate plan redirect
@@ -127,7 +129,8 @@ export function useTokens(shop) {
     if (!shop) return;
     
     // Redirect to billing page with plan activation flow
-    window.location.href = `/apps/new-ai-seo/billing?shop=${shop}&activate_plan=true`;
+    const appProxySubpath = import.meta.env.VITE_APP_PROXY_SUBPATH || 'indexaize';
+    window.location.href = `/apps/${appProxySubpath}/billing?shop=${shop}&activate_plan=true`;
   }, [shop]);
 
   // Initial fetch

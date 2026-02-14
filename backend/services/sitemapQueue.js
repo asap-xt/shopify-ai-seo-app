@@ -4,6 +4,7 @@
 
 import Shop from '../db/Shop.js';
 import { dbLogger } from '../utils/logger.js';
+import emailService from './emailService.js';
 
 class SitemapQueue {
   constructor() {
@@ -16,9 +17,10 @@ class SitemapQueue {
    * Add a sitemap generation job to the queue
    * @param {string} shop - Shop domain
    * @param {Function} generatorFn - Function that generates the sitemap
+   * @param {Object} options - Optional settings { type: 'basic' | 'ai-enhanced' }
    * @returns {Object} Job info
    */
-  async addJob(shop, generatorFn) {
+  async addJob(shop, generatorFn, options = {}) {
     // Check if job already exists in queue
     const existingJob = this.queue.find(job => job.shop === shop);
     if (existingJob) {
@@ -47,6 +49,7 @@ class SitemapQueue {
       id: `${shop}-${Date.now()}`,
       shop,
       generatorFn,
+      type: options.type || 'basic', // 'basic' or 'ai-enhanced'
       status: 'queued',
       queuedAt: new Date(),
       attempts: 0,
@@ -116,8 +119,10 @@ class SitemapQueue {
         job.completedAt = new Date();
         job.result = result;
 
+        const duration = (new Date() - job.startedAt) / 1000;
+
         dbLogger.info(`[QUEUE] ✅ Job completed for shop: ${job.shop}`, {
-          duration: (new Date() - job.startedAt) / 1000,
+          duration,
           productCount: result.productCount
         });
 
@@ -129,9 +134,52 @@ class SitemapQueue {
           completedAt: new Date(),
           lastError: null
         });
+        
+        // Send email notification if job took more than 2 minutes
+        if (duration > 120) {
+          try {
+            const shopDoc = await Shop.findOne({ shop: job.shop }).lean();
+            if (shopDoc?.email) {
+              await emailService.sendSitemapCompletedEmail(shopDoc, {
+                productCount: result.productCount,
+                duration: duration,
+                type: job.type || 'basic' // 'basic' or 'ai-enhanced'
+              });
+            }
+          } catch (emailErr) {
+            dbLogger.error(`[QUEUE] Failed to send sitemap completion email: ${emailErr.message}`);
+          }
+        }
 
       } catch (error) {
-        dbLogger.error(`[QUEUE] ❌ Job failed for shop: ${job.shop}`, error.message);
+        // Check if this was a user cancellation - DO NOT retry
+        // error.message could be "CANCELLED_BY_USER" or "Error: CANCELLED_BY_USER" or contain "CANCELLED"
+        const errorMsg = error.message || '';
+        const isCancelled = errorMsg === 'CANCELLED_BY_USER' || 
+                           errorMsg.includes('CANCELLED_BY_USER') || 
+                           errorMsg.includes('CANCELLED');
+        
+        dbLogger.info(`[QUEUE] Caught error for ${job.shop}: "${errorMsg}" (isCancelled: ${isCancelled})`);
+        
+        if (isCancelled) {
+          dbLogger.info(`[QUEUE] 🛑 Job cancelled by user for shop: ${job.shop} - NOT retrying`);
+          job.status = 'cancelled';
+          job.error = 'Cancelled by user';
+          job.cancelledAt = new Date();
+          
+          await this.updateShopStatus(job.shop, {
+            inProgress: false,
+            status: 'cancelled',
+            message: 'Generation cancelled by user',
+            lastError: null,
+            cancelledAt: new Date()
+          });
+          // Do NOT retry - skip to next job in queue
+          this.currentJob = null;
+          continue;
+        }
+        
+        dbLogger.error(`[QUEUE] ❌ Job failed for shop: ${job.shop}: ${errorMsg}`);
 
         job.status = 'failed';
         job.error = error.message;

@@ -53,11 +53,10 @@ function useRoute() {
   // Normalize path - remove app prefix for embedded apps
   const normalizePath = (pathname) => {
     // Remove app prefixes:
-    // - /apps/new-ai-seo (dev)
-    // - /apps/2749a2f6d38ff5796ed256b5c9dc70a1 (embedded)
+    // - /apps/{subpath} (any app proxy subpath like indexaize, indexaize-staging, etc.)
     // - /indexaize-unlock-ai-search (production custom handle)
     const normalized = pathname
-      .replace(/^\/apps\/[^/]+/, '') // Remove /apps/* prefix
+      .replace(/^\/apps\/[^/]+/, '') // Remove /apps/{subpath} prefix
       .replace(/^\/indexaize-unlock-ai-search/, '') // Remove custom handle prefix
       || '/';
     return normalized;
@@ -68,7 +67,7 @@ function useRoute() {
   useEffect(() => {
     const handleLocationChange = () => {
       const normalized = normalizePath(window.location.pathname);
-      console.log('[useRoute] Location changed to:', normalized);
+      devLog('[useRoute] Location changed to:', normalized);
       setPath(normalized);
       
       // Track page view in GA4
@@ -104,7 +103,7 @@ function useRoute() {
   return { path };
 }
 
-// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>.
+// -------- Admin left nav (App Bridge v4). Only <a> inside <ui-nav-menu>. Updated 2025-12-03.
 function AdminNavMenu({ active, shop }) {
   const isDash = active === '/' || active.startsWith('/dashboard');
   const isSeo = active.startsWith('/ai-seo');
@@ -123,8 +122,8 @@ function AdminNavMenu({ active, shop }) {
     <ui-nav-menu>
       <a href={`/${paramString}`} rel="home">Home</a>
       <a href={`/dashboard${paramString}`}>Dashboard</a>
-      <a href={`/ai-seo${paramString}`}>Search Optimization for AI</a>
-      <a href={`/settings${paramString}`}>Settings</a>
+      <a href={`/ai-seo${paramString}`}>Store Optimization for AI</a>
+      <a href={`/settings${paramString}`}>AI Discovery Features</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
       <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
@@ -134,407 +133,16 @@ function AdminNavMenu({ active, shop }) {
 }
 
 
-// -------- Old Dashboard (replaced by pages/Dashboard.jsx)
-/*
-const DashboardCard = React.memo(({ shop }) => {
-  const [plan, setPlan] = useState(null);
-  const { api } = useShopApi();
-  const currentShop = shop || qs('shop', '');
-  const apiSession = useMemo(() => makeSessionFetch(), []);
-
-  // локален помощник за GraphQL
-  const runGQL = async (query, variables) => {
-    const res = await apiSession('/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (res?.errors?.length) throw new Error(res.errors[0]?.message || 'GraphQL error');
-    return res?.data;
-  };
-
-  useEffect(() => {
-    if (!currentShop) return;
-    const Q = `
-      query PlansMe($shop:String!) {
-        plansMe(shop:$shop) {
-          shop
-          plan
-          planKey
-          priceUsd
-          product_limit
-          providersAllowed
-          modelsSuggested
-          autosyncCron
-          trial {
-            active
-            ends_at
-            days_left
-          }
-        }
-      }
-    `;
-    runGQL(Q, { shop: currentShop })
-      .then((d) => { const pm = d?.plansMe; if (pm) setPlan(pm); })
-      .catch((e) => console.error('Failed to load plan via GraphQL:', e));
-  }, [currentShop, apiSession]);
-
-//   // Ð•Ð´Ð½Ð¾ÐºÑ€Ð°Ñ‚Ð½Ð° Ð¸Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð½Ð° collection metafield definitions
-//   useEffect(() => {
-//     if (!currentShop) return;
-// 
-//     // 1) Проверка на definitions със session token
-//     api(`/collections/check-definitions?shop=${currentShop}`)
-//       .then(data => {
-// 
-//         // Ð¡ÑŠÐ·Ð´Ð°Ð¹ ÑÐ°Ð¼Ð¾ Ð»Ð¸Ð¿ÑÐ²Ð°Ñ‰Ð¸Ñ‚Ðµ definitions
-//         const existingKeys = (data.definitions || []).map(d => d.key);
-//         const requiredLangs = ['en', 'bg', 'fr'];
-//         const missingLangs = requiredLangs.filter(lang => !existingKeys.includes(`seo__${lang}`));
-//         
-//         if (missingLangs.length > 0) {
-//           // 2) Създай липсващите definitions със session token
-//           return api(`/collections/create-definitions?shop=${currentShop}`, {
-//             method: 'POST',
-//             body: { shop: currentShop, languages: missingLangs },
-//           });
-//         }
-//       })
-// 
-//       .catch(err => console.error('Definitions error:', err));
-//   }, [currentShop, api]);
-
-  if (!plan) {
-    return (
-      <Card>
-        <Box padding="400">
-          <Text>Loading plan info...</Text>
-        </Box>
-      </Card>
-    );
-  }
-
-  return (
-    <Card title="Dashboard">
-      <Box padding="400">
-        <InlineStack gap="800" wrap={false}>
-          <Box>
-            <Text variant="headingMd" as="h3">Current plan</Text>
-            <Text>{plan.plan || 'Free'}</Text>
-          </Box>
-          <Box>
-            <Text variant="headingMd" as="h3">Shop</Text>
-            <Text>{plan.shop || 'â€"'}</Text>
-          </Box>
-          <Box>
-            <Text variant="headingMd" as="h3">Product limit</Text>
-            <Text>{plan.product_limit || 0}</Text>
-          </Box>
-        </InlineStack>
-        <Box paddingBlockStart="400">
-          <Text variant="headingMd" as="h3">Allowed AI providers</Text>
-          <Text>{plan.providersAllowed?.join(', ') || 'None'}</Text>
-        </Box>
-        {plan.trial_ends_at && (
-          <Box paddingBlockStart="400">
-            <Text variant="headingMd" as="h3">Trial ends at</Text>
-            <Text>{new Date(plan.trial_ends_at).toLocaleDateString()}</Text>
-          </Box>
-        )}
-      </Box>
-    </Card>
-  );
-});
-
-// -------- Single Product Panel (original AiSeoPanel content) - Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž
-/*
-function SingleProductPanel({ shop }) {
-  // Form states
-  const [productId, setProductId] = useState('');
-  const [model, setModel] = useState('none'); // ÐŸÐ ÐžÐœÐ•ÐÐ•ÐÐž: Ð¥Ð°Ñ€Ð´ÐºÐ¾Ð´Ð½Ð°Ñ‚Ð¾ Ð·Ð° Ð»Ð¾ÐºÐ°Ð»Ð½Ð¾ Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð°Ð½Ðµ
-  const [language, setLanguage] = useState('en');
-  const [models, setModels] = useState([]); // Ð’ÐµÑ‡Ðµ Ð½Ðµ ÑÐµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°, Ð½Ð¾ Ð·Ð°Ð¿Ð°Ð·Ð²Ð°Ð¼Ðµ Ð·Ð° Ð±ÑŠÐ´ÐµÑ‰Ðµ
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState('');
-  const [result, setResult] = useState(null);
-
-  // Language handling states
-  const [showLanguageSelector, setShowLanguageSelector] = useState(true);
-  const [availableLanguages, setAvailableLanguages] = useState(['en']);
-  const [shopLanguages, setShopLanguages] = useState([]);
-  const [productLanguages, setProductLanguages] = useState([]);
-  const [primaryLanguage, setPrimaryLanguage] = useState('en');
-
-  // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž - Ð²ÐµÑ‡Ðµ Ð½Ðµ Ð¸Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°Ð¼Ðµ AI Ð¼Ð¾Ð´ÐµÐ»Ð¸
-  // Load models from GraphQL - старият /plans/me endpoint е премахнат
-
-  // Load languages for shop/product (hides selector when single)
-  useEffect(() => {
-    const s = shop || qs('shop', '');
-    const pid = (productId || '').trim();
-    if (!s || !pid) {
-      setShopLanguages([]); setProductLanguages([]); setPrimaryLanguage('en');
-      setAvailableLanguages([]); setShowLanguageSelector(false); setLanguage('en');
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        // product-level languages; backend uses session, shop in path is only informative
-        const url = `/api/languages/product/${encodeURIComponent(s)}/${encodeURIComponent(pid)}`;
-        const j = await api(url, { shop: s });
-        if (cancelled) return;
-
-        const shopLangs = j.shopLanguages || [];
-        const prodLangs = j.productLanguages || [];
-        const primary = j.primaryLanguage || (shopLangs[0] || 'en');
-        const effective = (prodLangs.length ? prodLangs : shopLangs).map(x => x.toLowerCase());
-        const showSel = effective.length > 1;
-
-        setShopLanguages(shopLangs);
-        setProductLanguages(prodLangs);
-        setPrimaryLanguage(primary);
-        setAvailableLanguages(effective);
-        setShowLanguageSelector(showSel);
-
-        // default selected language:
-        setLanguage(showSel ? (language && effective.includes(language) ? language : effective[0]) : primary);
-      } catch (e) {
-        console.error('Failed to load languages:', e);
-        setShowLanguageSelector(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [shop, productId]);
-
-  // Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€Ð°Ð¹ metafield definitions Ð·Ð° ÐºÐ¾Ð»ÐµÐºÑ†Ð¸Ð¸ Ð¿Ñ€Ð¸ Ð¿ÑŠÑ€Ð²Ð¾ Ð·Ð°Ñ€ÐµÐ¶Ð´Ð°Ð½Ðµ
-  useEffect(() => {
-    const s = shop || qs('shop', '');
-    if (!s) return;
-    
-    // Ð˜Ð½Ð¸Ñ†Ð¸Ð°Ð»Ð¸Ð·Ð¸Ñ€Ð°Ð¹ metafield definitions Ð·Ð° ÐºÐ¾Ð»ÐµÐºÑ†Ð¸Ð¸
-    api('/collections/init-metafields', {
-      method: 'POST',
-      shop: s,
-      body: { shop: s }
-    })
-    .catch(err => console.error('Failed to init collection metafields:', err));
-  }, [shop]);
-
-  const handleGenerate = async () => {
-    if (!shop || !productId) { // ÐŸÐ ÐžÐœÐ•ÐÐ•ÐÐž: ÐŸÑ€ÐµÐ¼Ð°Ñ…Ð½Ð°Ñ…Ð¼Ðµ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ°Ñ‚Ð° Ð·Ð° model
-      setToast('Please fill in all fields');
-      return;
-    }
-    setLoading(true);
-    setToast('');
-    setResult(null);
-
-    try {
-      const gid = toProductGID(productId);
-      let response, data;
-
-      if (language === 'all') {
-        // Multi-language generation
-        response = await api('/api/seo/generate-multi', {
-          method: 'POST',
-          shop,
-          body: { 
-            shop, 
-            productId: gid, 
-            model, 
-            languages: availableLanguages 
-          }
-        });
-        
-        // Проверка за валидни резултати
-        if (response?.results && Array.isArray(response.results)) {
-          const validResults = response.results.filter(r => r && r.seo && !r.error);
-          if (validResults.length === 0) {
-            throw new Error('No valid SEO data generated for any language');
-          }
-        }
-      } else {
-        // Single language generation
-        response = await api('/seo/generate', {
-          method: 'POST',
-          shop,
-          body: { shop, productId: gid, model, language }
-        });
-      }
-
-      setResult(response);
-      
-      setToast('SEO generated successfully');
-    } catch (e) {
-      const msg = e?.message || 'Failed to generate SEO';
-      setToast(msg);
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApply = async () => {
-    if (!shop || !result) {
-      setToast('No SEO data to apply');
-      return;
-    }
-    setLoading(true);
-    setToast('');
-
-
-
-    try {
-      const gid = toProductGID(productId);
-      let response, data;
-
-      // Check if this is a multi-language result
-      if (result.results && Array.isArray(result.results)) {
-        // Multi-language apply
-        const validResults = result.results
-          .filter(r => r && r.seo)
-          .map(r => ({
-            language: r.language,
-            seo: r.seo
-          }));
-          
-        if (!validResults.length) {
-          throw new Error('No valid SEO results to apply');
-        }
-
-        response = await api('/api/seo/apply-multi', {
-          method: 'POST',
-          shop,
-          body: {
-            shop,
-            productId: gid,
-            results: validResults,
-            primaryLanguage,
-            options: {
-              updateTitle: true,
-              updateBody: true,
-              updateSeo: true,
-              updateBullets: true,
-              updateFaq: true,
-            }
-          }
-        });
-      } else {
-        // IMPORTANT FIX: Always use the language from dropdown since result doesn't have it
-        const applyLanguage = language !== 'all' ? language : primaryLanguage;
-        
-        const isPrimary = applyLanguage.toLowerCase() === primaryLanguage.toLowerCase();
-        
-        const requestBody = {
-          shop,
-          productId: gid,
-          seo: result.seo || result,
-          language: applyLanguage,  // USE DROPDOWN LANGUAGE
-          options: {
-            updateTitle: isPrimary,
-            updateBody: isPrimary,
-            updateSeo: isPrimary,
-            updateBullets: true,
-            updateFaq: true,
-          },
-        };
-        
-        response = await api('/seo/apply', {
-          method: 'POST',
-          shop,
-          body: requestBody
-        });
-      }
-
-      // Show success with language info
-      const appliedLangs = result.results 
-        ? result.results.filter(r => r.seo).map(r => r.language).join(', ')
-        : language;
-      
-      setToast(`SEO applied successfully for: ${appliedLangs.toUpperCase()}`);
-    } catch (e) {
-      const msg = e?.message || 'Failed to apply SEO';
-      setToast(msg);
-      console.error('Apply error:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClear = () => {
-    setResult(null);
-    setToast('');
-  };
-
-  const languageOptions = showLanguageSelector
-    ? [
-        { label: 'All languages', value: 'all' },
-        ...availableLanguages.map(l => ({ label: l.toUpperCase(), value: l }))
-      ]
-    : [];
-
-  return (
-    <>
-      <Box paddingBlockEnd="400">
-        <Card title="Generate SEO">
-          <Box padding="400">
-            <InlineStack gap="400" blockAlign="end">
-              <TextField
-                label="Product ID"
-                value={productId}
-                onChange={setProductId}
-                placeholder="123456789 or gid://shopify/Product/123456789"
-                autoComplete="off"
-              />
-              {showLanguageSelector && (
-                <Select
-                  label="Output Language"
-                  options={languageOptions}
-                  value={language}
-                  onChange={setLanguage}
-                />
-              )}
-              <Button primary onClick={handleGenerate} loading={loading}>
-                Generate
-              </Button>
-              {result && (
-                <>
-                  <Button onClick={handleApply} loading={loading}>Apply</Button>
-                  <Button onClick={handleClear}>Clear</Button>
-                </>
-              )}
-            </InlineStack>
-          </Box>
-        </Card>
-      </Box>
-
-      <Box>
-        <Card title="Result">
-          <Box padding="400">
-            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {result ? pretty(result) : 'â€”'}
-            </pre>
-          </Box>
-        </Card>
-      </Box>
-
-      {toast && <Toast content={toast} onDismiss={() => setToast('')} />}
-    </>
-  );
-}
-*/
-
 // -------- AI Search Optimisation Panel with Tabs
 const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
   const shop = shopProp || qs('shop', '');
   const path = window.location.pathname;
   
   // Определи активния таб от URL - поддържа и /ai-seo и /ai-seo/products
-  // CRITICAL: Also support paths with /apps/new-ai-seo prefix (from redirects after token purchase)
+  // CRITICAL: Also support paths with /apps/{subpath} prefix (from redirects after token purchase)
   const getActiveTab = () => {
-    // Normalize path: remove /apps/new-ai-seo prefix if present
-    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    // Normalize path: remove /apps/{subpath} prefix if present (matches any app proxy subpath)
+    const normalizedPath = path.replace(/^\/apps\/[^/]+/, '');
     
     if (normalizedPath === '/ai-seo' || normalizedPath === '/ai-seo/products') return 'products';
     if (normalizedPath === '/ai-seo/collections') return 'collections';
@@ -558,39 +166,6 @@ const AiSearchOptimisationPanel = React.memo(({ shop: shopProp, plan }) => {
     return `/ai-seo/${tabPath}${paramString}`;
   };
   
-  // const tabs = [
-    // Ð—ÐÐšÐžÐœÐ•ÐÐ¢Ð˜Ð ÐÐÐž Single Product Ñ‚Ð°Ð±
-    // {
-    //   id: 'single-product',
-    //   content: 'Single Product',
-    //   panelID: 'single-product-panel',
-    // },
-    // {
-    //   id: 'products',
-    //   content: 'Products',
-    //   panelID: 'products-panel',
-    // },
-    // {
-    //   id: 'collections',
-    //   content: 'Collections',
-    //   panelID: 'collections-panel',
-    // },
-    // {
-    //   id: 'sitemap',
-    //   content: 'Sitemap',
-    //   panelID: 'sitemap-panel',
-    // },
-    // {
-    //   id: 'store-metadata',
-    //   content: 'Store metadata for AI search',
-    //   panelID: 'store-metadata-panel',
-    // },
-    // {
-    //   id: 'schema-data',
-    //   content: 'Schema Data',
-    //   panelID: 'schema-data-panel',
-    // },
-  // ];
   
   // Използвай обикновени <a> тагове вместо Button url
   return (
@@ -720,15 +295,9 @@ export default function App() {
 
   // Token exchange logic
   useEffect(() => {
-    // ALWAYS log - even if devLog doesn't work
-    console.log('[APP] ===== useEffect triggered =====');
-    console.log('[APP] Shop:', shop);
-    console.log('[APP] Plan state:', plan);
-    console.log('[APP] Current path:', window.location.pathname);
+    devLog('[APP] useEffect triggered, shop:', shop, 'path:', window.location.pathname);
     
     const handleTokenExchange = async () => {
-      // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] ===== handleTokenExchange called =====');
       const urlParams = new URLSearchParams(window.location.search);
       const shop = urlParams.get('shop');
       const idToken = urlParams.get('id_token');
@@ -736,11 +305,6 @@ export default function App() {
       // Първо направи token exchange ако има id_token
       if (shop && idToken) {
         try {
-          console.log('[APP] ===== Starting token exchange =====');
-          console.log('[APP] Shop:', shop);
-          console.log('[APP] ID Token present:', !!idToken);
-          console.log('[APP] ID Token length:', idToken ? idToken.length : 0);
-          
           devLog('[APP] Performing initial token exchange for shop:', shop);
           
           const response = await fetch('/token-exchange', {
@@ -754,19 +318,13 @@ export default function App() {
             })
           });
 
-          console.log('[APP] Token exchange response status:', response.status);
-          console.log('[APP] Token exchange response ok:', response.ok);
-
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
-            console.error('[APP] Token exchange failed:', errorData);
-            console.error('[APP] Response status:', response.status);
-            console.error('[APP] Response statusText:', response.statusText);
+            devLog('[APP] Token exchange failed:', errorData);
             // Don't return - try to load data anyway
-            console.log('[APP] Continuing despite token exchange failure...');
           } else {
             const result = await response.json();
-            console.log('[APP] ✅ Token exchange successful');
+            devLog('[APP] Token exchange successful');
             devLog('[APP] Token exchange successful:', result);
           }
           
@@ -779,7 +337,7 @@ export default function App() {
           await loadInitialData(shop);
           
         } catch (error) {
-          console.error('[APP] Token exchange error:', error);
+          devLog('[APP] Token exchange error:', error);
           // Fallback: Try to load data anyway
           if (shop) {
             devLog('[APP] Token exchange failed, trying to load data anyway...');
@@ -793,13 +351,10 @@ export default function App() {
     };
     
     const loadInitialData = async (shop) => {
-      // ALWAYS log - even if devLog doesn't work
-      console.log('[APP] ===== loadInitialData called =====');
-      console.log('[APP] Shop parameter:', shop);
-      console.log('[APP] Current plan state:', plan);
+      devLog('[APP] loadInitialData called for shop:', shop);
       
       if (!shop) {
-        console.error('[APP] ❌ No shop provided, cannot load data');
+        devLog('[APP] No shop provided, cannot load data');
         return;
       }
       
@@ -826,14 +381,8 @@ export default function App() {
             }
           }
         `;
-        // ALWAYS log - even if devLog doesn't work
-        console.log('[APP] Making GraphQL request to /graphql for shop:', shop);
-        console.log('[APP] Full URL:', window.location.href);
-        console.log('[APP] GraphQL query:', Q);
-        console.log('[APP] GraphQL variables:', { shop });
         
         const graphqlUrl = '/graphql';
-        console.log('[APP] Fetching from:', graphqlUrl);
         
         devLog('[APP] Making GraphQL request to /graphql for shop:', shop);
         devLog('[APP] Full URL:', window.location.href);
@@ -841,23 +390,46 @@ export default function App() {
         devLog('[APP] GraphQL variables:', { shop });
         devLog('[APP] Fetching from:', graphqlUrl);
         
-        console.log('[APP] About to fetch GraphQL, URL:', graphqlUrl);
-        console.log('[APP] Request body:', JSON.stringify({ query: Q, variables: { shop } }));
-        console.log('[APP] Full request URL:', window.location.origin + graphqlUrl);
+        // Retry logic for CORS errors during App Bridge initialization
+        const MAX_RETRIES = 5;
+        const BASE_DELAY = 800;
+        let plansResponse = null;
+        let lastFetchError = null;
         
-        const fetchStartTime = Date.now();
-        const plansResponse = await fetch(graphqlUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: Q, variables: { shop } }),
-        });
-        const fetchDuration = Date.now() - fetchStartTime;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const fetchStartTime = Date.now();
+            plansResponse = await fetch(graphqlUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: Q, variables: { shop } }),
+            });
+            const fetchDuration = Date.now() - fetchStartTime;
+            devLog('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
+            break; // Success, exit retry loop
+          } catch (fetchError) {
+            lastFetchError = fetchError;
+            const isCorsError = fetchError.message?.includes('Failed to fetch') || 
+                               fetchError.message?.includes('NetworkError') ||
+                               fetchError.message?.includes('CORS') ||
+                               fetchError.message?.includes('access control') ||
+                               fetchError.name === 'TypeError';
+            
+            if (isCorsError && attempt < MAX_RETRIES) {
+              const retryDelay = BASE_DELAY * attempt;
+              devLog(`[APP] CORS/Network error on attempt ${attempt}/${MAX_RETRIES}, retrying in ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              continue;
+            }
+            throw fetchError;
+          }
+        }
         
-        console.log('[APP] GraphQL fetch completed, status:', plansResponse.status, 'duration:', fetchDuration + 'ms');
-        console.log('[APP] Response headers:', Object.fromEntries(plansResponse.headers.entries()));
+        if (!plansResponse) {
+          throw lastFetchError || new Error('GraphQL fetch failed after retries');
+        }
         
-        devLog('[APP] GraphQL response status:', plansResponse.status);
-        devLog('[APP] GraphQL response headers:', Object.fromEntries(plansResponse.headers.entries()));
+        devLog('[APP] GraphQL fetch successful after retries');
         
         if (plansResponse.status === 202) {
           // Token exchange required - но това не трябва да се случва ако token exchange е направен на сървъра
@@ -896,7 +468,7 @@ export default function App() {
         
         if (!plansResponse.ok) {
           const errorText = await plansResponse.text();
-          console.error('[APP] Failed to load plans:', plansResponse.status, errorText);
+          devLog('[APP] Failed to load plans:', plansResponse.status, errorText);
           
           // Fallback: Set default plan and redirect to billing
           const defaultPlan = {
@@ -938,7 +510,7 @@ export default function App() {
           try {
             sessionStorage.setItem(`plan_${shop}`, JSON.stringify(pm));
           } catch (e) {
-            console.error('[APP] Failed to cache plan:', e);
+            devLog('[APP] Failed to cache plan:', e);
           }
           
           // CRITICAL: Redirect to billing if subscription is pending
@@ -954,7 +526,7 @@ export default function App() {
             try {
               localStorage.removeItem(`onboardingOpen_${shop}`);
             } catch (e) {
-              console.error('[APP] Failed to clear onboarding state:', e);
+              devLog('[APP] Failed to clear onboarding state:', e);
             }
             
             const params = new URLSearchParams(window.location.search);
@@ -966,7 +538,7 @@ export default function App() {
         }
         
       } catch (error) {
-        console.error('[APP] Error loading initial data:', error);
+        devLog('[APP] Error loading initial data:', error);
         
         // Fallback: Set default plan and redirect to billing to prevent infinite loading
         const shop = new URLSearchParams(window.location.search).get('shop');
@@ -1004,9 +576,9 @@ export default function App() {
   }, []);
   
   const sectionTitle = useMemo(() => {
-    if (path.startsWith('/ai-seo')) return 'Search Optimization for AI';
+    if (path.startsWith('/ai-seo')) return 'Store Optimization for AI';
     if (path.startsWith('/billing')) return 'Plans & Billing';
-    if (path.startsWith('/settings')) return 'Settings';
+    if (path.startsWith('/settings')) return 'AI Discovery Features';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
     if (path.startsWith('/clean-uninstall')) return 'Clean & Uninstall';
     if (path.startsWith('/contact-support')) return 'Contact Support';
@@ -1016,14 +588,14 @@ export default function App() {
 
   // Обнови routing логиката да поддържа под-страници:
   const getPageComponent = () => {
-    // Normalize path: remove /apps/new-ai-seo prefix if present (from redirects)
-    const normalizedPath = path.replace(/^\/apps\/new-ai-seo/, '');
+    // Normalize path: remove /apps/{subpath} prefix if present (from redirects after token purchase)
+    const normalizedPath = path.replace(/^\/apps\/[^/]+/, '');
     
     // Dashboard
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       return <Dashboard shop={shop} />;
     } 
-    // Search Optimization for AI и под-страници
+    // Store Optimization for AI и под-страници
     else if (normalizedPath.startsWith('/ai-seo')) {
       return <AiSearchOptimisationPanel shop={shop} plan={plan} />;
     } 
@@ -1077,7 +649,7 @@ export default function App() {
     // If plan is not loaded after 5 seconds, set timeout flag
     const timer = setTimeout(() => {
       if (!plan) {
-        console.warn('[APP] ⚠️ Plan not loaded after 5 seconds, setting timeout flag');
+        devLog('[APP] Plan not loaded after 5 seconds, setting timeout flag');
         setLoadingTimeout(true);
       }
     }, 5000);
@@ -1101,7 +673,7 @@ export default function App() {
   
   // If timeout reached and no plan, show error or redirect to billing
   if (!plan && loadingTimeout) {
-    console.error('[APP] ❌ Plan loading timeout - redirecting to billing');
+    devLog('[APP] Plan loading timeout - redirecting to billing');
     const params = new URLSearchParams(window.location.search);
     const shop = params.get('shop');
     const host = params.get('host');

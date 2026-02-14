@@ -4,7 +4,9 @@
 
 import Subscription from '../db/Subscription.js';
 import TokenBalance from '../db/TokenBalance.js';
+import Shop from '../db/Shop.js';
 import { getIncludedTokens } from '../billing/tokenConfig.js';
+import { SHOPIFY_API_VERSION } from '../utils/env.js';
 
 /**
  * Handle APP_SUBSCRIPTIONS_UPDATE webhook
@@ -48,7 +50,6 @@ export default async function handleSubscriptionUpdate(req, res) {
     let foundByFallback = false;
     if (!subscription) {
       // CRITICAL FIX: Use lean() to ensure all fields are returned, especially activatedAt
-      // This is the root cause - Mongoose might not return all fields without lean()
       // Try pendingActivation first (for /activate endpoint)
       subscription = await Subscription.findOne({ 
         shop, 
@@ -86,6 +87,7 @@ export default async function handleSubscriptionUpdate(req, res) {
     }
     
     if (!subscription) {
+      console.error('[SUBSCRIPTION-UPDATE] ❌ Subscription not found after all searches');
       // Respond 200 to avoid retries
       return res.status(200).json({ success: false, error: 'Subscription not found' });
     }
@@ -140,7 +142,6 @@ export default async function handleSubscriptionUpdate(req, res) {
       if (subscription.pendingPlan) {
         updateData.plan = subscription.pendingPlan;
         updateData.pendingPlan = null;
-        console.log('[SUBSCRIPTION-UPDATE] Activating pendingPlan:', subscription.pendingPlan);
       }
       
       // Handle activation
@@ -151,7 +152,6 @@ export default async function handleSubscriptionUpdate(req, res) {
         if (!hasBeenActivated) {
           updateData.activatedAt = now;
           updateData.trialEndsAt = null; // End trial on activation
-          console.log('[SUBSCRIPTION-UPDATE] First activation - setting activatedAt');
         }
       }
       
@@ -161,29 +161,15 @@ export default async function handleSubscriptionUpdate(req, res) {
         // Preserve the original activation date
         updateData.activatedAt = originalActivatedAt;
         updateData.trialEndsAt = null; // No trial for upgrades after activation
-        console.log('[SUBSCRIPTION-UPDATE] Upgrade after activation - preserving activatedAt:', originalActivatedAt);
       } else if (!subscription.pendingActivation && !subscription.trialEndsAt) {
         // Only set trial for brand new subscriptions (not activated, no existing trial)
         const { TRIAL_DAYS } = await import('../plans.js');
         const trialDays = trial_days || TRIAL_DAYS;
         updateData.trialEndsAt = new Date(now.getTime() + (trialDays * 24 * 60 * 60 * 1000));
-        console.log('[SUBSCRIPTION-UPDATE] New subscription - setting trial period');
       } else if (subscription.trialEndsAt && !hasBeenActivated) {
         // Preserve existing trial if still in trial period
         updateData.trialEndsAt = subscription.trialEndsAt;
-        console.log('[SUBSCRIPTION-UPDATE] Preserving existing trial period');
       }
-      
-      // CRITICAL: Log update data before applying
-      console.log('[SUBSCRIPTION-UPDATE] Trial logic check:', {
-        originalActivatedAt,
-        hasBeenActivated,
-        updateDataActivatedAt: updateData.activatedAt,
-        updateDataTrialEndsAt: updateData.trialEndsAt,
-        hadPendingPlan,
-        wasPendingActivation,
-        plan: updateData.plan || subscription.plan
-      });
       
       // CRITICAL: Use findByIdAndUpdate since we're using lean() (subscription is plain object)
       const updatedSubscription = await Subscription.findByIdAndUpdate(
@@ -192,12 +178,7 @@ export default async function handleSubscriptionUpdate(req, res) {
         { new: true, runValidators: true }
       );
       
-      console.log('[SUBSCRIPTION-UPDATE] Updated subscription:', {
-        plan: updatedSubscription.plan,
-        status: updatedSubscription.status,
-        activatedAt: updatedSubscription.activatedAt,
-        trialEndsAt: updatedSubscription.trialEndsAt
-      });
+      // Subscription updated successfully
       
       // Set included tokens for the plan (replaces old, keeps purchased)
       // CRITICAL: Only add included tokens if trial has ended (activatedAt is set and trialEndsAt is null or past)
@@ -220,6 +201,109 @@ export default async function handleSubscriptionUpdate(req, res) {
         );
       }
       
+      // Send welcome email when subscription is approved (ACTIVE status)
+      // Only send if this is a new subscription (first time activation)
+      // Logic: 
+      // - No originalActivatedAt (never activated before)
+      // - Status is active
+      // REMOVED hadPendingPlan check: callback clears it before webhook arrives (race condition)
+      const isNewSubscription = !originalActivatedAt && updatedSubscription.status === 'active';
+      
+      if (isNewSubscription) {
+        // Send welcome email asynchronously (non-blocking)
+        import('../services/emailService.js').then(async (emailModule) => {
+          const emailService = emailModule.default;
+          try {
+            // Get shop record
+            const shopRecord = await Shop.findOne({ shop }).lean();
+            if (!shopRecord) {
+              console.warn('[SUBSCRIPTION-UPDATE] Shop record not found, skipping welcome email');
+              return;
+            }
+            
+            // Fetch shop email from Shopify GraphQL API (production-tested)
+            let shopEmail = null;
+            let shopName = null;
+            try {
+              const shopQuery = `
+                query {
+                  shop {
+                    email
+                    contactEmail
+                    name
+                  }
+                }
+              `;
+              const shopResponse = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+                method: 'POST',
+                headers: {
+                  'X-Shopify-Access-Token': shopRecord.accessToken,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/graphql-response+json, application/json',
+                },
+                body: JSON.stringify({ query: shopQuery }),
+              });
+              
+              if (shopResponse.ok) {
+                const shopData = await shopResponse.json();
+                shopEmail = shopData.data?.shop?.email || 
+                           shopData.data?.shop?.contactEmail || 
+                           null;
+                shopName = shopData.data?.shop?.name || null;
+              } else {
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Shopify GraphQL error:', shopResponse.status, shopResponse.statusText);
+              }
+            } catch (emailFetchError) {
+              console.error('[SUBSCRIPTION-UPDATE] ❌ Could not fetch shop email:', emailFetchError.message);
+            }
+            
+            // Update shop record with email if fetched successfully
+            if (shopEmail || shopName) {
+              try {
+                const updateFields = { updatedAt: new Date() };
+                if (shopEmail && shopEmail !== shopRecord.email) {
+                  updateFields.email = shopEmail;
+                  updateFields.shopOwnerEmail = shopEmail;
+                }
+                if (shopName && shopName !== shopRecord.name) {
+                  updateFields.name = shopName;
+                }
+                
+                if (Object.keys(updateFields).length > 1) { // More than just updatedAt
+                  await Shop.updateOne(
+                    { shop },
+                    { $set: updateFields }
+                  );
+                  // Shop data updated in DB
+                }
+              } catch (updateError) {
+                console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to update shop email:', updateError.message);
+              }
+            }
+            
+            const storeWithSubscription = {
+              ...shopRecord,
+              _id: shopRecord._id,
+              email: shopEmail || shopRecord.email,
+              name: shopName || shopRecord.name,
+              subscription: updatedSubscription
+            };
+            
+            const result = await emailService.sendWelcomeEmail(storeWithSubscription);
+            if (result.success) {
+              // Welcome email sent/skipped successfully
+            } else {
+              console.error('[SUBSCRIPTION-UPDATE] ❌ Welcome email failed:', result.error);
+            }
+          } catch (emailError) {
+            console.error('[SUBSCRIPTION-UPDATE] ❌ Failed to send welcome email:', emailError.message);
+            // Don't throw - email failure shouldn't block subscription activation
+          }
+        }).catch(error => {
+          console.error('[SUBSCRIPTION-UPDATE] ❌ Error loading email service:', error.message);
+        });
+      }
+      
     } else if (status === 'CANCELLED' || status === 'DECLINED') {
       // ❌ Subscription cancelled/declined by merchant or Shopify (or user clicked "back" without approving)
       
@@ -234,7 +318,7 @@ export default async function handleSubscriptionUpdate(req, res) {
       const shouldClearPending = subscriptionIdMatches; // CRITICAL: Only clear if IDs match!
       
       if (hasPendingState && shouldClearPending) {
-        console.log('[SUBSCRIPTION-UPDATE] User clicked "back" - clearing pending state but keeping previous plan status');
+        // User clicked "back" - clearing pending state but keeping previous plan status
         const updateData = {
           pendingPlan: null,
           pendingActivation: false

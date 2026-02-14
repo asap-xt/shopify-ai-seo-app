@@ -7,6 +7,9 @@ import express from 'express';
 import Shop from './db/Shop.js';
 import Subscription from './db/Subscription.js';
 import emailService from './services/emailService.js';
+import { isExemptShop, ensureExemptShopAccess } from './billing/billingRoutes.js';
+import PromoCode from './db/PromoCode.js';
+import PromoAllowlist from './db/PromoAllowlist.js';
 
 const router = express.Router();
 
@@ -26,19 +29,11 @@ const REQUIRED_SCOPES = [
   'read_products',
   'write_products', 
   'read_locales',
-  'read_translations'
+  'read_translations',
+  'read_themes',
+  'write_themes',
+  'write_theme_code'  // Required for writing robots.txt.liquid (approved by Shopify)
 ];
-
-// DEBUG: Log configuration on startup
-console.log('[AUTH CONFIG]', {
-  SHOPIFY_API_KEY: SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
-  SHOPIFY_API_SECRET: SHOPIFY_API_SECRET ? 'SET' : 'NOT SET', 
-  SHOPIFY_API_SCOPES,
-  APP_URL,
-  REDIRECT_URI,
-  CALLBACK_PATH,
-  REQUIRED_SCOPES: REQUIRED_SCOPES.join(',')
-});
 
 // Validate required environment variables
 if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
@@ -70,7 +65,6 @@ function buildAuthUrl(shop, state) {
   });
   
   const authUrl = `https://${shop}/admin/oauth/authorize?${params.toString()}`;
-  console.log('[AUTH] Building auth URL:', authUrl);
   return authUrl;
 }
 
@@ -86,8 +80,6 @@ function verifyHmac(query, secret) {
 }
 
 async function exchangeToken(shop, code) {
-  console.log(`[AUTH] Exchanging code for offline access token: ${shop}`);
-  
   try {
     const tokenUrl = `https://${shop}/admin/oauth/access_token`;
     const requestBody = { 
@@ -96,8 +88,6 @@ async function exchangeToken(shop, code) {
       code 
     };
     
-    console.log(`[AUTH] Token exchange request to: ${tokenUrl}`);
-    
     const resp = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,7 +95,6 @@ async function exchangeToken(shop, code) {
     });
     
     const responseText = await resp.text();
-    console.log(`[AUTH] Token exchange response status: ${resp.status}`);
     
     if (!resp.ok) {
       console.error(`[AUTH] Token exchange failed:`, responseText);
@@ -113,9 +102,6 @@ async function exchangeToken(shop, code) {
     }
     
     const tokenData = JSON.parse(responseText);
-    console.log(`[AUTH] Token exchange successful!`);
-    console.log(`[AUTH] Received scopes: ${tokenData.scope}`);
-    console.log(`[AUTH] Token type: ${tokenData.access_token?.startsWith('shpat_') ? 'offline' : 'unknown'}`);
     
     // Validate token format
     if (!tokenData.access_token) {
@@ -123,8 +109,7 @@ async function exchangeToken(shop, code) {
     }
     
     if (!tokenData.access_token.startsWith('shpat_')) {
-      console.warn(`[AUTH] Warning: Token does not start with 'shpat_', got: ${tokenData.access_token.substring(0, 10)}...`);
-      console.warn(`[AUTH] This may be an online token instead of offline token`);
+      console.warn(`[AUTH] Warning: Token does not start with 'shpat_', may be online token`);
     }
     
     return tokenData; // { access_token, scope, ... }
@@ -135,8 +120,6 @@ async function exchangeToken(shop, code) {
 }
 
 async function testToken(shop, accessToken) {
-  console.log(`[AUTH] Testing access token for shop: ${shop}`);
-  
   try {
     const testQuery = `
       query TestToken {
@@ -164,7 +147,6 @@ async function testToken(shop, accessToken) {
       return false;
     }
     
-    console.log(`[AUTH] Token test successful for shop: ${result.data?.shop?.name}`);
     return true;
     
   } catch (error) {
@@ -174,8 +156,6 @@ async function testToken(shop, accessToken) {
 }
 
 async function registerWebhooks(shop, accessToken) {
-  console.log('[AUTH] Starting webhook registration using GraphQL...');
-  
   try {
     // Use the GraphQL-based webhook registration from webhookRegistration.js
     const { registerAllWebhooks } = await import('./utils/webhookRegistration.js');
@@ -187,8 +167,6 @@ async function registerWebhooks(shop, accessToken) {
     };
     
     const results = await registerAllWebhooks(mockReq, shop, APP_URL);
-    
-    console.log('[AUTH] Webhook registration results:', JSON.stringify(results, null, 2));
     
     return results;
   } catch (error) {
@@ -208,20 +186,27 @@ async function fetchShopContactInfo(shop, accessToken) {
     });
     
     if (!response.ok) {
-      console.warn('[AUTH] Failed to fetch shop contact info:', response.status);
+      console.error('[AUTH] Failed to fetch shop contact info:', response.status, response.statusText);
       return null;
     }
     
     const payload = await response.json();
     const shopData = payload?.shop;
-    if (!shopData) return null;
+    if (!shopData) {
+      console.error('[AUTH] No shop data in response');
+      return null;
+    }
     
-    return {
+    const contactInfo = {
       contactEmail: shopData.customer_email || shopData.contact_email || null,
       email: shopData.email || null,
       shopOwner: shopData.shop_owner || null,
       shopOwnerEmail: shopData.customer_email || shopData.email || null
     };
+    
+    // Shop contact info fetched
+    
+    return contactInfo;
   } catch (error) {
     console.error('[AUTH] Error fetching shop contact info:', error.message);
     return null;
@@ -238,7 +223,6 @@ function scheduleWelcomeEmail(shop) {
       }
       
       if (shopDoc.welcomeEmailSent) {
-        console.log('[AUTH] Welcome email already sent for', shop);
         return;
       }
       
@@ -254,9 +238,11 @@ function scheduleWelcomeEmail(shop) {
 }
 
 // GET /?shop=asapxt-teststore.myshopify.com
+// Supports marketing URL parameters:
+// - ref: Campaign source (e.g., ?ref=launch2025)
+// - promo: Promo code (e.g., ?promo=FREEMONTH)
+// - campaign: Alternative to ref
 router.get('/', async (req, res) => {
-  console.log('[AUTH] Starting OAuth flow', { query: req.query });
-  
   // Check environment variables
   if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
     console.error('[AUTH] Missing required environment variables');
@@ -276,6 +262,26 @@ router.get('/', async (req, res) => {
     return res.status(400).send('Invalid shop domain');
   }
   
+  // Capture marketing parameters for later use
+  const campaignSource = req.query.ref || req.query.campaign || null;
+  const promoCode = req.query.promo || null;
+  
+  if (campaignSource || promoCode) {
+    console.log(`[AUTH] 📣 Marketing params for ${shop}: ref=${campaignSource}, promo=${promoCode}`);
+  }
+  
+  // Store marketing params in cookie for callback
+  if (campaignSource || promoCode) {
+    const marketingData = JSON.stringify({ ref: campaignSource, promo: promoCode });
+    res.cookie('shopify_marketing', marketingData, {
+      httpOnly: true,
+      secure: APP_URL.startsWith('https://'),
+      sameSite: 'none',
+      maxAge: 10 * 60 * 1000, // 10 minutes
+      path: '/',
+    });
+  }
+  
   // Generate state for CSRF protection
   const state = crypto.randomBytes(16).toString('hex');
   res.cookie('shopify_oauth_state', state, {
@@ -286,17 +292,11 @@ router.get('/', async (req, res) => {
     path: '/',
   });
 
-  console.log(`[AUTH] Redirecting to Shopify OAuth for shop: ${shop}`);
   return res.redirect(302, buildAuthUrl(shop, state));
 });
 
 // GET /callback?code=...&hmac=...&shop=...&state=...&host=...
 router.get('/callback', async (req, res) => {
-  console.log('[AUTH] OAuth callback received', { 
-    query: req.query,
-    cookies: req.cookies 
-  });
-  
   try {
     // Check environment variables
     if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
@@ -337,9 +337,43 @@ router.get('/callback', async (req, res) => {
       return res.status(500).send('Received invalid access token');
     }
 
-    // 6) Save shop record to database
-    console.log('[AUTH] Saving shop record to database...');
+    // 6) Parse marketing parameters from cookie
+    let marketingData = { ref: null, promo: null };
+    try {
+      const marketingCookie = req.cookies?.shopify_marketing;
+      if (marketingCookie) {
+        marketingData = JSON.parse(marketingCookie);
+        console.log(`[AUTH] 📣 Retrieved marketing data for ${shop}:`, marketingData);
+      }
+    } catch (e) {
+      console.warn('[AUTH] Failed to parse marketing cookie:', e.message);
+    }
     
+    // Clear marketing cookie
+    res.clearCookie('shopify_marketing');
+    
+    // 7) Check promo code validity and allowlist
+    let promoDetails = null;
+    
+    // First check allowlist
+    const allowlistCheck = await PromoAllowlist.checkShop(shop);
+    if (allowlistCheck.onAllowlist) {
+      promoDetails = allowlistCheck.promo;
+      console.log(`[AUTH] ✅ Shop ${shop} is on allowlist:`, promoDetails);
+    }
+    
+    // Then check promo code (if provided and not already on allowlist)
+    if (!promoDetails && marketingData.promo) {
+      const promoCheck = await PromoCode.validateAndUse(marketingData.promo);
+      if (promoCheck.valid) {
+        promoDetails = promoCheck.promo;
+        console.log(`[AUTH] ✅ Valid promo code for ${shop}:`, promoDetails);
+      } else {
+        console.warn(`[AUTH] ⚠️ Invalid promo code ${marketingData.promo}: ${promoCheck.error}`);
+      }
+    }
+    
+    // 8) Save shop record to database with marketing info
     // Ensure accessToken is always a string
     const accessTokenString = typeof accessToken === 'object' && accessToken.accessToken 
       ? accessToken.accessToken 
@@ -356,7 +390,12 @@ router.get('/callback', async (req, res) => {
         updatedAt: new Date(),
         tokenType: accessTokenString.startsWith('shpat_') ? 'offline' : 'online',
         isActive: true,
-        needsTokenExchange: false // Token exchange вече е завършен
+        needsTokenExchange: false, // Token exchange вече е завършен
+        // Marketing tracking
+        campaignSource: marketingData.ref || null,
+        promoCode: marketingData.promo || null,
+        promoType: promoDetails?.type || null,
+        hasPromoEligibility: !!promoDetails
       }, 
       { upsert: true, new: true }
     );
@@ -376,42 +415,100 @@ router.get('/callback', async (req, res) => {
           { $set: contactUpdate },
           { new: true }
         );
+        // Shop contact info updated in DB
+      } else {
+        console.warn('[AUTH] ⚠️ No contact info to update (all fields were null)');
       }
+    } else {
+      console.error('[AUTH] ❌ Failed to fetch shop contact info - shop record will have no email!');
     }
     
     scheduleWelcomeEmail(shop);
     
-    console.log('[AUTH] Shop record saved:', {
-      id: shopRecord._id,
-      shop: shopRecord.shop,
-      tokenType: shopRecord.tokenType,
-      scopes: shopRecord.scopes
+    // 7) Add to SendGrid list (non-blocking)
+    // Fetch shop email and add to SendGrid App Users list
+    import('../services/sendgridListsService.js').then(async (sendgridModule) => {
+      const sendgridListsService = sendgridModule.default;
+      try {
+        // Fetch shop email from Shopify API
+        const shopQuery = `
+          query {
+            shop {
+              email
+              name
+            }
+          }
+        `;
+        const shopResponse = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: shopQuery }),
+        });
+        
+        if (shopResponse.ok) {
+          const shopData = await shopResponse.json();
+          const shopEmail = shopData.data?.shop?.email;
+          const shopName = shopData.data?.shop?.name;
+          
+          if (shopEmail) {
+            await sendgridListsService.addToAppUsersList(shopEmail, shop, shopName);
+          } else {
+            console.warn('[AUTH] Shop email not found in Shopify API response');
+          }
+        }
+      } catch (error) {
+        console.error('[AUTH] Failed to add to SendGrid list:', error.message);
+      }
+    }).catch(error => {
+      console.error('[AUTH] SendGrid list service error:', error.message);
     });
 
-    // 7) Register webhooks (non-blocking)
+    // 8) Register webhooks (non-blocking)
     registerWebhooks(shop, accessToken).catch(error => {
       console.error('[AUTH] Webhook registration failed:', error.message);
     });
 
-    // 8) Clear state cookie
+
+    // 9) Clear state cookie
     res.clearCookie('shopify_oauth_state');
 
-    // 9) Check for active subscription
-    console.log('[AUTH] Checking for active subscription...');
+    // 10) CRITICAL: Check if shop is EXEMPT from billing
+    // EXEMPT shops get free Enterprise access - no billing required!
+    if (isExemptShop(shop)) {
+      console.log(`[AUTH] ✅ EXEMPT shop detected: ${shop} - granting free Enterprise access`);
+      
+      // Ensure exempt access (creates/updates subscription, cancels any Shopify billing)
+      try {
+        const exemptResult = await ensureExemptShopAccess(shop);
+        console.log(`[AUTH] ✅ ensureExemptShopAccess result for ${shop}:`, exemptResult ? 'success' : 'null');
+      } catch (exemptError) {
+        console.error(`[AUTH] ❌ ensureExemptShopAccess FAILED for ${shop}:`, exemptError.message, exemptError.stack);
+      }
+      
+      // Redirect directly to dashboard - no billing page needed!
+      const finalHost = host
+        ? host.toString()
+        : base64UrlEncode(`${shop}/admin`);
+      
+      const adminBase = base64UrlDecode(finalHost).replace(/\/+$/, '');
+      const baseUrl = `https://${adminBase}/apps/${SHOPIFY_API_KEY}`;
+      const dashboardUrl = `${baseUrl}/?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}&exempt=true`;
+      
+      console.log(`[AUTH] ✅ Redirecting EXEMPT shop to dashboard: ${shop}`);
+      return res.redirect(302, dashboardUrl);
+    }
+    
+    // 11) Check for active subscription (non-exempt shops)
     const subscription = await Subscription.findOne({ shop }).lean();
     
     const hasActiveSubscription = subscription && 
       subscription.status === 'active' && 
       !subscription.cancelledAt;
     
-    console.log('[AUTH] Subscription status:', {
-      exists: !!subscription,
-      status: subscription?.status,
-      plan: subscription?.plan,
-      hasActive: hasActiveSubscription
-    });
-
-    // 10) Redirect to appropriate page
+    // 12) Redirect to appropriate page
     const finalHost = host
       ? host.toString()
       : base64UrlEncode(`${shop}/admin`);
@@ -425,13 +522,11 @@ router.get('/callback', async (req, res) => {
     if (!hasActiveSubscription) {
       // No subscription → Billing page (plan selection)
       const billingUrl = `${baseUrl}/billing?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
-      console.log('[AUTH] No active subscription, redirecting to billing:', billingUrl);
       return res.redirect(302, billingUrl);
     }
     
     // Active subscription → Dashboard
     const dashboardUrl = `${baseUrl}/?embedded=1&shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(finalHost)}`;
-    console.log('[AUTH] Active subscription found, redirecting to dashboard:', dashboardUrl);
     return res.redirect(302, dashboardUrl);
     
   } catch (error) {

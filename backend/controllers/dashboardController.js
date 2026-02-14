@@ -11,6 +11,7 @@ import { requireAuth, executeGraphQL } from '../middleware/modernAuth.js';
 import { syncStore } from '../services/syncService.js';
 import { withShopCache, CACHE_TTL } from '../utils/cacheWrapper.js';
 import cacheService from '../services/cacheService.js';
+import { isExemptShop, ensureExemptShopAccess } from '../billing/billingRoutes.js';
 
 const router = express.Router();
 
@@ -22,6 +23,13 @@ router.get('/stats', verifyRequest, async (req, res) => {
   try {
     const shop = req.shopDomain;
     
+    // EXEMPT SHOPS: Ensure they have Enterprise access before checking stats
+    if (isExemptShop(shop)) {
+      await ensureExemptShopAccess(shop);
+      // Invalidate cache to ensure fresh data
+      await cacheService.invalidateShop(shop);
+    }
+    
     // Cache dashboard stats for 1 minute (PHASE 3: Caching)
     // Dashboard is frequently accessed, so short TTL keeps data fresh
     const stats = await withShopCache(shop, 'dashboard:stats', CACHE_TTL.VERY_SHORT, async () => {
@@ -29,14 +37,58 @@ router.get('/stats', verifyRequest, async (req, res) => {
       const subscription = await Subscription.findOne({ shop });
       const plan = subscription?.plan || 'starter';
     
-    // Products stats
-    const totalProducts = await Product.countDocuments({ shop });
+      // Get primaryDomain from Shopify (public URL for AI prompts)
+      let primaryDomain = `https://${shop}`;
+      let storeName = shop.split('.')[0];
+      try {
+        // Use Shop record to get access token (verifyRequest doesn't set up executeGraphQL)
+        const shopRecord = await Shop.findOne({ shop });
+        if (shopRecord?.accessToken) {
+          const response = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: `{
+                shop {
+                  name
+                  primaryDomain { url }
+                }
+              }`
+            }),
+          });
+          const result = await response.json();
+          if (result?.data?.shop?.primaryDomain?.url) {
+            primaryDomain = result.data.shop.primaryDomain.url;
+          }
+          if (result?.data?.shop?.name) {
+            storeName = result.data.shop.name;
+          }
+        }
+      } catch (err) {
+        console.error('[Dashboard] Error fetching primaryDomain:', err.message);
+      }
+    
+    // Products stats - only count ACTIVE products (exclude DRAFT and ARCHIVED)
+    // Include products with status: ACTIVE OR status not set (for backwards compatibility)
+    const activeStatusFilter = {
+      $or: [
+        { status: 'ACTIVE' },
+        { status: { $exists: false } },
+        { status: null }
+      ]
+    };
+    const totalProducts = await Product.countDocuments({ shop, ...activeStatusFilter });
     const optimizedProducts = await Product.countDocuments({ 
       shop, 
+      ...activeStatusFilter,
       'seoStatus.optimized': true 
     });
     const lastOptimizedProduct = await Product.findOne({ 
       shop, 
+      ...activeStatusFilter,
       'seoStatus.optimized': true 
     }).sort({ updatedAt: -1 }).select('updatedAt');
     
@@ -270,6 +322,10 @@ router.get('/stats', verifyRequest, async (req, res) => {
     // Get plan config for correct pricing (now using Subscription virtual property)
     
     const stats = {
+      store: {
+        name: storeName,
+        primaryDomain: primaryDomain // Public URL for AI prompts
+      },
       subscription: {
         plan,
         price: subscription?.price || 0 // Virtual property from Subscription model

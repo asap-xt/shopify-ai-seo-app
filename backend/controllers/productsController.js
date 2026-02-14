@@ -183,52 +183,225 @@ router.get('/list', async (req, res) => {
     
     // Filter parameters
     const optimizedFilter = req.query.optimized; // 'true', 'false', or undefined (all)
+    const aiEnhancedFilter = req.query.aiEnhanced; // 'true', 'false', or undefined (all)
     const languageFilter = req.query.languageFilter; // e.g., 'en', 'de'
     const tagsFilter = req.query.tags ? req.query.tags.split(',') : []; // e.g., 'tag1,tag2'
     const searchFilter = req.query.search; // search term
+    
+    // Check if any client-side filters are active (requires fetching all products)
+    const hasClientFilters = optimizedFilter || aiEnhancedFilter || languageFilter || tagsFilter.length > 0 || searchFilter;
     
     const shop = req.auth.shop;
 
     // Cache key WITHOUT optimization filters (they will be applied AFTER fresh metafield fetch)
     const cacheKey = `products:list:${page}:${limit}:${sortBy}:${sortOrder}:${tagsFilter.join(',')}:${searchFilter || ''}`;
     
-    // Step 1: Get basic product data from cache (or fetch if cache miss)
-    const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
+    // Get total count of ACTIVE products (for pagination)
+    const COUNT_QUERY = `
+      query {
+        productsCount(query: "status:ACTIVE") {
+          count
+        }
+      }
+    `;
+    const countData = await executeGraphQL(req, COUNT_QUERY, {});
+    const totalProducts = countData?.productsCount?.count || 0;
+    
+    // Step 1: Get product data - fetch enough to cover the requested page
+    // Shopify uses cursor-based pagination, so we need to fetch all products up to (page * limit)
+    const cacheKeyAll = `products:all:${sortBy}:${sortOrder}:${tagsFilter.join(',')}:${searchFilter || ''}`;
+    
+    const allProductsResult = await withShopCache(shop, cacheKeyAll, CACHE_TTL.SHORT, async () => {
       const sortKey = convertSortKey(sortBy);
       const reverse = sortOrder === 'desc';
 
+      let allProducts = [];
+      let hasNextPage = true;
+      let cursor = null;
+      const maxFetch = 250; // Shopify max per request
+      
+      // Fetch all products (cursor-based pagination)
+      while (hasNextPage && allProducts.length < 1000) { // Safety limit
       const variables = {
-        first: limit,
+          first: maxFetch,
         sortKey: sortKey,
-        reverse: reverse
+          reverse: reverse,
+          ...(cursor && { after: cursor })
       };
 
       const data = await executeGraphQL(req, PRODUCTS_QUERY, variables);
-      const rawProducts = data?.products?.edges?.map(edge => edge.node) || [];
+        const products = data?.products?.edges?.map(edge => edge.node) || [];
       
-      // Store basic product data WITHOUT optimization summary
-      // (optimization summary will be fetched fresh later)
-      const products = rawProducts.map(product => ({
-        ...product,
-        // Remove metafields from cached data (we'll fetch them fresh)
-        metafields: undefined
-      }));
-
-      return {
+        // Filter only ACTIVE products
+        const activeProducts = products.filter(p => p.status === 'ACTIVE');
+        allProducts = allProducts.concat(activeProducts);
+        
+        hasNextPage = data?.products?.pageInfo?.hasNextPage || false;
+        cursor = data?.products?.pageInfo?.endCursor;
+        
+        // Stop if we don't have more
+        if (products.length === 0) break;
+      }
+      
+      return allProducts;
+    });
+    
+    // When we have client-side filters (optimized, language), we need to:
+    // 1. Fetch metafields for ALL products first
+    // 2. Apply filters
+    // 3. Then paginate the filtered results
+    
+    let productsToProcess = allProductsResult;
+    let filteredTotal = allProductsResult.length;
+    
+    // If we have optimization or language filters, we need metafields for all products
+    if (hasClientFilters) {
+      // Fetch metafields for ALL products (in batches of 250)
+      const allProductIds = allProductsResult.map(p => p.id);
+      const allFreshMetafields = {};
+      
+      for (let i = 0; i < allProductIds.length; i += 250) {
+        const batchIds = allProductIds.slice(i, i + 250);
+        const BATCH_METAFIELDS_QUERY = `
+          query GetProductMetafields($ids: [ID!]!) {
+            nodes(ids: $ids) {
+              ... on Product {
+                id
+                metafields(first: 50, namespace: "seo_ai") {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `;
+        const batchData = await executeGraphQL(req, BATCH_METAFIELDS_QUERY, { ids: batchIds });
+        (batchData?.nodes || []).forEach(node => {
+          if (node?.id) {
+            allFreshMetafields[node.id] = node.metafields;
+          }
+        });
+      }
+      
+      // Get AI-enhanced status from MongoDB for ALL products (needed for aiEnhanced filter)
+      const allProductNumericIds = allProductsResult.map(p => {
+        const id = p.id || '';
+        return id.includes('gid://') ? id.split('/').pop() : id;
+      }).filter(Boolean);
+      
+      const mongoProducts = await Product.find({
+        shop,
+        productId: { $in: allProductNumericIds }
+      }).select('productId seoStatus.aiEnhanced').lean();
+      
+      const aiEnhancedMap = {};
+      mongoProducts.forEach(mp => {
+        aiEnhancedMap[mp.productId] = mp.seoStatus?.aiEnhanced || false;
+      });
+      
+      // Process all products with metafields and aiEnhanced status
+      let allProcessedProducts = allProductsResult.map(product => {
+        const metafields = allFreshMetafields[product.id] || { edges: [] };
+        const optimizationSummary = processProductMetafields(metafields);
+        const numericId = product.id.includes('gid://') ? product.id.split('/').pop() : product.id;
+        const aiEnhanced = aiEnhancedMap[numericId] || false;
+        return {
+          ...product,
+          optimizationSummary: {
+            ...optimizationSummary,
+            aiEnhanced
+          },
+          metafields: undefined
+        };
+      });
+      
+      // Apply filters BEFORE pagination
+      if (optimizedFilter === 'true') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === true);
+      } else if (optimizedFilter === 'false') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.optimized === false);
+      }
+      
+      // Filter by AI-enhanced status
+      if (aiEnhancedFilter === 'true') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced === true);
+      } else if (aiEnhancedFilter === 'false') {
+        allProcessedProducts = allProcessedProducts.filter(p => p.optimizationSummary.aiEnhanced !== true);
+      }
+      
+      if (languageFilter) {
+        allProcessedProducts = allProcessedProducts.filter(p => 
+          p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
+        );
+      }
+      
+      if (tagsFilter.length > 0) {
+        allProcessedProducts = allProcessedProducts.filter(p => {
+          const productTags = p.tags || [];
+          return tagsFilter.some(tag => productTags.includes(tag));
+        });
+      }
+      
+      if (searchFilter) {
+        const searchLower = searchFilter.toLowerCase();
+        allProcessedProducts = allProcessedProducts.filter(p => 
+          p.title?.toLowerCase().includes(searchLower) ||
+          p.handle?.toLowerCase().includes(searchLower) ||
+          p.productType?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Update filtered total and slice for pagination
+      filteredTotal = allProcessedProducts.length;
+      const startIdx = (page - 1) * limit;
+      const endIdx = startIdx + limit;
+      const finalProducts = allProcessedProducts.slice(startIdx, endIdx);
+      
+      return res.json({
         success: true,
-        products: products,
+        products: finalProducts,
         pagination: {
           page: page,
           limit: limit,
-          hasNextPage: data?.products?.pageInfo?.hasNextPage || false,
-          endCursor: data?.products?.pageInfo?.endCursor
+          total: filteredTotal,
+          hasNextPage: (page * limit) < filteredTotal,
+          hasNext: (page * limit) < filteredTotal
+        },
+        shop: shop,
+        auth: {
+          tokenType: req.auth.tokenType,
+          source: req.auth.source
+        }
+      });
+    }
+    
+    // No client-side filters - use normal pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const pageProducts = allProductsResult.slice(startIndex, endIndex);
+    
+    // Build pagination info
+    const cachedResult = {
+      success: true,
+      products: pageProducts.map(product => ({
+        ...product,
+        metafields: undefined
+      })),
+        pagination: {
+          page: page,
+          limit: limit,
+        total: totalProducts,
+        hasNextPage: endIndex < allProductsResult.length,
+        hasNext: endIndex < allProductsResult.length
         },
         shop: shop
       };
-    });
     
-    // Step 2: Fetch FRESH optimization status for all products (NOT cached!)
-    // This ensures badges update immediately after optimize/delete operations
+    // Step 2: Fetch FRESH optimization status for page products only
     const productIds = cachedResult.products.map(p => p.id);
     
     const FRESH_METAFIELDS_QUERY = `
@@ -292,45 +465,18 @@ router.get('/list', async (req, res) => {
       };
     });
 
-    // Step 4: Apply client-side filters (using FRESH optimization data)
-    
-    // Filter by optimization status
-    if (optimizedFilter === 'true') {
-      products = products.filter(p => p.optimizationSummary.optimized === true);
-    } else if (optimizedFilter === 'false') {
-      products = products.filter(p => p.optimizationSummary.optimized === false);
-    }
-    
-    // Filter by language
-    if (languageFilter) {
-      products = products.filter(p => 
-        p.optimizationSummary.optimizedLanguages?.includes(languageFilter)
-      );
-    }
-    
-    // Filter by tags
-    if (tagsFilter.length > 0) {
-      products = products.filter(p => {
-        const productTags = p.tags || [];
-        return tagsFilter.some(tag => productTags.includes(tag));
-      });
-    }
-    
-    // Filter by search term (title, handle, productType)
-    if (searchFilter) {
-      const searchLower = searchFilter.toLowerCase();
-      products = products.filter(p => 
-        p.title?.toLowerCase().includes(searchLower) ||
-        p.handle?.toLowerCase().includes(searchLower) ||
-        p.productType?.toLowerCase().includes(searchLower)
-      );
-    }
+    // Note: Client-side filters are applied above when hasClientFilters is true
+    // This code path only runs when NO filters are active
 
     // Return result with FRESH optimization status
     return res.json({
       success: true,
       products: products,
-      pagination: cachedResult.pagination,
+      pagination: {
+        ...cachedResult.pagination,
+        total: cachedResult.pagination.total,
+        hasNext: page * limit < cachedResult.pagination.total
+      },
       shop: shop,
       auth: {
         tokenType: req.auth.tokenType,
@@ -400,11 +546,15 @@ router.post('/sync', async (req, res) => {
       if (edges.length === 0) break;
     }
 
+    // Count only ACTIVE products (exclude DRAFT and ARCHIVED)
+    const activeProducts = allProducts.filter(p => p.status === 'ACTIVE');
+
     return res.json({
       success: true,
-      productsCount: allProducts.length,
+      productsCount: activeProducts.length,
+      totalProducts: allProducts.length,
       shop: req.auth.shop,
-      message: `Successfully synced ${allProducts.length} products`
+      message: `Successfully synced ${activeProducts.length} products`
     });
 
   } catch (error) {
@@ -449,6 +599,146 @@ router.delete('/reset-shop', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: error.message || 'Failed to reset shop products'
+    });
+  }
+});
+
+/**
+ * POST /api/products/repair-optimization-status
+ * Repair MongoDB optimization status to match actual Shopify metafields
+ * This fixes discrepancies where MongoDB shows "optimized" but Shopify has no metafields
+ */
+router.post('/repair-optimization-status', async (req, res) => {
+  const shop = req.auth?.shop;
+  
+  if (!shop) {
+    return res.status(400).json({ error: 'Shop not found in session' });
+  }
+  
+  console.log(`[REPAIR] Starting optimization status repair for ${shop}`);
+  
+  try {
+    // Step 1: Get all products marked as optimized in MongoDB
+    const mongoOptimized = await Product.find({
+      shop,
+      'seoStatus.optimized': true
+    }).select('productId shopifyProductId title seoStatus').lean();
+    
+    console.log(`[REPAIR] Found ${mongoOptimized.length} products marked as optimized in MongoDB`);
+    
+    if (mongoOptimized.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No optimized products in MongoDB to check',
+        stats: { mongoOptimized: 0, shopifyHasMetafields: 0, repaired: 0 }
+      });
+    }
+    
+    // Step 2: Fetch metafields from Shopify for these products (in batches)
+    const BATCH_SIZE = 50;
+    const productsWithMetafields = new Set();
+    const productsWithoutMetafields = [];
+    
+    for (let i = 0; i < mongoOptimized.length; i += BATCH_SIZE) {
+      const batch = mongoOptimized.slice(i, i + BATCH_SIZE);
+      const productIds = batch.map(p => `gid://shopify/Product/${p.productId || p.shopifyProductId}`);
+      
+      const METAFIELDS_QUERY = `
+        query GetProductMetafields($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Product {
+              id
+              metafields(first: 20, namespace: "seo_ai") {
+                edges {
+                  node {
+                    key
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      try {
+        const data = await executeGraphQL(req, METAFIELDS_QUERY, { ids: productIds });
+        
+        (data?.nodes || []).forEach(node => {
+          if (node?.id) {
+            const numericId = node.id.split('/').pop();
+            const hasMetafields = (node.metafields?.edges?.length || 0) > 0;
+            
+            if (hasMetafields) {
+              productsWithMetafields.add(numericId);
+            }
+          }
+        });
+      } catch (batchError) {
+        console.error(`[REPAIR] Error fetching batch ${i}-${i + BATCH_SIZE}:`, batchError.message);
+      }
+    }
+    
+    // Step 3: Find products that need repair (in MongoDB but no Shopify metafields)
+    const repairedProducts = [];
+    
+    for (const product of mongoOptimized) {
+      const productId = String(product.productId || product.shopifyProductId);
+      
+      if (!productsWithMetafields.has(productId)) {
+        productsWithoutMetafields.push({
+          productId,
+          title: product.title
+        });
+        
+        // Update MongoDB - mark as NOT optimized
+        await Product.findOneAndUpdate(
+          { shop, productId: parseInt(productId) },
+          { 
+            $set: { 
+              'seoStatus.optimized': false,
+              'seoStatus.languages': [],
+              'seoStatus.repairedAt': new Date()
+            } 
+          }
+        );
+        
+        repairedProducts.push({
+          productId,
+          title: product.title
+        });
+      }
+    }
+    
+    console.log(`[REPAIR] Repair complete for ${shop}:`);
+    console.log(`[REPAIR]   - MongoDB optimized: ${mongoOptimized.length}`);
+    console.log(`[REPAIR]   - Actually have Shopify metafields: ${productsWithMetafields.size}`);
+    console.log(`[REPAIR]   - Repaired (marked as not optimized): ${repairedProducts.length}`);
+    
+    // Invalidate cache
+    try {
+      const { cacheService } = await import('../utils/cacheService.js');
+      await cacheService.invalidateShop(shop);
+    } catch (cacheError) {
+      console.error('[REPAIR] Cache invalidation error:', cacheError.message);
+    }
+    
+    return res.json({
+      success: true,
+      message: `Repair complete. ${repairedProducts.length} products updated.`,
+      stats: {
+        mongoOptimized: mongoOptimized.length,
+        shopifyHasMetafields: productsWithMetafields.size,
+        repaired: repairedProducts.length,
+        discrepancy: mongoOptimized.length - productsWithMetafields.size
+      },
+      repairedProducts: repairedProducts.slice(0, 50) // Limit response size
+    });
+    
+  } catch (error) {
+    console.error('[REPAIR] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Repair failed'
     });
   }
 });

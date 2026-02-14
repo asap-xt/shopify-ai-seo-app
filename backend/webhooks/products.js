@@ -4,8 +4,9 @@
 // - Detects title/description changes and invalidates SEO metafields
 // - Invalidates Redis cache to reflect changes immediately
 
-import { deleteAllSeoMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
+import { deleteAllSeoMetafieldsForProduct, deleteAdvancedSchemaMetafieldsForProduct, clearSeoStatusInMongoDB } from '../utils/seoMetafieldUtils.js';
 import cacheService from '../services/cacheService.js';
+import ProductChangeLog from '../db/ProductChangeLog.js';
 
 /**
  * Smart webhook handler:
@@ -53,33 +54,63 @@ export default async function productsWebhook(req, res) {
         const referenceTitle = existingProduct.lastShopifyUpdate?.title || existingProduct.title;
         const referenceDescription = existingProduct.lastShopifyUpdate?.description || existingProduct.description;
         
+        // Normalize values for comparison (treat null/undefined/'' as equivalent empty string)
+        // Also strip HTML tags to compare actual content, not formatting
+        const stripHtml = (html) => (html ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+        const normalizeText = (text) => (text ?? '').trim();
+        
+        const oldTitle = normalizeText(referenceTitle);
+        const newTitle = normalizeText(payload.title);
+        // Use stripHtml for descriptions since sync stores plain text but webhook sends HTML
+        const oldDesc = stripHtml(referenceDescription);
+        const newDesc = stripHtml(payload.body_html);
+        
         // Detect if title or description changed from last known Shopify state
-        titleChanged = referenceTitle !== payload.title;
-        descriptionChanged = referenceDescription !== payload.body_html;
+        // Only count as "changed" if there's actual text difference
+        titleChanged = oldTitle !== newTitle;
+        descriptionChanged = oldDesc !== newDesc;
         
         if (titleChanged || descriptionChanged) {
+          // Debug logging to track what changed
+          console.log(`[Webhook-Products] 📝 Content change detected for product ${numericProductId}:`);
+          if (titleChanged) {
+            console.log(`  Title: "${oldTitle?.substring(0, 50)}..." → "${newTitle?.substring(0, 50)}..."`);
+          }
+          if (descriptionChanged) {
+            console.log(`  Description changed (${oldDesc?.length || 0} → ${newDesc?.length || 0} chars, stripped text)`);
+            // Show first 100 chars of old vs new for debugging
+            console.log(`  Old: "${oldDesc?.substring(0, 100)}..."`);
+            console.log(`  New: "${newDesc?.substring(0, 100)}..."`);
+          }
+          
           // 3. Delete ALL SEO metafields (all languages)
           const deleteResult = await deleteAllSeoMetafieldsForProduct(req, shop, productGid);
           
+          // 3b. Delete Advanced Schema metafields too (schemas become outdated)
+          const schemaDeleteResult = await deleteAdvancedSchemaMetafieldsForProduct(req, shop, productGid);
+          
           if (deleteResult.success) {
-            // 4. Clear SEO status in MongoDB
+            // 4. Clear SEO status in MongoDB (includes hasAdvancedSchema flag)
             await clearSeoStatusInMongoDB(shop, numericProductId);
           } else {
-            console.error('[Webhook-Products] ❌ Failed to delete metafields:', deleteResult.errors);
+            console.error('[Webhook-Products] ❌ Failed to delete SEO metafields:', deleteResult.errors);
+          }
+          
+          if (!schemaDeleteResult.success) {
+            console.error('[Webhook-Products] ❌ Failed to delete schema metafields:', schemaDeleteResult.errors);
           }
         }
       }
       
       // 5. Update MongoDB with new product data for future comparisons
       // This ensures we have the latest title/description stored
-      // IMPORTANT: Update lastShopifyUpdate AFTER we've checked for changes
+      // IMPORTANT: Update lastShopifyUpdate ONLY when content changed (SEO was cleared)
+      // This prevents race conditions when Shopify sends duplicate webhooks
       
-      // Store whether content changed for proper lastShopifyUpdate update
       const contentChanged = titleChanged || descriptionChanged;
       
-      await Product.findOneAndUpdate(
-        { shop, productId: numericProductId },
-        {
+      // Build update object - only include lastShopifyUpdate if content changed
+      const updateData = {
           shopifyProductId: numericProductId,
           productId: numericProductId,
           title: payload.title,
@@ -105,17 +136,52 @@ export default async function productsWebhook(req, res) {
           currency: 'EUR', // Default currency
           totalInventory: payload.variants?.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0) || 0,
           gid: productGid,
-          syncedAt: new Date(),
-          // CRITICAL: ALWAYS update lastShopifyUpdate with current webhook data
-          // This is our reference point for detecting future changes
-          lastShopifyUpdate: {
+        syncedAt: new Date()
+      };
+      
+      // CRITICAL FIX: Only update lastShopifyUpdate when:
+      // 1. Content actually changed (SEO was cleared) - prevents duplicate webhook race conditions
+      // 2. Product is NEW (not in MongoDB yet) - ensures first change can be detected
+      // Without this, webhook race conditions cause missed change detection
+      const isNewProduct = !existingProduct;
+      if (contentChanged || isNewProduct) {
+        updateData.lastShopifyUpdate = {
             title: payload.title,
             description: payload.body_html,
             updatedAt: new Date()
+        };
           }
-        },
+      
+      const updatedProduct = await Product.findOneAndUpdate(
+        { shop, productId: numericProductId },
+        updateData,
         { upsert: true, new: true }
       );
+      
+      // Log change for weekly digest (if significant change or new product)
+      // Note: isNewProduct is already defined above
+      const changedFields = [];
+      
+      if (titleChanged) changedFields.push('title');
+      if (descriptionChanged) changedFields.push('description');
+      
+      // Only log if new product OR significant fields changed
+      if (isNewProduct || changedFields.length > 0) {
+        const hasOptimization = updatedProduct.seoStatus === 'optimized' || 
+                               updatedProduct.seoStatus === 'ai_enhanced';
+        
+        await ProductChangeLog.create({
+          shop,
+          productId: String(numericProductId),
+          productTitle: payload.title,
+          productHandle: payload.handle,
+          changeType: isNewProduct ? 'created' : 'updated',
+          changedFields: isNewProduct ? ['all'] : changedFields,
+          hasOptimization,
+          needsAttention: !hasOptimization,
+          notified: false
+        });
+      }
       
       // 6. Invalidate Redis cache for this shop's products
       // This ensures frontend immediately sees the updated product status

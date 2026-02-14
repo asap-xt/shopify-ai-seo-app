@@ -20,6 +20,8 @@ import {
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import { PLAN_HIERARCHY_LOWERCASE, getPlanIndex } from '../hooks/usePlanHierarchy.js';
 import { devLog } from '../utils/devLog.js';
+import AIEOScoreCard from '../components/AIEOScoreCard.jsx';
+import TokenPurchaseModal from '../components/TokenPurchaseModal.jsx';
 
 // Query string helper
 const qs = (k, d = '') => {
@@ -42,6 +44,11 @@ export default function Dashboard({ shop: shopProp }) {
   const [stats, setStats] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [tokens, setTokens] = useState(null);
+  const [plansData, setPlansData] = useState([]);
+  
+  // Test results for AIEO Score (loaded from localStorage, same as AI Testing page)
+  const [testResults, setTestResults] = useState({});
+  const [aiTestResults, setAiTestResults] = useState({});
   
   // Sync state
   const [syncStatus, setSyncStatus] = useState(null);
@@ -90,12 +97,68 @@ export default function Dashboard({ shop: shopProp }) {
     }
   });
   
+  // Review banner state (show after 6+ days of activation)
+  const [dismissedReviewBanner, setDismissedReviewBanner] = useState(() => {
+    try {
+      return localStorage.getItem(`dismissedReviewBanner_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  const [clickedReviewRate, setClickedReviewRate] = useState(() => {
+    try {
+      return localStorage.getItem(`clickedReviewRate_${shop}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // AIEO Score for review banner trigger
+  const [aieoScore, setAieoScore] = useState(0);
+  
+  // Token purchase modal state
+  const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
+  
   // Debounce timer for dashboard data loading
   const loadDataTimeoutRef = useRef(null);
+
+  // Load saved test results and stats from localStorage (same as AI Testing page)
+  const loadSavedTestResults = () => {
+    try {
+      const savedData = localStorage.getItem(`ai-test-results-${shop}`);
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.results) {
+          setTestResults(parsed.results);
+        }
+      }
+      
+      // Check for AI test results (if saved separately)
+      const savedAiData = localStorage.getItem(`ai-validation-results-${shop}`);
+      if (savedAiData) {
+        const parsed = JSON.parse(savedAiData);
+        if (parsed.results) {
+          setAiTestResults(parsed.results);
+        }
+      }
+      
+      // Load stats from localStorage (synced from Dashboard Sync)
+      const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+      if (savedStats) {
+        const parsed = JSON.parse(savedStats);
+        // Use saved stats if they exist (will be overridden by API call, but ensures consistency)
+        // This is mainly for AI Testing page to use
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error loading saved test results:', err);
+    }
+  };
 
   useEffect(() => {
     loadDashboardData(true); // Force immediate load on mount
     loadSyncStatus();
+    loadSavedTestResults(); // Load test results from localStorage
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -169,14 +232,32 @@ export default function Dashboard({ shop: shopProp }) {
         try {
           setLoading(true);
           // makeSessionFetch връща директно JSON, не Response
-          const [statsData, tokensData] = await Promise.all([
+          const [statsData, tokensData, billingData] = await Promise.all([
             api(`/api/dashboard/stats?shop=${shop}`),
-            api(`/api/billing/tokens/balance?shop=${shop}`)
+            api(`/api/billing/tokens/balance?shop=${shop}`),
+            api(`/api/billing/info?shop=${shop}`)
           ]);
 
           if (statsData) {
             setStats(statsData);
             setSubscription(statsData.subscription);
+            
+            // Save stats to localStorage for AI Testing page to use
+            try {
+              const statsToSave = {
+                totalProducts: statsData?.products?.total || 0,
+                optimizedProducts: statsData?.products?.optimized || 0,
+                totalCollections: statsData?.collections?.total || 0,
+                optimizedCollections: statsData?.collections?.optimized || 0,
+                timestamp: new Date().toISOString()
+              };
+              localStorage.setItem(`dashboard-stats-${shop}`, JSON.stringify(statsToSave));
+            } catch (err) {
+              console.error('[Dashboard] Error saving stats to localStorage:', err);
+            }
+          }
+          if (billingData?.plans) {
+            setPlansData(billingData.plans);
           }
           if (tokensData) {
             setTokens(tokensData);
@@ -286,39 +367,29 @@ export default function Dashboard({ shop: shopProp }) {
   const hasAdvancedSchema = planIndex >= 6; // Enterprise (index 6)
   const hasAiSitemap = planIndex >= 5; // Growth Extra+ (index 5)
 
-  // Plan price fallback mapping (if backend doesn't provide price)
-  const planPriceFallback = useMemo(() => ({
-    starter: 9.99,
-    professional: 15.99,
-    professional_plus: 19.99,
-    'professional plus': 19.99,
-    growth: 29.99,
-    growth_plus: 35.99,
-    'growth plus': 35.99,
-    growth_extra: 79.99,
-    'growth extra': 79.99,
-    enterprise: 139.99
-  }), []);
+  // Get plan price from dynamic data or use backend values
+  const getPlanPrice = (planKey) => {
+    const normalizedKey = planKey?.toLowerCase().replace(/_/g, ' ');
+    const plan = plansData.find(p => p.key === normalizedKey || p.key === planKey);
+    return plan?.price || 0;
+  };
+  
   const planPriceValue = subscription?.price && subscription.price > 0
     ? subscription.price
-    : (subscription?.plan ? planPriceFallback[subscription.plan] : undefined);
+    : (subscription?.plan ? getPlanPrice(subscription.plan) : undefined);
 
-  // Plan recommendation logic
-  // NOTE: These limits should match backend/plans.js
+  // Plan recommendation logic - uses dynamic data from backend
   const getPlanLimits = (planKey) => {
-    switch (planKey) {
-      case 'starter': return { products: 70, languages: 1 };
-      case 'professional': return { products: 70, languages: 1 };
-      case 'professional_plus':
-      case 'professional plus': return { products: 200, languages: 2 };
-      case 'growth': return { products: 450, languages: 3 };
-      case 'growth_plus':
-      case 'growth plus': return { products: 450, languages: 3 };
-      case 'growth_extra':
-      case 'growth extra': return { products: 750, languages: 6 };
-      case 'enterprise': return { products: 1200, languages: 10 };
-      default: return { products: 0, languages: 0 };
+    const normalizedKey = planKey?.toLowerCase().replace(/_/g, ' ');
+    const plan = plansData.find(p => p.key === normalizedKey || p.key === planKey);
+    if (plan) {
+      return { 
+        products: plan.productLimit || 0, 
+        languages: plan.languageLimit || 1 
+      };
     }
+    // Fallback if plans not loaded yet
+    return { products: 0, languages: 0 };
   };
 
   const getPlanOrder = (planKey) => {
@@ -338,34 +409,41 @@ export default function Dashboard({ shop: shopProp }) {
   };
 
   const recommendPlan = () => {
-    if (!stats) return null;
+    if (!stats || plansData.length === 0) return null;
     
     const totalProducts = stats.products?.total || 0;
     const totalLanguages = stats.languages?.length || 1;
     const currentPlan = subscription?.plan || 'starter';
     const currentPlanOrder = getPlanOrder(currentPlan);
 
-    // Find the most suitable plan based on store data
-    const plans = PLAN_HIERARCHY_LOWERCASE;
+    // Find the most suitable plan based on store data using dynamic plan data
+    // Skip hidden plans (growth is hidden, use growth plus instead)
+    const hiddenPlans = ['growth'];
     let recommendedPlan = null;
+    let recommendedPlanData = null;
 
-    for (const plan of plans) {
-      const limits = getPlanLimits(plan);
-      if (totalProducts <= limits.products && totalLanguages <= limits.languages) {
-        recommendedPlan = plan;
+    for (const planData of plansData) {
+      // Skip hidden plans
+      if (hiddenPlans.includes(planData.key)) continue;
+      
+      if (totalProducts <= planData.productLimit && totalLanguages <= planData.languageLimit) {
+        recommendedPlan = planData.key;
+        recommendedPlanData = planData;
         break;
       }
     }
 
     // If no plan fits, recommend enterprise
-    if (!recommendedPlan) recommendedPlan = 'enterprise';
+    if (!recommendedPlan) {
+      recommendedPlanData = plansData.find(p => p.key === 'enterprise');
+      recommendedPlan = 'enterprise';
+    }
 
     // Only show recommendation if it's higher than current plan
     const recommendedPlanOrder = getPlanOrder(recommendedPlan);
     if (recommendedPlanOrder <= currentPlanOrder) return null;
 
     const currentLimits = getPlanLimits(currentPlan);
-    const recommendedLimits = getPlanLimits(recommendedPlan);
     
     let reason = '';
     if (totalProducts > currentLimits.products) {
@@ -376,15 +454,15 @@ export default function Dashboard({ shop: shopProp }) {
 
     return {
       plan: recommendedPlan,
-      planName: recommendedPlan.replace('_', ' ').toUpperCase(),
-      price: planPriceFallback[recommendedPlan],
-      productLimit: recommendedLimits.products,
-      languageLimit: recommendedLimits.languages,
+      planName: recommendedPlanData?.name || recommendedPlan.replace('_', ' ').toUpperCase(),
+      price: recommendedPlanData?.price || getPlanPrice(recommendedPlan),
+      productLimit: recommendedPlanData?.productLimit || 0,
+      languageLimit: recommendedPlanData?.languageLimit || 1,
       reason
     };
   };
 
-  const recommendation = useMemo(() => recommendPlan(), [stats, subscription]);
+  const recommendation = useMemo(() => recommendPlan(), [stats, subscription, plansData]);
 
   // Token recommendation for Professional/Growth/Plus plans (pay-per-use)
   const shouldRecommendTokens = useMemo(() => {
@@ -398,6 +476,16 @@ export default function Dashboard({ shop: shopProp }) {
     if (balance >= 1000) return false;
     return true;
   }, [subscription, tokens]);
+  
+  // Review banner - show when AIEO Score > 50 (user sees real value)
+  // Score > 50 requires AI enhancement = user bought tokens = serious user
+  const shouldShowReviewBanner = useMemo(() => {
+    // Must not have dismissed or clicked rate
+    if (dismissedReviewBanner || clickedReviewRate) return false;
+    
+    // Show when AIEO Score is above 50 (means user has done AI enhancement)
+    return aieoScore > 50;
+  }, [dismissedReviewBanner, clickedReviewRate, aieoScore]);
 
   // Handle dismissing the upgrade banner
   const handleDismissUpgradeBanner = () => {
@@ -416,6 +504,28 @@ export default function Dashboard({ shop: shopProp }) {
       setDismissedTokenBanner(true);
     } catch (error) {
       console.error('[Dashboard] Error saving dismissed token banner state:', error);
+    }
+  };
+  
+  // Handle dismissing the review banner
+  const handleDismissReviewBanner = () => {
+    try {
+      localStorage.setItem(`dismissedReviewBanner_${shop}`, 'true');
+      setDismissedReviewBanner(true);
+    } catch (error) {
+      console.error('[Dashboard] Error saving dismissed review banner state:', error);
+    }
+  };
+  
+  // Handle clicking "Rate Us" in review banner
+  const handleClickReviewRate = () => {
+    try {
+      localStorage.setItem(`clickedReviewRate_${shop}`, 'true');
+      setClickedReviewRate(true);
+      // Open App Store review modal in new tab
+      window.open('https://apps.shopify.com/indexaize-unlock-ai-search#modal-show=WriteReviewModal', '_blank');
+    } catch (error) {
+      console.error('[Dashboard] Error saving clicked review rate state:', error);
     }
   };
 
@@ -520,7 +630,7 @@ export default function Dashboard({ shop: shopProp }) {
                             height: '100%',
                             border: 'none'
                           }}
-                          src="https://www.youtube-nocookie.com/embed/bNfDsyDQEkc?origin=https://admin.shopify.com"
+                          src="https://www.youtube-nocookie.com/embed/v253h9ucKNk?origin=https://admin.shopify.com"
                           title="Video Tutorial"
                           referrerPolicy="no-referrer-when-downgrade"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -542,63 +652,53 @@ export default function Dashboard({ shop: shopProp }) {
                         This is required before you can start optimizing. Enable "Auto-sync on load" to keep your data fresh.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">2. Plan Selection & Token Management</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">2. Token Management</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Plan selection happens during app installation. Visit "Plans & Billing" to upgrade your plan 
-                        or purchase additional tokens for AI-enhanced features (Professional/Growth plans).
+                        AI-enhanced features (AI SEO, Advanced Schema, AI Sitemap) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Go to "Search Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
-                        existing titles, descriptions, and metadata for better AI consumption. This is essential - without basic optimization, 
-                        AI-enhanced features cannot be applied.
+                        Go to "Store Optimization for AI" → Products tab. First, create <strong>basic optimization</strong> by structuring 
+                        existing titles, descriptions, and metadata for better AI consumption. Data is saved to Shopify metafields (seo_ai namespace). This is essential - without basic optimization, AI-enhanced features cannot be applied.
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         Also optimize your <strong>Collections</strong> to help AI bots understand your product categories 
                         and relationships.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">4. Configure Store Metadata</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">4. Generate Sitemaps</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Go to "Store Metadata" to configure store description, keywords, business information, 
-                        and contact details (Professional+ plans). This helps AI bots understand your brand and business context.
+                        Navigate to "Store Optimization for AI" → Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
+                        AI-Optimized Sitemap with structured data for AI search engines is available in the same tab (Growth Extra+ plans or with tokens).
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">5. Generate Sitemaps</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">5. Configure Store Metadata</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Navigate to Sitemap tab to generate your <strong>standard sitemap</strong> for search engines. 
-                        For advanced optimization, go to Settings → Sitemap to configure <strong>AI-enhanced sitemap</strong> 
-                         with structured data that helps AI search engines discover and index your products (Growth Extra+ plans).
+                        Go to "Store Optimization for AI" → Store Metadata tab to configure store description, keywords, business information, 
+                        and contact details (Professional+ plans). Some data is automatically synced from Shopify but can be manually edited. This helps AI bots understand your brand and business context.
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">6. AI-Enhanced Features (Optional)</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">6. Schema Data & Advanced Features</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Use AI-enhanced add-ons to <strong>supplement and strengthen</strong> your data discovery by AI bots, 
-                        increasing your store's chances of being well-represented. These include:
+                        Go to "Store Optimization for AI" → Schema Data tab:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+)
+                        • Copy basic schema Liquid code to your theme (reads from metafields)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Discovery Endpoints:</strong> Advanced AI simulation features (Growth Extra+)
-                      </Text>
-                      <Text variant="bodyMd" tone="subdued">
-                        • <strong>Advanced Schema Data:</strong> Rich structured data markup (Enterprise only)
-                      </Text>
-                      <Text variant="bodyMd" tone="subdued">
-                        These features require additional tokens unless you're on Growth Extra or Enterprise plans.
+                        • <strong>Advanced Schema Data:</strong> Generate rich AI-enhanced structured data markup (Plus plans: Professional Plus, Growth Plus, Growth Extra, Enterprise)
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">7. Configure AI Discovery Settings</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Visit "Settings" to configure AI Discovery features:
+                        Visit "AI Discovery Features" to configure:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • <strong>AI Bot Access Control:</strong> Select which AI bots (OpenAI, Claude, Google, etc.) can access your store's structured data
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page, AI-Enhanced Sitemap, and Advanced Schema Data
+                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • Click <strong>"Save Settings"</strong> to save your configuration
@@ -609,7 +709,7 @@ export default function Dashboard({ shop: shopProp }) {
                         <strong>Critical:</strong> After saving Settings, you must manually install robots.txt in your theme for AI bots to access your endpoints:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • In Settings, scroll to "robots.txt Configuration" section and click <strong>"View & Copy robots.txt Code"</strong>
+                        • In AI Discovery Features, scroll to "robots.txt Configuration" section and click <strong>"View & Copy robots.txt Code"</strong>
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • Copy the generated robots.txt content
@@ -627,24 +727,23 @@ export default function Dashboard({ shop: shopProp }) {
                         <strong>Without this step, AI bots cannot discover your store's endpoints!</strong>
                       </Text>
                       
-                      <Text variant="bodyMd" fontWeight="semibold">9. Optional: Advanced Features</Text>
+                      <Text variant="bodyMd" fontWeight="semibold">9. AI Testing</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Additional features available in Settings:
+                        Go to "AI Testing" to validate your optimization:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>Advanced Schema Data:</strong> Generate rich structured data markup for your products (Professional Plus/Enterprise plans)
+                        • Run Basic Tests to check endpoint availability
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Testing:</strong> Test how AI bots respond to your products (Professional+ plans)
+                        • Run AI-Powered Validation for detailed analysis (requires tokens)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        These features may require additional tokens depending on your plan.
+                        • Check your GEO Score breakdown
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">10. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Return to Dashboard regularly to track optimization progress, monitor token usage, 
-                        and review plan recommendations.
+                        Return to Dashboard regularly to track optimization progress and GEO Score. Re-optimize when adding new products or editing existing ones to keep AI-structured data current.
                       </Text>
                     </BlockStack>
                   </BlockStack>
@@ -813,9 +912,7 @@ export default function Dashboard({ shop: shopProp }) {
             <BlockStack gap="200">
               <Text>{recommendation.reason}</Text>
               <Text variant="bodySm" tone="subdued">
-                The {recommendation.planName} plan supports up to {recommendation.productLimit} products 
-                in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} 
-                for ${recommendation.price}/month.
+                The {recommendation.planName} plan supports up to {recommendation.productLimit} products in {recommendation.languageLimit} language{recommendation.languageLimit > 1 ? 's' : ''} for ${recommendation.price}/month.
               </Text>
             </BlockStack>
           </Banner>
@@ -830,7 +927,7 @@ export default function Dashboard({ shop: shopProp }) {
             tone="info"
             action={{
               content: 'Buy Tokens',
-              onAction: () => navigate('/billing')
+              onAction: () => setShowTokenPurchaseModal(true)
             }}
             onDismiss={handleDismissTokenBanner}
           >
@@ -840,8 +937,27 @@ export default function Dashboard({ shop: shopProp }) {
           </Banner>
         </Layout.Section>
       )}
+      
+      {/* App Store Review Request - shows when AIEO Score > 50 */}
+      {shouldShowReviewBanner && (
+        <Layout.Section>
+          <Banner
+            title="Help shape the future of AI Search"
+            tone="success"
+            action={{
+              content: 'Rate indexAIze',
+              onAction: handleClickReviewRate
+            }}
+            onDismiss={handleDismissReviewBanner}
+          >
+            <Text>
+              You've successfully optimized your store for AI engines. Your feedback helps us build better tools for the Shopify community.
+            </Text>
+          </Banner>
+        </Layout.Section>
+      )}
 
-      {/* Two columns: Left = Products & Collections + Current Plan; Right = Languages & Markets + Last Optimization + Token Balance */}
+      {/* Two columns: Left = Products & Collections; Right = Languages & Markets + Last Optimization */}
       <Layout.Section>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
           {/* LEFT COLUMN */}
@@ -902,22 +1018,6 @@ export default function Dashboard({ shop: shopProp }) {
                 </InlineStack>
               </BlockStack>
             </Card>
-
-            {/* Current Plan */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <div>
-                    <Text variant="headingMd">Current Plan</Text>
-                    <Box paddingBlockStart="100">
-                      <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
-                    </Box>
-                  </div>
-                  <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
-                </InlineStack>
-                <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
-              </BlockStack>
-            </Card>
           </div>
 
           {/* RIGHT COLUMN */}
@@ -974,22 +1074,112 @@ export default function Dashboard({ shop: shopProp }) {
                 <Button onClick={() => navigate('/ai-seo/products')}>Optimize Now</Button>
               </BlockStack>
             </Card>
-
-            {/* Token Balance */}
-            <Card style={{ height: 220, minHeight: 220 }}>
-              <BlockStack gap="300">
-                <Text variant="headingMd">Token Balance</Text>
-                <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
-                {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
-                  <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
-                )}
-                <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
-              </BlockStack>
-            </Card>
           </div>
         </div>
       </Layout.Section>
 
+      {/* AIEO Score Card - Full width section (2 columns) */}
+      <Layout.Section>
+        <AIEOScoreCard 
+          testResults={testResults}
+          aiTestResults={aiTestResults}
+          stats={(() => {
+            // Use stats from state (synced via localStorage)
+            // If stats are not loaded yet, try to get from localStorage
+            if (stats) {
+              return {
+                totalProducts: stats?.products?.total || 0,
+                optimizedProducts: stats?.products?.optimized || 0,
+                totalCollections: stats?.collections?.total || 0,
+                optimizedCollections: stats?.collections?.optimized || 0
+              };
+            }
+            
+            // Fallback to localStorage if stats not loaded yet
+            try {
+              const savedStats = localStorage.getItem(`dashboard-stats-${shop}`);
+              if (savedStats) {
+                const parsed = JSON.parse(savedStats);
+                return {
+                  totalProducts: parsed.totalProducts || 0,
+                  optimizedProducts: parsed.optimizedProducts || 0,
+                  totalCollections: parsed.totalCollections || 0,
+                  optimizedCollections: parsed.optimizedCollections || 0
+                };
+              }
+            } catch (err) {
+              console.error('[Dashboard] Error loading stats from localStorage:', err);
+            }
+            
+            return {
+              totalProducts: 0,
+              optimizedProducts: 0,
+              totalCollections: 0,
+              optimizedCollections: 0
+            };
+          })()}
+          shop={shop}
+          api={api}
+          onTestsComplete={(results) => {
+            setTestResults(results);
+            // Reload dashboard data to get fresh stats
+            loadDashboardData(true);
+          }}
+          onScoreCalculated={(score) => setAieoScore(score)}
+        />
+      </Layout.Section>
+
+      {/* Current Plan & Token Balance - Two columns side by side */}
+      <Layout.Section>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {/* Current Plan */}
+          <Card style={{ height: 220, minHeight: 220 }}>
+            <BlockStack gap="300">
+              <InlineStack align="space-between" blockAlign="center">
+                <div>
+                  <Text variant="headingMd">Current Plan</Text>
+                  <Box paddingBlockStart="100">
+                    <Text variant="bodySm" tone="subdued">{planPriceValue ? `$${planPriceValue.toFixed(2)}` : '—'}/month</Text>
+                  </Box>
+                </div>
+                <Badge tone="info" size="large">{subscription?.plan?.replace('_', ' ').toUpperCase() || 'N/A'}</Badge>
+              </InlineStack>
+              <Button onClick={() => navigate('/billing')}>View Plans & Billing</Button>
+            </BlockStack>
+          </Card>
+
+          {/* Token Balance */}
+          <Card style={{ height: 220, minHeight: 220 }}>
+            <BlockStack gap="300">
+              <Text variant="headingMd">Token Balance</Text>
+              <Text variant="bodyLg" fontWeight="semibold">{tokens?.balance?.toLocaleString() || 0} tokens</Text>
+              {(subscription?.plan === 'growth_extra' || subscription?.plan === 'enterprise') && (
+                <Text variant="bodySm" tone="subdued">{subscription?.plan === 'growth_extra' ? '100M' : '300M'} included monthly</Text>
+              )}
+              <Button onClick={() => navigate('/billing')}>Manage Tokens</Button>
+            </BlockStack>
+          </Card>
+        </div>
+      </Layout.Section>
+
+      {/* Token Purchase Modal */}
+      <TokenPurchaseModal
+        open={showTokenPurchaseModal}
+        onClose={() => setShowTokenPurchaseModal(false)}
+        shop={shop}
+        returnTo="/dashboard"
+        onPurchaseComplete={() => {
+          setShowTokenPurchaseModal(false);
+          loadDashboardData(true); // Refresh token balance
+        }}
+      />
+
+      {/* App Version Footer */}
+      <Layout.Section>
+        <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+          <Text variant="bodySm" tone="subdued">indexAIze v1.2.0</Text>
+        </div>
+      </Layout.Section>
     </Layout>
   );
 }

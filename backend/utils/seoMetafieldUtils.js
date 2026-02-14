@@ -125,6 +125,8 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
         $set: {
           'seoStatus.optimized': false,
           'seoStatus.aiEnhanced': false, // CRITICAL: Reset AI badge when product content changes
+          'seoStatus.hasAdvancedSchema': false, // CRITICAL: Reset schema flag - needs regeneration
+          'seoStatus.advancedSchemaGeneratedAt': null,
           'seoStatus.languages': [],
           'seoStatus.lastCheckedAt': new Date()
         }
@@ -135,6 +137,107 @@ export async function clearSeoStatusInMongoDB(shop, productId) {
     return !!result;
   } catch (error) {
     return false;
+  }
+}
+
+/**
+ * Delete all advanced schema metafields for a product (all languages)
+ * Called when product title or description changes in Shopify
+ * Namespace: advanced_schema, Keys: schemas_en, schemas_bg, etc.
+ * 
+ * @param {Object} req - Express request object (for shopGraphQL)
+ * @param {string} shop - Shop domain
+ * @param {string} productGid - Product GID (e.g., "gid://shopify/Product/123")
+ * @returns {Promise<Object>} - { success: boolean, deletedCount: number, errors: array }
+ */
+export async function deleteAdvancedSchemaMetafieldsForProduct(req, shop, productGid) {
+  try {
+    // Resolve access token
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      throw new Error(`No access token found for shop: ${shop}`);
+    }
+    
+    // 1. Fetch all metafields for the product in advanced_schema namespace
+    const fetchQuery = `
+      query GetProductSchemaMetafields($id: ID!) {
+        product(id: $id) {
+          id
+          metafields(namespace: "advanced_schema", first: 50) {
+            edges {
+              node {
+                id
+                key
+                namespace
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const fetchResult = await makeShopifyGraphQLRequest(shop, accessToken, fetchQuery, { id: productGid });
+    
+    if (!fetchResult?.product?.metafields?.edges) {
+      return { success: true, deletedCount: 0, errors: [] };
+    }
+    
+    const metafields = fetchResult.product.metafields.edges
+      .map(edge => ({
+        ownerId: productGid,
+        namespace: edge.node.namespace,
+        key: edge.node.key
+      }))
+      .filter(mf => mf.key); // Remove any nulls
+    
+    if (metafields.length === 0) {
+      return { success: true, deletedCount: 0, errors: [] };
+    }
+    
+    // 2. Delete all metafields using ownerId, namespace, key
+    const deleteMutation = `
+      mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+        metafieldsDelete(metafields: $metafields) {
+          deletedMetafields {
+            key
+            namespace
+            ownerId
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    
+    const deleteResult = await makeShopifyGraphQLRequest(shop, accessToken, deleteMutation, {
+      metafields: metafields
+    });
+    
+    const errors = deleteResult?.metafieldsDelete?.userErrors || [];
+    const deletedMetafields = deleteResult?.metafieldsDelete?.deletedMetafields || [];
+    
+    if (errors.length > 0) {
+      return {
+        success: false,
+        deletedCount: deletedMetafields.length,
+        errors: errors.map(e => e.message)
+      };
+    }
+    
+    return {
+      success: true,
+      deletedCount: deletedMetafields.length,
+      errors: []
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      deletedCount: 0,
+      errors: [error.message]
+    };
   }
 }
 

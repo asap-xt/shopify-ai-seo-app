@@ -1,5 +1,13 @@
 {
-  "nav": { "dashboard": "Panel", "seo": "SEO IA", "billing": "Facturación", "settings": "Ajustes" },
+  "nav": { 
+    "dashboard": "Panel", 
+    "storeOptimization": "Optimización de Tienda para IA",
+    "aiDiscovery": "Funciones de Descubrimiento IA",
+    "billing": "Planes y Facturación",
+    "aiTesting": "Pruebas de IA",
+    "cleanUninstall": "Limpiar y Desinstalar",
+    "contactSupport": "Contactar Soporte"
+  },
   "dashboard": {
     "plan": "Plan actual",
     "shop": "Tienda",
@@ -10,5 +18,5 @@
   },
   "seo": { "title": "Generar SEO", "productId": "ID de producto", "provider": "Proveedor IA", "generate": "Generar", "result": "Resultado" },
   "billing": { "title": "Planes y facturación", "choose": "Elige tu plan:", "activate": "Activar" },
-  "settings": { "title": "Ajustes", "languageInfo": "Usa el menú superior derecho para cambiar el idioma.", "notes": "Pronto añadiremos más opciones." }
+  "settings": { "title": "Funciones de Descubrimiento IA", "languageInfo": "Usa el menú superior derecho para cambiar el idioma.", "notes": "Pronto añadiremos más opciones." }
 }

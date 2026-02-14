@@ -10,10 +10,10 @@ const router = express.Router();
 // Apply authentication to all routes
 router.use(requireAuth);
 
-// GraphQL query for fetching collections
+// GraphQL query for fetching collections with sorting
 const COLLECTIONS_QUERY = `
-  query GetCollections($first: Int!, $after: String) {
-    collections(first: $first, after: $after) {
+  query GetCollections($first: Int!, $after: String, $sortKey: CollectionSortKeys, $reverse: Boolean) {
+    collections(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse) {
       edges {
         node {
           id
@@ -45,15 +45,30 @@ const COLLECTIONS_QUERY = `
   }
 `;
 
-// Fetch all collections using pagination
-async function fetchAllCollections(req) {
+// Convert frontend sortBy to Shopify CollectionSortKeys
+function convertCollectionSortKey(sortBy) {
+  const sortKeyMap = {
+    'title': 'TITLE',
+    'updatedAt': 'UPDATED_AT',
+    'productsCount': 'PRODUCT_COUNT',
+    'id': 'ID'
+  };
+  return sortKeyMap[sortBy] || 'UPDATED_AT';
+}
+
+// Fetch all collections using pagination with sorting
+async function fetchAllCollections(req, sortKey = 'UPDATED_AT', reverse = true) {
   const collections = [];
   let hasNextPage = true;
   let cursor = null;
   
   while (hasNextPage) {
     try {
-      const variables = { first: 50 };
+      const variables = { 
+        first: 250, // Fetch more at once for efficiency
+        sortKey,
+        reverse
+      };
       if (cursor) {
         variables.after = cursor;
       }
@@ -118,13 +133,21 @@ function formatCollection(collection, shop, shopLanguages = ['en']) {
 router.get('/list-graphql', async (req, res) => {
   try {
     const shop = req.auth.shop;
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 250);
+    const sortBy = req.query.sortBy || 'updatedAt';
+    const sortOrder = req.query.sortOrder || 'desc';
     
-    // Generate unique cache key
-    const cacheKey = `collections:list:all`;
+    // Convert to Shopify GraphQL sort parameters
+    const sortKey = convertCollectionSortKey(sortBy);
+    const reverse = sortOrder === 'desc';
+    
+    // Generate unique cache key including sort params
+    const cacheKey = `collections:list:all:${sortBy}:${sortOrder}`;
     
     // Try to get from cache first
     const cachedResult = await withShopCache(shop, cacheKey, CACHE_TTL.SHORT, async () => {
-      const collections = await fetchAllCollections(req);
+      const collections = await fetchAllCollections(req, sortKey, reverse);
       
       // Get shop languages dynamically
       const Q_SHOP_LOCALES = `
@@ -156,17 +179,39 @@ router.get('/list-graphql', async (req, res) => {
       return {
         success: true,
         collections: formattedCollections,
-        count: formattedCollections.length,
+        totalCount: formattedCollections.length,
         shop: shop
       };
     });
     
-    // NOTE: AI-enhanced flag is NOT added here - frontend uses /collections/list-graphql from seoController.js
-    // This endpoint is kept for future use but currently not used by frontend
+    // Apply client-side sorting for productsCount (not supported by Shopify GraphQL directly)
+    let sortedCollections = [...cachedResult.collections];
+    if (sortBy === 'productsCount') {
+      sortedCollections.sort((a, b) => {
+        const diff = (a.productsCount || 0) - (b.productsCount || 0);
+        return reverse ? -diff : diff;
+      });
+    }
     
-    // Return cached or fresh data
+    // Slice for pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const pageCollections = sortedCollections.slice(startIndex, endIndex);
+    const totalCount = cachedResult.totalCount;
+    
+    // Return paginated data
     return res.json({
-      ...cachedResult,
+      success: true,
+      collections: pageCollections,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        hasNext: endIndex < totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      },
+      count: pageCollections.length,
+      shop: shop,
       auth: {
         tokenType: req.auth.tokenType,
         source: req.auth.source

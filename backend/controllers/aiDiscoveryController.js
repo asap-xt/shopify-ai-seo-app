@@ -6,6 +6,7 @@ import { shopGraphQL as originalShopGraphQL } from './seoController.js';
 import { validateRequest } from '../middleware/shopifyAuth.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import { buildStoreContext } from '../utils/storeContextBuilder.js';
+import { estimateTokensWithMargin } from '../billing/tokenConfig.js';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -89,18 +90,43 @@ router.get('/ai-discovery/settings', validateRequest(), async (req, res) => {
     const { default: Sitemap } = await import('../db/Sitemap.js');
     const existingSitemap = await Sitemap.findOne({ shop }).select('isAiEnhanced updatedAt').lean();
     const hasAiSitemap = existingSitemap && existingSitemap.isAiEnhanced === true;
+    
+    // Check if Advanced Schema Data exists in database
+    const { default: AdvancedSchema } = await import('../db/AdvancedSchema.js');
+    const existingSchema = await AdvancedSchema.findOne({ shop }).select('schemas generatedAt').lean();
+    const hasAdvancedSchema = existingSchema && existingSchema.schemas && existingSchema.schemas.length > 0;
+    
+    // Get total products count for token estimation (Advanced Schema uses ALL products)
+    const { default: Product } = await import('../db/Product.js');
+    const totalProductCount = await Product.countDocuments({ shop });
 
+    const mergedFeatures = isFreshShop ? defaultFeatures : savedSettings.features;
+    
+    // If AI Sitemap already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAiSitemap && mergedFeatures?.aiSitemap) {
+      mergedFeatures.aiSitemap = false;
+    }
+    
+    // If Advanced Schema already exists, uncheck the checkbox to prevent accidental re-generation
+    if (hasAdvancedSchema && mergedFeatures?.schemaData) {
+      mergedFeatures.schemaData = false;
+    }
+    
     const mergedSettings = {
       plan: rawPlan,
       availableBots: defaultSettings.availableBots,
       bots: savedSettings.bots || defaultSettings.bots,
-      features: isFreshShop ? defaultFeatures : savedSettings.features,
+      features: mergedFeatures,
       richAttributes: savedSettings.richAttributes || defaultSettings.richAttributes,
       advancedSchemaEnabled: savedSettings.advancedSchemaEnabled || false,
       updatedAt: savedSettings.updatedAt || new Date().toISOString(),
-      hasAiSitemap: hasAiSitemap // NEW: indicate if AI sitemap exists
+      hasAiSitemap: hasAiSitemap, // NEW: indicate if AI sitemap exists
+      hasAdvancedSchema: hasAdvancedSchema, // NEW: indicate if Advanced Schema exists
+      productCount: totalProductCount // For token estimation in modals
     };
 
+    // Prevent caching so productCount is always fresh
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(mergedSettings);
   } catch (error) {
     console.error('Failed to get AI Discovery settings:', error);
@@ -119,6 +145,75 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
     if (!bots || !features) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    
+    // === TRIAL & TOKEN CHECK FOR AI SITEMAP ===
+    // Check if trying to enable AI Sitemap
+    if (features?.aiSitemap === true) {
+      const Subscription = (await import('../db/Subscription.js')).default;
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
+      const { isBlockedInTrial } = await import('../billing/tokenConfig.js');
+      
+      const subscription = await Subscription.findOne({ shop });
+      const planKey = (subscription?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+      
+      // Check trial status
+      const now = new Date();
+      const inTrial = subscription?.trialEndsAt && now < new Date(subscription.trialEndsAt);
+      const isActivated = !!subscription?.activatedAt;
+      
+      // Check tokens - CRITICAL: Always fetch FRESH data from DB (no cache)
+      // Use getOrCreate but ensure we're reading fresh data from DB
+      let tokenBalance = await TokenBalance.getOrCreate(shop);
+      
+      // CRITICAL FIX: After getOrCreate, reload from DB to get latest data
+      // This ensures we see tokens that were just purchased in a parallel request
+      tokenBalance = await TokenBalance.findOne({ shop });
+      
+      if (!tokenBalance) {
+        // Should never happen after getOrCreate, but handle gracefully
+        tokenBalance = await TokenBalance.create({ shop, balance: 0, totalPurchased: 0, totalUsed: 0 });
+      }
+      
+      const hasPurchasedTokens = tokenBalance.totalPurchased > 0;
+      const hasTokenBalance = tokenBalance.balance > 0;
+      
+      // Check if plan has included tokens
+      const includedTokensPlans = ['growth_extra', 'enterprise'];
+      const hasIncludedTokens = includedTokensPlans.includes(planKey);
+      
+      // PRIORITY 1: If included tokens plan (Growth Extra/Enterprise) in trial without activation
+      // → Show "Activate Plan or Buy Tokens" modal (TrialActivationModal)
+      // This check MUST come BEFORE insufficient tokens check to show the correct modal!
+      if (hasIncludedTokens && inTrial && !isActivated && !hasPurchasedTokens && !hasTokenBalance && isBlockedInTrial('ai-sitemap-optimized')) {
+        return res.status(402).json({
+          error: 'AI-Optimized Sitemap is locked during trial period',
+          trialRestriction: true,
+          requiresActivation: true,
+          trialEndsAt: subscription.trialEndsAt,
+          currentPlan: subscription.plan,
+          feature: 'ai-sitemap-optimized',
+          message: 'Activate your plan to unlock AI-Optimized Sitemap with included tokens'
+        });
+      }
+      
+      // PRIORITY 2: If NO tokens at all (no purchased, no balance) → show purchase modal
+      // This applies to plans WITHOUT included tokens (Starter, Professional, Growth, Plus plans)
+      // OR to users who already have purchased tokens but used them all
+      if (!hasPurchasedTokens && !hasTokenBalance) {
+        // Use base estimate (actual will be calculated at generation time based on product count)
+        const baseEstimate = estimateTokensWithMargin('ai-sitemap-optimized', { productCount: 0 });
+        return res.status(402).json({
+          error: 'Insufficient tokens for AI-Optimized Sitemap',
+          requiresPurchase: true,
+          currentPlan: subscription?.plan,
+          tokensAvailable: 0,
+          tokensNeeded: baseEstimate.withMargin,
+          feature: 'ai-sitemap-optimized',
+          message: 'Purchase tokens to enable AI-Optimized Sitemap'
+        });
+      }
+    }
+    // === END TRIAL & TOKEN CHECK ===
     
     // The token is already available in res.locals from the /api middleware
     const accessToken = res.locals.shopify?.session?.accessToken || req.shopAccessToken;
@@ -245,25 +340,26 @@ router.get('/ai-discovery/simulate', validateRequest(), async (req, res) => {
     const contextText = await buildStoreContext(shop, { includeProductAnalysis: true });
     
     // Prepare question text based on type
+    // Questions are phrased naturally to match frontend UI
     let questionText = '';
     switch (type) {
       case 'products':
-        questionText = 'What products does this store sell? Be specific about product types and examples.';
+        questionText = 'What products do they offer according to their website? Be specific about product types and give examples.';
         break;
       case 'business':
-        questionText = 'Tell me about this business (what it offers, who it serves, key value).';
+        questionText = 'What kind of business is this based on their store information? What do they offer and who do they serve?';
         break;
       case 'categories':
-        questionText = 'What product categories does this store have?';
+        questionText = 'What product categories can customers browse in this store?';
         break;
       case 'contact':
-        questionText = "What is this store's contact information (email, phone, address)?";
+        questionText = "How can customers contact this store? What contact options are available on their website?";
         break;
       case 'custom':
         questionText = String(question);
         break;
       default:
-        questionText = 'Provide general information about this store.';
+        questionText = 'Based on the store information, what can you tell me about this business?';
     }
     
     // Final prompt for the AI model
@@ -358,28 +454,24 @@ Keep the answer concise (2–3 sentences).`;
   } catch (error) {
     console.error('[AI-SIMULATE] Error:', error);
     
-    // Refund reserved tokens on error (Professional & Growth only)
+    // CRITICAL: Refund reserved tokens on error using finalizeReservation (0 actual usage)
     if (res.locals.tokenBalance && res.locals.tokenReservationId) {
       try {
         const tokenBalance = res.locals.tokenBalance;
         const reservationId = res.locals.tokenReservationId;
         
-        // Find the reservation and mark as cancelled, refund the tokens
-        const reservationIndex = tokenBalance.usage.findIndex(
-          u => u.metadata?.reservationId === reservationId && u.metadata?.status === 'reserved'
-        );
+        // Refund the full reserved amount (0 actual usage)
+        await tokenBalance.finalizeReservation(reservationId, 0);
         
-        if (reservationIndex !== -1) {
-          const estimatedAmount = tokenBalance.usage[reservationIndex].tokensUsed;
-          
-          // Refund the estimated amount back to balance
-          tokenBalance.balance += estimatedAmount;
-          
-          // Mark reservation as cancelled
-          tokenBalance.usage[reservationIndex].metadata.status = 'cancelled';
-          tokenBalance.usage[reservationIndex].metadata.cancelledAt = new Date();
-          
-          await tokenBalance.save();
+        // Refunded reserved tokens due to error
+        
+        // Invalidate cache
+        try {
+          const shop = res.locals.shop;
+          const cacheService = await import('../services/cacheService.js');
+          await cacheService.default.invalidateShop(shop);
+        } catch (cacheErr) {
+          console.error('[AI-SIMULATE] Failed to invalidate cache:', cacheErr);
         }
       } catch (refundError) {
         console.error('[AI-SIMULATE] Error refunding tokens:', refundError);
@@ -446,42 +538,31 @@ router.get('/ai-discovery/robots-txt', validateRequest(), async (req, res) => {
  * See: https://partners.shopify.com/ (search for protected scope exemption)
  */
 router.post('/ai-discovery/apply-robots', validateRequest(), async (req, res) => {
-  // Return 501 Not Implemented with clear explanation
-  return res.status(501).json({ 
-    error: 'Automatic robots.txt installation is temporarily disabled',
-    reason: 'Requires Shopify approval for write_themes_assets protected scope',
-    alternative: 'Please use manual copy/paste method from Settings page',
-    documentation: 'Contact support for manual installation instructions'
-  });
-  
-  /* ORIGINAL CODE - Keep for future use after Shopify approval
-  console.log('[APPLY ENDPOINT] Called with body:', req.body);
+  // NOW ENABLED - Shopify has approved write_themes scope
+  console.log('[APPLY ROBOTS] Called with body:', req.body);
   
   try {
     const shop = req.shopDomain;
     
-    console.log('[APPLY ENDPOINT] Shop:', shop);
+    console.log('[APPLY ROBOTS] Shop:', shop);
     
-    // Generate fresh robots.txt
-    const robotsTxt = await aiDiscoveryService.generateRobotsTxt(shop);
-    console.log('[APPLY ENDPOINT] Generated robots.txt length:', robotsTxt.length);
-    console.log('[APPLY ENDPOINT] First 200 chars:', robotsTxt.substring(0, 200));
+    // Generate robots.txt.liquid content (includes {{ content_for_robots }} for Shopify defaults)
+    const robotsTxtLiquid = await aiDiscoveryService.generateRobotsTxtLiquid(shop);
+    console.log('[APPLY ROBOTS] Generated robots.txt.liquid length:', robotsTxtLiquid.length);
     
     // Apply to theme
-    console.log('[APPLY ENDPOINT] Calling applyRobotsTxt...');
-    const result = await applyRobotsTxt(shop, robotsTxt);
-    console.log('[APPLY ENDPOINT] Result:', result);
+    console.log('[APPLY ROBOTS] Calling applyRobotsTxt...');
+    const result = await applyRobotsTxt(shop, robotsTxtLiquid);
+    console.log('[APPLY ROBOTS] Result:', result);
     
     res.json(result);
   } catch (error) {
-    console.error('[APPLY ENDPOINT] Error:', error.message);
-    console.error('[APPLY ENDPOINT] Stack:', error.stack);
+    console.error('[APPLY ROBOTS] Error:', error.message);
     res.status(500).json({ 
       error: error.message,
-      stack: error.stack 
+      details: 'Failed to apply robots.txt to theme. You may need to re-authorize the app.'
     });
   }
-  */
 });
 
 /**
@@ -502,7 +583,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
     
     // Delete metafield
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+      `https://${shop}/admin/api/2025-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
       {
         headers: {
           'X-Shopify-Access-Token': session.accessToken,
@@ -517,7 +598,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
       
       if (metafield) {
         await fetch(
-          `https://${shop}/admin/api/2024-07/metafields/${metafield.id}.json`,
+          `https://${shop}/admin/api/2025-07/metafields/${metafield.id}.json`,
           {
             method: 'DELETE',
             headers: {
@@ -530,7 +611,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
     
     // NEW: Delete robots.txt redirect
     const redirectsResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/redirects.json?path=/robots.txt`,
+      `https://${shop}/admin/api/2025-07/redirects.json?path=/robots.txt`,
       {
         headers: {
           'X-Shopify-Access-Token': session.accessToken
@@ -542,7 +623,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
       const redirectsData = await redirectsResponse.json();
       for (const redirect of redirectsData.redirects || []) {
         await fetch(
-          `https://${shop}/admin/api/2024-07/redirects/${redirect.id}.json`,
+          `https://${shop}/admin/api/2025-07/redirects/${redirect.id}.json`,
           {
             method: 'DELETE',
             headers: {
@@ -584,7 +665,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
     
     // Get theme
     const themesResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/themes.json`,
+      `https://${shop}/admin/api/2025-07/themes.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
     
@@ -593,7 +674,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
     
     // List all assets
     const assetsResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/themes/${activeTheme.id}/assets.json`,
+      `https://${shop}/admin/api/2025-07/themes/${activeTheme.id}/assets.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
     

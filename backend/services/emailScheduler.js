@@ -17,7 +17,6 @@ class EmailScheduler {
    */
   startAll() {
     if (this.isRunning) {
-      console.log('📧 Email scheduler already running');
       return;
     }
 
@@ -28,241 +27,184 @@ class EmailScheduler {
 
     console.log('📧 Starting email scheduler...');
 
-    // Daily onboarding emails check (every day at 10 AM)
+    // Token purchase email check (every day at 10:00 UTC) - Day 3 after installation (72 hours)
     this.jobs.push(
       cron.schedule('0 10 * * *', async () => {
-        console.log('⏰ Running daily onboarding check...');
-        await this.checkOnboardingEmails();
+        await this.checkTokenPurchaseEmail();
       })
     );
 
-    // Trial expiring check (every day at 9 AM)
+    // App Store rating email check (every day at 10:00 UTC) - Day 6 after installation (144 hours)
     this.jobs.push(
-      cron.schedule('0 9 * * *', async () => {
-        console.log('⏰ Running trial expiring check...');
-        await this.checkTrialExpiring();
+      cron.schedule('0 10 * * *', async () => {
+        await this.checkAppStoreRatingEmail();
       })
     );
 
-    // Weekly digest (every Monday at 10 AM)
-    this.jobs.push(
-      cron.schedule('0 10 * * 1', async () => {
-        console.log('⏰ Sending weekly digests...');
-        await this.sendWeeklyDigests();
-      })
-    );
-
-    // Re-engagement check (every day at 2 PM)
-    this.jobs.push(
-      cron.schedule('0 14 * * *', async () => {
-        console.log('⏰ Running re-engagement check...');
-        await this.checkInactiveUsers();
-      })
-    );
+    // REMOVED: Trial expiring check - replaced with in-app banner
+    // REMOVED: Weekly digest - replaced with Weekly Product Digest
+    // REMOVED: Re-engagement check - too aggressive
 
     this.isRunning = true;
-    console.log('✅ Email scheduler started');
   }
 
   /**
-   * Check and send onboarding emails
+   * Check and send token purchase email (Day 3 after installation - 72 hours)
+   * Only sends if: 
+   * - Installed exactly 72 hours ago (3 days)
+   * - Token balance = 0
+   * - Not unsubscribed
+   * - Hasn't received this email before
    */
-  async checkOnboardingEmails() {
+  async checkTokenPurchaseEmail() {
     try {
       const now = new Date();
+      const EmailLog = (await import('../db/EmailLog.js')).default;
+      const TokenBalance = (await import('../db/TokenBalance.js')).default;
       
-      // Day 1 onboarding (24 hours after install)
-      const day1Stores = await Shop.find({
-        createdAt: {
-          $gte: new Date(now - 25 * 60 * 60 * 1000), // 25 hours ago
-          $lte: new Date(now - 23 * 60 * 60 * 1000)  // 23 hours ago
-        }
-      }).lean();
-
-      for (const store of day1Stores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 1);
-        await this.delay(1000); // 1 second delay between emails
-      }
-
-      // Day 3 onboarding
+      // Find stores installed 3-4 days ago (72-96 hours)
+      // Check all stores from the last 24 hours that are now 3+ days old
+      // This ensures we catch all stores regardless of installation time
+      // EmailLog check prevents duplicates if a store was already processed
       const day3Stores = await Shop.find({
         createdAt: {
-          $gte: new Date(now - 73 * 60 * 60 * 1000),
-          $lte: new Date(now - 71 * 60 * 60 * 1000)
+          $gte: new Date(now - 96 * 60 * 60 * 1000), // 4 days ago (96 hours)
+          $lte: new Date(now - 72 * 60 * 60 * 1000)   // 3 days ago (72 hours)
         }
       }).lean();
+
+      if (day3Stores.length === 0) {
+        return;
+      }
+
+      let sentCount = 0;
+      let skippedCount = 0;
 
       for (const store of day3Stores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 3);
-        await this.delay(1000);
-      }
-
-      // Day 7 onboarding
-      const day7Stores = await Shop.find({
-        createdAt: {
-          $gte: new Date(now - 169 * 60 * 60 * 1000),
-          $lte: new Date(now - 167 * 60 * 60 * 1000)
-        }
-      }).lean();
-
-      for (const store of day7Stores) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        await emailService.sendOnboardingEmail({ ...store, subscription }, 7);
-        await this.delay(1000);
-      }
-
-      console.log('✅ Onboarding emails check completed');
-    } catch (error) {
-      console.error('❌ Onboarding emails error:', error);
-    }
-  }
-
-  /**
-   * Check trial expiring
-   */
-  async checkTrialExpiring() {
-    try {
-      const now = new Date();
-      
-      // 3 days before expiry
-      const threeDaysBefore = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-      const subscriptions3Days = await Subscription.find({
-        status: 'active',
-        trialEndsAt: {
-          $gte: now,
-          $lte: threeDaysBefore
-        }
-      }).lean();
-
-      for (const subscription of subscriptions3Days) {
-        const store = await Shop.findOne({ shop: subscription.shop }).lean();
-        if (store) {
-          await emailService.sendTrialExpiringEmail({ ...store, subscription }, 3);
-          await this.delay(1000);
-        }
-      }
-
-      // 1 day before expiry
-      const oneDayBefore = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
-      const subscriptions1Day = await Subscription.find({
-        status: 'active',
-        trialEndsAt: {
-          $gte: now,
-          $lte: oneDayBefore
-        }
-      }).lean();
-
-      for (const subscription of subscriptions1Day) {
-        const store = await Shop.findOne({ shop: subscription.shop }).lean();
-        if (store) {
-          await emailService.sendTrialExpiringEmail({ ...store, subscription }, 1);
-          await this.delay(1000);
-        }
-      }
-
-      console.log('✅ Trial expiring check completed');
-    } catch (error) {
-      console.error('❌ Trial expiring check error:', error);
-    }
-  }
-
-  /**
-   * Send weekly digest
-   */
-  async sendWeeklyDigests() {
-    try {
-      const shops = await Shop.find({}).lean();
-
-      for (const store of shops) {
-        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
+        // Check if email was already sent (prevent duplicates)
+        const existingEmailLog = await EmailLog.findOne({
+          shop: store.shop,
+          type: 'token-purchase',
+          status: 'sent'
+        }).lean();
         
-        // Calculate weekly stats
-        const weeklyStats = await this.calculateWeeklyStats(store.shop);
+        if (existingEmailLog) {
+          skippedCount++;
+          continue;
+        }
         
-        await emailService.sendWeeklyDigest({ ...store, subscription }, weeklyStats);
-        await this.delay(1000);
-      }
-
-      console.log('✅ Weekly digests sent');
-    } catch (error) {
-      console.error('❌ Weekly digest error:', error);
-    }
-  }
-
-  /**
-   * Check inactive users
-   */
-  async checkInactiveUsers() {
-    try {
-      const inactiveDays = 14; // 14 days inactive
-      const inactiveDate = new Date(Date.now() - inactiveDays * 24 * 60 * 60 * 1000);
-
-      const inactiveStores = await Shop.find({
-        updatedAt: { $lte: inactiveDate }
-      }).lean();
-
-      for (const store of inactiveStores) {
+        // Check if user has unsubscribed from marketing emails
+        const emailPrefs = store.emailPreferences || {};
+        if (emailPrefs.marketingEmails === false) {
+          skippedCount++;
+          continue;
+        }
+        
         const subscription = await Subscription.findOne({ shop: store.shop }).lean();
-        
-        // Skip if subscription is cancelled
-        if (subscription && subscription.status === 'cancelled') {
+        if (!subscription) {
+          skippedCount++;
           continue;
         }
 
-        const daysSinceActive = Math.floor((Date.now() - new Date(store.updatedAt)) / (1000 * 60 * 60 * 24));
-        await emailService.sendReengagementEmail({ ...store, subscription }, daysSinceActive);
-        await this.delay(1000);
+        // Check token balance - if balance > 0, skip email
+        const tokenBalance = await TokenBalance.findOne({ shop: store.shop }).lean();
+        const currentBalance = tokenBalance?.balance || 0;
+        
+        if (currentBalance > 0) {
+          skippedCount++;
+          continue;
+        }
+
+        // Send token purchase email
+        const result = await emailService.sendTokenPurchaseEmail({ ...store, subscription });
+        if (result.success) {
+          sentCount++;
+        } else {
+          console.error(`[TOKEN-EMAIL] ❌ Failed for ${store.shop}:`, result.error);
+        }
+        await this.delay(1000); // 1 second delay between emails
       }
 
-      console.log('✅ Inactive users check completed');
     } catch (error) {
-      console.error('❌ Inactive users check error:', error);
+      console.error('[TOKEN-EMAIL] Error:', error);
     }
   }
 
   /**
-   * Calculate weekly stats
+   * Check and send App Store rating email (Day 6 after installation - 144 hours)
+   * Only sends if: 
+   * - Installed exactly 144 hours ago (6 days)
+   * - Subscription is active (after trial)
+   * - Hasn't received this email before
    */
-  async calculateWeeklyStats(shop) {
+  async checkAppStoreRatingEmail() {
     try {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-      // Try to import Product model if it exists
-      let productsOptimized = 0;
-      let topProducts = [];
+      const now = new Date();
+      const EmailLog = (await import('../db/EmailLog.js')).default;
       
-      try {
-        const Product = (await import('../db/Product.js')).default;
-        const products = await Product.find({
-          shop,
-          'seo.lastOptimized': { $gte: weekAgo }
-        }).limit(5).select('title seo.lastOptimized').lean();
+      // Find stores installed 6-7 days ago (144-168 hours)
+      // Check all stores from the last 24 hours that are now 6+ days old
+      // This ensures we catch all stores regardless of installation time
+      // EmailLog check prevents duplicates if a store was already processed
+      const day6Stores = await Shop.find({
+        createdAt: {
+          $gte: new Date(now - 168 * 60 * 60 * 1000), // 7 days ago (168 hours)
+          $lte: new Date(now - 144 * 60 * 60 * 1000)   // 6 days ago (144 hours)
+        }
+      }).lean();
+
+      if (day6Stores.length === 0) {
+        return;
+      }
+      let sentCount = 0;
+      let skippedCount = 0;
+
+      for (const store of day6Stores) {
+        // Check if email was already sent (prevent duplicates)
+        const existingEmailLog = await EmailLog.findOne({
+          shop: store.shop,
+          type: 'appstore-rating',
+          status: 'sent'
+        }).lean();
         
-        productsOptimized = products.length;
-        topProducts = products.map(p => p.title);
-      } catch (e) {
-        // Product model might not exist
-        console.log('Product model not available for weekly stats');
+        if (existingEmailLog) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Check if user has unsubscribed from marketing emails
+        const emailPrefs = store.emailPreferences || {};
+        if (emailPrefs.marketingEmails === false) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Check if subscription is active (after trial)
+        const subscription = await Subscription.findOne({ shop: store.shop }).lean();
+        if (!subscription) {
+          skippedCount++;
+          continue;
+        }
+        
+        // Only send if subscription is active (not cancelled, not pending)
+        if (subscription.status !== 'active' || subscription.cancelledAt) {
+          skippedCount++;
+          continue;
+        }
+
+        // Send app store rating email
+        const emailService = (await import('./emailService.js')).default;
+        const result = await emailService.sendAppStoreRatingEmail({ ...store, subscription });
+        if (result.success) {
+          sentCount++;
+        } else {
+          console.error(`[APPSTORE-RATING] ❌ Failed for ${store.shop}:`, result.error);
+        }
+        await this.delay(1000); // 1 second delay between emails
       }
 
-      // For now, return basic stats
-      // In the future, you can add AI query tracking
-      return {
-        aiQueries: 0, // Can be calculated from AI query logs if you have them
-        productsOptimized,
-        topProducts,
-        seoImprovement: '15%' // Calculate based on your metrics
-      };
     } catch (error) {
-      console.error('Error calculating weekly stats:', error);
-      return {
-        aiQueries: 0,
-        productsOptimized: 0,
-        topProducts: [],
-        seoImprovement: '0%'
-      };
+      console.error('[APPSTORE-RATING] Error:', error);
     }
   }
 
@@ -273,7 +215,6 @@ class EmailScheduler {
     this.jobs.forEach(job => job.stop());
     this.jobs = [];
     this.isRunning = false;
-    console.log('⏹️ Email scheduler stopped');
   }
 
   delay(ms) {
