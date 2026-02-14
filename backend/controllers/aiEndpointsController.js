@@ -1156,7 +1156,8 @@ router.post('/ai/ask', async (req, res) => {
     // Debug mode: return raw context if requested
     if (req.body.debug === true || req.query.debug === 'true') {
       return res.json({ 
-        debug: true, 
+        debug: true,
+        version: 'v5-with-metafields',
         storeContextLength: storeContext.length, 
         storeContextStart: storeContext.substring(0, 2000),
         storeContextEnd: storeContext.substring(Math.max(0, storeContext.length - 3000))
