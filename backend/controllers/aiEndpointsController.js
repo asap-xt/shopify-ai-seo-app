@@ -1052,7 +1052,7 @@ router.post('/ai/ask', async (req, res) => {
       storeContext += '\n';
     }
 
-    // 3. Get shop info and policies
+    // 3. Get shop info, policies, and AI context metadata
     try {
       const shopInfoResponse = await fetch(
         `https://${shop}/admin/api/2024-07/graphql.json`,
@@ -1073,6 +1073,8 @@ router.post('/ai/ask', async (req, res) => {
                 refundPolicy { title body }
                 privacyPolicy { title body }
                 termsOfService { title body }
+                aiContextMetafield: metafield(namespace: "seo_ai", key: "ai_context") { value }
+                seoMetafield: metafield(namespace: "seo_ai", key: "seo_metadata") { value }
               }
             }`
           })
@@ -1088,26 +1090,52 @@ router.post('/ai/ask', async (req, res) => {
         if (shopInfo.email) storeContext += `- Contact: ${shopInfo.email}\n`;
         storeContext += `- URL: ${shopInfo.primaryDomain?.url || `https://${shop}`}\n`;
 
-        // Add policy content (increased limit for better AI answers)
-        const policyMap = {
-          'Shipping Policy': shopInfo.shippingPolicy,
-          'Refund Policy': shopInfo.refundPolicy,
-          'Return Policy': shopInfo.refundPolicy, // alias for better matching
-          'Privacy Policy': shopInfo.privacyPolicy,
-          'Terms of Service': shopInfo.termsOfService
-        };
-        const policies = Object.entries(policyMap)
-          .filter(([, p]) => p?.body)
-          .reduce((acc, [key, p]) => {
-            // Deduplicate (Refund = Return)
-            if (!acc.find(a => a.body === p.body)) acc.push({ title: p.title || key, body: p.body });
-            return acc;
-          }, []);
+        // Parse AI context metadata (has detailed returns, shipping, etc.)
+        let aiContext = null;
+        try {
+          if (shopInfo.aiContextMetafield?.value) {
+            aiContext = JSON.parse(shopInfo.aiContextMetafield.value);
+          }
+        } catch (e) { /* ignore parse errors */ }
+
+        // Parse SEO metadata
+        let seoMeta = null;
+        try {
+          if (shopInfo.seoMetafield?.value) {
+            seoMeta = JSON.parse(shopInfo.seoMetafield.value);
+          }
+        } catch (e) { /* ignore parse errors */ }
+
+        if (seoMeta?.shortDescription) {
+          storeContext += `- About: ${seoMeta.shortDescription}\n`;
+        }
+
+        // Add AI context data (rich business info)
+        if (aiContext) {
+          if (aiContext.business_type) storeContext += `- Business: ${aiContext.business_type}\n`;
+          if (aiContext.unique_selling_points) storeContext += `- Unique Selling Points: ${aiContext.unique_selling_points.substring(0, 500)}\n`;
+          
+          // Add shipping info from AI context
+          if (aiContext.shipping) {
+            storeContext += `\nSHIPPING POLICY:\n${aiContext.shipping.substring(0, 800)}\n`;
+          }
+          // Add returns info from AI context
+          if (aiContext.returns) {
+            storeContext += `\nRETURN / REFUND POLICY:\n${aiContext.returns.substring(0, 800)}\n`;
+          }
+        }
+
+        // Also add Shopify legal policies if available (may contain additional/different info)
+        const policies = [
+          shopInfo.shippingPolicy,
+          shopInfo.refundPolicy,
+          shopInfo.privacyPolicy,
+          shopInfo.termsOfService
+        ].filter(p => p?.body);
 
         if (policies.length > 0) {
-          storeContext += '\nSTORE POLICIES:\n';
+          storeContext += '\nOFFICIAL LEGAL POLICIES:\n';
           policies.forEach(p => {
-            // Strip HTML tags from policy body
             const cleanBody = p.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
             storeContext += `- ${p.title}: ${cleanBody.substring(0, 800)}\n`;
           });
