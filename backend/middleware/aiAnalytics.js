@@ -99,15 +99,8 @@ export function createAIAnalyticsMiddleware(source = 'direct') {
   return (req, res, next) => {
     const startTime = Date.now();
     
-    // Capture the original end method
-    const originalEnd = res.end;
-    
-    res.end = function(...args) {
-      // Restore original end
-      res.end = originalEnd;
-      res.end(...args);
-      
-      // Log asynchronously (fire-and-forget, don't block response)
+    // Use 'finish' event - fires reliably after response is sent
+    res.on('finish', () => {
       const responseTimeMs = Date.now() - startTime;
       const shop = req.query?.shop || req.get('x-shopify-shop-domain') || '';
       const userAgent = req.get('User-Agent') || '';
@@ -132,7 +125,7 @@ export function createAIAnalyticsMiddleware(source = 'direct') {
           }
         });
       }
-    };
+    });
     
     next();
   };
