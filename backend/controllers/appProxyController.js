@@ -458,6 +458,60 @@ async function handleSitemapProxy(req, res) {
       xml += '  </url>\n';
     }
     
+    // AI Discovery Endpoints - include enabled AI data endpoints in sitemap
+    try {
+      const shopRecord = await Shop.findOne({ shop }).lean();
+      if (shopRecord?.accessToken) {
+        const session = { accessToken: shopRecord.accessToken };
+        const aiSettings = await aiDiscoveryService.getSettings(shop, session);
+        const today = new Date().toISOString().split('T')[0];
+        const proxyBase = primaryDomain + '/apps/' + APP_PROXY_SUBPATH;
+        
+        if (aiSettings?.features?.llmsTxt) {
+          xml += '  <url>\n';
+          xml += '    <loc>' + proxyBase + '/llms.txt</loc>\n';
+          xml += '    <lastmod>' + today + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.8</priority>\n';
+          xml += '  </url>\n';
+        }
+        if (aiSettings?.features?.productsJson) {
+          xml += '  <url>\n';
+          xml += '    <loc>' + proxyBase + '/ai/products.json</loc>\n';
+          xml += '    <lastmod>' + today + '</lastmod>\n';
+          xml += '    <changefreq>daily</changefreq>\n';
+          xml += '    <priority>0.9</priority>\n';
+          xml += '  </url>\n';
+        }
+        if (aiSettings?.features?.collectionsJson) {
+          xml += '  <url>\n';
+          xml += '    <loc>' + proxyBase + '/ai/collections-feed.json</loc>\n';
+          xml += '    <lastmod>' + today + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.7</priority>\n';
+          xml += '  </url>\n';
+        }
+        if (aiSettings?.features?.storeMetadata) {
+          xml += '  <url>\n';
+          xml += '    <loc>' + proxyBase + '/ai/store-metadata.json</loc>\n';
+          xml += '    <lastmod>' + today + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.7</priority>\n';
+          xml += '  </url>\n';
+        }
+        if (aiSettings?.features?.welcomePage) {
+          xml += '  <url>\n';
+          xml += '    <loc>' + proxyBase + '/ai/welcome</loc>\n';
+          xml += '    <lastmod>' + today + '</lastmod>\n';
+          xml += '    <changefreq>weekly</changefreq>\n';
+          xml += '    <priority>0.8</priority>\n';
+          xml += '  </url>\n';
+        }
+      }
+    } catch (aiEndpointErr) {
+      console.error('[APP_PROXY] Error adding AI endpoints to sitemap:', aiEndpointErr.message);
+    }
+    
     xml += '</urlset>';
     
     // Save to cache
