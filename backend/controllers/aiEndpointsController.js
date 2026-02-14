@@ -1052,7 +1052,7 @@ router.post('/ai/ask', async (req, res) => {
       storeContext += '\n';
     }
 
-    // 3. Get shop info, policies, and AI context metadata
+    // 3. Get shop info + AI context metafields
     try {
       const shopInfoResponse = await fetch(
         `https://${shop}/admin/api/2025-07/graphql.json`,
@@ -1070,10 +1070,6 @@ router.post('/ai/ask', async (req, res) => {
                 email
                 url
                 primaryDomain { url }
-                shippingPolicy { title body }
-                refundPolicy { title body }
-                privacyPolicy { title body }
-                termsOfService { title body }
                 aiContextMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") { value }
                 seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
               }
@@ -1083,30 +1079,21 @@ router.post('/ai/ask', async (req, res) => {
       );
       const shopData = await shopInfoResponse.json();
       const shopInfo = shopData.data?.shop;
-      
-      // Debug: log what we got from GraphQL
-      if (!shopInfo) {
-        console.error('[AI-ASK] shopInfo is null. Status:', shopInfoResponse.status, 'Errors:', JSON.stringify(shopData.errors || 'none'));
-        storeContext += `\n[DEBUG: shopInfo null, status=${shopInfoResponse.status}, errors=${JSON.stringify(shopData.errors || 'none').substring(0, 200)}]\n`;
-      }
 
       if (shopInfo) {
         storeContext += `STORE INFO:\n`;
         storeContext += `- Name: ${shopInfo.name}\n`;
         if (shopInfo.description) storeContext += `- Description: ${shopInfo.description}\n`;
         if (shopInfo.email) storeContext += `- Contact: ${shopInfo.email}\n`;
-        storeContext += `- URL: ${shopInfo.primaryDomain?.url || `https://${shop}`}\n`;
+        storeContext += `- URL: ${shopInfo.primaryDomain?.url || shopInfo.url || `https://${shop}`}\n`;
 
         // Parse AI context metadata (has detailed returns, shipping, etc.)
         let aiContext = null;
         try {
-          console.log('[AI-ASK] aiContextMetafield present:', !!shopInfo.aiContextMetafield?.value);
-          console.log('[AI-ASK] seoMetafield present:', !!shopInfo.seoMetafield?.value);
           if (shopInfo.aiContextMetafield?.value) {
             aiContext = JSON.parse(shopInfo.aiContextMetafield.value);
-            console.log('[AI-ASK] AI context keys:', Object.keys(aiContext));
           }
-        } catch (e) { console.error('[AI-ASK] Failed to parse aiContext:', e.message); }
+        } catch (e) { /* ignore parse errors */ }
 
         // Parse SEO metadata
         let seoMeta = null;
@@ -1126,37 +1113,64 @@ router.post('/ai/ask', async (req, res) => {
           if (aiContext.uniqueSellingPoints) storeContext += `- Unique Selling Points: ${aiContext.uniqueSellingPoints.substring(0, 500)}\n`;
           if (aiContext.primaryCategories) storeContext += `- Categories: ${aiContext.primaryCategories}\n`;
           
-          // Add shipping info from AI context
           if (aiContext.shippingInfo) {
             storeContext += `\nSHIPPING POLICY:\n${aiContext.shippingInfo.substring(0, 800)}\n`;
           }
-          // Add returns info from AI context
           if (aiContext.returnPolicy) {
             storeContext += `\nRETURN / REFUND POLICY:\n${aiContext.returnPolicy.substring(0, 800)}\n`;
           }
         }
+        storeContext += '\n';
+      }
+    } catch (e) {
+      console.error('[AI-ASK] Failed to fetch shop info:', e.message);
+    }
 
-        // Also add Shopify legal policies if available (may contain additional/different info)
+    // 4. Try to get Shopify legal policies (separate query, older API version where these fields exist)
+    try {
+      const policyResponse = await fetch(
+        `https://${shop}/admin/api/2024-01/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: `{
+              shop {
+                shippingPolicy { title body }
+                refundPolicy { title body }
+                privacyPolicy { title body }
+                termsOfService { title body }
+              }
+            }`
+          })
+        }
+      );
+      const policyData = await policyResponse.json();
+      const policyShop = policyData.data?.shop;
+      
+      if (policyShop) {
         const policies = [
-          shopInfo.shippingPolicy,
-          shopInfo.refundPolicy,
-          shopInfo.privacyPolicy,
-          shopInfo.termsOfService
+          policyShop.shippingPolicy,
+          policyShop.refundPolicy,
+          policyShop.privacyPolicy,
+          policyShop.termsOfService
         ].filter(p => p?.body);
 
         if (policies.length > 0) {
-          storeContext += '\nOFFICIAL LEGAL POLICIES:\n';
+          storeContext += 'OFFICIAL LEGAL POLICIES:\n';
           policies.forEach(p => {
             const cleanBody = p.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
             storeContext += `- ${p.title}: ${cleanBody.substring(0, 800)}\n`;
           });
+          storeContext += '\n';
         }
-        storeContext += '\n';
       }
     } catch (e) {
-      console.error('[AI-ASK] Failed to fetch shop info:', e.message, e.stack);
-      // Store error for debug
-      storeContext += `\n[DEBUG ERROR: ${e.message}]\n`;
+      // Policies are optional, AI context metafields cover this
+      console.log('[AI-ASK] Legal policies not available:', e.message);
     }
 
     // Debug mode: return raw context if requested
