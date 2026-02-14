@@ -1676,9 +1676,10 @@ Respond in JSON format:
 
     let parsedResponse;
     try {
-      parsedResponse = typeof aiResult.content === 'string' 
-        ? JSON.parse(aiResult.content) 
-        : aiResult.content;
+      let rawContent = typeof aiResult.content === 'string' ? aiResult.content : JSON.stringify(aiResult.content);
+      // Strip markdown code fences (```json ... ``` or ``` ... ```) that Gemini sometimes wraps responses in
+      rawContent = rawContent.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+      parsedResponse = JSON.parse(rawContent);
     } catch (e) {
       parsedResponse = {
         answer: typeof aiResult.content === 'string' ? aiResult.content : 'I could not process your question. Please try rephrasing.',
