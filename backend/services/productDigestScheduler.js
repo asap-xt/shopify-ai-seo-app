@@ -87,6 +87,12 @@ class ProductDigestScheduler {
    */
   async sendDigestForShop(shop) {
     try {
+      // Check if user has unsubscribed from marketing emails
+      const emailPrefs = shop.emailPreferences || {};
+      if (emailPrefs.marketingEmails === false) {
+        return { success: true, skipped: true, reason: 'unsubscribed' };
+      }
+
       // Get unnotified product changes for this shop
       const changes = await ProductChangeLog.find({
         shop: shop.shop,
@@ -97,7 +103,9 @@ class ProductDigestScheduler {
       .limit(50) // Max 50 products per digest
       .lean();
 
-      // Calculate dynamic threshold based on total products (10% of total, min 2, max 10)
+      // Calculate progressive threshold based on catalog size
+      // Smaller catalogs need higher % of changes, larger ones lower %
+      // Threshold never drops when catalog grows (no-drop rule)
       const Product = (await import('../db/Product.js')).default;
       const totalProducts = await Product.countDocuments({ shop: shop.shop });
       
@@ -107,9 +115,7 @@ class ProductDigestScheduler {
       } else if (process.env.DIGEST_MIN_THRESHOLD) {
         minThreshold = parseInt(process.env.DIGEST_MIN_THRESHOLD); // Manual override
       } else {
-        // Dynamic: 10% of total products, minimum 2, maximum 10
-        const dynamicThreshold = Math.ceil(totalProducts * 0.1);
-        minThreshold = Math.max(2, Math.min(10, dynamicThreshold));
+        minThreshold = this.calculateProgressiveThreshold(totalProducts);
       }
       
       if (changes.length < minThreshold) {
@@ -146,6 +152,45 @@ class ProductDigestScheduler {
       console.error(`[PRODUCT-DIGEST] Error sending digest for ${shop.shop}:`, error);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Calculate progressive threshold based on catalog size
+   * 
+   * Tiers:
+   *   ≤10 products:   20% of catalog
+   *   11-50 products:  15% of catalog
+   *   51-100 products: 10% of catalog
+   *   101-200 products: 5% of catalog
+   *   201+ products:    1% of catalog
+   * 
+   * Rules:
+   *   - Minimum threshold: 1 (always notify if at least 1 change)
+   *   - Maximum threshold: 20 (don't require 50 changes for huge catalogs)
+   *   - No-drop rule: threshold never decreases as catalog grows
+   *     (each tier's result is at least as high as the max of the previous tier boundary)
+   */
+  calculateProgressiveThreshold(totalProducts) {
+    let tierThreshold;
+
+    if (totalProducts <= 10) {
+      tierThreshold = Math.ceil(totalProducts * 0.20);
+    } else if (totalProducts <= 50) {
+      // No-drop: at tier boundary 10→11, previous tier gives ceil(10*0.20)=2
+      tierThreshold = Math.max(2, Math.ceil(totalProducts * 0.15));
+    } else if (totalProducts <= 100) {
+      // No-drop: at tier boundary 50→51, previous tier gives ceil(50*0.15)=8
+      tierThreshold = Math.max(8, Math.ceil(totalProducts * 0.10));
+    } else if (totalProducts <= 200) {
+      // No-drop: at tier boundary 100→101, previous tier gives ceil(100*0.10)=10
+      tierThreshold = Math.max(10, Math.ceil(totalProducts * 0.05));
+    } else {
+      // No-drop: at tier boundary 200→201, previous tier gives ceil(200*0.05)=10
+      tierThreshold = Math.max(10, Math.ceil(totalProducts * 0.01));
+    }
+
+    // Global bounds: min 1, max 20
+    return Math.max(1, Math.min(20, tierThreshold));
   }
 
   /**
