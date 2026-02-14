@@ -1173,17 +1173,6 @@ router.post('/ai/ask', async (req, res) => {
       console.log('[AI-ASK] Legal policies not available:', e.message);
     }
 
-    // Debug mode: return raw context if requested
-    if (req.body.debug === true || req.query.debug === 'true') {
-      return res.json({ 
-        debug: true,
-        version: 'v5-with-metafields',
-        storeContextLength: storeContext.length, 
-        storeContextStart: storeContext.substring(0, 2000),
-        storeContextEnd: storeContext.substring(Math.max(0, storeContext.length - 3000))
-      });
-    }
-
     // Call Gemini Flash Lite for cost-effective response
     const prompt = `You are a helpful shopping assistant for an online store. Answer the customer's question based ONLY on the store data provided below. Be concise, accurate, and helpful.
 
