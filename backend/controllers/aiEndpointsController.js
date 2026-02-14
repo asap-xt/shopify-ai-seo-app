@@ -1083,6 +1083,12 @@ router.post('/ai/ask', async (req, res) => {
       );
       const shopData = await shopInfoResponse.json();
       const shopInfo = shopData.data?.shop;
+      
+      // Debug: log what we got from GraphQL
+      if (!shopInfo) {
+        console.error('[AI-ASK] shopInfo is null. Status:', shopInfoResponse.status, 'Errors:', JSON.stringify(shopData.errors || 'none'));
+        storeContext += `\n[DEBUG: shopInfo null, status=${shopInfoResponse.status}, errors=${JSON.stringify(shopData.errors || 'none').substring(0, 200)}]\n`;
+      }
 
       if (shopInfo) {
         storeContext += `STORE INFO:\n`;
