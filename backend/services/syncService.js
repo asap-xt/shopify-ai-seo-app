@@ -40,7 +40,6 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
               tags
               status
               totalInventory
-              availableForSale
               createdAt
               publishedAt
               updatedAt
@@ -166,7 +165,7 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
           tags: product.tags || [],
           price: product.priceRangeV2?.minVariantPrice?.amount || null,
           currency: product.priceRangeV2?.minVariantPrice?.currencyCode || '',
-          available: product.availableForSale !== false,
+          available: product.status === 'ACTIVE' && (product.totalInventory > 0 || product.totalInventory === null),
           status: product.status,
           totalInventory: product.totalInventory,
           featuredImage: product.featuredImage,
