@@ -1055,7 +1055,7 @@ router.post('/ai/ask', async (req, res) => {
     // 3. Get shop info, policies, and AI context metadata
     try {
       const shopInfoResponse = await fetch(
-        `https://${shop}/admin/api/2024-07/graphql.json`,
+        `https://${shop}/admin/api/2025-07/graphql.json`,
         {
           method: 'POST',
           headers: {
@@ -1068,6 +1068,7 @@ router.post('/ai/ask', async (req, res) => {
                 name
                 description
                 email
+                url
                 primaryDomain { url }
                 shippingPolicy { title body }
                 refundPolicy { title body }
@@ -1093,10 +1094,13 @@ router.post('/ai/ask', async (req, res) => {
         // Parse AI context metadata (has detailed returns, shipping, etc.)
         let aiContext = null;
         try {
+          console.log('[AI-ASK] aiContextMetafield present:', !!shopInfo.aiContextMetafield?.value);
+          console.log('[AI-ASK] seoMetafield present:', !!shopInfo.seoMetafield?.value);
           if (shopInfo.aiContextMetafield?.value) {
             aiContext = JSON.parse(shopInfo.aiContextMetafield.value);
+            console.log('[AI-ASK] AI context keys:', Object.keys(aiContext));
           }
-        } catch (e) { /* ignore parse errors */ }
+        } catch (e) { console.error('[AI-ASK] Failed to parse aiContext:', e.message); }
 
         // Parse SEO metadata
         let seoMeta = null;
