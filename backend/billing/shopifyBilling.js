@@ -22,9 +22,9 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
   const returnTo = options.returnTo || '/billing'; // Default to billing page
   
-  // STAGING MODE: Test payments enabled
-  // Set to true for testing, false for real payments
-  const isTest = false;
+  // STAGING MODE: Test payments enabled automatically for non-production environments
+  // Production (NODE_ENV=production) uses real payments, everything else uses test mode
+  const isTest = process.env.NODE_ENV !== 'production';
   
   const mutation = `
     mutation CreateSubscription(
@@ -148,8 +148,8 @@ export async function purchaseTokens(shop, usdAmount, accessToken, options = {})
   const { calculateTokensWithDynamicPricing } = await import('./tokenConfig.js');
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
   
-  // ALWAYS use test mode until we go live with real payments
-  const isTest = false;
+  // Test mode for non-production environments (same as subscriptions)
+  const isTest = process.env.NODE_ENV !== 'production';
   
   const mutation = `
     mutation PurchaseTokens(
