@@ -1148,7 +1148,9 @@ router.post('/ai/ask', async (req, res) => {
         storeContext += '\n';
       }
     } catch (e) {
-      console.error('[AI-ASK] Failed to fetch shop info:', e.message);
+      console.error('[AI-ASK] Failed to fetch shop info:', e.message, e.stack);
+      // Store error for debug
+      storeContext += `\n[DEBUG ERROR: ${e.message}]\n`;
     }
 
     // Debug mode: return raw context if requested
