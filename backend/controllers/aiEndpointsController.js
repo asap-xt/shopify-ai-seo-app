@@ -1153,7 +1153,12 @@ router.post('/ai/ask', async (req, res) => {
 
     // Debug mode: return raw context if requested
     if (req.body.debug === true || req.query.debug === 'true') {
-      return res.json({ debug: true, storeContextLength: storeContext.length, storeContext: storeContext.substring(0, 5000) });
+      return res.json({ 
+        debug: true, 
+        storeContextLength: storeContext.length, 
+        storeContextStart: storeContext.substring(0, 2000),
+        storeContextEnd: storeContext.substring(Math.max(0, storeContext.length - 3000))
+      });
     }
 
     // Call Gemini Flash Lite for cost-effective response
