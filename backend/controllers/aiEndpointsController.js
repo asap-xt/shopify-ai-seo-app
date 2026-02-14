@@ -1151,6 +1151,11 @@ router.post('/ai/ask', async (req, res) => {
       console.error('[AI-ASK] Failed to fetch shop info:', e.message);
     }
 
+    // Debug mode: return raw context if requested
+    if (req.body.debug === true || req.query.debug === 'true') {
+      return res.json({ debug: true, storeContextLength: storeContext.length, storeContext: storeContext.substring(0, 5000) });
+    }
+
     // Call Gemini Flash Lite for cost-effective response
     const prompt = `You are a helpful shopping assistant for an online store. Answer the customer's question based ONLY on the store data provided below. Be concise, accurate, and helpful.
 
