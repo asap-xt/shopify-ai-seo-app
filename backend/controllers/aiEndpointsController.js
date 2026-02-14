@@ -9,8 +9,10 @@ import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import AdvancedSchema from '../db/AdvancedSchema.js';
 import { getPlanConfig, resolvePlanKey } from '../plans.js';
 import { getGeminiResponse } from '../ai/gemini.js';
+import { createAIAnalyticsMiddleware } from '../middleware/aiAnalytics.js';
 
 const router = express.Router();
+const aiAnalytics = createAIAnalyticsMiddleware('direct');
 
 /**
  * Helper to get plan product limit for a shop
@@ -58,7 +60,7 @@ async function checkFeatureAccess(shop, feature) {
 }
 
 // Products Feed endpoint - просто взима готовите JSON-и
-router.get('/ai/products.json', async (req, res) => {
+router.get('/ai/products.json', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -238,7 +240,7 @@ router.get('/ai/products.json', async (req, res) => {
 });
 
 // Collections Feed endpoint - опростен
-router.get('/ai/collections-feed.json', async (req, res) => {
+router.get('/ai/collections-feed.json', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -381,7 +383,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
 });
 
 // AI Welcome page (direct access version - mirrors App Proxy version)
-router.get('/ai/welcome', async (req, res) => {
+router.get('/ai/welcome', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).send('Missing shop parameter');
@@ -540,7 +542,7 @@ router.get('/ai/robots-dynamic', async (req, res) => {
 // Advanced Schema Data endpoint - MOVED TO feedController.js
 
 // Store Metadata endpoint
-router.get('/ai/store-metadata.json', async (req, res) => {
+router.get('/ai/store-metadata.json', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -727,7 +729,7 @@ router.get('/ai/store-metadata.json', async (req, res) => {
 });
 
 // AI Sitemap Feed endpoint - преименуван и опростен
-router.get('/ai/sitemap-feed.xml', async (req, res) => {
+router.get('/ai/sitemap-feed.xml', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).send('Missing shop parameter');
@@ -840,7 +842,7 @@ router.get('/ai/schema-data.json', async (req, res) => {
 // LLMs.txt endpoint - AI Discovery standard (llmstxt.org)
 // Accessible via: /llms.txt?shop=xxx (direct) 
 // ============================================================
-router.get('/llms.txt', async (req, res) => {
+router.get('/llms.txt', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).type('text/plain').send('Missing shop parameter');
@@ -867,7 +869,7 @@ router.get('/llms.txt', async (req, res) => {
 // LLMs-full.txt endpoint - Extended version with API docs
 // Accessible via: /llms-full.txt?shop=xxx (direct)
 // ============================================================
-router.get('/llms-full.txt', async (req, res) => {
+router.get('/llms-full.txt', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).type('text/plain').send('Missing shop parameter');
@@ -894,7 +896,7 @@ router.get('/llms-full.txt', async (req, res) => {
 // AI Plugin JSON manifest for AI agent discovery
 // Accessible via: /.well-known/ai-plugin.json?shop=xxx
 // ============================================================
-router.get('/.well-known/ai-plugin.json', async (req, res) => {
+router.get('/.well-known/ai-plugin.json', aiAnalytics, async (req, res) => {
   const shop = req.query.shop;
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -971,7 +973,7 @@ function hashQuestion(q) {
   return hash.toString(36);
 }
 
-router.post('/ai/ask', async (req, res) => {
+router.post('/ai/ask', aiAnalytics, async (req, res) => {
   const shop = req.query.shop || req.body.shop;
   const question = req.body.question;
 
@@ -1258,7 +1260,7 @@ Respond in JSON format:
 });
 
 // Also support GET for simple queries (convenience for AI agents)
-router.get('/ai/ask', async (req, res) => {
+router.get('/ai/ask', aiAnalytics, async (req, res) => {
   const question = req.query.q || req.query.question;
   if (!question) {
     return res.json({ 

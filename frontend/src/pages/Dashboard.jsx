@@ -117,6 +117,10 @@ export default function Dashboard({ shop: shopProp }) {
   // AIEO Score for review banner trigger
   const [aieoScore, setAieoScore] = useState(0);
   
+  // AI Traffic analytics
+  const [aiTraffic, setAiTraffic] = useState(null);
+  const [aiTrafficLoading, setAiTrafficLoading] = useState(true);
+  
   // Token purchase modal state
   const [showTokenPurchaseModal, setShowTokenPurchaseModal] = useState(false);
   
@@ -155,10 +159,28 @@ export default function Dashboard({ shop: shopProp }) {
     }
   };
 
+  // Load AI traffic analytics
+  const loadAITraffic = async () => {
+    if (!shop) return;
+    try {
+      setAiTrafficLoading(true);
+      const res = await api(`/api/ai-analytics?shop=${encodeURIComponent(shop)}&period=30d`);
+      if (res.ok) {
+        const data = await res.json();
+        setAiTraffic(data);
+      }
+    } catch (err) {
+      console.error('[Dashboard] AI traffic load error:', err);
+    } finally {
+      setAiTrafficLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadDashboardData(true); // Force immediate load on mount
     loadSyncStatus();
     loadSavedTestResults(); // Load test results from localStorage
+    loadAITraffic(); // Load AI traffic analytics
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
@@ -1127,6 +1149,101 @@ export default function Dashboard({ shop: shopProp }) {
           }}
           onScoreCalculated={(score) => setAieoScore(score)}
         />
+      </Layout.Section>
+
+      {/* AI Traffic Analytics */}
+      <Layout.Section>
+        <Card>
+          <BlockStack gap="400">
+            <InlineStack align="space-between" blockAlign="center">
+              <Text variant="headingMd">AI Traffic</Text>
+              <Text variant="bodySm" tone="subdued">Last 30 days</Text>
+            </InlineStack>
+
+            {aiTrafficLoading ? (
+              <Text variant="bodySm" tone="subdued">Loading analytics...</Text>
+            ) : !aiTraffic || aiTraffic.totalVisits === 0 ? (
+              <Banner tone="info">
+                <p>AI bots haven't discovered your store yet. Make sure <strong>AI Discovery Features</strong> are enabled in Settings to attract AI crawlers.</p>
+              </Banner>
+            ) : (
+              <BlockStack gap="400">
+                {/* Key metrics row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+                  <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
+                    <Text variant="headingLg" fontWeight="bold">{aiTraffic.totalVisits.toLocaleString()}</Text>
+                    <Text variant="bodySm" tone="subdued">Total Visits</Text>
+                  </div>
+                  <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
+                    <Text variant="headingLg" fontWeight="bold">{aiTraffic.uniqueBots}</Text>
+                    <Text variant="bodySm" tone="subdued">Unique Bots</Text>
+                  </div>
+                  <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
+                    <Text variant="headingLg" fontWeight="bold">
+                      {aiTraffic.trend > 0 ? '+' : ''}{aiTraffic.trend}%
+                    </Text>
+                    <Text variant="bodySm" tone="subdued">vs Previous Period</Text>
+                  </div>
+                </div>
+
+                {/* Mini bar chart */}
+                {aiTraffic.dailyVisits?.length > 0 && (
+                  <div>
+                    <Text variant="bodySm" fontWeight="semibold">Daily Visits</Text>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '60px', marginTop: '8px' }}>
+                      {(() => {
+                        const maxVisits = Math.max(...aiTraffic.dailyVisits.map(d => d.visits), 1);
+                        return aiTraffic.dailyVisits.map((day, i) => (
+                          <div
+                            key={day.date}
+                            title={`${day.date}: ${day.visits} visits`}
+                            style={{
+                              flex: 1,
+                              height: `${Math.max(4, (day.visits / maxVisits) * 100)}%`,
+                              background: '#5c6ac4',
+                              borderRadius: '2px 2px 0 0',
+                              minWidth: '3px',
+                              cursor: 'default'
+                            }}
+                          />
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top bots and endpoints side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  {/* Top Bots */}
+                  <div>
+                    <Text variant="bodySm" fontWeight="semibold">Top AI Bots</Text>
+                    <BlockStack gap="100">
+                      {aiTraffic.topBots?.slice(0, 5).map(bot => (
+                        <InlineStack key={bot.name} align="space-between">
+                          <Text variant="bodySm">{bot.name}</Text>
+                          <Text variant="bodySm" tone="subdued">{bot.visits}</Text>
+                        </InlineStack>
+                      ))}
+                    </BlockStack>
+                  </div>
+
+                  {/* Top Endpoints */}
+                  <div>
+                    <Text variant="bodySm" fontWeight="semibold">Top Endpoints</Text>
+                    <BlockStack gap="100">
+                      {aiTraffic.topEndpoints?.slice(0, 5).map(ep => (
+                        <InlineStack key={ep.endpoint} align="space-between">
+                          <Text variant="bodySm">{ep.endpoint.replace('/ai/', '').replace('.json', '').replace('.txt', '').replace('.xml', '')}</Text>
+                          <Text variant="bodySm" tone="subdued">{ep.visits}</Text>
+                        </InlineStack>
+                      ))}
+                    </BlockStack>
+                  </div>
+                </div>
+              </BlockStack>
+            )}
+          </BlockStack>
+        </Card>
       </Layout.Section>
 
       {/* Current Plan & Token Balance - Two columns side by side */}

@@ -882,6 +882,7 @@ import debugRouter from './controllers/debugRouter.js';
     import aiEndpointsRouter from './controllers/aiEndpointsController.js';
     import aiEnhanceRouter from './controllers/aiEnhanceController.js';
     import advancedSchemaRouter from './controllers/advancedSchemaController.js';
+    import aiAnalyticsRouter from './controllers/aiAnalyticsController.js';
 
     // Import new middleware and controllers
     import { attachShop as attachShopFromApiResolver, apiResolver } from './middleware/apiResolver.js';
@@ -1386,6 +1387,7 @@ if (!IS_PROD) {
     app.use('/api/schema', advancedSchemaRouter);
     app.use('/api/ai', aiSimulationController);
     app.use('/api', aiTestingController);
+    app.use('/api', aiAnalyticsRouter);
 
 
     // Mount the new controllers with fixed authentication

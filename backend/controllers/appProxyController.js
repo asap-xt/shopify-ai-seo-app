@@ -12,8 +12,10 @@ import { resolveShopToken } from '../utils/tokenResolver.js';
 import { appProxyAuth } from '../utils/appProxyValidator.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import { getGeminiResponse } from '../ai/gemini.js';
+import { createAIAnalyticsMiddleware } from '../middleware/aiAnalytics.js';
 
 const router = express.Router();
+const aiAnalytics = createAIAnalyticsMiddleware('app_proxy');
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
@@ -602,7 +604,7 @@ router.get('/debug-sitemap', (req, res) => {
 // These will be accessible at: https://{shop}.myshopify.com/apps/{APP_PROXY_SUBPATH}/ai/*
 
 // AI Welcome Page
-router.get('/ai/welcome', appProxyAuth, async (req, res) => {
+router.get('/ai/welcome', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -866,7 +868,7 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
 });
 
 // AI Products JSON Feed - Direct implementation (no redirect!)
-router.get('/ai/products.json', appProxyAuth, async (req, res) => {
+router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
   // Try to get shop from multiple sources
   const shop = normalizeShop(req.query.shop || req.headers['x-shopify-shop-domain']);
   
@@ -1110,7 +1112,7 @@ router.get('/ai/products.json', appProxyAuth, async (req, res) => {
 });
 
 // AI Collections JSON Feed - Direct implementation (no redirect!)
-router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
+router.get('/ai/collections-feed.json', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -1230,7 +1232,7 @@ router.get('/ai/collections-feed.json', appProxyAuth, async (req, res) => {
 
 // AI Sitemap Feed - Uses the existing sitemap handler
 // Access is determined by whether ANY sitemap has been generated (standard or AI-enhanced)
-router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
+router.get('/ai/sitemap-feed.xml', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -1262,7 +1264,7 @@ router.get('/ai/sitemap-feed.xml', appProxyAuth, async (req, res) => {
 });
 
 // AI Store Metadata - Direct implementation (no redirect!)
-router.get('/ai/store-metadata.json', appProxyAuth, async (req, res) => {
+router.get('/ai/store-metadata.json', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.query.shop);
   
   if (!shop) {
@@ -1399,7 +1401,7 @@ router.get('/ai/store-metadata.json', appProxyAuth, async (req, res) => {
 // LLMs.txt endpoint - AI Discovery standard (llmstxt.org)
 // Accessible via: /apps/indexaize/llms.txt
 // ============================================================
-router.get('/llms.txt', appProxyAuth, async (req, res) => {
+router.get('/llms.txt', appProxyAuth, aiAnalytics, async (req, res) => {
   try {
     const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
     if (!shop) {
@@ -1426,7 +1428,7 @@ router.get('/llms.txt', appProxyAuth, async (req, res) => {
 // LLMs-full.txt endpoint - Extended version with API docs
 // Accessible via: /apps/indexaize/llms-full.txt
 // ============================================================
-router.get('/llms-full.txt', appProxyAuth, async (req, res) => {
+router.get('/llms-full.txt', appProxyAuth, aiAnalytics, async (req, res) => {
   try {
     const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
     if (!shop) {
@@ -1453,7 +1455,7 @@ router.get('/llms-full.txt', appProxyAuth, async (req, res) => {
 // AI Plugin JSON manifest - AI agent discovery
 // Accessible via: /apps/indexaize/.well-known/ai-plugin.json
 // ============================================================
-router.get('/.well-known/ai-plugin.json', appProxyAuth, async (req, res) => {
+router.get('/.well-known/ai-plugin.json', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
   if (!shop) {
     return res.status(400).json({ error: 'Missing shop parameter' });
@@ -1526,7 +1528,7 @@ function hashQuestion(q) {
   return hash.toString(36);
 }
 
-router.post('/ai/ask', appProxyAuth, async (req, res) => {
+router.post('/ai/ask', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop || req.body?.shop);
   const question = req.body?.question;
 
