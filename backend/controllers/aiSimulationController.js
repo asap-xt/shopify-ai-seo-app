@@ -168,7 +168,7 @@ router.post('/simulate-response', verifyRequest, async (req, res) => {
     }
     
     // Initialize GraphQL client
-    const adminGraphql = new GraphQLClient(`https://${shop}/admin/api/2024-01/graphql.json`, {
+    const adminGraphql = new GraphQLClient(`https://${shop}/admin/api/2025-07/graphql.json`, {
       headers: {
         'X-Shopify-Access-Token': accessToken,
         'Content-Type': 'application/json'

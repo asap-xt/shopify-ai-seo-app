@@ -210,7 +210,7 @@ class AIDiscoveryService {
     try {
       // First, try to get existing metafield
       const getResponse = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=${this.namespace}&key=settings`,
+        `https://${shop}/admin/api/2025-07/metafields.json?namespace=${this.namespace}&key=settings`,
         {
           headers: {
             'X-Shopify-Access-Token': session.accessToken,
@@ -237,7 +237,7 @@ class AIDiscoveryService {
       if (existingMetafield) {
         // Update existing
         saveResponse = await fetch(
-          `https://${shop}/admin/api/2024-07/metafields/${existingMetafield.id}.json`,
+          `https://${shop}/admin/api/2025-07/metafields/${existingMetafield.id}.json`,
           {
             method: 'PUT',
             headers: {
@@ -250,7 +250,7 @@ class AIDiscoveryService {
       } else {
         // Create new
         saveResponse = await fetch(
-          `https://${shop}/admin/api/2024-07/metafields.json`,
+          `https://${shop}/admin/api/2025-07/metafields.json`,
           {
             method: 'POST',
             headers: {
@@ -426,7 +426,7 @@ class AIDiscoveryService {
       
       // Use the same method as getSettings - fetch from Shopify metafields
       const response = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+        `https://${shop}/admin/api/2025-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
         {
           headers: {
             'X-Shopify-Access-Token': shopRecord.accessToken,
@@ -582,7 +582,7 @@ class AIDiscoveryService {
       let primaryDomain = `https://${shop}`;
       try {
         const shopInfoResponse = await fetch(
-          `https://${shop}/admin/api/2024-07/graphql.json`,
+          `https://${shop}/admin/api/2025-07/graphql.json`,
           {
             method: 'POST',
             headers: {
@@ -711,7 +711,7 @@ ${customRules}
 
       // Get settings from metafields
       const response = await fetch(
-        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+        `https://${shop}/admin/api/2025-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
         {
           headers: {
             'X-Shopify-Access-Token': shopRecord.accessToken,
@@ -920,7 +920,7 @@ ${customRules}
       // Get shop info
       try {
         const response = await fetch(
-          `https://${shop}/admin/api/2024-07/graphql.json`,
+          `https://${shop}/admin/api/2025-07/graphql.json`,
           {
             method: 'POST',
             headers: {

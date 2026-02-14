@@ -1665,7 +1665,7 @@ async function installThemeSnippet(shop) {
 
     // Създаваме файла чрез REST API
     const themeId = mainTheme.id.split('/').pop();
-    const putUrl = `https://${shop}/admin/api/2024-01/themes/${themeId}/assets.json`;
+    const putUrl = `https://${shop}/admin/api/2025-07/themes/${themeId}/assets.json`;
     const accessToken = await getAccessToken(shop);
     
     const response = await fetch(putUrl, {

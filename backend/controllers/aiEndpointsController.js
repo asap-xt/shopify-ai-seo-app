@@ -308,7 +308,7 @@ router.get('/ai/collections-feed.json', async (req, res) => {
     `;
 
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/graphql.json`,
+      `https://${shop}/admin/api/2025-07/graphql.json`,
       {
         method: 'POST',
         headers: {
@@ -414,7 +414,7 @@ router.get('/ai/welcome', async (req, res) => {
     }
     
     const shopInfoResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/graphql.json`,
+      `https://${shop}/admin/api/2025-07/graphql.json`,
       {
         method: 'POST',
         headers: { 'X-Shopify-Access-Token': shopRecord.accessToken, 'Content-Type': 'application/json' },
@@ -908,7 +908,7 @@ router.get('/.well-known/ai-plugin.json', async (req, res) => {
 
     // Get shop info
     const shopInfoResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/graphql.json`,
+      `https://${shop}/admin/api/2025-07/graphql.json`,
       {
         method: 'POST',
         headers: {

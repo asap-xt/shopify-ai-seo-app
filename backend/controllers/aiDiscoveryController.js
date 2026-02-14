@@ -583,7 +583,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
     
     // Delete metafield
     const response = await fetch(
-      `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+      `https://${shop}/admin/api/2025-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
       {
         headers: {
           'X-Shopify-Access-Token': session.accessToken,
@@ -598,7 +598,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
       
       if (metafield) {
         await fetch(
-          `https://${shop}/admin/api/2024-07/metafields/${metafield.id}.json`,
+          `https://${shop}/admin/api/2025-07/metafields/${metafield.id}.json`,
           {
             method: 'DELETE',
             headers: {
@@ -611,7 +611,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
     
     // NEW: Delete robots.txt redirect
     const redirectsResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/redirects.json?path=/robots.txt`,
+      `https://${shop}/admin/api/2025-07/redirects.json?path=/robots.txt`,
       {
         headers: {
           'X-Shopify-Access-Token': session.accessToken
@@ -623,7 +623,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
       const redirectsData = await redirectsResponse.json();
       for (const redirect of redirectsData.redirects || []) {
         await fetch(
-          `https://${shop}/admin/api/2024-07/redirects/${redirect.id}.json`,
+          `https://${shop}/admin/api/2025-07/redirects/${redirect.id}.json`,
           {
             method: 'DELETE',
             headers: {
@@ -665,7 +665,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
     
     // Get theme
     const themesResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/themes.json`,
+      `https://${shop}/admin/api/2025-07/themes.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
     
@@ -674,7 +674,7 @@ router.get('/ai-discovery/test-assets', validateRequest(), async (req, res) => {
     
     // List all assets
     const assetsResponse = await fetch(
-      `https://${shop}/admin/api/2024-07/themes/${activeTheme.id}/assets.json`,
+      `https://${shop}/admin/api/2025-07/themes/${activeTheme.id}/assets.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
     
