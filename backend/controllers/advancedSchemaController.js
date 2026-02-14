@@ -1018,9 +1018,13 @@ async function generateProductSchemas(shop, productDoc) {
     return { schemas: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
   }
   
-  // OPTIMIZATION 1: Get product + ALL SEO metafields in ONE query
+  // OPTIMIZATION 1: Get product + ALL SEO metafields + shop name + brand in ONE query
   const query = `
     query GetProductWithMetafields($id: ID!) {
+      shop {
+        name
+        organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
+      }
       product(id: $id) {
         id
         title
@@ -1041,6 +1045,8 @@ async function generateProductSchemas(shop, productDoc) {
             node {
               url
               altText
+              width
+              height
             }
           }
         }
@@ -1068,6 +1074,20 @@ async function generateProductSchemas(shop, productDoc) {
   
   const productData = await executeWithRetry(shop, query, { id: productGid });
   const product = productData.product;
+  
+  // Extract store brand name: Organization Schema name > Shop name > domain
+  let storeBrandName = shop;
+  try {
+    const orgMeta = productData.shop?.organizationMetafield?.value;
+    if (orgMeta) {
+      const orgData = JSON.parse(orgMeta);
+      storeBrandName = orgData.name || productData.shop?.name || shop;
+    } else {
+      storeBrandName = productData.shop?.name || shop;
+    }
+  } catch (e) {
+    storeBrandName = productData.shop?.name || shop;
+  }
   
   if (!product) {
     console.error(`[SCHEMA] Product not found: ${productGid}`);
@@ -1099,7 +1119,7 @@ async function generateProductSchemas(shop, productDoc) {
     if (!seoData) continue;
     
     // Generate schemas for this language
-    const result = await generateLangSchemas(product, seoData, shop, lang.code);
+    const result = await generateLangSchemas(product, seoData, shop, lang.code, storeBrandName);
     schemas.push({ language: lang.code, schemas: result.schemas });
     
     // Collect usage
@@ -1153,7 +1173,7 @@ async function generateProductSchemas(shop, productDoc) {
 }
 
 // Generate schemas for specific language
-async function generateLangSchemas(product, seoData, shop, language) {
+async function generateLangSchemas(product, seoData, shop, language, shopName = null) {
   const shopUrl = `https://${shop}`;
   const productUrl = `${shopUrl}/products/${product.handle}`;
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
@@ -1292,12 +1312,55 @@ async function generateLangSchemas(product, seoData, shop, language) {
       ? (seoData.imageAlt || img.altText || seoData.title)
       : (img.altText || seoData.title);
     
-    return {
+    const imageObj = {
       "@type": "ImageObject",
       "url": img.url,
       "name": altText
     };
+    // Add dimensions if available (improves Google validation)
+    if (img.width) imageObj.width = img.width;
+    if (img.height) imageObj.height = img.height;
+    return imageObj;
   });
+  
+  // Brand: product vendor > store brand name from Organization Schema > shop name
+  const brandName = product.vendor || shopName || shop;
+  
+  // Offers: Use Offer for single variant, AggregateOffer for multiple
+  // priceValidUntil: 90 days (Google recommends reasonable timeframe)
+  const priceValidUntil = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const isSingleVariant = variantCount <= 1;
+  
+  let offers;
+  if (isSingleVariant && minPrice !== null && !isNaN(minPrice)) {
+    // Single variant → Offer with price
+    offers = {
+      "@type": "Offer",
+      "url": productUrl,
+      "priceCurrency": priceCurrency,
+      "price": minPrice,
+      "availability": availability,
+      "priceValidUntil": priceValidUntil
+    };
+  } else {
+    // Multiple variants → AggregateOffer with lowPrice/highPrice
+    offers = {
+      "@type": "AggregateOffer",
+      "url": productUrl,
+      "priceCurrency": priceCurrency,
+      "availability": availability,
+      "priceValidUntil": priceValidUntil
+    };
+    if (minPrice !== null && !isNaN(minPrice)) {
+      offers.lowPrice = minPrice;
+    }
+    if (maxPrice !== null && !isNaN(maxPrice)) {
+      offers.highPrice = maxPrice;
+    }
+    if (variantCount > 1) {
+      offers.offerCount = variantCount;
+    }
+  }
   
   const productSchema = {
     "@context": "https://schema.org",
@@ -1306,30 +1369,16 @@ async function generateLangSchemas(product, seoData, shop, language) {
     "name": seoData.title,
     "description": seoData.metaDescription,
     "url": productUrl,
-    "image": images.length > 0 ? images : [],
     "brand": {
       "@type": "Brand",
-      "name": product.vendor || "Unknown"
+      "name": brandName
     },
-    "offers": {
-      "@type": "AggregateOffer",
-      "priceCurrency": priceCurrency,
-      "availability": availability,
-      "priceValidUntil": new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 year from now
-    }
+    "offers": offers
   };
   
-  // Add prices only if they exist and are valid numbers
-  if (minPrice !== null && !isNaN(minPrice)) {
-    productSchema.offers.lowPrice = minPrice;
-  }
-  if (maxPrice !== null && !isNaN(maxPrice)) {
-    productSchema.offers.highPrice = maxPrice;
-  }
-  
-  // Add offerCount if multiple variants
-  if (variantCount > 1) {
-    productSchema.offers.offerCount = variantCount;
+  // Only add images if at least one exists (Google requires >= 1 image for Product)
+  if (images.length > 0) {
+    productSchema.image = images;
   }
   
   // Add SKU if available
