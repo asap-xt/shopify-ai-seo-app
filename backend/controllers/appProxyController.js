@@ -1619,8 +1619,8 @@ router.post('/ai/ask', appProxyAuth, async (req, res) => {
                 refundPolicy { title body }
                 privacyPolicy { title body }
                 termsOfService { title body }
-                aiContextMetafield: metafield(namespace: "seo_ai", key: "ai_context") { value }
-                seoMetafield: metafield(namespace: "seo_ai", key: "seo_metadata") { value }
+                aiContextMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") { value }
+                seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
               }
             }`
           })
@@ -1656,18 +1656,19 @@ router.post('/ai/ask', appProxyAuth, async (req, res) => {
           storeContext += `- About: ${seoMeta.shortDescription}\n`;
         }
 
-        // Add AI context data (rich business info)
+        // Add AI context data (rich business info from ai_metadata metafield)
         if (aiContext) {
-          if (aiContext.business_type) storeContext += `- Business: ${aiContext.business_type}\n`;
-          if (aiContext.unique_selling_points) storeContext += `- Unique Selling Points: ${aiContext.unique_selling_points.substring(0, 500)}\n`;
+          if (aiContext.businessType) storeContext += `- Business: ${aiContext.businessType}\n`;
+          if (aiContext.uniqueSellingPoints) storeContext += `- Unique Selling Points: ${aiContext.uniqueSellingPoints.substring(0, 500)}\n`;
+          if (aiContext.primaryCategories) storeContext += `- Categories: ${aiContext.primaryCategories}\n`;
           
           // Add shipping info from AI context
-          if (aiContext.shipping) {
-            storeContext += `\nSHIPPING POLICY:\n${aiContext.shipping.substring(0, 800)}\n`;
+          if (aiContext.shippingInfo) {
+            storeContext += `\nSHIPPING POLICY:\n${aiContext.shippingInfo.substring(0, 800)}\n`;
           }
           // Add returns info from AI context
-          if (aiContext.returns) {
-            storeContext += `\nRETURN / REFUND POLICY:\n${aiContext.returns.substring(0, 800)}\n`;
+          if (aiContext.returnPolicy) {
+            storeContext += `\nRETURN / REFUND POLICY:\n${aiContext.returnPolicy.substring(0, 800)}\n`;
           }
         }
 
