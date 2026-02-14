@@ -830,7 +830,8 @@ export default function Settings() {
         storeMetadata: 'Store Metadata',
         schemaData: 'Schema Data',
         llmsTxt: 'LLMs.txt File',
-        discoveryLinks: 'AI Discovery Links'
+        discoveryLinks: 'AI Discovery Links',
+        aiAsk: 'AI Ask Endpoint'
       };
       setToast(`Upgrade your plan to enable ${feature[featureKey] || featureKey}`);
       return;
@@ -852,7 +853,8 @@ export default function Settings() {
             collectionsJson: 'ai-collections-json',
             storeMetadata: 'ai-store-metadata',
             llmsTxt: 'ai-llms-txt',
-            discoveryLinks: 'ai-discovery-links'
+            discoveryLinks: 'ai-discovery-links',
+            aiAsk: 'ai-ask-endpoint'
           };
           
           // Use dynamic token estimation with actual product count
@@ -1000,7 +1002,8 @@ export default function Settings() {
       collectionsJson: 2,     // Professional Plus+
       discoveryLinks: 2,      // Professional Plus+ (theme injection)
       aiSitemap: 2,           // Professional Plus+ (requires tokens for Plus plans)
-      schemaData: 2           // Professional Plus+ (requires tokens for Plus plans, Enterprise gets more)
+      schemaData: 2,          // Professional Plus+ (requires tokens for Plus plans, Enterprise gets more)
+      aiAsk: 2               // Professional Plus+ (AI-powered, cost absorbed)
     };
     
     const requiredIndex = requirements[featureKey];
@@ -1039,6 +1042,10 @@ export default function Settings() {
         growth_extra: 'Available in Enterprise'
       },
       discoveryLinks: {
+        starter: 'Available in Professional Plus or Growth+',
+        professional: 'Available in Professional Plus or Growth+'
+      },
+      aiAsk: {
         starter: 'Available in Professional Plus or Growth+',
         professional: 'Available in Professional Plus or Growth+'
       }
@@ -1587,6 +1594,12 @@ export default function Settings() {
                   key: 'discoveryLinks',
                   name: 'AI Discovery Links',
                   description: 'Adds <link rel="alternate"> tags in your store\'s <head> for AI crawler discovery',
+                  requiredPlan: 'Growth'
+                },
+                {
+                  key: 'aiAsk',
+                  name: 'AI Ask Endpoint',
+                  description: 'Interactive endpoint — AI agents can ask questions about your store and get answers based on real data',
                   requiredPlan: 'Growth'
                 }
               ].map((feature) => {

@@ -6,9 +6,12 @@ import fetch from 'node-fetch';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import Sitemap from '../db/Sitemap.js';
+import Product from '../db/Product.js';
+import Collection from '../db/Collection.js';
 import { resolveShopToken } from '../utils/tokenResolver.js';
 import { appProxyAuth } from '../utils/appProxyValidator.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
+import { getGeminiResponse } from '../ai/gemini.js';
 
 const router = express.Router();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
@@ -666,170 +669,191 @@ router.get('/ai/welcome', appProxyAuth, async (req, res) => {
     
     const shopData = await shopResponse.json();
     const shopInfo = shopData.data?.shop;
-    
+    const shopName = shopInfo?.name || shop.replace('.myshopify.com', '');
+    const primaryDomain = shopInfo?.primaryDomain?.url || `https://${shop}`;
+    const baseUrl = `${primaryDomain}/apps/${APP_PROXY_SUBPATH}`;
+    const planKey = (settings?.planKey || 'starter').toLowerCase().replace(/\s+/g, '_');
+
+    // Build endpoints list
+    const endpoints = [];
+    if (settings?.features?.productsJson) endpoints.push({ name: 'Products JSON Feed', path: `/ai/products.json`, desc: 'Complete product catalog with AI-optimized titles, descriptions, pricing, and availability', format: 'JSON' });
+    if (settings?.features?.collectionsJson) endpoints.push({ name: 'Collections Feed', path: `/ai/collections-feed.json`, desc: 'Product categories and collections with SEO metadata', format: 'JSON' });
+    if (settings?.features?.storeMetadata) endpoints.push({ name: 'Store Metadata', path: `/ai/store-metadata.json`, desc: 'Organization schema, business info, and policies', format: 'JSON' });
+    if (settings?.features?.schemaData) endpoints.push({ name: 'Schema Data', path: `/ai/schema-data.json`, desc: 'Rich structured data: BreadcrumbList, FAQPage, Product schemas', format: 'JSON' });
+    if (settings?.features?.aiSitemap) endpoints.push({ name: 'AI Sitemap', path: `/ai/sitemap-feed.xml`, desc: 'Enhanced XML sitemap with AI hints and priority scoring', format: 'XML' });
+    if (settings?.features?.llmsTxt) {
+      endpoints.push({ name: 'LLMs.txt', path: `/llms.txt`, desc: 'AI discovery file (llmstxt.org standard)', format: 'Markdown' });
+      endpoints.push({ name: 'LLMs-full.txt', path: `/llms-full.txt`, desc: 'Extended version with API documentation', format: 'Markdown' });
+    }
+    if (settings?.features?.aiAsk) endpoints.push({ name: 'AI Ask (Interactive)', path: `/ai/ask`, desc: 'Ask questions about this store — POST with JSON body {"question":"..."}', format: 'JSON', method: 'POST' });
+
+    // A1: Accept header detection — return Markdown for AI crawlers
+    const acceptHeader = req.get('Accept') || '';
+    const wantsMarkdown = acceptHeader.includes('text/markdown') || acceptHeader.includes('text/plain');
+
+    if (wantsMarkdown) {
+      // Return Markdown format for AI agents
+      let md = `# ${shopName} - AI Data Endpoints\n\n`;
+      md += `> ${shopInfo?.description || `AI-optimized e-commerce data from ${shopName}`}\n\n`;
+      md += `## Available Endpoints\n\n`;
+      endpoints.forEach(ep => {
+        md += `- [${ep.name}](${baseUrl}${ep.path}): ${ep.desc} (${ep.format}${ep.method ? ', ' + ep.method : ''})\n`;
+      });
+      md += `\n## Integration\n\n`;
+      md += `- Base URL: \`${baseUrl}\`\n`;
+      md += `- Authentication: None (public access)\n`;
+      md += `- Rate limits: 60 req/min per endpoint\n`;
+      md += `- Caching: ETags supported\n`;
+      if (settings?.features?.aiAsk) {
+        md += `\n## Interactive Query\n\n`;
+        md += `POST ${baseUrl}/ai/ask with JSON body: {"question": "your question"}\n`;
+        md += `Returns structured answer with product references.\n`;
+      }
+      md += `\n---\n`;
+      md += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
+      md += `generator: indexAIze - Unlock AI Search\n`;
+
+      res.set('Content-Type', 'text/markdown; charset=utf-8');
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.send(md);
+    }
+
+    // A2: Enhanced JSON-LD with DataCatalog and Action endpoints
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebAPI",
+          "name": `${shopName} AI Data API`,
+          "description": `Structured e-commerce data endpoints for AI agents from ${shopName}`,
+          "url": `${baseUrl}/ai/welcome`,
+          "documentation": `${baseUrl}/llms-full.txt`,
+          "provider": {
+            "@type": "Organization",
+            "name": shopName,
+            "url": primaryDomain
+          },
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        },
+        {
+          "@type": "DataCatalog",
+          "name": `${shopName} Product Catalog`,
+          "url": `${baseUrl}/ai/products.json`,
+          "description": "Complete product catalog with AI-optimized metadata",
+          "provider": { "@type": "Organization", "name": shopName }
+        },
+        ...(settings?.features?.aiAsk ? [{
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": `${baseUrl}/ai/ask`,
+            "httpMethod": "POST",
+            "contentType": "application/json"
+          },
+          "name": "Ask about products",
+          "description": "Query this store with natural language questions about products, policies, and availability"
+        }] : [])
+      ]
+    };
+
     // Welcome page HTML
+    const endpointsHtml = endpoints.map(ep => `
+      <div class="endpoint">
+        <div class="ep-header">
+          <h3>${ep.name} <span class="badge">${ep.format}</span>${ep.method ? `<span class="badge method">${ep.method}</span>` : ''}</h3>
+        </div>
+        <code class="ep-url">${baseUrl}${ep.path}</code>
+        <p>${ep.desc}</p>
+      </div>
+    `).join('');
+
     const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Welcome - ${shopInfo?.name || shop}</title>
-  <meta name="description" content="AI-optimized data endpoints for ${shopInfo?.name || shop}. Access structured product data, collections, and store information.">
+  <title>AI Data API - ${shopName}</title>
+  <meta name="description" content="AI-optimized data endpoints for ${shopName}. Access structured product data, collections, and store information.">
   <meta name="robots" content="index, follow">
-  
-  <!-- Open Graph -->
-  <meta property="og:title" content="AI Data Endpoints - ${shopInfo?.name}">
-  <meta property="og:description" content="Structured e-commerce data optimized for AI consumption">
+  <meta property="og:title" content="${shopName} - AI Data API">
+  <meta property="og:description" content="Structured e-commerce data optimized for AI agents">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/${APP_PROXY_SUBPATH}/ai/welcome">
-  
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebAPI",
-    "name": "${shopInfo?.name} AI Data API",
-    "description": "Structured e-commerce data endpoints for AI agents",
-    "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}/apps/${APP_PROXY_SUBPATH}/ai/welcome",
-    "provider": {
-      "@type": "Organization",
-      "name": "${shopInfo?.name}",
-      "url": "${shopInfo?.primaryDomain?.url || `https://${shop}`}"
-    },
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    }
-  }
-  </script>
-  
+  <meta property="og:url" content="${baseUrl}/ai/welcome">
+  <link rel="alternate" type="text/plain" href="${baseUrl}/llms.txt" title="LLMs.txt">
+  <link rel="alternate" type="text/plain" href="${baseUrl}/llms-full.txt" title="LLMs-full.txt">
+  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-      line-height: 1.6; 
-      color: #333;
-      background: #f8f9fa;
-    }
-    .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
-    header { 
-      background: white; 
-      border-bottom: 2px solid #e9ecef; 
-      margin: -2rem -2rem 3rem -2rem;
-      padding: 3rem 2rem;
-    }
-    h1 { 
-      font-size: 2.5rem; 
-      margin-bottom: 0.5rem; 
-      color: #2c3e50;
-    }
-    .tagline { 
-      font-size: 1.2rem; 
-      color: #6c757d; 
-    }
-    .section { 
-      background: white; 
-      padding: 2rem; 
-      margin-bottom: 2rem; 
-      border-radius: 8px; 
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .endpoint {
-      background: #f8f9fa;
-      padding: 1rem;
-      margin: 1rem 0;
-      border-left: 4px solid #007bff;
-      border-radius: 4px;
-    }
-    .endpoint h3 {
-      margin: 0 0 0.5rem 0;
-      color: #495057;
-    }
-    .endpoint a {
-      color: #007bff;
-      text-decoration: none;
-      font-family: monospace;
-      font-size: 0.95rem;
-    }
-    .endpoint a:hover { text-decoration: underline; }
-    .endpoint p { 
-      margin: 0.5rem 0 0 0; 
-      color: #6c757d;
-      font-size: 0.95rem;
-    }
-    .meta { 
-      color: #6c757d; 
-      font-size: 0.9rem; 
-      margin-top: 3rem;
-      text-align: center;
-    }
-    .badge {
-      display: inline-block;
-      padding: 0.25rem 0.5rem;
-      background: #28a745;
-      color: white;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      margin-left: 0.5rem;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a2e; background: #f0f2f5; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem; }
+    header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; margin: -2rem -2rem 2rem -2rem; padding: 3rem 2rem; }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    .tagline { color: rgba(255,255,255,0.8); font-size: 1.1rem; }
+    .section { background: white; padding: 1.5rem; margin-bottom: 1.5rem; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .section h2 { font-size: 1.3rem; margin-bottom: 1rem; color: #1a1a2e; }
+    .endpoint { background: #f8f9fc; padding: 1rem; margin: 0.75rem 0; border-left: 3px solid #4361ee; border-radius: 6px; }
+    .endpoint h3 { margin: 0 0 0.3rem 0; font-size: 1rem; color: #333; }
+    .ep-url { display: block; color: #4361ee; font-size: 0.85rem; word-break: break-all; margin: 0.25rem 0; }
+    .endpoint p { margin: 0.25rem 0 0 0; color: #666; font-size: 0.9rem; }
+    .badge { display: inline-block; padding: 0.15rem 0.4rem; background: #4361ee; color: white; border-radius: 3px; font-size: 0.7rem; margin-left: 0.5rem; font-weight: 500; }
+    .badge.method { background: #e63946; }
+    .code-block { background: #1a1a2e; color: #e0e0e0; padding: 1rem; border-radius: 6px; font-size: 0.85rem; overflow-x: auto; font-family: 'SF Mono', Monaco, monospace; }
+    .code-block .comment { color: #6c757d; }
+    .code-block .key { color: #82aaff; }
+    .code-block .string { color: #c3e88d; }
+    ul { margin-left: 1.5rem; color: #555; }
+    ul li { margin: 0.25rem 0; }
+    .meta { color: #999; font-size: 0.85rem; margin-top: 2rem; text-align: center; }
+    .meta a { color: #999; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🤖 Welcome, AI Agents!</h1>
-      <p class="tagline">Structured e-commerce data from ${shopInfo?.name || shop}</p>
+      <h1>${shopName} - AI Data API</h1>
+      <p class="tagline">Structured e-commerce data for AI agents and models</p>
     </header>
     
     <div class="section">
-      <h2>📊 Available Data Endpoints</h2>
-      <p>All endpoints return JSON data optimized for AI consumption.</p>
-      
-      ${settings?.features?.productsJson ? `
-      <div class="endpoint">
-        <h3>Products Feed <span class="badge">Active</span></h3>
-        <a href="/apps/${APP_PROXY_SUBPATH}/ai/products.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/products.json?shop=${shop}</a>
-        <p>Complete product catalog with descriptions, prices, and AI-optimized metadata</p>
-      </div>
-      ` : ''}
-      
-      ${settings?.features?.collectionsJson ? `
-      <div class="endpoint">
-        <h3>Collections Feed <span class="badge">Active</span></h3>
-        <a href="/apps/${APP_PROXY_SUBPATH}/ai/collections-feed.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/collections-feed.json?shop=${shop}</a>
-        <p>Product categories and collections with semantic groupings</p>
-      </div>
-      ` : ''}
-      
-      ${settings?.features?.storeMetadata ? `
-      <div class="endpoint">
-        <h3>Store Metadata <span class="badge">Active</span></h3>
-        <a href="/apps/${APP_PROXY_SUBPATH}/ai/store-metadata.json?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/store-metadata.json?shop=${shop}</a>
-        <p>Organization and LocalBusiness schema data</p>
-      </div>
-      ` : ''}
-      
-      ${settings?.features?.aiSitemap ? `
-      <div class="endpoint">
-        <h3>AI Sitemap <span class="badge">Active</span></h3>
-        <a href="/apps/${APP_PROXY_SUBPATH}/ai/sitemap-feed.xml?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/sitemap-feed.xml?shop=${shop}</a>
-        <p>Enhanced sitemap with AI-optimized hints and metadata</p>
-      </div>
-      ` : ''}
-      
-      ${settings?.features?.schemaData ? `
-      <div class="endpoint">
-        <h3>Advanced Schema Data <span class="badge">Active</span></h3>
-        <a href="/apps/${APP_PROXY_SUBPATH}/ai/schema-sitemap.xml?shop=${shop}" target="_blank">/apps/${APP_PROXY_SUBPATH}/ai/schema-sitemap.xml?shop=${shop}</a>
-        <p>BreadcrumbList, FAQPage, and other advanced schema markup</p>
-      </div>
-      ` : ''}
+      <h2>Available Endpoints</h2>
+      ${endpointsHtml}
     </div>
     
-    <div class="meta">
-      <p>Generated by indexAIze - Unlock AI Search • ${new Date().toISOString()}</p>
+    ${settings?.features?.aiAsk ? `
+    <div class="section">
+      <h2>Interactive Query</h2>
+      <p style="margin-bottom: 1rem; color: #555;">Ask questions about this store's products, policies, and availability:</p>
+      <div class="code-block">
+        <span class="comment">// POST ${baseUrl}/ai/ask</span><br>
+        {<br>
+        &nbsp;&nbsp;<span class="key">"question"</span>: <span class="string">"What products do you have under $100?"</span><br>
+        }<br><br>
+        <span class="comment">// Response:</span><br>
+        {<br>
+        &nbsp;&nbsp;<span class="key">"answer"</span>: <span class="string">"We have 5 products under $100..."</span>,<br>
+        &nbsp;&nbsp;<span class="key">"sources"</span>: [{<span class="key">"type"</span>: <span class="string">"product"</span>, <span class="key">"title"</span>: <span class="string">"..."</span>}],<br>
+        &nbsp;&nbsp;<span class="key">"confidence"</span>: 0.92<br>
+        }
+      </div>
     </div>
+    ` : ''}
+
+    <div class="section">
+      <h2>Integration Guidelines</h2>
+      <ul>
+        <li>All data endpoints are publicly accessible (no auth required)</li>
+        <li>Rate limits: 60 requests/min per endpoint, 10 req/min for /ai/ask</li>
+        <li>ETags and Cache-Control headers for efficient caching</li>
+        <li>Data freshness: Updated every ${planKey === 'enterprise' ? '2 hours' : planKey === 'growth_extra' ? '12 hours' : '24 hours'}</li>
+        <li><code>Accept: text/markdown</code> on this page returns machine-readable Markdown</li>
+      </ul>
+    </div>
+    
+    <p class="meta">
+      Powered by <strong>indexAIze</strong> &mdash; ${new Date().toISOString().split('T')[0]} &mdash; 
+      <a href="${primaryDomain}">Visit Store</a>
+    </p>
   </div>
 </body>
 </html>`;
@@ -1395,6 +1419,305 @@ router.get('/llms.txt', appProxyAuth, async (req, res) => {
   } catch (error) {
     console.error('[APP_PROXY] LLMs.txt error:', error);
     res.status(500).type('text/plain').send('# Error generating llms.txt\n');
+  }
+});
+
+// ============================================================
+// LLMs-full.txt endpoint - Extended version with API docs
+// Accessible via: /apps/indexaize/llms-full.txt
+// ============================================================
+router.get('/llms-full.txt', appProxyAuth, async (req, res) => {
+  try {
+    const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
+    if (!shop) {
+      return res.status(400).type('text/plain').send('Missing shop parameter');
+    }
+
+    const llmsFullTxt = await aiDiscoveryService.generateLlmsFullTxt(shop);
+    
+    if (!llmsFullTxt) {
+      return res.status(404).type('text/plain').send('# LLMs.txt is not enabled for this store.\n');
+    }
+
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('X-Robots-Tag', 'noindex');
+    res.send(llmsFullTxt);
+  } catch (error) {
+    console.error('[APP_PROXY] LLMs-full.txt error:', error);
+    res.status(500).type('text/plain').send('# Error generating llms-full.txt\n');
+  }
+});
+
+// ============================================================
+// AI Plugin JSON manifest - AI agent discovery
+// Accessible via: /apps/indexaize/.well-known/ai-plugin.json
+// ============================================================
+router.get('/.well-known/ai-plugin.json', appProxyAuth, async (req, res) => {
+  const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord?.accessToken) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    const shopInfoResponse = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': shopRecord.accessToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: `{ shop { name description primaryDomain { url } } }`
+        })
+      }
+    );
+    const shopData = await shopInfoResponse.json();
+    const shopInfo = shopData.data?.shop;
+
+    const manifest = aiDiscoveryService.generateAiPluginJson(
+      shop,
+      shopInfo?.name || shop.replace('.myshopify.com', ''),
+      shopInfo?.description || '',
+      shopInfo?.primaryDomain?.url || `https://${shop}`
+    );
+
+    res.set('Content-Type', 'application/json');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json(manifest);
+  } catch (error) {
+    console.error('[APP_PROXY] ai-plugin.json error:', error);
+    res.status(500).json({ error: 'Failed to generate AI plugin manifest' });
+  }
+});
+
+// ============================================================
+// AI Ask endpoint - AI agents can query the store
+// Accessible via: POST /apps/indexaize/ai/ask
+// Rate limited: 10 req/min per shop
+// ============================================================
+const askRateLimit = new Map();
+const askCache = new Map();
+
+function checkAskRateLimit(shop) {
+  const now = Date.now();
+  const limit = askRateLimit.get(shop);
+  if (!limit || now > limit.resetAt) {
+    askRateLimit.set(shop, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (limit.count >= 10) return false;
+  limit.count++;
+  return true;
+}
+
+function hashQuestion(q) {
+  let hash = 0;
+  for (let i = 0; i < q.length; i++) {
+    hash = ((hash << 5) - hash) + q.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
+router.post('/ai/ask', appProxyAuth, async (req, res) => {
+  const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop || req.body?.shop);
+  const question = req.body?.question;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+  if (!question || typeof question !== 'string' || question.trim().length < 3) {
+    return res.status(400).json({ error: 'Missing or invalid question (min 3 characters)' });
+  }
+  if (question.length > 500) {
+    return res.status(400).json({ error: 'Question too long (max 500 characters)' });
+  }
+
+  if (!checkAskRateLimit(shop)) {
+    return res.status(429).json({ error: 'Rate limit exceeded. Max 10 requests per minute.', retryAfter: 60 });
+  }
+
+  // Check cache
+  const cacheKey = `${shop}:${hashQuestion(question.trim().toLowerCase())}`;
+  const cached = askCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return res.json({ ...cached.data, cached: true });
+  }
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord?.accessToken) {
+      return res.status(404).json({ error: 'Shop not found' });
+    }
+
+    // Check if aiAsk feature is enabled
+    const session = { accessToken: shopRecord.accessToken };
+    const settings = await aiDiscoveryService.getSettings(shop, session);
+    if (!settings?.features?.aiAsk) {
+      return res.status(403).json({ error: 'AI Ask feature is not enabled for this store.' });
+    }
+
+    // Build context
+    let storeContext = '';
+
+    // Products
+    const products = await Product.find({ shop })
+      .select('title description price currency tags handle available productType vendor')
+      .limit(50)
+      .lean();
+
+    if (products.length > 0) {
+      storeContext += `PRODUCTS (${products.length} items):\n`;
+      products.forEach(p => {
+        storeContext += `- ${p.title}`;
+        if (p.price) storeContext += ` | ${p.currency || ''}${p.price}`;
+        if (p.available === false) storeContext += ' [OUT OF STOCK]';
+        if (p.description) storeContext += ` | ${p.description.substring(0, 150)}`;
+        storeContext += '\n';
+      });
+      storeContext += '\n';
+    }
+
+    // Collections
+    const collections = await Collection.find({ shop })
+      .select('title description handle')
+      .limit(20)
+      .lean();
+
+    if (collections.length > 0) {
+      storeContext += `COLLECTIONS:\n`;
+      collections.forEach(c => {
+        storeContext += `- ${c.title}`;
+        if (c.description) storeContext += `: ${c.description.substring(0, 100)}`;
+        storeContext += '\n';
+      });
+      storeContext += '\n';
+    }
+
+    // Shop info + policies
+    try {
+      const shopInfoResponse = await fetch(
+        `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: `{
+              shop {
+                name description email primaryDomain { url }
+                shippingPolicy { title body }
+                refundPolicy { title body }
+                privacyPolicy { title body }
+                termsOfService { title body }
+              }
+            }`
+          })
+        }
+      );
+      const shopData = await shopInfoResponse.json();
+      const shopInfo = shopData.data?.shop;
+
+      if (shopInfo) {
+        storeContext += `STORE INFO:\n`;
+        storeContext += `- Name: ${shopInfo.name}\n`;
+        if (shopInfo.description) storeContext += `- Description: ${shopInfo.description}\n`;
+        if (shopInfo.email) storeContext += `- Contact: ${shopInfo.email}\n`;
+        storeContext += `- URL: ${shopInfo.primaryDomain?.url || `https://${shop}`}\n`;
+
+        const policies = [shopInfo.shippingPolicy, shopInfo.refundPolicy, shopInfo.privacyPolicy, shopInfo.termsOfService].filter(p => p?.body);
+        if (policies.length > 0) {
+          storeContext += '\nSTORE POLICIES:\n';
+          policies.forEach(p => {
+            const cleanBody = p.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            storeContext += `- ${p.title}: ${cleanBody.substring(0, 300)}...\n`;
+          });
+        }
+        storeContext += '\n';
+      }
+    } catch (e) {
+      console.error('[AI-ASK] Failed to fetch shop info:', e.message);
+    }
+
+    // Call Gemini
+    const prompt = `You are a helpful shopping assistant for an online store. Answer the customer's question based ONLY on the store data provided below. Be concise, accurate, and helpful.
+
+If the question is about a specific product, include the product name and price in your answer.
+If you cannot find relevant information in the store data, say so honestly.
+Do NOT make up information that is not in the store data.
+Keep your answer under 200 words.
+
+STORE DATA:
+${storeContext}
+
+CUSTOMER QUESTION: ${question}
+
+Respond in JSON format:
+{
+  "answer": "Your helpful answer here",
+  "relevant_products": [{"title": "Product Name", "price": "29.99", "handle": "product-handle"}],
+  "confidence": 0.0-1.0
+}`;
+
+    const aiResult = await getGeminiResponse(prompt, {
+      maxTokens: 800,
+      temperature: 0.3,
+      priority: 'high'
+    });
+
+    let parsedResponse;
+    try {
+      parsedResponse = typeof aiResult.content === 'string' 
+        ? JSON.parse(aiResult.content) 
+        : aiResult.content;
+    } catch (e) {
+      parsedResponse = {
+        answer: typeof aiResult.content === 'string' ? aiResult.content : 'I could not process your question. Please try rephrasing.',
+        relevant_products: [],
+        confidence: 0.5
+      };
+    }
+
+    const sources = [];
+    const shopUrl = `https://${shop.replace('.myshopify.com', '')}.myshopify.com`;
+    if (parsedResponse.relevant_products?.length > 0) {
+      parsedResponse.relevant_products.forEach(p => {
+        if (p.handle) {
+          sources.push({ type: 'product', title: p.title, price: p.price, url: `${shopUrl}/products/${p.handle}` });
+        }
+      });
+    }
+
+    const responseData = {
+      answer: parsedResponse.answer,
+      sources,
+      confidence: parsedResponse.confidence || 0.7,
+      store: shop,
+      timestamp: new Date().toISOString()
+    };
+
+    // Cache 5 min
+    askCache.set(cacheKey, { data: responseData, expiresAt: Date.now() + 5 * 60 * 1000 });
+    if (askCache.size > 1000) {
+      const now = Date.now();
+      for (const [key, val] of askCache) {
+        if (now > val.expiresAt) askCache.delete(key);
+      }
+    }
+
+    res.json(responseData);
+  } catch (error) {
+    console.error('[APP_PROXY] AI Ask error:', error);
+    res.status(500).json({ error: 'Failed to process question. Please try again.' });
   }
 });
 

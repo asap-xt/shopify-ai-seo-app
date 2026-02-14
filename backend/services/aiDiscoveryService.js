@@ -317,7 +317,8 @@ class AIDiscoveryService {
         storeMetadata: false,
         schemaData: false,
         llmsTxt: false,
-        discoveryLinks: false
+        discoveryLinks: false,
+        aiAsk: false
       },
       professional: {
         productsJson: false,
@@ -327,7 +328,8 @@ class AIDiscoveryService {
         storeMetadata: true, // Enabled by default (included in Professional)
         schemaData: false,
         llmsTxt: false,
-        discoveryLinks: false
+        discoveryLinks: false,
+        aiAsk: false
       },
       professional_plus: {
         productsJson: true, // Enabled by default (static, no tokens)
@@ -337,7 +339,8 @@ class AIDiscoveryService {
         storeMetadata: true, // Enabled by default (static, no tokens)
         schemaData: true, // Enabled by default (requires tokens when used)
         llmsTxt: true, // Enabled by default (static)
-        discoveryLinks: true // Enabled by default (static)
+        discoveryLinks: true, // Enabled by default (static)
+        aiAsk: true // Enabled by default (AI-powered)
       },
       growth: {
         productsJson: false,
@@ -347,7 +350,8 @@ class AIDiscoveryService {
         storeMetadata: true, // Enabled by default (included in Growth)
         schemaData: false,
         llmsTxt: false,
-        discoveryLinks: false
+        discoveryLinks: false,
+        aiAsk: false
       },
       growth_plus: {
         productsJson: true, // Enabled by default (static, no tokens)
@@ -357,7 +361,8 @@ class AIDiscoveryService {
         storeMetadata: true, // Enabled by default (static, no tokens)
         schemaData: true, // Enabled by default (requires tokens when used)
         llmsTxt: true, // Enabled by default (static)
-        discoveryLinks: true // Enabled by default (static)
+        discoveryLinks: true, // Enabled by default (static)
+        aiAsk: true // Enabled by default (AI-powered)
       },
       growth_extra: {
         productsJson: false,
@@ -367,7 +372,8 @@ class AIDiscoveryService {
         storeMetadata: false,
         schemaData: false,
         llmsTxt: false,
-        discoveryLinks: false
+        discoveryLinks: false,
+        aiAsk: false
       },
       enterprise: {
         productsJson: false,
@@ -377,7 +383,8 @@ class AIDiscoveryService {
         storeMetadata: false,
         schemaData: false,
         llmsTxt: false,
-        discoveryLinks: false
+        discoveryLinks: false,
+        aiAsk: false
       }
     };
 
@@ -679,11 +686,11 @@ ${customRules}
     const features = {
       starter: ['productsJson', 'aiSitemap', 'llmsTxt'],
       professional: ['productsJson', 'aiSitemap', 'llmsTxt'],
-      professional_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData'],
-      growth: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt'],
-      growth_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData'],
-      growth_extra: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata'],
-      enterprise: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData']
+      professional_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData', 'aiAsk'],
+      growth: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'aiAsk'],
+      growth_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData', 'aiAsk'],
+      growth_extra: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'aiAsk'],
+      enterprise: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData', 'aiAsk']
     };
 
     return features[plan]?.includes(feature) || false;
@@ -892,6 +899,130 @@ ${customRules}
       console.error('[AI Discovery] Error generating llms.txt:', error);
       return null;
     }
+  }
+
+  /**
+   * Generate llms-full.txt - extended version with sample data and detailed documentation
+   * Per llmstxt.org standard, this is the "full" version with more context for AI agents
+   */
+  async generateLlmsFullTxt(shop) {
+    try {
+      // Start with the standard llms.txt
+      const baseLlmsTxt = await this.generateLlmsTxt(shop);
+      if (!baseLlmsTxt) return null;
+
+      const shopRecord = await Shop.findOne({ shop });
+      if (!shopRecord?.accessToken) return baseLlmsTxt;
+
+      const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
+      let primaryDomain = `https://${shop}`;
+
+      // Get shop info
+      try {
+        const response = await fetch(
+          `https://${shop}/admin/api/2024-07/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              query: `{
+                shop {
+                  name
+                  description
+                  primaryDomain { url }
+                }
+              }`
+            })
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          primaryDomain = data.data?.shop?.primaryDomain?.url || primaryDomain;
+        }
+      } catch (e) { /* use defaults */ }
+
+      // Build extended content
+      let fullTxt = baseLlmsTxt.replace(/---\n[\s\S]*$/, ''); // Remove metadata footer
+
+      // Add API documentation section
+      fullTxt += `## API Documentation\n\n`;
+      fullTxt += `All endpoints are publicly accessible and return structured data optimized for AI consumption.\n\n`;
+      fullTxt += `### Base URL\n\n`;
+      fullTxt += `\`${primaryDomain}/apps/${appProxySubpath}/\`\n\n`;
+      fullTxt += `### Authentication\n\n`;
+      fullTxt += `No authentication required. Public access for all AI agents.\n\n`;
+      fullTxt += `### Rate Limits\n\n`;
+      fullTxt += `- 60 requests per minute per endpoint\n`;
+      fullTxt += `- Responses include Cache-Control headers\n`;
+      fullTxt += `- ETags supported for conditional requests\n\n`;
+
+      // Add AI Ask endpoint documentation
+      fullTxt += `### Interactive Query Endpoint\n\n`;
+      fullTxt += `AI agents can ask questions about this store's products and policies:\n\n`;
+      fullTxt += `\`\`\`\n`;
+      fullTxt += `POST ${primaryDomain}/apps/${appProxySubpath}/ai/ask\n`;
+      fullTxt += `Content-Type: application/json\n\n`;
+      fullTxt += `{"question": "What products do you have under $100?"}\n`;
+      fullTxt += `\`\`\`\n\n`;
+      fullTxt += `Response includes structured answer with source references.\n\n`;
+
+      // Add response format section
+      fullTxt += `## Response Formats\n\n`;
+      fullTxt += `- **Products Feed**: JSON array with title, description, price, availability, images, SEO data\n`;
+      fullTxt += `- **Collections Feed**: JSON array with collection name, description, product handles\n`;
+      fullTxt += `- **Store Metadata**: JSON object with organization schema, business info, policies\n`;
+      fullTxt += `- **AI Ask**: JSON object with answer text, source references, confidence score\n\n`;
+
+      // Re-add metadata footer
+      fullTxt += `---\n`;
+      fullTxt += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
+      fullTxt += `generator: indexAIze - Unlock AI Search\n`;
+      fullTxt += `format: llms-full.txt (extended version)\n`;
+
+      return fullTxt;
+    } catch (error) {
+      console.error('[AI Discovery] Error generating llms-full.txt:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate ai-plugin.json manifest for AI agent discovery
+   */
+  generateAiPluginJson(shop, shopName, shopDescription, primaryDomain) {
+    const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
+    const baseUrl = `${primaryDomain}/apps/${appProxySubpath}`;
+
+    return {
+      schema_version: 'v1',
+      name_for_model: shopName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_store',
+      name_for_human: shopName,
+      description_for_model: `Access ${shopName}'s product catalog, pricing, availability, collections, store policies, and business information. Use the /ai/ask endpoint to query the store with natural language questions. Use /ai/products.json for full catalog data and /ai/store-metadata.json for business information.${shopDescription ? ' ' + shopDescription : ''}`,
+      description_for_human: `${shopName} - AI-optimized e-commerce data and product information`,
+      api: {
+        type: 'openapi',
+        url: `${baseUrl}/ai/welcome`,
+        has_user_authentication: false
+      },
+      auth: {
+        type: 'none'
+      },
+      logo_url: `${primaryDomain}/favicon.ico`,
+      contact_email: '',
+      legal_info_url: `${primaryDomain}/policies/terms-of-service`,
+      endpoints: {
+        welcome: `${baseUrl}/ai/welcome`,
+        products: `${baseUrl}/ai/products.json`,
+        collections: `${baseUrl}/ai/collections-feed.json`,
+        store_metadata: `${baseUrl}/ai/store-metadata.json`,
+        ask: `${baseUrl}/ai/ask`,
+        llms_txt: `${baseUrl}/llms.txt`,
+        llms_full_txt: `${baseUrl}/llms-full.txt`
+      }
+    };
   }
 }
 
