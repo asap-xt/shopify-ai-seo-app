@@ -22,9 +22,11 @@ export async function createSubscription(shop, plan, accessToken, options = {}) 
   const trialDays = options.trialDays !== undefined ? options.trialDays : TRIAL_DAYS;
   const returnTo = options.returnTo || '/billing'; // Default to billing page
   
-  // STAGING MODE: Test payments enabled automatically for non-production environments
-  // Production (NODE_ENV=production) uses real payments, everything else uses test mode
-  const isTest = process.env.NODE_ENV !== 'production';
+  // Test mode: enabled for staging/dev environments
+  // Production uses real payments, staging/dev uses test mode
+  const PRODUCTION_URL = 'https://indexaize-aiseo-app-production.up.railway.app';
+  const isProduction = process.env.APP_URL === PRODUCTION_URL;
+  const isTest = !isProduction;
   
   const mutation = `
     mutation CreateSubscription(
@@ -149,7 +151,9 @@ export async function purchaseTokens(shop, usdAmount, accessToken, options = {})
   const tokens = await calculateTokensWithDynamicPricing(usdAmount);
   
   // Test mode for non-production environments (same as subscriptions)
-  const isTest = process.env.NODE_ENV !== 'production';
+  const PRODUCTION_URL = 'https://indexaize-aiseo-app-production.up.railway.app';
+  const isProduction = process.env.APP_URL === PRODUCTION_URL;
+  const isTest = !isProduction;
   
   const mutation = `
     mutation PurchaseTokens(
