@@ -315,7 +315,9 @@ class AIDiscoveryService {
         welcomePage: false,
         collectionsJson: false,
         storeMetadata: false,
-        schemaData: false
+        schemaData: false,
+        llmsTxt: false,
+        discoveryLinks: false
       },
       professional: {
         productsJson: false,
@@ -323,7 +325,9 @@ class AIDiscoveryService {
         welcomePage: false,
         collectionsJson: false,
         storeMetadata: true, // Enabled by default (included in Professional)
-        schemaData: false
+        schemaData: false,
+        llmsTxt: false,
+        discoveryLinks: false
       },
       professional_plus: {
         productsJson: true, // Enabled by default (static, no tokens)
@@ -331,7 +335,9 @@ class AIDiscoveryService {
         welcomePage: true, // Enabled by default (static, no tokens)
         collectionsJson: true, // Enabled by default (static, no tokens)
         storeMetadata: true, // Enabled by default (static, no tokens)
-        schemaData: true // Enabled by default (requires tokens when used)
+        schemaData: true, // Enabled by default (requires tokens when used)
+        llmsTxt: true, // Enabled by default (static)
+        discoveryLinks: true // Enabled by default (static)
       },
       growth: {
         productsJson: false,
@@ -339,7 +345,9 @@ class AIDiscoveryService {
         welcomePage: false,
         collectionsJson: false,
         storeMetadata: true, // Enabled by default (included in Growth)
-        schemaData: false
+        schemaData: false,
+        llmsTxt: false,
+        discoveryLinks: false
       },
       growth_plus: {
         productsJson: true, // Enabled by default (static, no tokens)
@@ -347,7 +355,9 @@ class AIDiscoveryService {
         welcomePage: true, // Enabled by default (static, no tokens)
         collectionsJson: true, // Enabled by default (static, no tokens)
         storeMetadata: true, // Enabled by default (static, no tokens)
-        schemaData: true // Enabled by default (requires tokens when used)
+        schemaData: true, // Enabled by default (requires tokens when used)
+        llmsTxt: true, // Enabled by default (static)
+        discoveryLinks: true // Enabled by default (static)
       },
       growth_extra: {
         productsJson: false,
@@ -355,7 +365,9 @@ class AIDiscoveryService {
         welcomePage: false,
         collectionsJson: false,
         storeMetadata: false,
-        schemaData: false
+        schemaData: false,
+        llmsTxt: false,
+        discoveryLinks: false
       },
       enterprise: {
         productsJson: false,
@@ -363,7 +375,9 @@ class AIDiscoveryService {
         welcomePage: false,
         collectionsJson: false,
         storeMetadata: false,
-        schemaData: false
+        schemaData: false,
+        llmsTxt: false,
+        discoveryLinks: false
       }
     };
 
@@ -467,13 +481,13 @@ class AIDiscoveryService {
       
       // Define plan features
       const planFeatures = {
-        starter: ['productsJson'],
-        professional: ['productsJson', 'storeMetadata'], // Store Metadata included
-        professional_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // All features unlocked, some require tokens
-        growth: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson'], // Store Metadata included
-        growth_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData'], // All features unlocked, some require tokens
-        growth_extra: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson'],
-        enterprise: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'schemaData']
+        starter: ['productsJson', 'llmsTxt'],
+        professional: ['productsJson', 'storeMetadata', 'llmsTxt'], // Store Metadata included
+        professional_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData', 'llmsTxt', 'discoveryLinks'], // All features unlocked
+        growth: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'llmsTxt', 'discoveryLinks'], // Store Metadata included
+        growth_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData', 'llmsTxt', 'discoveryLinks'], // All features unlocked
+        growth_extra: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'llmsTxt', 'discoveryLinks'],
+        enterprise: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'schemaData', 'llmsTxt', 'discoveryLinks']
       };
       
       const availableFeatures = planFeatures[normalizedPlan] || planFeatures.starter;
@@ -531,6 +545,11 @@ class AIDiscoveryService {
           robotsTxt += `Allow: /apps/${appProxySubpath}/ai/schema-data.json\n`;
         }
         
+        // LLMs.txt (use app proxy path)
+        if (settings.features?.llmsTxt && availableFeatures.includes('llmsTxt')) {
+          robotsTxt += `Allow: /apps/${appProxySubpath}/llms.txt\n`;
+        }
+        
         // Always allow robots.txt endpoint (use app proxy path)
         robotsTxt += `Allow: /apps/${appProxySubpath}/ai/robots-dynamic\n`;
         
@@ -574,6 +593,12 @@ class AIDiscoveryService {
         }
       } catch (e) {
         console.error('[ROBOTS] Failed to fetch primaryDomain:', e.message);
+      }
+      
+      // LLMs.txt reference (AI discovery standard)
+      if (settings.features?.llmsTxt && availableFeatures.includes('llmsTxt')) {
+        robotsTxt += `\n# LLMs.txt (AI Discovery)\n`;
+        robotsTxt += `# ${primaryDomain}/apps/${appProxySubpath}/llms.txt\n`;
       }
       
       robotsTxt += '\n# AI Discovery Sitemaps (XML only)\n';
@@ -652,14 +677,208 @@ ${customRules}
 
   isFeatureAvailable(plan, feature) {
     const features = {
-      starter: ['productsJson', 'aiSitemap'],
-      professional: ['productsJson', 'aiSitemap'],
-      growth: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt'],
-      growth_extra: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata'],
-      enterprise: ['productsJson', 'aiSitemap', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData']
+      starter: ['productsJson', 'aiSitemap', 'llmsTxt'],
+      professional: ['productsJson', 'aiSitemap', 'llmsTxt'],
+      professional_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'storeMetadata', 'schemaData'],
+      growth: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt'],
+      growth_plus: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData'],
+      growth_extra: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata'],
+      enterprise: ['productsJson', 'aiSitemap', 'llmsTxt', 'discoveryLinks', 'welcomePage', 'collectionsJson', 'autoRobotsTxt', 'storeMetadata', 'schemaData']
     };
 
     return features[plan]?.includes(feature) || false;
+  }
+
+  /**
+   * Generate llms.txt content for a shop
+   * Follows the llmstxt.org standard - Markdown format with H1, blockquote, H2 sections
+   * Content is dynamic based on enabled features and plan
+   */
+  async generateLlmsTxt(shop) {
+    try {
+      // Get shop record for access token
+      const shopRecord = await Shop.findOne({ shop });
+      if (!shopRecord || !shopRecord.accessToken) {
+        return '# Store\n\n> AI-optimized e-commerce data. Configure indexAIze settings to enable endpoints.\n';
+      }
+
+      // Get settings from metafields
+      const response = await fetch(
+        `https://${shop}/admin/api/2024-07/metafields.json?namespace=ai_discovery&key=settings&owner_resource=shop`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': shopRecord.accessToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      let settings = null;
+      if (response.ok) {
+        const data = await response.json();
+        const metafield = data.metafields?.[0];
+        if (metafield?.value) {
+          try { settings = JSON.parse(metafield.value); } catch (e) { /* use defaults */ }
+        }
+      }
+      if (!settings) {
+        settings = this.getDefaultSettings();
+      }
+
+      // Check if llmsTxt feature is enabled
+      if (!settings.features?.llmsTxt) {
+        return null; // Feature not enabled - return null so route can return 404
+      }
+
+      // Get plan info
+      const subscription = await Subscription.findOne({ shop });
+      const normalizedPlan = normalizePlan(subscription?.plan || shopRecord?.plan || 'starter');
+      const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
+
+      // Get shop info from Shopify
+      let shopName = shop.replace('.myshopify.com', '');
+      let shopDescription = '';
+      let primaryDomain = `https://${shop}`;
+      let shopEmail = '';
+
+      try {
+        const shopInfoResponse = await fetch(
+          `https://${shop}/admin/api/2025-07/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              query: `{ 
+                shop { 
+                  name 
+                  description 
+                  email
+                  primaryDomain { url } 
+                  contactEmail
+                } 
+              }`
+            })
+          }
+        );
+        const shopInfoData = await shopInfoResponse.json();
+        const shopInfo = shopInfoData?.data?.shop;
+        if (shopInfo) {
+          shopName = shopInfo.name || shopName;
+          shopDescription = shopInfo.description || '';
+          shopEmail = shopInfo.contactEmail || shopInfo.email || '';
+          if (shopInfo.primaryDomain?.url) {
+            primaryDomain = shopInfo.primaryDomain.url.replace(/\/$/, '');
+          }
+        }
+      } catch (e) {
+        console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
+      }
+
+      // Define plan features (same as robots.txt)
+      const planFeatures = {
+        starter: ['productsJson', 'llmsTxt'],
+        professional: ['productsJson', 'storeMetadata', 'llmsTxt'],
+        professional_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData', 'llmsTxt', 'discoveryLinks'],
+        growth: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'llmsTxt', 'discoveryLinks'],
+        growth_plus: ['productsJson', 'storeMetadata', 'welcomePage', 'collectionsJson', 'aiSitemap', 'schemaData', 'llmsTxt', 'discoveryLinks'],
+        growth_extra: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'llmsTxt', 'discoveryLinks'],
+        enterprise: ['productsJson', 'storeMetadata', 'aiSitemap', 'welcomePage', 'collectionsJson', 'schemaData', 'llmsTxt', 'discoveryLinks']
+      };
+      const availableFeatures = planFeatures[normalizedPlan] || planFeatures.starter;
+
+      // Check what data actually exists
+      const sitemapDoc = await Sitemap.findOne({ shop }).select('generatedAt isAiEnhanced status').lean();
+      const hasSitemap = sitemapDoc && sitemapDoc.generatedAt && sitemapDoc.status !== 'failed';
+      const schemaDoc = await AdvancedSchema.findOne({ shop });
+      const hasAdvancedSchema = schemaDoc?.schemas?.length > 0;
+
+      // ---- Build llms.txt (Markdown format per llmstxt.org standard) ----
+
+      // H1 - Required
+      let llmsTxt = `# ${shopName}\n\n`;
+
+      // Blockquote summary
+      if (shopDescription) {
+        llmsTxt += `> ${shopDescription}\n\n`;
+      } else {
+        llmsTxt += `> E-commerce store with AI-optimized product data and structured endpoints for AI agents.\n\n`;
+      }
+
+      // --- Product Catalog section ---
+      const hasProductsJson = settings.features?.productsJson && availableFeatures.includes('productsJson');
+      const hasCollectionsJson = settings.features?.collectionsJson && availableFeatures.includes('collectionsJson');
+
+      if (hasProductsJson || hasCollectionsJson) {
+        llmsTxt += `## Product Catalog\n\n`;
+        if (hasProductsJson) {
+          llmsTxt += `- [Products JSON Feed](${primaryDomain}/apps/${appProxySubpath}/ai/products.json): Complete product catalog with AI-optimized titles, descriptions, pricing, availability, and FAQ\n`;
+        }
+        if (hasCollectionsJson) {
+          llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): Product categories and collections with SEO metadata\n`;
+        }
+        llmsTxt += '\n';
+      }
+
+      // --- Store Information section ---
+      const hasStoreMetadata = settings.features?.storeMetadata && availableFeatures.includes('storeMetadata');
+      const hasWelcomePage = settings.features?.welcomePage && availableFeatures.includes('welcomePage');
+
+      if (hasStoreMetadata || hasWelcomePage) {
+        llmsTxt += `## Store Information\n\n`;
+        if (hasStoreMetadata) {
+          llmsTxt += `- [Store Metadata](${primaryDomain}/apps/${appProxySubpath}/ai/store-metadata.json): Organization schema, business information, and AI context\n`;
+        }
+        if (hasWelcomePage) {
+          llmsTxt += `- [AI Welcome Page](${primaryDomain}/apps/${appProxySubpath}/ai/welcome): Overview of all available AI data endpoints\n`;
+        }
+        llmsTxt += '\n';
+      }
+
+      // --- Sitemaps section ---
+      const hasAiSitemap = hasSitemap && availableFeatures.includes('aiSitemap');
+
+      if (hasAiSitemap) {
+        llmsTxt += `## Sitemaps\n\n`;
+        llmsTxt += `- [AI-Enhanced Sitemap](${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml): XML sitemap with AI metadata, product features, and FAQ\n`;
+        llmsTxt += `- [Standard Sitemap](${primaryDomain}/sitemap.xml): Standard XML sitemap\n`;
+        llmsTxt += '\n';
+      }
+
+      // --- Schema Data section ---
+      const plusPlansWithSchema = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
+      const hasSchemaData = hasAdvancedSchema && plusPlansWithSchema.includes(normalizedPlan);
+
+      if (hasSchemaData) {
+        llmsTxt += `## Structured Data\n\n`;
+        llmsTxt += `- [Schema.org Data](${primaryDomain}/apps/${appProxySubpath}/ai/schema-data.json): Product, Organization, FAQ, and BreadcrumbList schemas\n`;
+        llmsTxt += '\n';
+      }
+
+      // --- Store Policies section (always included - these are public Shopify pages) ---
+      llmsTxt += `## Store Policies\n\n`;
+      llmsTxt += `- [Shipping Policy](${primaryDomain}/policies/shipping-policy)\n`;
+      llmsTxt += `- [Refund Policy](${primaryDomain}/policies/refund-policy)\n`;
+      llmsTxt += `- [Privacy Policy](${primaryDomain}/policies/privacy-policy)\n`;
+      llmsTxt += `- [Terms of Service](${primaryDomain}/policies/terms-of-service)\n`;
+      llmsTxt += '\n';
+
+      // --- Metadata footer ---
+      llmsTxt += `---\n`;
+      llmsTxt += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
+      if (shopEmail) {
+        llmsTxt += `contact: ${shopEmail}\n`;
+      }
+      llmsTxt += `crawl-delay: 1\n`;
+      llmsTxt += `generator: indexAIze - Unlock AI Search\n`;
+
+      return llmsTxt;
+    } catch (error) {
+      console.error('[AI Discovery] Error generating llms.txt:', error);
+      return null;
+    }
   }
 }
 

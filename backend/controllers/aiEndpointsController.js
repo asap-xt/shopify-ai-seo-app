@@ -1012,4 +1012,31 @@ router.get('/ai/schema-data.json', async (req, res) => {
   }
 });
 
+// ============================================================
+// LLMs.txt endpoint - AI Discovery standard (llmstxt.org)
+// Accessible via: /llms.txt?shop=xxx (direct) 
+// ============================================================
+router.get('/llms.txt', async (req, res) => {
+  const shop = req.query.shop;
+  if (!shop) {
+    return res.status(400).type('text/plain').send('Missing shop parameter');
+  }
+
+  try {
+    const llmsTxt = await aiDiscoveryService.generateLlmsTxt(shop);
+    
+    if (!llmsTxt) {
+      return res.status(404).type('text/plain').send('# LLMs.txt is not enabled for this store.\n# Enable it in indexAIze Settings > AI Discovery Features.\n');
+    }
+
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.set('X-Robots-Tag', 'noindex');
+    res.send(llmsTxt);
+  } catch (error) {
+    console.error('[AI-ENDPOINTS] LLMs.txt error:', error);
+    res.status(500).type('text/plain').send('# Error generating llms.txt\n');
+  }
+});
+
 export default router;

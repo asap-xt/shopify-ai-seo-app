@@ -828,7 +828,9 @@ export default function Settings() {
         welcomePage: 'AI Welcome Page',
         collectionsJson: 'Collections JSON Feed',
         storeMetadata: 'Store Metadata',
-        schemaData: 'Schema Data'
+        schemaData: 'Schema Data',
+        llmsTxt: 'LLMs.txt File',
+        discoveryLinks: 'AI Discovery Links'
       };
       setToast(`Upgrade your plan to enable ${feature[featureKey] || featureKey}`);
       return;
@@ -848,7 +850,9 @@ export default function Settings() {
             schemaData: 'ai-schema-advanced',
             welcomePage: 'ai-welcome-page',
             collectionsJson: 'ai-collections-json',
-            storeMetadata: 'ai-store-metadata'
+            storeMetadata: 'ai-store-metadata',
+            llmsTxt: 'ai-llms-txt',
+            discoveryLinks: 'ai-discovery-links'
           };
           
           // Use dynamic token estimation with actual product count
@@ -990,9 +994,11 @@ export default function Settings() {
     // Plan requirements by feature (index in PLAN_HIERARCHY)
     const requirements = {
       productsJson: 0,        // Starter+
+      llmsTxt: 0,             // Starter+ (static file, no tokens)
       storeMetadata: 1,       // Professional+
       welcomePage: 2,         // Professional Plus+
       collectionsJson: 2,     // Professional Plus+
+      discoveryLinks: 2,      // Professional Plus+ (theme injection)
       aiSitemap: 2,           // Professional Plus+ (requires tokens for Plus plans)
       schemaData: 2           // Professional Plus+ (requires tokens for Plus plans, Enterprise gets more)
     };
@@ -1031,6 +1037,10 @@ export default function Settings() {
         professional: 'Available in Professional Plus (pay-per-use tokens), Growth Plus (pay-per-use tokens) or Enterprise',
         growth: 'Available in Growth Plus (pay-per-use tokens) or Enterprise',
         growth_extra: 'Available in Enterprise'
+      },
+      discoveryLinks: {
+        starter: 'Available in Professional Plus or Growth+',
+        professional: 'Available in Professional Plus or Growth+'
       }
     };
     
@@ -1141,7 +1151,8 @@ export default function Settings() {
         storeMetadata: `/ai/store-metadata.json?shop=${shop}`,
         schemaData: `/ai/schema-data.json?shop=${shop}`,
         aiSitemap: `/api/sitemap/generate?shop=${shop}&force=true`, // Use the actual sitemap endpoint
-        welcomePage: `/ai/welcome?shop=${shop}`
+        welcomePage: `/ai/welcome?shop=${shop}`,
+        llmsTxt: `/llms.txt?shop=${shop}`
       };
 
       if (feature === 'aiSitemap') {
@@ -1174,6 +1185,22 @@ export default function Settings() {
         if (response.ok) {
           const htmlContent = await response.text();
           setJsonModalContent(htmlContent);
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } else if (feature === 'llmsTxt') {
+        // For llms.txt, fetch as text (Markdown)
+        const response = await fetch(endpoints[feature], {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${window.__SHOPIFY_APP_BRIDGE__?.getState()?.session?.token || ''}`
+          }
+        });
+        
+        if (response.ok) {
+          const txtContent = await response.text();
+          setJsonModalContent(txtContent);
         } else {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -1549,6 +1576,18 @@ export default function Settings() {
                   name: 'Collections JSON Feed',
                   description: 'Category data for better AI understanding',
                   requiredPlan: 'Growth'
+                },
+                {
+                  key: 'llmsTxt',
+                  name: 'LLMs.txt File',
+                  description: 'AI discovery file (llmstxt.org standard) — helps AI agents find your store data',
+                  requiredPlan: 'Starter'
+                },
+                {
+                  key: 'discoveryLinks',
+                  name: 'AI Discovery Links',
+                  description: 'Adds <link rel="alternate"> tags in your store\'s <head> for AI crawler discovery',
+                  requiredPlan: 'Growth'
                 }
               ].map((feature) => {
                 const isAvailable = isFeatureAvailable(feature.key);
@@ -1626,6 +1665,16 @@ export default function Settings() {
                           
                           {/* Welcome Page View button */}
                           {feature.key === 'welcomePage' && showWelcomePageView && (
+                            <Button
+                              size="slim"
+                              onClick={() => viewJson(feature.key, feature.name)}
+                            >
+                              View
+                            </Button>
+                          )}
+                          
+                          {/* LLMs.txt View button - always show when enabled */}
+                          {feature.key === 'llmsTxt' && isEnabled && (
                             <Button
                               size="slim"
                               onClick={() => viewJson(feature.key, feature.name)}
