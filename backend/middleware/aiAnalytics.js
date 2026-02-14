@@ -107,6 +107,7 @@ export function createAIAnalyticsMiddleware(source = 'direct') {
       const ip = req.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
       
       // Only log if we have a shop
+      console.log(`[AI-ANALYTICS] Visit: shop=${shop}, endpoint=${normalizeEndpoint(req.path)}, bot=${detectBot(userAgent)}, status=${res.statusCode}`);
       if (shop) {
         AIVisitLog.create({
           shop: shop.replace(/^https?:\/\//, '').toLowerCase(),

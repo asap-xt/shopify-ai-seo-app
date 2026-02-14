@@ -157,4 +157,48 @@ router.get('/ai-analytics', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ai-analytics/debug?shop=xxx
+ * Debug endpoint - shows raw recent logs to verify middleware is working
+ */
+router.get('/ai-analytics/debug', async (req, res) => {
+  try {
+    const shop = req.query.shop;
+    
+    // Count total records
+    const totalAll = await AIVisitLog.countDocuments({});
+    const totalForShop = shop 
+      ? await AIVisitLog.countDocuments({ shop: shop.replace(/^https?:\/\//, '').toLowerCase() })
+      : 0;
+    
+    // Get last 10 records (any shop)
+    const recentAll = await AIVisitLog.find({})
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    // Get distinct shop values
+    const shops = await AIVisitLog.distinct('shop');
+
+    res.json({
+      debug: true,
+      queriedShop: shop,
+      normalizedShop: shop ? shop.replace(/^https?:\/\//, '').toLowerCase() : null,
+      totalRecordsAll: totalAll,
+      totalRecordsForShop: totalForShop,
+      distinctShops: shops,
+      recentAll: recentAll.map(r => ({
+        shop: r.shop,
+        endpoint: r.endpoint,
+        botName: r.botName,
+        statusCode: r.statusCode,
+        source: r.source,
+        createdAt: r.createdAt
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
