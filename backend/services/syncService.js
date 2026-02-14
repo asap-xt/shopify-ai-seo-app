@@ -35,8 +35,12 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
               title
               handle
               description
+              vendor
+              productType
+              tags
               status
               totalInventory
+              availableForSale
               createdAt
               publishedAt
               updatedAt
@@ -48,6 +52,9 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
                 minVariantPrice {
                   amount
                   currencyCode
+                }
+                maxVariantPrice {
+                  amount
                 }
               }
               metafields(first: 50, namespace: "seo_ai") {
@@ -154,6 +161,12 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
           title: product.title,
           handle: product.handle,
           description: product.description,
+          vendor: product.vendor || '',
+          productType: product.productType || '',
+          tags: product.tags || [],
+          price: product.priceRangeV2?.minVariantPrice?.amount || null,
+          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || '',
+          available: product.availableForSale !== false,
           status: product.status,
           totalInventory: product.totalInventory,
           featuredImage: product.featuredImage,

@@ -1088,20 +1088,28 @@ router.post('/ai/ask', async (req, res) => {
         if (shopInfo.email) storeContext += `- Contact: ${shopInfo.email}\n`;
         storeContext += `- URL: ${shopInfo.primaryDomain?.url || `https://${shop}`}\n`;
 
-        // Add policy summaries (first 300 chars each)
-        const policies = [
-          shopInfo.shippingPolicy,
-          shopInfo.refundPolicy,
-          shopInfo.privacyPolicy,
-          shopInfo.termsOfService
-        ].filter(p => p?.body);
+        // Add policy content (increased limit for better AI answers)
+        const policyMap = {
+          'Shipping Policy': shopInfo.shippingPolicy,
+          'Refund Policy': shopInfo.refundPolicy,
+          'Return Policy': shopInfo.refundPolicy, // alias for better matching
+          'Privacy Policy': shopInfo.privacyPolicy,
+          'Terms of Service': shopInfo.termsOfService
+        };
+        const policies = Object.entries(policyMap)
+          .filter(([, p]) => p?.body)
+          .reduce((acc, [key, p]) => {
+            // Deduplicate (Refund = Return)
+            if (!acc.find(a => a.body === p.body)) acc.push({ title: p.title || key, body: p.body });
+            return acc;
+          }, []);
 
         if (policies.length > 0) {
           storeContext += '\nSTORE POLICIES:\n';
           policies.forEach(p => {
             // Strip HTML tags from policy body
             const cleanBody = p.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            storeContext += `- ${p.title}: ${cleanBody.substring(0, 300)}...\n`;
+            storeContext += `- ${p.title}: ${cleanBody.substring(0, 800)}\n`;
           });
         }
         storeContext += '\n';
