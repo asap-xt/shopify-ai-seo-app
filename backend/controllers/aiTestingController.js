@@ -1665,32 +1665,70 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
     for (const [key, result] of successfulEndpoints) {
       try {
         // Map endpoint keys to correct URLs (from run-tests endpoint definitions)
+        const appUrl = process.env.APP_URL || `https://${req.get('host')}`;
         const endpointUrls = {
-          productsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/products.json?shop=${shop}`,
-          basicSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
-          aiSitemap: `${process.env.APP_URL || `https://${req.get('host')}`}/sitemap_products.xml?shop=${shop}`,
-          storeMetadata: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/store-metadata.json?shop=${shop}`,
-          welcomePage: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/welcome?shop=${shop}`,
-          collectionsJson: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/collections-feed.json?shop=${shop}`,
-          advancedSchemaApi: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`
+          productsJson: `${appUrl}/ai/products.json?shop=${shop}`,
+          basicSitemap: `${appUrl}/sitemap_products.xml?shop=${shop}`,
+          aiSitemap: `${appUrl}/sitemap_products.xml?shop=${shop}`,
+          storeMetadata: `${appUrl}/ai/store-metadata.json?shop=${shop}`,
+          welcomePage: `${appUrl}/ai/welcome?shop=${shop}`,
+          collectionsJson: `${appUrl}/ai/collections-feed.json?shop=${shop}`,
+          advancedSchemaApi: `${appUrl}/ai/schema-data.json?shop=${shop}`,
+          llmsTxt: `${appUrl}/llms.txt?shop=${shop}`,
+          mcpServer: `${appUrl}/mcp?shop=${shop}`
         };
         
         // Fetch the actual data
-        const dataResponse = await fetch(endpointUrls[key] || result.url);
         let data = '';
         
-        if (dataResponse.ok) {
-          const contentType = dataResponse.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            data = JSON.stringify(await dataResponse.json(), null, 2);
-          } else {
-            data = await dataResponse.text();
+        if (key === 'mcpServer') {
+          // MCP requires JSON-RPC initialize + tools/list
+          try {
+            const mcpUrl = endpointUrls[key];
+            const initResp = await fetch(mcpUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'User-Agent': 'IndexAIze-Bot/1.0' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'indexAIze-validator', version: '1.0' } } }),
+              timeout: 10000
+            });
+            if (initResp.ok) {
+              const initBody = await initResp.text();
+              const sessionId = initResp.headers.get('mcp-session-id');
+              
+              // Try to get tools list
+              let toolsBody = '';
+              if (sessionId) {
+                try {
+                  const toolsResp = await fetch(mcpUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Mcp-Session-Id': sessionId },
+                    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+                    timeout: 10000
+                  });
+                  if (toolsResp.ok) toolsBody = await toolsResp.text();
+                } catch (e) { /* tools list optional */ }
+              }
+              
+              data = `MCP Server Initialize Response:\n${initBody}\n\nMCP Tools List:\n${toolsBody || 'Not available'}`;
+            }
+          } catch (e) {
+            data = `MCP Server error: ${e.message}`;
           }
-          
-          // Limit data size for AI (max 4000 chars)
-          if (data.length > 4000) {
-            data = data.substring(0, 4000) + '\n... (truncated)';
+        } else {
+          const dataResponse = await fetch(endpointUrls[key] || result.url);
+          if (dataResponse.ok) {
+            const contentType = dataResponse.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              data = JSON.stringify(await dataResponse.json(), null, 2);
+            } else {
+              data = await dataResponse.text();
+            }
           }
+        }
+        
+        // Limit data size for AI (max 4000 chars)
+        if (data.length > 4000) {
+          data = data.substring(0, 4000) + '\n... (truncated)';
         }
         
         // Create AI prompt (adjust for HTML vs JSON content)
@@ -1928,6 +1966,83 @@ Rating Guidelines:
 - good: Valid schemas with good coverage, minor improvements possible
 - fair: Basic schemas present but missing recommended properties
 - poor: Minimal schemas OR invalid structure OR missing key types
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'llmsTxt') {
+          prompt = `You are an AI expert analyzing an llms.txt file (llmstxt.org standard) for an e-commerce store.
+
+Data:
+${data}
+
+Analyze this file focusing on:
+
+Structure (llmstxt.org compliance):
+- Is there an H1 title (# StoreName)?
+- Is there a blockquote description (> ...)?
+- Are there H2 sections (## Product Catalog, ## Store Information, etc.)?
+
+Content Quality:
+- Are product feed URLs listed and accessible?
+- Are store information endpoints documented?
+- Is there enough context for AI agents to understand the store?
+- Are API endpoints clearly described with formats?
+
+Completeness:
+- Does it reference all key endpoints (products, collections, metadata, welcome page)?
+- Are there links to extended documentation (llms-full.txt)?
+- Is the file useful for AI agent discovery?
+
+Rating Guidelines:
+- excellent: Full llmstxt.org compliance, all endpoints listed, rich descriptions
+- good: Good structure, most endpoints listed, minor gaps
+- fair: Basic structure but missing some endpoints or descriptions
+- poor: Incomplete, missing key sections, or not following the standard
+
+IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
+
+Format:
+{
+  "rating": "excellent|good|fair|poor",
+  "feedback": "Your feedback here",
+  "suggestions": "Your suggestions here (or null if everything is good)"
+}`;
+        } else if (key === 'mcpServer') {
+          prompt = `You are an AI expert analyzing a Model Context Protocol (MCP) server for an e-commerce store.
+
+Data:
+${data}
+
+Analyze this MCP server focusing on:
+
+Protocol Compliance:
+- Does the server respond with proper JSON-RPC 2.0 format?
+- Is protocolVersion present and valid?
+- Are server capabilities declared (tools, resources)?
+
+Available Tools:
+- Are there product search tools?
+- Are there store info tools?
+- Are there collection browsing tools?
+- Is there a Q&A / ask tool?
+- Do tools have clear descriptions and parameter schemas?
+
+Data Quality:
+- Do tool descriptions clearly explain what they do?
+- Are input parameters well-documented with types and descriptions?
+- Is the server name and version properly set?
+
+Rating Guidelines:
+- excellent: Full MCP compliance, 4+ tools with rich descriptions, complete parameter schemas
+- good: Good MCP implementation, core tools present, minor gaps in docs
+- fair: Server responds but limited tools or poor descriptions
+- poor: Server issues, missing tools, or incomplete implementation
 
 IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
 

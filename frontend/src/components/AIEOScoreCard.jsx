@@ -368,10 +368,12 @@ export default function AIEOScoreCard({
         }
       }
       if (scoreBreakdown.aiValidationQuality < 30) {
+        // Exclude theme-based endpoints that can't be AI-validated
+        const excludeFromValidation = ['robotsTxt', 'schemaData'];
         const poorEndpoints = Object.entries(aiValidationResults || {})
           .filter(([key, result]) => {
             const rating = result.rating?.toLowerCase();
-            return (rating === 'poor' || rating === 'fair') && key !== 'robotsTxt' && key !== 'schemaData';
+            return (rating === 'poor' || rating === 'fair') && !excludeFromValidation.includes(key);
           });
         
         poorEndpoints.forEach(([key, result]) => {
