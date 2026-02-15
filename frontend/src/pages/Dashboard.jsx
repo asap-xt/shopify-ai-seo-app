@@ -1280,10 +1280,10 @@ export default function Dashboard({ shop: shopProp }) {
 
                 {/* Daily visits chart */}
                 {(() => {
-                  const periodDays = aiTrafficPeriod === 'today' || aiTrafficPeriod === 'yesterday' ? 1
-                    : aiTrafficPeriod === '7d' ? 7 : 30;
+                  // Always show at least 7 days so the chart never looks broken
+                  const chartDays = aiTrafficPeriod === '30d' ? 30 : 7;
 
-                  // Fill all days in period
+                  // Fill all days in chart range
                   const visitMap = {};
                   (aiTraffic.dailyVisits || []).forEach(d => { visitMap[d.date] = d.visits; });
                   const prevVisitMap = {};
@@ -1293,8 +1293,7 @@ export default function Dashboard({ shop: shopProp }) {
 
                   const allDays = [];
                   const prevDays = [];
-                  const startOffset = aiTrafficPeriod === 'yesterday' ? 1 : 0;
-                  for (let i = periodDays - 1 + startOffset; i >= startOffset; i--) {
+                  for (let i = chartDays - 1; i >= 0; i--) {
                     const d = new Date();
                     d.setDate(d.getDate() - i);
                     const key = d.toISOString().split('T')[0];
@@ -1302,7 +1301,7 @@ export default function Dashboard({ shop: shopProp }) {
                   }
                   // Previous period days (same count, shifted back)
                   if (aiTrafficCompare) {
-                    for (let i = periodDays * 2 - 1 + startOffset; i >= periodDays + startOffset; i--) {
+                    for (let i = chartDays * 2 - 1; i >= chartDays; i--) {
                       const d = new Date();
                       d.setDate(d.getDate() - i);
                       const key = d.toISOString().split('T')[0];
@@ -1319,15 +1318,11 @@ export default function Dashboard({ shop: shopProp }) {
                     return `${parseInt(day)}/${parseInt(m)}`;
                   };
 
-                  // Choose label count based on period
-                  const labelCount = periodDays <= 1 ? 1 : periodDays <= 7 ? periodDays : 5;
+                  // Labels: show all 7 for weekly view, 5 evenly spaced for 30d
+                  const labelCount = chartDays <= 7 ? chartDays : 5;
                   const labelIndices = [];
-                  if (labelCount === 1) {
-                    labelIndices.push(0);
-                  } else {
-                    for (let i = 0; i < labelCount; i++) {
-                      labelIndices.push(Math.round(i * (allDays.length - 1) / (labelCount - 1)));
-                    }
+                  for (let i = 0; i < labelCount; i++) {
+                    labelIndices.push(Math.round(i * (allDays.length - 1) / (labelCount - 1)));
                   }
 
                   return (
