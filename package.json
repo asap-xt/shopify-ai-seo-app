@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.59.0",
     "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@sendgrid/mail": "^7.7.0",
     "@shopify/app-bridge-react": "^4.2.1",
     "@shopify/app-bridge-utils": "^3.5.1",

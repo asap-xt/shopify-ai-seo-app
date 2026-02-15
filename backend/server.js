@@ -884,6 +884,7 @@ import debugRouter from './controllers/debugRouter.js';
     import aiEnhanceRouter from './controllers/aiEnhanceController.js';
     import advancedSchemaRouter from './controllers/advancedSchemaController.js';
     import aiAnalyticsRouter from './controllers/aiAnalyticsController.js';
+    import { createMcpHandler } from './mcp/mcpServer.js';
 
     // Import new middleware and controllers
     import { attachShop as attachShopFromApiResolver, apiResolver } from './middleware/apiResolver.js';
@@ -1390,6 +1391,12 @@ if (!IS_PROD) {
     app.use('/api', aiTestingController);
     app.use('/api', aiAnalyticsRouter);
 
+    // MCP Server endpoint (Model Context Protocol)
+    // Stateless StreamableHTTP - each request creates a fresh MCP server
+    const mcpHandler = createMcpHandler();
+    app.post('/mcp', mcpHandler);
+    app.get('/mcp', mcpHandler);       // For SSE streams
+    app.delete('/mcp', mcpHandler);    // For session cleanup
 
     // Mount the new controllers with fixed authentication
     app.use('/api/collections', collectionsRouter);

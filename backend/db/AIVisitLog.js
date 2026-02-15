@@ -8,7 +8,7 @@ const aiVisitLogSchema = new mongoose.Schema({
   ipHash: { type: String, default: '' },         // SHA256 hashed IP (no PII)
   statusCode: { type: Number, default: 200 },
   responseTimeMs: { type: Number, default: 0 },
-  source: { type: String, enum: ['app_proxy', 'direct'], default: 'direct' },
+  source: { type: String, enum: ['app_proxy', 'direct', 'mcp'], default: 'direct' },
   createdAt: { type: Date, default: Date.now }
 });
 
