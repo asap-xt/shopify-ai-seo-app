@@ -328,6 +328,7 @@ if (!IS_PROD) {
         
         if ((req.originalUrl.includes('/sitemap/') || 
             req.originalUrl.includes('/debug/') ||
+            req.originalUrl.includes('/ai-analytics') ||
             req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
           return next();
         }

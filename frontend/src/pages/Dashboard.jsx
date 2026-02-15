@@ -164,9 +164,8 @@ export default function Dashboard({ shop: shopProp }) {
     if (!shop) return;
     try {
       setAiTrafficLoading(true);
-      const res = await api(`/api/ai-analytics?shop=${encodeURIComponent(shop)}&period=30d`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api(`/api/ai-analytics?shop=${encodeURIComponent(shop)}&period=30d`);
+      if (data && !data.error) {
         setAiTraffic(data);
       }
     } catch (err) {
