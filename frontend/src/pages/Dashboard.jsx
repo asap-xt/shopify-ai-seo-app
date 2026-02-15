@@ -168,6 +168,11 @@ export default function Dashboard({ shop: shopProp }) {
     '/llms.txt': 'LLMs.txt',
     '/llms-full.txt': 'LLMs Full',
     '/.well-known/ai-plugin.json': 'AI Plugin',
+    '/mcp/tools/search_products': 'MCP: Product Search',
+    '/mcp/tools/get_product_details': 'MCP: Product Details',
+    '/mcp/tools/get_store_info': 'MCP: Store Info',
+    '/mcp/tools/search_collections': 'MCP: Collections',
+    '/mcp/tools/ask_question': 'MCP: AI Q&A',
   };
   
   const getEndpointLabel = (endpoint) => ENDPOINT_LABELS[endpoint] || endpoint;

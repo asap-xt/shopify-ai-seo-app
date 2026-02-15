@@ -48,17 +48,25 @@ async function logMcpCall(shop, toolName, userAgent) {
 }
 
 /**
- * Detect bot name from User-Agent (simplified for MCP)
+ * Detect bot name from User-Agent.
+ * Uses the SAME names as KNOWN_BOTS in aiAnalytics.js
+ * so they appear as the same bots in the Dashboard.
  */
 function detectBotFromUA(ua) {
-  if (!ua) return 'MCP Agent';
+  if (!ua) return 'Other Bot';
   const lower = ua.toLowerCase();
-  if (lower.includes('claude')) return 'Claude (MCP)';
-  if (lower.includes('chatgpt') || lower.includes('openai')) return 'ChatGPT (MCP)';
-  if (lower.includes('gemini') || lower.includes('google')) return 'Google AI (MCP)';
-  if (lower.includes('perplexity')) return 'Perplexity (MCP)';
-  if (lower.includes('copilot') || lower.includes('bing')) return 'Copilot (MCP)';
-  return 'MCP Agent';
+  if (lower.includes('claude')) return 'Claude';
+  if (lower.includes('chatgpt') || lower.includes('gptbot')) return 'ChatGPT';
+  if (lower.includes('oai-searchbot')) return 'OpenAI Search';
+  if (lower.includes('openai')) return 'ChatGPT';
+  if (lower.includes('google-extended') || lower.includes('gemini')) return 'Google AI';
+  if (lower.includes('perplexity')) return 'Perplexity';
+  if (lower.includes('copilot') || lower.includes('bingbot')) return 'Bing';
+  if (lower.includes('meta-externalagent')) return 'Meta AI';
+  if (lower.includes('cohere')) return 'Cohere';
+  if (lower.includes('youbot')) return 'You.com';
+  if (lower.includes('applebot')) return 'Apple';
+  return 'Other Bot';
 }
 
 // ============================================================
