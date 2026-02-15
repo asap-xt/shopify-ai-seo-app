@@ -65,21 +65,18 @@ router.get('/ai-analytics', async (req, res) => {
 
     const shopDomain = await resolveShopDomain(shop);
 
+    // Exclude direct browser visits (Human/Unknown) from all metrics
+    const botFilter = { shop: shopDomain, createdAt: { $gte: since }, botName: { $ne: 'Human/Unknown' } };
+
     // Run all aggregations in parallel
     const [totalVisits, dailyVisits, topBots, topEndpoints, recentVisits] = await Promise.all([
-      // 1. Total visits count
-      AIVisitLog.countDocuments({
-        shop: shopDomain,
-        createdAt: { $gte: since }
-      }),
+      // 1. Total visits count (bots only)
+      AIVisitLog.countDocuments(botFilter),
 
-      // 2. Visits per day (for chart)
+      // 2. Visits per day (for chart, bots only)
       AIVisitLog.aggregate([
         {
-          $match: {
-            shop: shopDomain,
-            createdAt: { $gte: since }
-          }
+          $match: botFilter
         },
         {
           $group: {
@@ -101,14 +98,9 @@ router.get('/ai-analytics', async (req, res) => {
         }
       ]),
 
-      // 3. Top bots
+      // 3. Top bots (excluding human visits)
       AIVisitLog.aggregate([
-        {
-          $match: {
-            shop: shopDomain,
-            createdAt: { $gte: since }
-          }
-        },
+        { $match: botFilter },
         {
           $group: {
             _id: '$botName',
@@ -128,14 +120,9 @@ router.get('/ai-analytics', async (req, res) => {
         }
       ]),
 
-      // 4. Top endpoints
+      // 4. Top endpoints (bots only)
       AIVisitLog.aggregate([
-        {
-          $match: {
-            shop: shopDomain,
-            createdAt: { $gte: since }
-          }
-        },
+        { $match: botFilter },
         {
           $group: {
             _id: '$endpoint',
@@ -153,11 +140,8 @@ router.get('/ai-analytics', async (req, res) => {
         }
       ]),
 
-      // 5. Recent visits (last 20)
-      AIVisitLog.find({
-        shop: shopDomain,
-        createdAt: { $gte: since }
-      })
+      // 5. Recent visits (bots only, last 20)
+      AIVisitLog.find(botFilter)
         .sort({ createdAt: -1 })
         .limit(20)
         .select('endpoint botName source statusCode responseTimeMs createdAt')
@@ -173,7 +157,8 @@ router.get('/ai-analytics', async (req, res) => {
     
     const previousVisits = await AIVisitLog.countDocuments({
       shop: shopDomain,
-      createdAt: { $gte: previousSince, $lt: since }
+      createdAt: { $gte: previousSince, $lt: since },
+      botName: { $ne: 'Human/Unknown' }
     });
 
     const trend = previousVisits > 0

@@ -1268,7 +1268,7 @@ export default function Dashboard({ shop: shopProp }) {
                     <Text variant="bodySm" fontWeight="semibold" >Who's Visiting Your Store</Text>
                     <div style={{ marginTop: '8px' }}>
                       <BlockStack gap="300">
-                        {aiTraffic.topBots?.slice(0, 5).map(bot => {
+                        {aiTraffic.topBots?.filter(b => b.name !== 'Human/Unknown').slice(0, 5).map(bot => {
                           const info = getBotDisplay(bot.name);
                           return (
                             <InlineStack key={bot.name} align="space-between" blockAlign="start">
