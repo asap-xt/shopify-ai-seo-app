@@ -10,6 +10,7 @@ import Subscription from '../db/Subscription.js';
 import Shop from '../db/Shop.js';
 
 const router = express.Router();
+const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 
 // Helper function to normalize plan names
 const normalizePlan = (plan) => {
@@ -864,19 +865,21 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
     ]
   };
   
-  // Get products (sample)
-  const products = await Product.find({ shop, ...activeStatusFilter })
-    .select('title descriptionHtml productType vendor priceRange tags handle available price currency')
-    .limit(50)
-    .lean();
+  // Fetch data in parallel
+  const [products, collections, aiMetadata, shopifyPolicies] = await Promise.all([
+    Product.find({ shop, ...activeStatusFilter })
+      .select('title descriptionHtml productType vendor priceRange tags handle available price currency')
+      .limit(50)
+      .lean(),
+    Collection.find({ shop })
+      .select('title description handle productsCount')
+      .limit(20)
+      .lean(),
+    fetchAiMetadata(shop, shopRecord?.accessToken),
+    fetchShopifyPolicies(shop, shopRecord?.accessToken)
+  ]);
   
-  // Get collections
-  const collections = await Collection.find({ shop })
-    .select('title description handle productsCount')
-    .limit(20)
-    .lean();
-  
-  // Get store metadata
+  // Get store metadata from local DB
   const storeMetadata = shopRecord?.storeMetadata || {};
   
   let context = '';
@@ -896,6 +899,19 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
     if (org.phone) context += `PHONE: ${org.phone}\n`;
     if (org.address) context += `ADDRESS: ${org.address}\n`;
   }
+  
+  // Languages, currencies, shipping regions (from AI metadata)
+  if (aiMetadata.languages) context += `SUPPORTED LANGUAGES: ${aiMetadata.languages}\n`;
+  if (aiMetadata.supportedCurrencies) context += `SUPPORTED CURRENCIES: ${aiMetadata.supportedCurrencies}\n`;
+  if (aiMetadata.shippingRegions) context += `SHIPPING REGIONS: ${aiMetadata.shippingRegions}\n`;
+  
+  // Shipping & return policies
+  const shippingInfo = aiMetadata.shippingInfo || shopifyPolicies.shipping;
+  const returnInfo = aiMetadata.returnPolicy || shopifyPolicies.refund;
+  if (shippingInfo) context += `\nSHIPPING POLICY:\n${shippingInfo}\n`;
+  if (returnInfo) context += `\nRETURN POLICY:\n${returnInfo}\n`;
+  if (shopifyPolicies.privacy) context += `PRIVACY POLICY: ${shopifyPolicies.privacy}\n`;
+  if (shopifyPolicies.terms) context += `TERMS OF SERVICE: ${shopifyPolicies.terms}\n`;
   
   // Collections with URLs
   if (collections.length > 0) {
@@ -921,6 +937,92 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
   }
   
   return context;
+}
+
+// Fetch AI metadata from Shopify metafields (shipping, returns, languages, etc.)
+async function fetchAiMetadata(shop, accessToken) {
+  if (!accessToken) return {};
+  
+  try {
+    const query = `
+      query {
+        shop {
+          aiMetafield: metafield(namespace: "ai_seo_store", key: "ai_metadata") {
+            value
+          }
+        }
+      }
+    `;
+    
+    const response = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
+    
+    if (!response.ok) return {};
+    
+    const json = await response.json();
+    const value = json.data?.shop?.aiMetafield?.value;
+    if (!value) return {};
+    
+    return JSON.parse(value);
+  } catch (e) {
+    console.error('[AI-TESTING] Error fetching AI metadata:', e.message);
+    return {};
+  }
+}
+
+// Fetch Shopify built-in store policies (shipping, refund, privacy, terms)
+async function fetchShopifyPolicies(shop, accessToken) {
+  if (!accessToken) return {};
+  
+  try {
+    const query = `
+      query {
+        shop {
+          shippingPolicy { body url }
+          refundPolicy { body url }
+          privacyPolicy { url }
+          termsOfService { url }
+        }
+      }
+    `;
+    
+    const response = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
+    
+    if (!response.ok) return {};
+    
+    const json = await response.json();
+    const shopData = json.data?.shop || {};
+    
+    return {
+      shipping: extractPolicyText(shopData.shippingPolicy?.body),
+      refund: extractPolicyText(shopData.refundPolicy?.body),
+      privacy: shopData.privacyPolicy?.url || null,
+      terms: shopData.termsOfService?.url || null,
+    };
+  } catch (e) {
+    console.error('[AI-TESTING] Error fetching policies:', e.message);
+    return {};
+  }
+}
+
+// Extract clean text from HTML policy (first 500 chars)
+function extractPolicyText(html) {
+  if (!html) return null;
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > 500 ? text.substring(0, 500) + '...' : text;
 }
 
 /**
