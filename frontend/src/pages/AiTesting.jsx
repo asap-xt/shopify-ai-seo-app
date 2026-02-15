@@ -401,7 +401,7 @@ export default function AiTesting({ shop: shopProp }) {
       case 'chatgpt':
         return currentPlanIndex >= 0; // Starter+ (ChatGPT 5.2)
       case 'gemini':
-        return currentPlanIndex >= 0; // Starter+ (Gemini 3 Pro)
+        return currentPlanIndex >= 0; // Starter+ (Gemini 3 Flash)
       case 'claude':
         return currentPlanIndex >= 1; // Professional+ (Claude Opus 4.6)
       case 'meta':

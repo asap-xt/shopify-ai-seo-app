@@ -35,12 +35,12 @@ const AI_BOTS = {
   },
   'gemini': {
     id: 'gemini',
-    name: 'Gemini 3 Pro',
-    model: 'google/gemini-3-pro-preview',
-    description: 'Google Gemini 3 Pro',
+    name: 'Gemini 3 Flash',
+    model: 'google/gemini-3-flash-preview',
+    description: 'Google Gemini 3 Flash',
     minPlanIndex: 0, // Starter+
     tokensPerTest: 2000,
-    priceMultiplier: 24.0 // $2/$12 vs base $0.10/$0.40
+    priceMultiplier: 6.0 // $0.50/$3 vs base $0.10/$0.40
   },
   'claude': {
     id: 'claude',
@@ -683,7 +683,7 @@ IMPORTANT RULES:
         // Standard string content
         if (typeof msg.content === 'string' && msg.content.trim()) return msg.content;
         
-        // Array content (thinking models like Gemini 3 Pro return [{type: "thinking"}, {type: "text", text: "..."}])
+        // Array content (thinking models return [{type: "thinking"}, {type: "text", text: "..."}])
         if (Array.isArray(msg.content)) {
           const textParts = msg.content
             .filter(part => part.type === 'text' && part.text)
