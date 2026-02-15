@@ -374,13 +374,53 @@ export default function AIEOScoreCard({
             return (rating === 'poor' || rating === 'fair') && key !== 'robotsTxt' && key !== 'schemaData';
           });
         
+        const endpointTips = {
+          productsJson: {
+            poor: 'Products JSON Feed: Product data needs improvement. Go to Store Optimization for AI → Products and optimize titles, descriptions, and metadata.',
+            fair: 'Products JSON Feed: Good, but could be better. Add more detailed product descriptions, images alt text, and ensure all products are optimized.'
+          },
+          collectionsJson: {
+            poor: 'Collections JSON Feed: Collection data needs improvement. Go to Store Optimization for AI → Collections and add descriptions and metadata.',
+            fair: 'Collections JSON Feed: Good, but could be better. Add more detailed collection descriptions and ensure all collections are optimized.'
+          },
+          storeMetadata: {
+            poor: 'Store Metadata: Missing key information. Go to Store Optimization for AI → Store Metadata and fill in description, keywords, shipping regions, and contact details.',
+            fair: 'Store Metadata: Good, but add more details — shipping policy, return policy, business hours, and social media links will help AI understand your store better.'
+          },
+          welcomePage: {
+            poor: 'AI Welcome Page: Content needs improvement. Ensure your Store Metadata is complete — the Welcome Page is generated from it.',
+            fair: 'AI Welcome Page: Good, but enriching your Store Metadata with more details will improve its content.'
+          },
+          llmsTxt: {
+            poor: 'LLMs.txt: File content is insufficient. Enable more AI Discovery features and complete your Store Metadata to enrich it.',
+            fair: 'LLMs.txt: Good, but enable all AI Discovery features (Collections Feed, Store Metadata, AI Welcome Page) to make it more comprehensive.'
+          },
+          mcpServer: {
+            poor: 'MCP Server: Returning limited data. Optimize more products and complete your Store Metadata to improve AI agent responses.',
+            fair: 'MCP Server: Working, but optimize more products and add shipping/return policies in Store Metadata for richer AI agent answers.'
+          },
+          aiSitemap: {
+            poor: 'AI-Enhanced Sitemap: Content quality is low. Ensure products are optimized before generating the AI sitemap.',
+            fair: 'AI-Enhanced Sitemap: Good. Optimize more products to improve sitemap quality.'
+          },
+          advancedSchema: {
+            poor: 'Advanced Schema Data: Schema quality is low. Re-generate schemas after optimizing your products.',
+            fair: 'Advanced Schema Data: Good. Ensure all products have optimized data before re-generating schemas.'
+          }
+        };
+        
         poorEndpoints.forEach(([key, result]) => {
-          const name = endpointDisplayNames[key] || key;
           const rating = result.rating?.toLowerCase();
-          if (rating === 'poor') {
-            recommendations.push(`${name}: Needs significant improvement. Run "Test with AI Bot" to see detailed suggestions.`);
-          } else if (rating === 'fair') {
-            recommendations.push(`${name}: Acceptable but can be improved. Add more detailed descriptions and structured data.`);
+          const tips = endpointTips[key];
+          if (tips && tips[rating]) {
+            recommendations.push(tips[rating]);
+          } else {
+            const name = endpointDisplayNames[key] || key;
+            if (rating === 'poor') {
+              recommendations.push(`${name}: Needs improvement. Run "Test with AI Bot" for detailed suggestions.`);
+            } else {
+              recommendations.push(`${name}: Good, but can be improved further. Run "Test with AI Bot" for specific tips.`);
+            }
           }
         });
       }
