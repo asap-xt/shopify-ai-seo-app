@@ -120,39 +120,39 @@ export default function Dashboard({ shop: shopProp }) {
   // AI Traffic analytics
   const [aiTraffic, setAiTraffic] = useState(null);
   
-  // Friendly bot names and categories for non-technical users
+  // Friendly bot descriptions for non-technical users
+  // Explains WHO is visiting and WHY in plain language
   const BOT_INFO = {
-    'ChatGPT':        { label: 'ChatGPT',         category: 'AI Search',      icon: '🤖' },
-    'OpenAI Search':  { label: 'OpenAI Search',    category: 'AI Search',      icon: '🤖' },
-    'Claude':         { label: 'Claude',           category: 'AI Search',      icon: '🤖' },
-    'Perplexity':     { label: 'Perplexity',       category: 'AI Search',      icon: '🔍' },
-    'Google AI':      { label: 'Google AI',        category: 'AI Search',      icon: '🤖' },
-    'Cohere':         { label: 'Cohere AI',        category: 'AI Search',      icon: '🤖' },
-    'You.com':        { label: 'You.com',          category: 'AI Search',      icon: '🔍' },
-    'Google':         { label: 'Google',           category: 'Search Engine',  icon: '🔎' },
-    'Bing':           { label: 'Bing',             category: 'Search Engine',  icon: '🔎' },
-    'Yahoo':          { label: 'Yahoo',            category: 'Search Engine',  icon: '🔎' },
-    'Yandex':         { label: 'Yandex',           category: 'Search Engine',  icon: '🔎' },
-    'DuckDuckGo':     { label: 'DuckDuckGo',       category: 'Search Engine',  icon: '🔎' },
-    'Ahrefs':         { label: 'Ahrefs',           category: 'SEO Tool',       icon: '📊' },
-    'Semrush':        { label: 'Semrush',          category: 'SEO Tool',       icon: '📊' },
-    'Majestic':       { label: 'Majestic',         category: 'SEO Tool',       icon: '📊' },
-    'DotBot':         { label: 'Moz',              category: 'SEO Tool',       icon: '📊' },
-    'Apple':          { label: 'Apple (Siri)',     category: 'AI Assistant',   icon: '🍎' },
-    'Meta AI':        { label: 'Meta AI',          category: 'AI Search',      icon: '🤖' },
-    'Facebook':       { label: 'Facebook',         category: 'Social Media',   icon: '📱' },
-    'Twitter/X':      { label: 'X (Twitter)',      category: 'Social Media',   icon: '📱' },
-    'LinkedIn':       { label: 'LinkedIn',         category: 'Social Media',   icon: '📱' },
-    'Amazon':         { label: 'Amazon',           category: 'Marketplace',    icon: '🛒' },
-    'Internet Archive': { label: 'Internet Archive', category: 'Archive',      icon: '📚' },
-    'indexAIze Test': { label: 'indexAIze',        category: 'Internal',       icon: '⚙️' },
-    'Human/Unknown':  { label: 'Direct Visit',    category: 'Human',          icon: '👤' },
-    'Other Bot':      { label: 'Other Bot',        category: 'Bot',            icon: '🔗' },
+    'ChatGPT':        { label: 'ChatGPT by OpenAI',           desc: 'AI assistant reading your products' },
+    'OpenAI Search':  { label: 'OpenAI Search',               desc: 'OpenAI indexing your store for AI search' },
+    'Claude':         { label: 'Claude by Anthropic',          desc: 'AI assistant reading your products' },
+    'Perplexity':     { label: 'Perplexity AI Search',         desc: 'AI search engine indexing your store' },
+    'Google AI':      { label: 'Google AI (Gemini)',           desc: 'Google AI indexing your store' },
+    'Cohere':         { label: 'Cohere AI',                    desc: 'AI platform reading your data' },
+    'You.com':        { label: 'You.com AI Search',            desc: 'AI search engine indexing your store' },
+    'Google':         { label: 'Google Search',                desc: 'Google indexing your AI endpoints' },
+    'Bing':           { label: 'Microsoft Bing / Copilot',     desc: 'Powers Bing search and Microsoft Copilot AI' },
+    'Yahoo':          { label: 'Yahoo Search',                 desc: 'Yahoo indexing your store' },
+    'Yandex':         { label: 'Yandex Search',                desc: 'Russian search engine indexing your store' },
+    'DuckDuckGo':     { label: 'DuckDuckGo',                   desc: 'Privacy search engine indexing your store' },
+    'Ahrefs':         { label: 'Ahrefs SEO Crawler',           desc: 'Helps your store appear in search results' },
+    'Semrush':        { label: 'Semrush SEO Crawler',           desc: 'Helps your store appear in search results' },
+    'Majestic':       { label: 'Majestic SEO Crawler',          desc: 'Building backlink profile for your store' },
+    'DotBot':         { label: 'Moz SEO Crawler',              desc: 'Helps your store appear in search results' },
+    'Apple':          { label: 'Apple / Siri',                 desc: 'Apple indexing for Siri and Spotlight' },
+    'Meta AI':        { label: 'Meta AI',                      desc: 'Meta AI reading your products' },
+    'Facebook':       { label: 'Facebook',                     desc: 'Facebook previewing your store links' },
+    'Twitter/X':      { label: 'X (Twitter)',                  desc: 'X previewing your store links' },
+    'LinkedIn':       { label: 'LinkedIn',                     desc: 'LinkedIn previewing your store links' },
+    'Amazon':         { label: 'Amazon',                       desc: 'Amazon crawler indexing your store' },
+    'Internet Archive': { label: 'Internet Archive',           desc: 'Archiving your store for posterity' },
+    'indexAIze Test': { label: 'indexAIze (internal)',          desc: 'Our own AI testing bot' },
+    'Human/Unknown':  { label: 'Direct browser visit',         desc: 'Someone opened this page in a browser' },
+    'Other Bot':      { label: 'Other automated visitor',      desc: 'Unidentified bot or crawler' },
   };
   
   const getBotDisplay = (botName) => {
-    const info = BOT_INFO[botName] || { label: botName, category: 'Other', icon: '🔗' };
-    return info;
+    return BOT_INFO[botName] || { label: botName, desc: '' };
   };
   
   // Friendly endpoint names
@@ -1263,39 +1263,40 @@ export default function Dashboard({ shop: shopProp }) {
 
                 {/* Top bots and endpoints side by side */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  {/* Top Visitors */}
+                  {/* Who's Visiting */}
                   <div>
-                    <Text variant="bodySm" fontWeight="semibold">Who's Visiting</Text>
-                    <BlockStack gap="200">
-                      {aiTraffic.topBots?.slice(0, 5).map(bot => {
-                        const info = getBotDisplay(bot.name);
-                        return (
-                          <InlineStack key={bot.name} align="space-between" blockAlign="center">
-                            <InlineStack gap="200" blockAlign="center">
-                              <span style={{ fontSize: '16px' }}>{info.icon}</span>
+                    <Text variant="bodySm" fontWeight="semibold" >Who's Visiting Your Store</Text>
+                    <div style={{ marginTop: '8px' }}>
+                      <BlockStack gap="300">
+                        {aiTraffic.topBots?.slice(0, 5).map(bot => {
+                          const info = getBotDisplay(bot.name);
+                          return (
+                            <InlineStack key={bot.name} align="space-between" blockAlign="start">
                               <BlockStack gap="0">
                                 <Text variant="bodySm" fontWeight="medium">{info.label}</Text>
-                                <Text variant="bodySm" tone="subdued">{info.category}</Text>
+                                <Text variant="bodySm" tone="subdued">{info.desc}</Text>
                               </BlockStack>
+                              <Text variant="bodySm" fontWeight="semibold">{bot.visits}</Text>
                             </InlineStack>
-                            <Badge size="small">{bot.visits}</Badge>
-                          </InlineStack>
-                        );
-                      })}
-                    </BlockStack>
+                          );
+                        })}
+                      </BlockStack>
+                    </div>
                   </div>
 
                   {/* What They're Reading */}
                   <div>
                     <Text variant="bodySm" fontWeight="semibold">What They're Reading</Text>
-                    <BlockStack gap="200">
-                      {aiTraffic.topEndpoints?.slice(0, 5).map(ep => (
-                        <InlineStack key={ep.endpoint} align="space-between" blockAlign="center">
-                          <Text variant="bodySm">{getEndpointLabel(ep.endpoint)}</Text>
-                          <Badge size="small">{ep.visits}</Badge>
-                        </InlineStack>
-                      ))}
-                    </BlockStack>
+                    <div style={{ marginTop: '8px' }}>
+                      <BlockStack gap="300">
+                        {aiTraffic.topEndpoints?.slice(0, 5).map(ep => (
+                          <InlineStack key={ep.endpoint} align="space-between" blockAlign="center">
+                            <Text variant="bodySm">{getEndpointLabel(ep.endpoint)}</Text>
+                            <Text variant="bodySm" fontWeight="semibold">{ep.visits}</Text>
+                          </InlineStack>
+                        ))}
+                      </BlockStack>
+                    </div>
                   </div>
                 </div>
               </BlockStack>
