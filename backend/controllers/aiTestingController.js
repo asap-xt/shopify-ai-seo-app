@@ -1129,7 +1129,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
     {
       key: 'llmsTxt',
       name: 'LLMs.txt',
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/llms.txt?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/llms.txt?shop=${shop}`
     },
     // MCP Server (available for all plans)
     {
