@@ -865,19 +865,27 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
     ]
   };
   
-  // Fetch data in parallel
-  const [products, collections, aiMetadata, shopifyPolicies] = await Promise.all([
-    Product.find({ shop, ...activeStatusFilter })
+  // Fetch data in parallel — prioritize available products, load more for better coverage
+  const [availableProducts, unavailableProducts, collections, aiMetadata, shopifyPolicies] = await Promise.all([
+    Product.find({ shop, ...activeStatusFilter, available: { $ne: false } })
+      .select('title descriptionHtml productType vendor priceRange tags handle available price currency publishedAt')
+      .sort({ publishedAt: -1 })
+      .limit(120)
+      .lean(),
+    Product.find({ shop, ...activeStatusFilter, available: false })
       .select('title descriptionHtml productType vendor priceRange tags handle available price currency')
-      .limit(50)
+      .limit(30)
       .lean(),
     Collection.find({ shop })
       .select('title description handle productsCount')
-      .limit(20)
+      .limit(30)
       .lean(),
     fetchAiMetadata(shop, shopRecord?.accessToken),
     fetchShopifyPolicies(shop, shopRecord?.accessToken)
   ]);
+  
+  // Combine: available first, then out-of-stock
+  const products = [...availableProducts, ...unavailableProducts];
   
   // Get store metadata from local DB
   const storeMetadata = shopRecord?.storeMetadata || {};
@@ -922,9 +930,9 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
     });
   }
   
-  // Products with handles and URLs
+  // Products with descriptions, tags, and URLs
   if (products.length > 0) {
-    context += `\nPRODUCTS (${products.length} shown):\n`;
+    context += `\nPRODUCTS (${products.length} shown, available first):\n`;
     products.forEach(p => {
       const price = p.price 
         ? `${p.currency || ''} ${p.price}`
@@ -932,7 +940,20 @@ async function buildStoreContext(shop, shopRecord, publicDomain) {
           ? `${p.priceRange.minVariantPrice.currencyCode || ''} ${p.priceRange.minVariantPrice.amount}`
           : '');
       const availability = p.available === false ? ' [Out of stock]' : '';
+      
+      // Extract short description from HTML (strip tags, first 150 chars)
+      let desc = '';
+      if (p.descriptionHtml) {
+        desc = p.descriptionHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (desc.length > 150) desc = desc.substring(0, 150) + '...';
+      }
+      
+      // Include tags for better search matching
+      const tags = Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '');
+      
       context += `- ${p.title}${price ? ` - ${price}` : ''}${p.productType ? ` [${p.productType}]` : ''}${availability} | URL: https://${domain}/products/${p.handle}\n`;
+      if (desc) context += `  Description: ${desc}\n`;
+      if (tags) context += `  Tags: ${tags}\n`;
     });
   }
   
