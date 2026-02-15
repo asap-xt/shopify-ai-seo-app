@@ -675,12 +675,12 @@ export default function Dashboard({ shop: shopProp }) {
                   <BlockStack gap="300">
                     <Text variant="headingMd" as="h3">What This App Does</Text>
                     <Text variant="bodyMd" tone="subdued">
-                      This app helps optimize your Shopify store for <strong>AI search engines</strong> (like ChatGPT, Claude, Perplexity) 
-                      by structuring your existing product data in a format that AI bots can easily understand and reference.
+                      This app optimizes your Shopify store for <strong>AI search engines and AI agents</strong> (ChatGPT, Claude, Gemini, Perplexity and others). 
+                      It structures your product data, store metadata, and policies so AI can accurately discover, understand, and recommend your store.
                     </Text>
                     <Text variant="bodyMd" tone="subdued">
-                      <strong>Important:</strong> This app primarily <strong>structures</strong> your existing data rather than creating new content. 
-                      AI-enhanced features are supplementary and require additional tokens (unless you're on Growth Extra or Enterprise plans).
+                      Key capabilities: structured product data, AI-optimized feeds, <strong>MCP Server</strong> for direct AI agent access, 
+                      <strong>AI Shopping Assistant</strong> to preview how AI helps your customers, and <strong>AI Traffic analytics</strong> to track AI bot visits.
                     </Text>
                   </BlockStack>
                   
@@ -734,7 +734,7 @@ export default function Dashboard({ shop: shopProp }) {
                       
                       <Text variant="bodyMd" fontWeight="semibold">2. Token Management</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        AI-enhanced features (AI SEO, Advanced Schema, AI Sitemap) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances.
+                        AI features (AI SEO, Advanced Schema, AI Sitemap, AI Shopping Assistant, MCP Q&A) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances. Each AI model has a different cost multiplier based on its pricing.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
@@ -756,7 +756,7 @@ export default function Dashboard({ shop: shopProp }) {
                       <Text variant="bodyMd" fontWeight="semibold">5. Configure Store Metadata</Text>
                       <Text variant="bodyMd" tone="subdued">
                         Go to "Store Optimization for AI" → Store Metadata tab to configure store description, keywords, business information, 
-                        and contact details (Professional+ plans). Some data is automatically synced from Shopify but can be manually edited. This helps AI bots understand your brand and business context.
+                        contact details, <strong>shipping regions, supported currencies, languages, and policies</strong>. This data is used by AI bots and the AI Shopping Assistant to accurately answer customer questions about delivery, returns, and more.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">6. Schema Data & Advanced Features</Text>
@@ -778,7 +778,10 @@ export default function Dashboard({ shop: shopProp }) {
                         • <strong>AI Bot Access Control:</strong> Select which AI bots (OpenAI, Claude, Google, etc.) can access your store's structured data
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page
+                        • <strong>AI Discovery Features:</strong> Enable Products JSON Feed, Collections JSON Feed, Store Metadata, AI Welcome Page, and <strong>llms.txt</strong>
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued">
+                        • <strong>MCP Server:</strong> Automatically available — allows AI agents to search products, browse collections, get store info, and answer questions directly through the Model Context Protocol
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
                         • Click <strong>"Save Settings"</strong> to save your configuration
@@ -812,18 +815,18 @@ export default function Dashboard({ shop: shopProp }) {
                         Go to "AI Testing" to validate your optimization:
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • Run Basic Tests to check endpoint availability
+                        • Run <strong>Basic Tests</strong> to check endpoint availability (including llms.txt and MCP Server)
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • Run AI-Powered Validation for detailed analysis (requires tokens)
+                        • Check your <strong>GEO Score</strong> — measures overall AI-readiness across all endpoints
                       </Text>
                       <Text variant="bodyMd" tone="subdued">
-                        • Check your GEO Score breakdown
+                        • Use the <strong>AI Shopping Assistant</strong> to test how AI models (GPT-5 Mini, Gemini 3 Flash, Claude Haiku 4.5, Llama 4, Perplexity Sonar) answer customer questions using your real store data, products, policies, and shipping info
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">10. Monitor & Improve</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        Return to Dashboard regularly to track optimization progress and GEO Score. Re-optimize when adding new products or editing existing ones to keep AI-structured data current.
+                        Return to Dashboard regularly to track your GEO Score and <strong>AI Traffic</strong> — see which AI bots (ChatGPT, Claude, Gemini, Perplexity, etc.) visit your store, which endpoints they access, and how traffic trends over time. Re-optimize when adding new products or updating policies to keep your AI presence current.
                       </Text>
                     </BlockStack>
                   </BlockStack>
