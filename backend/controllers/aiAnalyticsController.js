@@ -48,7 +48,69 @@ async function resolveShopDomain(shopParam) {
 }
 
 /**
- * GET /api/ai-analytics?shop=xxx&period=7d|30d|90d
+ * Calculate date range for a given period
+ * Supports: 'today', 'yesterday', '7d', '30d', '90d'
+ */
+function getPeriodRange(period) {
+  const now = new Date();
+  let since, until, days;
+
+  switch (period) {
+    case 'today': {
+      since = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight today
+      until = now;
+      days = 1;
+      break;
+    }
+    case 'yesterday': {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      since = new Date(y.getFullYear(), y.getMonth(), y.getDate()); // midnight yesterday
+      until = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight today
+      days = 1;
+      break;
+    }
+    case '7d': {
+      since = new Date(now);
+      since.setDate(since.getDate() - 7);
+      until = now;
+      days = 7;
+      break;
+    }
+    case '90d': {
+      since = new Date(now);
+      since.setDate(since.getDate() - 90);
+      until = now;
+      days = 90;
+      break;
+    }
+    default: { // '30d'
+      since = new Date(now);
+      since.setDate(since.getDate() - 30);
+      until = now;
+      days = 30;
+      break;
+    }
+  }
+
+  return { since, until, days };
+}
+
+/**
+ * Get the previous period range for comparison
+ * E.g. if current = last 7 days, previous = the 7 days before that
+ */
+function getPreviousPeriodRange(period, currentSince) {
+  const duration = currentSince.getTime() - getPeriodRange(period).since.getTime();
+  // Use the same duration going back from the current since
+  const ms = getPeriodRange(period).until.getTime() - getPeriodRange(period).since.getTime();
+  const prevUntil = new Date(getPeriodRange(period).since);
+  const prevSince = new Date(prevUntil.getTime() - ms);
+  return { since: prevSince, until: prevUntil };
+}
+
+/**
+ * GET /api/ai-analytics?shop=xxx&period=today|yesterday|7d|30d&compare=true
  * Returns aggregated AI traffic data for the dashboard
  */
 router.get('/ai-analytics', async (req, res) => {
@@ -59,14 +121,14 @@ router.get('/ai-analytics', async (req, res) => {
     }
 
     const period = req.query.period || '30d';
-    const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-    const since = new Date();
-    since.setDate(since.getDate() - days);
+    const compare = req.query.compare === 'true';
+    const { since, until, days } = getPeriodRange(period);
 
     const shopDomain = await resolveShopDomain(shop);
 
     // Exclude direct browser visits and our own internal test requests from all metrics
-    const botFilter = { shop: shopDomain, createdAt: { $gte: since }, botName: { $nin: ['Human/Unknown', 'indexAIze Test'] } };
+    const botExclude = { $nin: ['Human/Unknown', 'indexAIze Test'] };
+    const botFilter = { shop: shopDomain, createdAt: { $gte: since, $lte: until }, botName: botExclude };
 
     // Run all aggregations in parallel
     const [totalVisits, dailyVisits, topBots, topEndpoints, recentVisits] = await Promise.all([
@@ -75,14 +137,10 @@ router.get('/ai-analytics', async (req, res) => {
 
       // 2. Visits per day (for chart, bots only)
       AIVisitLog.aggregate([
-        {
-          $match: botFilter
-        },
+        { $match: botFilter },
         {
           $group: {
-            _id: {
-              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-            },
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
             count: { $sum: 1 },
             uniqueIPs: { $addToSet: '$ipHash' }
           }
@@ -98,7 +156,7 @@ router.get('/ai-analytics', async (req, res) => {
         }
       ]),
 
-      // 3. Top bots (excluding human visits)
+      // 3. Top bots
       AIVisitLog.aggregate([
         { $match: botFilter },
         {
@@ -111,12 +169,7 @@ router.get('/ai-analytics', async (req, res) => {
         { $sort: { visits: -1 } },
         { $limit: 10 },
         {
-          $project: {
-            _id: 0,
-            name: '$_id',
-            visits: 1,
-            lastSeen: 1
-          }
+          $project: { _id: 0, name: '$_id', visits: 1, lastSeen: 1 }
         }
       ]),
 
@@ -124,19 +177,12 @@ router.get('/ai-analytics', async (req, res) => {
       AIVisitLog.aggregate([
         { $match: botFilter },
         {
-          $group: {
-            _id: '$endpoint',
-            visits: { $sum: 1 }
-          }
+          $group: { _id: '$endpoint', visits: { $sum: 1 } }
         },
         { $sort: { visits: -1 } },
         { $limit: 10 },
         {
-          $project: {
-            _id: 0,
-            endpoint: '$_id',
-            visits: 1
-          }
+          $project: { _id: 0, endpoint: '$_id', visits: 1 }
         }
       ]),
 
@@ -151,31 +197,86 @@ router.get('/ai-analytics', async (req, res) => {
     // Calculate unique bots
     const uniqueBotsCount = topBots.length;
 
-    // Calculate trend (compare with previous period)
-    const previousSince = new Date(since);
-    previousSince.setDate(previousSince.getDate() - days);
-    
+    // Previous period for trend + comparison
+    const prevRange = (() => {
+      const ms = until.getTime() - since.getTime();
+      const prevUntil = new Date(since);
+      const prevSince = new Date(prevUntil.getTime() - ms);
+      return { since: prevSince, until: prevUntil };
+    })();
+
     const previousVisits = await AIVisitLog.countDocuments({
       shop: shopDomain,
-      createdAt: { $gte: previousSince, $lt: since },
-      botName: { $nin: ['Human/Unknown', 'indexAIze Test'] }
+      createdAt: { $gte: prevRange.since, $lt: prevRange.until },
+      botName: botExclude
     });
 
     const trend = previousVisits > 0
       ? Math.round(((totalVisits - previousVisits) / previousVisits) * 100)
       : totalVisits > 0 ? 100 : 0;
 
-    res.json({
+    // Build response
+    const response = {
       period,
       days,
       totalVisits,
       uniqueBots: uniqueBotsCount,
-      trend, // % change vs previous period
+      trend,
+      previousVisits,
       dailyVisits,
       topBots,
       topEndpoints,
       recentVisits
-    });
+    };
+
+    // If comparison requested, add previous period daily data
+    if (compare) {
+      const prevFilter = {
+        shop: shopDomain,
+        createdAt: { $gte: prevRange.since, $lt: prevRange.until },
+        botName: botExclude
+      };
+
+      const [prevDaily, prevBots, prevEndpoints] = await Promise.all([
+        AIVisitLog.aggregate([
+          { $match: prevFilter },
+          {
+            $group: {
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              count: { $sum: 1 }
+            }
+          },
+          { $sort: { _id: 1 } },
+          { $project: { _id: 0, date: '$_id', visits: '$count' } }
+        ]),
+
+        AIVisitLog.aggregate([
+          { $match: prevFilter },
+          { $group: { _id: '$botName', visits: { $sum: 1 } } },
+          { $sort: { visits: -1 } },
+          { $limit: 10 },
+          { $project: { _id: 0, name: '$_id', visits: 1 } }
+        ]),
+
+        AIVisitLog.aggregate([
+          { $match: prevFilter },
+          { $group: { _id: '$endpoint', visits: { $sum: 1 } } },
+          { $sort: { visits: -1 } },
+          { $limit: 10 },
+          { $project: { _id: 0, endpoint: '$_id', visits: 1 } }
+        ])
+      ]);
+
+      response.comparison = {
+        totalVisits: previousVisits,
+        uniqueBots: prevBots.length,
+        dailyVisits: prevDaily,
+        topBots: prevBots,
+        topEndpoints: prevEndpoints
+      };
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('[AI-ANALYTICS] Error:', error);

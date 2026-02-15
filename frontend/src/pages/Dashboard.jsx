@@ -119,6 +119,8 @@ export default function Dashboard({ shop: shopProp }) {
   
   // AI Traffic analytics
   const [aiTraffic, setAiTraffic] = useState(null);
+  const [aiTrafficPeriod, setAiTrafficPeriod] = useState('30d');
+  const [aiTrafficCompare, setAiTrafficCompare] = useState(false);
   
   // Friendly bot descriptions for non-technical users
   // Explains WHO is visiting and WHY in plain language
@@ -210,11 +212,13 @@ export default function Dashboard({ shop: shopProp }) {
   };
 
   // Load AI traffic analytics
-  const loadAITraffic = async () => {
+  const loadAITraffic = async (period, compare) => {
+    const p = period || aiTrafficPeriod;
+    const c = compare !== undefined ? compare : aiTrafficCompare;
     if (!shop) return;
     try {
       setAiTrafficLoading(true);
-      const data = await api(`/api/ai-analytics?shop=${encodeURIComponent(shop)}&period=30d`);
+      const data = await api(`/api/ai-analytics?shop=${encodeURIComponent(shop)}&period=${p}&compare=${c}`);
       if (data && !data.error) {
         setAiTraffic(data);
       }
@@ -1204,10 +1208,43 @@ export default function Dashboard({ shop: shopProp }) {
       <Layout.Section>
         <Card>
           <BlockStack gap="400">
-            <InlineStack align="space-between" blockAlign="center">
+            {/* Header with period selector */}
+            <InlineStack align="space-between" blockAlign="center" wrap={false}>
               <Text variant="headingMd">AI Traffic</Text>
-              <Text variant="bodySm" tone="subdued">Last 30 days</Text>
+              <InlineStack gap="200" blockAlign="center">
+                {[
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: '7d', label: '7 days' },
+                  { value: '30d', label: '30 days' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setAiTrafficPeriod(opt.value); loadAITraffic(opt.value, aiTrafficCompare); }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: aiTrafficPeriod === opt.value ? '1px solid #5c6ac4' : '1px solid #d2d5d8',
+                      background: aiTrafficPeriod === opt.value ? '#f4f5ff' : '#fff',
+                      color: aiTrafficPeriod === opt.value ? '#5c6ac4' : '#616161',
+                      fontSize: '12px',
+                      fontWeight: aiTrafficPeriod === opt.value ? 600 : 400,
+                      cursor: 'pointer',
+                      lineHeight: '20px'
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </InlineStack>
             </InlineStack>
+
+            {/* Compare toggle */}
+            <Checkbox
+              label="Compare to previous period"
+              checked={aiTrafficCompare}
+              onChange={(v) => { setAiTrafficCompare(v); loadAITraffic(aiTrafficPeriod, v); }}
+            />
 
             {aiTrafficLoading ? (
               <Text variant="bodySm" tone="subdued">Loading analytics...</Text>
@@ -1222,13 +1259,19 @@ export default function Dashboard({ shop: shopProp }) {
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
                     <Text variant="headingLg" fontWeight="bold">{aiTraffic.totalVisits.toLocaleString()}</Text>
                     <Text variant="bodySm" tone="subdued">AI & Search Visits</Text>
+                    {aiTrafficCompare && aiTraffic.comparison && (
+                      <Text variant="bodySm" tone="subdued">vs {aiTraffic.comparison.totalVisits.toLocaleString()}</Text>
+                    )}
                   </div>
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
                     <Text variant="headingLg" fontWeight="bold">{aiTraffic.uniqueBots}</Text>
                     <Text variant="bodySm" tone="subdued">Services Reading Your Data</Text>
+                    {aiTrafficCompare && aiTraffic.comparison && (
+                      <Text variant="bodySm" tone="subdued">vs {aiTraffic.comparison.uniqueBots}</Text>
+                    )}
                   </div>
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
-                    <Text variant="headingLg" fontWeight="bold">
+                    <Text variant="headingLg" fontWeight="bold" tone={aiTraffic.trend > 0 ? 'success' : aiTraffic.trend < 0 ? 'critical' : undefined}>
                       {aiTraffic.trend > 0 ? '+' : ''}{aiTraffic.trend}%
                     </Text>
                     <Text variant="bodySm" tone="subdued">Growth vs Last Period</Text>
@@ -1236,56 +1279,122 @@ export default function Dashboard({ shop: shopProp }) {
                 </div>
 
                 {/* Daily visits chart */}
-                {aiTraffic.dailyVisits?.length > 0 && (() => {
-                  // Fill all 30 days so the chart shows the full timeline
+                {(() => {
+                  const periodDays = aiTrafficPeriod === 'today' || aiTrafficPeriod === 'yesterday' ? 1
+                    : aiTrafficPeriod === '7d' ? 7 : 30;
+
+                  // Fill all days in period
                   const visitMap = {};
-                  aiTraffic.dailyVisits.forEach(d => { visitMap[d.date] = d.visits; });
+                  (aiTraffic.dailyVisits || []).forEach(d => { visitMap[d.date] = d.visits; });
+                  const prevVisitMap = {};
+                  if (aiTrafficCompare && aiTraffic.comparison?.dailyVisits) {
+                    aiTraffic.comparison.dailyVisits.forEach(d => { prevVisitMap[d.date] = d.visits; });
+                  }
+
                   const allDays = [];
-                  for (let i = 29; i >= 0; i--) {
+                  const prevDays = [];
+                  const startOffset = aiTrafficPeriod === 'yesterday' ? 1 : 0;
+                  for (let i = periodDays - 1 + startOffset; i >= startOffset; i--) {
                     const d = new Date();
                     d.setDate(d.getDate() - i);
                     const key = d.toISOString().split('T')[0];
                     allDays.push({ date: key, visits: visitMap[key] || 0 });
                   }
-                  const maxVisits = Math.max(...allDays.map(d => d.visits), 1);
+                  // Previous period days (same count, shifted back)
+                  if (aiTrafficCompare) {
+                    for (let i = periodDays * 2 - 1 + startOffset; i >= periodDays + startOffset; i--) {
+                      const d = new Date();
+                      d.setDate(d.getDate() - i);
+                      const key = d.toISOString().split('T')[0];
+                      prevDays.push({ date: key, visits: prevVisitMap[key] || 0 });
+                    }
+                  }
 
-                  // Show 5 date labels evenly spaced
-                  const labelIndices = [0, 7, 14, 21, 29];
+                  const allValues = [...allDays.map(d => d.visits), ...prevDays.map(d => d.visits)];
+                  const maxVisits = Math.max(...allValues, 1);
+
                   const formatLabel = (dateStr) => {
+                    if (!dateStr) return '';
                     const [, m, day] = dateStr.split('-');
                     return `${parseInt(day)}/${parseInt(m)}`;
                   };
 
+                  // Choose label count based on period
+                  const labelCount = periodDays <= 1 ? 1 : periodDays <= 7 ? periodDays : 5;
+                  const labelIndices = [];
+                  if (labelCount === 1) {
+                    labelIndices.push(0);
+                  } else {
+                    for (let i = 0; i < labelCount; i++) {
+                      labelIndices.push(Math.round(i * (allDays.length - 1) / (labelCount - 1)));
+                    }
+                  }
+
                   return (
                     <div>
-                      <Text variant="bodySm" fontWeight="semibold">Daily Visits</Text>
+                      <InlineStack align="space-between" blockAlign="center">
+                        <Text variant="bodySm" fontWeight="semibold">Daily Visits</Text>
+                        {aiTrafficCompare && (
+                          <InlineStack gap="300" blockAlign="center">
+                            <InlineStack gap="100" blockAlign="center">
+                              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#5c6ac4' }} />
+                              <Text variant="bodySm" tone="subdued">Current</Text>
+                            </InlineStack>
+                            <InlineStack gap="100" blockAlign="center">
+                              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#c4c7e0' }} />
+                              <Text variant="bodySm" tone="subdued">Previous</Text>
+                            </InlineStack>
+                          </InlineStack>
+                        )}
+                      </InlineStack>
                       <div style={{ position: 'relative', marginTop: '8px' }}>
-                        {/* Y-axis hint */}
-                        <div style={{ position: 'absolute', top: 0, right: 0, opacity: 0.5 }}>
-                          <Text variant="bodySm" tone="subdued">{maxVisits}</Text>
-                        </div>
                         {/* Bars */}
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '80px', paddingTop: '4px' }}>
-                          {allDays.map((day) => {
-                            const pct = day.visits > 0 ? Math.max(6, (day.visits / maxVisits) * 100) : 0;
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: aiTrafficCompare ? '2px' : '1px', height: '120px' }}>
+                          {allDays.map((day, idx) => {
+                            const pct = day.visits > 0 ? Math.max(8, (day.visits / maxVisits) * 100) : 0;
+                            const prevDay = prevDays[idx];
+                            const prevPct = prevDay && prevDay.visits > 0 ? Math.max(8, (prevDay.visits / maxVisits) * 100) : 0;
+
                             return (
-                              <div
-                                key={day.date}
-                                title={`${formatLabel(day.date)}: ${day.visits} visits`}
-                                style={{
-                                  flex: 1,
-                                  height: day.visits > 0 ? `${pct}%` : '2px',
-                                  background: day.visits > 0 ? '#5c6ac4' : '#e4e5e7',
-                                  borderRadius: day.visits > 0 ? '3px 3px 0 0' : '1px',
-                                  cursor: 'default',
-                                  transition: 'height 0.2s ease'
-                                }}
-                              />
+                              <div key={day.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+                                {/* Value label on top */}
+                                {day.visits > 0 && (
+                                  <div style={{ fontSize: '9px', color: '#616161', fontWeight: 600, marginBottom: '2px', lineHeight: 1 }}>
+                                    {day.visits}
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', width: '100%', height: '100px' }}>
+                                  {/* Previous period bar (behind) */}
+                                  {aiTrafficCompare && (
+                                    <div
+                                      title={prevDay ? `Prev ${formatLabel(prevDay.date)}: ${prevDay.visits}` : ''}
+                                      style={{
+                                        flex: 1,
+                                        height: prevDay && prevDay.visits > 0 ? `${prevPct}%` : '2px',
+                                        background: prevDay && prevDay.visits > 0 ? '#c4c7e0' : '#eeeff1',
+                                        borderRadius: prevDay && prevDay.visits > 0 ? '2px 2px 0 0' : '1px',
+                                        transition: 'height 0.2s ease'
+                                      }}
+                                    />
+                                  )}
+                                  {/* Current period bar */}
+                                  <div
+                                    title={`${formatLabel(day.date)}: ${day.visits} visits`}
+                                    style={{
+                                      flex: 1,
+                                      height: day.visits > 0 ? `${pct}%` : '2px',
+                                      background: day.visits > 0 ? '#5c6ac4' : '#e4e5e7',
+                                      borderRadius: day.visits > 0 ? '2px 2px 0 0' : '1px',
+                                      transition: 'height 0.2s ease'
+                                    }}
+                                  />
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
                         {/* Date labels */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: allDays.length === 1 ? 'center' : 'space-between', marginTop: '4px' }}>
                           {labelIndices.map(idx => (
                             <Text key={idx} variant="bodySm" tone="subdued">
                               {formatLabel(allDays[idx]?.date || '')}
@@ -1301,18 +1410,27 @@ export default function Dashboard({ shop: shopProp }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   {/* Who's Visiting */}
                   <div>
-                    <Text variant="bodySm" fontWeight="semibold" >Who's Visiting Your Store</Text>
+                    <Text variant="bodySm" fontWeight="semibold">Who's Visiting Your Store</Text>
                     <div style={{ marginTop: '8px' }}>
                       <BlockStack gap="300">
                         {aiTraffic.topBots?.filter(b => b.name !== 'Human/Unknown' && b.name !== 'indexAIze Test').slice(0, 5).map(bot => {
                           const info = getBotDisplay(bot.name);
+                          const prevBot = aiTrafficCompare && aiTraffic.comparison?.topBots?.find(b => b.name === bot.name);
+                          const diff = prevBot ? bot.visits - prevBot.visits : null;
                           return (
                             <InlineStack key={bot.name} align="space-between" blockAlign="start">
                               <BlockStack gap="0">
                                 <Text variant="bodySm" fontWeight="medium">{info.label}</Text>
                                 <Text variant="bodySm" tone="subdued">{info.desc}</Text>
                               </BlockStack>
-                              <Text variant="bodySm" fontWeight="semibold">{bot.visits}</Text>
+                              <InlineStack gap="100" blockAlign="center">
+                                <Text variant="bodySm" fontWeight="semibold">{bot.visits}</Text>
+                                {diff !== null && diff !== 0 && (
+                                  <Text variant="bodySm" tone={diff > 0 ? 'success' : 'critical'}>
+                                    {diff > 0 ? '+' : ''}{diff}
+                                  </Text>
+                                )}
+                              </InlineStack>
                             </InlineStack>
                           );
                         })}
@@ -1325,12 +1443,23 @@ export default function Dashboard({ shop: shopProp }) {
                     <Text variant="bodySm" fontWeight="semibold">What They're Reading</Text>
                     <div style={{ marginTop: '8px' }}>
                       <BlockStack gap="300">
-                        {aiTraffic.topEndpoints?.slice(0, 5).map(ep => (
-                          <InlineStack key={ep.endpoint} align="space-between" blockAlign="center">
-                            <Text variant="bodySm">{getEndpointLabel(ep.endpoint)}</Text>
-                            <Text variant="bodySm" fontWeight="semibold">{ep.visits}</Text>
-                          </InlineStack>
-                        ))}
+                        {aiTraffic.topEndpoints?.slice(0, 5).map(ep => {
+                          const prevEp = aiTrafficCompare && aiTraffic.comparison?.topEndpoints?.find(e => e.endpoint === ep.endpoint);
+                          const diff = prevEp ? ep.visits - prevEp.visits : null;
+                          return (
+                            <InlineStack key={ep.endpoint} align="space-between" blockAlign="center">
+                              <Text variant="bodySm">{getEndpointLabel(ep.endpoint)}</Text>
+                              <InlineStack gap="100" blockAlign="center">
+                                <Text variant="bodySm" fontWeight="semibold">{ep.visits}</Text>
+                                {diff !== null && diff !== 0 && (
+                                  <Text variant="bodySm" tone={diff > 0 ? 'success' : 'critical'}>
+                                    {diff > 0 ? '+' : ''}{diff}
+                                  </Text>
+                                )}
+                              </InlineStack>
+                            </InlineStack>
+                          );
+                        })}
                       </BlockStack>
                     </div>
                   </div>
