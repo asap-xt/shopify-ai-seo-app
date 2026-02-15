@@ -734,7 +734,7 @@ export default function Dashboard({ shop: shopProp }) {
                       
                       <Text variant="bodyMd" fontWeight="semibold">2. Token Management</Text>
                       <Text variant="bodyMd" tone="subdued">
-                        AI features (AI SEO, Advanced Schema, AI Sitemap, AI Shopping Assistant, MCP Q&A) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances. Each AI model has a different cost multiplier based on its pricing.
+                        AI features (AI SEO, Advanced Schema, AI Sitemap, AI Shopping Assistant, MCP Q&A) require tokens. Purchase tokens from "Plans & Billing" or upgrade to Growth Extra/Enterprise for included monthly allowances.
                       </Text>
                       
                       <Text variant="bodyMd" fontWeight="semibold">3. Structure Your Product Data</Text>
