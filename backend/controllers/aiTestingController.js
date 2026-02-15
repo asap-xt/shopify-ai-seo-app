@@ -455,9 +455,8 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
     
     // Get store context for the AI
     const shopRecord = await Shop.findOne({ shop });
-    const storeContext = await buildStoreContext(shop, shopRecord);
     
-    // Get public domain for fetching public data
+    // Resolve public domain first (needed for product URLs in context)
     let publicDomain = shop;
     try {
       const domainQuery = `{ shop { primaryDomain { url host } } }`;
@@ -477,6 +476,8 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
     } catch (domainErr) {
       console.error('[AI-TESTING] Error fetching domain:', domainErr);
     }
+    
+    const storeContext = await buildStoreContext(shop, shopRecord, publicDomain);
     
     // Fetch public store data for AI Data Quality prompts
     let publicDataContext = '';
@@ -801,7 +802,8 @@ async function fetchPublicStoreData(publicDomain, shop) {
 }
 
 // Build store context for AI
-async function buildStoreContext(shop, shopRecord) {
+async function buildStoreContext(shop, shopRecord, publicDomain) {
+  const domain = publicDomain || shop;
   const activeStatusFilter = {
     $or: [
       { status: 'ACTIVE' },
@@ -812,7 +814,7 @@ async function buildStoreContext(shop, shopRecord) {
   
   // Get products (sample)
   const products = await Product.find({ shop, ...activeStatusFilter })
-    .select('title descriptionHtml productType vendor priceRange tags handle')
+    .select('title descriptionHtml productType vendor priceRange tags handle available price currency')
     .limit(50)
     .lean();
   
@@ -829,6 +831,7 @@ async function buildStoreContext(shop, shopRecord) {
   
   // Store info
   context += `STORE NAME: ${storeMetadata.storeName || shopRecord?.name || shop}\n`;
+  context += `STORE URL: https://${domain}\n`;
   if (storeMetadata.tagline) context += `TAGLINE: ${storeMetadata.tagline}\n`;
   if (storeMetadata.description) context += `DESCRIPTION: ${storeMetadata.description}\n`;
   if (storeMetadata.targetAudience) context += `TARGET AUDIENCE: ${storeMetadata.targetAudience}\n`;
@@ -842,23 +845,26 @@ async function buildStoreContext(shop, shopRecord) {
     if (org.address) context += `ADDRESS: ${org.address}\n`;
   }
   
-  // Collections
+  // Collections with URLs
   if (collections.length > 0) {
     context += `\nCOLLECTIONS:\n`;
     collections.forEach(c => {
-      context += `- ${c.title}${c.productsCount ? ` (${c.productsCount} products)` : ''}\n`;
+      context += `- ${c.title}${c.productsCount ? ` (${c.productsCount} products)` : ''} | URL: https://${domain}/collections/${c.handle}\n`;
       if (c.description) context += `  Description: ${c.description.substring(0, 100)}...\n`;
     });
   }
   
-  // Products
+  // Products with handles and URLs
   if (products.length > 0) {
     context += `\nPRODUCTS (${products.length} shown):\n`;
     products.forEach(p => {
-      const price = p.priceRange?.minVariantPrice?.amount 
-        ? `${p.priceRange.minVariantPrice.currencyCode || ''} ${p.priceRange.minVariantPrice.amount}`
-        : '';
-      context += `- ${p.title}${price ? ` - ${price}` : ''}${p.productType ? ` [${p.productType}]` : ''}\n`;
+      const price = p.price 
+        ? `${p.currency || ''} ${p.price}`
+        : (p.priceRange?.minVariantPrice?.amount 
+          ? `${p.priceRange.minVariantPrice.currencyCode || ''} ${p.priceRange.minVariantPrice.amount}`
+          : '');
+      const availability = p.available === false ? ' [Out of stock]' : '';
+      context += `- ${p.title}${price ? ` - ${price}` : ''}${p.productType ? ` [${p.productType}]` : ''}${availability} | URL: https://${domain}/products/${p.handle}\n`;
     });
   }
   
