@@ -639,6 +639,12 @@ IMPORTANT RULES:
     const aiResult = await openRouterResponse.json();
     const responseTime = Date.now() - startTime;
     
+    // Debug: log response structure for thinking models
+    const msgContent = aiResult.choices?.[0]?.message?.content;
+    if (typeof msgContent !== 'string') {
+      console.log(`[AI-TESTING] Non-string response from ${bot.id}:`, JSON.stringify(msgContent)?.substring(0, 500));
+    }
+    
     // Calculate actual tokens used (raw from API)
     const rawTokensUsed = aiResult.usage?.total_tokens || baseTokens;
     
@@ -670,7 +676,30 @@ IMPORTANT RULES:
         priceMultiplier
       },
       prompt: questionToAsk,
-      response: aiResult.choices?.[0]?.message?.content || 'No response generated',
+      response: (() => {
+        const msg = aiResult.choices?.[0]?.message;
+        if (!msg) return 'No response generated';
+        
+        // Standard string content
+        if (typeof msg.content === 'string' && msg.content.trim()) return msg.content;
+        
+        // Array content (thinking models like Gemini 3 Pro return [{type: "thinking"}, {type: "text", text: "..."}])
+        if (Array.isArray(msg.content)) {
+          const textParts = msg.content
+            .filter(part => part.type === 'text' && part.text)
+            .map(part => part.text);
+          if (textParts.length > 0) return textParts.join('\n\n');
+          
+          // Fallback: any part with text
+          const anyText = msg.content.find(part => part.text);
+          if (anyText) return anyText.text;
+        }
+        
+        // Last resort: stringify
+        if (msg.content) return typeof msg.content === 'object' ? JSON.stringify(msg.content) : String(msg.content);
+        
+        return 'No response generated';
+      })(),
       usage: {
         tokensUsed: adjustedTokensUsed, // Adjusted for model pricing
         rawTokens: rawTokensUsed,       // Actual API tokens
