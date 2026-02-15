@@ -399,15 +399,15 @@ export default function AiTesting({ shop: shopProp }) {
       
       // AI Bot Testing (synced with backend AI_BOTS config)
       case 'chatgpt':
-        return currentPlanIndex >= 0; // Starter+ (ChatGPT 5.2)
+        return currentPlanIndex >= 0; // Starter+ (GPT-5)
       case 'gemini':
         return currentPlanIndex >= 0; // Starter+ (Gemini 3 Flash)
       case 'claude':
-        return currentPlanIndex >= 1; // Professional+ (Claude Opus 4.6)
+        return currentPlanIndex >= 0; // Starter+ (Claude Haiku 4.5)
       case 'meta':
         return currentPlanIndex >= 2; // Growth+ (Llama 4 Maverick)
       case 'perplexity':
-        return currentPlanIndex >= 3; // Growth Extra+ (Perplexity Sonar Pro)
+        return currentPlanIndex >= 2; // Growth+ (Perplexity Sonar)
       default:
         return false;
     }

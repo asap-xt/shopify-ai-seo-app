@@ -24,14 +24,17 @@ const normalizePlan = (plan) => {
 // Order: ChatGPT → Gemini → Claude → Meta → Perplexity
 // ============================================
 const AI_BOTS = {
+  // priceMultiplier = model effective rate / base effective rate
+  // Base: Gemini 2.5 Flash Lite ($0.075 input / $0.30 output)
+  // Effective base (70/30 input/output): $0.1425 per 1M tokens
   'chatgpt': {
     id: 'chatgpt',
-    name: 'ChatGPT 5.2',
-    model: 'openai/gpt-5.2-chat',
-    description: 'OpenAI GPT-5.2',
+    name: 'GPT-5 Mini',
+    model: 'openai/gpt-5-mini',
+    description: 'OpenAI GPT-5 Mini',
     minPlanIndex: 0, // Starter+
     tokensPerTest: 2000,
-    priceMultiplier: 28.0 // $1.75/$14 vs base $0.10/$0.40
+    priceMultiplier: 5.0 // $0.25/$2 → eff. $0.775/1M ÷ $0.1425 = 5.4
   },
   'gemini': {
     id: 'gemini',
@@ -40,16 +43,16 @@ const AI_BOTS = {
     description: 'Google Gemini 3 Flash',
     minPlanIndex: 0, // Starter+
     tokensPerTest: 2000,
-    priceMultiplier: 6.0 // $0.50/$3 vs base $0.10/$0.40
+    priceMultiplier: 9.0 // $0.50/$3 → eff. $1.25/1M ÷ $0.1425 = 8.8
   },
   'claude': {
     id: 'claude',
-    name: 'Claude Opus 4.6',
-    model: 'anthropic/claude-opus-4.6',
-    description: 'Anthropic Claude Opus 4.6',
-    minPlanIndex: 1, // Professional+
+    name: 'Claude Haiku 4.5',
+    model: 'anthropic/claude-haiku-4.5',
+    description: 'Anthropic Claude Haiku 4.5',
+    minPlanIndex: 0, // Starter+
     tokensPerTest: 2000,
-    priceMultiplier: 50.0 // $5/$25 vs base $0.10/$0.40
+    priceMultiplier: 15.0 // $1/$5 → eff. $2.20/1M ÷ $0.1425 = 15.4
   },
   'meta': {
     id: 'meta',
@@ -58,16 +61,16 @@ const AI_BOTS = {
     description: 'Meta Llama 4 Maverick',
     minPlanIndex: 2, // Growth+
     tokensPerTest: 2000,
-    priceMultiplier: 1.5 // $0.15/$0.60 vs base $0.10/$0.40
+    priceMultiplier: 2.0 // $0.15/$0.60 → eff. $0.285/1M ÷ $0.1425 = 2.0
   },
   'perplexity': {
     id: 'perplexity',
-    name: 'Perplexity Sonar Pro',
-    model: 'perplexity/sonar-pro',
-    description: 'Perplexity Sonar Pro (with search)',
-    minPlanIndex: 3, // Growth Extra+
-    tokensPerTest: 3000,
-    priceMultiplier: 30.0 // $3/$15 + per-request costs vs base $0.10/$0.40
+    name: 'Perplexity Sonar',
+    model: 'perplexity/sonar',
+    description: 'Perplexity Sonar (with search)',
+    minPlanIndex: 2, // Growth+
+    tokensPerTest: 2000,
+    priceMultiplier: 7.0 // $1/$1 → eff. $1.00/1M ÷ $0.1425 = 7.0
   }
 };
 
