@@ -1235,31 +1235,67 @@ export default function Dashboard({ shop: shopProp }) {
                   </div>
                 </div>
 
-                {/* Mini bar chart */}
-                {aiTraffic.dailyVisits?.length > 0 && (
-                  <div>
-                    <Text variant="bodySm" fontWeight="semibold">Daily Visits</Text>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '60px', marginTop: '8px' }}>
-                      {(() => {
-                        const maxVisits = Math.max(...aiTraffic.dailyVisits.map(d => d.visits), 1);
-                        return aiTraffic.dailyVisits.map((day, i) => (
-                          <div
-                            key={day.date}
-                            title={`${day.date}: ${day.visits} visits`}
-                            style={{
-                              flex: 1,
-                              height: `${Math.max(4, (day.visits / maxVisits) * 100)}%`,
-                              background: '#5c6ac4',
-                              borderRadius: '2px 2px 0 0',
-                              minWidth: '3px',
-                              cursor: 'default'
-                            }}
-                          />
-                        ));
-                      })()}
+                {/* Daily visits chart */}
+                {aiTraffic.dailyVisits?.length > 0 && (() => {
+                  // Fill all 30 days so the chart shows the full timeline
+                  const visitMap = {};
+                  aiTraffic.dailyVisits.forEach(d => { visitMap[d.date] = d.visits; });
+                  const allDays = [];
+                  for (let i = 29; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const key = d.toISOString().split('T')[0];
+                    allDays.push({ date: key, visits: visitMap[key] || 0 });
+                  }
+                  const maxVisits = Math.max(...allDays.map(d => d.visits), 1);
+
+                  // Show 5 date labels evenly spaced
+                  const labelIndices = [0, 7, 14, 21, 29];
+                  const formatLabel = (dateStr) => {
+                    const [, m, day] = dateStr.split('-');
+                    return `${parseInt(day)}/${parseInt(m)}`;
+                  };
+
+                  return (
+                    <div>
+                      <Text variant="bodySm" fontWeight="semibold">Daily Visits</Text>
+                      <div style={{ position: 'relative', marginTop: '8px' }}>
+                        {/* Y-axis hint */}
+                        <div style={{ position: 'absolute', top: 0, right: 0, opacity: 0.5 }}>
+                          <Text variant="bodySm" tone="subdued">{maxVisits}</Text>
+                        </div>
+                        {/* Bars */}
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1px', height: '80px', paddingTop: '4px' }}>
+                          {allDays.map((day) => {
+                            const pct = day.visits > 0 ? Math.max(6, (day.visits / maxVisits) * 100) : 0;
+                            return (
+                              <div
+                                key={day.date}
+                                title={`${formatLabel(day.date)}: ${day.visits} visits`}
+                                style={{
+                                  flex: 1,
+                                  height: day.visits > 0 ? `${pct}%` : '2px',
+                                  background: day.visits > 0 ? '#5c6ac4' : '#e4e5e7',
+                                  borderRadius: day.visits > 0 ? '3px 3px 0 0' : '1px',
+                                  cursor: 'default',
+                                  transition: 'height 0.2s ease'
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                        {/* Date labels */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                          {labelIndices.map(idx => (
+                            <Text key={idx} variant="bodySm" tone="subdued">
+                              {formatLabel(allDays[idx]?.date || '')}
+                            </Text>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Top bots and endpoints side by side */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
