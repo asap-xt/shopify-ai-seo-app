@@ -119,6 +119,56 @@ export default function Dashboard({ shop: shopProp }) {
   
   // AI Traffic analytics
   const [aiTraffic, setAiTraffic] = useState(null);
+  
+  // Friendly bot names and categories for non-technical users
+  const BOT_INFO = {
+    'ChatGPT':        { label: 'ChatGPT',         category: 'AI Search',      icon: '🤖' },
+    'OpenAI Search':  { label: 'OpenAI Search',    category: 'AI Search',      icon: '🤖' },
+    'Claude':         { label: 'Claude',           category: 'AI Search',      icon: '🤖' },
+    'Perplexity':     { label: 'Perplexity',       category: 'AI Search',      icon: '🔍' },
+    'Google AI':      { label: 'Google AI',        category: 'AI Search',      icon: '🤖' },
+    'Cohere':         { label: 'Cohere AI',        category: 'AI Search',      icon: '🤖' },
+    'You.com':        { label: 'You.com',          category: 'AI Search',      icon: '🔍' },
+    'Google':         { label: 'Google',           category: 'Search Engine',  icon: '🔎' },
+    'Bing':           { label: 'Bing',             category: 'Search Engine',  icon: '🔎' },
+    'Yahoo':          { label: 'Yahoo',            category: 'Search Engine',  icon: '🔎' },
+    'Yandex':         { label: 'Yandex',           category: 'Search Engine',  icon: '🔎' },
+    'DuckDuckGo':     { label: 'DuckDuckGo',       category: 'Search Engine',  icon: '🔎' },
+    'Ahrefs':         { label: 'Ahrefs',           category: 'SEO Tool',       icon: '📊' },
+    'Semrush':        { label: 'Semrush',          category: 'SEO Tool',       icon: '📊' },
+    'Majestic':       { label: 'Majestic',         category: 'SEO Tool',       icon: '📊' },
+    'DotBot':         { label: 'Moz',              category: 'SEO Tool',       icon: '📊' },
+    'Apple':          { label: 'Apple (Siri)',     category: 'AI Assistant',   icon: '🍎' },
+    'Meta AI':        { label: 'Meta AI',          category: 'AI Search',      icon: '🤖' },
+    'Facebook':       { label: 'Facebook',         category: 'Social Media',   icon: '📱' },
+    'Twitter/X':      { label: 'X (Twitter)',      category: 'Social Media',   icon: '📱' },
+    'LinkedIn':       { label: 'LinkedIn',         category: 'Social Media',   icon: '📱' },
+    'Amazon':         { label: 'Amazon',           category: 'Marketplace',    icon: '🛒' },
+    'Internet Archive': { label: 'Internet Archive', category: 'Archive',      icon: '📚' },
+    'indexAIze Test': { label: 'indexAIze',        category: 'Internal',       icon: '⚙️' },
+    'Human/Unknown':  { label: 'Direct Visit',    category: 'Human',          icon: '👤' },
+    'Other Bot':      { label: 'Other Bot',        category: 'Bot',            icon: '🔗' },
+  };
+  
+  const getBotDisplay = (botName) => {
+    const info = BOT_INFO[botName] || { label: botName, category: 'Other', icon: '🔗' };
+    return info;
+  };
+  
+  // Friendly endpoint names
+  const ENDPOINT_LABELS = {
+    '/ai/products.json': 'Product Catalog',
+    '/ai/collections-feed.json': 'Collections',
+    '/ai/store-metadata.json': 'Store Info',
+    '/ai/welcome': 'AI Welcome Page',
+    '/ai/sitemap-feed.xml': 'AI Sitemap',
+    '/ai/ask': 'AI Ask',
+    '/llms.txt': 'LLMs.txt',
+    '/llms-full.txt': 'LLMs Full',
+    '/.well-known/ai-plugin.json': 'AI Plugin',
+  };
+  
+  const getEndpointLabel = (endpoint) => ENDPOINT_LABELS[endpoint] || endpoint;
   const [aiTrafficLoading, setAiTrafficLoading] = useState(true);
   
   // Token purchase modal state
@@ -1171,17 +1221,17 @@ export default function Dashboard({ shop: shopProp }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
                     <Text variant="headingLg" fontWeight="bold">{aiTraffic.totalVisits.toLocaleString()}</Text>
-                    <Text variant="bodySm" tone="subdued">Total Visits</Text>
+                    <Text variant="bodySm" tone="subdued">AI & Search Visits</Text>
                   </div>
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
                     <Text variant="headingLg" fontWeight="bold">{aiTraffic.uniqueBots}</Text>
-                    <Text variant="bodySm" tone="subdued">Unique Bots</Text>
+                    <Text variant="bodySm" tone="subdued">Services Reading Your Data</Text>
                   </div>
                   <div style={{ padding: '12px', background: '#f6f6f7', borderRadius: '8px', textAlign: 'center' }}>
                     <Text variant="headingLg" fontWeight="bold">
                       {aiTraffic.trend > 0 ? '+' : ''}{aiTraffic.trend}%
                     </Text>
-                    <Text variant="bodySm" tone="subdued">vs Previous Period</Text>
+                    <Text variant="bodySm" tone="subdued">Growth vs Last Period</Text>
                   </div>
                 </div>
 
@@ -1213,27 +1263,36 @@ export default function Dashboard({ shop: shopProp }) {
 
                 {/* Top bots and endpoints side by side */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  {/* Top Bots */}
+                  {/* Top Visitors */}
                   <div>
-                    <Text variant="bodySm" fontWeight="semibold">Top AI Bots</Text>
-                    <BlockStack gap="100">
-                      {aiTraffic.topBots?.slice(0, 5).map(bot => (
-                        <InlineStack key={bot.name} align="space-between">
-                          <Text variant="bodySm">{bot.name}</Text>
-                          <Text variant="bodySm" tone="subdued">{bot.visits}</Text>
-                        </InlineStack>
-                      ))}
+                    <Text variant="bodySm" fontWeight="semibold">Who's Visiting</Text>
+                    <BlockStack gap="200">
+                      {aiTraffic.topBots?.slice(0, 5).map(bot => {
+                        const info = getBotDisplay(bot.name);
+                        return (
+                          <InlineStack key={bot.name} align="space-between" blockAlign="center">
+                            <InlineStack gap="200" blockAlign="center">
+                              <span style={{ fontSize: '16px' }}>{info.icon}</span>
+                              <BlockStack gap="0">
+                                <Text variant="bodySm" fontWeight="medium">{info.label}</Text>
+                                <Text variant="bodySm" tone="subdued">{info.category}</Text>
+                              </BlockStack>
+                            </InlineStack>
+                            <Badge size="small">{bot.visits}</Badge>
+                          </InlineStack>
+                        );
+                      })}
                     </BlockStack>
                   </div>
 
-                  {/* Top Endpoints */}
+                  {/* What They're Reading */}
                   <div>
-                    <Text variant="bodySm" fontWeight="semibold">Top Endpoints</Text>
-                    <BlockStack gap="100">
+                    <Text variant="bodySm" fontWeight="semibold">What They're Reading</Text>
+                    <BlockStack gap="200">
                       {aiTraffic.topEndpoints?.slice(0, 5).map(ep => (
-                        <InlineStack key={ep.endpoint} align="space-between">
-                          <Text variant="bodySm">{ep.endpoint.replace('/ai/', '').replace('.json', '').replace('.txt', '').replace('.xml', '')}</Text>
-                          <Text variant="bodySm" tone="subdued">{ep.visits}</Text>
+                        <InlineStack key={ep.endpoint} align="space-between" blockAlign="center">
+                          <Text variant="bodySm">{getEndpointLabel(ep.endpoint)}</Text>
+                          <Badge size="small">{ep.visits}</Badge>
                         </InlineStack>
                       ))}
                     </BlockStack>
