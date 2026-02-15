@@ -1201,59 +1201,39 @@ export default function AiTesting({ shop: shopProp }) {
           </Box>
         </Card>
 
-        {/* Product Discovery Card */}
+        {/* AI Shopping Assistant Card */}
         <Card>
           <Box padding="400">
             <BlockStack gap="400">
               <BlockStack gap="100">
-                <Text as="h3" variant="headingMd">Product Discovery</Text>
+                <Text as="h3" variant="headingMd">AI Shopping Assistant</Text>
                 <Text variant="bodySm" tone="subdued">
-                  Test how AI finds and recommends your products
+                  Ask anything about your store - see how AI helps customers find products and answers their questions
                 </Text>
               </BlockStack>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'Product Discovery').map(prompt => (
-                  <Box 
-                    key={prompt.id} 
-                    padding="300" 
-                    background="bg-surface-secondary" 
-                    borderRadius="200"
-                  >
-                    <BlockStack gap="200">
-                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
-                      <Button
-                        size="slim"
-                        onClick={() => runBotTest(prompt.question, prompt.id, 'Product Discovery')}
-                        loading={loadingPromptIds.has(prompt.id)}
-                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
-                      >
-                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
-                      </Button>
-                    </BlockStack>
-                  </Box>
-                ))}
-              </div>
-              
-              {/* Custom product search */}
               <Box padding="300" background="bg-surface-secondary" borderRadius="200">
                 <BlockStack gap="200">
-                  <Text variant="bodyMd" fontWeight="medium">Ask about specific products</Text>
+                  <Text variant="bodyMd" fontWeight="medium">Ask about your store</Text>
                   <TextField
                     value={customProductQuestion}
                     onChange={setCustomProductQuestion}
-                    placeholder="e.g., leather bags, summer dresses, gifts under $50..."
+                    placeholder="e.g., looking for a red dress, do you ship to Germany, gifts under $50..."
                     autoComplete="off"
+                    multiline={2}
                     connectedRight={
                       <Button
                         onClick={() => {
-                          // "Secret formatting" - wrap user question in positive framing for best results
-                          const formattedQuestion = `A customer is interested in: "${customProductQuestion}". 
-Based on ${storeInsights?.publicDomain || 'this store'}'s product catalog:
-1. What are the BEST matching products available?
-2. What makes each one a great choice?
-3. Highlight any special features, quality, or value.
-Be enthusiastic and helpful - this customer is ready to buy!`;
+                          const storeDomain = storeInsights?.publicDomain || 'this store';
+                          const formattedQuestion = `A customer asks: "${customProductQuestion}".
+Based on ${storeDomain}'s product catalog and store information:
+1. Answer the customer's question accurately and helpfully.
+2. If products are relevant, recommend the BEST matching ones with details.
+3. For EVERY product mentioned, include the direct URL (https://${storeDomain}/products/[handle]).
+4. For any store page or collection mentioned, include the direct URL.
+5. Highlight special features, quality, or value.
+6. If the question is about policies (shipping, returns, etc.), provide specific details from the store data.
+Answer in the same language the customer used. Be helpful and specific!`;
                           runBotTest(formattedQuestion, 'discovery-custom', 'Product Discovery');
                         }}
                         loading={loadingPromptIds.has('discovery-custom')}
@@ -1324,183 +1304,7 @@ Be enthusiastic and helpful - this customer is ready to buy!`;
           </Box>
         </Card>
 
-        {/* Business Intelligence Card */}
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingMd">Business Intelligence</Text>
-                <Text variant="bodySm" tone="subdued">
-                  See how AI extracts business information from your store
-                </Text>
-              </BlockStack>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {dynamicPrompts.filter(p => p.category === 'Business Intelligence').map(prompt => (
-                  <Box 
-                    key={prompt.id} 
-                    padding="300" 
-                    background="bg-surface-secondary" 
-                    borderRadius="200"
-                  >
-                    <BlockStack gap="200">
-                      <Text variant="bodyMd" fontWeight="medium">{prompt.description}</Text>
-                      <Button
-                        size="slim"
-                        onClick={() => runBotTest(prompt.question, prompt.id, 'Business Intelligence')}
-                        loading={loadingPromptIds.has(prompt.id)}
-                        disabled={!selectedBotId || loadingPromptIds.has(prompt.id)}
-                      >
-                        {loadingPromptIds.has(prompt.id) ? 'Checking...' : 'Check'}
-                      </Button>
-                    </BlockStack>
-                  </Box>
-                ))}
-              </div>
-
-              {/* Response area - under the card */}
-              {categoryResponse['Business Intelligence'] && (
-                <Box 
-                  padding="400" 
-                  background="bg-surface-secondary" 
-                  borderRadius="200"
-                >
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        {categoryResponse['Business Intelligence'].bot?.name} Response
-                      </Text>
-                      <Text variant="bodySm" tone="subdued">
-                        {categoryResponse['Business Intelligence'].usage?.tokensUsed?.toLocaleString()} tokens
-                      </Text>
-                    </InlineStack>
-                    <div 
-                      style={{ 
-                        maxHeight: '400px', 
-                        overflowY: 'auto', 
-                        whiteSpace: 'pre-wrap', 
-                        lineHeight: '1.6',
-                        padding: '12px',
-                        backgroundColor: 'var(--p-color-bg-surface)',
-                        borderRadius: '8px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      {categoryResponse['Business Intelligence'].response}
-                    </div>
-                    <InlineStack align="end" gap="200">
-                      <Button
-                        size="slim"
-                        onClick={() => {
-                          navigator.clipboard.writeText(categoryResponse['Business Intelligence'].response);
-                          setToastContent('Response copied to clipboard');
-                        }}
-                      >
-                        Copy
-                      </Button>
-                      <Button
-                        size="slim"
-                        onClick={() => setCategoryResponse(prev => {
-                          const updated = { ...prev };
-                          delete updated['Business Intelligence'];
-                          return updated;
-                        })}
-                      >
-                        Close
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
-                </Box>
-              )}
-            </BlockStack>
-          </Box>
-        </Card>
-
-        {/* Custom Question Card */}
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingMd">Custom Question</Text>
-                <Text variant="bodySm" tone="subdued">
-                  Ask your own question to the AI model
-                </Text>
-              </BlockStack>
-
-              <TextField
-                label=""
-                value={customBotQuestion}
-                onChange={setCustomBotQuestion}
-                placeholder="Enter your question..."
-                autoComplete="off"
-                connectedRight={
-                  <Button
-                    onClick={() => runBotTest(customBotQuestion, 'custom', 'Custom')}
-                    loading={loadingPromptIds.has('custom')}
-                    disabled={!selectedBotId || !customBotQuestion.trim() || loadingPromptIds.has('custom')}
-                  >
-                    {loadingPromptIds.has('custom') ? 'Asking...' : 'Ask'}
-                  </Button>
-                }
-              />
-
-              {/* Response area - under the card */}
-              {categoryResponse['Custom'] && (
-                <Box 
-                  padding="400" 
-                  background="bg-surface-secondary" 
-                  borderRadius="200"
-                >
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text variant="bodyMd" fontWeight="semibold">
-                        {categoryResponse['Custom'].bot?.name} Response
-                      </Text>
-                      <Text variant="bodySm" tone="subdued">
-                        {categoryResponse['Custom'].usage?.tokensUsed?.toLocaleString()} tokens
-                      </Text>
-                    </InlineStack>
-                    <div 
-                      style={{ 
-                        maxHeight: '400px', 
-                        overflowY: 'auto', 
-                        whiteSpace: 'pre-wrap', 
-                        lineHeight: '1.6',
-                        padding: '12px',
-                        backgroundColor: 'var(--p-color-bg-surface)',
-                        borderRadius: '8px',
-                        fontSize: '14px'
-                      }}
-                    >
-                      {categoryResponse['Custom'].response}
-                    </div>
-                    <InlineStack align="end" gap="200">
-                      <Button
-                        size="slim"
-                        onClick={() => {
-                          navigator.clipboard.writeText(categoryResponse['Custom'].response);
-                          setToastContent('Response copied to clipboard');
-                        }}
-                      >
-                        Copy
-                      </Button>
-                      <Button
-                        size="slim"
-                        onClick={() => setCategoryResponse(prev => {
-                          const updated = { ...prev };
-                          delete updated['Custom'];
-                          return updated;
-                        })}
-                      >
-                        Close
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
-                </Box>
-              )}
-            </BlockStack>
-          </Box>
-        </Card>
+        {/* Business Intelligence & Custom Question cards removed */}
 
         {/* Competitive Analysis Card - Growth Plus+ only */}
         <Card>
