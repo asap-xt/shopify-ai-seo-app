@@ -1239,7 +1239,7 @@ Answer in the same language the customer used. Be helpful and specific!`;
                         loading={loadingPromptIds.has('discovery-custom')}
                         disabled={!selectedBotId || !customProductQuestion.trim() || loadingPromptIds.has('discovery-custom')}
                       >
-                        {loadingPromptIds.has('discovery-custom') ? 'Searching...' : 'Find Products'}
+                        {loadingPromptIds.has('discovery-custom') ? 'Thinking...' : 'Ask AI'}
                       </Button>
                     }
                   />

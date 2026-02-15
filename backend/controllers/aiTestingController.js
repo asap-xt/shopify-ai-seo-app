@@ -563,7 +563,27 @@ router.post('/ai-testing/run-bot-test', validateRequest(), async (req, res) => {
     // Call OpenRouter API
     const startTime = Date.now();
     
-    const systemPrompt = `You are an AI assistant evaluating an e-commerce store's AI-readiness.
+    // Use different system prompts for product/shopping questions vs technical tests
+    const isShoppingQuestion = !!customPrompt;
+    
+    const systemPrompt = isShoppingQuestion 
+      ? `You are a helpful and knowledgeable shopping assistant for an online store.
+Your goal is to help customers find exactly what they're looking for.
+
+STORE DATA:
+${storeContext}
+
+IMPORTANT RULES:
+- Answer in the SAME LANGUAGE the customer uses
+- Be detailed, enthusiastic, and helpful
+- For EVERY product you mention, ALWAYS include the exact URL from the store data
+- Include price, availability, and key features for each product
+- If a product is out of stock, mention it clearly
+- If you can't find what the customer wants, suggest the closest alternatives
+- Format product recommendations clearly with name, price, URL, and a brief description
+- You may recommend up to 5-10 relevant products
+- Do NOT make up product URLs - only use URLs from the STORE DATA above`
+      : `You are an AI assistant evaluating an e-commerce store's AI-readiness.
 Analyze the store data provided and give a CONCISE assessment.
 
 STORE DATA:
@@ -598,8 +618,8 @@ IMPORTANT RULES:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: questionToAsk }
         ],
-        max_tokens: 2000, // Increased for "thinking" models like Gemini Pro
-        temperature: 0.5
+        max_tokens: isShoppingQuestion ? 4000 : 2000,
+        temperature: isShoppingQuestion ? 0.7 : 0.5
       })
     });
     
