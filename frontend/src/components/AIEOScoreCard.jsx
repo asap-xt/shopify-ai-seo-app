@@ -368,29 +368,33 @@ export default function AIEOScoreCard({
         }
       }
       if (scoreBreakdown.aiValidationQuality < 30) {
-        const poorRatings = Object.entries(aiValidationResults || {})
+        const poorEndpoints = Object.entries(aiValidationResults || {})
           .filter(([key, result]) => {
             const rating = result.rating?.toLowerCase();
             return (rating === 'poor' || rating === 'fair') && key !== 'robotsTxt' && key !== 'schemaData';
-          })
-          .map(([key]) => endpointDisplayNames[key] || key);
-        if (poorRatings.length > 0) {
-          recommendations.push(`${poorRatings.length} endpoint(s) have low data quality ratings. Improve content quality to boost your score.`);
-          recommendations.push(`Review and improve: ${poorRatings.join(', ')}`);
-        }
+          });
+        
+        poorEndpoints.forEach(([key, result]) => {
+          const name = endpointDisplayNames[key] || key;
+          const rating = result.rating?.toLowerCase();
+          if (rating === 'poor') {
+            recommendations.push(`${name}: Needs significant improvement. Run "Test with AI Bot" to see detailed suggestions.`);
+          } else if (rating === 'fair') {
+            recommendations.push(`${name}: Acceptable but can be improved. Add more detailed descriptions and structured data.`);
+          }
+        });
       }
       if (scoreBreakdown.optimizationCoverage < 15) {
-        recommendations.push('Low optimization coverage. Optimize more products and collections to improve your score.');
-        recommendations.push('Go to Store Optimization for AI and optimize your products/collections');
+        recommendations.push('Low optimization coverage. Go to Store Optimization for AI to optimize your products and collections.');
       }
       if (scoreBreakdown.structuredDataQuality < 7) {
-        recommendations.push('Structured data could be improved. Add organization schema and enhance product schema.');
+        recommendations.push('Structured data needs improvement. Go to Store Optimization for AI → Schema Data to add organization schema and enhance product markup.');
       }
       if (endpointResults?.llmsTxt && endpointResults.llmsTxt.status !== 'success') {
-        recommendations.push('LLMs.txt file is missing or incomplete. Enable AI Discovery in Settings to help AI agents find your store.');
+        recommendations.push('LLMs.txt is not active. Go to AI Discovery Features and enable "LLMs.txt File", then click Save Settings.');
       }
       if (endpointResults?.mcpServer && endpointResults.mcpServer.status !== 'success') {
-        recommendations.push('MCP Server is not responding. This limits AI agents from accessing your store data via Model Context Protocol.');
+        recommendations.push('MCP Server is not responding. Contact support if this persists — AI agents cannot search your products without it.');
       }
 
       return {
@@ -529,8 +533,8 @@ export default function AIEOScoreCard({
                   {calculatedAIEOScore.recommendations.map((rec, idx) => (
                     <Banner 
                       key={idx} 
-                      tone={rec.includes('Fix') || rec.includes('Improve') || rec.includes('low') ? 'critical' : 
-                            rec.includes('Review') ? 'warning' : 'info'}
+                      tone={rec.includes('significant') || rec.includes('not active') || rec.includes('not responding') ? 'critical' : 
+                            rec.includes('can be improved') || rec.includes('needs improvement') || rec.includes('Low ') ? 'warning' : 'info'}
                     >
                       <Text variant="bodyMd">{rec}</Text>
                     </Banner>
