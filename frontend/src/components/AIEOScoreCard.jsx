@@ -22,7 +22,9 @@ const endpointDisplayNames = {
   collectionsJson: 'Collections JSON Feed',
   storeMetadata: 'Store Metadata',
   aiSitemap: 'AI-Enhanced Sitemap',
-  advancedSchemaApi: 'Advanced Schema Data'
+  advancedSchemaApi: 'Advanced Schema Data',
+  llmsTxt: 'LLMs.txt',
+  mcpServer: 'MCP Server'
 };
 
 export default function AIEOScoreCard({ 
@@ -202,7 +204,9 @@ export default function AIEOScoreCard({
         collectionsJson: 4,
         storeMetadata: 4,
         aiSitemap: 3,
-        advancedSchemaApi: 3
+        advancedSchemaApi: 3,
+        llmsTxt: 3,
+        mcpServer: 4
       };
 
       // 1. ENDPOINT AVAILABILITY (0-30 points)
@@ -279,23 +283,37 @@ export default function AIEOScoreCard({
       let structuredDataScore = 0;
 
       if (endpointResults?.schemaData?.status === 'success') {
-        structuredDataScore += 3;
+        structuredDataScore += 2;
       }
 
       if (endpointResults?.storeMetadata?.status === 'success') {
-        structuredDataScore += 3;
+        structuredDataScore += 2;
         const metadataRating = aiValidationResults?.storeMetadata?.rating?.toLowerCase();
         if (metadataRating === 'excellent') {
-          structuredDataScore += 4;
-        } else if (metadataRating === 'good') {
           structuredDataScore += 2;
+        } else if (metadataRating === 'good') {
+          structuredDataScore += 1;
         }
       } else if (endpointResults?.storeMetadata?.status === 'locked') {
-        structuredDataScore += 1;
+        structuredDataScore += 0.5;
       }
 
       if (endpointResults?.advancedSchemaApi?.status === 'success') {
-        structuredDataScore += 2;
+        structuredDataScore += 1;
+      }
+
+      // llms.txt contributes to structured data quality
+      if (endpointResults?.llmsTxt?.status === 'success') {
+        structuredDataScore += 1.5;
+      } else if (endpointResults?.llmsTxt?.status === 'fair') {
+        structuredDataScore += 0.75;
+      }
+
+      // MCP Server contributes to structured data quality
+      if (endpointResults?.mcpServer?.status === 'success') {
+        structuredDataScore += 1.5;
+      } else if (endpointResults?.mcpServer?.status === 'fair') {
+        structuredDataScore += 0.75;
       }
 
       scoreBreakdown.structuredDataQuality = Math.min(10, Math.round(structuredDataScore));
@@ -367,6 +385,12 @@ export default function AIEOScoreCard({
       }
       if (scoreBreakdown.structuredDataQuality < 7) {
         recommendations.push('Structured data could be improved. Add organization schema and enhance product schema.');
+      }
+      if (endpointResults?.llmsTxt && endpointResults.llmsTxt.status !== 'success') {
+        recommendations.push('LLMs.txt file is missing or incomplete. Enable AI Discovery in Settings to help AI agents find your store.');
+      }
+      if (endpointResults?.mcpServer && endpointResults.mcpServer.status !== 'success') {
+        recommendations.push('MCP Server is not responding. This limits AI agents from accessing your store data via Model Context Protocol.');
       }
 
       return {

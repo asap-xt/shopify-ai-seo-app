@@ -964,6 +964,19 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       name: 'Advanced Schema Data', 
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
+    },
+    // AI Discovery files (available for all plans)
+    {
+      key: 'llmsTxt',
+      name: 'LLMs.txt',
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/llms.txt?shop=${shop}`
+    },
+    // MCP Server (available for all plans)
+    {
+      key: 'mcpServer',
+      name: 'MCP Server',
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/mcp?shop=${shop}`,
+      customTest: true // handled separately (requires JSON-RPC initialize)
     }
   ];
   
@@ -978,6 +991,74 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
           message: 'Plan upgrade required',
           name: endpoint.name
         };
+        continue;
+      }
+      
+      // MCP Server custom test (requires JSON-RPC POST, not GET)
+      if (endpoint.customTest && endpoint.key === 'mcpServer') {
+        try {
+          const mcpResponse = await fetch(endpoint.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json, text/event-stream',
+              'User-Agent': 'IndexAIze-Bot/1.0'
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2025-03-26',
+                capabilities: {},
+                clientInfo: { name: 'indexAIze-test', version: '1.0' }
+              }
+            }),
+            timeout: 10000
+          });
+          
+          if (mcpResponse.ok) {
+            const mcpBody = await mcpResponse.text();
+            const hasServerInfo = mcpBody.includes('indexAIze') && mcpBody.includes('protocolVersion');
+            const hasToolsCap = mcpBody.includes('"tools"');
+            const hasResourcesCap = mcpBody.includes('"resources"');
+            
+            if (hasServerInfo && hasToolsCap && hasResourcesCap) {
+              results[endpoint.key] = {
+                status: 'success',
+                message: 'MCP Server is active and responding. AI agents can connect via Model Context Protocol.',
+                name: endpoint.name,
+                dataSize: mcpBody.length,
+                contentType: mcpResponse.headers.get('content-type')
+              };
+            } else if (hasServerInfo) {
+              results[endpoint.key] = {
+                status: 'fair',
+                message: 'MCP Server responds but capabilities may be limited',
+                name: endpoint.name,
+                dataSize: mcpBody.length
+              };
+            } else {
+              results[endpoint.key] = {
+                status: 'warning',
+                message: 'MCP endpoint reachable but returned unexpected response',
+                name: endpoint.name
+              };
+            }
+          } else {
+            results[endpoint.key] = {
+              status: 'error',
+              message: `MCP Server returned HTTP ${mcpResponse.status}`,
+              name: endpoint.name
+            };
+          }
+        } catch (mcpErr) {
+          results[endpoint.key] = {
+            status: 'error',
+            message: `MCP Server not reachable: ${mcpErr.message}`,
+            name: endpoint.name
+          };
+        }
         continue;
       }
       
@@ -1226,6 +1307,28 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
               validationMessage = 'API OK, but no advanced schemas generated yet. Generate schemas in Advanced Schema Data section.';
             } else {
               validationMessage = `${schemasCount} advanced schema${schemasCount > 1 ? 's' : ''} available`;
+            }
+          }
+          
+          // llms.txt validation
+          if (endpoint.key === 'llmsTxt' && data) {
+            if (typeof data === 'string' && data.trim().length > 0) {
+              const hasTitle = data.includes('#');
+              const hasLinks = data.includes('http');
+              const hasProductCatalog = data.toLowerCase().includes('product') || data.toLowerCase().includes('catalog');
+              
+              if (hasTitle && hasLinks && hasProductCatalog) {
+                validationMessage = 'LLMs.txt is configured correctly with store information and endpoint links';
+              } else if (hasTitle && hasLinks) {
+                validationStatus = 'fair';
+                validationMessage = 'LLMs.txt exists but may be missing product catalog links';
+              } else {
+                validationStatus = 'warning';
+                validationMessage = 'LLMs.txt exists but content appears incomplete';
+              }
+            } else {
+              validationStatus = 'warning';
+              validationMessage = 'LLMs.txt returned empty content';
             }
           }
           
