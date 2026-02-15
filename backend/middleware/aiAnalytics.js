@@ -33,8 +33,9 @@ const KNOWN_BOTS = [
   { pattern: /Twitterbot/i, name: 'Twitter/X' },
   { pattern: /LinkedInBot/i, name: 'LinkedIn' },
   
-  // Internal
+  // Internal (our own app's requests - should be excluded from analytics)
   { pattern: /AI-SEO-Testing-Bot/i, name: 'indexAIze Test' },
+  { pattern: /IndexAIze-Bot/i, name: 'indexAIze Test' },
   
   // Generic crawlers
   { pattern: /Amazonbot/i, name: 'Amazon' },

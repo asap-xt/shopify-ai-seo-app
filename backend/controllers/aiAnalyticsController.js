@@ -65,8 +65,8 @@ router.get('/ai-analytics', async (req, res) => {
 
     const shopDomain = await resolveShopDomain(shop);
 
-    // Exclude direct browser visits (Human/Unknown) from all metrics
-    const botFilter = { shop: shopDomain, createdAt: { $gte: since }, botName: { $ne: 'Human/Unknown' } };
+    // Exclude direct browser visits and our own internal test requests from all metrics
+    const botFilter = { shop: shopDomain, createdAt: { $gte: since }, botName: { $nin: ['Human/Unknown', 'indexAIze Test'] } };
 
     // Run all aggregations in parallel
     const [totalVisits, dailyVisits, topBots, topEndpoints, recentVisits] = await Promise.all([
@@ -158,7 +158,7 @@ router.get('/ai-analytics', async (req, res) => {
     const previousVisits = await AIVisitLog.countDocuments({
       shop: shopDomain,
       createdAt: { $gte: previousSince, $lt: since },
-      botName: { $ne: 'Human/Unknown' }
+      botName: { $nin: ['Human/Unknown', 'indexAIze Test'] }
     });
 
     const trend = previousVisits > 0
