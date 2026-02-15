@@ -5,6 +5,10 @@ import Product from '../db/Product.js';
 import Collection from '../db/Collection.js';
 import Shop from '../db/Shop.js';
 import AIVisitLog from '../db/AIVisitLog.js';
+import Subscription from '../db/Subscription.js';
+import TokenBalance from '../db/TokenBalance.js';
+import { resolvePlanKey, getPlanConfig } from '../plans.js';
+import { calculateFeatureCost } from '../billing/tokenConfig.js';
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 
@@ -55,6 +59,63 @@ function detectBotFromUA(ua) {
   if (lower.includes('perplexity')) return 'Perplexity (MCP)';
   if (lower.includes('copilot') || lower.includes('bing')) return 'Copilot (MCP)';
   return 'MCP Agent';
+}
+
+// ============================================================
+// PLAN LIMIT HELPERS
+// ============================================================
+
+/**
+ * Get the shop's plan config (product limit, collection limit, etc.)
+ */
+async function getShopPlanConfig(shop) {
+  try {
+    const subscription = await Subscription.findOne({ shop }).lean();
+    const planKey = resolvePlanKey(subscription?.plan) || 'starter';
+    const planConfig = getPlanConfig(planKey);
+    return {
+      planKey,
+      productLimit: planConfig?.productLimit || 70,
+      collectionLimit: planConfig?.collectionLimit ?? 0,
+      plan: planConfig?.name || 'Starter',
+    };
+  } catch (err) {
+    console.error('[MCP] Error getting plan config:', err.message);
+    return { planKey: 'starter', productLimit: 70, collectionLimit: 0, plan: 'Starter' };
+  }
+}
+
+/**
+ * Check if shop has sufficient token balance for a feature.
+ * Returns { allowed, balance, cost, error? }
+ */
+async function checkAndDeductTokens(shop, feature) {
+  const cost = calculateFeatureCost(feature);
+
+  try {
+    const tokenBalance = await TokenBalance.findOne({ shop });
+    if (!tokenBalance || !tokenBalance.hasBalance(cost)) {
+      return {
+        allowed: false,
+        balance: tokenBalance?.balance || 0,
+        cost,
+        error: `Insufficient token balance. Required: ${cost.toLocaleString()} tokens, available: ${(tokenBalance?.balance || 0).toLocaleString()} tokens. Purchase tokens in the app dashboard.`
+      };
+    }
+
+    // Deduct tokens
+    await tokenBalance.deductTokens(cost, feature, { source: 'mcp', tool: 'ask_question' });
+
+    return { allowed: true, balance: tokenBalance.balance, cost };
+  } catch (err) {
+    console.error('[MCP] Token deduction error:', err.message);
+    return {
+      allowed: false,
+      balance: 0,
+      cost,
+      error: 'Failed to verify token balance. Please try again later.'
+    };
+  }
 }
 
 /**
@@ -130,6 +191,10 @@ export async function searchProducts(shop, args, userAgent) {
 
   await logMcpCall(shop, 'search_products', userAgent);
 
+  // Get plan limits
+  const planConfig = await getShopPlanConfig(shop);
+  const maxProducts = planConfig.productLimit;
+
   const filter = { shop, ...ACTIVE_FILTER };
 
   // Add product type filter
@@ -143,6 +208,9 @@ export async function searchProducts(shop, args, userAgent) {
     filter.tags = { $in: tagList.map(t => new RegExp(t, 'i')) };
   }
 
+  // Effective limit: min of requested, 50 hard cap, and plan product limit
+  const effectiveLimit = Math.min(limit, 50, maxProducts);
+
   // Text search on title
   let products;
   if (query) {
@@ -152,7 +220,7 @@ export async function searchProducts(shop, args, userAgent) {
       { score: { $meta: 'textScore' } }
     )
       .sort({ score: { $meta: 'textScore' } })
-      .limit(Math.min(limit, 50))
+      .limit(effectiveLimit)
       .lean();
 
     // If text search returns nothing, fall back to regex on title
@@ -161,13 +229,13 @@ export async function searchProducts(shop, args, userAgent) {
         ...filter,
         title: { $regex: query, $options: 'i' }
       })
-        .limit(Math.min(limit, 50))
+        .limit(effectiveLimit)
         .lean();
     }
   } else {
     products = await Product.find(filter)
       .sort({ publishedAt: -1 })
-      .limit(Math.min(limit, 50))
+      .limit(effectiveLimit)
       .lean();
   }
 
@@ -190,6 +258,8 @@ export async function searchProducts(shop, args, userAgent) {
       type: 'text',
       text: JSON.stringify({
         shop: publicDomain,
+        plan: planConfig.plan,
+        product_limit: maxProducts,
         query: query || null,
         total_results: products.length,
         products: products.map(p => formatProduct(p, publicDomain))
@@ -377,18 +447,36 @@ export async function searchCollections(shop, args, userAgent) {
 
   await logMcpCall(shop, 'search_collections', userAgent);
 
+  // Check plan collection limit
+  const planConfig = await getShopPlanConfig(shop);
+  if (planConfig.collectionLimit === 0) {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          error: 'Collections are not available on the current plan.',
+          plan: planConfig.plan,
+          upgrade_message: 'Upgrade to Professional or higher to access collection data.'
+        })
+      }],
+      isError: true
+    };
+  }
+
+  const effectiveLimit = Math.min(limit, 50, planConfig.collectionLimit);
+
   let collections;
   if (query) {
     collections = await Collection.find({
       shop,
       title: { $regex: query, $options: 'i' }
     })
-      .limit(Math.min(limit, 50))
+      .limit(effectiveLimit)
       .lean();
   } else {
     collections = await Collection.find({ shop })
       .sort({ productsCount: -1 })
-      .limit(Math.min(limit, 50))
+      .limit(effectiveLimit)
       .lean();
   }
 
@@ -399,6 +487,8 @@ export async function searchCollections(shop, args, userAgent) {
       type: 'text',
       text: JSON.stringify({
         shop: publicDomain,
+        plan: planConfig.plan,
+        collection_limit: planConfig.collectionLimit,
         total_results: collections.length,
         collections: collections.map(c => ({
           id: c.collectionId || c.shopifyCollectionId,
@@ -421,6 +511,24 @@ export async function askQuestion(shop, args, userAgent) {
   const { question, context: additionalContext } = args;
 
   await logMcpCall(shop, 'ask_question', userAgent);
+
+  // Check and deduct tokens BEFORE calling Gemini
+  const tokenCheck = await checkAndDeductTokens(shop, 'mcp-ask-question');
+  if (!tokenCheck.allowed) {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          error: 'Token balance required',
+          message: tokenCheck.error,
+          tokens_required: tokenCheck.cost,
+          tokens_available: tokenCheck.balance,
+          help: 'The store owner needs to purchase tokens in the indexAIze app dashboard to enable AI-powered Q&A.'
+        })
+      }],
+      isError: true
+    };
+  }
 
   const shopRecord = await Shop.findOne({ shop }).lean();
   if (!shopRecord) {
@@ -566,9 +674,13 @@ Respond in JSON format:
 // ============================================================
 
 export async function readCatalogResource(shop) {
+  // Apply plan product limit to catalog resource
+  const planConfig = await getShopPlanConfig(shop);
+  const maxProducts = Math.min(200, planConfig.productLimit);
+
   const products = await Product.find({ shop, ...ACTIVE_FILTER })
     .select('title handle price currency productType vendor tags available')
-    .limit(200)
+    .limit(maxProducts)
     .lean();
 
   const publicDomain = await getPublicDomain(shop);
@@ -579,6 +691,8 @@ export async function readCatalogResource(shop) {
       mimeType: 'application/json',
       text: JSON.stringify({
         shop: publicDomain,
+        plan: planConfig.plan,
+        product_limit: planConfig.productLimit,
         products_count: products.length,
         products: products.map(p => ({
           title: p.title,

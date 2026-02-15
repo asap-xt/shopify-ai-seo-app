@@ -97,6 +97,11 @@ export const TOKEN_COSTS = {
     base: 2000,           // Overhead for system messages
     perProduct: 2500,     // Cost per product: 5 AI calls × ~500 tokens each = ~2500 per product
     description: 'AI-optimized sitemap generation'
+  },
+
+  'mcp-ask-question': {
+    base: 5000,           // ~3000-4000 input (store context + question) + ~500-800 output
+    description: 'MCP RAG Q&A - AI-powered answer based on store catalog'
   }
 };
 
@@ -160,7 +165,8 @@ export const TOKEN_REQUIRED_FEATURES = [
   'ai-testing-simulation',      // Requires tokens
   'ai-testing-validation',      // Requires tokens
   'ai-schema-advanced',         // Requires tokens
-  'ai-sitemap-optimized'        // Requires tokens
+  'ai-sitemap-optimized',       // Requires tokens
+  'mcp-ask-question'            // Requires tokens (MCP RAG Q&A)
 ];
 
 // Features blocked during trial
