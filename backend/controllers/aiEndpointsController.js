@@ -102,6 +102,7 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
               description
               productType
               vendor
+              totalInventory
               priceRangeV2 {
                 minVariantPrice {
                   amount
@@ -111,6 +112,19 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
               featuredImage {
                 url
                 altText
+              }
+              variants(first: 100) {
+                edges {
+                  node {
+                    title
+                    availableForSale
+                    inventoryQuantity
+                    selectedOptions {
+                      name
+                      value
+                    }
+                  }
+                }
               }
               metafields(namespace: "seo_ai", first: 100) {
                 edges {
@@ -184,6 +198,36 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
           }
         }
         
+        // Build availability
+        const totalInventory = product.totalInventory || 0;
+        const hasAvailableVariants = product.variants?.edges?.some(v => v.node.availableForSale);
+        let availability = 'out_of_stock';
+        if (hasAvailableVariants && totalInventory > 10) {
+          availability = 'in_stock';
+        } else if (hasAvailableVariants && totalInventory > 0) {
+          availability = 'limited_stock';
+        } else if (hasAvailableVariants) {
+          availability = 'available';
+        }
+
+        // Build option summary (Size, Color, etc.)
+        const optionSummary = {};
+        for (const { node: v } of (product.variants?.edges || [])) {
+          for (const opt of (v.selectedOptions || [])) {
+            if (!optionSummary[opt.name]) optionSummary[opt.name] = { available: [], unavailable: [] };
+            if (v.availableForSale) {
+              if (!optionSummary[opt.name].available.includes(opt.value)) {
+                optionSummary[opt.name].available.push(opt.value);
+              }
+            } else {
+              if (!optionSummary[opt.name].unavailable.includes(opt.value) &&
+                  !optionSummary[opt.name].available.includes(opt.value)) {
+                optionSummary[opt.name].unavailable.push(opt.value);
+              }
+            }
+          }
+        }
+
         const productData = {
           id: product.id,
           title: product.title,
@@ -193,10 +237,11 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
           vendor: product.vendor || null,
           price: product.priceRangeV2?.minVariantPrice?.amount || null,
           currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          availability,
+          options: Object.keys(optionSummary).length > 0 ? optionSummary : null,
           url: `https://${shop}/products/${product.handle}`,
           image: product.featuredImage ? {
             url: product.featuredImage.url,
-            // Priority: AI-generated imageAlt > Shopify altText > product title
             alt: aiImageAlt || product.featuredImage.altText || product.title
           } : null,
           metafields: parsedMetafields
