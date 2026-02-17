@@ -933,12 +933,21 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                   url
                   altText
                 }
-                variants(first: 10) {
+                variants(first: 100) {
                   edges {
                     node {
+                      title
                       sku
                       availableForSale
                       inventoryQuantity
+                      selectedOptions {
+                        name
+                        value
+                      }
+                      price {
+                        amount
+                        currencyCode
+                      }
                     }
                   }
                 }
@@ -1044,6 +1053,37 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
         const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantPrice?.amount || 0);
         const isOnSale = compareAtMin > 0 && compareAtMin > minPrice;
         
+        // Build variants with size/option info
+        const variants = (product.variants?.edges || []).map(({ node: v }) => ({
+          title: v.title,
+          sku: v.sku || null,
+          available: v.availableForSale,
+          inventory: v.inventoryQuantity,
+          options: (v.selectedOptions || []).reduce((acc, opt) => {
+            acc[opt.name] = opt.value;
+            return acc;
+          }, {}),
+          price: v.price ? parseFloat(v.price.amount).toFixed(2) : null
+        }));
+
+        // Extract unique option names and available values
+        const optionSummary = {};
+        for (const v of variants) {
+          for (const [optName, optValue] of Object.entries(v.options)) {
+            if (!optionSummary[optName]) optionSummary[optName] = { available: [], unavailable: [] };
+            if (v.available) {
+              if (!optionSummary[optName].available.includes(optValue)) {
+                optionSummary[optName].available.push(optValue);
+              }
+            } else {
+              if (!optionSummary[optName].unavailable.includes(optValue) && 
+                  !optionSummary[optName].available.includes(optValue)) {
+                optionSummary[optName].unavailable.push(optValue);
+              }
+            }
+          }
+        }
+
         optimizedProducts.push({
           id: product.id,
           sku: primarySku,
@@ -1060,11 +1100,13 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             totalInventory: totalInventory,
             availableForSale: hasAvailableVariants || false
           },
+          options: Object.keys(optionSummary).length > 0 ? optionSummary : null,
+          variants: variants.length > 0 ? variants : null,
           pricing: {
             price: minPrice.toFixed(2),
             priceMax: maxPrice > minPrice ? maxPrice.toFixed(2) : null,
             compareAtPrice: isOnSale ? compareAtMin.toFixed(2) : null,
-          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+            currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
             isOnSale: isOnSale
           },
           url: `https://${shop}/products/${product.handle}`,
