@@ -33,9 +33,10 @@ const KNOWN_BOTS = [
   { pattern: /Twitterbot/i, name: 'Twitter/X' },
   { pattern: /LinkedInBot/i, name: 'LinkedIn' },
   
-  // Internal (our own app's requests - should be excluded from analytics)
-  { pattern: /AI-SEO-Testing-Bot/i, name: 'indexAIze Test' },
-  { pattern: /IndexAIze-Bot/i, name: 'indexAIze Test' },
+  // Internal (our own app's requests - excluded from analytics)
+  { pattern: /AI-SEO-Testing-Bot/i, name: 'indexAIze Test', internal: true },
+  { pattern: /IndexAIze-Bot/i, name: 'indexAIze Test', internal: true },
+  { pattern: /PlamenaAIAssistant/i, name: 'Plamenna AI', internal: true },
   
   // Generic crawlers
   { pattern: /Amazonbot/i, name: 'Amazon' },
@@ -55,18 +56,18 @@ const KNOWN_BOTS = [
 
 /**
  * Detect bot name from User-Agent string
+ * Returns { name, internal } where internal=true means skip analytics
  */
 function detectBot(userAgent) {
-  if (!userAgent) return 'Unknown';
+  if (!userAgent) return { name: 'Unknown', internal: false };
   
   for (const bot of KNOWN_BOTS) {
     if (bot.pattern.test(userAgent)) {
-      return bot.name;
+      return { name: bot.name, internal: !!bot.internal };
     }
   }
   
-  // If no bot pattern matched, it might be a human visitor or unknown agent
-  return 'Human/Unknown';
+  return { name: 'Human/Unknown', internal: false };
 }
 
 /**
@@ -106,22 +107,24 @@ export function createAIAnalyticsMiddleware(source = 'direct') {
       const shop = req.query?.shop || req.get('x-shopify-shop-domain') || '';
       const userAgent = req.get('User-Agent') || '';
       const ip = req.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
-      
-      // Only log if we have a shop
-      console.log(`[AI-ANALYTICS] Visit: shop=${shop}, endpoint=${normalizeEndpoint(req.path)}, bot=${detectBot(userAgent)}, status=${res.statusCode}`);
+      const bot = detectBot(userAgent);
+
+      // Skip logging for internal bots (our own services)
+      if (bot.internal) return;
+
+      console.log(`[AI-ANALYTICS] Visit: shop=${shop}, endpoint=${normalizeEndpoint(req.path)}, bot=${bot.name}, status=${res.statusCode}`);
       if (shop) {
         AIVisitLog.create({
           shop: shop.replace(/^https?:\/\//, '').toLowerCase(),
           endpoint: normalizeEndpoint(req.path),
-          botName: detectBot(userAgent),
-          userAgent: userAgent.substring(0, 500), // Limit UA length
+          botName: bot.name,
+          userAgent: userAgent.substring(0, 500),
           ipHash: hashIP(ip),
           statusCode: res.statusCode,
           responseTimeMs,
           source,
           createdAt: new Date()
         }).catch(err => {
-          // Silent fail - analytics should never break the app
           if (process.env.NODE_ENV !== 'production') {
             console.error('[AI-ANALYTICS] Log error:', err.message);
           }

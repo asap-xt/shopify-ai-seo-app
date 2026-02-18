@@ -28,10 +28,13 @@ async function logMcpCall(shop, toolName, userAgent) {
   try {
     const ipHash = crypto.createHash('sha256').update('mcp-agent').digest('hex').substring(0, 16);
 
+    const botName = detectBotFromUA(userAgent);
+    if (!botName) return; // internal bot — skip analytics
+
     await AIVisitLog.create({
       shop: shop.replace(/^https?:\/\//, '').toLowerCase(),
       endpoint: `/mcp/tools/${toolName}`,
-      botName: detectBotFromUA(userAgent),
+      botName,
       userAgent: (userAgent || '').substring(0, 500),
       ipHash,
       statusCode: 200,
@@ -66,6 +69,7 @@ function detectBotFromUA(ua) {
   if (lower.includes('cohere')) return 'Cohere';
   if (lower.includes('youbot')) return 'You.com';
   if (lower.includes('applebot')) return 'Apple';
+  if (lower.includes('plamenaaiassistant')) return null; // internal — skip logging
   return 'Other Bot';
 }
 
