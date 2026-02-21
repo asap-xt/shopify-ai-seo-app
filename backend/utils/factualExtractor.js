@@ -1,228 +1,292 @@
-// Factual Data Extractor - Extract real product attributes from product data
+// Factual Data Extractor — Hybrid approach:
+// 1. Shopify product options & variants (Color, Size — always reliable)
+// 2. Shopify category metafields (structured data from taxonomy)
+// 3. Text extraction from description/tags (multilingual fallback)
 
 /**
  * Extract factual attributes from product data
- * @param {Object} productData - Product data from Shopify
+ * @param {Object} productData - Product data from Shopify (with options, variants, metafields, descriptionHtml)
  * @param {Array} requestedAttributes - Attributes to extract
  * @returns {Object} Extracted factual attributes
  */
 export function extractFactualAttributes(productData, requestedAttributes = []) {
-  // console.log('[FACTUAL-EXTRACTOR] Extracting attributes:', requestedAttributes);
-  // console.log('[FACTUAL-EXTRACTOR] Product data:', JSON.stringify(productData, null, 2));
-  
   const extracted = {};
-  
+  const textCorpus = buildTextCorpus(productData);
+  const optionsMap = buildOptionsMap(productData);
+  const metafieldsMap = productData._allMetafields || {};
+
   for (const attribute of requestedAttributes) {
     switch (attribute) {
       case 'material':
-        extracted.material = extractMaterial(productData);
+        extracted.material = extractMaterial(metafieldsMap, textCorpus, productData);
         break;
       case 'color':
-        extracted.color = extractColor(productData);
+        extracted.color = extractColor(optionsMap, metafieldsMap, textCorpus);
         break;
       case 'size':
-        extracted.size = extractSize(productData);
+        extracted.size = extractSize(optionsMap, productData);
         break;
       case 'weight':
-        extracted.weight = extractWeight(productData);
+        extracted.weight = extractWeight(productData, textCorpus);
         break;
       case 'dimensions':
-        extracted.dimensions = extractDimensions(productData);
+        extracted.dimensions = extractDimensions(textCorpus);
         break;
       case 'category':
         extracted.category = extractCategory(productData);
         break;
       case 'audience':
-        extracted.audience = extractAudience(productData);
+        extracted.audience = extractAudience(metafieldsMap, textCorpus, productData);
         break;
     }
   }
-  
-  // console.log('[FACTUAL-EXTRACTOR] Extracted attributes:', JSON.stringify(extracted, null, 2));
+
   return extracted;
 }
 
-/**
- * Extract material information from product data
- */
-function extractMaterial(productData) {
-  const sources = [
-    productData.tags || [],
-    productData.description || '',
+function buildTextCorpus(productData) {
+  const parts = [
+    productData.descriptionHtml || '',
+    productData.title || '',
     productData.productType || '',
-    productData.variants?.edges?.map(e => e.node.title).join(' ') || productData.variants?.map(v => v.title).join(' ') || ''
+    ...(productData.tags || [])
   ];
-  
-  const materialKeywords = {
-    'cotton': ['cotton', '100% cotton', 'organic cotton'],
-    'polyester': ['polyester', 'poly', 'poly blend'],
-    'wool': ['wool', 'merino', 'cashmere'],
-    'silk': ['silk', 'silk blend'],
-    'leather': ['leather', 'genuine leather', 'faux leather'],
-    'denim': ['denim', 'jeans'],
-    'linen': ['linen'],
-    'nylon': ['nylon'],
-    'spandex': ['spandex', 'stretch'],
-    'bamboo': ['bamboo'],
-    'modal': ['modal']
-  };
-  
-  const text = sources.join(' ').toLowerCase();
-  
-  for (const [material, keywords] of Object.entries(materialKeywords)) {
-    for (const keyword of keywords) {
-      if (text.includes(keyword)) {
-        return material;
+  const raw = parts.join(' ');
+  return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+}
+
+function buildOptionsMap(productData) {
+  const map = {};
+  if (productData.options) {
+    for (const opt of productData.options) {
+      const name = (opt.name || '').toLowerCase();
+      map[name] = opt.values || [];
+    }
+  }
+  return map;
+}
+
+function findMetafield(metafieldsMap, keywords) {
+  for (const [fullKey, meta] of Object.entries(metafieldsMap)) {
+    const key = fullKey.toLowerCase();
+    for (const kw of keywords) {
+      if (key.includes(kw)) {
+        try {
+          const parsed = JSON.parse(meta.value);
+          if (Array.isArray(parsed)) {
+            const simple = parsed.filter(v => typeof v === 'string' && !v.startsWith('gid://'));
+            if (simple.length) return simple.join(', ');
+          }
+          if (typeof parsed === 'string') return parsed;
+        } catch {
+          if (meta.value && !meta.value.startsWith('gid://') && !meta.value.startsWith('[')) {
+            return meta.value;
+          }
+        }
       }
     }
   }
-  
   return null;
 }
 
-/**
- * Extract color information from product data
- */
-function extractColor(productData) {
-  const sources = [
-    productData.tags || [],
-    productData.variants?.edges?.map(e => e.node.title).join(' ') || productData.variants?.map(v => v.title).join(' ') || '',
-    productData.description || ''
-  ];
-  
-  const colorKeywords = [
-    'red', 'blue', 'green', 'black', 'white', 'yellow', 'pink', 'purple', 
-    'orange', 'brown', 'gray', 'grey', 'navy', 'maroon', 'beige', 'cream',
-    'gold', 'silver', 'copper', 'bronze', 'rose gold'
-  ];
-  
-  const text = sources.join(' ').toLowerCase();
-  
-  for (const color of colorKeywords) {
-    if (text.includes(color)) {
-      return color;
-    }
-  }
-  
-  return null;
-}
+// ==================== MATERIAL / FABRIC ====================
 
-/**
- * Extract size information from product data
- */
-function extractSize(productData) {
-  const variantTitles = productData.variants?.edges?.map(e => e.node.title) || productData.variants?.map(v => v.title) || [];
-  
-  const sizeKeywords = [
-    'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl',
-    'small', 'medium', 'large', 'extra large',
-    'one size', 'free size', 'os',
-    '0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20'
-  ];
-  
-  for (const variant of variantTitles) {
-    const title = variant.toLowerCase();
-    for (const size of sizeKeywords) {
-      if (title.includes(size)) {
-        return size.toUpperCase();
+const MATERIAL_KEYWORDS = {
+  'cotton': ['cotton', 'памук', 'bumbac'],
+  'polyester': ['polyester', 'полиестер', 'poliester'],
+  'wool': ['wool', 'merino', 'cashmere', 'вълна', 'мерино', 'кашмир', 'lână'],
+  'silk': ['silk', 'коприна', 'mătase'],
+  'leather': ['leather', 'кожа', 'piele'],
+  'denim': ['denim', 'деним', 'jeans', 'дънки'],
+  'linen': ['linen', 'лен', 'in'],
+  'nylon': ['nylon', 'найлон'],
+  'spandex': ['spandex', 'еластан', 'elastane', 'lycra', 'лайкра'],
+  'viscose': ['viscose', 'вискоза', 'viscoză'],
+  'modal': ['modal', 'модал'],
+  'velvet': ['velvet', 'кадифе', 'catifea'],
+  'satin': ['satin', 'сатен'],
+  'chiffon': ['chiffon', 'шифон'],
+  'lace': ['lace', 'дантела', 'dantelă'],
+  'tulle': ['tulle', 'тюл'],
+  'gabardine': ['gabardine', 'габардин', 'gabardină'],
+};
+
+function extractMaterial(metafieldsMap, textCorpus, productData) {
+  // 1. Metafields
+  const fromMeta = findMetafield(metafieldsMap, ['fabric', 'material', 'composition', 'състав', 'материал']);
+  if (fromMeta) return fromMeta;
+
+  // 2. Tags with fabric prefix
+  const fabricTag = (productData.tags || []).find(t =>
+    /^(fabric|material|състав)/i.test(t)
+  );
+  if (fabricTag) return fabricTag.replace(/^(fabric|material|състав)[:\-_]\s*/i, '');
+
+  // 3. Text extraction (multilingual)
+  const found = [];
+  for (const [material, keywords] of Object.entries(MATERIAL_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (textCorpus.includes(kw)) {
+        found.push(material.charAt(0).toUpperCase() + material.slice(1));
+        break;
       }
     }
   }
-  
-  return null;
+  return found.length ? found.join(', ') : null;
 }
 
-/**
- * Extract weight information from product data
- */
-function extractWeight(productData) {
-  const sources = [
-    productData.description || '',
-    productData.tags || []
-  ];
-  
-  const text = sources.join(' ').toLowerCase();
-  const weightRegex = /(\d+(?:\.\d+)?)\s*(kg|g|lb|lbs|pound|pounds|ounce|ounces|oz)/i;
-  const match = text.match(weightRegex);
-  
-  if (match) {
-    return `${match[1]} ${match[2].toLowerCase()}`;
+// ==================== COLOR ====================
+
+const COLOR_KEYWORDS = {
+  'Red': ['red', 'червен', 'червено', 'roșu', 'rosu'],
+  'Blue': ['blue', 'син', 'синьо', 'синя', 'albastru'],
+  'Green': ['green', 'зелен', 'зелено', 'verde'],
+  'Black': ['black', 'черен', 'черно', 'negru'],
+  'White': ['white', 'бял', 'бяло', 'alb'],
+  'Yellow': ['yellow', 'жълт', 'жълто', 'galben'],
+  'Pink': ['pink', 'розов', 'розово', 'roz'],
+  'Purple': ['purple', 'лилав', 'лилаво', 'mov'],
+  'Orange': ['orange', 'оранжев', 'оранжево', 'portocaliu'],
+  'Brown': ['brown', 'кафяв', 'кафяво', 'maro'],
+  'Gray': ['gray', 'grey', 'сив', 'сиво', 'gri'],
+  'Navy': ['navy', 'тъмносин', 'bleumarin'],
+  'Beige': ['beige', 'бежов', 'бежово', 'bej'],
+  'Cream': ['cream', 'кремав', 'кремово', 'crem'],
+  'Gold': ['gold', 'златист', 'златно', 'auriu'],
+  'Silver': ['silver', 'сребрист', 'сребърно', 'argintiu'],
+  'Bordeaux': ['bordeaux', 'бордо', 'bordo'],
+  'Khaki': ['khaki', 'каки'],
+  'Coral': ['coral', 'корал'],
+  'Turquoise': ['turquoise', 'тюркоаз', 'turcoaz'],
+};
+
+function extractColor(optionsMap, metafieldsMap, textCorpus) {
+  // 1. Product options (most reliable for color)
+  const colorOption = optionsMap['color'] || optionsMap['colour'] || optionsMap['цвят'];
+  if (colorOption?.length) return colorOption.join(', ');
+
+  // 2. Metafields
+  const fromMeta = findMetafield(metafieldsMap, ['color', 'colour', 'цвят']);
+  if (fromMeta) return fromMeta;
+
+  // 3. Text extraction
+  for (const [color, keywords] of Object.entries(COLOR_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (textCorpus.includes(kw)) return color;
+    }
   }
-  
   return null;
 }
 
-/**
- * Extract dimensions information from product data
- */
-function extractDimensions(productData) {
-  const sources = [
-    productData.description || '',
-    productData.tags || []
-  ];
-  
-  const text = sources.join(' ').toLowerCase();
-  const dimensionRegex = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]?\s*(\d+(?:\.\d+)?)?\s*(cm|mm|in|inch|inches)/i;
-  const match = text.match(dimensionRegex);
-  
+// ==================== SIZE ====================
+
+function extractSize(optionsMap, productData) {
+  // 1. Product options
+  const sizeOption = optionsMap['size'] || optionsMap['размер'] || optionsMap['mărime'];
+  if (sizeOption?.length) return sizeOption.join(', ');
+
+  // 2. Variants selectedOptions
+  const sizes = new Set();
+  const variants = productData.variants?.edges || [];
+  for (const edge of variants) {
+    const opts = edge.node.selectedOptions || [];
+    for (const opt of opts) {
+      const name = (opt.name || '').toLowerCase();
+      if (name === 'size' || name === 'размер' || name === 'mărime') {
+        sizes.add(opt.value);
+      }
+    }
+  }
+  if (sizes.size) return [...sizes].join(', ');
+
+  // 3. "ONE SIZE" / "ONE SIZE FITS ALL" detection
+  const allTitles = variants.map(e => (e.node.title || '').toLowerCase());
+  if (allTitles.some(t => t.includes('one size') || t.includes('един размер') || t === 'os')) {
+    return 'One Size';
+  }
+
+  return null;
+}
+
+// ==================== WEIGHT ====================
+
+function extractWeight(productData, textCorpus) {
+  // 1. Variant weight from Shopify
+  const firstVariant = productData.variants?.edges?.[0]?.node;
+  if (firstVariant?.weight && parseFloat(firstVariant.weight) > 0) {
+    const unit = (firstVariant.weightUnit || 'kg').toLowerCase();
+    return `${firstVariant.weight} ${unit}`;
+  }
+
+  // 2. Text extraction
+  const weightRegex = /(\d+(?:[.,]\d+)?)\s*(kg|g|lb|lbs|oz|гр|кг)/i;
+  const match = textCorpus.match(weightRegex);
+  if (match) return `${match[1]} ${match[2].toLowerCase()}`;
+
+  return null;
+}
+
+// ==================== DIMENSIONS ====================
+
+function extractDimensions(textCorpus) {
+  const dimRegex = /(\d+(?:[.,]\d+)?)\s*[x×х]\s*(\d+(?:[.,]\d+)?)\s*(?:[x×х]\s*(\d+(?:[.,]\d+)?))?\s*(cm|мм|mm|in|inch|см)/i;
+  const match = textCorpus.match(dimRegex);
   if (match) {
     const unit = match[4].toLowerCase();
-    if (match[3]) {
-      return `${match[1]} x ${match[2]} x ${match[3]} ${unit}`;
-    } else {
-      return `${match[1]} x ${match[2]} ${unit}`;
-    }
+    if (match[3]) return `${match[1]} x ${match[2]} x ${match[3]} ${unit}`;
+    return `${match[1]} x ${match[2]} ${unit}`;
   }
-  
   return null;
 }
 
-/**
- * Extract category information from product data
- */
+// ==================== CATEGORY ====================
+
 function extractCategory(productData) {
-  // Use productType as primary category
-  if (productData.productType) {
-    return productData.productType;
-  }
-  
-  // Fallback to first collection if available
+  // 1. Shopify taxonomy category
+  if (productData.category?.name) return productData.category.name;
+  if (productData.category?.fullName) return productData.category.fullName;
+
+  // 2. productType
+  if (productData.productType) return productData.productType;
+
+  // 3. First collection
   if (productData.collections?.edges?.[0]?.node?.title) {
     return productData.collections.edges[0].node.title;
   }
-  
+
   return null;
 }
 
-/**
- * Extract audience information from product data
- */
-function extractAudience(productData) {
-  const sources = [
-    productData.tags || [],
-    productData.description || '',
-    productData.productType || ''
-  ];
-  
-  const text = sources.join(' ').toLowerCase();
-  
-  const audienceKeywords = {
-    'men': ['men', 'male', 'gents', 'boys'],
-    'women': ['women', 'female', 'ladies', 'girls'],
-    'kids': ['kids', 'children', 'baby', 'toddler', 'infant'],
-    'unisex': ['unisex', 'unified', 'both'],
-    'adults': ['adults', 'adult'],
-    'teenagers': ['teen', 'teenager', 'youth']
-  };
-  
-  for (const [audience, keywords] of Object.entries(audienceKeywords)) {
-    for (const keyword of keywords) {
-      if (text.includes(keyword)) {
-        return audience;
-      }
+// ==================== AUDIENCE ====================
+
+const AUDIENCE_KEYWORDS = {
+  'Women': ['women', 'female', 'ladies', 'жени', 'дами', 'момичета', 'femei', 'doamne'],
+  'Men': ['men', 'male', 'gents', 'мъже', 'bărbați', 'barbati'],
+  'Kids': ['kids', 'children', 'baby', 'toddler', 'деца', 'бебе', 'copii'],
+  'Unisex': ['unisex'],
+  'Adults': ['adults', 'adult', 'възрастни', 'adulți'],
+};
+
+function extractAudience(metafieldsMap, textCorpus, productData) {
+  // 1. Metafields
+  const fromMeta = findMetafield(metafieldsMap, ['audience', 'gender', 'target', 'аудитория', 'пол']);
+  if (fromMeta) return fromMeta;
+
+  // 2. Tags
+  const audienceTags = (productData.tags || []).map(t => t.toLowerCase());
+  for (const [audience, keywords] of Object.entries(AUDIENCE_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (audienceTags.includes(kw)) return audience;
     }
   }
-  
+
+  // 3. Text extraction
+  for (const [audience, keywords] of Object.entries(AUDIENCE_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (textCorpus.includes(kw)) return audience;
+    }
+  }
+
   return null;
 }
 
@@ -235,7 +299,9 @@ export function getProductSummary(productData) {
     productType: productData.productType,
     vendor: productData.vendor,
     tags: productData.tags || [],
-    description: productData.description ? productData.description.substring(0, 500) : '',
+    description: productData.descriptionHtml
+      ? productData.descriptionHtml.replace(/<[^>]+>/g, ' ').substring(0, 500)
+      : '',
     variants: productData.variants?.edges?.map(e => ({
       title: e.node.title,
       price: e.node.price

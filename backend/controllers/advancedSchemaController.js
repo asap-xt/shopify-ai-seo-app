@@ -1032,6 +1032,9 @@ async function generateProductSchemas(shop, productDoc) {
         vendor
         productType
         tags
+        descriptionHtml
+        category { fullName name }
+        options { name values }
         collections(first: 5) {
           edges {
             node {
@@ -1050,6 +1053,16 @@ async function generateProductSchemas(shop, productDoc) {
             }
           }
         }
+        variants(first: 30) {
+          edges {
+            node {
+              title
+              selectedOptions { name value }
+              weight
+              weightUnit
+            }
+          }
+        }
         priceRangeV2 {
           minVariantPrice {
             amount
@@ -1060,11 +1073,13 @@ async function generateProductSchemas(shop, productDoc) {
             currencyCode
           }
         }
-        metafields(first: 20, namespace: "seo_ai") {
+        metafields(first: 40) {
           edges {
             node {
+              namespace
               key
               value
+              type
             }
           }
         }
@@ -1094,21 +1109,26 @@ async function generateProductSchemas(shop, productDoc) {
     return;
   }
   
-  // Extract SEO metafields into a map for quick lookup
+  // Extract SEO metafields and all other metafields
   const seoMetafields = {};
+  const allMetafields = {};
   if (product.metafields?.edges) {
     for (const edge of product.metafields.edges) {
-      const key = edge.node.key; // e.g., "seo__en", "seo__bg"
-      if (key.startsWith('seo__')) {
+      const { namespace, key, value, type } = edge.node;
+      const fullKey = `${namespace}.${key}`;
+      allMetafields[fullKey] = { value, type, namespace, key };
+
+      if (namespace === 'seo_ai' && key.startsWith('seo__')) {
         const langCode = key.replace('seo__', '');
         try {
-          seoMetafields[langCode] = JSON.parse(edge.node.value);
+          seoMetafields[langCode] = JSON.parse(value);
         } catch (e) {
           console.error(`[SCHEMA] Failed to parse SEO metafield for ${langCode}:`, e);
         }
-          }
-        }
       }
+    }
+  }
+  product._allMetafields = allMetafields;
   
   // Generate schemas for all languages
   const schemas = [];
