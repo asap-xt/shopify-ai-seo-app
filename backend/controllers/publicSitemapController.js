@@ -154,7 +154,7 @@ async function handlePublicSitemap(req, res) {
 Sitemap not found or outdated for shop: ${shop}
 
 To generate a fresh sitemap:
-1. Install and open the indexAIze - Unlock AI Search app in your Shopify admin
+1. Install and open the indexAIze - AI Discovery & SEO app in your Shopify admin
 2. Go to the Sitemap section
 3. Click "Generate Sitemap"
 4. Your sitemap will be available at this URL

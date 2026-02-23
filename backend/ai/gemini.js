@@ -46,7 +46,7 @@ export async function getGeminiResponse(prompt, options = {}) {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-        'X-Title': 'indexAIze - Unlock AI Search'
+        'X-Title': 'indexAIze - AI Discovery & SEO'
       },
       body: JSON.stringify({
         model,

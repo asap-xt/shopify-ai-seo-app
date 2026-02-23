@@ -713,7 +713,7 @@ router.get('/ai/welcome', appProxyAuth, aiAnalytics, async (req, res) => {
       }
       md += `\n---\n`;
       md += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
-      md += `generator: indexAIze - Unlock AI Search\n`;
+      md += `generator: indexAIze - AI Discovery & SEO\n`;
 
       res.set('Content-Type', 'text/markdown; charset=utf-8');
       res.set('Cache-Control', 'public, max-age=3600');

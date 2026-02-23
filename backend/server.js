@@ -1,5 +1,5 @@
     // backend/server.js
-    // Express server for indexAIze - Unlock AI Search (ESM).
+    // Express server for indexAIze - AI Discovery & SEO (ESM).
     // All comments are in English.
     // Railway trigger: GDPR webhook fix + AI enhanced product tracking
 
@@ -1699,7 +1699,7 @@ if (!IS_PROD) {
           <!DOCTYPE html>
           <html>
           <head>
-            <title>Install indexAIze - Unlock AI Search</title>
+            <title>Install indexAIze - AI Discovery & SEO</title>
             <style>
               body { 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1748,7 +1748,7 @@ if (!IS_PROD) {
           </head>
           <body>
             <div class="container">
-              <h1>Install indexAIze - Unlock AI Search</h1>
+              <h1>Install indexAIze - AI Discovery & SEO</h1>
               <p>Enter your shop domain to install the app:</p>
               <form action="/auth" method="GET">
                 <input 
@@ -1931,7 +1931,7 @@ if (!IS_PROD) {
     app.get('/api', (req, res) => {
       res.json({ 
         status: 'ok',
-        app: 'indexAIze - Unlock AI Search',
+        app: 'indexAIze - AI Discovery & SEO',
         version: '1.2.0'
       });
     });
@@ -2304,7 +2304,7 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
+    1. Install the indexAIze - AI Discovery & SEO app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
@@ -2440,7 +2440,7 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
+    1. Install the indexAIze - AI Discovery & SEO app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 
@@ -2538,7 +2538,7 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
     Sitemap not found for shop: ${shop}
 
     To generate a sitemap:
-    1. Install the indexAIze - Unlock AI Search app in your Shopify admin
+    1. Install the indexAIze - AI Discovery & SEO app in your Shopify admin
     2. Go to the Sitemap section and click "Generate Sitemap"
     3. Your sitemap will be available at this URL
 

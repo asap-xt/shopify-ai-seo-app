@@ -391,7 +391,7 @@ Keep the answer concise (2–3 sentences).`;
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.OPENROUTER_SITE_URL || process.env.APP_URL || 'https://indexaize.com',
-        'X-Title': 'indexAIze - Unlock AI Search'
+        'X-Title': 'indexAIze - AI Discovery & SEO'
       },
       body: JSON.stringify({
         model: AI_MODEL,

@@ -109,7 +109,7 @@ class EmailService {
       const msg = {
         to: store.email || store.shopOwner || `${shopName}@example.com`,
         from: { email: this.fromEmail, name: this.fromName },
-        subject: `Welcome to indexAIze - Unlock AI Search`,
+        subject: `Welcome to indexAIze - AI Discovery & SEO`,
         html: this.getWelcomeEmailTemplate({
           shopName,
           shop: store.shop,
@@ -838,7 +838,7 @@ class EmailService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Welcome to indexAIze - Unlock AI Search</title>
+        <title>Welcome to indexAIze - AI Discovery & SEO</title>
       </head>
       <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
         <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
@@ -856,7 +856,7 @@ class EmailService {
                         </td>
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
-                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">AI Discovery & SEO</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>
@@ -991,7 +991,7 @@ class EmailService {
                         </td>
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
-                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">AI Discovery & SEO</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>
@@ -1091,7 +1091,7 @@ class EmailService {
                         </td>
                         <!-- Text (Center) -->
                         <td style="text-align: left; vertical-align: middle; padding-left: 0;">
-                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">Unlock AI Search</p>
+                          <p style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; line-height: 1.3;">AI Discovery & SEO</p>
                         </td>
                         <!-- Spacer (Right) -->
                         <td style="width: auto;"></td>

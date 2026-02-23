@@ -1249,7 +1249,7 @@ async function handlePublicSitemap(req, res) {
 Sitemap not found for shop: ${shop}
 
 To generate a sitemap:
-1. Install the indexAIze - Unlock AI Search app in your Shopify admin
+1. Install the indexAIze - AI Discovery & SEO app in your Shopify admin
 2. Go to the Sitemap section and click "Generate Sitemap"
 3. Your sitemap will be available at this URL
 
@@ -1279,7 +1279,7 @@ async function servePublicSitemap(req, res) {
 Sitemap not found for shop: ${shop}
 
 To generate a sitemap:
-1. Install the indexAIze - Unlock AI Search app in your Shopify admin
+1. Install the indexAIze - AI Discovery & SEO app in your Shopify admin
 2. Go to the Sitemap section and click "Generate Sitemap"
 3. Your sitemap will be available at this URL
 

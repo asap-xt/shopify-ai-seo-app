@@ -2,7 +2,7 @@
 # Public App Configuration for Shopify App Store Distribution
 
 # Root-level configuration (required by Shopify CLI)
-name = "indexAIze - Unlock AI Search"
+name = "indexAIze - AI Discovery & SEO"
 handle = "indexaize-unlock-ai-search"
 client_id = "2749a2f6d38ff5796ed256b5c9dc70a1"
 application_url = "https://indexaize-aiseo-app-production.up.railway.app"
