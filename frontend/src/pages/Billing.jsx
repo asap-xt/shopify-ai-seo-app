@@ -124,8 +124,9 @@ export default function Billing({ shop }) {
         throw new Error(data.error || 'Failed to create subscription');
       }
       
-      // Redirect to Shopify confirmation page
-      if (data.confirmationUrl) {
+      if (data.free || data.exempt || data.promo) {
+        await fetchBillingInfo();
+      } else if (data.confirmationUrl) {
         window.top.location.href = data.confirmationUrl;
       }
     } catch (err) {
@@ -134,7 +135,8 @@ export default function Billing({ shop }) {
     } finally {
       setPurchasing(false);
       setShowPlanModal(false);
-      setIsActivatingPlan(false); // Reset activation flag
+      setSelectedPlan(null);
+      setIsActivatingPlan(false);
     }
   };
 
@@ -262,9 +264,9 @@ export default function Billing({ shop }) {
   const tokens = billingInfo?.tokens;
   const allPlans = billingInfo?.plans || [];
   
-  // Filter out Starter & Growth plans (hidden temporarily)
+  // Filter out Growth plan (hidden temporarily)
   const plans = allPlans.filter(plan => 
-    !['starter', 'growth'].includes(plan.key)
+    !['growth'].includes(plan.key)
   );
 
   return (
@@ -444,8 +446,10 @@ export default function Billing({ shop }) {
                         </Text>
                       )}
                       
-                      <Text variant="heading2xl">${plan.price}</Text>
-                      <Text variant="bodySm" tone="subdued">per month</Text>
+                      <Text variant="heading2xl">{Number(plan.price) === 0 ? 'Free' : `$${plan.price}`}</Text>
+                      {Number(plan.price) > 0 && (
+                        <Text variant="bodySm" tone="subdued">per month</Text>
+                      )}
                       
                       <Divider />
                       
@@ -513,7 +517,7 @@ export default function Billing({ shop }) {
                             setShowPlanModal(true);
                           }}
                         >
-                          Select Plan
+                          {Number(plan.price) === 0 ? 'Start Free' : 'Select Plan'}
                         </Button>
                       )}
                       </div>
@@ -637,13 +641,21 @@ export default function Billing({ shop }) {
       >
         <Modal.Section>
           <BlockStack gap="400">
-            <Text>
-              You are about to subscribe to the <strong>{selectedPlan?.name || subscription?.plan}</strong> plan.
-            </Text>
-            {subscription?.inTrial && isActivatingPlan && (
-              <Banner tone="warning">
-                <p>This will end your trial period and start billing immediately.</p>
-              </Banner>
+            {Number(selectedPlan?.price) === 0 ? (
+              <Text>
+                You are about to activate the <strong>{selectedPlan?.name}</strong> plan. This is completely free — no payment required.
+              </Text>
+            ) : (
+              <>
+                <Text>
+                  You are about to subscribe to the <strong>{selectedPlan?.name || subscription?.plan}</strong> plan.
+                </Text>
+                {subscription?.inTrial && isActivatingPlan && (
+                  <Banner tone="warning">
+                    <p>This will end your trial period and start billing immediately.</p>
+                  </Banner>
+                )}
+              </>
             )}
           </BlockStack>
         </Modal.Section>

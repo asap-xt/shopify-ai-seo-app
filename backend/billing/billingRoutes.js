@@ -731,6 +731,47 @@ router.post('/subscribe', verifyRequest, async (req, res) => {
       });
     }
     
+    // FREE PLAN: Skip Shopify billing entirely, activate directly
+    const planConfig = PLANS[plan];
+    if (planConfig.priceUsd === 0) {
+      console.log(`[BILLING] Free plan "${plan}" selected by ${shop} — activating directly`);
+      
+      // Cancel any existing Shopify subscription (if upgrading from paid → free)
+      const existingSub = await Subscription.findOne({ shop });
+      if (existingSub?.shopifySubscriptionId) {
+        try {
+          await cancelSubscription(shop, existingSub.shopifySubscriptionId, shopDoc.accessToken);
+          console.log(`[BILLING] Cancelled paid subscription for ${shop} (switching to free)`);
+        } catch (e) {
+          console.warn(`[BILLING] Could not cancel old subscription: ${e.message}`);
+        }
+      }
+      
+      await Subscription.findOneAndUpdate(
+        { shop },
+        {
+          shop,
+          plan,
+          status: 'active',
+          activatedAt: new Date(),
+          trialEndsAt: null,
+          shopifySubscriptionId: null,
+          pendingPlan: null,
+          pendingActivation: false
+        },
+        { upsert: true, new: true }
+      );
+      
+      await cacheService.invalidateShop(shop);
+      
+      return res.json({
+        success: true,
+        free: true,
+        plan,
+        message: `Your ${planConfig.name} plan has been activated. No payment required.`
+      });
+    }
+    
     // CRITICAL: Check if this is a plan change (existing subscription)
     const existingSubCheck = await Subscription.findOne({ shop });
     

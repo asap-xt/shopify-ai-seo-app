@@ -6,7 +6,7 @@ export const TRIAL_DAYS = 5;
 export const PLANS = {
   starter: {
     name: "Starter",
-    priceUsd: 9.99,
+    priceUsd: 0,
     queryLimit: 50,
     productLimit: 70,
     collectionLimit: 0, // No collections
