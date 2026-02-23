@@ -8,7 +8,7 @@ export const PLANS = {
     name: "Starter",
     priceUsd: 0,
     queryLimit: 50,
-    productLimit: 70,
+    productLimit: 40,
     collectionLimit: 0, // No collections
     languageLimit: 1, // Only default language
     providersAllowed: ["deepseek", "llama"],

@@ -996,7 +996,7 @@ export default function Settings() {
     // Plan requirements by feature (index in PLAN_HIERARCHY)
     const requirements = {
       productsJson: 0,        // Starter+
-      llmsTxt: 0,             // Starter+ (static file, no tokens)
+      llmsTxt: 2,             // Professional Plus+ (locked on Starter & Professional)
       storeMetadata: 1,       // Professional+
       welcomePage: 2,         // Professional Plus+
       collectionsJson: 2,     // Professional Plus+
@@ -1046,6 +1046,10 @@ export default function Settings() {
         professional: 'Available in Professional Plus or Growth+'
       },
       aiAsk: {
+        starter: 'Available in Professional Plus or Growth+',
+        professional: 'Available in Professional Plus or Growth+'
+      },
+      llmsTxt: {
         starter: 'Available in Professional Plus or Growth+',
         professional: 'Available in Professional Plus or Growth+'
       }
@@ -1588,7 +1592,7 @@ export default function Settings() {
                   key: 'llmsTxt',
                   name: 'LLMs.txt File',
                   description: 'AI discovery file (llmstxt.org standard) — helps AI agents find your store data',
-                  requiredPlan: 'Starter'
+                  requiredPlan: 'Professional Plus'
                 },
                 {
                   key: 'discoveryLinks',

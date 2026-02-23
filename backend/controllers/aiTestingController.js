@@ -1146,18 +1146,22 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/ai/schema-data.json?shop=${shop}`,
       requiresPlan: ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise']
     },
-    // AI Discovery files (available for all plans)
+    // LLMs.txt (not available on Starter)
     {
       key: 'llmsTxt',
       name: 'LLMs.txt',
-      url: `${process.env.APP_URL || `https://${req.get('host')}`}/llms.txt?shop=${shop}`
+      url: `${process.env.APP_URL || `https://${req.get('host')}`}/llms.txt?shop=${shop}`,
+      requiresPlan: ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
+      lockedMessage: 'Available in Professional Plus or Growth+'
     },
-    // MCP Server (available for all plans)
+    // MCP Server (not available on Starter)
     {
       key: 'mcpServer',
       name: 'MCP Server',
       url: `${process.env.APP_URL || `https://${req.get('host')}`}/mcp?shop=${shop}`,
-      customTest: true // handled separately (requires JSON-RPC initialize)
+      customTest: true,
+      requiresPlan: ['professional', 'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'],
+      lockedMessage: 'Available in Professional Plus or Growth+'
     }
   ];
   
@@ -1169,7 +1173,7 @@ router.post('/ai-testing/run-tests', validateRequest(), async (req, res) => {
       if (endpoint.requiresPlan && !endpoint.requiresPlan.includes(userPlan)) {
         results[endpoint.key] = {
           status: 'locked',
-          message: 'Plan upgrade required',
+          message: endpoint.lockedMessage || 'Plan upgrade required',
           name: endpoint.name
         };
         continue;
