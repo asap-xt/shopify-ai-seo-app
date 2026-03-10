@@ -152,7 +152,7 @@ router.get('/analytics/products', async (req, res) => {
     const { start, end } = getPeriodDates(period);
 
     const [products, orders, addToCartEvents, aiVisits] = await Promise.all([
-      Product.find({ shop }).select('shopifyProductId title handle seoStatus aiOptimized').lean(),
+      Product.find({ shop, status: { $ne: 'DRAFT' } }).select('shopifyProductId title handle seoStatus aiOptimized status').lean(),
       OrderRevenue.find({ shop, orderCreatedAt: { $gte: start, $lte: end } }).lean(),
       ConversionEvent.find({
         shop, eventType: 'add_to_cart',
@@ -215,9 +215,10 @@ router.get('/analytics/products', async (req, res) => {
       };
     });
 
-    productStats.sort((a, b) => b.aiVisits - a.aiVisits);
+    const filtered = productStats.filter(p => p.aiVisits > 0 || p.totalOrders > 0 || p.addToCart > 0);
+    filtered.sort((a, b) => b.aiVisits - a.aiVisits);
 
-    res.json({ period, products: productStats });
+    res.json({ period, products: filtered });
   } catch (err) {
     console.error('[ANALYTICS] products error:', err.message);
     res.status(500).json({ error: err.message });
@@ -234,7 +235,7 @@ router.get('/analytics/comparison', async (req, res) => {
     const { start, end } = getPeriodDates(period);
 
     const [products, orders, aiVisits] = await Promise.all([
-      Product.find({ shop }).select('handle seoStatus').lean(),
+      Product.find({ shop, status: { $ne: 'DRAFT' } }).select('handle seoStatus').lean(),
       OrderRevenue.find({ shop, orderCreatedAt: { $gte: start, $lte: end } }).lean(),
       AIVisitLog.aggregate([
         { $match: { shop, createdAt: { $gte: start, $lte: end }, botName: { $nin: ['Human/Unknown', 'Other Bot'] } } },
