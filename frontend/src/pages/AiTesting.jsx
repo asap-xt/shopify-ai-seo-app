@@ -1490,15 +1490,17 @@ Answer in the same language the customer used. Be helpful and specific!`;
                         aiDiscovery: {
                           label: 'AI Discovery',
                           maxPts: 20,
-                          description: 'Dedicated AI endpoints like .well-known/ai-plugin.json and AI product feeds for direct AI integration.',
+                          description: 'MCP endpoint, AI product feeds, and AI Hub page for direct AI agent integration.',
                           scoring: [
-                            { tier: 'Excellent (20 pts)', desc: 'AI Plugin manifest + AI Products Feed with data' },
-                            { tier: 'Good (8-12 pts)', desc: 'Either AI Plugin manifest or AI Products Feed present' },
+                            { tier: 'Excellent (16-20 pts)', desc: 'MCP endpoint + AI Products Feed + AI Hub page — full AI integration stack' },
+                            { tier: 'Good (8-15 pts)', desc: 'MCP endpoint or AI Products Feed present' },
+                            { tier: 'Basic (1-7 pts)', desc: 'Partial setup — e.g. empty feed or hub page only' },
                             { tier: 'Missing (0 pts)', desc: 'No AI-specific discovery endpoints' }
                           ],
                           analyzeStatus: (s) => ({
-                            excellent: 'Full AI discovery stack — plugin manifest and product feed. AI assistants can integrate directly with this store.',
-                            good: 'Partial AI discovery endpoints found. Some AI integration is possible but not at full potential.',
+                            excellent: 'Full AI discovery stack — MCP endpoint for tool integration, AI product feed for catalog access, and an AI Hub landing page. AI assistants can fully integrate with this store.',
+                            good: 'Key AI endpoints are present but the stack is not complete. Adding the missing components (MCP, AI Feed, or Hub page) would maximize AI discoverability.',
+                            basic: 'Minimal AI discovery setup. Some endpoints exist but AI agents have limited integration options.',
                             missing: 'No AI-specific endpoints. AI models cannot integrate directly and must rely on web scraping.',
                             error: 'Could not check AI discovery endpoints.'
                           })[s] || 'Unknown status'

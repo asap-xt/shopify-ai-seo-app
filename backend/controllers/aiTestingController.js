@@ -2602,25 +2602,36 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     result.criteria.productsJson = { status: 'missing', score: 0, details: 'Not accessible' };
   }
 
-  // --- 6. AI Discovery Endpoints (max 20 pts) — AI plugin, MCP, feeds ---
+  // --- 6. AI Discovery Endpoints (max 20 pts) — MCP, AI feeds, AI hub page ---
   // Checked for BOTH own store AND competitors
   try {
     let discoveryScore = 0;
     let discoveryDetails = [];
 
-    // Check .well-known/ai-plugin.json (public for anyone)
-    try {
-      const pluginRes = await safeFetch(`${storeUrl}/.well-known/ai-plugin.json`);
-      if (pluginRes.ok) {
-        const pluginData = await pluginRes.json();
-        if (pluginData.name_for_model || pluginData.schema_version) {
+    // 6a. MCP Endpoint (8 pts) — the modern standard for AI tool integration
+    if (isMyStore && shop) {
+      try {
+        const mcpRes = await safeFetch(`${appUrl}/mcp`);
+        if (mcpRes.ok || mcpRes.status === 405 || mcpRes.status === 400) {
           discoveryScore += 8;
-          discoveryDetails.push('AI Plugin manifest');
+          discoveryDetails.push('MCP endpoint');
         }
+      } catch { /* ignore */ }
+    } else {
+      // For competitors, check common MCP paths
+      for (const mcpPath of ['/mcp', '/apps/indexaize/mcp', '/.well-known/mcp.json']) {
+        try {
+          const mcpRes = await safeFetch(`${storeUrl}${mcpPath}`);
+          if (mcpRes.ok || mcpRes.status === 405 || mcpRes.status === 400) {
+            discoveryScore += 8;
+            discoveryDetails.push('MCP endpoint');
+            break;
+          }
+        } catch { /* ignore */ }
       }
-    } catch { /* ignore */ }
+    }
 
-    // For own store, check AI Products Feed
+    // 6b. AI Products Feed (8 pts)
     if (isMyStore && shop) {
       try {
         const feedRes = await safeFetch(`${appUrl}/ai/products.json?shop=${shop}`);
@@ -2628,25 +2639,50 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
           const feedData = await feedRes.json();
           const count = feedData.products?.length || 0;
           if (count > 0) {
-            discoveryScore += 12;
+            discoveryScore += 8;
             discoveryDetails.push(`AI Products Feed (${count} products)`);
           } else {
-            discoveryScore += 4;
+            discoveryScore += 3;
             discoveryDetails.push('AI Feed configured (empty)');
           }
         }
       } catch { /* ignore */ }
+    } else {
+      for (const feedPath of ['/apps/indexaize/ai/products.json', '/ai/products.json']) {
+        try {
+          const feedRes = await safeFetch(`${storeUrl}${feedPath}`);
+          if (feedRes.ok) {
+            const t = await feedRes.text();
+            if (t.includes('"products"') && t.length > 100) {
+              discoveryScore += 8;
+              discoveryDetails.push('AI Products Feed');
+              break;
+            }
+          }
+        } catch { /* ignore */ }
+      }
     }
 
-    // For competitors, check app proxy /apps/*/ai/products.json or /ai/products.json
-    if (!isMyStore) {
+    // 6c. AI Hub / Welcome page (4 pts) — central discovery landing with JSON-LD
+    if (isMyStore && shop) {
       try {
-        const feedRes = await safeFetch(`${storeUrl}/apps/indexaize/ai/products.json`);
-        if (feedRes.ok) {
-          const t = await feedRes.text();
-          if (t.includes('"products"') && t.length > 100) {
-            discoveryScore += 12;
-            discoveryDetails.push('AI Products Feed found');
+        const welcomeRes = await safeFetch(`${appUrl}/ai/welcome?shop=${shop}`);
+        if (welcomeRes.ok) {
+          const html = await welcomeRes.text();
+          if (html.includes('application/ld+json') || html.includes('AI Data')) {
+            discoveryScore += 4;
+            discoveryDetails.push('AI Hub page');
+          }
+        }
+      } catch { /* ignore */ }
+    } else {
+      try {
+        const welcomeRes = await safeFetch(`${storeUrl}/apps/indexaize/ai/welcome`);
+        if (welcomeRes.ok) {
+          const html = await welcomeRes.text();
+          if (html.includes('application/ld+json') || html.includes('AI Data') || html.includes('ai-hub')) {
+            discoveryScore += 4;
+            discoveryDetails.push('AI Hub page');
           }
         }
       } catch { /* ignore */ }
@@ -2654,8 +2690,10 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
 
     if (discoveryScore >= 16) {
       result.criteria.aiDiscovery = { status: 'excellent', score: Math.min(discoveryScore, 20), details: discoveryDetails.join(' + ') };
+    } else if (discoveryScore >= 8) {
+      result.criteria.aiDiscovery = { status: 'good', score: discoveryScore, details: discoveryDetails.join(' + ') };
     } else if (discoveryScore > 0) {
-      result.criteria.aiDiscovery = { status: 'good', score: discoveryScore, details: discoveryDetails.join(' + ') || 'Partial AI Discovery' };
+      result.criteria.aiDiscovery = { status: 'basic', score: discoveryScore, details: discoveryDetails.join(' + ') };
     } else {
       result.criteria.aiDiscovery = { status: 'missing', score: 0, details: 'No AI Discovery endpoints' };
     }
