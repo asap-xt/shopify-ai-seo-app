@@ -1979,6 +1979,7 @@ if (!IS_PROD) {
       '/ai-seo/schema-data',
       '/settings',
       '/ai-testing',
+      '/analytics',
       '/billing',
       '/clean-uninstall'
     ];
