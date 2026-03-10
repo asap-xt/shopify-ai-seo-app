@@ -12,6 +12,14 @@ function getPeriodDates(period) {
   const now = new Date();
   let start;
   switch (period) {
+    case 'today': {
+      const TZ = 'Europe/Sofia';
+      const dayStr = now.toLocaleDateString('en-CA', { timeZone: TZ });
+      const localMidnight = new Date(dayStr + 'T00:00:00');
+      const offset = now.getTime() - new Date(now.toLocaleString('en-US', { timeZone: TZ })).getTime();
+      start = new Date(localMidnight.getTime() + offset);
+      break;
+    }
     case '7d':  start = new Date(now - 7 * 86400000); break;
     case '30d': start = new Date(now - 30 * 86400000); break;
     case '90d': start = new Date(now - 90 * 86400000); break;

@@ -12,6 +12,7 @@ const qs = (k, d = '') => {
 };
 
 const PERIODS = [
+  { label: 'Today', value: 'today' },
   { label: '7 days', value: '7d' },
   { label: '30 days', value: '30d' },
   { label: '90 days', value: '90d' },
