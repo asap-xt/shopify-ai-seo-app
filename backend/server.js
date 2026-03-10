@@ -332,6 +332,11 @@ if (!IS_PROD) {
             req.originalUrl.includes('/token-exchange')) && req.method === 'GET') {
           return next();
         }
+
+        // Pixel events endpoint is public (receives events from web pixel on storefront)
+        if (req.originalUrl.includes('/pixel/events') && req.method === 'POST') {
+          return next();
+        }
         
         const shop = req.shopDomain;
         
