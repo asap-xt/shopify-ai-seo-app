@@ -1,0 +1,1 @@
+const r=["Starter","Professional","Professional Plus","Growth","Growth Plus","Growth Extra","Enterprise"].map(r=>r.toLowerCase());function t(t){if(!t)return-1;const o=t.toLowerCase().replace(/_/g," ");return r.indexOf(o)}function o(r,o){const e=t(r);return e>=t(o)&&-1!==e}export{t as g,o as i};

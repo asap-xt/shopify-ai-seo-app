@@ -25,6 +25,7 @@ const Settings = React.lazy(() => {
   return import('./pages/Settings.jsx');
 });
 const AiTesting = React.lazy(() => import('./pages/AiTesting.jsx'));
+const Analytics = React.lazy(() => import('./pages/Analytics.jsx'));
 const Billing = React.lazy(() => import('./pages/Billing.jsx'));
 const CleanUninstall = React.lazy(() => import('./pages/CleanUninstall.jsx'));
 const ContactSupport = React.lazy(() => import('./pages/ContactSupport.jsx'));
@@ -125,6 +126,7 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/ai-seo${paramString}`}>Store Optimization for AI</a>
       <a href={`/settings${paramString}`}>AI Discovery Features</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
+      <a href={`/analytics${paramString}`}>Analytics</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
       <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
       <a href={`/contact-support${paramString}`}>Contact Support</a>
@@ -580,6 +582,7 @@ export default function App() {
     if (path.startsWith('/billing')) return 'Plans & Billing';
     if (path.startsWith('/settings')) return 'AI Discovery Features';
     if (path.startsWith('/ai-testing')) return 'AI Testing';
+    if (path.startsWith('/analytics')) return 'Analytics';
     if (path.startsWith('/clean-uninstall')) return 'Clean & Uninstall';
     if (path.startsWith('/contact-support')) return 'Contact Support';
     return 'Dashboard';
@@ -612,6 +615,10 @@ export default function App() {
     else if (path === '/contact-support') {
       devLog('[APP] ===== RENDERING CONTACT SUPPORT PAGE =====');
       return <ContactSupport shop={shop} />;
+    }
+    // Analytics
+    else if (path === '/analytics') {
+      return <Analytics shop={shop} globalPlan={plan} />;
     }
     // AI Testing
     else if (path === '/ai-testing') {

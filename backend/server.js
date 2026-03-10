@@ -884,6 +884,8 @@ import debugRouter from './controllers/debugRouter.js';
     import aiEnhanceRouter from './controllers/aiEnhanceController.js';
     import advancedSchemaRouter from './controllers/advancedSchemaController.js';
     import aiAnalyticsRouter from './controllers/aiAnalyticsController.js';
+    import pixelRouter from './controllers/pixelController.js';
+    import analyticsRouter from './controllers/analyticsController.js';
     import { createMcpHandler } from './mcp/mcpServer.js';
 
     // Import new middleware and controllers
@@ -1390,6 +1392,8 @@ if (!IS_PROD) {
     app.use('/api/ai', aiSimulationController);
     app.use('/api', aiTestingController);
     app.use('/api', aiAnalyticsRouter);
+    app.use('/api', pixelRouter);
+    app.use('/api', analyticsRouter);
 
     // MCP Server endpoint (Model Context Protocol)
     // Stateless StreamableHTTP - each request creates a fresh MCP server
@@ -1529,6 +1533,7 @@ if (!IS_PROD) {
         const { default: collectionsWebhook } = await import('./webhooks/collections.js');
         const { default: subscriptionUpdateWebhook } = await import('./webhooks/subscription-update.js');
         const { default: subscriptionBillingWebhook } = await import('./webhooks/subscription-billing.js');
+        const { default: ordersPaidWebhook } = await import('./webhooks/orders-paid.js');
 
         // Example webhook endpoints (adjust paths if your files expect different)
         app.post('/webhooks/products', validateShopifyWebhook, productsWebhook);
@@ -1536,6 +1541,7 @@ if (!IS_PROD) {
         app.post('/webhooks/app/uninstalled', validateShopifyWebhook, uninstallWebhook);
         app.post('/webhooks/subscription/update', validateShopifyWebhook, subscriptionUpdateWebhook);
         app.post('/webhooks/subscription/billing', validateShopifyWebhook, subscriptionBillingWebhook);
+        app.post('/webhooks/orders/paid', validateShopifyWebhook, ordersPaidWebhook);
         console.log('✔ Webhooks mounted');
       } catch (e) {
         console.log('ℹ Webhooks not mounted (missing files or import error).', e?.message || '');

@@ -450,6 +450,89 @@ export async function registerSubscriptionUpdateWebhook(req, shop, callbackUrl) 
 }
 
 /**
+ * Register ORDERS_PAID webhook with Shopify
+ */
+export async function registerOrdersPaidWebhook(req, shop, callbackUrl) {
+  try {
+    const accessToken = await resolveAdminToken(req, shop);
+    if (!accessToken) {
+      throw new Error(`No access token found for shop: ${shop}`);
+    }
+
+    const checkQuery = `
+      query {
+        webhookSubscriptions(first: 50, topics: ORDERS_PAID) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const checkResult = await makeShopifyGraphQLRequest(shop, accessToken, checkQuery);
+    const existingWebhooks = checkResult?.webhookSubscriptions?.edges || [];
+
+    const ourWebhook = existingWebhooks.find(edge => {
+      const endpoint = edge.node.endpoint;
+      return endpoint.__typename === 'WebhookHttpEndpoint' &&
+             endpoint.callbackUrl === callbackUrl;
+    });
+
+    if (ourWebhook) {
+      return { success: true, alreadyExists: true, webhookId: ourWebhook.node.id };
+    }
+
+    const createMutation = `
+      mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+          webhookSubscription {
+            id
+            topic
+            endpoint {
+              __typename
+              ... on WebhookHttpEndpoint {
+                callbackUrl
+              }
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      topic: 'ORDERS_PAID',
+      webhookSubscription: { callbackUrl, format: 'JSON' }
+    };
+
+    const createResult = await makeShopifyGraphQLRequest(shop, accessToken, createMutation, variables);
+    const errors = createResult?.webhookSubscriptionCreate?.userErrors || [];
+    if (errors.length > 0) {
+      console.error(`[WEBHOOK-REG] ORDERS_PAID Errors:`, errors);
+      return { success: false, errors: errors.map(e => e.message) };
+    }
+
+    const webhook = createResult?.webhookSubscriptionCreate?.webhookSubscription;
+    return { success: true, alreadyExists: false, webhookId: webhook.id };
+  } catch (error) {
+    console.error(`[WEBHOOK-REG] ORDERS_PAID Error:`, error);
+    return { success: false, errors: [error.message] };
+  }
+}
+
+/**
  * Register all required webhooks for the app
  * Also creates metafield definitions to make metafields visible in Shopify Admin
  * @param {Object} req - Express request
@@ -476,6 +559,10 @@ export async function registerAllWebhooks(req, shop, appUrl) {
   // Register APP_SUBSCRIPTIONS_UPDATE webhook (for secure plan activation)
   const subscriptionUpdateUrl = `${appUrl}/webhooks/subscription/update`;
   results.subscriptionUpdate = await registerSubscriptionUpdateWebhook(req, shop, subscriptionUpdateUrl);
+
+  // Register ORDERS_PAID webhook (for revenue analytics)
+  const ordersPaidUrl = `${appUrl}/webhooks/orders/paid`;
+  results.ordersPaid = await registerOrdersPaidWebhook(req, shop, ordersPaidUrl);
   
   // Create metafield definitions (makes metafields visible in Product → Metafields)
   results.metafieldDefinitions = await createAllMetafieldDefinitions(req, shop);

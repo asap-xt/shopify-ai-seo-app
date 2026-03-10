@@ -72,6 +72,16 @@ async function loadSubscriptionModel() {
   return null;
 }
 
+/** Try to dynamically import the order sync function. */
+async function loadOrderSyncFn() {
+  try {
+    const mod = await import('./services/orderSyncService.js');
+    return mod.syncOrdersForShop || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Try to dynamically import a product/catalog sync function. */
 async function loadSyncFn() {
   const candidates = [
@@ -162,6 +172,37 @@ async function runBatch(planKey) {
   console.log(`[scheduler] Autosync done for '${planKey}'`);
 }
 
+/** Run order sync for all active shops. */
+async function runOrderSyncBatch() {
+  const Subscription = await loadSubscriptionModel();
+  const orderSyncFn = await loadOrderSyncFn();
+  if (!Subscription || !orderSyncFn) {
+    console.log('[scheduler] Order sync: model or function not available, skipping');
+    return;
+  }
+
+  try {
+    const docs = await Subscription.find({ plan: { $exists: true, $ne: null } }).lean();
+    const shops = (docs || []).map(d => d.shop).filter(Boolean);
+    if (!shops.length) {
+      console.log('[scheduler] Order sync: no active shops');
+      return;
+    }
+
+    console.log(`[scheduler] Order sync start — ${shops.length} shops`);
+    for (const shop of shops) {
+      try {
+        await orderSyncFn(null, shop, 30);
+      } catch (e) {
+        console.error(`[scheduler] Order sync failed for ${shop}:`, e.message);
+      }
+    }
+    console.log('[scheduler] Order sync done');
+  } catch (e) {
+    console.error('[scheduler] Order sync batch error:', e.message);
+  }
+}
+
 /** Start all cron tasks for each plan. */
 export function startScheduler() {
   if (String(process.env.SCHEDULER_DISABLED || '').toLowerCase() === 'true') {
@@ -187,6 +228,18 @@ export function startScheduler() {
     } catch (e) {
       console.error(`[scheduler] Failed to schedule '${planKey}':`, e.message);
     }
+  }
+
+  // Order revenue sync — every 6 hours for all shops
+  try {
+    const orderTask = cron.schedule('0 */6 * * *', () => runOrderSyncBatch(), {
+      scheduled: true,
+      timezone: TIMEZONE,
+    });
+    tasks.push(orderTask);
+    console.log(`[scheduler] Scheduled order sync → 0 */6 * * * (${TIMEZONE})`);
+  } catch (e) {
+    console.error('[scheduler] Failed to schedule order sync:', e.message);
   }
 
   return { stop: stopScheduler };

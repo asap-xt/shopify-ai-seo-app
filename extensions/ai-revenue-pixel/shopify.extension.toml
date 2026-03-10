@@ -1,0 +1,16 @@
+name = "ai-revenue-pixel"
+type = "web_pixel_extension"
+runtime_context = "strict"
+
+[settings]
+type = "object"
+
+[settings.fields.app_url]
+name = "App URL"
+description = "Backend URL for sending conversion events"
+type = "single_line_text_field"
+
+[settings.fields.shop_domain]
+name = "Shop Domain"
+description = "The myshopify.com domain"
+type = "single_line_text_field"
