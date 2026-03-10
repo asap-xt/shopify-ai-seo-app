@@ -1739,6 +1739,53 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
           } catch (e) {
             data = `MCP Server error: ${e.message}`;
           }
+        } else if (key === 'productsJson') {
+          // Smart sampling: skip non-products and pick representative items
+          const dataResponse = await fetch(endpointUrls[key] || result.url);
+          if (dataResponse.ok) {
+            const fullData = await dataResponse.json();
+            const allProducts = fullData.products || [];
+
+            const SKIP_PATTERNS = [
+              /gift\s*card/i, /подаръчна\s*карта/i, /carte\s*cadeau/i, /gutschein/i,
+              /наложен\s*платеж/i, /cod\s*fee/i, /cash\s*on\s*delivery/i,
+              /shipping\s*fee/i, /такса.*доставка/i, /delivery\s*charge/i,
+              /service\s*fee/i, /insurance/i, /warranty/i, /tip\s*jar/i,
+              /donation/i, /дарение/i, /placeholder/i, /test\s*product/i,
+              /draft/i, /hidden/i
+            ];
+
+            const isSkippable = (p) => {
+              const text = `${p.title || ''} ${p.handle || ''} ${p.product_type || ''} ${(p.tags || []).join(' ')}`;
+              return SKIP_PATTERNS.some(rx => rx.test(text));
+            };
+
+            const realProducts = allProducts.filter(p => !isSkippable(p));
+            const totalCount = allProducts.length;
+            const realCount = realProducts.length;
+            const skippedCount = totalCount - realCount;
+
+            // Pick up to 3 diverse products: first, middle, last
+            const sample = [];
+            if (realProducts.length > 0) sample.push(realProducts[0]);
+            if (realProducts.length > 2) sample.push(realProducts[Math.floor(realProducts.length / 2)]);
+            if (realProducts.length > 1) sample.push(realProducts[realProducts.length - 1]);
+
+            const summaryObj = {
+              _validation_meta: {
+                total_products_in_feed: totalCount,
+                real_products: realCount,
+                skipped_non_products: skippedCount,
+                sample_size: sample.length,
+                note: 'Below are representative products from the catalog (non-products like gift cards and fees are excluded).'
+              },
+              sample_products: sample
+            };
+            data = JSON.stringify(summaryObj, null, 2);
+          }
+          if (data.length > 5000) {
+            data = data.substring(0, 5000) + '\n... (truncated)';
+          }
         } else {
           const dataResponse = await fetch(endpointUrls[key] || result.url);
           if (dataResponse.ok) {
@@ -1751,8 +1798,8 @@ router.post('/ai-testing/ai-validate', validateRequest(), async (req, res) => {
           }
         }
         
-        // Limit data size for AI (max 4000 chars)
-        if (data.length > 4000) {
+        // Limit data size for AI (max 4000 chars) — productsJson handled above
+        if (key !== 'productsJson' && data.length > 4000) {
           data = data.substring(0, 4000) + '\n... (truncated)';
         }
         
@@ -1803,24 +1850,47 @@ Format:
   "suggestions": "Your suggestions here (or null if everything is good)"
 }`;
         } else if (key === 'productsJson') {
-          prompt = `You are an AI SEO expert analyzing Products JSON Feed for an e-commerce store.
+          prompt = `You are an AI SEO expert analyzing a Products JSON Feed for an e-commerce store.
 
-NOTE: The metafields section may be truncated in this preview due to size limits. This is NORMAL and not a problem.
+The data below contains:
+- A _validation_meta section showing catalog stats (total products, how many are real products vs non-products like gift cards/fees that were excluded)
+- 2-3 representative sample products picked from across the catalog
 
-Data sample:
+Data:
 ${data}
 
-Analyze this data and provide:
-1. Rating: excellent/good/fair/poor (based on visible product data quality, NOT truncation)
-2. Feedback: Brief assessment of product titles, descriptions, pricing, and URL structure
-3. Suggestions: Recommendations for improving SEO value (ignore truncation note)
+Analyze focusing on:
+
+Catalog Health:
+- Total product count and diversity (are there enough products for meaningful AI discovery?)
+- Were many non-products filtered out? (gift cards, fees, test products — these reduce feed quality)
+
+Product Data Quality (based on the sample):
+- Are titles descriptive and SEO-friendly (not generic like "Product 1")?
+- Are descriptions informative and unique (not duplicated or empty)?
+- Is pricing complete with currency codes?
+- Are SEO fields (seo.title, seo.description) populated?
+- Are variants with options (size, color) properly structured?
+
+Feed Completeness:
+- Are images present with alt text?
+- Are metafields populated with AI-optimized data?
+- Is availability/inventory information included?
+
+NOTE: Metafields may be truncated — this is normal and not a problem.
+
+Rating Guidelines:
+- excellent: Rich, diverse catalog with detailed titles, descriptions, SEO fields, and clean data
+- good: Good product data but some fields could be more detailed or complete
+- fair: Basic product data, missing descriptions or SEO fields
+- poor: Sparse data, generic titles, missing critical fields
 
 IMPORTANT: Respond with ONLY valid JSON, no markdown, no code blocks.
 
 Format:
 {
   "rating": "excellent|good|fair|poor",
-  "feedback": "Your feedback here",
+  "feedback": "Your feedback here (mention catalog size and sample quality)",
   "suggestions": "Your suggestions here (or null if everything is good)"
 }`;
         } else if (key === 'collectionsJson') {
