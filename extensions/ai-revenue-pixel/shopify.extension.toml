@@ -1,4 +1,5 @@
 name = "ai-revenue-pixel"
+uid = "6b27e9ac-3687-8897-8c5f-843a7939238e50a7c980"
 type = "web_pixel_extension"
 runtime_context = "strict"
 
