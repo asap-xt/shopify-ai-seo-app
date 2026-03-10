@@ -1433,14 +1433,15 @@ Answer in the same language the customer used. Be helpful and specific!`;
                                 </tr>
                               </thead>
                               <tbody>
-                                {['robotsTxt', 'sitemap', 'productsJson', 'structuredData', 'aiEndpoints'].map(criterion => (
+                                {['llmsTxt', 'robotsTxt', 'sitemap', 'structuredData', 'productsJson', 'aiDiscovery'].map(criterion => (
                                   <tr key={criterion} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
                                     <td style={{ padding: '8px' }}>
+                                      {criterion === 'llmsTxt' && 'LLMs.txt'}
                                       {criterion === 'robotsTxt' && 'robots.txt'}
                                       {criterion === 'sitemap' && 'Sitemap'}
-                                      {criterion === 'productsJson' && 'Products JSON'}
                                       {criterion === 'structuredData' && 'Structured Data'}
-                                      {criterion === 'aiEndpoints' && 'AI Endpoints'}
+                                      {criterion === 'productsJson' && 'Products Feed'}
+                                      {criterion === 'aiDiscovery' && 'AI Discovery'}
                                     </td>
                                     <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
                                       {competitiveResults.myStore?.criteria[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}

@@ -2402,6 +2402,23 @@ router.post('/ai-testing/competitive-analysis', validateRequest(), async (req, r
   }
 });
 
+// Helper: safe fetch with timeout
+async function safeFetch(url, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 // Helper function to analyze store AI-readiness
 async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
   const result = {
@@ -2409,236 +2426,246 @@ async function analyzeStoreAIReadiness(domain, shop = null, isMyStore = false) {
     isMyStore,
     score: 0,
     criteria: {
+      llmsTxt: { status: 'unknown', score: 0, details: '' },
       robotsTxt: { status: 'unknown', score: 0, details: '' },
       sitemap: { status: 'unknown', score: 0, details: '' },
-      productsJson: { status: 'unknown', score: 0, details: '' },
       structuredData: { status: 'unknown', score: 0, details: '' },
-      aiEndpoints: { status: 'unknown', score: 0, details: '' }
+      productsJson: { status: 'unknown', score: 0, details: '' },
+      aiDiscovery: { status: 'unknown', score: 0, details: '' }
     }
   };
-  
+
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const storeUrl = `https://${cleanDomain}`;
-  
-  // 1. Check robots.txt
+  const appUrl = process.env.APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app';
+
+  // --- 1. LLMs.txt (max 20 pts) — THE primary AI discovery standard ---
   try {
-    const robotsResponse = await fetch(`${storeUrl}/robots.txt`, {
-      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-      timeout: 10000
-    });
-    if (robotsResponse.ok) {
-      const robotsTxt = await robotsResponse.text();
-      const hasAIDirectives = robotsTxt.includes('GPTBot') || 
-                              robotsTxt.includes('ChatGPT') || 
-                              robotsTxt.includes('anthropic') ||
-                              robotsTxt.includes('ClaudeBot') ||
-                              robotsTxt.includes('Google-Extended');
-      const hasSitemap = robotsTxt.toLowerCase().includes('sitemap:');
-      
-      // robots.txt: max 15 points (controls AI bot access)
-      result.criteria.robotsTxt = {
-        status: hasAIDirectives ? 'excellent' : hasSitemap ? 'good' : 'basic',
-        score: hasAIDirectives ? 15 : hasSitemap ? 10 : 5,
-        details: hasAIDirectives ? 'AI bot directives configured' : hasSitemap ? 'Standard with sitemap' : 'Basic robots.txt'
-      };
+    // Check public /llms.txt on the store domain
+    let llmsFound = false;
+    let llmsContent = '';
+    let llmsRich = false;
+
+    // Try store domain first
+    const paths = [`${storeUrl}/llms.txt`, `${storeUrl}/llms-full.txt`];
+    // For our store, also check app proxy path
+    if (isMyStore && shop) {
+      paths.push(`${storeUrl}/apps/indexaize/llms.txt`);
+      paths.push(`${appUrl}/llms.txt?shop=${shop}`);
+    }
+
+    for (const url of paths) {
+      try {
+        const res = await safeFetch(url);
+        if (res.ok) {
+          llmsContent = await res.text();
+          if (llmsContent.length > 50 && !llmsContent.includes('<html')) {
+            llmsFound = true;
+            llmsRich = llmsContent.length > 500 || llmsContent.includes('## ') || llmsContent.includes('API');
+            break;
+          }
+        }
+      } catch { /* try next */ }
+    }
+
+    if (llmsFound && llmsRich) {
+      result.criteria.llmsTxt = { status: 'excellent', score: 20, details: 'Detailed LLMs.txt with structured content' };
+    } else if (llmsFound) {
+      result.criteria.llmsTxt = { status: 'good', score: 14, details: 'LLMs.txt present' };
+    } else {
+      result.criteria.llmsTxt = { status: 'missing', score: 0, details: 'No LLMs.txt found' };
+    }
+  } catch {
+    result.criteria.llmsTxt = { status: 'error', score: 0, details: 'Could not access' };
+  }
+
+  // --- 2. robots.txt (max 10 pts) — AI bot access control ---
+  try {
+    const res = await safeFetch(`${storeUrl}/robots.txt`);
+    if (res.ok) {
+      const txt = await res.text();
+      const hasAIDirectives = /GPTBot|ChatGPT|anthropic|ClaudeBot|Google-Extended|PerplexityBot/i.test(txt);
+      const hasSitemap = /sitemap:/i.test(txt);
+
+      if (hasAIDirectives) {
+        result.criteria.robotsTxt = { status: 'excellent', score: 10, details: 'AI bot directives configured' };
+      } else if (hasSitemap) {
+        result.criteria.robotsTxt = { status: 'good', score: 7, details: 'Standard with sitemap reference' };
+      } else {
+        result.criteria.robotsTxt = { status: 'basic', score: 3, details: 'Basic robots.txt, no AI directives' };
+      }
     } else {
       result.criteria.robotsTxt = { status: 'missing', score: 0, details: 'No robots.txt found' };
     }
-  } catch (err) {
+  } catch {
     result.criteria.robotsTxt = { status: 'error', score: 0, details: 'Could not access' };
   }
-  
-  // 2. Check sitemap (both Shopify default AND our AI-Enhanced sitemap)
+
+  // --- 3. Sitemap (max 15 pts) — AI-enhanced sitemap ---
   try {
     let hasAINamespace = false;
     let urlCount = 0;
-    
-    // First check Shopify's default sitemap
-    const sitemapResponse = await fetch(`${storeUrl}/sitemap.xml`, {
-      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-      timeout: 10000
-    });
-    if (sitemapResponse.ok) {
-      const sitemapContent = await sitemapResponse.text();
-      hasAINamespace = sitemapContent.includes('xmlns:ai=') || sitemapContent.includes('<ai:');
-      urlCount = (sitemapContent.match(/<url>/g) || []).length;
+
+    const res = await safeFetch(`${storeUrl}/sitemap.xml`);
+    if (res.ok) {
+      const xml = await res.text();
+      hasAINamespace = xml.includes('xmlns:ai=') || xml.includes('<ai:');
+      urlCount = (xml.match(/<url>/g) || []).length;
     }
-    
-    // For our store, also check our AI-Enhanced sitemap endpoint
+
     if (isMyStore && shop && !hasAINamespace) {
       try {
-        const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
-        const aiSitemapResponse = await fetch(`${appUrl}/sitemap_products.xml?shop=${shop}`, {
-          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-          timeout: 10000
-        });
-        if (aiSitemapResponse.ok) {
-          const aiSitemapContent = await aiSitemapResponse.text();
-          if (aiSitemapContent.includes('xmlns:ai=') || aiSitemapContent.includes('<ai:')) {
-            hasAINamespace = true;
-          }
+        const aiRes = await safeFetch(`${appUrl}/sitemap_products.xml?shop=${shop}`);
+        if (aiRes.ok) {
+          const aiXml = await aiRes.text();
+          if (aiXml.includes('xmlns:ai=') || aiXml.includes('<ai:')) hasAINamespace = true;
         }
-      } catch (e) {
-        // Ignore - will use default sitemap check
-      }
+      } catch { /* ignore */ }
     }
-    
-    // Sitemap: max 20 points (helps AI discover content)
-    result.criteria.sitemap = {
-      status: hasAINamespace ? 'excellent' : urlCount > 50 ? 'good' : 'basic',
-      score: hasAINamespace ? 20 : urlCount > 50 ? 12 : 6,
-      details: hasAINamespace ? 'AI-Enhanced sitemap detected' : `Standard sitemap (${urlCount} URLs)`
-    };
-  } catch (err) {
+
+    if (hasAINamespace) {
+      result.criteria.sitemap = { status: 'excellent', score: 15, details: 'AI-Enhanced sitemap detected' };
+    } else if (urlCount > 50) {
+      result.criteria.sitemap = { status: 'good', score: 10, details: `Standard sitemap (${urlCount} URLs)` };
+    } else if (urlCount > 0) {
+      result.criteria.sitemap = { status: 'basic', score: 5, details: `Small sitemap (${urlCount} URLs)` };
+    } else {
+      result.criteria.sitemap = { status: 'missing', score: 0, details: 'No sitemap found' };
+    }
+  } catch {
     result.criteria.sitemap = { status: 'error', score: 0, details: 'Could not access' };
   }
-  
-  // 3. Check products.json (Shopify stores)
-  try {
-    const productsResponse = await fetch(`${storeUrl}/products.json?limit=1`, {
-      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-      timeout: 10000
-    });
-    if (productsResponse.ok) {
-      const productsData = await productsResponse.json();
-      const hasProducts = productsData.products?.length > 0;
-      
-      // Products JSON: max 6 points (standard Shopify endpoint, not AI-specific)
-      result.criteria.productsJson = {
-        status: hasProducts ? 'good' : 'none',
-        score: hasProducts ? 6 : 0,
-        details: hasProducts ? 'Products JSON accessible' : 'Not accessible or empty'
-      };
-    } else {
-      result.criteria.productsJson = { status: 'none', score: 0, details: 'Not a Shopify store or disabled' };
-    }
-  } catch (err) {
-    result.criteria.productsJson = { status: 'none', score: 0, details: 'Not accessible' };
-  }
-  
-  // 4. Check for structured data (homepage + our Advanced Schema API)
+
+  // --- 4. Structured Data (max 25 pts) — JSON-LD schema ---
   try {
     let hasJsonLd = false;
     let hasOrgSchema = false;
     let hasProductSchema = false;
     let hasAdvancedSchema = false;
-    
-    // Check homepage for basic schema
-    const homepageResponse = await fetch(storeUrl, {
-      headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-      timeout: 10000
-    });
-    if (homepageResponse.ok) {
-      const html = await homepageResponse.text();
+
+    const res = await safeFetch(storeUrl);
+    if (res.ok) {
+      const html = await res.text();
       hasJsonLd = html.includes('application/ld+json');
-      hasOrgSchema = html.includes('"@type":"Organization"') || html.includes('"@type": "Organization"');
-      hasProductSchema = html.includes('"@type":"Product"') || html.includes('"@type": "Product"');
+      hasOrgSchema = /"@type"\s*:\s*"Organization"/i.test(html);
+      hasProductSchema = /"@type"\s*:\s*"Product"/i.test(html);
     }
-    
-    // For our store, also check our Advanced Schema API endpoint
+
     if (isMyStore && shop) {
       try {
-        // Use direct API URL instead of app proxy (more reliable)
-        const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
-        const schemaApiUrl = `${appUrl}/ai/schema-data.json?shop=${shop}`;
-        const schemaResponse = await fetch(schemaApiUrl, {
-          headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-          timeout: 10000
-        });
-        if (schemaResponse.ok) {
-          const schemaData = await schemaResponse.json();
-          // Check both snake_case and camelCase for compatibility
-          if (schemaData.schemas?.length > 0 || schemaData.total_schemas > 0 || schemaData.totalSchemas > 0) {
-            hasAdvancedSchema = true;
-          }
+        const schemaRes = await safeFetch(`${appUrl}/ai/schema-data.json?shop=${shop}`);
+        if (schemaRes.ok) {
+          const d = await schemaRes.json();
+          if (d.schemas?.length > 0 || d.total_schemas > 0 || d.totalSchemas > 0) hasAdvancedSchema = true;
         }
-      } catch (e) {
-        console.log('[COMPETITIVE] Schema API check failed:', e.message);
-        // Ignore - will use homepage check
-      }
-      
-      // Also check MongoDB directly for hasAdvancedSchema flag
+      } catch { /* ignore */ }
+
       if (!hasAdvancedSchema) {
         try {
           const Product = (await import('../db/Product.js')).default;
-          const productsWithSchema = await Product.countDocuments({
-            shop,
-            'seoStatus.hasAdvancedSchema': true
-          });
-          if (productsWithSchema > 0) {
-            hasAdvancedSchema = true;
-          }
-        } catch (e) {
-          // Ignore
-        }
+          const cnt = await Product.countDocuments({ shop, 'seoStatus.hasAdvancedSchema': true });
+          if (cnt > 0) hasAdvancedSchema = true;
+        } catch { /* ignore */ }
       }
     }
-    
-    let schemaScore = 0;
-    let schemaStatus = 'none';
-    let schemaDetails = 'No structured data found';
-    
-    // Structured Data: max 30 points (most important for AI understanding)
+
     if (hasAdvancedSchema) {
-      schemaScore = 30;
-      schemaStatus = 'excellent';
-      schemaDetails = 'Advanced Schema API enabled';
+      result.criteria.structuredData = { status: 'excellent', score: 25, details: 'Advanced Schema API enabled' };
+    } else if (hasProductSchema) {
+      result.criteria.structuredData = { status: 'good', score: 17, details: 'Product schema detected' };
+    } else if (hasOrgSchema) {
+      result.criteria.structuredData = { status: 'good', score: 12, details: 'Organization schema present' };
     } else if (hasJsonLd) {
-      schemaScore = 10;
-      schemaStatus = 'basic';
-      schemaDetails = 'Basic JSON-LD present';
-      
-      if (hasOrgSchema) {
-        schemaScore = 15;
-        schemaStatus = 'good';
-        schemaDetails = 'Organization schema present';
-      }
-      
-      if (hasProductSchema) {
-        schemaScore = 20;
-        schemaStatus = 'good';
-        schemaDetails = 'Product schema detected';
-      }
+      result.criteria.structuredData = { status: 'basic', score: 8, details: 'Basic JSON-LD present' };
+    } else {
+      result.criteria.structuredData = { status: 'missing', score: 0, details: 'No structured data found' };
     }
-    
-    result.criteria.structuredData = { status: schemaStatus, score: schemaScore, details: schemaDetails };
-  } catch (err) {
+  } catch {
     result.criteria.structuredData = { status: 'error', score: 0, details: 'Could not analyze' };
   }
-  
-  // 5. Check AI-specific endpoints (only for stores with our app)
-  if (isMyStore && shop) {
-    try {
-      const appUrl = process.env.APP_URL || 'https://shopify-ai-seo-app-production.up.railway.app';
-      const aiProductsResponse = await fetch(`${appUrl}/ai/products.json?shop=${shop}`, {
-        headers: { 'User-Agent': 'IndexAIze-Bot/1.0' },
-        timeout: 10000
-      });
-      
-      if (aiProductsResponse.ok) {
-        const aiData = await aiProductsResponse.json();
-        const productCount = aiData.products?.length || 0;
-        
-        // AI Endpoints: max 25 points (direct AI crawler feeds)
-        result.criteria.aiEndpoints = {
-          status: productCount > 0 ? 'excellent' : 'configured',
-          score: productCount > 0 ? 25 : 10,
-          details: productCount > 0 ? `AI Products Feed: ${productCount} products` : 'AI endpoints configured'
-        };
-      } else {
-        result.criteria.aiEndpoints = { status: 'unavailable', score: 0, details: 'AI endpoints not configured' };
-      }
-    } catch (err) {
-      result.criteria.aiEndpoints = { status: 'error', score: 0, details: 'Could not check' };
+
+  // --- 5. Products Feed (max 10 pts) — /products.json ---
+  try {
+    const res = await safeFetch(`${storeUrl}/products.json?limit=1`);
+    if (res.ok) {
+      const d = await res.json();
+      const has = d.products?.length > 0;
+      result.criteria.productsJson = {
+        status: has ? 'good' : 'basic',
+        score: has ? 10 : 3,
+        details: has ? 'Products JSON accessible' : 'Endpoint exists but empty'
+      };
+    } else {
+      result.criteria.productsJson = { status: 'missing', score: 0, details: 'Not accessible' };
     }
-  } else {
-    // For competitors, we can't check their AI endpoints (they likely don't have our app)
-    result.criteria.aiEndpoints = { status: 'n/a', score: 0, details: 'Not applicable (competitor)' };
+  } catch {
+    result.criteria.productsJson = { status: 'missing', score: 0, details: 'Not accessible' };
   }
-  
+
+  // --- 6. AI Discovery Endpoints (max 20 pts) — AI plugin, MCP, feeds ---
+  // Checked for BOTH own store AND competitors
+  try {
+    let discoveryScore = 0;
+    let discoveryDetails = [];
+
+    // Check .well-known/ai-plugin.json (public for anyone)
+    try {
+      const pluginRes = await safeFetch(`${storeUrl}/.well-known/ai-plugin.json`);
+      if (pluginRes.ok) {
+        const pluginData = await pluginRes.json();
+        if (pluginData.name_for_model || pluginData.schema_version) {
+          discoveryScore += 8;
+          discoveryDetails.push('AI Plugin manifest');
+        }
+      }
+    } catch { /* ignore */ }
+
+    // For own store, check AI Products Feed
+    if (isMyStore && shop) {
+      try {
+        const feedRes = await safeFetch(`${appUrl}/ai/products.json?shop=${shop}`);
+        if (feedRes.ok) {
+          const feedData = await feedRes.json();
+          const count = feedData.products?.length || 0;
+          if (count > 0) {
+            discoveryScore += 12;
+            discoveryDetails.push(`AI Products Feed (${count} products)`);
+          } else {
+            discoveryScore += 4;
+            discoveryDetails.push('AI Feed configured (empty)');
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // For competitors, check app proxy /apps/*/ai/products.json or /ai/products.json
+    if (!isMyStore) {
+      try {
+        const feedRes = await safeFetch(`${storeUrl}/apps/indexaize/ai/products.json`);
+        if (feedRes.ok) {
+          const t = await feedRes.text();
+          if (t.includes('"products"') && t.length > 100) {
+            discoveryScore += 12;
+            discoveryDetails.push('AI Products Feed found');
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (discoveryScore >= 16) {
+      result.criteria.aiDiscovery = { status: 'excellent', score: Math.min(discoveryScore, 20), details: discoveryDetails.join(' + ') };
+    } else if (discoveryScore > 0) {
+      result.criteria.aiDiscovery = { status: 'good', score: discoveryScore, details: discoveryDetails.join(' + ') || 'Partial AI Discovery' };
+    } else {
+      result.criteria.aiDiscovery = { status: 'missing', score: 0, details: 'No AI Discovery endpoints' };
+    }
+  } catch {
+    result.criteria.aiDiscovery = { status: 'error', score: 0, details: 'Could not check' };
+  }
+
   // Calculate total score
   result.score = Object.values(result.criteria).reduce((sum, c) => sum + c.score, 0);
-  
+
   return result;
 }
 
@@ -2653,7 +2680,7 @@ function generateCompetitiveSummary(myStore, competitors) {
   const myWeaknesses = [];
   
   // Compare each criterion
-  const criteriaNames = ['robotsTxt', 'sitemap', 'productsJson', 'structuredData', 'aiEndpoints'];
+  const criteriaNames = ['llmsTxt', 'robotsTxt', 'sitemap', 'structuredData', 'productsJson', 'aiDiscovery'];
   
   for (const criterion of criteriaNames) {
     const myScore = myStore.criteria[criterion]?.score || 0;
