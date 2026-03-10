@@ -15,7 +15,10 @@ import {
   Modal,
   ProgressBar,
   Spinner,
-  Layout
+  Layout,
+  Tooltip,
+  Icon,
+  Popover
 } from '@shopify/polaris';
 import { makeSessionFetch } from '../lib/sessionFetch.js';
 import InsufficientTokensModal from '../components/InsufficientTokensModal.jsx';
@@ -1395,97 +1398,266 @@ Answer in the same language the customer used. Be helpful and specific!`;
                     </Button>
                     
                     {/* Results Table */}
-                    {competitiveResults && (
-                      <Box paddingBlockStart="400">
-                        <BlockStack gap="400">
-                          {/* Summary Banner */}
-                          <Banner 
-                            tone={competitiveResults.summary?.position === 'ahead' ? 'success' : 
-                                  competitiveResults.summary?.position === 'behind' ? 'warning' : 'info'}
+                    {competitiveResults && (() => {
+                      const criteriaInfo = {
+                        llmsTxt: {
+                          label: 'LLMs.txt',
+                          maxPts: 20,
+                          description: 'The emerging standard for AI discovery. A /llms.txt file tells AI models what your store offers.',
+                          scoring: [
+                            { tier: 'Excellent (20 pts)', desc: 'Detailed LLMs.txt with structured content (>500 chars, sections, or API references)' },
+                            { tier: 'Good (14 pts)', desc: 'LLMs.txt present but minimal content' },
+                            { tier: 'Missing (0 pts)', desc: 'No /llms.txt found on the domain' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            excellent: 'This store has a well-structured LLMs.txt file, making it easily discoverable by AI models like ChatGPT, Claude, and Perplexity.',
+                            good: 'LLMs.txt exists but could be improved with more structured content, product categories, and API references.',
+                            missing: 'No LLMs.txt found. AI models have no dedicated entry point to understand this store. This is a significant missed opportunity.',
+                            error: 'Could not access the domain to check for LLMs.txt.'
+                          })[s] || 'Unknown status'
+                        },
+                        robotsTxt: {
+                          label: 'robots.txt',
+                          maxPts: 10,
+                          description: 'Controls which AI bots can crawl the store. Explicit AI bot directives signal AI-readiness.',
+                          scoring: [
+                            { tier: 'Excellent (10 pts)', desc: 'Explicit AI bot directives (GPTBot, ClaudeBot, PerplexityBot, etc.)' },
+                            { tier: 'Good (7 pts)', desc: 'Standard robots.txt with sitemap reference' },
+                            { tier: 'Basic (3 pts)', desc: 'robots.txt exists but no AI directives or sitemap' },
+                            { tier: 'Missing (0 pts)', desc: 'No robots.txt found' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            excellent: 'AI bot access is explicitly configured. Search and AI crawlers know exactly what they can index.',
+                            good: 'robots.txt is present with sitemap, but lacks explicit AI bot directives. AI crawlers use default rules.',
+                            basic: 'robots.txt exists but doesn\'t reference a sitemap or AI bots. Minimal value for AI discovery.',
+                            missing: 'No robots.txt at all. While crawlers will still work, this signals a lack of technical SEO awareness.',
+                            error: 'Could not access the domain.'
+                          })[s] || 'Unknown status'
+                        },
+                        sitemap: {
+                          label: 'Sitemap',
+                          maxPts: 15,
+                          description: 'Helps AI crawlers discover all products. AI-enhanced sitemaps include extra metadata for better indexing.',
+                          scoring: [
+                            { tier: 'Excellent (15 pts)', desc: 'AI-Enhanced sitemap with AI namespace (xmlns:ai) and rich metadata' },
+                            { tier: 'Good (10 pts)', desc: 'Standard sitemap with 50+ URLs' },
+                            { tier: 'Basic (5 pts)', desc: 'Small sitemap with fewer than 50 URLs' },
+                            { tier: 'Missing (0 pts)', desc: 'No sitemap found' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            excellent: 'AI-enhanced sitemap detected with rich metadata. AI crawlers can discover and understand all products efficiently.',
+                            good: 'Standard sitemap with good coverage. Works for traditional SEO, but lacks AI-specific metadata that could improve AI discovery.',
+                            basic: 'Sitemap exists but is small. Limited product coverage means AI crawlers may miss products.',
+                            missing: 'No sitemap found. AI crawlers have to guess what pages exist, significantly reducing discoverability.',
+                            error: 'Could not access the sitemap.'
+                          })[s] || 'Unknown status'
+                        },
+                        structuredData: {
+                          label: 'Structured Data',
+                          maxPts: 25,
+                          description: 'JSON-LD schema markup helps AI understand product attributes, pricing, availability, and relationships.',
+                          scoring: [
+                            { tier: 'Excellent (25 pts)', desc: 'Advanced Schema API with detailed product attributes (color, size, material, etc.)' },
+                            { tier: 'Good (17 pts)', desc: 'Product schema with basic properties (name, price, image)' },
+                            { tier: 'Good (12 pts)', desc: 'Organization schema present on homepage' },
+                            { tier: 'Basic (8 pts)', desc: 'Some JSON-LD present but minimal schema types' },
+                            { tier: 'Missing (0 pts)', desc: 'No structured data found' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            excellent: 'Advanced Schema with rich product attributes. AI models can accurately describe products including color, size, material, and more.',
+                            good: 'Product or Organization schema present. AI models get basic info, but lack detailed attributes for precise recommendations.',
+                            basic: 'Some JSON-LD exists but with limited schema types. AI models get minimal structured context about the store.',
+                            missing: 'No structured data at all. AI models rely solely on raw HTML parsing, which is unreliable and often incomplete.',
+                            error: 'Could not analyze the homepage for structured data.'
+                          })[s] || 'Unknown status'
+                        },
+                        productsJson: {
+                          label: 'Products Feed',
+                          maxPts: 10,
+                          description: 'A public /products.json endpoint lets AI models access product catalog data directly.',
+                          scoring: [
+                            { tier: 'Good (10 pts)', desc: 'Products JSON accessible with product data' },
+                            { tier: 'Basic (3 pts)', desc: 'Endpoint exists but returns empty results' },
+                            { tier: 'Missing (0 pts)', desc: 'Not accessible or not a Shopify store' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            good: 'Products JSON is accessible. AI models can query the full product catalog programmatically.',
+                            basic: 'The endpoint exists but returns no products. May be restricted or the store has no published products.',
+                            missing: 'Products JSON not accessible. AI models cannot programmatically browse the catalog.',
+                            error: 'Could not access the endpoint.'
+                          })[s] || 'Unknown status'
+                        },
+                        aiDiscovery: {
+                          label: 'AI Discovery',
+                          maxPts: 20,
+                          description: 'Dedicated AI endpoints like .well-known/ai-plugin.json and AI product feeds for direct AI integration.',
+                          scoring: [
+                            { tier: 'Excellent (20 pts)', desc: 'AI Plugin manifest + AI Products Feed with data' },
+                            { tier: 'Good (8-12 pts)', desc: 'Either AI Plugin manifest or AI Products Feed present' },
+                            { tier: 'Missing (0 pts)', desc: 'No AI-specific discovery endpoints' }
+                          ],
+                          analyzeStatus: (s) => ({
+                            excellent: 'Full AI discovery stack — plugin manifest and product feed. AI assistants can integrate directly with this store.',
+                            good: 'Partial AI discovery endpoints found. Some AI integration is possible but not at full potential.',
+                            missing: 'No AI-specific endpoints. AI models cannot integrate directly and must rely on web scraping.',
+                            error: 'Could not check AI discovery endpoints.'
+                          })[s] || 'Unknown status'
+                        }
+                      };
+
+                      const statusBadge = (status) => {
+                        const map = {
+                          excellent: <Badge tone="success">Excellent</Badge>,
+                          good: <Badge tone="success">Good</Badge>,
+                          basic: <Badge tone="info">Basic</Badge>,
+                          configured: <Badge tone="info">Configured</Badge>,
+                          missing: <Badge tone="critical">Missing</Badge>,
+                          'n/a': <Badge>N/A</Badge>,
+                          unavailable: <Badge>N/A</Badge>,
+                          error: <Badge tone="warning">Error</Badge>,
+                          unknown: <Badge>—</Badge>
+                        };
+                        return map[status] || <Badge>—</Badge>;
+                      };
+
+                      const CriterionCell = ({ info, criterionData }) => {
+                        const [open, setOpen] = React.useState(false);
+                        if (!criterionData) return <span>—</span>;
+
+                        const { status, score, details } = criterionData;
+                        const analysis = info.analyzeStatus(status);
+
+                        return (
+                          <Popover
+                            active={open}
+                            activator={
+                              <button
+                                onClick={() => setOpen(!open)}
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px'
+                                }}
+                              >
+                                {statusBadge(status)}
+                                <span style={{ fontSize: '11px', color: '#6d7175' }}>{score}/{info.maxPts}</span>
+                              </button>
+                            }
+                            onClose={() => setOpen(false)}
+                            preferredAlignment="center"
                           >
-                            <BlockStack gap="200">
-                              <Text fontWeight="semibold">
-                                Your Score: {competitiveResults.myStore?.score}/100 vs Competitors Avg: {competitiveResults.summary?.avgCompetitorScore}/100
-                              </Text>
-                              <Text>{competitiveResults.summary?.recommendation}</Text>
-                            </BlockStack>
-                          </Banner>
-                          
-                          {/* Comparison Table */}
-                          <Box 
-                            background="bg-surface-secondary" 
-                            padding="300" 
-                            borderRadius="200"
-                            style={{ overflowX: 'auto' }}
-                          >
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                              <thead>
-                                <tr style={{ borderBottom: '2px solid var(--p-color-border)' }}>
-                                  <th style={{ textAlign: 'left', padding: '8px', fontWeight: '600' }}>Criterion</th>
-                                  <th style={{ textAlign: 'center', padding: '8px', fontWeight: '600', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
-                                    Your Store
-                                  </th>
-                                  {competitiveResults.competitors?.map((c, i) => (
-                                    <th key={i} style={{ textAlign: 'center', padding: '8px', fontWeight: '600' }}>
-                                      {c.domain?.replace(/^https?:\/\//, '').substring(0, 20)}
+                            <Box padding="300" maxWidth="320px">
+                              <BlockStack gap="200">
+                                <Text variant="headingSm" fontWeight="semibold">{info.label}: {status}</Text>
+                                {details && <Text variant="bodySm" tone="subdued">{details}</Text>}
+                                <Divider />
+                                <Text variant="bodySm">{analysis}</Text>
+                                <Text variant="bodySm" tone="subdued">Score: {score} / {info.maxPts} pts</Text>
+                              </BlockStack>
+                            </Box>
+                          </Popover>
+                        );
+                      };
+
+                      return (
+                        <Box paddingBlockStart="400">
+                          <BlockStack gap="400">
+                            <Banner 
+                              tone={competitiveResults.summary?.position === 'ahead' ? 'success' : 
+                                    competitiveResults.summary?.position === 'behind' ? 'warning' : 'info'}
+                            >
+                              <BlockStack gap="200">
+                                <Text fontWeight="semibold">
+                                  Your Score: {competitiveResults.myStore?.score}/100 vs Competitors Avg: {competitiveResults.summary?.avgCompetitorScore}/100
+                                </Text>
+                                <Text>{competitiveResults.summary?.recommendation}</Text>
+                              </BlockStack>
+                            </Banner>
+
+                            <Box 
+                              background="bg-surface-secondary" 
+                              padding="300" 
+                              borderRadius="200"
+                              style={{ overflowX: 'auto' }}
+                            >
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: '2px solid var(--p-color-border)' }}>
+                                    <th style={{ textAlign: 'left', padding: '8px', fontWeight: '600', minWidth: '140px' }}>Criterion</th>
+                                    <th style={{ textAlign: 'center', padding: '8px', fontWeight: '600', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                      Your Store
                                     </th>
+                                    {competitiveResults.competitors?.map((c, i) => (
+                                      <th key={i} style={{ textAlign: 'center', padding: '8px', fontWeight: '600' }}>
+                                        {c.domain?.replace(/^https?:\/\//, '').substring(0, 25)}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(criteriaInfo).map(([key, info]) => (
+                                    <tr key={key} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                                      <td style={{ padding: '8px' }}>
+                                        <Tooltip content={`Max ${info.maxPts} pts — ${info.description}`} dismissOnMouseOut width="wide">
+                                          <span style={{ cursor: 'help', borderBottom: '1px dotted #8c9196' }}>
+                                            {info.label}
+                                          </span>
+                                        </Tooltip>
+                                      </td>
+                                      <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
+                                        <CriterionCell info={info} criterionData={competitiveResults.myStore?.criteria[key]} />
+                                      </td>
+                                      {competitiveResults.competitors?.map((comp, i) => (
+                                        <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
+                                          <CriterionCell info={info} criterionData={comp.criteria?.[key]} />
+                                        </td>
+                                      ))}
+                                    </tr>
                                   ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {['llmsTxt', 'robotsTxt', 'sitemap', 'structuredData', 'productsJson', 'aiDiscovery'].map(criterion => (
-                                  <tr key={criterion} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
-                                    <td style={{ padding: '8px' }}>
-                                      {criterion === 'llmsTxt' && 'LLMs.txt'}
-                                      {criterion === 'robotsTxt' && 'robots.txt'}
-                                      {criterion === 'sitemap' && 'Sitemap'}
-                                      {criterion === 'structuredData' && 'Structured Data'}
-                                      {criterion === 'productsJson' && 'Products Feed'}
-                                      {criterion === 'aiDiscovery' && 'AI Discovery'}
-                                    </td>
+                                  <tr style={{ fontWeight: '600', backgroundColor: 'var(--p-color-bg-surface-secondary)' }}>
+                                    <td style={{ padding: '8px' }}>Total Score</td>
                                     <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
-                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
-                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
-                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
-                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
-                                      {competitiveResults.myStore?.criteria[criterion]?.status === 'n/a' && <Badge>N/A</Badge>}
+                                      <Badge tone="success">{competitiveResults.myStore?.score}/100</Badge>
                                     </td>
                                     {competitiveResults.competitors?.map((comp, i) => (
                                       <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
-                                        {comp.criteria?.[criterion]?.status === 'excellent' && <Badge tone="success">Excellent</Badge>}
-                                        {comp.criteria?.[criterion]?.status === 'good' && <Badge tone="success">Good</Badge>}
-                                        {comp.criteria?.[criterion]?.status === 'basic' && <Badge tone="info">Basic</Badge>}
-                                        {comp.criteria?.[criterion]?.status === 'missing' && <Badge tone="critical">Missing</Badge>}
-                                        {comp.criteria?.[criterion]?.status === 'unavailable' && <Badge>N/A</Badge>}
-                                        {comp.criteria?.[criterion]?.status === 'error' && <Badge tone="warning">Error</Badge>}
+                                        <Badge tone={comp.score > 50 ? 'info' : 'warning'}>{comp.score}/100</Badge>
                                       </td>
                                     ))}
                                   </tr>
-                                ))}
-                                <tr style={{ fontWeight: '600', backgroundColor: 'var(--p-color-bg-surface-secondary)' }}>
-                                  <td style={{ padding: '8px' }}>Total Score</td>
-                                  <td style={{ textAlign: 'center', padding: '8px', backgroundColor: 'var(--p-color-bg-success-subdued)' }}>
-                                    <Badge tone="success">{competitiveResults.myStore?.score}/100</Badge>
-                                  </td>
-                                  {competitiveResults.competitors?.map((comp, i) => (
-                                    <td key={i} style={{ textAlign: 'center', padding: '8px' }}>
-                                      <Badge tone={comp.score > 50 ? 'info' : 'warning'}>{comp.score}/100</Badge>
-                                    </td>
+                                </tbody>
+                              </table>
+                            </Box>
+
+                            {/* Scoring breakdown */}
+                            <Box padding="200">
+                              <BlockStack gap="200">
+                                <Text variant="bodySm" fontWeight="semibold">Scoring breakdown</Text>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                  {Object.entries(criteriaInfo).map(([key, info]) => (
+                                    <Tooltip key={key} content={info.scoring.map(s => s.tier + ': ' + s.desc).join(' | ')} width="wide">
+                                      <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                        padding: '3px 8px', borderRadius: '4px',
+                                        backgroundColor: '#f1f2f4', fontSize: '12px', cursor: 'help'
+                                      }}>
+                                        {info.label} <strong>{info.maxPts}</strong>
+                                      </span>
+                                    </Tooltip>
                                   ))}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </Box>
-                          
-                          <Button 
-                            variant="plain" 
-                            onClick={() => setCompetitiveResults(null)}
-                          >
-                            Clear Results
-                          </Button>
-                        </BlockStack>
-                      </Box>
-                    )}
+                                </div>
+                              </BlockStack>
+                            </Box>
+
+                            <Button 
+                              variant="plain" 
+                              onClick={() => setCompetitiveResults(null)}
+                            >
+                              Clear Results
+                            </Button>
+                          </BlockStack>
+                        </Box>
+                      );
+                    })()}
                   </BlockStack>
                 );
               })()}
