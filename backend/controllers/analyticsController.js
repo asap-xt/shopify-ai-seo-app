@@ -3,20 +3,20 @@ import OrderRevenue from '../db/OrderRevenue.js';
 import ConversionEvent from '../db/ConversionEvent.js';
 import AIVisitLog from '../db/AIVisitLog.js';
 import Product from '../db/Product.js';
+import Shop from '../db/Shop.js';
 import { syncOrdersForShop } from '../services/orderSyncService.js';
 import { resolveAdminToken } from '../utils/tokenResolver.js';
 
 const router = Router();
 
-function getPeriodDates(period) {
+function getPeriodDates(period, tz = 'UTC') {
   const now = new Date();
   let start;
   switch (period) {
     case 'today': {
-      const TZ = 'Europe/Sofia';
-      const dayStr = now.toLocaleDateString('en-CA', { timeZone: TZ });
+      const dayStr = now.toLocaleDateString('en-CA', { timeZone: tz });
       const localMidnight = new Date(dayStr + 'T00:00:00');
-      const offset = now.getTime() - new Date(now.toLocaleString('en-US', { timeZone: TZ })).getTime();
+      const offset = now.getTime() - new Date(now.toLocaleString('en-US', { timeZone: tz })).getTime();
       start = new Date(localMidnight.getTime() + offset);
       break;
     }
@@ -28,10 +28,19 @@ function getPeriodDates(period) {
   return { start, end: now };
 }
 
-function getPreviousPeriod(period) {
-  const { start, end } = getPeriodDates(period);
+function getPreviousPeriod(period, tz) {
+  const { start, end } = getPeriodDates(period, tz);
   const duration = end - start;
   return { start: new Date(start - duration), end: new Date(start) };
+}
+
+async function getShopTimezone(shop) {
+  try {
+    const doc = await Shop.findOne({ shop }).select('ianaTimezone').lean();
+    return doc?.ianaTimezone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 // GET /api/analytics/revenue — Revenue summary with attribution breakdown
@@ -42,7 +51,8 @@ router.get('/analytics/revenue', async (req, res) => {
     const compare = req.query.compare === 'true';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
     const filter = { shop, orderCreatedAt: { $gte: start, $lte: end } };
 
     const [allOrders, directOrders, influencedOrders] = await Promise.all([
@@ -76,7 +86,7 @@ router.get('/analytics/revenue', async (req, res) => {
     };
 
     if (compare) {
-      const prev = getPreviousPeriod(period);
+      const prev = getPreviousPeriod(period, tz);
       const prevFilter = { shop, orderCreatedAt: { $gte: prev.start, $lte: prev.end } };
       const [prevAll, prevDirect, prevInfluenced] = await Promise.all([
         OrderRevenue.countDocuments(prevFilter),
@@ -105,7 +115,8 @@ router.get('/analytics/add-to-cart', async (req, res) => {
     const period = req.query.period || '30d';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
     const filter = {
       shop,
       createdAt: { $gte: start, $lte: end },
@@ -157,7 +168,8 @@ router.get('/analytics/products', async (req, res) => {
     const period = req.query.period || '30d';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
 
     const [products, orders, addToCartEvents, aiVisits] = await Promise.all([
       Product.find({ shop, status: { $ne: 'DRAFT' } }).select('shopifyProductId title handle seoStatus aiOptimized status').lean(),
@@ -240,7 +252,8 @@ router.get('/analytics/comparison', async (req, res) => {
     const period = req.query.period || '30d';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
 
     const [products, orders, aiVisits] = await Promise.all([
       Product.find({ shop, status: { $ne: 'DRAFT' } }).select('handle seoStatus').lean(),
@@ -311,7 +324,8 @@ router.get('/analytics/funnel', async (req, res) => {
     const period = req.query.period || '30d';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
 
     const [botVisits, pixelPageViews, pixelAddToCart, pixelCheckouts, directOrders] = await Promise.all([
       AIVisitLog.countDocuments({
@@ -366,7 +380,8 @@ router.get('/analytics/timeline', async (req, res) => {
     const period = req.query.period || '30d';
     if (!shop) return res.status(400).json({ error: 'shop required' });
 
-    const { start, end } = getPeriodDates(period);
+    const tz = await getShopTimezone(shop);
+    const { start, end } = getPeriodDates(period, tz);
 
     const pipeline = [
       { $match: { shop, orderCreatedAt: { $gte: start, $lte: end } } },

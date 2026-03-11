@@ -50,6 +50,10 @@ const shopSchema = new mongoose.Schema({
     type: Number,
     default: 50
   },
+  ianaTimezone: {
+    type: String,
+    default: null
+  },
   email: {
     type: String,
     required: false

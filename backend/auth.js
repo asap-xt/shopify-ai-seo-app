@@ -211,10 +211,9 @@ async function fetchShopContactInfo(shop, accessToken) {
       contactEmail: shopData.customer_email || shopData.contact_email || null,
       email: shopData.email || null,
       shopOwner: shopData.shop_owner || null,
-      shopOwnerEmail: shopData.customer_email || shopData.email || null
+      shopOwnerEmail: shopData.customer_email || shopData.email || null,
+      ianaTimezone: shopData.iana_timezone || null
     };
-    
-    // Shop contact info fetched
     
     return contactInfo;
   } catch (error) {
@@ -417,6 +416,7 @@ router.get('/callback', async (req, res) => {
       if (contactInfo.contactEmail) contactUpdate.contactEmail = contactInfo.contactEmail;
       if (contactInfo.shopOwner) contactUpdate.shopOwner = contactInfo.shopOwner;
       if (contactInfo.shopOwnerEmail) contactUpdate.shopOwnerEmail = contactInfo.shopOwnerEmail;
+      if (contactInfo.ianaTimezone) contactUpdate.ianaTimezone = contactInfo.ianaTimezone;
       
       if (Object.keys(contactUpdate).length) {
         contactUpdate.updatedAt = new Date();
