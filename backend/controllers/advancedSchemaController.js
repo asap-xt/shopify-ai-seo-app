@@ -326,8 +326,31 @@ async function generateWithAI(prompt, systemPrompt) {
     }
     
     const data = await response.json();
-    const content = JSON.parse(data.choices[0].message.content);
+    const rawContent = data.choices?.[0]?.message?.content || '';
     const usage = data.usage || {};
+    
+    if (!rawContent || !rawContent.trim()) {
+      throw new Error('AI returned empty response');
+    }
+
+    let content;
+    try {
+      content = JSON.parse(rawContent);
+    } catch (parseErr) {
+      // Try to extract JSON from markdown fences or fix truncated JSON
+      const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || rawContent.match(/(\{[\s\S]*\})/);
+      if (jsonMatch) {
+        try {
+          content = JSON.parse(jsonMatch[1].trim());
+        } catch {
+          console.error('[SCHEMA] Could not parse extracted JSON, raw length:', rawContent.length);
+          throw parseErr;
+        }
+      } else {
+        console.error('[SCHEMA] No JSON found in AI response, raw length:', rawContent.length, 'first 200 chars:', rawContent.substring(0, 200));
+        throw parseErr;
+      }
+    }
     
     console.log(`[SCHEMA] ✅ AI response received: ${usage.total_tokens || 0} tokens`);
     
