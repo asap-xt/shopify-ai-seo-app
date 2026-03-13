@@ -1058,8 +1058,6 @@ async function generateProductSchemas(shop, productDoc) {
             node {
               title
               selectedOptions { name value }
-              weight
-              weightUnit
             }
           }
         }
