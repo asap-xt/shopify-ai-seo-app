@@ -159,8 +159,9 @@ async function runBatch(planKey) {
         continue;
       }
 
-      // Execute sync
-      await syncFn(shop);
+      // Build a minimal req-like object for sync functions that expect req.auth.shop
+      const mockReq = { auth: { shop }, shopDomain: shop, query: { shop } };
+      await syncFn(mockReq);
 
       // Persist lastSyncAt
       await Subscription.updateOne({ shop }, { $set: { lastSyncAt: new Date() } }).exec().catch(() => {});
@@ -190,14 +191,21 @@ async function runOrderSyncBatch() {
     }
 
     console.log(`[scheduler] Order sync start — ${shops.length} shops`);
+    let synced = 0, denied = 0;
     for (const shop of shops) {
       try {
-        await orderSyncFn(null, shop, 30);
+        const mockReq = { auth: { shop }, shopDomain: shop, query: { shop } };
+        await orderSyncFn(mockReq, shop, 30);
+        synced++;
       } catch (e) {
-        console.error(`[scheduler] Order sync failed for ${shop}:`, e.message);
+        if (e.message?.includes('Access denied') || e.message?.includes('not approved')) {
+          denied++;
+        } else {
+          console.error(`[scheduler] Order sync failed for ${shop}:`, e.message);
+        }
       }
     }
-    console.log('[scheduler] Order sync done');
+    console.log(`[scheduler] Order sync done — synced: ${synced}, access denied: ${denied}`);
   } catch (e) {
     console.error('[scheduler] Order sync batch error:', e.message);
   }
