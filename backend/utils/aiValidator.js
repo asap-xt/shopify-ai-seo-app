@@ -225,6 +225,10 @@ PRODUCT INFORMATION:
   if (productData.price && productData.currency) {
     contextSummary += `\n- Price: ${productData.price} ${productData.currency}`;
   }
+
+  if (productData.taxonomyContext) {
+    contextSummary += `\n${productData.taxonomyContext}`;
+  }
   
   return `Based on this EXACT product data, generate ONLY the requested fields: ${requestedFields.join(', ')}.
 

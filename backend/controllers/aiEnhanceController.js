@@ -230,6 +230,17 @@ Return ONLY a JSON object with:
   }
 }
 
+function extractTaxonomyContext(product) {
+  const metafields = product.metafields?.edges || [];
+  const taxonomy = {};
+  for (const { node } of metafields) {
+    if (node.namespace === 'taxonomy' || node.namespace === 'custom') {
+      taxonomy[node.key] = node.value;
+    }
+  }
+  return taxonomy;
+}
+
 async function generateEnhancedBulletsFAQ(data) {
   const { shop, productId, model, language, product, existingSeo } = data;
   
@@ -244,6 +255,15 @@ async function generateEnhancedBulletsFAQ(data) {
   const currency = product.priceRangeV2?.minVariantPrice?.currencyCode || '';
   const rawDescription = product.description || '';
   
+  // Extract taxonomy metafields for richer AI context
+  const taxonomy = extractTaxonomyContext(product);
+  
+  // Build taxonomy context string for the prompt
+  const taxonomyEntries = Object.entries(taxonomy);
+  const taxonomyContext = taxonomyEntries.length > 0
+    ? '\nProduct attributes (taxonomy metafields):\n' + taxonomyEntries.map(([k, v]) => `- ${k}: ${v}`).join('\n')
+    : '';
+
   // Create factual prompt to prevent hallucinations
   const factualPrompt = createFactualPrompt(
     {
@@ -254,7 +274,8 @@ async function generateEnhancedBulletsFAQ(data) {
       vendor: vendor,
       price: price,
       currency: currency,
-      existingSeo: existingSeo
+      existingSeo: existingSeo,
+      taxonomyContext: taxonomyContext,
     },
     ['bullets', 'faq']
   );
@@ -272,12 +293,13 @@ Guidelines:
 - Create helpful FAQ questions and answers based on product data
 - Keep the same language as input
 - Use ONLY factual information from product data AND store context above
+- Use taxonomy attributes (fabric, color, fit, care instructions, etc.) when available to create more specific and accurate content
 - For products with minimal descriptions, use product type, vendor, tags, and price to create relevant generic FAQs
 - Examples for minimal data: "What is this ${productType} suitable for?", "How do I care for my ${productType}?", "What makes this ${vendor} product special?"
 - Return ONLY a JSON object with exactly 2 keys: "bullets" and "faq"
 - bullets: array of EXACTLY 5 strings (NO MORE, NO LESS) - this is mandatory!
 - faq: array of 3-5 objects with "q" and "a" keys
-
+${taxonomyContext}
 **CRITICAL:** You MUST return exactly 5 bullets. If you can't generate 5 unique bullets, repeat/rephrase similar points.`
     },
     {
@@ -522,6 +544,16 @@ router.post('/product', validateRequest(), async (req, res) => {
               }
               metafield(namespace: "seo_ai", key: "${metafieldKey}") {
                 value
+              }
+              metafields(first: 30) {
+                edges {
+                  node {
+                    namespace
+                    key
+                    value
+                    type
+                  }
+                }
               }
             }
           }
@@ -1630,7 +1662,7 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
       }
       
       try {
-        // Get current SEO + product data
+        // Get current SEO + product data (including taxonomy metafields)
         const metafieldKey = `seo__${language.toLowerCase()}`;
         const query = `
           query GetProductSEO($productId: ID!) {
@@ -1652,6 +1684,16 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
               }
               metafield(namespace: "seo_ai", key: "${metafieldKey}") {
                 value
+              }
+              metafields(first: 30) {
+                edges {
+                  node {
+                    namespace
+                    key
+                    value
+                    type
+                  }
+                }
               }
             }
           }

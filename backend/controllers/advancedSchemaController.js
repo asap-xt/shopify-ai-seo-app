@@ -1679,6 +1679,11 @@ async function installThemeSnippet(shop) {
     <script type="application/ld+json">
 {{ schemas_json }}
     </script>
+  {%- elsif product.metafields.custom.json_ld -%}
+    {%- comment -%} Enriched JSON-LD with taxonomy data (Professional Plus+) {%- endcomment -%}
+    <script type="application/ld+json">
+{{ product.metafields.custom.json_ld.value }}
+    </script>
   {%- else -%}
     {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
     {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
@@ -2916,4 +2921,5 @@ router.get('/debug-shop/:shop', async (req, res) => {
   }
 });
 
+export { installThemeSnippet };
 export default router;

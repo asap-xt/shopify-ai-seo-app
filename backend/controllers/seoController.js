@@ -645,8 +645,37 @@ async function ensureCollectionMetafieldDefinitions(req, shop, languages) {
   return results;
 }
 
+/* --------------------------- Taxonomy Metafield Helpers --------------------------- */
+function extractTaxonomyMetafields(product) {
+  const metafields = product.metafields?.edges || [];
+  const taxonomy = {};
+  for (const { node } of metafields) {
+    if (node.namespace === 'taxonomy' || node.namespace === 'custom') {
+      taxonomy[node.key] = node.value;
+    }
+  }
+  return taxonomy;
+}
+
+const TAXONOMY_TO_SCHEMA = {
+  fabric: 'material',
+  material: 'material',
+  color: 'color',
+  colour: 'color',
+  fit: 'additionalProperty',
+  waist_rise: 'additionalProperty',
+  care_instructions: 'additionalProperty',
+  target_gender: 'audience',
+  age_group: 'audience',
+};
+
 /* --------------------------- Product JSON-LD Generator --------------------------- */
 function generateProductJsonLd(product, seoData, language) {
+  const taxonomy = extractTaxonomyMetafields(product);
+  const variants = product.variants?.edges?.map(e => e.node) || [];
+  const firstVariant = variants[0];
+  const storeUrl = 'https://plamenna.boutique';
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -657,26 +686,77 @@ function generateProductJsonLd(product, seoData, language) {
       "@type": "Brand",
       "name": product.vendor || "Unknown"
     },
-    "offers": {
-      "@type": "Offer",
-      "price": product.priceRangeV2?.minVariantPrice?.amount || "0",
-      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "USD",
-      "availability": "https://schema.org/InStock",
-      "priceValidUntil": new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    }
   };
-  
-  // URL added if exists
-  if (product.onlineStoreUrl) {
-    jsonLd.url = product.onlineStoreUrl;
+
+  if (taxonomy.fabric || taxonomy.material) {
+    jsonLd.material = taxonomy.fabric || taxonomy.material;
   }
-  
-  // SKU added if exists
-  if (product.variants?.edges?.[0]?.node?.sku) {
-    jsonLd.sku = product.variants.edges[0].node.sku;
+  if (taxonomy.color || taxonomy.colour) {
+    jsonLd.color = taxonomy.color || taxonomy.colour;
   }
-  
-  // For various languages we could add inLanguage
+
+  // Size from variant options
+  const sizes = variants.map(v => v.title).filter(t => t && t !== 'Default Title');
+  if (sizes.length) {
+    jsonLd.size = sizes.join(', ');
+  }
+
+  // Additional properties from taxonomy
+  const additionalProps = [];
+  for (const [key, schemaField] of Object.entries(TAXONOMY_TO_SCHEMA)) {
+    if (schemaField !== 'additionalProperty') continue;
+    if (!taxonomy[key]) continue;
+    additionalProps.push({
+      "@type": "PropertyValue",
+      "name": key.replace(/_/g, ' '),
+      "value": taxonomy[key],
+    });
+  }
+  if (additionalProps.length) {
+    jsonLd.additionalProperty = additionalProps;
+  }
+
+  // Audience from target_gender / age_group
+  if (taxonomy.target_gender || taxonomy.age_group) {
+    jsonLd.audience = {
+      "@type": "PeopleAudience",
+    };
+    if (taxonomy.target_gender) jsonLd.audience.suggestedGender = taxonomy.target_gender;
+    if (taxonomy.age_group) jsonLd.audience.suggestedAge = taxonomy.age_group;
+  }
+
+  // Offers - use all variants if multiple, or single offer
+  if (variants.length > 1) {
+    jsonLd.offers = {
+      "@type": "AggregateOffer",
+      "lowPrice": product.priceRangeV2?.minVariantPrice?.amount || "0",
+      "highPrice": product.priceRangeV2?.maxVariantPrice?.amount || "0",
+      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "EUR",
+      "offerCount": variants.length,
+      "availability": variants.some(v => v.availableForSale)
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      "url": product.onlineStoreUrl || `${storeUrl}/products/${product.handle}`,
+    };
+  } else {
+    jsonLd.offers = {
+      "@type": "Offer",
+      "price": firstVariant?.price || product.priceRangeV2?.minVariantPrice?.amount || "0",
+      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "EUR",
+      "availability": (firstVariant?.availableForSale !== false)
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      "url": product.onlineStoreUrl || `${storeUrl}/products/${product.handle}`,
+      "priceValidUntil": new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    };
+  }
+
+  // SKU
+  if (firstVariant?.sku) {
+    jsonLd.sku = firstVariant.sku;
+  }
+
+  // Language
   if (language && language !== 'en') {
     jsonLd.inLanguage = language;
   }
@@ -1222,7 +1302,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
   const primaryLang = (shopData?.shopLocales || []).find(l => l?.primary)?.locale?.toLowerCase() || 'en';
   const isPrimary = langNormalized.toLowerCase() === primaryLang.toLowerCase();
 
-  // Get base product
+  // Get base product with variants, taxonomy metafields, and images
   const Q = `
     query GetProduct($id: ID!) {
       product(id: $id) {
@@ -1239,8 +1319,26 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
-        variants(first: 1) {
-          edges { node { sku } }
+        variants(first: 10) {
+          edges {
+            node {
+              id
+              title
+              price
+              sku
+              availableForSale
+            }
+          }
+        }
+        metafields(first: 30) {
+          edges {
+            node {
+              namespace
+              key
+              value
+              type
+            }
+          }
         }
         onlineStoreUrl
       }
@@ -1446,7 +1544,7 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
     const updateAlt = options?.updateAlt === true;
     const dryRun = options?.dryRun === true;
 
-    const updated = { seoMetafield: false, imageAlt: false };
+    const updated = { seoMetafield: false, imageAlt: false, jsonLd: false };
     const errors = [];
 
     // Validate/normalize - change provider to 'local'
@@ -1516,7 +1614,45 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
         updated.seoMetafield = true;
       }
 
-      // 4. Optional: image alts (if explicitly requested)
+      // 3b. Save JSON-LD as custom.json_ld metafield (programmatic, not AI-generated)
+      if (v.jsonLd) {
+        try {
+          const jsonLdMetafields = [{
+            ownerId: productId,
+            namespace: 'custom',
+            key: 'json_ld',
+            type: 'json',
+            value: JSON.stringify(v.jsonLd),
+          }];
+          const jsonLdRes = await shopGraphQL(req, shop, metaMutation, { metafields: jsonLdMetafields });
+          const jsonLdErrs = jsonLdRes?.metafieldsSet?.userErrors || [];
+          if (jsonLdErrs.length) {
+            console.error(`[SEO-APPLY] JSON-LD metafield errors:`, jsonLdErrs);
+          } else {
+            updated.jsonLd = true;
+          }
+        } catch (jsonLdErr) {
+          console.error(`[SEO-APPLY] Failed to save JSON-LD metafield:`, jsonLdErr.message);
+        }
+
+        // Auto-install theme snippet for Professional Plus+ plans
+        if (updated.jsonLd) {
+          try {
+            const sub = await Subscription.findOne({ shop });
+            const plan = (sub?.plan || '').toLowerCase().replace(/\s+/g, '_');
+            const autoInstallPlans = ['professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'];
+            if (autoInstallPlans.includes(plan) || sub?.plan === 'professional plus' || sub?.plan === 'growth plus' || sub?.plan === 'growth extra') {
+              const { installThemeSnippet } = await import('./advancedSchemaController.js');
+              await installThemeSnippet(shop);
+              console.log(`[SEO-APPLY] Auto-installed theme snippet for ${shop} (plan: ${sub?.plan})`);
+            }
+          } catch (snippetErr) {
+            console.error(`[SEO-APPLY] Theme snippet auto-install failed:`, snippetErr.message);
+          }
+        }
+      }
+
+      // 4. Optional: image alts (if explicitly requested via options)
       if (updateAlt && Array.isArray(v.imageAlt) && v.imageAlt.length) {
         for (const it of v.imageAlt) {
           try {
@@ -1536,6 +1672,53 @@ async function applySEOForLanguage(req, shop, productId, seo, language, options 
             errors.push(e.message || String(e));
           }
         }
+      }
+
+      // 5. Auto-fill null image alt texts with product title + variant info
+      try {
+        const imgQuery = `
+          query GetProductImages($id: ID!) {
+            product(id: $id) {
+              title
+              images(first: 10) {
+                edges { node { id altText } }
+              }
+            }
+          }
+        `;
+        const imgData = await shopGraphQL(req, shop, imgQuery, { id: productId });
+        const images = imgData?.product?.images?.edges || [];
+        const pTitle = imgData?.product?.title || v.title || '';
+        const nullAltImages = images.filter(e => !e.node.altText);
+
+        if (nullAltImages.length > 0) {
+          const altMutation = `
+            mutation ProductImageUpdate($productId: ID!, $id: ID!, $altText: String) {
+              productImageUpdate(productId: $productId, id: $id, altText: $altText) {
+                image { id altText }
+                userErrors { field message }
+              }
+            }
+          `;
+          for (let i = 0; i < nullAltImages.length; i++) {
+            const img = nullAltImages[i].node;
+            const altText = i === 0
+              ? pTitle
+              : `${pTitle} - ${language.toUpperCase()} ${i + 1}`;
+            try {
+              await shopGraphQL(req, shop, altMutation, {
+                productId,
+                id: img.id,
+                altText: altText.slice(0, 125),
+              });
+              updated.imageAlt = true;
+            } catch (altErr) {
+              console.error(`[SEO-APPLY] Image alt update failed for ${img.id}:`, altErr.message);
+            }
+          }
+        }
+      } catch (imgErr) {
+        console.error(`[SEO-APPLY] Failed to auto-fill image alts:`, imgErr.message);
       }
     }
 
