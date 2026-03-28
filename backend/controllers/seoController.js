@@ -690,6 +690,67 @@ function extractTaxonomyMetafields(product) {
   return taxonomy;
 }
 
+/**
+ * Resolve Metaobject GID references in taxonomy values to display names.
+ * Shopify taxonomy metafields store values as JSON arrays of GIDs like:
+ * '["gid://shopify/Metaobject/123", "gid://shopify/Metaobject/456"]'
+ */
+async function resolveTaxonomyValues(req, shop, rawTaxonomy) {
+  const resolved = { ...rawTaxonomy };
+  const gidsToResolve = new Set();
+
+  for (const [key, val] of Object.entries(resolved)) {
+    if (!val || typeof val !== 'string') continue;
+    const gids = extractGids(val);
+    gids.forEach(g => gidsToResolve.add(g));
+  }
+
+  if (gidsToResolve.size === 0) return resolved;
+
+  const gidMap = new Map();
+  try {
+    const ids = [...gidsToResolve];
+    const query = `query ResolveMetaobjects($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        ... on Metaobject {
+          id
+          displayName
+        }
+      }
+    }`;
+    const data = await shopGraphQL(req, shop, query, { ids });
+    for (const node of (data?.nodes || [])) {
+      if (node?.id && node?.displayName) {
+        gidMap.set(node.id, node.displayName);
+      }
+    }
+  } catch (err) {
+    console.error('[TAXONOMY] Failed to resolve metaobject GIDs:', err.message);
+    return resolved;
+  }
+
+  for (const [key, val] of Object.entries(resolved)) {
+    if (!val || typeof val !== 'string') continue;
+    const gids = extractGids(val);
+    if (gids.length === 0) continue;
+    const names = gids.map(g => gidMap.get(g)).filter(Boolean);
+    resolved[key] = names.length > 0 ? names.join(', ') : val;
+  }
+
+  return resolved;
+}
+
+function extractGids(val) {
+  if (val.startsWith('gid://')) return [val];
+  if (val.startsWith('[')) {
+    try {
+      const arr = JSON.parse(val);
+      if (Array.isArray(arr)) return arr.filter(v => typeof v === 'string' && v.startsWith('gid://'));
+    } catch { /* not JSON */ }
+  }
+  return [];
+}
+
 const TAXONOMY_TO_SCHEMA = {
   fabric: 'material',
   material: 'material',
@@ -713,9 +774,10 @@ const ADDITIONAL_PROP_LABELS = {
  * @param {Object} product - Shopify product from GraphQL
  * @param {Object} seoData - SEO data (language-specific)
  * @param {Object} [englishContent] - Optional English title/description for schema.org
+ * @param {Object} [resolvedTaxonomy] - Pre-resolved taxonomy values (GIDs already converted to names)
  */
-function generateProductJsonLd(product, seoData, englishContent) {
-  const taxonomy = extractTaxonomyMetafields(product);
+function generateProductJsonLd(product, seoData, englishContent, resolvedTaxonomy) {
+  const taxonomy = resolvedTaxonomy || extractTaxonomyMetafields(product);
   const variants = product.variants?.edges?.map(e => e.node) || [];
   const firstVariant = variants[0];
   const storeUrl = 'https://plamenna.boutique';
@@ -1532,6 +1594,15 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     // English translations not available -- will fallback to base product data
   }
 
+  // Resolve taxonomy Metaobject GIDs to display names for JSON-LD
+  let resolvedTaxonomy = null;
+  try {
+    const rawTaxonomy = extractTaxonomyMetafields(p);
+    resolvedTaxonomy = await resolveTaxonomyValues(req, shop, rawTaxonomy);
+  } catch (taxErr) {
+    console.error('[SEO] Failed to resolve taxonomy:', taxErr.message);
+  }
+
   const fixed = {
     productId: p.id,
     provider: 'local',
@@ -1539,7 +1610,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     language: langNormalized,
     seo: {
       ...localSeoData,
-      jsonLd: generateProductJsonLd(p, localSeoData, englishContent),
+      jsonLd: generateProductJsonLd(p, localSeoData, englishContent, resolvedTaxonomy),
     },
     quality: {
       warnings: [],
