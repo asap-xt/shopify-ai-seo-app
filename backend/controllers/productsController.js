@@ -347,12 +347,14 @@ router.get('/list', async (req, res) => {
       }
       
       if (searchFilter) {
-        const searchLower = searchFilter.toLowerCase();
-        allProcessedProducts = allProcessedProducts.filter(p => 
-          p.title?.toLowerCase().includes(searchLower) ||
-          p.handle?.toLowerCase().includes(searchLower) ||
-          p.productType?.toLowerCase().includes(searchLower)
-        );
+        const searchLower = searchFilter.toLowerCase().trim();
+        allProcessedProducts = allProcessedProducts.filter(p => {
+          const numericId = p.id?.includes('gid://') ? p.id.split('/').pop() : String(p.id || '');
+          return numericId.includes(searchLower) ||
+            p.title?.toLowerCase().includes(searchLower) ||
+            p.handle?.toLowerCase().includes(searchLower) ||
+            p.productType?.toLowerCase().includes(searchLower);
+        });
       }
       
       // Update filtered total and slice for pagination
