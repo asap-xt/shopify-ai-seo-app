@@ -3272,11 +3272,18 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
       
       // IMPORTANT: Pass ownerId, namespace and key - NOT id!
       const variables = {
-        metafields: [{
-          ownerId: productId,     // gid://shopify/Product/...
-          namespace: 'seo_ai',    
-          key: metafieldKey       // seo__en, seo__de, etc.
-        }]
+        metafields: [
+          {
+            ownerId: productId,
+            namespace: 'seo_ai',    
+            key: metafieldKey
+          },
+          {
+            ownerId: productId,
+            namespace: 'custom',
+            key: 'json_ld'
+          }
+        ]
       };
       
       const deleteResult = await shopGraphQL(req, shop, deleteMutation, variables);
@@ -3286,7 +3293,6 @@ router.delete('/seo/delete', validateRequest(), async (req, res) => {
         console.error('[DELETE-SEO] Delete errors:', errorMessages);
         errors.push(...errorMessages);
       } else {
-        // Successful deletion or metafield doesn't exist
         deleted.metafield = true;
       }
     } catch (e) {
@@ -3401,6 +3407,7 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
     const mongoUpdates = [];
     
     // Prepare all metafields for deletion
+    const jsonLdProductIds = new Set();
     items.forEach(({ productId, language }) => {
       if (productId && language) {
         metafieldsToDelete.push({
@@ -3409,8 +3416,17 @@ router.delete('/seo/bulk-delete', validateRequest(), async (req, res) => {
           key: `seo__${language.toLowerCase()}`
         });
         mongoUpdates.push({ productId, language });
+        jsonLdProductIds.add(productId);
       }
     });
+    // Also delete custom.json_ld for each unique product
+    for (const pid of jsonLdProductIds) {
+      metafieldsToDelete.push({
+        ownerId: pid,
+        namespace: 'custom',
+        key: 'json_ld'
+      });
+    }
     
     // 1. Delete metafields in batches of 250 (Shopify limit)
     const BATCH_SIZE = 250;
@@ -3651,12 +3667,24 @@ async function processDeleteInBackground(req, shop, items, totalProducts) {
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       
-      // Prepare metafields for this batch
-      const metafieldsToDelete = batch.map(({ productId, language }) => ({
-        ownerId: productId,
-        namespace: 'seo_ai',
-        key: `seo__${language.toLowerCase()}`
-      }));
+      // Prepare metafields for this batch (seo_ai + custom.json_ld)
+      const metafieldsToDelete = [];
+      const batchProductIds = new Set();
+      for (const { productId, language } of batch) {
+        metafieldsToDelete.push({
+          ownerId: productId,
+          namespace: 'seo_ai',
+          key: `seo__${language.toLowerCase()}`
+        });
+        batchProductIds.add(productId);
+      }
+      for (const pid of batchProductIds) {
+        metafieldsToDelete.push({
+          ownerId: pid,
+          namespace: 'custom',
+          key: 'json_ld'
+        });
+      }
       
       try {
         const deleteResult = await shopGraphQL(req, shop, deleteMutation, {
