@@ -3,6 +3,7 @@
 
 import mongoose from 'mongoose';
 import { executeGraphQL } from '../middleware/modernAuth.js';
+import Subscription from '../db/Subscription.js';
 
 // Mongo model for cached feed
 const FeedCacheSchema = new mongoose.Schema({
@@ -87,6 +88,16 @@ const PRODUCTS_QUERY = `
                 id
                 url
                 altText
+              }
+            }
+          }
+          metafields(first: 30) {
+            edges {
+              node {
+                namespace
+                key
+                value
+                type
               }
             }
           }
@@ -285,16 +296,118 @@ function formatProductForAI(product, { shopCurrency, shopDomain, shopUrl, langua
   };
 }
 
+// Taxonomy keys we care about for the feed
+const TAXONOMY_FEED_KEYS = [
+  'material', 'fabric', 'color', 'colour', 'fit', 'waist_rise',
+  'target_gender', 'age_group', 'care_instructions', 'pants_length_type'
+];
+
+function extractTaxonomyFromProduct(product) {
+  const taxonomy = {};
+  for (const edge of (product.metafields?.edges || [])) {
+    const mf = edge?.node;
+    if (!mf) continue;
+    if (mf.namespace === 'taxonomy' || mf.namespace === 'custom' || mf.namespace === 'shopify') {
+      const k = mf.key?.toLowerCase();
+      if (TAXONOMY_FEED_KEYS.includes(k)) {
+        taxonomy[k] = mf.value;
+      }
+    }
+  }
+  return taxonomy;
+}
+
+function extractGids(val) {
+  if (!val || typeof val !== 'string') return [];
+  if (val.startsWith('gid://')) return [val];
+  if (val.startsWith('[')) {
+    try {
+      const arr = JSON.parse(val);
+      if (Array.isArray(arr)) return arr.filter(v => typeof v === 'string' && v.startsWith('gid://'));
+    } catch { /* not JSON */ }
+  }
+  return [];
+}
+
+async function resolveAllTaxonomyGids(req, productsTaxonomy) {
+  const allGids = new Set();
+  for (const taxonomy of productsTaxonomy) {
+    for (const val of Object.values(taxonomy)) {
+      extractGids(val).forEach(g => allGids.add(g));
+    }
+  }
+  if (allGids.size === 0) return new Map();
+
+  const gidMap = new Map();
+  const ids = [...allGids];
+  const BATCH = 250;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    try {
+      const batch = ids.slice(i, i + BATCH);
+      const query = `query ResolveMetaobjects($ids: [ID!]!) {
+        nodes(ids: $ids) { ... on Metaobject { id displayName } }
+      }`;
+      const data = await executeGraphQL(req, query, { ids: batch });
+      for (const node of (data?.nodes || [])) {
+        if (node?.id && node?.displayName) gidMap.set(node.id, node.displayName);
+      }
+    } catch (err) {
+      console.error('[FEED-SYNC] Failed to resolve taxonomy GIDs batch:', err.message);
+    }
+  }
+  return gidMap;
+}
+
+function resolveTaxonomyWithMap(taxonomy, gidMap) {
+  const resolved = {};
+  for (const [key, val] of Object.entries(taxonomy)) {
+    const gids = extractGids(val);
+    if (gids.length > 0) {
+      const names = gids.map(g => gidMap.get(g)).filter(Boolean);
+      if (names.length > 0) resolved[key] = names.join(', ');
+    } else if (val) {
+      resolved[key] = val;
+    }
+  }
+  // Normalize fabric → material
+  if (resolved.fabric && !resolved.material) {
+    resolved.material = resolved.fabric;
+    delete resolved.fabric;
+  }
+  if (resolved.colour && !resolved.color) {
+    resolved.color = resolved.colour;
+    delete resolved.colour;
+  }
+  return resolved;
+}
+
+async function getShopPlan(shop) {
+  try {
+    const sub = await Subscription.findOne({ shop });
+    const plan = (sub?.plan || 'starter').toLowerCase().replace(/\s+/g, '_');
+    return plan;
+  } catch {
+    return 'starter';
+  }
+}
+
+const TAXONOMY_ELIGIBLE_PLANS = [
+  'professional_plus', 'growth', 'growth_plus', 'growth_extra', 'enterprise'
+];
+
 // Main sync function
 export async function syncProductsForShop(req) {
   const startTime = Date.now();
   
   try {
-    // Get shop info and languages in parallel
-    const [shopInfo, languages] = await Promise.all([
+    // Get shop info, languages, and plan in parallel
+    const [shopInfo, languages, plan] = await Promise.all([
       getShopInfo(req),
-      getShopLanguages(req)
+      getShopLanguages(req),
+      getShopPlan(req.auth.shop)
     ]);
+    
+    const includeTaxonomy = TAXONOMY_ELIGIBLE_PLANS.includes(plan);
     
     // Fetch all products
     const allProducts = await fetchAllProducts(req);
@@ -302,15 +415,28 @@ export async function syncProductsForShop(req) {
     // FILTER: Only sync ACTIVE products (exclude DRAFT and ARCHIVED)
     const products = allProducts.filter(product => product.status === 'ACTIVE');
     
+    // Resolve taxonomy GIDs in one batch (Professional Plus+ only)
+    let gidMap = new Map();
+    let productsTaxonomy = [];
+    if (includeTaxonomy) {
+      productsTaxonomy = products.map(p => extractTaxonomyFromProduct(p));
+      gidMap = await resolveAllTaxonomyGids(req, productsTaxonomy);
+    }
+    
     // Format products for AI
-    const formattedProducts = products.map(product =>
-      formatProductForAI(product, {
+    const formattedProducts = products.map((product, idx) => {
+      const base = formatProductForAI(product, {
         shopCurrency: shopInfo.currency,
         shopDomain: shopInfo.domain,
         shopUrl: shopInfo.url,
         languages: languages
-      })
-    );
+      });
+      if (includeTaxonomy && productsTaxonomy[idx]) {
+        const resolved = resolveTaxonomyWithMap(productsTaxonomy[idx], gidMap);
+        Object.assign(base, resolved);
+      }
+      return base;
+    });
     
     // Convert to NDJSON
     const ndjsonData = formattedProducts
