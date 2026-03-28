@@ -683,7 +683,7 @@ function extractTaxonomyMetafields(product) {
   const metafields = product.metafields?.edges || [];
   const taxonomy = {};
   for (const { node } of metafields) {
-    if (node.namespace === 'taxonomy' || node.namespace === 'custom') {
+    if (node.namespace === 'taxonomy' || node.namespace === 'custom' || node.namespace === 'shopify') {
       taxonomy[node.key] = node.value;
     }
   }
@@ -702,18 +702,32 @@ const TAXONOMY_TO_SCHEMA = {
   age_group: 'audience',
 };
 
+const ADDITIONAL_PROP_LABELS = {
+  fit: 'Fit',
+  waist_rise: 'Waist Rise',
+  care_instructions: 'Care Instructions',
+};
+
 /* --------------------------- Product JSON-LD Generator --------------------------- */
-function generateProductJsonLd(product, seoData, language) {
+/**
+ * @param {Object} product - Shopify product from GraphQL
+ * @param {Object} seoData - SEO data (language-specific)
+ * @param {Object} [englishContent] - Optional English title/description for schema.org
+ */
+function generateProductJsonLd(product, seoData, englishContent) {
   const taxonomy = extractTaxonomyMetafields(product);
   const variants = product.variants?.edges?.map(e => e.node) || [];
   const firstVariant = variants[0];
   const storeUrl = 'https://plamenna.boutique';
 
+  const enTitle = englishContent?.title || product.title || seoData.title;
+  const enDesc = englishContent?.description || seoData.metaDescription || '';
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-    "name": seoData.title || product.title,
-    "description": seoData.metaDescription || "",
+    "name": enTitle,
+    "description": enDesc,
     "image": product.images?.edges?.map(e => e.node.url).filter(Boolean) || [],
     "brand": {
       "@type": "Brand",
@@ -741,7 +755,7 @@ function generateProductJsonLd(product, seoData, language) {
     if (!taxonomy[key]) continue;
     additionalProps.push({
       "@type": "PropertyValue",
-      "name": key.replace(/_/g, ' '),
+      "name": ADDITIONAL_PROP_LABELS[key] || key.replace(/_/g, ' '),
       "value": taxonomy[key],
     });
   }
@@ -789,10 +803,7 @@ function generateProductJsonLd(product, seoData, language) {
     jsonLd.sku = firstVariant.sku;
   }
 
-  // Language
-  if (language && language !== 'en') {
-    jsonLd.inLanguage = language;
-  }
+  jsonLd.inLanguage = 'en';
   
   return jsonLd;
 }
@@ -1503,6 +1514,24 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     imageAlt: featuredImageAlt  // Shopify alt text or null (AI will generate later if null)
   };
 
+  // Fetch English content for JSON-LD (schema.org works best in English)
+  let englishContent = null;
+  try {
+    if (isPrimary && primaryLang === 'en') {
+      englishContent = { title: p.title, description: stripHtml(p.descriptionHtml) };
+    } else {
+      const enLoc = await getProductLocalizedContent(req, shop, productId, 'en');
+      if (enLoc?.hasAny) {
+        englishContent = {
+          title: enLoc.title || p.title,
+          description: stripHtml(enLoc.bodyHtml) || stripHtml(p.descriptionHtml),
+        };
+      }
+    }
+  } catch (enErr) {
+    // English translations not available -- will fallback to base product data
+  }
+
   const fixed = {
     productId: p.id,
     provider: 'local',
@@ -1510,7 +1539,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     language: langNormalized,
     seo: {
       ...localSeoData,
-      jsonLd: generateProductJsonLd(p, localSeoData, langNormalized),
+      jsonLd: generateProductJsonLd(p, localSeoData, englishContent),
     },
     quality: {
       warnings: [],

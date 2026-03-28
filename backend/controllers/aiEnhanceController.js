@@ -234,7 +234,7 @@ function extractTaxonomyContext(product) {
   const metafields = product.metafields?.edges || [];
   const taxonomy = {};
   for (const { node } of metafields) {
-    if (node.namespace === 'taxonomy' || node.namespace === 'custom') {
+    if (node.namespace === 'taxonomy' || node.namespace === 'custom' || node.namespace === 'shopify') {
       taxonomy[node.key] = node.value;
     }
   }
