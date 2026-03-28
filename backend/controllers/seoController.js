@@ -770,6 +770,49 @@ const ADDITIONAL_PROP_LABELS = {
 };
 
 /* --------------------------- Product JSON-LD Generator --------------------------- */
+
+/**
+ * Extract a concise description from product HTML for schema.org.
+ * Strategy: take intro text before bullets/lists, fallback to truncated full text.
+ * @param {string} html - Raw descriptionHtml from Shopify
+ */
+function extractSchemaDescription(html) {
+  if (!html) return '';
+
+  // Try to extract intro paragraph(s) before the first list or detail section
+  const listCutoff = html.search(/<[uo]l[\s>]/i);
+  const detailCutoff = html.search(/<(?:li|dt)[\s>]/i);
+  const sectionCutoff = html.search(/(?:Details|Composition|Care\s*instructions|Specifications)\s*:/i);
+  const bulletCharCutoff = html.search(/[\n>]\s*[•–—\-\*]\s/);
+
+  const cutoffs = [listCutoff, detailCutoff, sectionCutoff, bulletCharCutoff]
+    .filter(i => i > 0);
+  const cutAt = cutoffs.length ? Math.min(...cutoffs) : -1;
+
+  let intro = cutAt > 0 ? html.substring(0, cutAt) : html;
+  // Strip HTML tags and normalize whitespace
+  intro = intro.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ')
+    .replace(/\r\n/g, '\n').replace(/\n{2,}/g, ' ').replace(/\n/g, ' ')
+    .replace(/\s{2,}/g, ' ').trim();
+
+  const MIN_INTRO = 50;
+  if (intro.length >= MIN_INTRO) {
+    if (intro.length <= 300) return intro;
+    const t = intro.substring(0, 300);
+    const sp = t.lastIndexOf(' ');
+    return (sp > 200 ? t.substring(0, sp) : t) + '…';
+  }
+
+  // Intro too short (product is bullets-only) → fall back to full body, cleaned & truncated
+  let full = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ')
+    .replace(/\r\n/g, '\n').replace(/\n{2,}/g, ' ').replace(/\n/g, ' ')
+    .replace(/\s{2,}/g, ' ').trim();
+  if (full.length <= 300) return full;
+  const t = full.substring(0, 300);
+  const sp = t.lastIndexOf(' ');
+  return (sp > 200 ? t.substring(0, sp) : t) + '…';
+}
+
 /**
  * @param {Object} product - Shopify product from GraphQL
  * @param {Object} seoData - SEO data (language-specific)
@@ -1580,13 +1623,16 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
   let englishContent = null;
   try {
     if (isPrimary && primaryLang === 'en') {
-      englishContent = { title: p.title, description: stripHtml(p.descriptionHtml) };
+      englishContent = {
+        title: p.title,
+        description: localSeoData.metaDescription || extractSchemaDescription(p.descriptionHtml),
+      };
     } else {
       const enLoc = await getProductLocalizedContent(req, shop, productId, 'en');
       if (enLoc?.hasAny) {
         englishContent = {
           title: enLoc.title || p.title,
-          description: stripHtml(enLoc.bodyHtml) || stripHtml(p.descriptionHtml),
+          description: enLoc.seoDescription || extractSchemaDescription(enLoc.bodyHtml) || extractSchemaDescription(p.descriptionHtml),
         };
       }
     }
