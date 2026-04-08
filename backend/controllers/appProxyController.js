@@ -13,6 +13,10 @@ import { appProxyAuth } from '../utils/appProxyValidator.js';
 import aiDiscoveryService from '../services/aiDiscoveryService.js';
 import { getGeminiResponse } from '../ai/gemini.js';
 import { createAIAnalyticsMiddleware } from '../middleware/aiAnalytics.js';
+import { resolveProductDomain } from '../utils/aiProductDomain.js';
+import { extractSharedTaxonomy } from '../utils/aiTaxonomyMapper.js';
+import { extractDomainAttributes } from '../utils/aiAttributeMapper.js';
+import { compactObject } from '../utils/compactObject.js';
 
 const router = express.Router();
 const aiAnalytics = createAIAnalyticsMiddleware('app_proxy');
@@ -908,6 +912,10 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                 productType
                 vendor
                 tags
+                category {
+                  fullName
+                  name
+                }
                 totalInventory
                 publishedAt
                 updatedAt
@@ -1059,13 +1067,41 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
           }
         }
         
-        // Extract taxonomy metafields (simple string values only, skip GID refs)
-        const taxonomy = {};
+        // Extract raw taxonomy metafields (simple string values only, skip GID refs)
+        const rawTaxonomyMeta = {};
         for (const { node: meta } of (product.taxonomyMetafields?.edges || [])) {
           if (meta.value && !meta.value.startsWith('gid://') && !meta.value.startsWith('[')) {
-            taxonomy[meta.key] = meta.value;
+            rawTaxonomyMeta[meta.key] = meta.value;
           }
         }
+
+        // Build variant options map for taxonomy extraction
+        const variantOptions = {};
+        for (const { node: v } of (product.variants?.edges || [])) {
+          for (const opt of (v.selectedOptions || [])) {
+            if (!variantOptions[opt.name]) variantOptions[opt.name] = new Set();
+            variantOptions[opt.name].add(opt.value);
+          }
+        }
+        for (const key of Object.keys(variantOptions)) {
+          variantOptions[key] = [...variantOptions[key]];
+        }
+
+        // AI taxonomy extraction
+        const taxonomyInput = {
+          title: product.title,
+          productType: product.productType,
+          tags: product.tags || [],
+          categoryFullName: product.category?.fullName || null,
+          categoryName: product.category?.name || null,
+          descriptionHtml: product.descriptionHtml,
+          vendor: product.vendor,
+          taxonomyMetafields: rawTaxonomyMeta,
+          variantOptions,
+        };
+        const productDomain = resolveProductDomain(taxonomyInput);
+        const sharedTaxonomy = compactObject(extractSharedTaxonomy(taxonomyInput));
+        const domainAttrs = compactObject(extractDomainAttributes(productDomain, taxonomyInput));
 
         // Calculate availability status
         const totalInventory = product.totalInventory || 0;
@@ -1156,7 +1192,9 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             published: product.publishedAt,
             updated: product.updatedAt
           },
-          ...(Object.keys(taxonomy).length > 0 ? { taxonomy } : {}),
+          ...(productDomain ? { productDomain } : {}),
+          ...(sharedTaxonomy && Object.keys(sharedTaxonomy).length > 0 ? { taxonomy: sharedTaxonomy } : {}),
+          ...(domainAttrs && Object.keys(domainAttrs).length > 0 ? { attributes: domainAttrs } : {}),
           ...(req.query.fields === 'all' ? { seoMetafields: parsedMetafields } : {})
         });
       }
