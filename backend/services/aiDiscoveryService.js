@@ -903,6 +903,7 @@ ${customRules}
 
       // --- Metadata footer ---
       llmsTxt += `---\n`;
+      llmsTxt += `primary-domain: ${primaryDomain}\n`;
       llmsTxt += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
       if (shopEmail) {
         llmsTxt += `contact: ${shopEmail}\n`;
