@@ -1139,7 +1139,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             published: product.publishedAt,
             updated: product.updatedAt
           },
-          seoMetafields: parsedMetafields
+          ...(req.query.fields === 'all' ? { seoMetafields: parsedMetafields } : {})
         });
       }
     });
