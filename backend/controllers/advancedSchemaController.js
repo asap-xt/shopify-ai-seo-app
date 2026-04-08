@@ -71,10 +71,13 @@ function extractGids(val) {
   return [];
 }
 
+const TAXONOMY_SKIP_KEYS = new Set(['json_ld', 'advanced_schema_en', 'advanced_schema_bg', 'advanced_schema_ro']);
+
 function extractTaxonomyFromMetafields(allMetafields) {
   const taxonomy = {};
   for (const [, meta] of Object.entries(allMetafields)) {
     if (meta.namespace === 'taxonomy' || meta.namespace === 'custom' || meta.namespace === 'shopify') {
+      if (TAXONOMY_SKIP_KEYS.has(meta.key)) continue;
       taxonomy[meta.key] = meta.value;
     }
   }
