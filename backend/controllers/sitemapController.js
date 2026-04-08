@@ -425,7 +425,7 @@ async function generateSitemapCore(shop, options = {}) {
                 tags
                 updatedAt
                 publishedAt
-                priceRangeV2 {
+                priceRange {
                   minVariantPrice {
                     amount
                     currencyCode
@@ -547,8 +547,8 @@ async function generateSitemapCore(shop, options = {}) {
         xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
         xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
         
-        if (product.priceRangeV2?.minVariantPrice) {
-          xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+        if (product.priceRange?.minVariantPrice) {
+          xml += '      <ai:price>' + product.priceRange.minVariantPrice.amount + ' ' + product.priceRange.minVariantPrice.currencyCode + '</ai:price>\n';
         }
         
         if (product.vendor) {
@@ -604,7 +604,7 @@ async function generateSitemapCore(shop, options = {}) {
               productType: product.productType,
               tags: product.tags,
               vendor: product.vendor,
-              price: product.priceRangeV2?.minVariantPrice?.amount
+              price: product.priceRange?.minVariantPrice?.amount
             };
             
             // Generate AI enhancements (sequential processing via aiQueue)

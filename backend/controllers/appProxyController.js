@@ -245,7 +245,7 @@ async function handleSitemapProxy(req, res) {
                 tags
                 updatedAt
                 publishedAt
-                priceRangeV2 {
+                priceRange {
                   minVariantPrice {
                     amount
                     currencyCode
@@ -367,8 +367,8 @@ async function handleSitemapProxy(req, res) {
       xml += '      <ai:title>' + escapeXml(product.seo?.title || product.title) + '</ai:title>\n';
       xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
       
-      if (product.priceRangeV2?.minVariantPrice) {
-        xml += '      <ai:price>' + product.priceRangeV2.minVariantPrice.amount + ' ' + product.priceRangeV2.minVariantPrice.currencyCode + '</ai:price>\n';
+      if (product.priceRange?.minVariantPrice) {
+        xml += '      <ai:price>' + product.priceRange.minVariantPrice.amount + ' ' + product.priceRange.minVariantPrice.currencyCode + '</ai:price>\n';
       }
       
       if (product.vendor) {
@@ -911,7 +911,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                 totalInventory
                 publishedAt
                 updatedAt
-                priceRangeV2 {
+                priceRange {
                   minVariantPrice {
                     amount
                     currencyCode
@@ -986,8 +986,13 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
       );
 
       const data = await response.json();
-      
+
+      if (data?.errors) {
+        console.error('[PRODUCTS_JSON] GraphQL errors:', JSON.stringify(data.errors));
+      }
+
       if (!data?.data?.products?.edges) {
+        console.error('[PRODUCTS_JSON] No products data. Response keys:', Object.keys(data || {}), 'HTTP status:', response.status);
         break;
       }
       
@@ -997,7 +1002,8 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
     }
     
     if (allProducts.length === 0) {
-      return res.status(500).json({ error: 'Failed to fetch products' });
+      console.error('[PRODUCTS_JSON] No products found for shop:', shop);
+      return res.status(500).json({ error: 'Failed to fetch products. The store may have no active products or the GraphQL query failed.' });
     }
     
     const optimizedProducts = [];
@@ -1048,8 +1054,8 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
         const primarySku = product.variants?.edges?.[0]?.node?.sku || null;
         
         // Check for sale price
-        const minPrice = parseFloat(product.priceRangeV2?.minVariantPrice?.amount || 0);
-        const maxPrice = parseFloat(product.priceRangeV2?.maxVariantPrice?.amount || 0);
+        const minPrice = parseFloat(product.priceRange?.minVariantPrice?.amount || 0);
+        const maxPrice = parseFloat(product.priceRange?.maxVariantPrice?.amount || 0);
         const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantPrice?.amount || 0);
         const isOnSale = compareAtMin > 0 && compareAtMin > minPrice;
         
@@ -1106,7 +1112,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             price: minPrice.toFixed(2),
             priceMax: maxPrice > minPrice ? maxPrice.toFixed(2) : null,
             compareAtPrice: isOnSale ? compareAtMin.toFixed(2) : null,
-            currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+            currency: product.priceRange?.minVariantPrice?.currencyCode || 'USD',
             isOnSale: isOnSale
           },
           url: `https://${shop}/products/${product.handle}`,

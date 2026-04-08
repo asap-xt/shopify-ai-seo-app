@@ -251,8 +251,8 @@ async function generateEnhancedBulletsFAQ(data) {
   const productType = product.productType || 'product';
   const vendor = product.vendor || '';
   const tags = product.tags || [];
-  const price = product.priceRangeV2?.minVariantPrice?.amount || '';
-  const currency = product.priceRangeV2?.minVariantPrice?.currencyCode || '';
+  const price = product.priceRange?.minVariantPrice?.amount || '';
+  const currency = product.priceRange?.minVariantPrice?.currencyCode || '';
   const rawDescription = product.description || '';
   
   // Extract taxonomy metafields for richer AI context
@@ -536,7 +536,7 @@ router.post('/product', validateRequest(), async (req, res) => {
                 url
                 altText
               }
-              priceRangeV2 {
+              priceRange {
                 minVariantPrice {
                   amount
                   currencyCode
@@ -1676,7 +1676,7 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
                 url
                 altText
               }
-              priceRangeV2 {
+              priceRange {
                 minVariantPrice {
                   amount
                   currencyCode

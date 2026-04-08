@@ -47,7 +47,7 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
                 url
                 altText
               }
-              priceRangeV2 {
+              priceRange {
                 minVariantPrice {
                   amount
                   currencyCode
@@ -163,8 +163,8 @@ export async function syncProducts(adminGraphql, shop, progressCallback = null) 
           vendor: product.vendor || '',
           productType: product.productType || '',
           tags: product.tags || [],
-          price: product.priceRangeV2?.minVariantPrice?.amount || null,
-          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || '',
+          price: product.priceRange?.minVariantPrice?.amount || null,
+          currency: product.priceRange?.minVariantPrice?.currencyCode || '',
           available: product.status === 'ACTIVE' && (product.totalInventory > 0 || product.totalInventory === null),
           status: product.status,
           totalInventory: product.totalInventory,

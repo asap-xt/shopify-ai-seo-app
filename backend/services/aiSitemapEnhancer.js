@@ -279,8 +279,8 @@ export function findRelatedProducts(product, allProducts, maxResults = 5) {
       score += sharedTags;
       
       // Similar price range (within 30%)
-      if (product.price && other.node.priceRangeV2?.minVariantPrice?.amount) {
-        const priceRatio = parseFloat(other.node.priceRangeV2.minVariantPrice.amount) / parseFloat(product.price);
+      if (product.price && other.node.priceRange?.minVariantPrice?.amount) {
+        const priceRatio = parseFloat(other.node.priceRange.minVariantPrice.amount) / parseFloat(product.price);
         if (priceRatio >= 0.7 && priceRatio <= 1.3) score += 1;
       }
       

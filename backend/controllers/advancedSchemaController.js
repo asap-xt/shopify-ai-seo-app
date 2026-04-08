@@ -1092,7 +1092,7 @@ async function generateProductSchemas(shop, productDoc) {
             }
           }
         }
-        priceRangeV2 {
+        priceRange {
           minVariantPrice {
             amount
             currencyCode
@@ -1341,13 +1341,13 @@ async function generateLangSchemas(product, seoData, shop, language, shopName = 
   const category = product.productType || product.collections?.edges?.[0]?.node?.title || null;
   
   // Parse prices - Shopify returns amounts as strings, convert to numbers
-  const minPrice = product.priceRangeV2?.minVariantPrice?.amount 
-    ? parseFloat(product.priceRangeV2.minVariantPrice.amount) 
+  const minPrice = product.priceRange?.minVariantPrice?.amount 
+    ? parseFloat(product.priceRange.minVariantPrice.amount) 
     : null;
-  const maxPrice = product.priceRangeV2?.maxVariantPrice?.amount 
-    ? parseFloat(product.priceRangeV2.maxVariantPrice.amount) 
+  const maxPrice = product.priceRange?.maxVariantPrice?.amount 
+    ? parseFloat(product.priceRange.maxVariantPrice.amount) 
     : null;
-  const priceCurrency = product.priceRangeV2?.minVariantPrice?.currencyCode || "USD";
+  const priceCurrency = product.priceRange?.minVariantPrice?.currencyCode || "USD";
   
   // Count variants for offerCount
   const variantCount = product.variants?.edges?.length || 0;

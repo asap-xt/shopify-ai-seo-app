@@ -262,7 +262,7 @@ async function getProductCatalogSummary(shop, accessToken) {
             id
             productType
             vendor
-            priceRangeV2 {
+            priceRange {
               minVariantPrice {
                 amount
                 currencyCode
@@ -314,10 +314,10 @@ async function getProductCatalogSummary(shop, accessToken) {
       if (node.productType) productTypes.add(node.productType);
       if (node.vendor) vendors.add(node.vendor);
       
-      if (node.priceRangeV2) {
-        const min = parseFloat(node.priceRangeV2.minVariantPrice.amount);
-        const max = parseFloat(node.priceRangeV2.maxVariantPrice.amount);
-        currency = node.priceRangeV2.minVariantPrice.currencyCode;
+      if (node.priceRange) {
+        const min = parseFloat(node.priceRange.minVariantPrice.amount);
+        const max = parseFloat(node.priceRange.maxVariantPrice.amount);
+        currency = node.priceRange.minVariantPrice.currencyCode;
         
         minPrice = Math.min(minPrice, min);
         maxPrice = Math.max(maxPrice, max);

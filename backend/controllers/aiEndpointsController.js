@@ -103,7 +103,7 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
               productType
               vendor
               totalInventory
-              priceRangeV2 {
+              priceRange {
                 minVariantPrice {
                   amount
                   currencyCode
@@ -235,8 +235,8 @@ router.get('/ai/products.json', aiAnalytics, async (req, res) => {
           description: product.description || null,
           productType: product.productType || null,
           vendor: product.vendor || null,
-          price: product.priceRangeV2?.minVariantPrice?.amount || null,
-          currency: product.priceRangeV2?.minVariantPrice?.currencyCode || 'USD',
+          price: product.priceRange?.minVariantPrice?.amount || null,
+          currency: product.priceRange?.minVariantPrice?.currencyCode || 'USD',
           availability,
           options: Object.keys(optionSummary).length > 0 ? optionSummary : null,
           url: `https://${shop}/products/${product.handle}`,

@@ -881,9 +881,9 @@ function generateProductJsonLd(product, seoData, englishContent, resolvedTaxonom
   if (variants.length > 1) {
     jsonLd.offers = {
       "@type": "AggregateOffer",
-      "lowPrice": product.priceRangeV2?.minVariantPrice?.amount || "0",
-      "highPrice": product.priceRangeV2?.maxVariantPrice?.amount || "0",
-      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "EUR",
+      "lowPrice": product.priceRange?.minVariantPrice?.amount || "0",
+      "highPrice": product.priceRange?.maxVariantPrice?.amount || "0",
+      "priceCurrency": product.priceRange?.minVariantPrice?.currencyCode || "EUR",
       "offerCount": variants.length,
       "availability": variants.some(v => v.availableForSale)
         ? "https://schema.org/InStock"
@@ -893,8 +893,8 @@ function generateProductJsonLd(product, seoData, englishContent, resolvedTaxonom
   } else {
     jsonLd.offers = {
       "@type": "Offer",
-      "price": firstVariant?.price || product.priceRangeV2?.minVariantPrice?.amount || "0",
-      "priceCurrency": product.priceRangeV2?.minVariantPrice?.currencyCode || "EUR",
+      "price": firstVariant?.price || product.priceRange?.minVariantPrice?.amount || "0",
+      "priceCurrency": product.priceRange?.minVariantPrice?.currencyCode || "EUR",
       "availability": (firstVariant?.availableForSale !== false)
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
@@ -1464,7 +1464,7 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
         images(first: 10) {
           edges { node { id altText url } }
         }
-        priceRangeV2 {
+        priceRange {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
@@ -1556,8 +1556,8 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     productType: p.productType,
     tags: p.tags,
     handle: p.handle,
-    price: p?.priceRangeV2?.minVariantPrice?.amount || null,
-    currency: p?.priceRangeV2?.minVariantPrice?.currencyCode || null,
+    price: p?.priceRange?.minVariantPrice?.amount || null,
+    currency: p?.priceRange?.minVariantPrice?.currencyCode || null,
     images: (p.images?.edges || []).map(e => ({ id: e.node.id, altText: e.node.altText || null })),
     language: langNormalized,
   };
@@ -2312,7 +2312,7 @@ router.post('/seo/generate-collection', validateRequest(), async (req, res) => {
                 title
                 productType
                 vendor
-                priceRangeV2 {
+                priceRange {
                   minVariantPrice { amount currencyCode }
                   maxVariantPrice { amount currencyCode }
                 }
@@ -2683,11 +2683,11 @@ function getPriceRange(productEdges) {
   let currency = 'USD';
   
   productEdges.forEach(({ node }) => {
-    if (node.priceRangeV2?.minVariantPrice) {
-      const price = parseFloat(node.priceRangeV2.minVariantPrice.amount);
+    if (node.priceRange?.minVariantPrice) {
+      const price = parseFloat(node.priceRange.minVariantPrice.amount);
       min = Math.min(min, price);
       max = Math.max(max, price);
-      currency = node.priceRangeV2.minVariantPrice.currencyCode;
+      currency = node.priceRange.minVariantPrice.currencyCode;
     }
   });
   
@@ -2748,7 +2748,7 @@ router.post('/seo/generate-collection-multi', validateRequest(), async (req, res
                 title
                 productType
                 vendor
-                priceRangeV2 {
+                priceRange {
                   minVariantPrice { amount currencyCode }
                   maxVariantPrice { amount currencyCode }
                 }

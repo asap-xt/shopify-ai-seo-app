@@ -73,7 +73,7 @@ const PRODUCTS_QUERY = `
             url
             altText
           }
-          priceRangeV2 {
+          priceRange {
             minVariantPrice {
               amount
               currencyCode
