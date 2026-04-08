@@ -614,13 +614,13 @@ class AIDiscoveryService {
       // Only XML sitemaps should be listed here - check if generated (standard or AI-enhanced)
       // Use primaryDomain (public URL) for sitemap references
       if (hasSitemap && availableFeatures.includes('aiSitemap')) {
-        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml\n`;
       }
-      
+
       // Advanced Schema Data Sitemap - Plus plans and Enterprise - check if generated
       const schemaPlans = ['professional_plus', 'growth_plus', 'growth_extra', 'enterprise'];
       if (hasAdvancedSchema && schemaPlans.includes(normalizedPlan)) {
-        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/schema-sitemap.xml?shop=${shop}\n`;
+        robotsTxt += `Sitemap: ${primaryDomain}/apps/${appProxySubpath}/ai/schema-sitemap.xml\n`;
       }
       
       // Note: JSON endpoints (products.json, collections-feed.json, etc.) are NOT sitemaps
