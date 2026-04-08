@@ -750,7 +750,30 @@ ${customRules}
       let shopEmail = '';
       let policies = [];
 
-      // Query 1: Shop info + policies (critical — determines primaryDomain for all URLs)
+      // Query 1: Shop basic info via REST (reliable for primaryDomain)
+      try {
+        const shopRestResponse = await fetch(
+          `https://${shop}/admin/api/2025-07/shop.json?fields=name,email,domain,myshopify_domain`,
+          {
+            headers: { 'X-Shopify-Access-Token': shopRecord.accessToken }
+          }
+        );
+        if (shopRestResponse.ok) {
+          const shopRestData = await shopRestResponse.json();
+          const s = shopRestData?.shop;
+          if (s) {
+            shopName = s.name || shopName;
+            shopEmail = s.email || '';
+            if (s.domain) {
+              primaryDomain = `https://${s.domain}`;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[LLMS-TXT] Failed to fetch shop REST:', e.message);
+      }
+
+      // Query 2: Shop description + policies via GraphQL
       try {
         const shopInfoResponse = await fetch(
           `https://${shop}/admin/api/2025-07/graphql.json`,
@@ -763,11 +786,7 @@ ${customRules}
             body: JSON.stringify({
               query: `{
                 shop {
-                  name
                   description
-                  email
-                  url
-                  primaryDomain { url }
                   contactEmail
                   privacyPolicy { title url }
                   refundPolicy { title url }
@@ -778,33 +797,18 @@ ${customRules}
             })
           }
         );
-        if (!shopInfoResponse.ok) {
-          console.error('[LLMS-TXT] Shop info HTTP error:', shopInfoResponse.status, shopInfoResponse.statusText);
-        }
         const shopInfoData = await shopInfoResponse.json();
-        if (shopInfoData?.errors) {
-          console.error('[LLMS-TXT] Shop info GraphQL errors:', JSON.stringify(shopInfoData.errors));
-        }
-        if (!shopInfoData?.data?.shop) {
-          console.error('[LLMS-TXT] No shop data returned. Keys:', Object.keys(shopInfoData || {}));
-        }
         const shopInfo = shopInfoData?.data?.shop;
         if (shopInfo) {
-          shopName = shopInfo.name || shopName;
-          shopDescription = shopInfo.description || '';
-          shopEmail = shopInfo.contactEmail || shopInfo.email || '';
-          // Prefer primaryDomain (custom domain), fall back to shop.url
-          const domainUrl = shopInfo.primaryDomain?.url || shopInfo.url;
-          if (domainUrl) {
-            primaryDomain = domainUrl.replace(/\/$/, '');
-          }
+          shopDescription = shopInfo.description || shopDescription;
+          if (shopInfo.contactEmail) shopEmail = shopInfo.contactEmail;
           if (shopInfo.shippingPolicy?.url) policies.push({ title: shopInfo.shippingPolicy.title || 'Shipping Policy', url: shopInfo.shippingPolicy.url });
           if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
           if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
           if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
         }
       } catch (e) {
-        console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
+        console.error('[LLMS-TXT] Failed to fetch shop policies:', e.message);
       }
 
 
@@ -903,7 +907,6 @@ ${customRules}
 
       // --- Metadata footer ---
       llmsTxt += `---\n`;
-      llmsTxt += `primary-domain: ${primaryDomain}\n`;
       llmsTxt += `last-updated: ${new Date().toISOString().split('T')[0]}\n`;
       if (shopEmail) {
         llmsTxt += `contact: ${shopEmail}\n`;
