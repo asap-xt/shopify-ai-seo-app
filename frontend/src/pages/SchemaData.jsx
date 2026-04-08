@@ -888,37 +888,22 @@ ${JSON.stringify(allSchemas, null, 2)}
   </script>
 {%- endif -%}
 
-{%- comment -%} Product Schema (product pages only) {%- endcomment -%}
+{%- comment -%} Product Schema (product pages only) — Advanced Schema is the sole JSON-LD source {%- endcomment -%}
 {%- if product -%}
-  {%- comment -%} Advanced Schema EN is authoritative for schema.org and Google {%- endcomment -%}
-  {%- assign schemas_json = product.metafields.advanced_schema.schemas_en.value -%}
-  {%- if schemas_json -%}
-    <script type="application/ld+json">
-{{ schemas_json }}
-    </script>
+  {%- assign primary_schema = nil -%}
+
+  {%- if product.metafields.advanced_schema.schemas_en -%}
+    {%- assign primary_schema = product.metafields.advanced_schema.schemas_en -%}
   {%- else -%}
-    {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
-    {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
-    {%- assign seo_data_json = product.metafields.seo_ai[seo_key].value | default: product.metafields.seo_ai.seo__en.value -%}
-    {%- if seo_data_json -%}
-      <script type="application/ld+json" id="seo-basic-jsonld-{{ product.id }}">
-      </script>
-      <script>
-        (function() {
-          try {
-            var seoData = JSON.parse({{ seo_data_json | json }});
-            if (seoData && seoData.jsonLd) {
-              var scriptTag = document.getElementById('seo-basic-jsonld-{{ product.id }}');
-              if (scriptTag) {
-                scriptTag.textContent = JSON.stringify(seoData.jsonLd);
-              }
-            }
-          } catch(e) {
-            console.error('Failed to parse SEO JSON-LD:', e);
-          }
-        })();
-      </script>
-    {%- endif -%}
+    {%- assign primary_locale = shop.locale | split: '-' | first -%}
+    {%- assign schema_key = 'schemas_' | append: primary_locale -%}
+    {%- assign primary_schema = product.metafields.advanced_schema[schema_key] -%}
+  {%- endif -%}
+
+  {%- if primary_schema -%}
+  <script type="application/ld+json">
+  {{ primary_schema.value | json }}
+  </script>
   {%- endif -%}
 {%- endif -%}
 
@@ -943,37 +928,22 @@ ${JSON.stringify(allSchemas, null, 2)}
   </script>
 {%- endif -%}
 
-{%- comment -%} Product Schema (product pages only) {%- endcomment -%}
+{%- comment -%} Product Schema (product pages only) — Advanced Schema is the sole JSON-LD source {%- endcomment -%}
 {%- if product -%}
-  {%- comment -%} Advanced Schema EN is authoritative for schema.org and Google {%- endcomment -%}
-  {%- assign schemas_json = product.metafields.advanced_schema.schemas_en.value -%}
-  {%- if schemas_json -%}
-    <script type="application/ld+json">
-{{ schemas_json }}
-    </script>
+  {%- assign primary_schema = nil -%}
+
+  {%- if product.metafields.advanced_schema.schemas_en -%}
+    {%- assign primary_schema = product.metafields.advanced_schema.schemas_en -%}
   {%- else -%}
-    {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}
-    {%- assign seo_key = 'seo__' | append: request.locale.iso_code -%}
-    {%- assign seo_data_json = product.metafields.seo_ai[seo_key].value | default: product.metafields.seo_ai.seo__en.value -%}
-    {%- if seo_data_json -%}
-      <script type="application/ld+json" id="seo-basic-jsonld-{{ product.id }}">
-      </script>
-      <script>
-        (function() {
-          try {
-            var seoData = JSON.parse({{ seo_data_json | json }});
-            if (seoData && seoData.jsonLd) {
-              var scriptTag = document.getElementById('seo-basic-jsonld-{{ product.id }}');
-              if (scriptTag) {
-                scriptTag.textContent = JSON.stringify(seoData.jsonLd);
-              }
-            }
-          } catch(e) {
-            console.error('Failed to parse SEO JSON-LD:', e);
-          }
-        })();
-      </script>
-    {%- endif -%}
+    {%- assign primary_locale = shop.locale | split: '-' | first -%}
+    {%- assign schema_key = 'schemas_' | append: primary_locale -%}
+    {%- assign primary_schema = product.metafields.advanced_schema[schema_key] -%}
+  {%- endif -%}
+
+  {%- if primary_schema -%}
+  <script type="application/ld+json">
+  {{ primary_schema.value | json }}
+  </script>
   {%- endif -%}
 {%- endif -%}
 
