@@ -126,7 +126,6 @@ function AdminNavMenu({ active, shop }) {
       <a href={`/ai-seo${paramString}`}>Store Optimization for AI</a>
       <a href={`/settings${paramString}`}>AI Discovery Features</a>
       <a href={`/ai-testing${paramString}`}>AI Testing</a>
-      <a href={`/analytics${paramString}`}>Analytics</a>
       <a href={`/billing${paramString}`}>Plans & Billing</a>
       <a href={`/clean-uninstall${paramString}`}>Clean & Uninstall</a>
       <a href={`/contact-support${paramString}`}>Contact Support</a>
@@ -616,10 +615,10 @@ export default function App() {
       devLog('[APP] ===== RENDERING CONTACT SUPPORT PAGE =====');
       return <ContactSupport shop={shop} />;
     }
-    // Analytics
-    else if (path === '/analytics') {
-      return <Analytics shop={shop} globalPlan={plan} />;
-    }
+    // Analytics — temporarily hidden (not providing meaningful data yet)
+    // else if (path === '/analytics') {
+    //   return <Analytics shop={shop} globalPlan={plan} />;
+    // }
     // AI Testing
     else if (path === '/ai-testing') {
       devLog('[APP] ===== RENDERING AI TESTING PAGE =====');

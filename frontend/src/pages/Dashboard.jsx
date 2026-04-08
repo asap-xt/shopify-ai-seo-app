@@ -1212,11 +1212,10 @@ export default function Dashboard({ shop: shopProp }) {
         />
       </Layout.Section>
 
-      {/* AI Traffic Analytics */}
-      <Layout.Section>
+      {/* AI Traffic Analytics — temporarily hidden */}
+      {false && <Layout.Section>
         <Card>
           <BlockStack gap="400">
-            {/* Header with period selector */}
             <InlineStack align="space-between" blockAlign="center" wrap={false}>
               <Text variant="headingMd">AI Traffic</Text>
               <InlineStack gap="200" blockAlign="center">
@@ -1471,7 +1470,7 @@ export default function Dashboard({ shop: shopProp }) {
             )}
           </BlockStack>
         </Card>
-      </Layout.Section>
+      </Layout.Section>}
 
       {/* Current Plan & Token Balance - Two columns side by side */}
       <Layout.Section>
