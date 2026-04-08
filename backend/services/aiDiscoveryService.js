@@ -766,6 +766,7 @@ ${customRules}
                   name
                   description
                   email
+                  url
                   primaryDomain { url }
                   contactEmail
                   privacyPolicy { title url }
@@ -787,8 +788,10 @@ ${customRules}
           shopName = shopInfo.name || shopName;
           shopDescription = shopInfo.description || '';
           shopEmail = shopInfo.contactEmail || shopInfo.email || '';
-          if (shopInfo.primaryDomain?.url) {
-            primaryDomain = shopInfo.primaryDomain.url.replace(/\/$/, '');
+          // Prefer primaryDomain (custom domain), fall back to shop.url
+          const domainUrl = shopInfo.primaryDomain?.url || shopInfo.url;
+          if (domainUrl) {
+            primaryDomain = domainUrl.replace(/\/$/, '');
           }
           if (shopInfo.shippingPolicy?.url) policies.push({ title: shopInfo.shippingPolicy.title || 'Shipping Policy', url: shopInfo.shippingPolicy.url });
           if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
