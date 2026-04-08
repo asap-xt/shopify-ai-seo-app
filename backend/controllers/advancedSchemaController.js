@@ -34,6 +34,83 @@ async function getAccessToken(shop) {
   return shopRecord?.accessToken;
 }
 
+// Helper: fetch primary domain via REST API (reliable, unlike GraphQL primaryDomain)
+async function fetchPrimaryDomain(shop) {
+  try {
+    const accessToken = await getAccessToken(shop);
+    const response = await fetch(
+      `https://${shop}/admin/api/2025-07/shop.json?fields=name,domain`,
+      { headers: { 'X-Shopify-Access-Token': accessToken } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.shop?.domain) return `https://${data.shop.domain}`;
+    }
+  } catch (err) {
+    console.error('[SCHEMA] Failed to fetch primary domain:', err.message);
+  }
+  return `https://${shop}`;
+}
+
+// --- Taxonomy helpers (for schema enrichment) ---
+
+const TAXONOMY_TO_SCHEMA = {
+  fabric: 'material', material: 'material',
+  color: 'color', colour: 'color',
+  target_gender: 'audience', age_group: 'audience',
+};
+
+function extractGids(val) {
+  if (val.startsWith('gid://')) return [val];
+  if (val.startsWith('[')) {
+    try {
+      const arr = JSON.parse(val);
+      if (Array.isArray(arr)) return arr.filter(v => typeof v === 'string' && v.startsWith('gid://'));
+    } catch { /* not JSON */ }
+  }
+  return [];
+}
+
+function extractTaxonomyFromMetafields(allMetafields) {
+  const taxonomy = {};
+  for (const [, meta] of Object.entries(allMetafields)) {
+    if (meta.namespace === 'taxonomy' || meta.namespace === 'custom' || meta.namespace === 'shopify') {
+      taxonomy[meta.key] = meta.value;
+    }
+  }
+  return taxonomy;
+}
+
+async function resolveTaxonomyValues(shop, rawTaxonomy) {
+  const resolved = { ...rawTaxonomy };
+  const gidsToResolve = new Set();
+  for (const [, val] of Object.entries(resolved)) {
+    if (!val || typeof val !== 'string') continue;
+    extractGids(val).forEach(g => gidsToResolve.add(g));
+  }
+  if (gidsToResolve.size === 0) return resolved;
+  const gidMap = new Map();
+  try {
+    const ids = [...gidsToResolve];
+    const query = `query ResolveMetaobjects($ids: [ID!]!) { nodes(ids: $ids) { ... on Metaobject { id displayName } } }`;
+    const data = await executeShopifyGraphQL(shop, query, { ids });
+    for (const node of (data?.nodes || [])) {
+      if (node?.id && node?.displayName) gidMap.set(node.id, node.displayName);
+    }
+  } catch (err) {
+    console.error('[SCHEMA-TAXONOMY] Failed to resolve GIDs:', err.message);
+    return resolved;
+  }
+  for (const [key, val] of Object.entries(resolved)) {
+    if (!val || typeof val !== 'string') continue;
+    const gids = extractGids(val);
+    if (gids.length === 0) continue;
+    const names = gids.map(g => gidMap.get(g)).filter(Boolean);
+    resolved[key] = names.length > 0 ? names.join(', ') : val;
+  }
+  return resolved;
+}
+
 // Helper function to save schema to Shopify metafield
 async function saveSchemaToMetafield(shop, productId, language, schemas) {
   try {
@@ -636,16 +713,15 @@ async function generateOrganizationSchema(product, shop, language) {
           name
           description
           email
-          primaryDomain { url }
           organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
           seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
         }
       }
     `;
-    
+
     const data = await executeShopifyGraphQL(shop, storeMetaQuery);
     const shopData = data.shop;
-    
+
     // Parse organization schema if available
     let organizationData = {};
     if (shopData.organizationMetafield?.value) {
@@ -655,7 +731,7 @@ async function generateOrganizationSchema(product, shop, language) {
         console.error('[SCHEMA] Failed to parse organization schema:', e);
       }
     }
-    
+
     // Parse SEO metadata if available
     let seoData = {};
     if (shopData.seoMetafield?.value) {
@@ -665,8 +741,8 @@ async function generateOrganizationSchema(product, shop, language) {
         console.error('[SCHEMA] Failed to parse SEO metadata:', e);
       }
     }
-    
-    const shopUrl = shopData.primaryDomain?.url || `https://${shop}`;
+
+    const shopUrl = await fetchPrimaryDomain(shop);
     
     return {
       "@context": "https://schema.org",
@@ -713,18 +789,17 @@ async function loadShopContext(shop) {
         description
         contactEmail
         currencyCode
-        primaryDomain {
-          url
-        }
         paymentSettings {
           supportedDigitalWallets
         }
       }
     }
   `;
-  
+
   try {
     const data = await executeShopifyGraphQL(shop, contextQuery);
+    // Inject REST-based primary domain (reliable)
+    data.shop.primaryDomainUrl = await fetchPrimaryDomain(shop);
     return {
       shop: data.shop
     };
@@ -745,16 +820,15 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
           name
           description
           email
-          primaryDomain { url }
           organizationMetafield: metafield(namespace: "ai_seo_store", key: "organization_schema") { value }
           seoMetafield: metafield(namespace: "ai_seo_store", key: "seo_metadata") { value }
         }
       }
     `;
-    
+
     const data = await executeShopifyGraphQL(shop, storeMetaQuery);
     const shopData = data.shop;
-    
+
     // Parse organization schema if available
     let organizationData = {};
     if (shopData.organizationMetafield?.value) {
@@ -764,7 +838,7 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
         console.error('[SCHEMA] Failed to parse organization schema:', e);
       }
     }
-    
+
     // Parse SEO metadata if available
     let seoData = {};
     if (shopData.seoMetafield?.value) {
@@ -774,8 +848,8 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
         console.error('[SCHEMA] Failed to parse SEO metadata:', e);
       }
     }
-    
-    const shopUrl = shopData.primaryDomain?.url || `https://${shop}`;
+
+    const shopUrl = await fetchPrimaryDomain(shop);
     const schemas = [];
     
     // Generate Organization schema if enabled
@@ -874,7 +948,7 @@ async function generateAndSaveShopSchemas(shop, shopContext) {
 
 // Generate site-wide FAQ
 async function generateSiteFAQ(shop, shopContext) {
-  const shopUrl = shopContext.shop.primaryDomain?.url || `https://${shop}`;
+  const shopUrl = shopContext.shop.primaryDomainUrl || `https://${shop}`;
   // ВРЕМЕННО - използваме fallback за languages
   const languages = ['en']; // Default to English
   const primaryLanguage = 'en';
@@ -1044,10 +1118,12 @@ async function generateProductSchemas(shop, productDoc) {
   const productGid = `gid://shopify/Product/${productDoc.productId}`;
   const languages = productDoc.seoStatus?.languages || [];
   const optimizedLanguages = languages.filter(lang => lang.optimized);
-  
+
   if (optimizedLanguages.length === 0) {
     return { schemas: [], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
   }
+
+  const primaryDomainUrl = await fetchPrimaryDomain(shop);
   
   // OPTIMIZATION 1: Get product + ALL SEO metafields + shop name + brand in ONE query
   const query = `
@@ -1088,6 +1164,7 @@ async function generateProductSchemas(shop, productDoc) {
           edges {
             node {
               title
+              availableForSale
               selectedOptions { name value }
             }
           }
@@ -1158,7 +1235,20 @@ async function generateProductSchemas(shop, productDoc) {
     }
   }
   product._allMetafields = allMetafields;
-  
+
+  // Extract and resolve taxonomy metafields for schema enrichment
+  const rawTaxonomy = extractTaxonomyFromMetafields(allMetafields);
+  if (Object.keys(rawTaxonomy).length > 0) {
+    try {
+      product._resolvedTaxonomy = await resolveTaxonomyValues(shop, rawTaxonomy);
+    } catch (err) {
+      console.error('[SCHEMA] Failed to resolve taxonomy:', err.message);
+      product._resolvedTaxonomy = rawTaxonomy;
+    }
+  } else {
+    product._resolvedTaxonomy = {};
+  }
+
   // Generate schemas for all languages
   const schemas = [];
   let totalProductUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
@@ -1168,7 +1258,7 @@ async function generateProductSchemas(shop, productDoc) {
     if (!seoData) continue;
     
     // Generate schemas for this language
-    const result = await generateLangSchemas(product, seoData, shop, lang.code, storeBrandName);
+    const result = await generateLangSchemas(product, seoData, shop, lang.code, storeBrandName, primaryDomainUrl);
     schemas.push({ language: lang.code, schemas: result.schemas });
     
     // Collect usage
@@ -1222,8 +1312,8 @@ async function generateProductSchemas(shop, productDoc) {
 }
 
 // Generate schemas for specific language
-async function generateLangSchemas(product, seoData, shop, language, shopName = null) {
-  const shopUrl = `https://${shop}`;
+async function generateLangSchemas(product, seoData, shop, language, shopName = null, primaryDomainUrl = null) {
+  const shopUrl = primaryDomainUrl || `https://${shop}`;
   const productUrl = `${shopUrl}/products/${product.handle}`;
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
@@ -1440,9 +1530,40 @@ async function generateLangSchemas(product, seoData, shop, language, shopName = 
     productSchema.category = category;
   }
   
+  // Map taxonomy metafields to schema.org properties
+  const taxonomy = product._resolvedTaxonomy || {};
+  for (const [key, value] of Object.entries(taxonomy)) {
+    if (!value) continue;
+    const mapping = TAXONOMY_TO_SCHEMA[key];
+    if (mapping === 'material') {
+      productSchema.material = value;
+    } else if (mapping === 'color') {
+      productSchema.color = value;
+    } else if (mapping === 'audience') {
+      // handled below
+    } else {
+      // skip — will be added as additionalProperty below
+    }
+  }
+  if (taxonomy.target_gender || taxonomy.age_group) {
+    productSchema.audience = { "@type": "PeopleAudience" };
+    if (taxonomy.target_gender) productSchema.audience.suggestedGender = taxonomy.target_gender;
+    if (taxonomy.age_group) productSchema.audience.suggestedAge = taxonomy.age_group;
+  }
+
   // Add bullets as additionalProperty
   const additionalProperties = [];
-  
+
+  // Add unmapped taxonomy keys as additionalProperty
+  for (const [key, value] of Object.entries(taxonomy)) {
+    if (!value || TAXONOMY_TO_SCHEMA[key]) continue;
+    additionalProperties.push({
+      "@type": "PropertyValue",
+      "name": key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      "value": value
+    });
+  }
+
   if (seoData.bullets && seoData.bullets.length > 0) {
     additionalProperties.push(...seoData.bullets.map((bullet, i) => ({
       "@type": "PropertyValue",
@@ -1670,19 +1791,11 @@ async function installThemeSnippet(shop) {
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
-  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
-  {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
-  {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
+  {%- comment -%} Advanced Schema EN is authoritative for schema.org and Google {%- endcomment -%}
+  {%- assign schemas_json = product.metafields.advanced_schema.schemas_en.value -%}
   {%- if schemas_json -%}
-    {%- comment -%} schemas_json is a JSON string containing an array of schema objects {%- endcomment -%}
-    {%- comment -%} Render the JSON array directly - it's already valid JSON {%- endcomment -%}
     <script type="application/ld+json">
 {{ schemas_json }}
-    </script>
-  {%- elsif product.metafields.custom.json_ld -%}
-    {%- comment -%} Enriched JSON-LD with taxonomy data (Professional Plus+) {%- endcomment -%}
-    <script type="application/ld+json">
-{{ product.metafields.custom.json_ld.value }}
     </script>
   {%- else -%}
     {%- comment -%} Fallback to basic SEO JSON-LD (available for all plans) {%- endcomment -%}

@@ -890,9 +890,8 @@ ${JSON.stringify(allSchemas, null, 2)}
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
-  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
-  {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
-  {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
+  {%- comment -%} Advanced Schema EN is authoritative for schema.org and Google {%- endcomment -%}
+  {%- assign schemas_json = product.metafields.advanced_schema.schemas_en.value -%}
   {%- if schemas_json -%}
     <script type="application/ld+json">
 {{ schemas_json }}
@@ -946,9 +945,8 @@ ${JSON.stringify(allSchemas, null, 2)}
 
 {%- comment -%} Product Schema (product pages only) {%- endcomment -%}
 {%- if product -%}
-  {%- comment -%} Try Advanced Schema first (requires tokens/Enterprise plan) {%- endcomment -%}
-  {%- assign schema_key = 'schemas_' | append: request.locale.iso_code -%}
-  {%- assign schemas_json = product.metafields.advanced_schema[schema_key].value -%}
+  {%- comment -%} Advanced Schema EN is authoritative for schema.org and Google {%- endcomment -%}
+  {%- assign schemas_json = product.metafields.advanced_schema.schemas_en.value -%}
   {%- if schemas_json -%}
     <script type="application/ld+json">
 {{ schemas_json }}
