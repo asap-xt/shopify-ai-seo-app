@@ -1156,16 +1156,39 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
 
     // Apply plan limit - only include up to the plan's product limit
     const { limit: planLimit, plan } = await getPlanLimits(shop);
-    const limitedProducts = optimizedProducts.slice(0, planLimit);
+    const allLimited = optimizedProducts.slice(0, planLimit);
 
-    res.json({
+    // Pagination: ?page=1&limit=50 (default: all products)
+    const pageParam = parseInt(req.query.page) || 0;
+    const limitParam = parseInt(req.query.limit) || 0;
+    let paginatedProducts = allLimited;
+    let pagination = null;
+
+    if (pageParam > 0 && limitParam > 0) {
+      const startIndex = (pageParam - 1) * limitParam;
+      paginatedProducts = allLimited.slice(startIndex, startIndex + limitParam);
+      const totalPages = Math.ceil(allLimited.length / limitParam);
+      pagination = {
+        page: pageParam,
+        limit: limitParam,
+        total_pages: totalPages,
+        total_products: allLimited.length,
+        has_next: pageParam < totalPages,
+        has_prev: pageParam > 1
+      };
+    }
+
+    res.set('Cache-Control', 'public, max-age=1800, s-maxage=3600');
+    const response = {
       shop,
       generated_at: new Date().toISOString(),
-      products_count: limitedProducts.length,
+      products_count: paginatedProducts.length,
       products_total: totalProducts,
       plan_limit: planLimit,
-      products: limitedProducts
-    });
+      products: paginatedProducts
+    };
+    if (pagination) response.pagination = pagination;
+    res.json(response);
   } catch (error) {
     console.error('[APP_PROXY] AI Products JSON error:', error.message, error.stack?.split('\n')[1]);
     res.status(500).json({ error: 'Failed to fetch products', detail: error.message });
