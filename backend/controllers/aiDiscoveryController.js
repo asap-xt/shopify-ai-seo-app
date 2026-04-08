@@ -20,11 +20,12 @@ const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
 /**
  * Manage /llms.txt redirect in the Shopify store.
- * Creates a redirect /llms.txt → /apps/indexaize/llms.txt when the feature is enabled,
- * and removes it when disabled. Idempotent — safe to call multiple times.
+ * Points /llms.txt → backend /llms.txt?shop=... (direct, no App Proxy).
+ * Idempotent — safe to call multiple times.
  */
 async function manageLlmsTxtRedirect(shop, accessToken, enable) {
-  const targetPath = `/apps/${APP_PROXY_SUBPATH}/llms.txt`;
+  const appBaseUrl = process.env.APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app';
+  const targetUrl = `${appBaseUrl}/llms.txt?shop=${encodeURIComponent(shop)}`;
   try {
     // Check if a /llms.txt redirect already exists
     const existing = await fetch(
@@ -36,10 +37,10 @@ async function manageLlmsTxtRedirect(shop, accessToken, enable) {
 
     if (enable) {
       // Check if a correct redirect already exists
-      const correct = redirects.find(r => r.target === targetPath);
+      const correct = redirects.find(r => r.target === targetUrl);
       if (correct) return; // Already set up
 
-      // Delete any stale /llms.txt redirects (e.g. pointing to old app)
+      // Delete any stale /llms.txt redirects (e.g. pointing to old app proxy path)
       for (const r of redirects) {
         await fetch(
           `https://${shop}/admin/api/${API_VERSION}/redirects/${r.id}.json`,
@@ -47,16 +48,16 @@ async function manageLlmsTxtRedirect(shop, accessToken, enable) {
         );
       }
 
-      // Create the correct redirect
+      // Create redirect pointing directly to backend
       await fetch(
         `https://${shop}/admin/api/${API_VERSION}/redirects.json`,
         {
           method: 'POST',
           headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetPath } })
+          body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetUrl } })
         }
       );
-      console.log(`[LLMS-REDIRECT] Created /llms.txt → ${targetPath} for ${shop}`);
+      console.log(`[LLMS-REDIRECT] Created /llms.txt → ${targetUrl} for ${shop}`);
     } else {
       // Remove all /llms.txt redirects
       for (const r of redirects) {

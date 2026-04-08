@@ -63,16 +63,15 @@ export function authCallback() {
                 const AIDiscoverySettings = (await import('../db/AIDiscoverySettings.js')).default;
                 const existing = await AIDiscoverySettings.findOne({ shop: session.shop });
                 if (existing?.features?.llmsTxt) {
-                  const subpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
-                  const targetPath = `/apps/${subpath}/llms.txt`;
+                  const appBaseUrl = process.env.APP_URL || 'https://indexaize-aiseo-app-production.up.railway.app';
+                  const targetUrl = `${appBaseUrl}/llms.txt?shop=${encodeURIComponent(session.shop)}`;
                   const rRes = await fetch(
                     `https://${session.shop}/admin/api/2025-07/redirects.json?path=/llms.txt`,
                     { headers: { 'X-Shopify-Access-Token': accessTokenString } }
                   );
                   const rData = rRes.ok ? await rRes.json() : { redirects: [] };
-                  const correct = (rData.redirects || []).find(r => r.target === targetPath);
+                  const correct = (rData.redirects || []).find(r => r.target === targetUrl);
                   if (!correct) {
-                    // Delete stale redirects first
                     for (const r of (rData.redirects || [])) {
                       await fetch(`https://${session.shop}/admin/api/2025-07/redirects/${r.id}.json`,
                         { method: 'DELETE', headers: { 'X-Shopify-Access-Token': accessTokenString } });
@@ -80,7 +79,7 @@ export function authCallback() {
                     await fetch(`https://${session.shop}/admin/api/2025-07/redirects.json`, {
                       method: 'POST',
                       headers: { 'X-Shopify-Access-Token': accessTokenString, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetPath } })
+                      body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetUrl } })
                     });
                     console.log(`[SHOPIFY-AUTH] Created /llms.txt redirect for ${session.shop}`);
                   }

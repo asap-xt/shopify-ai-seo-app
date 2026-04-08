@@ -2289,6 +2289,40 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
       app.use(`/apps/${APP_PROXY_SUBPATH}`, appProxyRouter);
       app.use('/apps', appProxyRouter);  // Also mount at /apps for App Proxy compatibility
 
+        // PUBLIC llms.txt ENDPOINT - no authentication required
+        // Shopify redirect points store.com/llms.txt → railway.app/llms.txt?shop=...
+        app.get('/llms.txt', async (req, res) => {
+          try {
+            const aiDiscovery = (await import('./services/aiDiscoveryService.js')).default;
+
+            function normalizeShop(s) {
+              if (!s) return null;
+              s = String(s).trim().toLowerCase();
+              if (/^https?:\/\//.test(s)) s = s.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+              if (!/\.myshopify\.com$/i.test(s)) return s + '.myshopify.com';
+              return s;
+            }
+
+            const shop = normalizeShop(req.query.shop);
+            if (!shop) {
+              return res.status(400).type('text/plain').send('Missing shop parameter. Use: ?shop=your-shop.myshopify.com');
+            }
+
+            const llmsTxt = await aiDiscovery.generateLlmsTxt(shop);
+            if (!llmsTxt) {
+              return res.status(404).type('text/plain').send('# LLMs.txt is not enabled for this store.\n');
+            }
+
+            res.set('Content-Type', 'text/plain; charset=utf-8');
+            res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+            res.set('X-Robots-Tag', 'noindex');
+            res.send(llmsTxt);
+          } catch (error) {
+            console.error('[PUBLIC_LLMS_TXT] Error:', error);
+            res.status(500).type('text/plain').send('# Error generating llms.txt\n');
+          }
+        });
+
         // PUBLIC SITEMAP ENDPOINTS (MUST be before authentication middleware)
         // Direct public sitemap endpoint - no authentication required
         app.get('/public-sitemap', async (req, res) => {
