@@ -57,6 +57,37 @@ export function authCallback() {
                 },
                 { upsert: true, new: true }
               );
+
+              // Sync /llms.txt redirect if the feature is already enabled
+              try {
+                const AIDiscoverySettings = (await import('../db/AIDiscoverySettings.js')).default;
+                const existing = await AIDiscoverySettings.findOne({ shop: session.shop });
+                if (existing?.features?.llmsTxt) {
+                  const subpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
+                  const targetPath = `/apps/${subpath}/llms.txt`;
+                  const rRes = await fetch(
+                    `https://${session.shop}/admin/api/2025-07/redirects.json?path=/llms.txt`,
+                    { headers: { 'X-Shopify-Access-Token': accessTokenString } }
+                  );
+                  const rData = rRes.ok ? await rRes.json() : { redirects: [] };
+                  const correct = (rData.redirects || []).find(r => r.target === targetPath);
+                  if (!correct) {
+                    // Delete stale redirects first
+                    for (const r of (rData.redirects || [])) {
+                      await fetch(`https://${session.shop}/admin/api/2025-07/redirects/${r.id}.json`,
+                        { method: 'DELETE', headers: { 'X-Shopify-Access-Token': accessTokenString } });
+                    }
+                    await fetch(`https://${session.shop}/admin/api/2025-07/redirects.json`, {
+                      method: 'POST',
+                      headers: { 'X-Shopify-Access-Token': accessTokenString, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetPath } })
+                    });
+                    console.log(`[SHOPIFY-AUTH] Created /llms.txt redirect for ${session.shop}`);
+                  }
+                }
+              } catch (redirectErr) {
+                console.error('[SHOPIFY-AUTH] Non-critical: failed to sync llms.txt redirect:', redirectErr.message);
+              }
             } catch (error) {
               console.error('[SHOPIFY-AUTH] ❌ Failed to save access token to MongoDB:', error);
             }

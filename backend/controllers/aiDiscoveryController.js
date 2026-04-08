@@ -15,6 +15,65 @@ const normalizePlan = (plan) => {
 
 // Use originalShopGraphQL directly - token resolution is handled by /api middleware
 
+const API_VERSION = '2025-07';
+const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
+
+/**
+ * Manage /llms.txt redirect in the Shopify store.
+ * Creates a redirect /llms.txt → /apps/indexaize/llms.txt when the feature is enabled,
+ * and removes it when disabled. Idempotent — safe to call multiple times.
+ */
+async function manageLlmsTxtRedirect(shop, accessToken, enable) {
+  const targetPath = `/apps/${APP_PROXY_SUBPATH}/llms.txt`;
+  try {
+    // Check if a /llms.txt redirect already exists
+    const existing = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/redirects.json?path=/llms.txt`,
+      { headers: { 'X-Shopify-Access-Token': accessToken } }
+    );
+    const data = existing.ok ? await existing.json() : { redirects: [] };
+    const redirects = data.redirects || [];
+
+    if (enable) {
+      // Check if a correct redirect already exists
+      const correct = redirects.find(r => r.target === targetPath);
+      if (correct) return; // Already set up
+
+      // Delete any stale /llms.txt redirects (e.g. pointing to old app)
+      for (const r of redirects) {
+        await fetch(
+          `https://${shop}/admin/api/${API_VERSION}/redirects/${r.id}.json`,
+          { method: 'DELETE', headers: { 'X-Shopify-Access-Token': accessToken } }
+        );
+      }
+
+      // Create the correct redirect
+      await fetch(
+        `https://${shop}/admin/api/${API_VERSION}/redirects.json`,
+        {
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ redirect: { path: '/llms.txt', target: targetPath } })
+        }
+      );
+      console.log(`[LLMS-REDIRECT] Created /llms.txt → ${targetPath} for ${shop}`);
+    } else {
+      // Remove all /llms.txt redirects
+      for (const r of redirects) {
+        await fetch(
+          `https://${shop}/admin/api/${API_VERSION}/redirects/${r.id}.json`,
+          { method: 'DELETE', headers: { 'X-Shopify-Access-Token': accessToken } }
+        );
+      }
+      if (redirects.length > 0) {
+        console.log(`[LLMS-REDIRECT] Removed /llms.txt redirect for ${shop}`);
+      }
+    }
+  } catch (e) {
+    console.error(`[LLMS-REDIRECT] Error managing redirect for ${shop}:`, e.message);
+  }
+}
+
 const router = express.Router();
 
 // Token resolution is now handled by the /api middleware
@@ -253,7 +312,10 @@ router.post('/ai-discovery/settings', validateRequest(), async (req, res) => {
       richAttributes,
       advancedSchemaEnabled
     });
-    
+
+    // Manage /llms.txt redirect based on feature toggle
+    manageLlmsTxtRedirect(shop, accessToken, !!features?.llmsTxt);
+
     res.json({ success: true, settings });
   } catch (error) {
     console.error('[AI-DISCOVERY] Error:', error);
@@ -609,7 +671,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
       }
     }
     
-    // NEW: Delete robots.txt redirect
+    // Delete robots.txt redirect
     const redirectsResponse = await fetch(
       `https://${shop}/admin/api/2025-07/redirects.json?path=/robots.txt`,
       {
@@ -618,7 +680,7 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
         }
       }
     );
-    
+
     if (redirectsResponse.ok) {
       const redirectsData = await redirectsResponse.json();
       for (const redirect of redirectsData.redirects || []) {
@@ -633,7 +695,10 @@ router.delete('/ai-discovery/settings', validateRequest(), async (req, res) => {
         );
       }
     }
-    
+
+    // Delete llms.txt redirect
+    manageLlmsTxtRedirect(shop, session.accessToken, false);
+
     // Clear cache
     aiDiscoveryService.cache.clear();
     
