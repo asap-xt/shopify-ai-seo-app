@@ -742,12 +742,13 @@ ${customRules}
       const normalizedPlan = normalizePlan(subscription?.plan || shopRecord?.plan || 'starter');
       const appProxySubpath = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
-      // Get shop info + policies from Shopify
+      // Get shop info + policies + collections from Shopify
       let shopName = shop.replace('.myshopify.com', '');
       let shopDescription = '';
       let primaryDomain = `https://${shop}`;
       let shopEmail = '';
       let policies = [];
+      let collections = [];
 
       try {
         const shopInfoResponse = await fetch(
@@ -759,19 +760,29 @@ ${customRules}
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              query: `{ 
-                shop { 
-                  name 
-                  description 
+              query: `{
+                shop {
+                  name
+                  description
                   email
-                  primaryDomain { url } 
+                  primaryDomain { url }
                   contactEmail
                   privacyPolicy { title url }
                   refundPolicy { title url }
                   shippingPolicy { title url }
                   termsOfService { title url }
                   subscriptionPolicy { title url }
-                } 
+                }
+                collections(first: 50, sortKey: UPDATED_AT, reverse: true) {
+                  edges {
+                    node {
+                      title
+                      handle
+                      description
+                      productsCount { count }
+                    }
+                  }
+                }
               }`
             })
           }
@@ -791,6 +802,18 @@ ${customRules}
           if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
           if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
           if (shopInfo.subscriptionPolicy?.url) policies.push({ title: shopInfo.subscriptionPolicy.title || 'Subscription Policy', url: shopInfo.subscriptionPolicy.url });
+        }
+        // Collect published collections with products
+        const collectionEdges = shopInfoData?.data?.collections?.edges || [];
+        for (const { node } of collectionEdges) {
+          if (node.productsCount?.count > 0) {
+            collections.push({
+              title: node.title,
+              handle: node.handle,
+              description: node.description ? node.description.substring(0, 120).replace(/\n/g, ' ') : '',
+              count: node.productsCount.count
+            });
+          }
         }
       } catch (e) {
         console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
@@ -830,29 +853,30 @@ ${customRules}
       const hasProductsJson = settings.features?.productsJson && availableFeatures.includes('productsJson');
       const hasCollectionsJson = settings.features?.collectionsJson && availableFeatures.includes('collectionsJson');
 
-      if (hasProductsJson || hasCollectionsJson) {
-        llmsTxt += `## Product Catalog\n\n`;
+      if (hasProductsJson || hasCollectionsJson || collections.length > 0) {
+        llmsTxt += `## Products\n\n`;
         if (hasProductsJson) {
-          llmsTxt += `- [Products JSON Feed](${primaryDomain}/apps/${appProxySubpath}/ai/products.json): Complete product catalog with AI-optimized titles, descriptions, pricing, availability, and FAQ\n`;
+          llmsTxt += `- [Products JSON Feed](${primaryDomain}/apps/${appProxySubpath}/ai/products.json): Machine-readable product catalog with pricing, availability, and taxonomy data\n`;
         }
         if (hasCollectionsJson) {
-          llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): Product categories and collections with SEO metadata\n`;
+          llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): All product categories with SEO metadata\n`;
+        }
+        // Individual collection links for better AI discoverability
+        if (collections.length > 0) {
+          for (const col of collections) {
+            const desc = col.description ? `: ${col.description}` : `: ${col.count} products`;
+            llmsTxt += `- [${col.title}](${primaryDomain}/collections/${col.handle})${desc}\n`;
+          }
         }
         llmsTxt += '\n';
       }
 
       // --- Store Information section ---
       const hasStoreMetadata = settings.features?.storeMetadata && availableFeatures.includes('storeMetadata');
-      const hasWelcomePage = settings.features?.welcomePage && availableFeatures.includes('welcomePage');
 
-      if (hasStoreMetadata || hasWelcomePage) {
+      if (hasStoreMetadata) {
         llmsTxt += `## Store Information\n\n`;
-        if (hasStoreMetadata) {
-          llmsTxt += `- [Store Metadata](${primaryDomain}/apps/${appProxySubpath}/ai/store-metadata.json): Organization schema, business information, and AI context\n`;
-        }
-        if (hasWelcomePage) {
-          llmsTxt += `- [AI Welcome Page](${primaryDomain}/apps/${appProxySubpath}/ai/welcome): Overview of all available AI data endpoints\n`;
-        }
+        llmsTxt += `- [Store Metadata](${primaryDomain}/apps/${appProxySubpath}/ai/store-metadata.json): Organization schema, business information, and AI context\n`;
         llmsTxt += '\n';
       }
 
@@ -861,8 +885,7 @@ ${customRules}
 
       if (hasAiSitemap) {
         llmsTxt += `## Sitemaps\n\n`;
-        llmsTxt += `- [AI-Enhanced Sitemap](${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml): XML sitemap with AI metadata, product features, and FAQ\n`;
-        llmsTxt += `- [Standard Sitemap](${primaryDomain}/sitemap.xml): Standard XML sitemap\n`;
+        llmsTxt += `- [AI-Enhanced Sitemap](${primaryDomain}/apps/${appProxySubpath}/ai/sitemap-feed.xml): XML sitemap with AI metadata, product taxonomy, and FAQ\n`;
         llmsTxt += '\n';
       }
 
@@ -876,14 +899,25 @@ ${customRules}
         llmsTxt += '\n';
       }
 
-      // --- Store Policies section (only policies that actually exist in the store) ---
+      // --- Policies section (only policies that actually exist in the store) ---
       if (policies.length > 0) {
-        llmsTxt += `## Store Policies\n\n`;
+        llmsTxt += `## Policies\n\n`;
         for (const policy of policies) {
           llmsTxt += `- [${policy.title}](${policy.url})\n`;
         }
         llmsTxt += '\n';
       }
+
+      // --- AI Integration section ---
+      const hasWelcomePageForAI = settings.features?.welcomePage && availableFeatures.includes('welcomePage');
+      const appBaseUrl = process.env.APP_URL || `https://indexaize-aiseo-app-production.up.railway.app`;
+      llmsTxt += `## AI Integration\n\n`;
+      llmsTxt += `- [MCP Server](${appBaseUrl}/mcp?shop=${encodeURIComponent(shop)}): Model Context Protocol endpoint for direct product data access (POST, StreamableHTTP)\n`;
+      if (hasWelcomePageForAI) {
+        llmsTxt += `- [AI Welcome Page](${primaryDomain}/apps/${appProxySubpath}/ai/welcome): Overview of all available AI data endpoints\n`;
+      }
+      llmsTxt += `- [Standard Sitemap](${primaryDomain}/sitemap.xml): XML sitemap for all pages\n`;
+      llmsTxt += '\n';
 
       // --- Metadata footer ---
       llmsTxt += `---\n`;

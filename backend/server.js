@@ -1649,7 +1649,13 @@ if (!IS_PROD) {
 
 
     // Handle Shopify's app routes - both by handle and by API key
-    app.get('/apps/:app_identifier', (req, res) => {
+    app.get('/apps/:app_identifier', (req, res, next) => {
+      // Skip App Proxy routes - file extensions (.txt, .xml, .json) are proxy requests,
+      // not Shopify admin embeds. Shopify app identifiers are always alphanumeric handles or API keys.
+      const id = req.params.app_identifier;
+      if (id === APP_PROXY_SUBPATH || id === 'ai' || id.includes('.')) {
+        return next();
+      }
       res.set('Cache-Control', 'no-store');
       res.setHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com; frame-src \'self\' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://youtu.be');
       res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
