@@ -748,7 +748,6 @@ ${customRules}
       let primaryDomain = `https://${shop}`;
       let shopEmail = '';
       let policies = [];
-      let collections = [];
 
       // Query 1: Shop info + policies (critical — determines primaryDomain for all URLs)
       try {
@@ -803,50 +802,6 @@ ${customRules}
         console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
       }
 
-      // Query 2: Collections (separate so a failure here doesn't break shop info)
-      try {
-        const colResponse = await fetch(
-          `https://${shop}/admin/api/2025-07/graphql.json`,
-          {
-            method: 'POST',
-            headers: {
-              'X-Shopify-Access-Token': shopRecord.accessToken,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              query: `{
-                collections(first: 50, sortKey: UPDATED_AT, reverse: true) {
-                  edges {
-                    node {
-                      title
-                      handle
-                      description
-                      productsCount { count }
-                    }
-                  }
-                }
-              }`
-            })
-          }
-        );
-        const colData = await colResponse.json();
-        if (colData?.errors) {
-          console.error('[LLMS-TXT] Collections GraphQL errors:', JSON.stringify(colData.errors));
-        }
-        const collectionEdges = colData?.data?.collections?.edges || [];
-        for (const { node } of collectionEdges) {
-          if (node.productsCount?.count > 0) {
-            collections.push({
-              title: node.title,
-              handle: node.handle,
-              description: node.description ? node.description.substring(0, 120).replace(/\n/g, ' ') : '',
-              count: node.productsCount.count
-            });
-          }
-        }
-      } catch (e) {
-        console.error('[LLMS-TXT] Failed to fetch collections:', e.message);
-      }
 
       // Define plan features (same as robots.txt)
       const planFeatures = {
@@ -882,20 +837,13 @@ ${customRules}
       const hasProductsJson = settings.features?.productsJson && availableFeatures.includes('productsJson');
       const hasCollectionsJson = settings.features?.collectionsJson && availableFeatures.includes('collectionsJson');
 
-      if (hasProductsJson || hasCollectionsJson || collections.length > 0) {
+      if (hasProductsJson || hasCollectionsJson) {
         llmsTxt += `## Products\n\n`;
         if (hasProductsJson) {
           llmsTxt += `- [Products JSON Feed](${primaryDomain}/apps/${appProxySubpath}/ai/products.json): Machine-readable product catalog with pricing, availability, and taxonomy data\n`;
         }
         if (hasCollectionsJson) {
-          llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): All product categories with SEO metadata\n`;
-        }
-        // Individual collection links for better AI discoverability
-        if (collections.length > 0) {
-          for (const col of collections) {
-            const desc = col.description ? `: ${col.description}` : `: ${col.count} products`;
-            llmsTxt += `- [${col.title}](${primaryDomain}/collections/${col.handle})${desc}\n`;
-          }
+          llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): Product categories with metadata\n`;
         }
         llmsTxt += '\n';
       }
