@@ -2291,7 +2291,11 @@ app.get('/debug/ai-queue-stats', async (req, res) => {
 
         // PUBLIC llms.txt ENDPOINT - no authentication required
         // Shopify redirect points store.com/llms.txt → railway.app/llms.txt?shop=...
-        app.get('/llms.txt', async (req, res) => {
+        // This is the main entry point for AI bots (ChatGPT, Perplexity, Claude, etc.)
+        const { createAIAnalyticsMiddleware: createDirectAnalytics } = await import('./middleware/aiAnalytics.js');
+        const directAnalytics = createDirectAnalytics('direct');
+
+        app.get('/llms.txt', directAnalytics, async (req, res) => {
           try {
             const aiDiscovery = (await import('./services/aiDiscoveryService.js')).default;
 

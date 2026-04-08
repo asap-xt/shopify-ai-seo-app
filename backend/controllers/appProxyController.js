@@ -1697,7 +1697,7 @@ router.get('/ai/schema-index.json', appProxyAuth, aiAnalytics, async (req, res) 
 // Per-product Advanced Schema endpoint
 // Accessible via: /apps/indexaize/ai/product/{handle}/schemas.json
 // ============================================================
-router.get('/ai/product/:handle/schemas.json', appProxyAuth, async (req, res) => {
+router.get('/ai/product/:handle/schemas.json', appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
   if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
 
