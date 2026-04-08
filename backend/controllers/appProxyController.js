@@ -994,8 +994,10 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
 
       if (data?.errors) {
         console.error('[PRODUCTS_JSON] GraphQL errors:', JSON.stringify(data.errors));
-        // If there's partial data, continue; otherwise break
-        if (!data?.data?.products?.edges) break;
+        // Return the actual GraphQL error so we can diagnose
+        if (!data?.data?.products?.edges) {
+          return res.status(500).json({ error: 'GraphQL query failed', graphql_errors: data.errors });
+        }
       }
 
       if (!data?.data?.products?.edges) {
