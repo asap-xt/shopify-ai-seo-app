@@ -1587,6 +1587,75 @@ router.get('/ai/schema-data.json', appProxyAuth, aiAnalytics, async (req, res) =
 });
 
 // ============================================================
+// Schema Index - lightweight map of handle → schemaUrl → updatedAt
+// Accessible via: /apps/indexaize/ai/schema-index.json
+// ============================================================
+router.get('/ai/schema-index.json', appProxyAuth, aiAnalytics, async (req, res) => {
+  const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) return res.status(404).json({ error: 'Shop not found' });
+
+    // Fetch all products that have advanced schema EN metafield
+    const allEntries = [];
+    let cursor = null;
+    let hasMore = true;
+    while (hasMore && allEntries.length < 1000) {
+      const query = `query($cursor: String) {
+        products(first: 250, after: $cursor, query: "status:active") {
+          edges {
+            node {
+              handle
+              updatedAt
+              schemaMetafields: metafields(namespace: "advanced_schema", first: 1) {
+                edges { node { key updatedAt } }
+              }
+            }
+            cursor
+          }
+          pageInfo { hasNextPage }
+        }
+      }`;
+      const response = await fetch(
+        `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+        {
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': shopRecord.accessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, variables: { cursor } })
+        }
+      );
+      const data = await response.json();
+      const edges = data?.data?.products?.edges || [];
+      for (const { node, cursor: c } of edges) {
+        const firstSchema = node.schemaMetafields?.edges?.[0]?.node;
+        if (firstSchema) {
+          allEntries.push({
+            handle: node.handle,
+            schemaUrl: `/apps/${APP_PROXY_SUBPATH}/ai/product/${node.handle}/schemas.json`,
+            updatedAt: firstSchema.updatedAt || node.updatedAt
+          });
+        }
+        cursor = c;
+      }
+      hasMore = data?.data?.products?.pageInfo?.hasNextPage || false;
+    }
+
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.json({
+      shop,
+      generated_at: new Date().toISOString(),
+      total: allEntries.length,
+      products: allEntries
+    });
+  } catch (error) {
+    console.error('[APP_PROXY] Schema index error:', error.message);
+    res.status(500).json({ error: 'Failed to build schema index' });
+  }
+});
+
+// ============================================================
 // Per-product Advanced Schema endpoint
 // Accessible via: /apps/indexaize/ai/product/{handle}/schemas.json
 // ============================================================
@@ -1600,9 +1669,13 @@ router.get('/ai/product/:handle/schemas.json', appProxyAuth, async (req, res) =>
 
     const { handle } = req.params;
     const query = `{
+      shop { primaryDomain { host } }
       productByHandle(handle: "${handle}") {
         id title handle
-        metafield(namespace: "advanced_schema", key: "schemas_en") { value }
+        schemasEn: metafield(namespace: "advanced_schema", key: "schemas_en") { value }
+        allSchemaMetafields: metafields(namespace: "advanced_schema", first: 10) {
+          edges { node { key value } }
+        }
       }
     }`;
     const response = await fetch(
@@ -1617,7 +1690,14 @@ router.get('/ai/product/:handle/schemas.json', appProxyAuth, async (req, res) =>
     const product = data?.data?.productByHandle;
     if (!product) return res.status(404).json({ error: 'Product not found' });
 
-    const schemaValue = product.metafield?.value;
+    // Prefer EN, fall back to first available schemas_* metafield
+    let schemaValue = product.schemasEn?.value;
+    if (!schemaValue) {
+      const fallback = product.allSchemaMetafields?.edges?.find(
+        e => e.node.key.startsWith('schemas_') && e.node.value
+      );
+      schemaValue = fallback?.node?.value;
+    }
     if (!schemaValue) return res.status(404).json({ error: 'No advanced schema for this product' });
 
     res.set('Content-Type', 'application/ld+json; charset=utf-8');

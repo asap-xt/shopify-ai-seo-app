@@ -854,7 +854,8 @@ ${customRules}
         if (hasCollectionsJson) {
           llmsTxt += `- [Collections Feed](${primaryDomain}/apps/${appProxySubpath}/ai/collections-feed.json): Product categories with metadata\n`;
         }
-        llmsTxt += `- [Per-product Schema](${primaryDomain}/apps/${appProxySubpath}/ai/product/{handle}/schemas.json): JSON-LD structured data per product (replace {handle} with product handle from feed)\n`;
+        llmsTxt += `- [Schema Index](${primaryDomain}/apps/${appProxySubpath}/ai/schema-index.json): Lightweight index of all products with schema data (handle, schemaUrl, updatedAt)\n`;
+        llmsTxt += `- [Per-product Schema](${primaryDomain}/apps/${appProxySubpath}/ai/product/{handle}/schemas.json): JSON-LD structured data per product (replace {handle} with product handle)\n`;
         llmsTxt += '\n';
       }
 
