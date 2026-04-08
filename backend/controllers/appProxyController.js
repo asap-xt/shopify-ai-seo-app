@@ -1010,37 +1010,12 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
     }
     
     if (allProducts.length === 0) {
-      // Debug: try minimal query to check if it's a field issue
-      let debugInfo = 'unknown';
-      try {
-        const debugRes = await fetch(
-          `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
-          {
-            method: 'POST',
-            headers: { 'X-Shopify-Access-Token': shopRecord.accessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: `{ products(first: 1, query: "status:active") { edges { node { id title } } } }` })
-          }
-        );
-        const debugData = await debugRes.json();
-        if (debugData?.errors) {
-          debugInfo = JSON.stringify(debugData.errors);
-        } else if (debugData?.data?.products?.edges?.length > 0) {
-          debugInfo = 'minimal query works - full query has field issue';
-        } else {
-          debugInfo = 'no products returned even with minimal query';
-        }
-      } catch (e) {
-        debugInfo = e.message;
-      }
-      console.error('[PRODUCTS_JSON] No products for shop:', shop, 'debug:', debugInfo);
       return res.json({
         shop,
         generated_at: new Date().toISOString(),
         products_count: 0,
         products_total: 0,
-        products: [],
-        warning: 'No active products found',
-        _debug: debugInfo
+        products: []
       });
     }
     

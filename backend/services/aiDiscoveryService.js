@@ -773,15 +773,20 @@ ${customRules}
                   refundPolicy { title url }
                   shippingPolicy { title url }
                   termsOfService { title url }
-                  subscriptionPolicy { title url }
                 }
               }`
             })
           }
         );
+        if (!shopInfoResponse.ok) {
+          console.error('[LLMS-TXT] Shop info HTTP error:', shopInfoResponse.status, shopInfoResponse.statusText);
+        }
         const shopInfoData = await shopInfoResponse.json();
         if (shopInfoData?.errors) {
           console.error('[LLMS-TXT] Shop info GraphQL errors:', JSON.stringify(shopInfoData.errors));
+        }
+        if (!shopInfoData?.data?.shop) {
+          console.error('[LLMS-TXT] No shop data returned. Keys:', Object.keys(shopInfoData || {}));
         }
         const shopInfo = shopInfoData?.data?.shop;
         if (shopInfo) {
@@ -797,7 +802,6 @@ ${customRules}
           if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
           if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
           if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
-          if (shopInfo.subscriptionPolicy?.url) policies.push({ title: shopInfo.subscriptionPolicy.title || 'Subscription Policy', url: shopInfo.subscriptionPolicy.url });
         }
       } catch (e) {
         console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
