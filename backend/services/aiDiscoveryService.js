@@ -552,9 +552,9 @@ class AIDiscoveryService {
           robotsTxt += `Allow: /apps/${appProxySubpath}/ai/schema-data.json\n`;
         }
         
-        // LLMs.txt (use app proxy path)
+        // LLMs.txt (served at /llms.txt via redirect)
         if (settings.features?.llmsTxt && availableFeatures.includes('llmsTxt')) {
-          robotsTxt += `Allow: /apps/${appProxySubpath}/llms.txt\n`;
+          robotsTxt += `Allow: /llms.txt\n`;
         }
         
         // Always allow robots.txt endpoint (use app proxy path)
@@ -590,13 +590,14 @@ class AIDiscoveryService {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              query: `{ shop { primaryDomain { url } } }`
+              query: `{ shop { url primaryDomain { url } } }`
             })
           }
         );
         const shopInfoData = await shopInfoResponse.json();
-        if (shopInfoData?.data?.shop?.primaryDomain?.url) {
-          primaryDomain = shopInfoData.data.shop.primaryDomain.url.replace(/\/$/, '');
+        const shopDomainUrl = shopInfoData?.data?.shop?.primaryDomain?.url || shopInfoData?.data?.shop?.url;
+        if (shopDomainUrl) {
+          primaryDomain = shopDomainUrl.replace(/\/$/, '');
         }
       } catch (e) {
         console.error('[ROBOTS] Failed to fetch primaryDomain:', e.message);
@@ -605,7 +606,7 @@ class AIDiscoveryService {
       // LLMs.txt reference (AI discovery standard)
       if (settings.features?.llmsTxt && availableFeatures.includes('llmsTxt')) {
         robotsTxt += `\n# LLMs.txt (AI Discovery)\n`;
-        robotsTxt += `# ${primaryDomain}/apps/${appProxySubpath}/llms.txt\n`;
+        robotsTxt += `# ${primaryDomain}/llms.txt\n`;
       }
       
       robotsTxt += '\n# AI Discovery Sitemaps (XML only)\n';
