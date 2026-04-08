@@ -962,6 +962,14 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                     }
                   }
                 }
+                taxonomyMetafields: metafields(namespace: "taxonomy", first: 20) {
+                  edges {
+                    node {
+                      key
+                      value
+                    }
+                  }
+                }
               }
               cursor
             }
@@ -1051,6 +1059,14 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
           }
         }
         
+        // Extract taxonomy metafields (simple string values only, skip GID refs)
+        const taxonomy = {};
+        for (const { node: meta } of (product.taxonomyMetafields?.edges || [])) {
+          if (meta.value && !meta.value.startsWith('gid://') && !meta.value.startsWith('[')) {
+            taxonomy[meta.key] = meta.value;
+          }
+        }
+
         // Calculate availability status
         const totalInventory = product.totalInventory || 0;
         const hasAvailableVariants = product.variants?.edges?.some(v => v.node.availableForSale);
@@ -1129,6 +1145,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             isOnSale: isOnSale
           },
           url: `https://${shop}/products/${product.handle}`,
+          schemaUrl: `https://${shop}/apps/${APP_PROXY_SUBPATH}/ai/product/${product.handle}/schemas.json`,
           image: product.featuredImage ? {
             url: product.featuredImage.url,
             alt: aiImageAlt || product.featuredImage.altText || product.title
@@ -1139,6 +1156,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             published: product.publishedAt,
             updated: product.updatedAt
           },
+          ...(Object.keys(taxonomy).length > 0 ? { taxonomy } : {}),
           ...(req.query.fields === 'all' ? { seoMetafields: parsedMetafields } : {})
         });
       }
@@ -1532,6 +1550,82 @@ router.get('/llms-full.txt', appProxyAuth, aiAnalytics, async (req, res) => {
   } catch (error) {
     console.error('[APP_PROXY] LLMs-full.txt error:', error);
     res.status(500).type('text/plain').send('# Error generating llms-full.txt\n');
+  }
+});
+
+// ============================================================
+// Schema Data endpoint - all product schemas
+// Accessible via: /apps/indexaize/ai/schema-data.json
+// ============================================================
+router.get('/ai/schema-data.json', appProxyAuth, aiAnalytics, async (req, res) => {
+  const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) return res.status(404).json({ error: 'Shop not found' });
+
+    const AdvancedSchema = (await import('../db/AdvancedSchema.js')).default;
+    const schemaData = await AdvancedSchema.findOne({ shop });
+
+    if (!schemaData || !schemaData.schemas?.length) {
+      return res.json({ shop, generated_at: null, total_schemas: 0, schemas: [] });
+    }
+
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.json({
+      shop,
+      generated_at: schemaData.generatedAt,
+      total_schemas: schemaData.schemas.length,
+      schemas: schemaData.schemas,
+      siteFAQ: schemaData.siteFAQ || null
+    });
+  } catch (error) {
+    console.error('[APP_PROXY] Schema data error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch schema data' });
+  }
+});
+
+// ============================================================
+// Per-product Advanced Schema endpoint
+// Accessible via: /apps/indexaize/ai/product/{handle}/schemas.json
+// ============================================================
+router.get('/ai/product/:handle/schemas.json', appProxyAuth, async (req, res) => {
+  const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop);
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
+
+  try {
+    const shopRecord = await Shop.findOne({ shop });
+    if (!shopRecord) return res.status(404).json({ error: 'Shop not found' });
+
+    const { handle } = req.params;
+    const query = `{
+      productByHandle(handle: "${handle}") {
+        id title handle
+        metafield(namespace: "advanced_schema", key: "schemas_en") { value }
+      }
+    }`;
+    const response = await fetch(
+      `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: 'POST',
+        headers: { 'X-Shopify-Access-Token': shopRecord.accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      }
+    );
+    const data = await response.json();
+    const product = data?.data?.productByHandle;
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const schemaValue = product.metafield?.value;
+    if (!schemaValue) return res.status(404).json({ error: 'No advanced schema for this product' });
+
+    res.set('Content-Type', 'application/ld+json; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    res.send(schemaValue);
+  } catch (error) {
+    console.error('[APP_PROXY] Product schema error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch product schema' });
   }
 });
 
