@@ -985,14 +985,21 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
         }
       );
 
+      if (!response.ok) {
+        console.error('[PRODUCTS_JSON] GraphQL HTTP error:', response.status, response.statusText);
+        break;
+      }
+
       const data = await response.json();
 
       if (data?.errors) {
         console.error('[PRODUCTS_JSON] GraphQL errors:', JSON.stringify(data.errors));
+        // If there's partial data, continue; otherwise break
+        if (!data?.data?.products?.edges) break;
       }
 
       if (!data?.data?.products?.edges) {
-        console.error('[PRODUCTS_JSON] No products data. Response keys:', Object.keys(data || {}), 'HTTP status:', response.status);
+        console.error('[PRODUCTS_JSON] No products data. Response keys:', Object.keys(data || {}));
         break;
       }
       
@@ -1002,8 +1009,38 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
     }
     
     if (allProducts.length === 0) {
-      console.error('[PRODUCTS_JSON] No products found for shop:', shop);
-      return res.status(500).json({ error: 'Failed to fetch products. The store may have no active products or the GraphQL query failed.' });
+      // Debug: try minimal query to check if it's a field issue
+      let debugInfo = 'unknown';
+      try {
+        const debugRes = await fetch(
+          `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+          {
+            method: 'POST',
+            headers: { 'X-Shopify-Access-Token': shopRecord.accessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `{ products(first: 1, query: "status:active") { edges { node { id title } } } }` })
+          }
+        );
+        const debugData = await debugRes.json();
+        if (debugData?.errors) {
+          debugInfo = JSON.stringify(debugData.errors);
+        } else if (debugData?.data?.products?.edges?.length > 0) {
+          debugInfo = 'minimal query works - full query has field issue';
+        } else {
+          debugInfo = 'no products returned even with minimal query';
+        }
+      } catch (e) {
+        debugInfo = e.message;
+      }
+      console.error('[PRODUCTS_JSON] No products for shop:', shop, 'debug:', debugInfo);
+      return res.json({
+        shop,
+        generated_at: new Date().toISOString(),
+        products_count: 0,
+        products_total: 0,
+        products: [],
+        warning: 'No active products found',
+        _debug: debugInfo
+      });
     }
     
     const optimizedProducts = [];
@@ -1154,8 +1191,8 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
       products: limitedProducts
     });
   } catch (error) {
-    console.error('[APP_PROXY] AI Products JSON error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('[APP_PROXY] AI Products JSON error:', error.message, error.stack?.split('\n')[1]);
+    res.status(500).json({ error: 'Failed to fetch products', detail: error.message });
   }
 });
 
