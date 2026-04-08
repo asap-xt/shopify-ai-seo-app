@@ -109,9 +109,6 @@ export function createAIAnalyticsMiddleware(source = 'direct') {
       const ip = req.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
       const bot = detectBot(userAgent);
 
-      // Debug: log raw UA for all requests to diagnose bot detection
-      console.log(`[AI-ANALYTICS] UA-DEBUG: source=${source}, endpoint=${normalizeEndpoint(req.path)}, ua="${userAgent.substring(0, 200)}", detected=${bot.name}`);
-
       // Skip logging for internal bots (our own services)
       if (bot.internal) return;
 
