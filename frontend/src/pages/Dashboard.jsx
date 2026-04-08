@@ -64,7 +64,9 @@ export default function Dashboard({ shop: shopProp }) {
     }
   });
   const pollRef = useRef(null);
-  const autoSyncTriggered = useRef(false); // Track if auto-sync was already triggered
+  const autoSyncTriggered = useRef(
+    (() => { try { return sessionStorage.getItem(`autoSyncDone_${shop}`) === '1'; } catch { return false; } })()
+  ); // Track if auto-sync was already triggered this session
   const markAsSeenTimerRef = useRef(null); // Timer to mark card as seen after user has time to see it
   
   // Onboarding state logic - SIMPLIFIED:
@@ -297,6 +299,7 @@ export default function Dashboard({ shop: shopProp }) {
     if (syncStatus && syncStatus.autoSyncEnabled && !syncing && !autoSyncTriggered.current) {
       devLog('[Dashboard] Auto-sync is enabled, triggering sync...');
       autoSyncTriggered.current = true;
+      try { sessionStorage.setItem(`autoSyncDone_${shop}`, '1'); } catch {}
       handleSync();
     }
   }, [syncStatus?.autoSyncEnabled]); // Only trigger when autoSyncEnabled changes
