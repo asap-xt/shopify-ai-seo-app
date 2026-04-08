@@ -750,6 +750,7 @@ ${customRules}
       let policies = [];
       let collections = [];
 
+      // Query 1: Shop info + policies (critical — determines primaryDomain for all URLs)
       try {
         const shopInfoResponse = await fetch(
           `https://${shop}/admin/api/2025-07/graphql.json`,
@@ -773,6 +774,44 @@ ${customRules}
                   termsOfService { title url }
                   subscriptionPolicy { title url }
                 }
+              }`
+            })
+          }
+        );
+        const shopInfoData = await shopInfoResponse.json();
+        if (shopInfoData?.errors) {
+          console.error('[LLMS-TXT] Shop info GraphQL errors:', JSON.stringify(shopInfoData.errors));
+        }
+        const shopInfo = shopInfoData?.data?.shop;
+        if (shopInfo) {
+          shopName = shopInfo.name || shopName;
+          shopDescription = shopInfo.description || '';
+          shopEmail = shopInfo.contactEmail || shopInfo.email || '';
+          if (shopInfo.primaryDomain?.url) {
+            primaryDomain = shopInfo.primaryDomain.url.replace(/\/$/, '');
+          }
+          if (shopInfo.shippingPolicy?.url) policies.push({ title: shopInfo.shippingPolicy.title || 'Shipping Policy', url: shopInfo.shippingPolicy.url });
+          if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
+          if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
+          if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
+          if (shopInfo.subscriptionPolicy?.url) policies.push({ title: shopInfo.subscriptionPolicy.title || 'Subscription Policy', url: shopInfo.subscriptionPolicy.url });
+        }
+      } catch (e) {
+        console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
+      }
+
+      // Query 2: Collections (separate so a failure here doesn't break shop info)
+      try {
+        const colResponse = await fetch(
+          `https://${shop}/admin/api/2025-07/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopRecord.accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              query: `{
                 collections(first: 50, sortKey: UPDATED_AT, reverse: true) {
                   edges {
                     node {
@@ -787,24 +826,11 @@ ${customRules}
             })
           }
         );
-        const shopInfoData = await shopInfoResponse.json();
-        const shopInfo = shopInfoData?.data?.shop;
-        if (shopInfo) {
-          shopName = shopInfo.name || shopName;
-          shopDescription = shopInfo.description || '';
-          shopEmail = shopInfo.contactEmail || shopInfo.email || '';
-          if (shopInfo.primaryDomain?.url) {
-            primaryDomain = shopInfo.primaryDomain.url.replace(/\/$/, '');
-          }
-          // Collect only policies that actually exist
-          if (shopInfo.shippingPolicy?.url) policies.push({ title: shopInfo.shippingPolicy.title || 'Shipping Policy', url: shopInfo.shippingPolicy.url });
-          if (shopInfo.refundPolicy?.url) policies.push({ title: shopInfo.refundPolicy.title || 'Refund Policy', url: shopInfo.refundPolicy.url });
-          if (shopInfo.privacyPolicy?.url) policies.push({ title: shopInfo.privacyPolicy.title || 'Privacy Policy', url: shopInfo.privacyPolicy.url });
-          if (shopInfo.termsOfService?.url) policies.push({ title: shopInfo.termsOfService.title || 'Terms of Service', url: shopInfo.termsOfService.url });
-          if (shopInfo.subscriptionPolicy?.url) policies.push({ title: shopInfo.subscriptionPolicy.title || 'Subscription Policy', url: shopInfo.subscriptionPolicy.url });
+        const colData = await colResponse.json();
+        if (colData?.errors) {
+          console.error('[LLMS-TXT] Collections GraphQL errors:', JSON.stringify(colData.errors));
         }
-        // Collect published collections with products
-        const collectionEdges = shopInfoData?.data?.collections?.edges || [];
+        const collectionEdges = colData?.data?.collections?.edges || [];
         for (const { node } of collectionEdges) {
           if (node.productsCount?.count > 0) {
             collections.push({
@@ -816,7 +842,7 @@ ${customRules}
           }
         }
       } catch (e) {
-        console.error('[LLMS-TXT] Failed to fetch shop info:', e.message);
+        console.error('[LLMS-TXT] Failed to fetch collections:', e.message);
       }
 
       // Define plan features (same as robots.txt)
