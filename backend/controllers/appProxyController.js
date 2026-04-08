@@ -922,11 +922,13 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                   }
                 }
                 compareAtPriceRange {
-                  minVariantPrice {
+                  maxVariantCompareAtPrice {
                     amount
+                    currencyCode
                   }
-                  maxVariantPrice {
+                  minVariantCompareAtPrice {
                     amount
+                    currencyCode
                   }
                 }
                 featuredImage {
@@ -944,10 +946,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                         name
                         value
                       }
-                      price {
-                        amount
-                        currencyCode
-                      }
+                      price
                     }
                   }
                 }
@@ -1095,7 +1094,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
         // Check for sale price
         const minPrice = parseFloat(product.priceRange?.minVariantPrice?.amount || 0);
         const maxPrice = parseFloat(product.priceRange?.maxVariantPrice?.amount || 0);
-        const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantPrice?.amount || 0);
+        const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantCompareAtPrice?.amount || 0);
         const isOnSale = compareAtMin > 0 && compareAtMin > minPrice;
         
         // Build variants with size/option info
@@ -1108,7 +1107,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
             acc[opt.name] = opt.value;
             return acc;
           }, {}),
-          price: v.price ? parseFloat(v.price.amount).toFixed(2) : null
+          price: v.price ? parseFloat(v.price).toFixed(2) : null
         }));
 
         // Extract unique option names and available values
