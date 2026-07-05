@@ -255,6 +255,13 @@ async function handleSitemapProxy(req, res) {
                     currencyCode
                   }
                 }
+                variants(first: 100) {
+                  edges {
+                    node {
+                      price
+                    }
+                  }
+                }
                 seo {
                   title
                   description
@@ -372,7 +379,15 @@ async function handleSitemapProxy(req, res) {
       xml += '      <ai:description><![CDATA[' + (product.seo?.description || cleanHtmlForXml(product.descriptionHtml)) + ']]></ai:description>\n';
       
       if (product.priceRange?.minVariantPrice) {
-        xml += '      <ai:price>' + product.priceRange.minVariantPrice.amount + ' ' + product.priceRange.minVariantPrice.currencyCode + '</ai:price>\n';
+        // Derive min price from variants (major units); priceRange.amount can be inflated to
+        // minor units (100x) under some presentment-currency setups.
+        const vPrices = (product.variants?.edges || [])
+          .map(({ node: v }) => parseFloat(v.price))
+          .filter(n => !isNaN(n));
+        const minAmt = vPrices.length
+          ? Math.min(...vPrices).toFixed(2)
+          : product.priceRange.minVariantPrice.amount;
+        xml += '      <ai:price>' + minAmt + ' ' + product.priceRange.minVariantPrice.currencyCode + '</ai:price>\n';
       }
       
       if (product.vendor) {
@@ -955,6 +970,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
                         value
                       }
                       price
+                      compareAtPrice
                     }
                   }
                 }
@@ -1118,11 +1134,23 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
         // Get SKU from first variant
         const primarySku = product.variants?.edges?.[0]?.node?.sku || null;
         
-        // Check for sale price
-        const minPrice = parseFloat(product.priceRange?.minVariantPrice?.amount || 0);
-        const maxPrice = parseFloat(product.priceRange?.maxVariantPrice?.amount || 0);
-        const compareAtMin = parseFloat(product.compareAtPriceRange?.minVariantCompareAtPrice?.amount || 0);
-        const isOnSale = compareAtMin > 0 && compareAtMin > minPrice;
+        // Derive pricing from variants (the source of truth). Under some EUR presentment-currency
+        // setups, product.priceRange amounts come back in minor units (cents), which inflated the
+        // aggregate pricing by 100x. variant.price is always in major units, so compute from it.
+        const variantPriceNums = (product.variants?.edges || [])
+          .map(({ node: v }) => parseFloat(v.price))
+          .filter(n => !isNaN(n));
+        const variantComparePriceNums = (product.variants?.edges || [])
+          .map(({ node: v }) => parseFloat(v.compareAtPrice))
+          .filter(n => !isNaN(n) && n > 0);
+        const minPrice = variantPriceNums.length
+          ? Math.min(...variantPriceNums)
+          : parseFloat(product.priceRange?.minVariantPrice?.amount || 0);
+        const maxPrice = variantPriceNums.length
+          ? Math.max(...variantPriceNums)
+          : parseFloat(product.priceRange?.maxVariantPrice?.amount || 0);
+        const compareAtMax = variantComparePriceNums.length ? Math.max(...variantComparePriceNums) : 0;
+        const isOnSale = compareAtMax > maxPrice;
         
         // Build variants with size/option info
         const variants = (product.variants?.edges || []).map(({ node: v }) => ({
@@ -1176,7 +1204,7 @@ router.get('/ai/products.json', appProxyAuth, aiAnalytics, async (req, res) => {
           pricing: {
             price: minPrice.toFixed(2),
             priceMax: maxPrice > minPrice ? maxPrice.toFixed(2) : null,
-            compareAtPrice: isOnSale ? compareAtMin.toFixed(2) : null,
+            compareAtPrice: isOnSale ? compareAtMax.toFixed(2) : null,
             currency: product.priceRange?.minVariantPrice?.currencyCode || 'USD',
             isOnSale: isOnSale
           },
