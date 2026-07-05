@@ -338,22 +338,12 @@ ${taxonomyContext}
     existingSeo: existingSeo
   }, ['bullets', 'faq']);
   
-  // STRICT VALIDATION: Ensure EXACTLY 5 bullets
+  // Use only the genuine AI-generated bullets. Do NOT pad with fabricated marketing claims
+  // (e.g. "Great value at competitive pricing", "Satisfaction guaranteed") — those are
+  // hallucinations that end up in ItemList schema. Fewer real bullets is better than fake ones.
   let bullets = validated.bullets || [];
-  if (bullets.length < 5) {
-    // Pad with generic bullets if needed
-    const genericBullets = [
-      `High-quality ${productType || 'product'} from ${vendor || 'trusted brand'}`,
-      `Perfect for ${productType || 'everyday use'}`,
-      `Great value at competitive pricing`,
-      `Available in multiple options`,
-      `Satisfaction guaranteed`
-    ];
-    while (bullets.length < 5) {
-      bullets.push(genericBullets[bullets.length] || `Feature ${bullets.length + 1}`);
-    }
-  } else if (bullets.length > 5) {
-    // Trim to exactly 5
+  if (bullets.length > 5) {
+    // Cap at 5
     bullets = bullets.slice(0, 5);
   }
   
