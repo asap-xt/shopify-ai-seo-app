@@ -26,6 +26,20 @@ const shopSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Expiring offline access token support (Shopify deprecation of non-expiring tokens).
+  // When present, accessToken must be refreshed via refreshToken before/after expiry.
+  tokenExpiresAt: {
+    type: Date,
+    default: null
+  },
+  refreshToken: {
+    type: String,
+    default: null
+  },
+  refreshTokenExpiresAt: {
+    type: Date,
+    default: null
+  },
   scopes: {
     type: String,
     required: false

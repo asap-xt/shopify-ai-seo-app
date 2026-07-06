@@ -211,6 +211,37 @@ async function runOrderSyncBatch() {
   }
 }
 
+/**
+ * Refresh EXPIRING offline access tokens before they lapse.
+ * Keeps the stored Shop.accessToken valid for every reader (feeds, REST, webhooks),
+ * so headless endpoints don't 401 an hour after the last app load. Runs headless.
+ */
+async function runTokenRefreshBatch() {
+  try {
+    const { default: Shop } = await import('./db/Shop.js');
+    const { refreshOfflineToken } = await import('./utils/tokenResolver.js');
+    // Only shops on expiring tokens (have a refreshToken) that are within 20 min of expiry.
+    const soon = new Date(Date.now() + 20 * 60 * 1000);
+    const shops = await Shop.find(
+      { refreshToken: { $ne: null }, tokenExpiresAt: { $ne: null, $lte: soon } },
+      { shop: 1 }
+    ).lean().catch(() => []);
+
+    if (!shops.length) return;
+
+    console.log(`[scheduler] Token refresh — ${shops.length} shop(s) near expiry`);
+    for (const s of shops) {
+      try {
+        await refreshOfflineToken(s.shop);
+      } catch (e) {
+        console.error(`[scheduler] Token refresh failed for ${s.shop}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[scheduler] Token refresh batch error:', e.message);
+  }
+}
+
 /** Start all cron tasks for each plan. */
 export function startScheduler() {
   if (String(process.env.SCHEDULER_DISABLED || '').toLowerCase() === 'true') {
@@ -248,6 +279,18 @@ export function startScheduler() {
     console.log(`[scheduler] Scheduled order sync → 0 */6 * * * (${TIMEZONE})`);
   } catch (e) {
     console.error('[scheduler] Failed to schedule order sync:', e.message);
+  }
+
+  // Offline token refresh — every 15 min (tokens live ~60 min; refresh when <20 min left)
+  try {
+    const tokenTask = cron.schedule('*/15 * * * *', () => runTokenRefreshBatch(), {
+      scheduled: true,
+      timezone: TIMEZONE,
+    });
+    tasks.push(tokenTask);
+    console.log(`[scheduler] Scheduled token refresh → */15 * * * * (${TIMEZONE})`);
+  } catch (e) {
+    console.error('[scheduler] Failed to schedule token refresh:', e.message);
   }
 
   return { stop: stopScheduler };

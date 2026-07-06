@@ -36,13 +36,68 @@ export async function invalidateShopToken(shopInput) {
       tokenLogger.warn('Cannot invalidate - invalid shop:', shopInput);
       return;
     }
-    
+
     const Shop = await loadShopModel();
     await Shop.updateOne({ shop }, { $unset: { accessToken: "", appApiKey: "" } });
     tokenLogger.info('Invalidated stored token for', shop);
   } catch (e) {
     tokenLogger.warn('Failed to invalidate token:', e.message);
   }
+}
+
+/**
+ * Refresh an EXPIRING offline access token using the stored refresh_token.
+ * Works WITHOUT a user session — safe for background jobs, webhooks and schedulers.
+ * Returns the new access token, or null if the shop has no refresh_token
+ * (i.e. a legacy non-expiring token that doesn't need refreshing).
+ */
+export async function refreshOfflineToken(shopInput) {
+  const shop = shopInput.toLowerCase().trim();
+  const Shop = await loadShopModel();
+  const shopRecord = await Shop.findOne({ shop }).lean().exec();
+  const refreshToken = shopRecord?.refreshToken;
+  if (!refreshToken) {
+    tokenLogger.debug(`No refresh_token for ${shop} (legacy non-expiring token) — nothing to refresh`);
+    return null;
+  }
+
+  const tokenUrl = `https://${shop}/admin/oauth/access_token`;
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.SHOPIFY_API_KEY,
+      client_secret: process.env.SHOPIFY_API_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken
+    })
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Offline token refresh failed: ${response.status} ${text}`);
+  }
+
+  const data = JSON.parse(text);
+  if (!data.access_token) {
+    throw new Error('No access_token in refresh response');
+  }
+
+  const now = Date.now();
+  const update = {
+    accessToken: data.access_token,
+    appApiKey: process.env.SHOPIFY_API_KEY,
+    needsTokenExchange: false,
+    updatedAt: new Date()
+  };
+  if (data.expires_in) update.tokenExpiresAt = new Date(now + Number(data.expires_in) * 1000);
+  // Shopify rotates the refresh_token on each refresh — persist the new one when returned.
+  if (data.refresh_token) update.refreshToken = data.refresh_token;
+  if (data.refresh_token_expires_in) update.refreshTokenExpiresAt = new Date(now + Number(data.refresh_token_expires_in) * 1000);
+
+  await Shop.updateOne({ shop }, { $set: update });
+  tokenLogger.info(`Refreshed offline token for ${shop}`);
+  return data.access_token;
 }
 
 /**
@@ -76,6 +131,17 @@ export async function resolveAdminTokenForShop(shop, options = {}) {
       if (token && String(token).trim() && token !== 'jwt-pending') {
         // Проверка дали токенът е за текущия API key
         if (shopRecord.appApiKey === process.env.SHOPIFY_API_KEY) {
+          // Proactively refresh an expiring token that is at/near expiry (<2 min left).
+          // Legacy non-expiring tokens have no tokenExpiresAt/refreshToken and skip this.
+          if (shopRecord.refreshToken && shopRecord.tokenExpiresAt &&
+              (new Date(shopRecord.tokenExpiresAt).getTime() - Date.now() < 120000)) {
+            try {
+              const refreshed = await refreshOfflineToken(normalizedShop);
+              if (refreshed) return refreshed;
+            } catch (e) {
+              tokenLogger.warn(`Proactive token refresh failed for ${normalizedShop}: ${e.message} — falling back to stored token`);
+            }
+          }
           tokenLogger.debug(`Found valid token in DB for ${normalizedShop}`);
           return String(token).trim();
         } else {
@@ -145,13 +211,10 @@ async function exchangeJWTForAccessToken(shop, jwtToken) {
  * GraphQL query executor with proper error handling
  */
 export async function executeShopifyGraphQL(shop, query, variables = {}) {
-  const token = await resolveAdminTokenForShop(shop);
   const apiVersion = process.env.SHOPIFY_API_VERSION?.trim() || '2025-07';
   const url = `https://${shop}/admin/api/${apiVersion}/graphql.json`;
 
-  console.log(`[GRAPHQL] Making request to ${url}`);
-
-  try {
+  async function attempt(token) {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -160,9 +223,28 @@ export async function executeShopifyGraphQL(shop, query, variables = {}) {
       },
       body: JSON.stringify({ query, variables }),
     });
-
     const text = await response.text();
-    
+    return { response, text };
+  }
+
+  console.log(`[GRAPHQL] Making request to ${url}`);
+
+  try {
+    let token = await resolveAdminTokenForShop(shop);
+    let { response, text } = await attempt(token);
+
+    // Reactive refresh: an expired/invalid offline token returns 401. Refresh once and retry.
+    if (response.status === 401) {
+      tokenLogger.warn(`[GRAPHQL] 401 for ${shop} — attempting offline token refresh + retry`);
+      const refreshed = await refreshOfflineToken(shop).catch((e) => {
+        tokenLogger.error(`[GRAPHQL] Token refresh failed for ${shop}: ${e.message}`);
+        return null;
+      });
+      if (refreshed) {
+        ({ response, text } = await attempt(refreshed));
+      }
+    }
+
     if (!response.ok) {
       console.error(`[GRAPHQL] HTTP ${response.status} for ${shop}:`, text);
       throw new Error(`GraphQL HTTP error ${response.status}: ${text}`);

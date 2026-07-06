@@ -26,7 +26,8 @@ router.post('/', async (req, res) => {
         grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
         subject_token: id_token,
         subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token' // SHOPIFY-специфичен!
+        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token', // SHOPIFY-специфичен!
+        expiring: '1' // Request an EXPIRING offline token (non-expiring tokens are deprecated by Shopify)
       }),
     });
     
@@ -38,23 +39,37 @@ router.post('/', async (req, res) => {
 
     const tokenData = await response.json();
     const accessToken = tokenData.access_token;
-    
+
     if (!accessToken) {
       throw new Error('No access_token in response');
+    }
+
+    // Build update, including expiring-token fields when Shopify returns them.
+    const now = Date.now();
+    const tokenUpdate = {
+      shop,
+      accessToken,
+      appApiKey: process.env.SHOPIFY_API_KEY,
+      useJWT: true,
+      needsTokenExchange: false,
+      installedAt: new Date(),
+      updatedAt: new Date()
+    };
+    if (tokenData.expires_in) {
+      tokenUpdate.tokenExpiresAt = new Date(now + Number(tokenData.expires_in) * 1000);
+    }
+    if (tokenData.refresh_token) {
+      tokenUpdate.refreshToken = tokenData.refresh_token;
+    }
+    if (tokenData.refresh_token_expires_in) {
+      tokenUpdate.refreshTokenExpiresAt = new Date(now + Number(tokenData.refresh_token_expires_in) * 1000);
     }
 
     // Запази в базата данни
     try {
       await Shop.findOneAndUpdate(
         { shop },
-        { 
-          shop, 
-          accessToken,
-          appApiKey: process.env.SHOPIFY_API_KEY,
-          useJWT: true,
-          installedAt: new Date(),
-          updatedAt: new Date() 
-        },
+        tokenUpdate,
         { upsert: true, new: true }
       );
       
