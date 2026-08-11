@@ -3,6 +3,7 @@
 
 import express from 'express';
 import fetch from 'node-fetch';
+import rateLimit from 'express-rate-limit';
 import Shop from '../db/Shop.js';
 import Subscription from '../db/Subscription.js';
 import Sitemap from '../db/Sitemap.js';
@@ -20,6 +21,18 @@ import { compactObject } from '../utils/compactObject.js';
 
 const router = express.Router();
 const aiAnalytics = createAIAnalyticsMiddleware('app_proxy');
+
+// Rate limiter for the LLM-backed /ai/ask endpoint. appProxyAuth allows unsigned requests,
+// so /ai/ask (which calls Gemini) is otherwise open to unauthenticated cost abuse. Throttle
+// per client IP (trust proxy is enabled, so req.ip is the real client on Railway). The public
+// read feeds are intentionally NOT rate-limited — AI crawlers and the chatbot depend on them.
+const aiAskLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 10,           // max 10 questions/min/IP
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down and try again shortly.' }
+});
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07';
 const APP_PROXY_SUBPATH = process.env.APP_PROXY_SUBPATH || 'indexaize';
 
@@ -1852,7 +1865,7 @@ function hashQuestion(q) {
   return hash.toString(36);
 }
 
-router.post('/ai/ask', appProxyAuth, aiAnalytics, async (req, res) => {
+router.post('/ai/ask', aiAskLimiter, appProxyAuth, aiAnalytics, async (req, res) => {
   const shop = normalizeShop(req.headers['x-shopify-shop-domain'] || req.query.shop || req.body?.shop);
   const question = req.body?.question;
 
