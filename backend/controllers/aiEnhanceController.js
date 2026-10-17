@@ -96,6 +96,44 @@ async function openrouterChat(model, messages, response_format_json = true) {
   }, { model, messageCount: messages.length });
 }
 
+const LANGUAGE_NAMES = {
+  bg: 'Bulgarian', en: 'English', ro: 'Romanian', de: 'German', fr: 'French', it: 'Italian',
+  es: 'Spanish', el: 'Greek', ru: 'Russian', uk: 'Ukrainian', sr: 'Serbian', mk: 'Macedonian',
+  pl: 'Polish', nl: 'Dutch', pt: 'Portuguese', tr: 'Turkish', cs: 'Czech', hu: 'Hungarian'
+};
+const CYRILLIC_LANGS = new Set(['bg', 'ru', 'uk', 'sr', 'mk']);
+
+function baseLang(code) {
+  return String(code || '').toLowerCase().split(/[-_]/)[0];
+}
+
+function languageName(code) {
+  return LANGUAGE_NAMES[baseLang(code)] || code;
+}
+
+/**
+ * Cheap deterministic guard: true when the text's script clearly doesn't fit the target language
+ * (e.g. Cyrillic alt text for Romanian/English, or alt text with no Cyrillic for Bulgarian).
+ */
+function altTextScriptMismatch(text, langCode) {
+  if (!text) return false;
+  const base = baseLang(langCode);
+  const hasCyrillic = /[Ѐ-ӿ]/.test(text);
+  if (CYRILLIC_LANGS.has(base)) return !hasCyrillic;
+  if (LANGUAGE_NAMES[base]) return hasCyrillic;
+  return false;
+}
+
+function mergeUsage(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return {
+    prompt_tokens: (a.prompt_tokens || 0) + (b.prompt_tokens || 0),
+    completion_tokens: (a.completion_tokens || 0) + (b.completion_tokens || 0),
+    total_tokens: (a.total_tokens || 0) + (b.total_tokens || 0)
+  };
+}
+
 /**
  * Generate AI alt text for featured image
  * Only called if Shopify image has no alt text
@@ -103,23 +141,24 @@ async function openrouterChat(model, messages, response_format_json = true) {
  */
 async function generateImageAltText(data) {
   const { product, language, model } = data;
-  
+
   const productTitle = product.title || '';
   const productType = product.productType || 'product';
   const vendor = product.vendor || '';
   const description = product.description || '';
-  
+  const targetLanguage = languageName(language);
+
   const messages = [
     {
       role: 'system',
       content: `You are an AI assistant that generates SEO-optimized alt text for e-commerce product images.
-Language: ${language}
+Target language: ${targetLanguage} (${language})
 Guidelines:
+- Write the alt text in ${targetLanguage}, even if the product information below is in another language (translate as needed)
 - Create a concise, descriptive alt text (max 125 characters)
 - Describe what the product looks like based on the product information
-- Include relevant keywords naturally
+- Include relevant keywords naturally; keep brand names as-is
 - Do NOT start with "image of" or "photo of"
-- Keep the same language as specified
 - Return ONLY a JSON object with key "altText" containing the alt text string`
     },
     {
@@ -154,7 +193,11 @@ Guidelines:
     if (altText && altText.length > 125) {
       altText = altText.slice(0, 122) + '...';
     }
-    
+    if (altTextScriptMismatch(altText, language)) {
+      console.warn(`[AI-ENHANCE] Generated alt text is not in ${languageName(language)} — discarding`);
+      altText = null;
+    }
+
     return { altText, usage };
   } catch (error) {
     console.error('[AI-ENHANCE] Error generating alt text:', error.message);
@@ -163,48 +206,50 @@ Guidelines:
 }
 
 /**
- * Translate/adapt existing alt text to match description language
- * AI compares the language of alt text vs description and:
- * - If different languages → translates alt text to description's language
- * - If same language → returns alt text unchanged
- * Returns: { altText: string, translated: boolean, usage: object }
+ * Ensure existing alt text is in the TARGET language.
+ * - Already in the target language → returned unchanged (translated: false)
+ * - Different language → translated into the target language (translated: true)
+ * The target language is passed explicitly (no language detection guesswork).
+ * Returns { altText: string|null, translated: boolean, usage }. altText is null when no
+ * alt text in the target language could be produced, so the caller can regenerate it.
  */
 async function translateImageAltText(data) {
-  const { existingAltText, description, model, productTitle } = data;
-  
+  const { existingAltText, description, model, productTitle, language } = data;
+  const targetLanguage = languageName(language);
+  const safeFallback = altTextScriptMismatch(existingAltText, language) ? null : existingAltText;
+
   const messages = [
     {
       role: 'system',
-      content: `You are an AI assistant that ensures image alt text matches the language of product descriptions.
+      content: `You are an AI assistant that makes sure product image alt text is written in ${targetLanguage} (${language}).
 
 Your task:
-1. Detect the language of the provided alt text
-2. Detect the language of the provided description
-3. If they are in DIFFERENT languages: translate the alt text to match the description's language
-4. If they are in the SAME language: return the alt text unchanged
+- If the alt text is already in ${targetLanguage}: return it unchanged and set "translated" to false
+- Otherwise: translate it into ${targetLanguage} and set "translated" to true
 
 Guidelines for translation:
 - Keep it concise (max 125 characters)
-- Preserve SEO keywords where possible
+- Preserve SEO keywords and brand names where possible
 - Maintain the descriptive nature of the original
+- The description and title are context only (they may be in another language)
 
 Return ONLY a JSON object with:
-- "altText": the final alt text (translated or unchanged)
-- "translated": boolean (true if translation was needed, false if languages matched)`
+- "altText": the final alt text in ${targetLanguage}
+- "translated": boolean`
     },
     {
       role: 'user',
       content: JSON.stringify({
         altText: existingAltText,
-        description: description?.slice(0, 300), // Enough to detect language
+        description: description?.slice(0, 300), // Context only
         productTitle: productTitle // For context
       })
     }
   ];
-  
+
   try {
     const { content, usage } = await openrouterChat(model, messages, true);
-    
+
     let parsed;
     try {
       let cleanContent = content.trim();
@@ -215,18 +260,22 @@ Return ONLY a JSON object with:
       parsed = JSON.parse(cleanContent);
     } catch {
       console.error('[AI-ENHANCE] Failed to parse alt text response:', content.substring(0, 100));
-      return { altText: existingAltText, translated: false, usage }; // Fallback to original
+      return { altText: safeFallback, translated: false, usage }; // Never fall back to wrong-language text
     }
-    
-    let altText = parsed.altText || existingAltText;
+
+    let altText = parsed.altText || safeFallback;
     if (altText && altText.length > 125) {
       altText = altText.slice(0, 122) + '...';
     }
-    
+    if (altTextScriptMismatch(altText, language)) {
+      console.warn(`[AI-ENHANCE] Alt text still not in ${targetLanguage} after translation — discarding`);
+      return { altText: null, translated: false, usage };
+    }
+
     return { altText, translated: parsed.translated === true, usage };
   } catch (error) {
     console.error('[AI-ENHANCE] Error processing alt text:', error.message);
-    return { altText: existingAltText, translated: false, usage: null }; // Fallback to original
+    return { altText: safeFallback, translated: false, usage: null }; // Never fall back to wrong-language text
   }
 }
 
@@ -612,7 +661,7 @@ router.post('/product', validateRequest(), async (req, res) => {
           const existingAltText = existingSeo.imageAlt || shopifyAltText;
           
           if (!existingAltText) {
-            // Case 1: No alt text at all → Generate with AI
+            // Case 1: No alt text at all → Generate with AI in the target language
             imageAltResult = await generateImageAltText({
               product: data.product,
               language,
@@ -620,22 +669,37 @@ router.post('/product', validateRequest(), async (req, res) => {
             });
             imageAltResult.translated = false;
           } else {
-            // Case 2: Alt text exists → AI compares languages and translates if needed
+            // Case 2: Alt text exists → make sure it is in the target language (translate if not)
             imageAltResult = await translateImageAltText({
               existingAltText: existingAltText,
               description: currentDescription,
               model,
-              productTitle: data.product.title
+              productTitle: data.product.title,
+              language
             });
           }
+
+          // Still no alt text in the target language (e.g. translation failed) → generate a fresh one
+          if (!imageAltResult.altText) {
+            const regenerated = await generateImageAltText({ product: data.product, language, model });
+            imageAltResult = {
+              altText: regenerated.altText,
+              translated: false,
+              regenerated: true,
+              usage: mergeUsage(imageAltResult.usage, regenerated.usage)
+            };
+          }
         }
-        
+
+        // Never keep stored alt text that is in the wrong language for this locale
+        const existingAltForLang = altTextScriptMismatch(existingSeo.imageAlt, language) ? null : existingSeo.imageAlt;
+
         // Обновяваме bullets, FAQ, и imageAlt в съществуващия SEO обект
         const updatedSeo = {
           ...existingSeo,  // Запазва title, metaDescription, bodyHtml, jsonLd и всичко друго
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
-          imageAlt: imageAltResult.altText || existingSeo.imageAlt || null,  // AI-generated or existing
+          imageAlt: imageAltResult.altText || existingAltForLang || null,  // AI-generated or existing (same language only)
           enhancedAt: new Date().toISOString() // Маркираме че това е AI Enhanced, не само Basic SEO
         };
 
@@ -677,7 +741,7 @@ router.post('/product', validateRequest(), async (req, res) => {
         // Determine what happened with imageAlt
         const existingAltText = existingSeo.imageAlt || shopifyAltText;
         const imageAltAction = !hasFeaturedImage ? 'no_image' 
-          : !existingAltText ? 'generated'
+          : !existingAltText || imageAltResult.regenerated ? 'generated'
           : imageAltResult.translated ? 'translated'
           : 'kept_existing';
         
@@ -1748,17 +1812,32 @@ export async function enhanceProductDirectly({ shop, productId, languages, acces
               existingAltText,
               description: currentDescription,
               model,
-              productTitle: data.product.title
+              productTitle: data.product.title,
+              language
             });
           }
+
+          // Still no alt text in the target language (e.g. translation failed) → generate a fresh one
+          if (!imageAltResult.altText) {
+            const regenerated = await generateImageAltText({ product: data.product, language, model });
+            imageAltResult = {
+              altText: regenerated.altText,
+              translated: false,
+              regenerated: true,
+              usage: mergeUsage(imageAltResult.usage, regenerated.usage)
+            };
+          }
         }
-        
+
+        // Never keep stored alt text that is in the wrong language for this locale
+        const existingAltForLang = altTextScriptMismatch(existingSeo.imageAlt, language) ? null : existingSeo.imageAlt;
+
         // Update SEO object (ONLY bullets, faq, imageAlt - preserves everything else!)
         const updatedSeo = {
           ...existingSeo,
           bullets: enhancedResult.bullets || existingSeo.bullets,
           faq: enhancedResult.faq || existingSeo.faq,
-          imageAlt: imageAltResult.altText || existingSeo.imageAlt || null,
+          imageAlt: imageAltResult.altText || existingAltForLang || null,
           enhancedAt: new Date().toISOString()
         };
         

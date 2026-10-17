@@ -1606,8 +1606,10 @@ async function generateSEOForLanguage(req, shop, productId, model, language) {
     });
   }
 
-  // Get featured image alt text from Shopify (null if not set)
-  const featuredImageAlt = p.featuredImage?.altText || null;
+  // Shopify's featured image alt text is in the store's PRIMARY language. Reuse it only for the
+  // primary language; for translated languages leave it null so AI enhancement generates alt text
+  // in the correct language (otherwise e.g. the RO data ends up with Bulgarian alt text).
+  const featuredImageAlt = isPrimary ? (p.featuredImage?.altText || null) : null;
   
   const localSeoData = {
     title: seoTitle || localizedTitle || 'Product',
