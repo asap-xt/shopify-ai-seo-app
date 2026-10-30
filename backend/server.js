@@ -1801,49 +1801,13 @@ if (!IS_PROD) {
         if (id_token) {
           if (!existingShop || !existingShop.accessToken || existingShop.accessToken === 'jwt-pending' || 
               existingShop.appApiKey !== process.env.SHOPIFY_API_KEY) {
-            // НАПРАВИ TOKEN EXCHANGE ВЕДНАГА НА СЪРВЪРА
+            // НАПРАВИ TOKEN EXCHANGE ВЕДНАГА НА СЪРВЪРА (expiring offline token)
             try {
-              const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  client_id: process.env.SHOPIFY_API_KEY,
-                  client_secret: process.env.SHOPIFY_API_SECRET,
-                  grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-                  subject_token: id_token,
-                  subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-                  requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
-                }),
-              });
-
-              if (tokenResponse.ok) {
-                const tokenData = await tokenResponse.json();
-                const accessToken = tokenData.access_token;
-                
-                if (accessToken) {
-                  // Запази в базата данни
-                  await ShopModel.findOneAndUpdate(
-                    { shop },
-                    { 
-                      shop, 
-                      accessToken,
-                      appApiKey: process.env.SHOPIFY_API_KEY,
-                      useJWT: true,
-                      needsTokenExchange: false,
-                      installedAt: new Date(),
-                      updatedAt: new Date() 
-                    },
-                    { upsert: true, new: true }
-                  );
-                } else {
-                  console.error('[APP URL] No access token in response');
-                }
-              } else {
-                const errorText = await tokenResponse.text();
-                console.error('[APP URL] Token exchange failed:', tokenResponse.status, errorText);
-              }
+              const { exchangeIdTokenForOfflineToken, saveTokenResponse } = await import('./utils/tokenResolver.js');
+              const tokenData = await exchangeIdTokenForOfflineToken(shop, id_token);
+              await saveTokenResponse(shop, tokenData, { useJWT: true, installedAt: new Date() });
             } catch (error) {
-              console.error('[APP URL] Token exchange error:', error);
+              console.error('[APP URL] Token exchange failed:', error.status, error.message);
             }
           }
           

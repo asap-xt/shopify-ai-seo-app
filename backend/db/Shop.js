@@ -40,6 +40,21 @@ const shopSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // true = accessToken is an expiring offline token; false = non-expiring (legacy); null = unknown
+  tokenExpiring: {
+    type: Boolean,
+    default: null
+  },
+  // Last attempt to migrate a stored non-expiring token (scheduler backs off between attempts)
+  tokenMigrationCheckedAt: {
+    type: Date,
+    default: null
+  },
+  // One-time retirement of any non-expiring token Shopify still holds for this shop
+  legacyTokenRetiredAt: {
+    type: Date,
+    default: null
+  },
   scopes: {
     type: String,
     required: false

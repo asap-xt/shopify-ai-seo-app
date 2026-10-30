@@ -45,6 +45,189 @@ export async function invalidateShopToken(shopInput) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Offline access tokens (expiring). Shopify requires expiring offline tokens for
+// public apps from 2027-01-01. EVERY code path that obtains a token must go through
+// these helpers so tokens are always requested with expiring=1 and stored consistently.
+// Docs: shopify.dev/docs/apps/build/authentication-authorization/migrate-to-expiring-offline-access-tokens
+// ---------------------------------------------------------------------------
+
+const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
+const OFFLINE_TOKEN_TYPE = 'urn:shopify:params:oauth:token-type:offline-access-token';
+const ID_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:id_token';
+
+function normalizeShopDomain(shopInput) {
+  return String(shopInput || '').toLowerCase().trim();
+}
+
+/** POST to Shopify's token endpoint, form-encoded as documented. Throws with .code on error. */
+async function postTokenEndpoint(shop, params) {
+  const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+    body: new URLSearchParams(params).toString()
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { /* non-JSON error body */ }
+
+  if (!response.ok) {
+    const err = new Error(`Shopify token endpoint ${response.status}: ${text}`);
+    err.status = response.status;
+    err.code = data?.error;
+    throw err;
+  }
+  if (!data?.access_token) {
+    throw new Error('No access_token in token endpoint response');
+  }
+  return data;
+}
+
+/**
+ * Build a Shop update from a token endpoint response. Expiring tokens carry refresh data.
+ * If Shopify returned a non-expiring token, stale refresh fields are cleared so nothing tries
+ * to refresh with a refresh_token that doesn't belong to the stored access token.
+ */
+export function tokenUpdateFromResponse(data) {
+  const now = Date.now();
+  const expiring = !!data.refresh_token;
+  const $set = {
+    accessToken: data.access_token,
+    appApiKey: process.env.SHOPIFY_API_KEY,
+    tokenExpiring: expiring,
+    needsTokenExchange: false,
+    updatedAt: new Date()
+  };
+  if (data.scope) $set.scopes = data.scope;
+  if (expiring) {
+    $set.refreshToken = data.refresh_token;
+    $set.tokenExpiresAt = data.expires_in ? new Date(now + Number(data.expires_in) * 1000) : null;
+    $set.refreshTokenExpiresAt = data.refresh_token_expires_in
+      ? new Date(now + Number(data.refresh_token_expires_in) * 1000)
+      : null;
+    return { $set };
+  }
+  return { $set, $unset: { refreshToken: '', tokenExpiresAt: '', refreshTokenExpiresAt: '' } };
+}
+
+/** Persist a token endpoint response for a shop (upsert). extraSet adds caller-specific fields. */
+export async function saveTokenResponse(shopInput, data, extraSet = {}) {
+  const shop = normalizeShopDomain(shopInput);
+  const Shop = await loadShopModel();
+  const update = tokenUpdateFromResponse(data);
+  update.$set = { ...update.$set, ...extraSet, shop };
+  await Shop.updateOne({ shop }, update, { upsert: true });
+  return data.access_token;
+}
+
+/** Exchange a session ID token for an EXPIRING offline token. Returns the raw response. */
+export async function exchangeIdTokenForOfflineToken(shopInput, idToken) {
+  return postTokenEndpoint(normalizeShopDomain(shopInput), {
+    client_id: process.env.SHOPIFY_API_KEY,
+    client_secret: process.env.SHOPIFY_API_SECRET,
+    grant_type: TOKEN_EXCHANGE_GRANT,
+    subject_token: idToken,
+    subject_token_type: ID_TOKEN_TYPE,
+    requested_token_type: OFFLINE_TOKEN_TYPE,
+    expiring: '1'
+  });
+}
+
+/** Exchange an OAuth authorization code for an EXPIRING offline token. Returns the raw response. */
+export async function exchangeAuthCodeForOfflineToken(shopInput, code) {
+  return postTokenEndpoint(normalizeShopDomain(shopInput), {
+    client_id: process.env.SHOPIFY_API_KEY,
+    client_secret: process.env.SHOPIFY_API_SECRET,
+    code,
+    expiring: '1'
+  });
+}
+
+/** Migrate a non-expiring offline token to an expiring pair. The old token is revoked by Shopify. */
+async function migrateTokenValue(shop, nonExpiringToken) {
+  return postTokenEndpoint(shop, {
+    client_id: process.env.SHOPIFY_API_KEY,
+    client_secret: process.env.SHOPIFY_API_SECRET,
+    grant_type: TOKEN_EXCHANGE_GRANT,
+    subject_token: nonExpiringToken,
+    subject_token_type: OFFLINE_TOKEN_TYPE,
+    requested_token_type: OFFLINE_TOKEN_TYPE,
+    expiring: '1'
+  });
+}
+
+/**
+ * Migrate the STORED token if it is (or may be) non-expiring. Works without a user session.
+ * Shopify rejects already-expiring or revoked tokens with invalid_subject_token, which is
+ * harmless: the check time is recorded so the scheduler backs off.
+ */
+export async function migrateLegacyOfflineToken(shopInput) {
+  const shop = normalizeShopDomain(shopInput);
+  const Shop = await loadShopModel();
+  const rec = await Shop.findOne({ shop }).lean().exec();
+  if (!rec?.accessToken || rec.tokenExpiring === true) {
+    return { migrated: false, reason: 'not_needed' };
+  }
+  try {
+    const data = await migrateTokenValue(shop, rec.accessToken);
+    await saveTokenResponse(shop, data, { tokenMigrationCheckedAt: new Date() });
+    tokenLogger.info(`Migrated non-expiring offline token to expiring for ${shop}`);
+    return { migrated: true };
+  } catch (e) {
+    await Shop.updateOne({ shop }, { $set: { tokenMigrationCheckedAt: new Date() } });
+    tokenLogger.warn(`Offline token migration not applied for ${shop}: ${e.code || e.message}`);
+    return { migrated: false, reason: e.code || e.message };
+  }
+}
+
+/**
+ * One-time cleanup run on app load (needs a session ID token). Shopify keeps at most one
+ * non-expiring offline token per app and store, and it may no longer be the one in our DB.
+ * A non-expiring exchange returns that token (or mints one); migrating it immediately revokes
+ * it and yields an expiring pair. Either way no live non-expiring token remains afterwards.
+ * Returns the saved access token, or null if the cleanup already ran or failed.
+ */
+export async function retireLegacyOfflineToken(shopInput, idToken) {
+  const shop = normalizeShopDomain(shopInput);
+  const Shop = await loadShopModel();
+  const rec = await Shop.findOne({ shop }).lean().exec();
+  if (rec?.legacyTokenRetiredAt) return null;
+
+  let legacy;
+  try {
+    legacy = await postTokenEndpoint(shop, {
+      client_id: process.env.SHOPIFY_API_KEY,
+      client_secret: process.env.SHOPIFY_API_SECRET,
+      grant_type: TOKEN_EXCHANGE_GRANT,
+      subject_token: idToken,
+      subject_token_type: ID_TOKEN_TYPE,
+      requested_token_type: OFFLINE_TOKEN_TYPE
+    });
+  } catch (e) {
+    if (e.status === 400) {
+      // Definitive rejection: Shopify no longer issues non-expiring tokens here → nothing to retire
+      await Shop.updateOne({ shop }, { $set: { legacyTokenRetiredAt: new Date() } });
+      tokenLogger.info(`No legacy non-expiring token to retire for ${shop} (${e.code || e.status})`);
+    } else {
+      tokenLogger.warn(`Legacy token retirement deferred for ${shop}: ${e.message}`);
+    }
+    return null;
+  }
+
+  try {
+    const data = legacy.refresh_token ? legacy : await migrateTokenValue(shop, legacy.access_token);
+    const token = await saveTokenResponse(shop, data, {
+      legacyTokenRetiredAt: new Date(),
+      tokenMigrationCheckedAt: new Date()
+    });
+    tokenLogger.info(`Retired legacy non-expiring offline token for ${shop}`);
+    return token;
+  } catch (e) {
+    tokenLogger.warn(`Legacy token retirement failed for ${shop} (will retry next load): ${e.code || e.message}`);
+    return null;
+  }
+}
+
 /**
  * Refresh an EXPIRING offline access token using the stored refresh_token.
  * Works WITHOUT a user session — safe for background jobs, webhooks and schedulers.
@@ -52,7 +235,7 @@ export async function invalidateShopToken(shopInput) {
  * (i.e. a legacy non-expiring token that doesn't need refreshing).
  */
 export async function refreshOfflineToken(shopInput) {
-  const shop = shopInput.toLowerCase().trim();
+  const shop = normalizeShopDomain(shopInput);
   const Shop = await loadShopModel();
   const shopRecord = await Shop.findOne({ shop }).lean().exec();
   const refreshToken = shopRecord?.refreshToken;
@@ -61,43 +244,16 @@ export async function refreshOfflineToken(shopInput) {
     return null;
   }
 
-  const tokenUrl = `https://${shop}/admin/oauth/access_token`;
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: process.env.SHOPIFY_API_KEY,
-      client_secret: process.env.SHOPIFY_API_SECRET,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
-    })
+  // Shopify rotates the refresh_token on each refresh — saveTokenResponse persists the new one.
+  const data = await postTokenEndpoint(shop, {
+    client_id: process.env.SHOPIFY_API_KEY,
+    client_secret: process.env.SHOPIFY_API_SECRET,
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken
   });
-
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`Offline token refresh failed: ${response.status} ${text}`);
-  }
-
-  const data = JSON.parse(text);
-  if (!data.access_token) {
-    throw new Error('No access_token in refresh response');
-  }
-
-  const now = Date.now();
-  const update = {
-    accessToken: data.access_token,
-    appApiKey: process.env.SHOPIFY_API_KEY,
-    needsTokenExchange: false,
-    updatedAt: new Date()
-  };
-  if (data.expires_in) update.tokenExpiresAt = new Date(now + Number(data.expires_in) * 1000);
-  // Shopify rotates the refresh_token on each refresh — persist the new one when returned.
-  if (data.refresh_token) update.refreshToken = data.refresh_token;
-  if (data.refresh_token_expires_in) update.refreshTokenExpiresAt = new Date(now + Number(data.refresh_token_expires_in) * 1000);
-
-  await Shop.updateOne({ shop }, { $set: update });
+  const token = await saveTokenResponse(shop, data);
   tokenLogger.info(`Refreshed offline token for ${shop}`);
-  return data.access_token;
+  return token;
 }
 
 /**
@@ -163,48 +319,6 @@ export async function resolveAdminTokenForShop(shop, options = {}) {
     tokenLogger.error(`Database error for ${normalizedShop}:`, dbError);
     throw new Error(`Failed to retrieve access token for shop: ${normalizedShop}`);
   }
-}
-
-async function exchangeJWTForAccessToken(shop, jwtToken) {
-  tokenLogger.info(`Exchanging JWT for access token: ${shop}`);
-  
-  const tokenUrl = `https://${shop}/admin/oauth/access_token`;
-  const requestBody = {
-    client_id: process.env.SHOPIFY_API_KEY,
-    client_secret: process.env.SHOPIFY_API_SECRET,
-    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-    subject_token: jwtToken,
-    subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-    requested_token_type: 'urn:ietf:params:oauth:token-type:access_token'
-  };
-
-  tokenLogger.debug(`Request URL: ${tokenUrl}`);
-  tokenLogger.debug(`Request body keys:`, Object.keys(requestBody));
-
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  const responseText = await response.text();
-  tokenLogger.debug(`Response status: ${response.status}`);
-  tokenLogger.debug(`Response text: ${responseText}`);
-
-  if (!response.ok) {
-    throw new Error(`Token exchange failed: ${response.status} ${responseText}`);
-  }
-
-  const tokenData = JSON.parse(responseText);
-  
-  if (!tokenData.access_token) {
-    throw new Error('No access_token in token exchange response');
-  }
-
-  console.log(`[TOKEN_EXCHANGE] Success! Token starts with: ${tokenData.access_token.substring(0, 10)}...`);
-  return tokenData.access_token;
 }
 
 /**

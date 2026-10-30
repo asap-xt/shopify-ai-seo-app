@@ -219,7 +219,25 @@ async function runOrderSyncBatch() {
 async function runTokenRefreshBatch() {
   try {
     const { default: Shop } = await import('./db/Shop.js');
-    const { refreshOfflineToken } = await import('./utils/tokenResolver.js');
+    const { refreshOfflineToken, migrateLegacyOfflineToken } = await import('./utils/tokenResolver.js');
+
+    // 1) Migrate stored tokens that are (or may be) non-expiring — no user session needed.
+    //    Back off 24h between attempts per shop (already-expiring tokens are rejected harmlessly).
+    const migrationCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const legacy = await Shop.find(
+      {
+        accessToken: { $nin: [null, '', 'jwt-pending'] },
+        tokenExpiring: { $ne: true },
+        $or: [{ tokenMigrationCheckedAt: null }, { tokenMigrationCheckedAt: { $lt: migrationCutoff } }]
+      },
+      { shop: 1 }
+    ).lean().catch(() => []);
+    for (const s of legacy) {
+      const result = await migrateLegacyOfflineToken(s.shop).catch((e) => ({ migrated: false, reason: e.message }));
+      console.log(`[scheduler] Token migration ${s.shop}: ${result.migrated ? 'migrated' : result.reason}`);
+    }
+
+    // 2) Refresh expiring tokens that are close to expiry.
     // Only shops on expiring tokens (have a refreshToken) that are within 20 min of expiry.
     const soon = new Date(Date.now() + 20 * 60 * 1000);
     const shops = await Shop.find(

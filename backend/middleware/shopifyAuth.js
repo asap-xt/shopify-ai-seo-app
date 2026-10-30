@@ -39,24 +39,24 @@ export function authCallback() {
           if (session.accessToken) {
             try {
               const Shop = (await import('../db/Shop.js')).default;
-              
+              const { saveTokenResponse, migrateLegacyOfflineToken } = await import('../utils/tokenResolver.js');
+
               // Ensure accessToken is always a string
-              const accessTokenString = typeof session.accessToken === 'object' && session.accessToken.accessToken 
-                ? session.accessToken.accessToken 
+              let accessTokenString = typeof session.accessToken === 'object' && session.accessToken.accessToken
+                ? session.accessToken.accessToken
                 : session.accessToken;
-              
-              await Shop.findOneAndUpdate(
-                { shop: session.shop },
-                {
-                  shop: session.shop,
-                  accessToken: accessTokenString,
-                  scopes: session.scope,
-                  useJWT: false, // This is traditional OAuth flow
-                  installedAt: new Date(),
-                  updatedAt: new Date()
-                },
-                { upsert: true, new: true }
+
+              await saveTokenResponse(
+                session.shop,
+                { access_token: accessTokenString, scope: session.scope },
+                { useJWT: false, installedAt: new Date() } // traditional OAuth flow
               );
+
+              // The bundled library issues a NON-expiring token; migrate it to an expiring pair
+              // right away. Migration revokes the old token, so use the stored new one below.
+              await migrateLegacyOfflineToken(session.shop);
+              const savedShop = await Shop.findOne({ shop: session.shop }).lean();
+              accessTokenString = savedShop?.accessToken || accessTokenString;
 
               // Sync /llms.txt redirect if the feature is already enabled
               try {

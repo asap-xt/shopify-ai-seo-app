@@ -4,6 +4,11 @@
 import '@shopify/shopify-api/adapters/node';
 import { shopifyApi, LATEST_API_VERSION, RequestedTokenType } from '@shopify/shopify-api';
 import Shop from '../db/Shop.js';
+import {
+  exchangeIdTokenForOfflineToken,
+  saveTokenResponse,
+  refreshOfflineToken
+} from '../utils/tokenResolver.js';
 
 // Initialize Shopify API
 const shopify = shopifyApi({
@@ -39,32 +44,14 @@ function extractShop(req) {
 }
 
 /**
- * Get offline access token via token exchange
+ * Get an EXPIRING offline access token via token exchange.
+ * (The bundled @shopify/shopify-api version can't request expiring tokens, so this uses
+ * the shared helper instead of shopify.auth.tokenExchange.)
  */
 async function getOfflineTokenViaExchange(shop, sessionToken) {
   try {
-    const result = await shopify.auth.tokenExchange({
-      shop,
-      sessionToken,
-      requestedTokenType: RequestedTokenType.OfflineAccessToken,
-    });
-
-    // Store the token (extract accessToken from Session object)
-    const tokenString = result.session?.accessToken || result.accessToken || result;
-    await Shop.findOneAndUpdate(
-      { shop },
-      { 
-        shop, 
-        accessToken: tokenString, 
-        updatedAt: new Date(),
-        tokenType: 'offline',
-        authMethod: 'token_exchange'
-      },
-      { upsert: true, new: true }
-    );
-
-    return tokenString;
-
+    const tokenData = await exchangeIdTokenForOfflineToken(shop, sessionToken);
+    return await saveTokenResponse(shop, tokenData);
   } catch (error) {
     console.error(`[TOKEN_EXCHANGE] Failed for ${shop}:`, error.message);
     throw error;
@@ -91,15 +78,26 @@ async function getOnlineTokenViaExchange(shop, sessionToken) {
 }
 
 /**
- * Get cached offline token from database
+ * Get cached offline token from database (refreshing an expiring token that is about to lapse).
+ * Previously this required an `authMethod` field that isn't in the Shop schema, so the cache
+ * never hit and every request minted (and stored) a new non-expiring token.
  */
 async function getCachedOfflineToken(shop) {
   try {
     const shopRecord = await Shop.findOne({ shop }).lean();
-    if (shopRecord?.accessToken && shopRecord.authMethod === 'token_exchange') {
-      return shopRecord.accessToken;
+    if (!shopRecord?.accessToken || shopRecord.accessToken === 'jwt-pending') {
+      return null;
     }
-    return null;
+    if (shopRecord.refreshToken && shopRecord.tokenExpiresAt &&
+        new Date(shopRecord.tokenExpiresAt).getTime() - Date.now() < 120000) {
+      try {
+        const refreshed = await refreshOfflineToken(shop);
+        if (refreshed) return refreshed;
+      } catch (refreshError) {
+        console.error(`[CACHE] Token refresh failed for ${shop}:`, refreshError.message);
+      }
+    }
+    return shopRecord.accessToken;
   } catch (error) {
     console.error(`[CACHE] Error getting cached token for ${shop}:`, error.message);
     return null;
@@ -207,14 +205,28 @@ export async function executeGraphQL(req, query, variables = {}) {
 
   console.log(`[GRAPHQL] Making request to ${url}`);
 
-  const response = await fetch(url, {
+  const attempt = (token) => fetch(url, {
     method: 'POST',
     headers: {
-      'X-Shopify-Access-Token': accessToken,
+      'X-Shopify-Access-Token': token,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query, variables }),
   });
+
+  let response = await attempt(accessToken);
+
+  // Expired offline token → refresh once and retry
+  if (response.status === 401) {
+    const refreshed = await refreshOfflineToken(shop).catch((e) => {
+      console.error(`[GRAPHQL] Token refresh failed for ${shop}:`, e.message);
+      return null;
+    });
+    if (refreshed) {
+      req.auth.accessToken = refreshed;
+      response = await attempt(refreshed);
+    }
+  }
 
   const text = await response.text();
   

@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import express from 'express';
 import Shop from './db/Shop.js';
 import Subscription from './db/Subscription.js';
+import { exchangeAuthCodeForOfflineToken, tokenUpdateFromResponse } from './utils/tokenResolver.js';
 import emailService from './services/emailService.js';
 import { isExemptShop, ensureExemptShopAccess } from './billing/billingRoutes.js';
 import PromoCode from './db/PromoCode.js';
@@ -91,33 +92,9 @@ function verifyHmac(query, secret) {
 
 async function exchangeToken(shop, code) {
   try {
-    const tokenUrl = `https://${shop}/admin/oauth/access_token`;
-    const requestBody = { 
-      client_id: SHOPIFY_API_KEY, 
-      client_secret: SHOPIFY_API_SECRET, 
-      code 
-    };
-    
-    const resp = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
-    
-    const responseText = await resp.text();
-    
-    if (!resp.ok) {
-      console.error(`[AUTH] Token exchange failed:`, responseText);
-      throw new Error(`Token exchange failed: ${resp.status} ${responseText}`);
-    }
-    
-    const tokenData = JSON.parse(responseText);
-    
-    // Validate token format
-    if (!tokenData.access_token) {
-      throw new Error('No access token received from Shopify');
-    }
-    
+    // Authorization code grant with expiring=1 → expiring offline token + refresh token
+    const tokenData = await exchangeAuthCodeForOfflineToken(shop, code);
+
     if (!tokenData.access_token.startsWith('shpat_')) {
       console.warn(`[AUTH] Warning: Token does not start with 'shpat_', may be online token`);
     }
@@ -388,24 +365,26 @@ router.get('/callback', async (req, res) => {
       ? accessToken.accessToken 
       : accessToken;
     
+    // Token fields (incl. refresh data for expiring tokens, or clearing stale refresh data)
+    const tokenFields = tokenUpdateFromResponse({ ...tokenResp, access_token: accessTokenString });
     let shopRecord = await Shop.findOneAndUpdate(
-      { shop }, 
-      { 
-        shop, 
-        accessToken: accessTokenString, 
-        appApiKey: SHOPIFY_API_KEY, // ВАЖНО: записваме API key за validation
-        scopes, 
-        installedAt: new Date(),
-        updatedAt: new Date(),
-        tokenType: accessTokenString.startsWith('shpat_') ? 'offline' : 'online',
-        isActive: true,
-        needsTokenExchange: false, // Token exchange вече е завършен
-        // Marketing tracking
-        campaignSource: marketingData.ref || null,
-        promoCode: marketingData.promo || null,
-        promoType: promoDetails?.type || null,
-        hasPromoEligibility: !!promoDetails
-      }, 
+      { shop },
+      {
+        $set: {
+          ...tokenFields.$set,
+          shop,
+          appApiKey: SHOPIFY_API_KEY, // ВАЖНО: записваме API key за validation
+          scopes,
+          installedAt: new Date(),
+          isActive: true,
+          // Marketing tracking
+          campaignSource: marketingData.ref || null,
+          promoCode: marketingData.promo || null,
+          promoType: promoDetails?.type || null,
+          hasPromoEligibility: !!promoDetails
+        },
+        ...(tokenFields.$unset ? { $unset: tokenFields.$unset } : {})
+      },
       { upsert: true, new: true }
     );
     
