@@ -63,7 +63,8 @@ class DatabaseConnection {
       this.connectionAttempts = 0;
       
       dbLogger.info('✅ MongoDB connected');
-      
+
+      await this.applyCacheLimit();
       this.setupEventHandlers();
       this.setupHealthChecks();
       
@@ -82,6 +83,27 @@ class DatabaseConnection {
     }
   }
 
+  /**
+   * Cap mongod's WiredTiger cache at runtime (Railway bills RAM per minute).
+   * mongo:7 in a container sizes the cache from the host limit, not from our ~1.5GB of data,
+   * so it slowly grows to hundreds of MB. Doing it here avoids touching the Mongo service's
+   * start command. Not persisted by mongod, hence re-applied on every (re)connect.
+   * MONGO_WT_CACHE_MB=0 disables. Needs the root/admin user (our URI uses authSource=admin).
+   */
+  async applyCacheLimit() {
+    const mb = parseInt(process.env.MONGO_WT_CACHE_MB ?? '256', 10);
+    if (!Number.isFinite(mb) || mb <= 0) return;
+    try {
+      await mongoose.connection.db.admin().command({
+        setParameter: 1,
+        wiredTigerEngineRuntimeConfig: `cache_size=${mb}M`
+      });
+      dbLogger.info(`🧠 WiredTiger cache capped at ${mb}MB`);
+    } catch (error) {
+      dbLogger.warn('⚠️  Could not cap WiredTiger cache (non-fatal):', error.message);
+    }
+  }
+
   setupEventHandlers() {
     mongoose.connection.on('error', (err) => {
       dbLogger.error('❌ MongoDB connection error:', err.message);
@@ -97,6 +119,8 @@ class DatabaseConnection {
     mongoose.connection.on('reconnected', () => {
       dbLogger.info('✅ MongoDB reconnected');
       this.isConnected = true;
+      // mongod may have restarted (runtime config is not persisted) → re-apply
+      this.applyCacheLimit();
     });
     
     mongoose.connection.on('close', () => {
