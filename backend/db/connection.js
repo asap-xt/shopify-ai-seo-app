@@ -33,7 +33,7 @@ class DatabaseConnection {
 
     const options = {
       // Connection Pool Settings (CONSERVATIVE for testing)
-      maxPoolSize: 20,           // Reduced from 50
+      maxPoolSize: 10,           // Single-tenant: fewer idle server-side connections (~1MB RAM each on mongod)
       minPoolSize: 2,            // Reduced from 10 (less aggressive)
       maxIdleTimeMS: 60000,      // Increased to 60s (more forgiving)
       
@@ -53,7 +53,8 @@ class DatabaseConnection {
       
       // Optimization
       autoIndex: false,          // Don't auto-create indexes (manual control)
-      family: 4,                 // Use IPv4
+      // No `family` pin: Railway private networking (mongodb.railway.internal) can be IPv6-only,
+      // so forcing IPv4 would break the internal connection. Public proxy works either way.
     };
 
     try {
