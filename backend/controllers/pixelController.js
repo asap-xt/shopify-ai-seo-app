@@ -7,7 +7,7 @@ const router = Router();
 const pixelLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
-  keyGenerator: (req) => req.body?.shop || req.ip,
+  // Default key = client IP (IPv6-safe). Keying on body.shop let callers pick their own bucket.
   standardHeaders: false,
   legacyHeaders: false,
 });

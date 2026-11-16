@@ -1,49 +1,37 @@
 // backend/middleware/webhookValidator.js
-// Dev-friendly webhook validator.
-// В продукция можеш да затегнеш проверката (виж коментара по-долу).
+// Verifies Shopify webhook signatures (X-Shopify-Hmac-Sha256) over the RAW request body.
+// server.js captures the raw bytes in req.rawBody (express.json verify hook).
+// Set WEBHOOK_HMAC_ENFORCE=false to fall back to log-only mode in an emergency.
 
 import crypto from 'crypto';
 
+function safeEqual(a, b) {
+  const ab = Buffer.from(a || '', 'utf8');
+  const bb = Buffer.from(b || '', 'utf8');
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
 export default function validateShopifyWebhook(req, res, next) {
-  try {
-    const secret = process.env.SHOPIFY_API_SECRET || process.env.SHOPIFY_API_SECRET_KEY || '';
-    const hmac =
-      req.get('X-Shopify-Hmac-Sha256') ||
-      req.get('x-shopify-hmac-sha256') ||
-      '';
+  const enforce = String(process.env.WEBHOOK_HMAC_ENFORCE ?? 'true').toLowerCase() !== 'false';
+  const secret = process.env.SHOPIFY_API_SECRET || process.env.SHOPIFY_API_SECRET_KEY || '';
+  const hmac = req.get('X-Shopify-Hmac-Sha256') || '';
 
-    // Опит за изчисляване на подписа върху raw body.
-    // Заб: нямаме express.raw() за /webhooks, така че може да не е 1:1 със Shopify payload-а.
-    let rawBody;
-    if (Buffer.isBuffer(req.body)) {
-      rawBody = req.body;
-    } else if (typeof req.body === 'string') {
-      rawBody = Buffer.from(req.body, 'utf8');
-    } else if (req.body && typeof req.body === 'object') {
-      rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
-    } else {
-      rawBody = Buffer.from('', 'utf8');
-    }
+  const raw = Buffer.isBuffer(req.rawBody)
+    ? req.rawBody
+    : typeof req.rawBody === 'string'
+      ? Buffer.from(req.rawBody, 'utf8')
+      : null;
 
-    if (hmac && secret) {
-      const digest = crypto
-        .createHmac('sha256', secret)
-        .update(rawBody)
-        .digest('base64');
-
-      if (digest !== hmac) {
-        console.warn('[Webhooks] HMAC mismatch (dev mode: allowing).');
-        // Ако искаш да откажеш при невалиден подпис в прод:
-        // return res.status(401).send('Invalid webhook signature');
-      }
-    } else {
-      console.warn('[Webhooks] Missing HMAC header or secret (dev mode: allowing).');
-    }
-
-    return next();
-  } catch (err) {
-    console.error('[Webhooks] Validation error:', err);
-    // Не блокираме уебхука в dev
+  if (!secret || !raw) {
+    // Misconfiguration on our side — don't drop Shopify's webhooks, but make it loud.
+    console.error(`[Webhooks] Cannot verify ${req.originalUrl}: ${!secret ? 'missing secret' : 'raw body not captured'} (allowing)`);
     return next();
   }
+
+  const digest = crypto.createHmac('sha256', secret).update(raw).digest('base64');
+  if (hmac && safeEqual(digest, hmac)) return next();
+
+  console.warn(`[Webhooks] Invalid HMAC on ${req.originalUrl} from ${req.ip}${enforce ? ' — rejected' : ' (log-only)'}`);
+  if (enforce) return res.status(401).send('Invalid webhook signature');
+  return next();
 }
